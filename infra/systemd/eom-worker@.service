@@ -1,0 +1,44 @@
+[Unit]
+Description=EOM Codex one-shot worker slot %i
+Documentation=file:/home/eom/EOM/docs/adr/0001-execution-boundaries.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=eom-cdx-%i
+Group=eom-cdx-%i
+Environment=HOME=/srv/eom/worker-homes/eom-cdx-%i
+Environment=EOM_WORKER_SLOT=%i
+WorkingDirectory=/srv/eom/workspaces/eom-cdx-%i
+ExecStart=/usr/local/bin/codex exec --help
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+InaccessiblePaths=/mnt/nas
+ReadWritePaths=/srv/eom/worker-homes/eom-cdx-%i
+ReadWritePaths=/srv/eom/workspaces/eom-cdx-%i
+UMask=0077
+
+TimeoutStartSec=10min
+TimeoutStopSec=30s
+RuntimeMaxSec=20min
+MemoryMax=6G
+CPUQuota=200%
+TasksMax=256
+
+StandardOutput=journal
+StandardError=journal
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

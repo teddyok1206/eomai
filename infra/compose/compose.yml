@@ -1,0 +1,40 @@
+name: eom
+
+services:
+  eom-postgres:
+    image: docker.io/library/postgres:18-bookworm@sha256:7d2695c3aa88e792e8b3b233e7e4adb296a20412c6c0ca361e3edaaacfada108
+    container_name: eom-postgres
+    restart: unless-stopped
+    env_file:
+      - /etc/eom/secrets/postgres.env
+    ports:
+      - "127.0.0.1:5432:5432"
+    shm_size: "256mb"
+    volumes:
+      - eom_postgres_data:/var/lib/postgresql
+      - ./initdb/001-create-app-role.sh:/docker-entrypoint-initdb.d/001-create-app-role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - eom_backend
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  eom_backend:
+    name: eom_backend
+    driver: bridge
+
+volumes:
+  eom_postgres_data:
+    name: eom_postgres_data
+    driver: local

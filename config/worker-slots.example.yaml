@@ -1,0 +1,32 @@
+version: 1
+
+limits:
+  global_codex_concurrency: 3
+  gpu_concurrency: 1
+
+slots:
+  - slot_id: "01"
+    linux_user: "eom-cdx-01"
+    role: "authoring"
+    enabled: true
+
+  - slot_id: "02"
+    linux_user: "eom-cdx-02"
+    role: "review"
+    enabled: true
+
+  - slot_id: "03"
+    linux_user: "eom-cdx-03"
+    role: "image"
+    enabled: true
+    gpu: true
+
+  - slot_id: "04"
+    linux_user: "eom-cdx-04"
+    role: "item_management"
+    enabled: true
+
+  - slot_id: "05"
+    linux_user: "eom-cdx-05"
+    role: "support"
+    enabled: true

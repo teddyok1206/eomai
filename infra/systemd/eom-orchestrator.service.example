@@ -1,0 +1,52 @@
+[Unit]
+Description=EOM orchestrator API
+Documentation=file:/home/eom/EOM/README.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=eom
+Group=eom
+Environment=HOME=/home/eom
+Environment=TZ=UTC
+Environment=EOM_API_BIND=127.0.0.1
+Environment=EOM_API_PORT=8765
+EnvironmentFile=-/etc/eom/eom.env
+WorkingDirectory=/home/eom/EOM
+ExecStart=/srv/eom/conda/envs/eom-core/bin/python -m eom.orchestrator
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/etc/eom/secrets
+ReadWritePaths=/srv/eom/jobs
+ReadWritePaths=/srv/eom/staging
+ReadWritePaths=/srv/eom/state
+ReadWritePaths=/srv/eom/cache
+ReadWritePaths=/var/log/eom
+ReadWritePaths=/mnt/nas/eom
+
+UMask=0027
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=60s
+TimeoutStopSec=30s
+MemoryMax=8G
+CPUQuota=400%
+TasksMax=512
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
