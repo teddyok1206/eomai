@@ -1,0 +1,45 @@
+.env
+.env.*
+!.env.example
+*.secret
+secrets/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+node_modules/
+target/
+.DS_Store
+Thumbs.db
+*.log
+runtime/
+artifacts/
+backups/
+postgres-data/
+docker-data/
+worker-homes/
+workspaces/
+jobs/
+cache/
+staging/
+*.hwpx
+*.hwp
+*.ai
+*.psd
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# Test fixtures are allowed only when intentionally added under tests/fixtures
+# and kept small enough for normal Git review. Large binary fixtures require
+# a written justification or Git LFS in a later approved step.
