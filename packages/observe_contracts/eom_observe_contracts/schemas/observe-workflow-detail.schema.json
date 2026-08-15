@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/observe/observe-workflow-detail.schema.json",
+  "title": "EOM Observe Workflow Detail",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "workflow_id", "definition_key", "definition_version", "definition_hash", "state", "stage", "current_step_key", "rework_cycle_count", "created_at", "updated_at", "completed_at", "failure_code", "failure_summary", "request_summary", "step_runs", "approvals", "events"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "workflow_id": {"type": "string", "maxLength": 64},
+    "definition_key": {"type": "string", "maxLength": 64},
+    "definition_version": {"type": "string", "maxLength": 32},
+    "definition_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "state": {"type": "string", "maxLength": 40},
+    "stage": {"type": "string", "maxLength": 40},
+    "current_step_key": {"type": "string", "maxLength": 64},
+    "rework_cycle_count": {"type": "integer", "minimum": 0},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": ["string", "null"], "format": "date-time"},
+    "failure_code": {"type": ["string", "null"], "maxLength": 80},
+    "failure_summary": {"type": ["string", "null"], "maxLength": 500},
+    "request_summary": {"type": "object", "maxProperties": 20},
+    "step_runs": {"type": "array", "items": {"type": "object"}, "maxItems": 100},
+    "approvals": {"type": "array", "items": {"type": "object"}, "maxItems": 20},
+    "events": {"type": "array", "items": {"$ref": "observe-event.schema.json"}, "maxItems": 500}
+  }
+}

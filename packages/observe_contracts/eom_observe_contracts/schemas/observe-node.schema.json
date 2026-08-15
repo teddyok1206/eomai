@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/observe/observe-node.schema.json",
+  "title": "EOM Observe Node",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "node_id", "node_type", "display_name", "role", "linux_user", "slot_id",
+    "status", "current_workflow_id", "current_step_key", "current_step_run_id",
+    "current_job_id", "attempt", "started_at", "elapsed_seconds", "last_event",
+    "last_event_at", "input_summary", "output_summary", "last_error_code",
+    "last_error_summary", "data_freshness"
+  ],
+  "properties": {
+    "node_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$"},
+    "node_type": {"enum": ["SERVICE", "WORKER", "HUMAN_GATE", "DATABASE", "STORAGE"]},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 80},
+    "role": {"type": ["string", "null"], "maxLength": 64},
+    "linux_user": {"type": ["string", "null"], "maxLength": 64},
+    "slot_id": {"type": ["string", "null"], "maxLength": 8},
+    "status": {"enum": ["IDLE", "QUEUED", "RUNNING", "WAITING", "SUCCEEDED_RECENTLY", "FAILED_RECENTLY", "DISABLED", "UNAVAILABLE", "UNKNOWN"]},
+    "current_workflow_id": {"type": ["string", "null"], "maxLength": 64},
+    "current_step_key": {"type": ["string", "null"], "maxLength": 64},
+    "current_step_run_id": {"type": ["string", "null"], "maxLength": 64},
+    "current_job_id": {"type": ["string", "null"], "maxLength": 64},
+    "attempt": {"type": ["integer", "null"], "minimum": 1},
+    "started_at": {"type": ["string", "null"], "format": "date-time"},
+    "elapsed_seconds": {"type": ["integer", "null"], "minimum": 0},
+    "last_event": {"type": ["string", "null"], "maxLength": 80},
+    "last_event_at": {"type": ["string", "null"], "format": "date-time"},
+    "input_summary": {"$ref": "#/$defs/summary"},
+    "output_summary": {"$ref": "#/$defs/summary"},
+    "last_error_code": {"type": ["string", "null"], "maxLength": 80},
+    "last_error_summary": {"type": ["string", "null"], "maxLength": 500},
+    "data_freshness": {"enum": ["fresh", "stale", "unknown"]}
+  },
+  "$defs": {
+    "summary": {
+      "type": "object",
+      "maxProperties": 24,
+      "additionalProperties": {
+        "type": ["string", "integer", "boolean", "null", "array"],
+        "items": {"type": "string", "maxLength": 160},
+        "maxItems": 12
+      }
+    }
+  }
+}

@@ -10,7 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from eom_observe.errors import ObserveError, ObserveErrorCode
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG_PATH = Path("/etc/eom/observe.yaml")
 DEFAULT_SECRET_PATH = Path("/etc/eom/secrets/observe.env")
 

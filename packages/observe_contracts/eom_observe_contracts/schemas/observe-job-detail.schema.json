@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/observe/observe-job-detail.schema.json",
+  "title": "EOM Observe Job Detail",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "job_id", "status", "task_type", "protocol_version", "worker_slot_id", "worker_role", "worker_linux_user", "created_at", "updated_at", "completed_at", "input_summary", "output_summary", "error_code", "error_summary", "artifact_id", "revision_id", "events"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "job_id": {"type": "string", "maxLength": 64},
+    "status": {"type": "string", "maxLength": 40},
+    "task_type": {"type": "string", "maxLength": 80},
+    "protocol_version": {"type": "string", "maxLength": 40},
+    "worker_slot_id": {"type": ["string", "null"], "maxLength": 8},
+    "worker_role": {"type": ["string", "null"], "maxLength": 64},
+    "worker_linux_user": {"type": ["string", "null"], "maxLength": 64},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": ["string", "null"], "format": "date-time"},
+    "input_summary": {"type": "object", "maxProperties": 24},
+    "output_summary": {"type": "object", "maxProperties": 24},
+    "error_code": {"type": ["string", "null"], "maxLength": 80},
+    "error_summary": {"type": ["string", "null"], "maxLength": 500},
+    "artifact_id": {"type": ["string", "null"], "maxLength": 64},
+    "revision_id": {"type": ["string", "null"], "maxLength": 64},
+    "events": {"type": "array", "items": {"$ref": "observe-event.schema.json"}, "maxItems": 500}
+  }
+}

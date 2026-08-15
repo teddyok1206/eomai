@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from datetime import timedelta
+from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ import pytest
 pytest.importorskip("eom_observe")
 
 from eom_observe.auth import LoginRateLimiter
+from eom_observe.build_info import get_build_info
 from eom_observe.cli import rotate_token
 from eom_observe.event_mapper import merge_events, role_node
 from eom_observe.logging import JsonFormatter
@@ -31,6 +33,7 @@ from eom_observe.snapshot import canonical_snapshot_hash
 from eom_observe.state_derivation import derive_edges, derive_nodes
 from eom_observe.stream import SharedSnapshotPoller, StreamMessage, SubscriptionHub, format_sse
 from eom_observe_contracts import NodeStatus
+from eom_observe_contracts.validation import SCHEMA_FILES, schema_resource
 
 from tests.observe.helpers import NOW, event, settings, snapshot
 
@@ -210,6 +213,21 @@ def test_snapshot_hash_ignores_generated_identity() -> None:
     second["snapshot_id"] = "snapshot_" + "b" * 32
     second["content_hash"] = "sha256:" + "b" * 64
     assert canonical_snapshot_hash(first) == canonical_snapshot_hash(second)
+
+
+def test_runtime_resources_are_package_resources() -> None:
+    package = files("eom_observe")
+    for name in ("index.html", "login.html", "app.js", "styles.css", "icons.svg"):
+        assert package.joinpath("static", name).is_file()
+    assert package.joinpath("resources", "worker-slots.example.yaml").is_file()
+    for filename in SCHEMA_FILES.values():
+        assert schema_resource(filename).is_file()
+
+
+def test_source_build_info_is_safe_without_git_lookup() -> None:
+    info = get_build_info()
+    assert info.source_commit == "unbuilt" or len(info.source_commit) == 40
+    assert info.package_version
 
 
 def test_metadata_redaction_hides_long_text_and_keeps_safe_enums() -> None:

@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=eom-observe
 Group=eom-observe
-WorkingDirectory=/home/eom/EOM
+WorkingDirectory=/var/lib/eom-observe
 
 EnvironmentFile=/etc/eom/secrets/observe.env
 Environment=EOM_OBSERVE_CONFIG=/etc/eom/observe.yaml
@@ -29,12 +29,12 @@ LockPersonality=true
 RestrictRealtime=true
 CapabilityBoundingSet=
 
-ReadOnlyPaths=/home/eom/EOM
 ReadOnlyPaths=/etc/eom/observe.yaml
 ReadOnlyPaths=/etc/eom/secrets/observe.env
 ReadWritePaths=/var/lib/eom-observe
 
 InaccessiblePaths=/root/.codex
+InaccessiblePaths=/home/eom/EOM
 InaccessiblePaths=/srv/eom/worker-homes
 InaccessiblePaths=/mnt/nas
 InaccessiblePaths=/var/run/docker.sock

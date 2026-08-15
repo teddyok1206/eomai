@@ -15,6 +15,7 @@ from eom_observe_contracts import (
     ArtifactDetail,
     ArtifactRevisionSummary,
     DataFreshness,
+    DeploymentInfo,
     JobDetail,
     NodeStatus,
     ObserveEdge,
@@ -104,6 +105,11 @@ def snapshot() -> ObserveSnapshot:
         content_hash="sha256:" + "a" * 64,
         generated_at=NOW,
         deployment_revision="3c4ab3130286",
+        deployment=DeploymentInfo(
+            source_commit="3c4ab3130286608f01a5a76e33e0163a330b0086",
+            package_version="0.1.1",
+            build_timestamp_utc=NOW,
+        ),
         data_freshness=DataFreshness(database="fresh", system_probe="fresh"),
         summary=SnapshotSummary(
             active_workflows=1,

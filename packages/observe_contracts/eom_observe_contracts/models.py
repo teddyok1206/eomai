@@ -41,6 +41,12 @@ class SnapshotSummary(StrictModel):
     idle_workers: int = Field(ge=0)
 
 
+class DeploymentInfo(StrictModel):
+    source_commit: str = Field(min_length=1, max_length=64)
+    package_version: str = Field(min_length=1, max_length=64)
+    build_timestamp_utc: datetime
+
+
 class ObserveNode(StrictModel):
     node_id: str
     node_type: Literal["SERVICE", "WORKER", "HUMAN_GATE", "DATABASE", "STORAGE"]
@@ -104,6 +110,7 @@ class ObserveSnapshot(StrictModel):
     content_hash: str
     generated_at: datetime
     deployment_revision: str
+    deployment: DeploymentInfo
     data_freshness: DataFreshness
     summary: SnapshotSummary
     nodes: list[ObserveNode]

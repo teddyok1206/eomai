@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/observe/observe-event.schema.json",
+  "title": "EOM Observe Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "source", "event_type", "timestamp", "source_node_id", "target_node_id", "workflow_id", "step_run_id", "job_id", "artifact_id", "revision_id", "status", "summary", "error_code"],
+  "properties": {
+    "event_id": {"type": "string", "maxLength": 128},
+    "source": {"enum": ["job_event", "workflow_event", "step_run", "approval", "artifact_revision"]},
+    "event_type": {"type": "string", "maxLength": 80},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "source_node_id": {"type": "string", "maxLength": 64},
+    "target_node_id": {"type": "string", "maxLength": 64},
+    "workflow_id": {"type": ["string", "null"], "maxLength": 64},
+    "step_run_id": {"type": ["string", "null"], "maxLength": 64},
+    "job_id": {"type": ["string", "null"], "maxLength": 64},
+    "artifact_id": {"type": ["string", "null"], "maxLength": 64},
+    "revision_id": {"type": ["string", "null"], "maxLength": 64},
+    "status": {"type": "string", "maxLength": 40},
+    "summary": {"type": "string", "maxLength": 240},
+    "error_code": {"type": ["string", "null"], "maxLength": 80}
+  }
+}

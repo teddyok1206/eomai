@@ -4,11 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eom-observe"
-version = "0.1.0"
+version = "0.1.1"
 description = "Independent read-only EOM observability console"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "eom-observe-contracts==0.1.0",
   "fastapi==0.116.1",
   "psycopg[binary]==3.2.9",
   "pydantic==2.11.7",
@@ -26,4 +25,5 @@ where = ["."]
 include = ["eom_observe*"]
 
 [tool.setuptools.package-data]
-eom_observe = ["static/*"]
+eom_observe = ["build-info.json", "resources/*.yaml", "static/*"]
+eom_observe_contracts = ["schemas/*.json"]

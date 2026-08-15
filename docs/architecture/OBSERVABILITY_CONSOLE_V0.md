@@ -6,6 +6,11 @@ Observability Console V0 is a read-only development and operations view. It is n
 plane, terminal, database admin, main GUI, or Slack feature. Production runtime packages never import
 `eom_observe` or `eom_observe_contracts`.
 
+The running service is a non-editable `eom-observe` wheel installed in the dedicated observer prefix.
+It neither imports from nor reads `/home/eom/EOM`; the systemd mount namespace explicitly makes the
+checkout inaccessible. Branch changes and future work such as HWPX therefore cannot alter the active
+release. Deployment is an explicit build-and-install operation.
+
 ```mermaid
 flowchart LR
   subgraph Runtime[EOM production runtime]
@@ -51,6 +56,25 @@ flowchart LR
 Identical canonical content produces the same hash and is suppressed. Every reconnect receives a full
 snapshot. Changes produce `delta`; inactivity produces `heartbeat`. A slow client loses intermediate
 snapshots and receives the latest value.
+
+## Release Resources
+
+```mermaid
+flowchart LR
+  G[Clean committed checkout] --> B[PEP 517 wheel build in /tmp]
+  B --> W[eom-observe wheel]
+  W --> P[Python packages]
+  W --> A[HTML / CSS / JS / SVG]
+  W --> J[Observe JSON Schemas]
+  W --> M[build-info.json]
+  W --> I[Non-editable site-packages install]
+  I --> S[eom-observe.service]
+  S -. denied .-> G
+```
+
+`importlib.resources` is the sole runtime resource boundary for static assets, schemas, and the
+embedded worker-slot projection. `build-info.json` supplies source commit, package version, and UTC
+build timestamp without consulting Git. The API exposes those immutable values in each snapshot.
 
 ## Read-Only Boundary
 

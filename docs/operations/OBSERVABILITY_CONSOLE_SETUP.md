@@ -12,8 +12,9 @@ The intended Conda definition is `infra/conda/eom-observe.environment.yml`:
   --requirement infra/conda/eom-observe.requirements.lock
 ```
 
-The lock installs only the local `eom-observe-contracts` and `eom-observe` distributions plus their
-fully pinned dependencies. It does not install the production `eom-platform` distribution.
+The lock installs only fully pinned third-party runtime, build, and test dependencies. It does not
+install observer source in editable mode and does not install the production `eom-platform`
+distribution. Build tools are present solely to create the observer wheel in this prefix.
 
 If the configured Conda channels reject noninteractive creation because their Terms of Service have
 not been accepted, do not repeatedly change channels or accept terms implicitly. Create the isolated
@@ -24,6 +25,28 @@ prefix with the existing Conda-managed Python 3.12 and install only through that
 ```
 
 This fallback does not install anything into `eom-core` or system Python.
+
+## Build And Deploy A Release
+
+Commit the intended release and ensure the working tree is clean. Build artifacts are kept under
+`/tmp/eom-observe-build/<commit>/` and are not added to Git:
+
+```bash
+scripts/observe/deploy_release.sh --dry-run
+scripts/observe/deploy_release.sh --build-only
+sudo scripts/observe/deploy_release.sh --install
+scripts/observe/deploy_release.sh --verify
+```
+
+The install action verifies wheel content before stopping the service, removes only a known previous
+editable observer distribution, performs a non-editable force reinstall, installs the reviewed unit,
+and checks health, authenticated assets, SSE, read-only DB behavior, and sandbox restrictions. It
+never uses system Python or `eom-core`.
+
+The installed release imports from
+`/srv/eom/conda/envs/eom-observe/lib/python3.12/site-packages`. Its working directory is
+`/var/lib/eom-observe`; `/home/eom/EOM` is inaccessible inside the service. Do not add `PYTHONPATH`,
+repository symlinks, `.pth` source mappings, or editable installs.
 
 ## Database Role
 
@@ -65,3 +88,11 @@ ss -lntp 'sport = :8780'
 ```
 
 The only acceptable listener is `127.0.0.1:8780`.
+
+## Rollback
+
+Each install writes a 0600 deployment record and copies the prior unit below
+`/var/lib/eom-observe/deployments/`. To roll back, stop the service, reinstall a previously retained
+and inspected wheel with the same non-editable pip command, restore its recorded unit if necessary,
+reload systemd, start the service, and run `deploy_release.sh --verify`. Never point the unit at a Git
+checkout as a rollback mechanism.

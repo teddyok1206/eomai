@@ -8,7 +8,6 @@ import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from eom_observe_contracts import HealthResponse, NodeStatus, ObserveSnapshot, validate_contract
@@ -21,11 +20,12 @@ from eom_observe.auth import AuthService
 from eom_observe.database import build_readonly_engine
 from eom_observe.errors import ObserveError, ObserveErrorCode
 from eom_observe.repository import ObserveRepository
+from eom_observe.resources import static_resource
 from eom_observe.settings import ObserveSecrets, ObserveSettings, load_secrets, load_settings
 from eom_observe.snapshot import SnapshotBuilder
 from eom_observe.stream import SharedSnapshotPoller, StreamMessage, SubscriptionHub, format_sse
 
-STATIC_ROOT = Path(__file__).resolve().parent / "static"
+STATIC_ROOT = static_resource()
 COOKIE_NAME = "eom_observe_session"
 API_PREFIX = "/observe/api/v1"
 WORKFLOW_ID_PATTERN = r"^workflow_[a-z0-9_]{8,55}$"
@@ -104,7 +104,7 @@ def create_app(services: AppServices | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.services = actual
-    app.mount("/observe/assets", StaticFiles(directory=STATIC_ROOT), name="observe-assets")
+    app.mount("/observe/assets", StaticFiles(directory=str(STATIC_ROOT)), name="observe-assets")
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next: Any) -> Response:
@@ -164,11 +164,11 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     ) -> Response:
         if actual.auth.session(session_cookie) is None:
             return RedirectResponse("/observe/login", status_code=303)
-        return FileResponse(STATIC_ROOT / "index.html")
+        return FileResponse(str(static_resource("index.html")))
 
     @app.get("/observe/login", include_in_schema=False)
     async def login_page() -> FileResponse:
-        return FileResponse(STATIC_ROOT / "login.html")
+        return FileResponse(str(static_resource("login.html")))
 
     @app.post(
         f"{API_PREFIX}/session",

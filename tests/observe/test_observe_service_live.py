@@ -49,6 +49,9 @@ def test_installed_service_login_snapshot_and_reconnect() -> None:
         snapshot_response = client.get("/observe/api/v1/snapshot")
         snapshot = ObserveSnapshot.model_validate(snapshot_response.json())
         validate_contract("snapshot", snapshot.model_dump(mode="json"))
+        assert len(snapshot.deployment.source_commit) == 40
+        assert snapshot.deployment.package_version == "0.1.1"
+        assert snapshot.deployment_revision == snapshot.deployment.source_commit[:12]
         assert len(snapshot.nodes) == 10
         assert {node.role for node in snapshot.nodes if node.role} == {
             "authoring",

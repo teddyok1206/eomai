@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eom-observe-contracts"
-version = "0.1.0"
+version = "0.1.1"
 description = "Versioned contracts for the EOM read-only observability API"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -15,3 +15,6 @@ dependencies = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["eom_observe_contracts*"]
+
+[tool.setuptools.package-data]
+eom_observe_contracts = ["schemas/*.json"]

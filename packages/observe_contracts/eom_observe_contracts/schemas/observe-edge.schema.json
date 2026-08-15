@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/observe/observe-edge.schema.json",
+  "title": "EOM Observe Edge",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["edge_id", "source_node_id", "target_node_id", "interaction_type", "status", "workflow_id", "job_id", "step_key", "attempt", "started_at", "completed_at", "last_event_at", "summary"],
+  "properties": {
+    "edge_id": {"type": "string", "pattern": "^edge_[a-z0-9_]{3,120}$"},
+    "source_node_id": {"type": "string", "maxLength": 64},
+    "target_node_id": {"type": "string", "maxLength": 64},
+    "interaction_type": {"type": "string", "maxLength": 80},
+    "status": {"enum": ["ACTIVE", "RECENT", "INACTIVE", "FAILED"]},
+    "workflow_id": {"type": ["string", "null"], "maxLength": 64},
+    "job_id": {"type": ["string", "null"], "maxLength": 64},
+    "step_key": {"type": ["string", "null"], "maxLength": 64},
+    "attempt": {"type": ["integer", "null"], "minimum": 1},
+    "started_at": {"type": ["string", "null"], "format": "date-time"},
+    "completed_at": {"type": ["string", "null"], "format": "date-time"},
+    "last_event_at": {"type": ["string", "null"], "format": "date-time"},
+    "summary": {"type": "string", "maxLength": 240}
+  }
+}

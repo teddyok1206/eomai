@@ -218,6 +218,8 @@ function render(state) {
   elements.db.textContent = snapshot.data_freshness.database.toUpperCase();
   elements.snapshotTime.textContent = formatUtc(snapshot.generated_at);
   elements.revision.textContent = snapshot.deployment_revision;
+  document.querySelector("#package-version").textContent = snapshot.deployment.package_version;
+  document.querySelector("#build-time").textContent = formatUtc(snapshot.deployment.build_timestamp_utc);
   elements.freshness.textContent = snapshot.data_freshness.database.toUpperCase();
   for (const [key, id] of Object.entries(metricIds)) document.querySelector(`#${id}`).textContent = snapshot.summary[key];
   renderGraph(elements.graph, snapshot.nodes, snapshot.edges, selectNode, state.selectedNodeId);

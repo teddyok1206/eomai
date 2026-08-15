@@ -6,7 +6,6 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime
-from pathlib import Path
 from time import perf_counter
 from typing import Any
 
@@ -15,6 +14,7 @@ from eom_observe_contracts import (
     ArtifactDetail,
     ArtifactRevisionSummary,
     DataFreshness,
+    DeploymentInfo,
     JobDetail,
     ObserveSnapshot,
     SnapshotSummary,
@@ -23,6 +23,7 @@ from eom_observe_contracts import (
     validate_contract,
 )
 
+from eom_observe.build_info import get_build_info
 from eom_observe.event_mapper import map_job_event, map_workflow_event, merge_events
 from eom_observe.redaction import (
     logical_artifact_uri,
@@ -31,21 +32,9 @@ from eom_observe.redaction import (
     shortened_hash,
 )
 from eom_observe.repository import ObserveRepository
-from eom_observe.settings import REPOSITORY_ROOT, ObserveSettings
+from eom_observe.settings import ObserveSettings
 from eom_observe.state_derivation import derive_edges, derive_nodes
 from eom_observe.system_probe import probe_system
-
-
-def deployment_revision(repository_root: Path = REPOSITORY_ROOT) -> str:
-    try:
-        git_dir = repository_root / ".git"
-        head = (git_dir / "HEAD").read_text(encoding="ascii").strip()
-        if head.startswith("ref: "):
-            ref = head[5:]
-            return (git_dir / ref).read_text(encoding="ascii").strip()[:12]
-        return head[:12]
-    except OSError:
-        return "unknown"
 
 
 def canonical_snapshot_hash(value: dict[str, Any]) -> str:
@@ -103,9 +92,16 @@ class SnapshotBuilder:
             failed_jobs_recent=int(rows.counts["failed_jobs_recent"]),
             idle_workers=sum(node.status == "IDLE" for node in nodes if node.node_type == "WORKER"),
         )
+        build_info = get_build_info()
+        deployment = DeploymentInfo(
+            source_commit=build_info.source_commit,
+            package_version=build_info.package_version,
+            build_timestamp_utc=build_info.build_timestamp_utc,
+        )
         partial = {
             "schema_version": "1.0",
-            "deployment_revision": deployment_revision(),
+            "deployment_revision": build_info.source_commit[:12],
+            "deployment": deployment.model_dump(mode="json"),
             "data_freshness": DataFreshness(
                 database="fresh", system_probe="fresh" if probe.fresh else "unknown"
             ).model_dump(mode="json"),
@@ -119,7 +115,8 @@ class SnapshotBuilder:
             snapshot_id=f"snapshot_{content_hash.removeprefix('sha256:')[:32]}",
             content_hash=content_hash,
             generated_at=generated_at,
-            deployment_revision=deployment_revision(),
+            deployment_revision=build_info.source_commit[:12],
+            deployment=deployment,
             data_freshness=DataFreshness(
                 database="fresh", system_probe="fresh" if probe.fresh else "unknown"
             ),

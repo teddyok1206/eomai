@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import pwd
 import socket
@@ -11,10 +12,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import yaml
-from eom_observe_contracts.validation import SCHEMA_FILES, SCHEMA_ROOT
+from eom_observe_contracts.validation import SCHEMA_FILES, schema_resource
 
+from eom_observe.build_info import get_build_info
 from eom_observe.database import build_readonly_engine
 from eom_observe.repository import ObserveRepository
+from eom_observe.resources import static_resource, worker_slot_resource
 from eom_observe.settings import (
     DEFAULT_CONFIG_PATH,
     DEFAULT_SECRET_PATH,
@@ -25,8 +28,7 @@ from eom_observe.settings import (
 
 SERVICE_USER = "eom-observe"
 UNIT_PATH = Path("/etc/systemd/system/eom-observe.service")
-SOURCE_UNIT_PATH = Path(__file__).resolve().parents[3] / "infra/systemd/eom-observe.service"
-STATIC_ROOT = Path(__file__).resolve().parent / "static"
+SOURCE_ROOT = Path("/home/eom/EOM")
 
 
 @dataclass(frozen=True)
@@ -84,7 +86,7 @@ def _inaccessible_in_service_namespace(path: Path) -> bool:
         )
         return result.returncode != 0
     try:
-        unit = SOURCE_UNIT_PATH.read_text(encoding="utf-8")
+        unit = UNIT_PATH.read_text(encoding="utf-8")
     except OSError:
         return False
     return f"InaccessiblePaths={path}" in unit
@@ -164,9 +166,8 @@ def run_doctor(
                 Check("required_table_select", False, "0/9"),
             ]
         )
-    worker_config = Path(__file__).resolve().parents[3] / "config/worker-slots.example.yaml"
     try:
-        workers = yaml.safe_load(worker_config.read_text(encoding="utf-8"))["slots"]
+        workers = yaml.safe_load(worker_slot_resource().read_text(encoding="utf-8"))["slots"]
         worker_ok = len(workers) == 5
     except Exception:
         worker_ok = False
@@ -197,14 +198,14 @@ def run_doctor(
     checks.append(
         Check(
             "static_assets",
-            all((STATIC_ROOT / name).is_file() for name in assets),
+            all(static_resource(name).is_file() for name in assets),
             f"{len(assets)} required",
         )
     )
     schema_ok = True
     try:
         for filename in SCHEMA_FILES.values():
-            schema = json.loads((SCHEMA_ROOT / filename).read_text(encoding="utf-8"))
+            schema = json.loads(schema_resource(filename).read_text(encoding="utf-8"))
             schema_ok = schema_ok and schema.get("$schema", "").endswith("2020-12/schema")
     except Exception:
         schema_ok = False
@@ -215,8 +216,27 @@ def run_doctor(
     except KeyError:
         user_ok = False
     checks.append(Check("service_user", user_ok, SERVICE_USER if user_ok else "missing"))
+    checks.append(Check("systemd_unit", UNIT_PATH.is_file(), str(UNIT_PATH)))
+    build_info = get_build_info()
     checks.append(
-        Check("systemd_unit", UNIT_PATH.is_file() or SOURCE_UNIT_PATH.is_file(), str(UNIT_PATH))
+        Check(
+            "release_build_info",
+            build_info.is_release,
+            f"package={build_info.package_version}",
+        )
+    )
+    module = importlib.util.find_spec("eom_observe")
+    module_origin = Path(module.origin).resolve() if module is not None and module.origin else None
+    installed = module_origin is not None and "site-packages" in module_origin.parts
+    checks.append(
+        Check("non_editable_install", installed, "site-packages" if installed else "source")
+    )
+    checks.append(
+        Check(
+            "source_checkout_inaccessible",
+            _inaccessible_in_service_namespace(SOURCE_ROOT),
+            "denied",
+        )
     )
     for name, path in (
         ("nas_inaccessible", Path("/mnt/nas")),
