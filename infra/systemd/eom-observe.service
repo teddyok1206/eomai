@@ -1,0 +1,57 @@
+[Unit]
+Description=EOM Read-Only Observability Console
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=eom-observe
+Group=eom-observe
+WorkingDirectory=/home/eom/EOM
+
+EnvironmentFile=/etc/eom/secrets/observe.env
+Environment=EOM_OBSERVE_CONFIG=/etc/eom/observe.yaml
+
+ExecStart=/srv/eom/conda/envs/eom-observe/bin/eom-observe serve
+
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+CapabilityBoundingSet=
+
+ReadOnlyPaths=/home/eom/EOM
+ReadOnlyPaths=/etc/eom/observe.yaml
+ReadOnlyPaths=/etc/eom/secrets/observe.env
+ReadWritePaths=/var/lib/eom-observe
+
+InaccessiblePaths=/root/.codex
+InaccessiblePaths=/srv/eom/worker-homes
+InaccessiblePaths=/mnt/nas
+InaccessiblePaths=/var/run/docker.sock
+InaccessiblePaths=/etc/eom/secrets/postgres.env
+
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+UMask=0077
+MemoryMax=512M
+TasksMax=128
+TimeoutStartSec=30
+TimeoutStopSec=15
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EOM Observability Console</title>
+    <link rel="stylesheet" href="/observe/assets/styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-block">
+        <p class="eyebrow">READ-ONLY OPERATIONS</p>
+        <h1>EOM Observability Console</h1>
+      </div>
+      <div class="connection-strip" aria-live="polite">
+        <span class="status-chip" id="connection-status"><span class="status-mark"></span>Connecting</span>
+        <span class="header-meta">DB <strong id="db-status">Unknown</strong></span>
+        <span class="header-meta">Snapshot <strong id="snapshot-time">-</strong></span>
+        <span class="header-meta">Revision <strong id="revision">-</strong></span>
+        <button class="icon-button" id="pause-button" type="button" title="Pause updates" aria-label="Pause updates">Ⅱ</button>
+        <button class="text-button" id="logout-button" type="button">Sign out</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="summary-band" aria-label="System summary">
+        <article><span>Active workflows</span><strong id="metric-workflows">0</strong></article>
+        <article><span>Awaiting approval</span><strong id="metric-approvals">0</strong></article>
+        <article><span>Queued jobs</span><strong id="metric-queued">0</strong></article>
+        <article><span>Running jobs</span><strong id="metric-running">0</strong></article>
+        <article><span>Recent failures</span><strong id="metric-failures">0</strong></article>
+        <article><span>Idle workers</span><strong id="metric-idle">0</strong></article>
+      </section>
+
+      <div class="workspace">
+        <section class="graph-section" aria-labelledby="graph-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">LIVE TOPOLOGY</p>
+              <h2 id="graph-title">System graph</h2>
+            </div>
+            <span class="freshness" id="freshness">UNKNOWN</span>
+          </div>
+          <div class="graph-frame">
+            <svg id="system-graph" viewBox="0 0 1120 720" role="img" aria-label="EOM component interaction graph">
+              <defs>
+                <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 Z"></path>
+                </marker>
+              </defs>
+              <g id="edge-layer"></g>
+              <g id="node-layer"></g>
+            </svg>
+          </div>
+        </section>
+
+        <aside class="detail-panel" aria-labelledby="detail-title">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow">SELECTION</p>
+              <h2 id="detail-title">Component detail</h2>
+            </div>
+            <span class="status-chip neutral" id="detail-status">NONE</span>
+          </div>
+          <div id="detail-content" class="detail-content">
+            <p class="empty-state">Select a component or timeline event.</p>
+          </div>
+        </aside>
+      </div>
+
+      <section class="operations-band">
+        <div class="queue-panel">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow">CURRENT LOAD</p>
+              <h2>Queue</h2>
+            </div>
+          </div>
+          <div id="queue-list" class="queue-list"></div>
+        </div>
+
+        <div class="timeline-panel">
+          <div class="section-heading timeline-heading">
+            <div>
+              <p class="eyebrow">AUDIT STREAM</p>
+              <h2>Timeline</h2>
+            </div>
+            <div class="filters" role="search">
+              <label><span>Workflow</span><input id="filter-workflow" type="search" autocomplete="off"></label>
+              <label><span>Job</span><input id="filter-job" type="search" autocomplete="off"></label>
+              <label><span>Role</span><select id="filter-role"><option value="">All</option><option>authoring</option><option>image</option><option>review</option><option value="item-management">item management</option><option>support</option></select></label>
+              <label><span>Status</span><input id="filter-status" type="search" autocomplete="off"></label>
+              <label><span>Event</span><input id="filter-event" type="search" autocomplete="off"></label>
+              <label><span>Text</span><input id="filter-text" type="search" autocomplete="off"></label>
+            </div>
+          </div>
+          <div class="timeline-table-wrap">
+            <table>
+              <thead><tr><th>UTC</th><th>Event</th><th>Route</th><th>Status</th><th>Reference</th></tr></thead>
+              <tbody id="timeline-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/observe/assets/app.js"></script>
+  </body>
+</html>

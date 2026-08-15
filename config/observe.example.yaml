@@ -1,0 +1,28 @@
+schema_version: 1
+
+server:
+  host: "127.0.0.1"
+  port: 8780
+  root_path: "/observe"
+  poll_interval_ms: 1000
+  heartbeat_seconds: 15
+  max_stream_clients: 5
+
+snapshot:
+  recent_event_limit: 200
+  query_timeout_ms: 1500
+  stale_after_seconds: 5
+
+privacy:
+  content_preview_mode: "metadata"
+  max_preview_bytes: 65536
+  max_text_length: 500
+  expose_filesystem_paths: false
+
+auth:
+  session_ttl_seconds: 28800
+  secure_cookie: false
+
+ui:
+  default_timeline_limit: 100
+  edge_activity_seconds: 4

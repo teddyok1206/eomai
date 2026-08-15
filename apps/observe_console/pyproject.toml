@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-observe"
+version = "0.1.0"
+description = "Independent read-only EOM observability console"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "eom-observe-contracts==0.1.0",
+  "fastapi==0.116.1",
+  "psycopg[binary]==3.2.9",
+  "pydantic==2.11.7",
+  "PyYAML==6.0.2",
+  "SQLAlchemy==2.0.43",
+  "typer==0.16.0",
+  "uvicorn==0.35.0",
+]
+
+[project.scripts]
+eom-observe = "eom_observe.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_observe*"]
+
+[tool.setuptools.package-data]
+eom_observe = ["static/*"]

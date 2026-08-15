@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/observe/observe-snapshot.schema.json",
+  "title": "EOM Observe Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_id", "content_hash", "generated_at", "deployment_revision", "data_freshness", "summary", "nodes", "edges", "recent_events"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "snapshot_id": {"type": "string", "pattern": "^snapshot_[a-f0-9]{32}$"},
+    "content_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "deployment_revision": {"type": "string", "maxLength": 64},
+    "data_freshness": {
+      "type": "object", "additionalProperties": false,
+      "required": ["database", "system_probe"],
+      "properties": {
+        "database": {"enum": ["fresh", "stale", "unknown"]},
+        "system_probe": {"enum": ["fresh", "stale", "unknown"]}
+      }
+    },
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["active_workflows", "waiting_approvals", "queued_jobs", "running_jobs", "failed_jobs_recent", "idle_workers"],
+      "properties": {
+        "active_workflows": {"type": "integer", "minimum": 0},
+        "waiting_approvals": {"type": "integer", "minimum": 0},
+        "queued_jobs": {"type": "integer", "minimum": 0},
+        "running_jobs": {"type": "integer", "minimum": 0},
+        "failed_jobs_recent": {"type": "integer", "minimum": 0},
+        "idle_workers": {"type": "integer", "minimum": 0}
+      }
+    },
+    "nodes": {"type": "array", "items": {"$ref": "observe-node.schema.json"}, "minItems": 10, "maxItems": 32},
+    "edges": {"type": "array", "items": {"$ref": "observe-edge.schema.json"}, "maxItems": 128},
+    "recent_events": {"type": "array", "items": {"$ref": "observe-event.schema.json"}, "maxItems": 500}
+  }
+}

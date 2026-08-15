@@ -12,6 +12,7 @@ This repository is separate from `/home/eom/EOMIS`. Do not import, copy, or modi
 - Short-term logs: `/var/log/eom`
 - NAS artifact root: `/mnt/nas/eom`
 - Reserved API bind: `127.0.0.1:8765`
+- Read-only observability bind: `127.0.0.1:8780`
 
 ## Current Phase
 
@@ -37,6 +38,11 @@ request -> authoring -> image decision -> review -> human CLI gate
 All role results are strict placeholder JSON. There is no real domain content, generated image,
 HWPX, GUI, or external LLM API. Slack is not a workflow feature; `eom_dev_reporter` is a separate,
 best-effort developer milestone sender using only an Incoming Webhook.
+
+Observability Console V0 is a separate, replaceable read-only process at `/observe/`. It projects
+existing PostgreSQL audit data through a versioned `/observe/api/v1/` contract and a shared SSE
+poller. It cannot enqueue commands, mutate database rows, access NAS, inspect worker homes, or run
+Codex. Stopping `eom-observe.service` has no effect on the platform or workflow runtime.
 
 ## Operating Commands
 
@@ -89,6 +95,18 @@ The runner also exposes `run-once`, `serve`, and `reconcile` modes through
 `/srv/eom/conda/envs/eom-core/bin/eom-workflow-runner`. CLI approval, rework, cancellation, and
 reconciliation enqueue commands; only the deterministic engine changes workflow state.
 
+Observability operations use their own Python 3.12 prefix and CLI:
+
+```bash
+/srv/eom/conda/envs/eom-observe/bin/eom-observe doctor
+/srv/eom/conda/envs/eom-observe/bin/eom-observe snapshot
+systemctl status eom-observe.service
+```
+
+Access remains loopback-only. Forward local port 8780 and open `http://127.0.0.1:8780/observe/`.
+The one-time initial token file is `/home/eom/.eom-observe-initial-token`; its value is never logged
+or stored in Git.
+
 `job submit` needs permission to create a transient systemd unit because that unit changes to the
 isolated worker Linux user and makes `/mnt/nas` and the Docker socket inaccessible. Database
 credentials are loaded from `EOM_DATABASE_URL` or `/etc/eom/secrets/postgres.env`; they are never
@@ -108,6 +126,9 @@ Use UTC for system timestamps. Use Asia/Seoul only for user-facing display.
 - Workflow engine architecture: `docs/architecture/WORKFLOW_ENGINE_V0.md`
 - Workflow live smoke test: `docs/operations/WORKFLOW_ENGINE_SMOKE_TEST.md`
 - Development Slack reporting: `docs/operations/DEVELOPMENT_SLACK_REPORTING.md`
+- Observability architecture: `docs/architecture/OBSERVABILITY_CONSOLE_V0.md`
+- Observability setup: `docs/operations/OBSERVABILITY_CONSOLE_SETUP.md`
+- Observability access: `docs/operations/OBSERVABILITY_CONSOLE_ACCESS.md`
 - Internal environment reports: `docs/internal/`
 - Operations and rollback: `docs/operations/`
 - Compose operations: `infra/compose/README.md`

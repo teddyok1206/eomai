@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/observe/observe-health.schema.json",
+  "title": "EOM Observe Health",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "timestamp_utc"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "status": {"enum": ["LIVE", "READY", "DEGRADED"]},
+    "timestamp_utc": {"type": "string", "format": "date-time"}
+  }
+}
