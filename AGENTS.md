@@ -25,3 +25,12 @@ These rules apply to all future Codex and automation work in `/home/eom/EOM`.
 21. Do not use external LLM APIs.
 22. Do not copy root Codex auth to workers.
 23. Do not add worker users to sudo, Docker, or the `eom` group.
+
+## Development Progress Reporting
+
+- When the development reporter is enabled, send reports only at important milestones.
+- The Slack development reporter is not a production runtime feature.
+- Slack failure must not block development, tests, commits, or runtime workflows.
+- Never send secrets, full diffs, full logs, worker prompts or results, or item content to Slack.
+- Keep routine reporting milestone-based and avoid excessive messages.
+- Report `BLOCKED` and `COMPLETED` milestones immediately.

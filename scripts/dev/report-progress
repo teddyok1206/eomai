@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec /srv/eom/conda/envs/eom-core/bin/python -m eom_dev_reporter "$@"
