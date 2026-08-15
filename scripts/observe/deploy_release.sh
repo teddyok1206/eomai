@@ -249,6 +249,7 @@ verify_release() {
 import importlib.metadata
 import importlib.util
 import json
+import os
 import site
 from pathlib import Path
 
