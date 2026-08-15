@@ -242,6 +242,19 @@ PY
   fi
 }
 
+wait_for_live() {
+  local attempt
+  for attempt in {1..30}; do
+    if systemctl is-active --quiet "${SERVICE}" && \
+      curl --fail --silent --max-time 1 \
+        http://127.0.0.1:8780/observe/api/v1/health/live >/dev/null; then
+      return 0
+    fi
+    sleep 0.5
+  done
+  fail "service did not become live within 15 seconds"
+}
+
 verify_release() {
   inspect_wheel "${WHEEL}"
   EXPECTED_COMMIT="${COMMIT}" EXPECTED_VERSION="${VERSION}" \
@@ -295,6 +308,7 @@ PY
     fail "service working directory mismatch"
   ! systemctl show "${SERVICE}" --property=Environment --value | grep -q '/home/eom/EOM' || \
     fail "repository path appears in service environment"
+  wait_for_live
   systemctl is-active --quiet "${SERVICE}" || fail "service is not active"
   systemctl is-enabled --quiet "${SERVICE}" || fail "service is not enabled"
   ss -lnt | grep -q '127.0.0.1:8780' || fail "loopback listener missing"
