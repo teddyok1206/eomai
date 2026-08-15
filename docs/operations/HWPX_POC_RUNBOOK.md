@@ -11,6 +11,19 @@ Do not describe a synthetic fixture as a reference or compatibility result.
 
 ## Prepare
 
+Bootstrap the locked system user and install a reviewed clean commit as non-editable wheels:
+
+```bash
+sudo /home/eom/EOM/scripts/hwpx/bootstrap_builder_user.sh
+/home/eom/EOM/scripts/hwpx/deploy_builder.sh --install
+/home/eom/EOM/scripts/hwpx/deploy_builder.sh --verify
+```
+
+Wheel builds occur from a temporary source copy under `/tmp`; build directories and editable
+metadata are never left in the repository. Deployment records the previous versions and installed
+commit under `/var/lib/eom-hwpx/deployments/`. Roll back by force-reinstalling the reviewed wheels
+from the recorded prior release directory, then run `--verify` and `eomctl hwpx doctor`.
+
 ```bash
 /srv/eom/conda/envs/eom-core/bin/eomctl hwpx doctor
 /srv/eom/conda/envs/eom-core/bin/eomctl hwpx reference-kit create
@@ -57,3 +70,7 @@ hash, or either validation report fails. NAS commit occurs only after eom-core r
 
 Continue with `HWPX_MANUAL_HANCOM_VALIDATION.md`. Before this gate, the expected build state is
 `PENDING_MANUAL_VALIDATION`, not complete.
+
+The transient unit runs as `eom-hwpx` with `PrivateNetwork`, no privileges, a strict filesystem,
+and explicit denial of NAS, the Git checkout, Docker, Codex, worker homes, and EOM secrets. Only the
+assigned build workspace is writable.

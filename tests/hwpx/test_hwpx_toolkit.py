@@ -159,6 +159,15 @@ def test_binding_compiler_handles_split_marker_and_anchor_fallback(tmp_path: Pat
     assert upper.constraints["split_across_text_nodes"] is True
     assert equation.binding_kind == BindingKind.EQUATION_ANCHOR
     assert "anchor_text_locator" in equation.constraints
+    image = next(
+        binding for binding in bindings.bindings if binding.binding_kind == BindingKind.IMAGE_BINARY
+    )
+    assert image.object_id == "pic1"
+    assert image.reference_ids == ("image1",)
+    table = next(
+        binding for binding in bindings.bindings if binding.field_name == "item.table.rows.1.2"
+    )
+    assert table.locator["cell_index"] == 5
 
 
 def test_binding_compiler_rejects_missing_duplicate_marker_and_image_hash(tmp_path: Path) -> None:

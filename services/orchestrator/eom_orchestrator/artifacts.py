@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,27 @@ class StagedArtifact:
     manifest: ArtifactManifest
     content_hash: str
     manifest_hash: str
+
+
+@dataclass(frozen=True)
+class StagedFile:
+    relative_path: str
+    path: Path
+    sha256: str
+    size: int
+
+
+@dataclass(frozen=True)
+class StagedFileSet:
+    directory: Path
+    manifest_path: Path
+    manifest: dict[str, object]
+    files: tuple[StagedFile, ...]
+    primary_hash: str
+    primary_bytes: int
+    manifest_hash: str
+    logical_artifact_id: str
+    revision_id: str
 
 
 def stage_artifact(
@@ -122,10 +144,136 @@ def commit_artifact(staged: StagedArtifact, nas_root: Path) -> Path:
     return final
 
 
+def stage_file_set_artifact(
+    *,
+    files: dict[str, Path],
+    primary_file: str,
+    job_id: str,
+    logical_artifact_id: str,
+    revision_id: str,
+    artifact_type: str,
+    staging: Path,
+    created_at: datetime | None = None,
+) -> StagedFileSet:
+    if primary_file not in files or not files:
+        raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "primary artifact file is missing")
+    staging.mkdir(mode=0o750, parents=True, exist_ok=True)
+    staged_files: list[StagedFile] = []
+    for relative_path, source in sorted(files.items()):
+        relative = Path(relative_path)
+        if (
+            relative.is_absolute()
+            or ".." in relative.parts
+            or "\\" in relative_path
+            or relative_path in {"manifest.json", ""}
+        ):
+            raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "unsafe artifact file name")
+        try:
+            source_stat = source.lstat()
+        except OSError as exc:
+            raise PlatformError(
+                ErrorCode.ARTIFACT_COMMIT_FAILED, "artifact source is missing"
+            ) from exc
+        if not stat.S_ISREG(source_stat.st_mode) or source.is_symlink():
+            raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "artifact source is not regular")
+        target = staging / relative
+        target.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        target.chmod(0o640)
+        staged_files.append(
+            StagedFile(
+                relative_path=relative.as_posix(),
+                path=target,
+                sha256=sha256_file(target),
+                size=target.stat().st_size,
+            )
+        )
+    primary = next(item for item in staged_files if item.relative_path == primary_file)
+    manifest: dict[str, object] = {
+        "manifest_version": "hwpx-file-set/1.0",
+        "job_id": job_id,
+        "logical_artifact_id": logical_artifact_id,
+        "revision_id": revision_id,
+        "artifact_type": artifact_type,
+        "primary_file": primary_file,
+        "content_hash": primary.sha256,
+        "content_bytes": primary.size,
+        "files": [
+            {
+                "file_name": item.relative_path,
+                "sha256": item.sha256,
+                "bytes": item.size,
+            }
+            for item in staged_files
+        ],
+        "created_at": (created_at or datetime.now(UTC)).isoformat().replace("+00:00", "Z"),
+    }
+    manifest_path = staging / "manifest.json"
+    manifest_path.write_bytes(canonical_json_bytes(manifest))
+    manifest_path.chmod(0o640)
+    return StagedFileSet(
+        directory=staging,
+        manifest_path=manifest_path,
+        manifest=manifest,
+        files=tuple(staged_files),
+        primary_hash=primary.sha256,
+        primary_bytes=primary.size,
+        manifest_hash=sha256_file(manifest_path),
+        logical_artifact_id=logical_artifact_id,
+        revision_id=revision_id,
+    )
+
+
+def commit_file_set_artifact(staged: StagedFileSet, nas_root: Path) -> Path:
+    if not nas_root.is_dir():
+        raise PlatformError(ErrorCode.NAS_UNAVAILABLE, "NAS artifact root is unavailable")
+    resolved_root = nas_root.resolve(strict=True)
+    logical_dir = nas_root / staged.logical_artifact_id
+    final = logical_dir / staged.revision_id
+    if logical_dir.is_symlink() or (logical_dir.exists() and not logical_dir.is_dir()):
+        raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "invalid logical artifact path")
+    logical_dir.mkdir(mode=0o755, exist_ok=True)
+    if logical_dir.resolve().parent != resolved_root:
+        raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "artifact path escaped NAS root")
+    if final.exists():
+        _verify_file_set(staged, final)
+        return final
+    temporary = logical_dir / f".{staged.revision_id}.tmp-{uuid4().hex}"
+    try:
+        temporary.mkdir(mode=0o750)
+        for item in staged.files:
+            target = temporary / item.relative_path
+            target.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+            shutil.copyfile(item.path, target)
+        shutil.copyfile(staged.manifest_path, temporary / "manifest.json")
+        _verify_file_set(staged, temporary)
+        for item in staged.files:
+            _fsync_file(temporary / item.relative_path)
+        _fsync_file(temporary / "manifest.json")
+        os.replace(temporary, final)
+    except PlatformError:
+        shutil.rmtree(temporary, ignore_errors=True)
+        raise
+    except OSError as exc:
+        shutil.rmtree(temporary, ignore_errors=True)
+        raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "NAS artifact commit failed") from exc
+    return final
+
+
 def _verify_final(staged: StagedArtifact, directory: Path) -> None:
     if sha256_file(directory / "result.json") != staged.content_hash:
         raise PlatformError(ErrorCode.ARTIFACT_HASH_MISMATCH, "result checksum mismatch")
     if sha256_file(directory / "manifest.json") != staged.manifest_hash:
+        raise PlatformError(ErrorCode.ARTIFACT_HASH_MISMATCH, "manifest checksum mismatch")
+
+
+def _verify_file_set(staged: StagedFileSet, directory: Path) -> None:
+    for item in staged.files:
+        target = directory / item.relative_path
+        if not target.is_file() or target.is_symlink() or sha256_file(target) != item.sha256:
+            raise PlatformError(ErrorCode.ARTIFACT_HASH_MISMATCH, "artifact file checksum mismatch")
+    manifest = directory / "manifest.json"
+    if not manifest.is_file() or sha256_file(manifest) != staged.manifest_hash:
         raise PlatformError(ErrorCode.ARTIFACT_HASH_MISMATCH, "manifest checksum mismatch")
 
 

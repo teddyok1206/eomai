@@ -119,6 +119,10 @@ Logical IDs, revision IDs, package byte hashes, and semantic hashes remain disti
 template revision and every committed output revision are immutable. Build idempotency is enforced
 by a unique normalized key.
 
+Alembic revision `20260815_0003` adds `hwpx_templates`, `hwpx_template_revisions`, `hwpx_builds`,
+and `hwpx_validation_runs`. HWPX actions also create ordinary platform jobs and immutable artifact
+revisions, preserving the existing event and storage audit boundary.
+
 ## Preview And Determinism
 
 Preview parts are not authoritative. A retained preview produces a stale-preview warning when it
@@ -131,3 +135,19 @@ will be recorded after the manual gate.
 
 The installed Observability Console is not rebuilt by this POC. A dedicated HWPX node requires a
 future versioned observer contract and release: `OBSERVABILITY_HWPX_NODE_DEFERRED`.
+
+## Dependencies
+
+The dedicated environment contains only bounded format tooling and its test/build tools:
+
+| Dependency | Reason |
+| --- | --- |
+| lxml 6.0.0 | Namespace-aware, explicitly hardened XML parsing and serialization |
+| Pillow 11.3.0 | Deterministic PNG generation, signature decode, mode, and dimension checks |
+| Pydantic 2.11.7 | Strict file contracts and internal immutable models |
+| jsonschema 4.25.1 | Independent JSON Schema 2020-12 validation |
+| Typer 0.16.0 | File-only builder CLI |
+| pytest, Ruff, mypy, build | Isolated test, static-quality, and non-editable wheel gates |
+
+No HWPX dependency is installed into system Python or added to eom-core. The contracts-only core
+package uses dependencies already present in eom-core.

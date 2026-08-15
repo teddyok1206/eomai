@@ -7,6 +7,10 @@ import pytest
 from eom_identifiers import (
     canonical_json_bytes,
     content_sha256,
+    new_hwpx_build_id,
+    new_hwpx_template_id,
+    new_hwpx_template_revision_id,
+    new_hwpx_validation_id,
     new_job_id,
     new_logical_artifact_id,
     new_revision_id,
@@ -17,6 +21,10 @@ def test_ids_have_distinct_namespaces() -> None:
     assert re.fullmatch(r"job_[0-9a-f]{32}", new_job_id())
     assert re.fullmatch(r"artifact_[0-9a-f]{32}", new_logical_artifact_id())
     assert re.fullmatch(r"rev_[0-9a-f]{32}", new_revision_id())
+    assert re.fullmatch(r"hwpxtpl_[0-9a-f]{32}", new_hwpx_template_id())
+    assert re.fullmatch(r"hwpxrev_[0-9a-f]{32}", new_hwpx_template_revision_id())
+    assert re.fullmatch(r"hwpxbuild_[0-9a-f]{32}", new_hwpx_build_id())
+    assert re.fullmatch(r"hwpxval_[0-9a-f]{32}", new_hwpx_validation_id())
 
 
 def test_canonical_serialization_and_hash_are_stable() -> None:

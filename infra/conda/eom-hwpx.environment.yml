@@ -6,3 +6,6 @@ dependencies:
   - pip
   - setuptools
   - wheel
+
+# Runtime and validation packages are installed from the adjacent pinned pip lock. This avoids
+# changing eom-core and keeps the builder release reproducible when Conda channel access is limited.

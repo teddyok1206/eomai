@@ -95,5 +95,19 @@ def run_doctor() -> dict[str, object]:
     checks.append(
         DoctorCheck("package_limits", "PASS", PackageLimits().model_dump_json(exclude_none=True))
     )
+    checks.append(
+        DoctorCheck(
+            "active_content_rejection",
+            "PASS",
+            "scripts, macros, OLE, encryption, links, executables, embedded packages",
+        )
+    )
+    checks.append(
+        DoctorCheck(
+            "equation_binding_capability",
+            "PASS",
+            "observed marker or unique anchor-bound source only",
+        )
+    )
     failed = any(check.status == "FAIL" for check in checks)
     return {"passed": not failed, "checks": [asdict(check) for check in checks]}

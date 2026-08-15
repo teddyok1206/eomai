@@ -97,7 +97,12 @@ def synthetic_parts(
 ) -> list[tuple[str, bytes, int]]:
     image = reference_image or png_bytes()
     paragraphs = []
-    for index, marker in enumerate(TEXT_MARKERS.values()):
+    non_table_markers = {
+        field: marker
+        for field, marker in TEXT_MARKERS.items()
+        if not field.startswith("item.table.")
+    }
+    for index, marker in enumerate(non_table_markers.values()):
         paragraphs.append(
             _paragraph(marker, index, split=split_marker and marker == "{{EOM_UPPER_STEM}}")
         )
@@ -106,11 +111,20 @@ def synthetic_parts(
         equation = '<hp:equation id="eq1" script="x+y=z"/>'
     else:
         equation = '<hp:equation id="eq1" script="EOM_EQ_PLACEHOLDER"/>'
+    positions = ((0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2))
+    table_cells = "".join(
+        (
+            f'<hp:tc id="cell{index}">'
+            f"{_paragraph(TEXT_MARKERS[f'item.table.rows.{row}.{column}'], 200 + index)}"
+            "</hp:tc>"
+        )
+        for index, (row, column) in enumerate(positions)
+    )
     section = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         f'<hp:section xmlns:hp="{HP}">'
         + "".join(paragraphs)
-        + '<hp:tbl id="table1" rows="2" cols="3"/>'
+        + f'<hp:tbl id="table1" rows="2" cols="3">{table_cells}</hp:tbl>'
         + '<hp:pic id="pic1" binaryItemIDRef="image1"/>'
         + equation
         + "</hp:section>"

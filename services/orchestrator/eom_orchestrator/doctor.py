@@ -17,7 +17,7 @@ from eom_orchestrator.protocol import SCHEMA_NAMES
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry
 
-EXPECTED_MIGRATION_REVISION = "20260815_0002"
+EXPECTED_MIGRATION_REVISION = "20260815_0003"
 
 
 @dataclass(frozen=True)

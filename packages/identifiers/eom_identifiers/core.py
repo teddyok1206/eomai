@@ -23,6 +23,22 @@ def new_revision_id() -> str:
     return f"rev_{uuid4().hex}"
 
 
+def new_hwpx_template_id() -> str:
+    return f"hwpxtpl_{uuid4().hex}"
+
+
+def new_hwpx_template_revision_id() -> str:
+    return f"hwpxrev_{uuid4().hex}"
+
+
+def new_hwpx_build_id() -> str:
+    return f"hwpxbuild_{uuid4().hex}"
+
+
+def new_hwpx_validation_id() -> str:
+    return f"hwpxval_{uuid4().hex}"
+
+
 def _canonical_value(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         value = value.model_dump(mode="python")

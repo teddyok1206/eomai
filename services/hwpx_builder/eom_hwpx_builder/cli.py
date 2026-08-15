@@ -111,9 +111,12 @@ def compare_semantic_command(
     expected: Annotated[Path, typer.Option("--expected", exists=True, dir_okay=False)],
     actual_hwpx: Annotated[Path, typer.Option("--actual-hwpx", exists=True, dir_okay=False)],
     bindings: Annotated[Path | None, typer.Option("--bindings")] = None,
+    output: Annotated[Path | None, typer.Option("--output")] = None,
 ) -> None:
     expected_value = json.loads(expected.read_text(encoding="utf-8"))
     report = compare_semantic(expected_value, actual_hwpx, _bindings(bindings, actual_hwpx))
+    if output is not None:
+        write_json(output, report.model_dump(mode="json"))
     _echo(report.model_dump(mode="json"))
     if report.status != "PASS":
         raise typer.Exit(1)

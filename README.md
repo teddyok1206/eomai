@@ -122,6 +122,7 @@ doctor reports `REFERENCE_TEMPLATE=PENDING_MANUAL_ACTION`:
 /srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx doctor
 /srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx inspect-package --input <HWPX> --output <REPORT>
 /srv/eom/conda/envs/eom-core/bin/eomctl hwpx doctor
+/home/eom/EOM/scripts/hwpx/deploy_builder.sh --verify
 ```
 
 `job submit` needs permission to create a transient systemd unit because that unit changes to the

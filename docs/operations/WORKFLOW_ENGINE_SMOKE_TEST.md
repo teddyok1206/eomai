@@ -13,7 +13,7 @@ $CORE/bin/eomctl system doctor
 $CORE/bin/eomctl worker list
 ```
 
-Doctor must pass PostgreSQL, migration `20260815_0002`, NAS, Codex, five worker users, all workflow
+Doctor must pass PostgreSQL, current Alembic head, NAS, Codex, five worker users, all workflow
 schemas, definition, role mapping, actor config, and a runner lease longer than the worker timeout.
 
 ## Definition

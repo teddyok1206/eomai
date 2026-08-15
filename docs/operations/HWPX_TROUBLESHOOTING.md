@@ -20,6 +20,14 @@ Recreate a fresh workspace; do not reuse extracted content. Confirm the template
 match, output PNG is exact RGB/RGBA 800-by-500 and matches its declared hash, and equation source is
 inside the POC grammar.
 
+## Wheel Or Sandbox Failed
+
+Run `scripts/hwpx/deploy_builder.sh --verify`. Both imports must resolve below the eom-hwpx
+environment's `site-packages`; `direct_url.json` must not declare editable mode and no editable
+finder may exist. Run `eomctl hwpx doctor` to confirm migration `20260815_0003`, the locked user,
+reference paths, artifact root, security capabilities, and transient execution. Use the release
+record under `/var/lib/eom-hwpx/deployments/` for rollback; do not add a repository `PYTHONPATH`.
+
 ## Structural Or Semantic Failure
 
 Structural checks identify a bounded part and evidence hash without returning full XML. Semantic

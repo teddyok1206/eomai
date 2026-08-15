@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import posixpath
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -172,22 +173,71 @@ def _unique_text_binding(
         "last_offset": occurrence.last_offset,
         "structure_fingerprint": occurrence.structure_fingerprint,
     }
+    constraints: dict[str, Any] = {
+        "split_across_text_nodes": occurrence.split,
+        "prefix": occurrence.prefix,
+        "suffix": occurrence.suffix,
+        "preserve_first_run_style": True,
+    }
+    if kind == BindingKind.TABLE_CELL_MARKER:
+        root = roots[occurrence.part_name]
+        text_nodes = [element for element in root.iter() if local_name(element.tag) == "t"]
+        bound_node = text_nodes[occurrence.first_node_index]
+        ancestor_tables = [
+            element for element in bound_node.iterancestors() if local_name(element.tag) == "tbl"
+        ]
+        ancestor_cells = [
+            element
+            for element in bound_node.iterancestors()
+            if local_name(element.tag) in {"tc", "cell"}
+        ]
+        if len(ancestor_tables) != 1 or len(ancestor_cells) != 1:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_TEMPLATE_BINDING_FAILED,
+                f"table marker is not in one non-nested cell: {field_name}",
+            )
+        table = ancestor_tables[0]
+        cell = ancestor_cells[0]
+        cells = [
+            candidate
+            for candidate in table.iter()
+            if local_name(candidate.tag) in {"tc", "cell"}
+            and next(
+                (
+                    ancestor
+                    for ancestor in candidate.iterancestors()
+                    if local_name(ancestor.tag) == "tbl"
+                ),
+                None,
+            )
+            is table
+        ]
+        expected_row = int(field_name.split(".")[-2])
+        expected_column = int(field_name.split(".")[-1])
+        expected_index = expected_row * 3 + expected_column
+        if len(cells) != 6 or cells.index(cell) != expected_index:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_TEMPLATE_BINDING_FAILED,
+                f"table marker is outside the fixed 2x3 position: {field_name}",
+            )
+        locator["table_fingerprint"] = _fingerprint(table)
+        locator["cell_index"] = expected_index
+        constraints.update({"rows": 2, "columns": 3, "nested_table": False})
     return TemplateBinding(
         field_name=field_name,
         part_name=occurrence.part_name,
         binding_kind=kind,
         locator=locator,
         expected_original_value=marker,
-        constraints={
-            "split_across_text_nodes": occurrence.split,
-            "prefix": occurrence.prefix,
-            "suffix": occurrence.suffix,
-            "preserve_first_run_style": True,
-        },
+        constraints=constraints,
     )
 
 
-def _image_binding(package: SafePackage, reference_image_sha256: str) -> TemplateBinding:
+def _image_binding(
+    package: SafePackage,
+    roots: dict[str, etree._Element],
+    reference_image_sha256: str,
+) -> TemplateBinding:
     matches = [
         entry
         for entry in package.entries
@@ -211,13 +261,59 @@ def _image_binding(package: SafePackage, reference_image_sha256: str) -> Templat
         raise HwpxError(HwpxErrorCode.HWPX_IMAGE_BINDING_FAILED, "bound image is invalid") from exc
     if file_format != "PNG" or mode not in {"RGB", "RGBA"}:
         raise HwpxError(HwpxErrorCode.HWPX_IMAGE_BINDING_FAILED, "bound image is not RGB/RGBA PNG")
+    manifest_ids: list[str] = []
+    content_root = roots.get("Contents/content.hpf")
+    if content_root is not None:
+        for element in content_root.iter():
+            if local_name(element.tag).casefold() != "item":
+                continue
+            attributes = {
+                local_name(key).casefold(): value for key, value in element.attrib.items()
+            }
+            href = attributes.get("href")
+            identifier = attributes.get("id")
+            if not href or not identifier:
+                continue
+            resolved = posixpath.normpath(posixpath.join("Contents", href))
+            if resolved == entry.info.filename:
+                manifest_ids.append(identifier)
+    if len(manifest_ids) != 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_IMAGE_BINDING_FAILED,
+            "bound PNG does not have one manifest identifier",
+        )
+    manifest_id = manifest_ids[0]
+    object_matches: list[etree._Element] = []
+    for part_name, root in roots.items():
+        if part_name == "Contents/content.hpf":
+            continue
+        for element in root.iter():
+            if any(value == manifest_id for value in element.attrib.values()):
+                object_matches.append(element)
+    if len(object_matches) != 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_IMAGE_BINDING_FAILED,
+            "manifest image identifier does not resolve to one object",
+        )
+    image_object = object_matches[0]
+    object_id = next(
+        (value for key, value in image_object.attrib.items() if local_name(key) == "id"), None
+    )
     return TemplateBinding(
         field_name="item.image",
         part_name=entry.info.filename,
         binding_kind=BindingKind.IMAGE_BINARY,
-        locator={"binary_sha256": reference_image_sha256},
+        locator={
+            "binary_sha256": reference_image_sha256,
+            "manifest_id": manifest_id,
+            "object_namespace_uri": namespace_uri(image_object.tag),
+            "object_local_name": local_name(image_object.tag),
+            "object_fingerprint": _fingerprint(image_object),
+        },
         expected_original_value=reference_image_sha256,
+        object_id=object_id,
         binary_part=entry.info.filename,
+        reference_ids=(manifest_id,),
         constraints={
             "width_px": width,
             "height_px": height,
@@ -341,7 +437,7 @@ def compile_bindings(
         _unique_text_binding(roots, field_name, marker)
         for field_name, marker in TEXT_MARKERS.items()
     ]
-    bindings.append(_image_binding(package, reference_image_sha256))
+    bindings.append(_image_binding(package, roots, reference_image_sha256))
     bindings.append(_equation_binding(roots))
     warnings = tuple(
         f"SPLIT_MARKER_NORMALIZED:{binding.field_name}"

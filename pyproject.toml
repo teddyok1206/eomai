@@ -40,10 +40,13 @@ where = [
   "tools/dev_reporter",
   "packages/workflow",
   "services/workflow_runner",
+  "packages/hwpx_contracts",
+  "services/hwpx_manager",
 ]
 
 [tool.setuptools.package-data]
 eom_protocol = ["schemas/*.json"]
+eom_hwpx_contracts = ["schemas/*.json"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
@@ -55,6 +58,7 @@ markers = [
   "dev_slack_live: sends one opt-in development report to a configured Slack webhook",
   "observe_integration: requires the installed eom_observe_ro PostgreSQL role",
   "observe_browser_live: validates the installed observability service and browser rendering",
+  "hwpx_reference_live: uses the fixed Hancom-created reference and immutable artifact storage",
 ]
 
 [tool.ruff]
@@ -73,6 +77,8 @@ mypy_path = [
   "packages/workflow",
   "services/orchestrator",
   "services/workflow_runner",
+  "packages/hwpx_contracts",
+  "services/hwpx_manager",
   "apps/eomctl",
   "tools/dev_reporter",
 ]
@@ -84,4 +90,6 @@ packages = [
   "eom_orchestrator",
   "eomctl",
   "eom_dev_reporter",
+  "eom_hwpx_contracts",
+  "eom_hwpx_manager",
 ]
