@@ -29,6 +29,7 @@ dev = [
 [project.scripts]
 eomctl = "eomctl.cli:app"
 eom-dev-report = "eom_dev_reporter.cli:main"
+eom-workflow-runner = "eom_workflow_runner.cli:main"
 
 [tool.setuptools.packages.find]
 where = [
@@ -37,6 +38,8 @@ where = [
   "services/orchestrator",
   "apps/eomctl",
   "tools/dev_reporter",
+  "packages/workflow",
+  "services/workflow_runner",
 ]
 
 [tool.setuptools.package-data]
@@ -48,6 +51,7 @@ testpaths = ["tests"]
 markers = [
   "integration: requires a reachable PostgreSQL instance",
   "codex_live: consumes a live Codex subscription invocation and is opt-in",
+  "workflow_codex_live: consumes multiple live Codex subscription invocations and is opt-in",
   "dev_slack_live: sends one opt-in development report to a configured Slack webhook",
 ]
 
@@ -61,4 +65,21 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-packages = ["eom_protocol", "eom_identifiers", "eom_orchestrator", "eomctl", "eom_dev_reporter"]
+mypy_path = [
+  "packages/protocol",
+  "packages/identifiers",
+  "packages/workflow",
+  "services/orchestrator",
+  "services/workflow_runner",
+  "apps/eomctl",
+  "tools/dev_reporter",
+]
+packages = [
+  "eom_protocol",
+  "eom_identifiers",
+  "eom_workflow",
+  "eom_workflow_runner",
+  "eom_orchestrator",
+  "eomctl",
+  "eom_dev_reporter",
+]

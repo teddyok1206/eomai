@@ -1,0 +1,133 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+import pytest
+from eom_workflow.models import ArtifactPointer, ArtifactSpec, RoleWorkerInput, WorkflowRequest
+from eom_workflow.schemas import (
+    RESULT_SCHEMA_FILES,
+    constrained_result_schema,
+    load_definition_schema,
+    load_role_input_schema,
+    load_role_result_schema,
+    role_schema_bundle_hash,
+    validate_role_input,
+    validate_role_result,
+    validate_schema_message,
+)
+from jsonschema import Draft202012Validator
+
+JOB_ID = "job_0123456789abcdef0123456789abcdef"
+WORKFLOW_ID = "workflow_0123456789abcdef0123456789abcdef"
+STEP_RUN_ID = "steprun_0123456789abcdef0123456789abcdef"
+ARTIFACT_ID = "artifact_0123456789abcdef0123456789abcdef"
+REVISION_ID = "rev_0123456789abcdef0123456789abcdef"
+
+
+def _input(role: str) -> RoleWorkerInput:
+    upstream: tuple[ArtifactPointer, ...] = ()
+    if role != "authoring":
+        upstream = (
+            ArtifactPointer(
+                step_key="authoring",
+                attempt=1,
+                job_id=JOB_ID,
+                logical_artifact_id=ARTIFACT_ID,
+                revision_id=REVISION_ID,
+                content_hash="sha256:" + "a" * 64,
+                result_schema="authoring-result@1.0",
+            ),
+        )
+    return RoleWorkerInput(
+        job_id=JOB_ID,
+        workflow_id=WORKFLOW_ID,
+        step_run_id=STEP_RUN_ID,
+        attempt=1,
+        role=role,  # type: ignore[arg-type]
+        request=WorkflowRequest(request_name="PLACEHOLDER_REQUEST", image_mode="required"),
+        upstream_artifacts=upstream,
+        artifact=ArtifactSpec(
+            logical_artifact_id=ARTIFACT_ID,
+            revision_id=REVISION_ID,
+        ),
+    )
+
+
+def _result(role: str) -> dict[str, object]:
+    outputs: dict[str, object] = {
+        "authoring": {
+            "draft": {"title": "PLACEHOLDER_CONTENT", "body": "PLACEHOLDER_CONTENT"},
+            "metadata": {"domain": "placeholder"},
+        },
+        "image": {"image_spec": {"kind": "placeholder", "description": "PLACEHOLDER_IMAGE_SPEC"}},
+        "review": {
+            "review": {
+                "decision": "ready_for_human",
+                "findings": [],
+                "summary": "PLACEHOLDER_REVIEW",
+            }
+        },
+        "item_management": {
+            "registration": {
+                "result": "registered_placeholder",
+                "summary": "PLACEHOLDER_REGISTRATION",
+            }
+        },
+    }
+    return {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.0.1",
+        "job_id": JOB_ID,
+        "workflow_id": WORKFLOW_ID,
+        "step_run_id": STEP_RUN_ID,
+        "role": role,
+        "status": "ok",
+        "artifact": {
+            "logical_artifact_id": ARTIFACT_ID,
+            "revision_id": REVISION_ID,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+        "output": outputs[role],
+        "completed_at": datetime(2026, 8, 15, tzinfo=UTC).isoformat().replace("+00:00", "Z"),
+    }
+
+
+def test_all_workflow_schemas_are_valid_draft_2020_12() -> None:
+    Draft202012Validator.check_schema(load_definition_schema())
+    for role in ("authoring", "image", "review", "item_management"):
+        Draft202012Validator.check_schema(load_role_input_schema(role))
+    for schema_id in RESULT_SCHEMA_FILES:
+        Draft202012Validator.check_schema(load_role_result_schema(schema_id))
+
+
+@pytest.mark.parametrize(
+    ("role", "schema_id"),
+    [
+        ("authoring", "authoring-result@1.0"),
+        ("image", "image-result@1.0"),
+        ("review", "review-result@1.0"),
+        ("item_management", "registration-result@1.0"),
+    ],
+)
+def test_role_input_and_result_pass_schema_and_typed_validation(role: str, schema_id: str) -> None:
+    worker_input = _input(role)
+    assert validate_role_input(worker_input.model_dump(mode="json"), role) == worker_input
+    parsed = validate_role_result(_result(role), role, schema_id)
+    assert parsed.role == role
+
+
+def test_constrained_result_schema_fixes_all_execution_identifiers() -> None:
+    worker_input = _input("authoring")
+    schema = constrained_result_schema("authoring-result@1.0", worker_input)
+    validate_schema_message(schema, _result("authoring"), "constrained-result")
+    properties = schema["properties"]
+    assert properties["job_id"]["const"] == JOB_ID
+    assert properties["workflow_id"]["const"] == WORKFLOW_ID
+    assert properties["step_run_id"]["const"] == STEP_RUN_ID
+
+
+def test_role_schema_bundle_hash_is_canonical() -> None:
+    first = role_schema_bundle_hash()
+    assert first == role_schema_bundle_hash()
+    assert first.startswith("sha256:")

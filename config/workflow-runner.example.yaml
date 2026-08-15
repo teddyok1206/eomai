@@ -1,0 +1,4 @@
+version: 1
+poll_interval_seconds: 2
+command_lease_seconds: 900
+max_commands_per_run: 100

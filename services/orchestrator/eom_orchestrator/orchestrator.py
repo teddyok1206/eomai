@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
 from eom_identifiers import new_job_id, new_logical_artifact_id, new_revision_id
@@ -17,12 +18,21 @@ from eom_protocol import (
     WorkerResult,
     validate_message,
 )
+from eom_workflow.models import ArtifactPointer, RoleWorkerInput, WorkflowRequest
+from eom_workflow.models import ArtifactSpec as WorkflowArtifactSpec
+from eom_workflow.schemas import (
+    WorkflowSchemaError,
+    constrained_result_schema,
+    role_schema_bundle_hash,
+    validate_role_input,
+    validate_role_result,
+)
 from pydantic import ValidationError
 from sqlalchemy import Engine, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from eom_orchestrator.artifacts import commit_artifact, stage_artifact
+from eom_orchestrator.artifacts import commit_artifact, stage_artifact, stage_structured_artifact
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.logging import log_event
@@ -32,6 +42,7 @@ from eom_orchestrator.repository import (
     create_artifact_records,
     ensure_protocol_version,
     submit_job,
+    submit_structured_job,
     upsert_worker_slot,
 )
 from eom_orchestrator.settings import Settings
@@ -174,6 +185,174 @@ class Orchestrator:
             if job is None:
                 raise KeyError(job_id)
             session.expunge(job)
+            return job
+
+    def submit_workflow_role(
+        self,
+        *,
+        workflow_id: str,
+        step_run_id: str,
+        attempt: int,
+        role: str,
+        request: WorkflowRequest,
+        upstream_artifacts: tuple[ArtifactPointer, ...],
+        result_schema: str,
+        idempotency_key: str,
+        prompt_path: Path,
+    ) -> JobRecord:
+        existing = self._job_by_idempotency_key(idempotency_key)
+        if existing is not None:
+            stored = existing.request
+            if (
+                stored.get("workflow_id") != workflow_id
+                or stored.get("step_run_id") != step_run_id
+                or stored.get("role") != role
+                or stored.get("attempt") != attempt
+            ):
+                raise ValueError("workflow role idempotency key conflicts with stored job")
+            return existing
+
+        job_id = new_job_id()
+        artifact = WorkflowArtifactSpec(
+            logical_artifact_id=new_logical_artifact_id(), revision_id=new_revision_id()
+        )
+        worker_input = RoleWorkerInput(
+            job_id=job_id,
+            workflow_id=workflow_id,
+            step_run_id=step_run_id,
+            attempt=attempt,
+            role=role,  # type: ignore[arg-type]
+            request=request,
+            upstream_artifacts=upstream_artifacts,
+            artifact=artifact,
+        )
+        input_document = worker_input.model_dump(mode="json")
+        validate_role_input(input_document, role)
+        prompt_text = prompt_path.read_text(encoding="utf-8")
+        protocol_version = worker_input.protocol_version
+        with transaction(self.sessions) as session:
+            self._sync_registry(session)
+            ensure_protocol_version(session, protocol_version, role_schema_bundle_hash())
+            job, created = submit_structured_job(
+                session,
+                job_id=job_id,
+                protocol_version=protocol_version,
+                idempotency_key=idempotency_key,
+                task_type=f"workflow_{role}",
+                request=input_document,
+                logical_artifact_id=artifact.logical_artifact_id,
+                revision_id=artifact.revision_id,
+            )
+        if not created:
+            return self.get_job(job.job_id)
+
+        slot: WorkerSlot | None = None
+        try:
+            self._transition(job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
+            self._transition(job_id, JobState.QUEUED, "JOB_QUEUED")
+            slot = self.registry.select(role)
+            with transaction(self.sessions) as session:
+                claimed = session.get(JobRecord, job_id)
+                if claimed is None:
+                    raise RuntimeError("created workflow job disappeared")
+                claimed.worker_slot_id = slot.slot_id
+                transition_job(
+                    session,
+                    job_id,
+                    JobState.CLAIMED,
+                    "WORKER_CLAIMED",
+                    data={"worker_slot": slot.slot_id, "linux_user": slot.linux_user},
+                )
+            self._transition(job_id, JobState.RUNNING, "WORKER_STARTED")
+            staging = self.settings.staging_root / job_id
+            staging.mkdir(mode=0o750, parents=False, exist_ok=False)
+            run = self.worker_adapter.run_structured(
+                job_id=job_id,
+                input_document=input_document,
+                output_schema=constrained_result_schema(result_schema, worker_input),
+                prompt_text=prompt_text,
+                slot=slot,
+                staging=staging,
+            )
+            with transaction(self.sessions) as session:
+                running = session.get(JobRecord, job_id)
+                if running is None:
+                    raise RuntimeError("running workflow job disappeared")
+                running.worker_exit_code = run.exit_code
+                running.worker_stdout_path = str(run.stdout_path)
+                running.worker_stderr_path = str(run.stderr_path)
+            if run.exit_code != 0:
+                raise PlatformError(
+                    ErrorCode.WORKER_EXEC_FAILED, f"worker exited with code {run.exit_code}"
+                )
+
+            self._transition(job_id, JobState.VALIDATING_RESULT, "WORKER_RESULT_RECEIVED")
+            raw_result = load_worker_result(run.result_path, run.result_path.parent)
+            result = validate_role_result(raw_result, role, result_schema)
+            if (
+                result.job_id != worker_input.job_id
+                or result.workflow_id != worker_input.workflow_id
+                or result.step_run_id != worker_input.step_run_id
+                or result.artifact != worker_input.artifact
+            ):
+                raise PlatformError(
+                    ErrorCode.WORKER_RESULT_INVALID,
+                    "workflow worker result identifiers do not match input",
+                )
+            result_document = result.model_dump(mode="json")
+            staged = stage_structured_artifact(
+                result=result_document,
+                job_id=job_id,
+                logical_artifact_id=artifact.logical_artifact_id,
+                revision_id=artifact.revision_id,
+                staging=staging,
+                worker_slot=slot.slot_id,
+            )
+            self._transition(job_id, JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED")
+            final_path = commit_artifact(staged, self.settings.nas_artifact_root)
+            with transaction(self.sessions) as session:
+                committing = session.execute(
+                    select(JobRecord).where(JobRecord.job_id == job_id).with_for_update()
+                ).scalar_one()
+                create_artifact_records(
+                    session,
+                    job=committing,
+                    content_hash=staged.content_hash,
+                    manifest_hash=staged.manifest_hash,
+                    content_bytes=staged.manifest.content_bytes,
+                    nas_path=str(final_path),
+                    manifest=staged.manifest.model_dump(mode="json"),
+                    result=result_document,
+                )
+                transition_job(
+                    session,
+                    job_id,
+                    JobState.SUCCEEDED,
+                    "ARTIFACT_COMMITTED",
+                    data={
+                        "logical_artifact_id": artifact.logical_artifact_id,
+                        "revision_id": artifact.revision_id,
+                        "content_hash": staged.content_hash,
+                    },
+                )
+        except WorkflowSchemaError as exc:
+            self._fail(job_id, ErrorCode.WORKER_RESULT_INVALID, str(exc), slot)
+        except PlatformError as exc:
+            self._fail(job_id, exc.code, str(exc), slot)
+        except OSError:
+            self._fail(job_id, ErrorCode.WORKER_EXEC_FAILED, "workflow worker I/O failed", slot)
+        except SQLAlchemyError as exc:
+            self._fail(job_id, ErrorCode.DATABASE_ERROR, "database operation failed", slot)
+            raise PlatformError(ErrorCode.DATABASE_ERROR, "database operation failed") from exc
+        return self.get_job(job_id)
+
+    def _job_by_idempotency_key(self, idempotency_key: str) -> JobRecord | None:
+        with self.sessions() as session:
+            job = session.scalar(
+                select(JobRecord).where(JobRecord.idempotency_key == idempotency_key)
+            )
+            if job is not None:
+                session.expunge(job)
             return job
 
     def _sync_registry(self, session: Session) -> None:

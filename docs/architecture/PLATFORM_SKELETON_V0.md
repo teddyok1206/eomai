@@ -130,7 +130,7 @@ Each dependency has a narrow purpose:
 | psycopg 3 | PostgreSQL driver |
 | Pydantic 2 | Runtime typed protocol and config validation |
 | jsonschema | Independent JSON Schema 2020-12 validation |
-| PyYAML | Worker slot configuration parsing |
+| PyYAML | Safe parsing of worker, actor, runner, and declarative workflow configuration |
 | Typer | Small operator CLI |
 | pytest | Unit, integration, and opt-in live tests |
 | Ruff | Formatter and linter |

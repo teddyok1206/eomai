@@ -17,6 +17,8 @@ from eom_orchestrator.protocol import SCHEMA_NAMES
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry
 
+EXPECTED_MIGRATION_REVISION = "20260815_0002"
+
 
 @dataclass(frozen=True)
 class DoctorCheck:
@@ -37,7 +39,9 @@ def run_doctor(engine: Engine, settings: Settings) -> list[DoctorCheck]:
         checks.append(DoctorCheck("postgresql", True, "connected"))
         checks.append(
             DoctorCheck(
-                "migration_revision", revision == "20260815_0001", revision or "not migrated"
+                "migration_revision",
+                revision == EXPECTED_MIGRATION_REVISION,
+                revision or "not migrated",
             )
         )
     except Exception as exc:  # doctor must report all independent checks

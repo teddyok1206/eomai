@@ -66,6 +66,46 @@ def submit_job(session: Session, request: JobRequest) -> tuple[JobRecord, bool]:
     return job, True
 
 
+def submit_structured_job(
+    session: Session,
+    *,
+    job_id: str,
+    protocol_version: str,
+    idempotency_key: str,
+    task_type: str,
+    request: dict[str, Any],
+    logical_artifact_id: str,
+    revision_id: str,
+) -> tuple[JobRecord, bool]:
+    request_hash = content_sha256(
+        {
+            "protocol_version": protocol_version,
+            "task_type": task_type,
+            "request": request,
+        }
+    )
+    existing = session.scalar(select(JobRecord).where(JobRecord.idempotency_key == idempotency_key))
+    if existing is not None:
+        if existing.request_hash != request_hash:
+            raise IdempotencyConflict("idempotency key was already used for a different request")
+        return existing, False
+    job = JobRecord(
+        job_id=job_id,
+        protocol_version=protocol_version,
+        idempotency_key=idempotency_key,
+        request_hash=request_hash,
+        task_type=task_type,
+        request=request,
+        status=JobState.CREATED.value,
+        logical_artifact_id=logical_artifact_id,
+        revision_id=revision_id,
+    )
+    session.add(job)
+    session.flush()
+    record_initial_event(session, job)
+    return job, True
+
+
 def upsert_worker_slot(
     session: Session, *, slot_id: str, linux_user: str, role: str, enabled: bool, gpu: bool
 ) -> None:

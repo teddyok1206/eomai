@@ -36,7 +36,7 @@ def _request(idempotency_key: str) -> JobRequest:
 
 def test_migration_revision(integration_engine: Engine) -> None:
     with integration_engine.connect() as connection:
-        assert MigrationContext.configure(connection).get_current_revision() == "20260815_0001"
+        assert MigrationContext.configure(connection).get_current_revision() == "20260815_0002"
 
 
 def test_job_events_idempotency_and_immutable_artifact(db_session: Session) -> None:

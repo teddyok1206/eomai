@@ -8,7 +8,7 @@ from typing import Any
 
 import typer
 from eom_orchestrator.database import build_engine, build_session_factory
-from eom_orchestrator.doctor import run_doctor
+from eom_orchestrator.doctor import DoctorCheck, run_doctor
 from eom_orchestrator.logging import configure_logging
 from eom_orchestrator.models import (
     ArtifactRecord,
@@ -19,7 +19,11 @@ from eom_orchestrator.models import (
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry
+from eom_workflow_runner.doctor import run_workflow_doctor
+from eom_workflow_runner.settings import WorkflowSettings
 from sqlalchemy import select
+
+from eomctl.workflow import workflow_app
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 system_app = typer.Typer(no_args_is_help=True)
@@ -28,6 +32,7 @@ job_app = typer.Typer(no_args_is_help=True)
 app.add_typer(system_app, name="system")
 app.add_typer(worker_app, name="worker")
 app.add_typer(job_app, name="job")
+app.add_typer(workflow_app, name="workflow")
 
 
 def _emit(data: object) -> None:
@@ -71,6 +76,10 @@ def system_doctor() -> None:
     configure_logging()
     settings = Settings.from_environment()
     checks = run_doctor(build_engine(), settings)
+    checks.extend(
+        DoctorCheck(check.name, check.passed, check.detail)
+        for check in run_workflow_doctor(WorkflowSettings.from_environment(), settings)
+    )
     passed = all(check.passed for check in checks)
     _emit({"passed": passed, "checks": [asdict(check) for check in checks]})
     if not passed:

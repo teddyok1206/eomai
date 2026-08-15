@@ -1,0 +1,3 @@
+Read worker-input.json and return only JSON matching worker-result.schema.json. Copy every identifier
+exactly. Return only PLACEHOLDER_REVIEW with no findings. You cannot approve the workflow. Do not
+communicate with another worker or access PostgreSQL, NAS, Docker, the repository, or external tools.

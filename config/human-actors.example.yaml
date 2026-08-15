@@ -1,0 +1,14 @@
+version: 1
+
+actors:
+  - actor_id: "requester_01"
+    role: "requester"
+    enabled: true
+
+  - actor_id: "reviewer_01"
+    role: "reviewer"
+    enabled: true
+
+  - actor_id: "admin_01"
+    role: "admin"
+    enabled: true

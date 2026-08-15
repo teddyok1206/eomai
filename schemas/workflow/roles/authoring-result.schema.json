@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/workflow/roles/authoring-result.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "protocol_version", "job_id", "workflow_id", "step_run_id", "role", "status", "artifact", "output", "completed_at"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.0"},
+    "protocol_version": {"type": "string", "const": "workflow-role/1.0.1"},
+    "job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+    "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "step_run_id": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+    "role": {"type": "string", "const": "authoring"},
+    "status": {"type": "string", "const": "ok"},
+    "artifact": {"$ref": "#/$defs/artifact"},
+    "output": {"type": "object", "additionalProperties": false, "required": ["draft", "metadata"], "properties": {"draft": {"type": "object", "additionalProperties": false, "required": ["title", "body"], "properties": {"title": {"type": "string", "const": "PLACEHOLDER_CONTENT"}, "body": {"type": "string", "const": "PLACEHOLDER_CONTENT"}}}, "metadata": {"type": "object", "additionalProperties": false, "required": ["domain"], "properties": {"domain": {"type": "string", "const": "placeholder"}}}}},
+    "completed_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {"artifact": {"type": "object", "additionalProperties": false, "required": ["logical_artifact_id", "revision_id", "file_name", "media_type"], "properties": {"logical_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"}, "revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"}, "file_name": {"type": "string", "const": "result.json"}, "media_type": {"type": "string", "const": "application/json"}}}}
+}

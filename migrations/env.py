@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
+import eom_workflow_runner.models  # noqa: F401
 from alembic import context
 from eom_orchestrator.models import Base
 from eom_orchestrator.settings import database_url

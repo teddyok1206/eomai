@@ -186,7 +186,12 @@ def test_dry_run_cli_does_not_send(
         ]
     )
     assert result == 0
-    assert '"delivery_status": "DRY_RUN"' in capsys.readouterr().out
+    output = json.loads(capsys.readouterr().out)
+    assert output["delivery_status"] == "DRY_RUN"
+    assert output["component"] == "dev_reporter"
+    assert output["report_status"] == "TESTING"
+    assert output["phase"] == "unit"
+    assert output["timestamp"].endswith("Z")
 
 
 def test_http_200_ok_is_success() -> None:

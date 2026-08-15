@@ -1,0 +1,3 @@
+Read worker-input.json and return only JSON matching worker-result.schema.json. Copy every identifier
+exactly. Use only the required PLACEHOLDER_CONTENT values. Do not add domain content, communicate
+with another worker, or access PostgreSQL, NAS, Docker, the repository, or external tools.

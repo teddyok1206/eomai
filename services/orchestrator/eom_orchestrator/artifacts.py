@@ -28,6 +28,27 @@ class StagedArtifact:
 def stage_artifact(
     *, result: WorkerResult, staging: Path, worker_slot: str, created_at: datetime | None = None
 ) -> StagedArtifact:
+    return stage_structured_artifact(
+        result=result.model_dump(mode="json"),
+        job_id=result.job_id,
+        logical_artifact_id=result.artifact.logical_artifact_id,
+        revision_id=result.artifact.revision_id,
+        staging=staging,
+        worker_slot=worker_slot,
+        created_at=created_at,
+    )
+
+
+def stage_structured_artifact(
+    *,
+    result: dict[str, object],
+    job_id: str,
+    logical_artifact_id: str,
+    revision_id: str,
+    staging: Path,
+    worker_slot: str,
+    created_at: datetime | None = None,
+) -> StagedArtifact:
     staging.mkdir(mode=0o750, parents=True, exist_ok=True)
     result_bytes = canonical_json_bytes(result)
     result_path = staging / "result.json"
@@ -36,9 +57,9 @@ def stage_artifact(
     result_temp.replace(result_path)
     content_hash = sha256_bytes(result_bytes)
     manifest = ArtifactManifest(
-        job_id=result.job_id,
-        logical_artifact_id=result.artifact.logical_artifact_id,
-        revision_id=result.artifact.revision_id,
+        job_id=job_id,
+        logical_artifact_id=logical_artifact_id,
+        revision_id=revision_id,
         content_hash=content_hash,
         content_bytes=len(result_bytes),
         worker_slot=worker_slot,

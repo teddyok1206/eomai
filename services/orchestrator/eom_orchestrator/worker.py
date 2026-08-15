@@ -13,6 +13,7 @@ from typing import Any
 
 from eom_protocol import ErrorCode, WorkerInput
 from eom_protocol.validation import load_schema
+from jsonschema import Draft202012Validator
 
 from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.settings import Settings
@@ -44,7 +45,25 @@ class CodexWorkerAdapter:
     def _prepare_workspace(
         self, worker_input: WorkerInput, slot: WorkerSlot
     ) -> tuple[Path, Path, Path]:
-        workspace = self.settings.workspace_root / slot.linux_user / worker_input.job_id
+        return self._prepare_workspace_document(
+            job_id=worker_input.job_id,
+            input_document=worker_input.model_dump(mode="json"),
+            output_schema=worker_output_schema(worker_input),
+            prompt_text=WORKER_PROMPT,
+            slot=slot,
+        )
+
+    def _prepare_workspace_document(
+        self,
+        *,
+        job_id: str,
+        input_document: dict[str, Any],
+        output_schema: dict[str, Any],
+        prompt_text: str,
+        slot: WorkerSlot,
+    ) -> tuple[Path, Path, Path]:
+        Draft202012Validator.check_schema(output_schema)
+        workspace = self.settings.workspace_root / slot.linux_user / job_id
         if workspace.exists():
             raise PlatformError(ErrorCode.WORKER_EXEC_FAILED, "worker workspace already exists")
         workspace.mkdir(mode=0o700, parents=False)
@@ -55,14 +74,14 @@ class CodexWorkerAdapter:
         schema_path = workspace / "worker-result.schema.json"
         prompt_path = workspace / "prompt.txt"
         input_path.write_text(
-            json.dumps(worker_input.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
+            json.dumps(input_document, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
         schema_path.write_text(
-            json.dumps(worker_output_schema(worker_input), ensure_ascii=False, indent=2) + "\n",
+            json.dumps(output_schema, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        prompt_path.write_text(WORKER_PROMPT, encoding="utf-8")
+        prompt_path.write_text(prompt_text, encoding="utf-8")
         for path in (input_path, schema_path, prompt_path):
             os.chown(path, account.pw_uid, account.pw_gid)
             path.chmod(0o400)
@@ -125,7 +144,52 @@ class CodexWorkerAdapter:
 
     def run(self, worker_input: WorkerInput, slot: WorkerSlot, staging: Path) -> WorkerRun:
         workspace, schema_path, prompt_path = self._prepare_workspace(worker_input, slot)
-        unit_name = f"eom-worker-{worker_input.job_id.replace('_', '-')}"
+        return self._execute(
+            job_id=worker_input.job_id,
+            workspace=workspace,
+            schema_path=schema_path,
+            prompt_path=prompt_path,
+            slot=slot,
+            staging=staging,
+        )
+
+    def run_structured(
+        self,
+        *,
+        job_id: str,
+        input_document: dict[str, Any],
+        output_schema: dict[str, Any],
+        prompt_text: str,
+        slot: WorkerSlot,
+        staging: Path,
+    ) -> WorkerRun:
+        workspace, schema_path, prompt_path = self._prepare_workspace_document(
+            job_id=job_id,
+            input_document=input_document,
+            output_schema=output_schema,
+            prompt_text=prompt_text,
+            slot=slot,
+        )
+        return self._execute(
+            job_id=job_id,
+            workspace=workspace,
+            schema_path=schema_path,
+            prompt_path=prompt_path,
+            slot=slot,
+            staging=staging,
+        )
+
+    def _execute(
+        self,
+        *,
+        job_id: str,
+        workspace: Path,
+        schema_path: Path,
+        prompt_path: Path,
+        slot: WorkerSlot,
+        staging: Path,
+    ) -> WorkerRun:
+        unit_name = f"eom-worker-{job_id.replace('_', '-')}"
         argv = self._argv(
             workspace=workspace,
             schema_path=schema_path,

@@ -141,13 +141,20 @@ def _send(report: DevelopmentProgressReport, *, dry_run: bool, strict: bool) -> 
         delivery = DeliveryResult(DeliveryStatus.DRY_RUN, 0)
     else:
         delivery = send_webhook(payload, load_reporter_config())
+    error_code = delivery.error_code or archive.error_code
     output: dict[str, Any] = {
         "ok": delivery.succeeded,
+        "timestamp": utc_now().isoformat().replace("+00:00", "Z"),
+        "level": "INFO" if delivery.succeeded and archive.path else "WARNING",
+        "component": "dev_reporter",
+        "event": "DEVELOPMENT_REPORT_DELIVERY",
         "report_id": report.report_id,
+        "report_status": report.status,
+        "phase": report.phase,
         "delivery_status": delivery.status,
         "attempts": delivery.attempts,
         "http_status": delivery.http_status,
-        "error_code": delivery.error_code,
+        "error_code": error_code,
         "archive_status": "SAVED" if archive.path else "FAILED",
         "archive_path": str(archive.path) if archive.path else None,
         "archive_error_code": archive.error_code,

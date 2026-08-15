@@ -15,7 +15,7 @@ This repository is separate from `/home/eom/EOMIS`. Do not import, copy, or modi
 
 ## Current Phase
 
-Platform skeleton v0 implements one executable vertical slice:
+Platform Skeleton V0 remains available as one executable job slice:
 
 ```text
 eomctl job submit
@@ -27,9 +27,16 @@ eomctl job submit
   -> PostgreSQL artifact history
 ```
 
-Integrated-science domain behavior, review, image generation, HWPX, Slack, an API service, and a
-GUI remain out of scope. The authoring worker only implements the
-`EOM_PLATFORM_SMOKE_TEST` placeholder.
+Workflow Engine V0 adds a domain-neutral, versioned multi-role path:
+
+```text
+request -> authoring -> image decision -> review -> human CLI gate
+        -> approval or immutable rework attempts -> registration -> completed
+```
+
+All role results are strict placeholder JSON. There is no real domain content, generated image,
+HWPX, GUI, or external LLM API. Slack is not a workflow feature; `eom_dev_reporter` is a separate,
+best-effort developer milestone sender using only an Incoming Webhook.
 
 ## Operating Commands
 
@@ -66,6 +73,22 @@ Apply the migration and run the control CLI:
 /srv/eom/conda/envs/eom-core/bin/eomctl job events <JOB_ID>
 ```
 
+Validate, import, and run the placeholder workflow:
+
+```bash
+/srv/eom/conda/envs/eom-core/bin/eomctl workflow definition validate config/workflows/generic-item-development.v1.yaml
+/srv/eom/conda/envs/eom-core/bin/eomctl workflow definition import config/workflows/generic-item-development.v1.yaml
+/srv/eom/conda/envs/eom-core/bin/eomctl workflow start --definition generic-item-development --version 1.0.0 --request-name PLACEHOLDER_REQUEST --image-mode skip --idempotency-key <KEY>
+/srv/eom/conda/envs/eom-core/bin/eomctl workflow approve <WORKFLOW_ID> --actor-id reviewer_01
+/srv/eom/conda/envs/eom-core/bin/eomctl workflow inspect <WORKFLOW_ID>
+/srv/eom/conda/envs/eom-core/bin/eomctl workflow events <WORKFLOW_ID>
+/srv/eom/conda/envs/eom-core/bin/eomctl workflow steps <WORKFLOW_ID>
+```
+
+The runner also exposes `run-once`, `serve`, and `reconcile` modes through
+`/srv/eom/conda/envs/eom-core/bin/eom-workflow-runner`. CLI approval, rework, cancellation, and
+reconciliation enqueue commands; only the deterministic engine changes workflow state.
+
 `job submit` needs permission to create a transient systemd unit because that unit changes to the
 isolated worker Linux user and makes `/mnt/nas` and the Docker socket inaccessible. Database
 credentials are loaded from `EOM_DATABASE_URL` or `/etc/eom/secrets/postgres.env`; they are never
@@ -82,6 +105,9 @@ Use UTC for system timestamps. Use Asia/Seoul only for user-facing display.
 - Architecture decisions: `docs/adr/`
 - Platform skeleton architecture: `docs/architecture/PLATFORM_SKELETON_V0.md`
 - Live smoke test: `docs/operations/PLATFORM_SMOKE_TEST.md`
+- Workflow engine architecture: `docs/architecture/WORKFLOW_ENGINE_V0.md`
+- Workflow live smoke test: `docs/operations/WORKFLOW_ENGINE_SMOKE_TEST.md`
+- Development Slack reporting: `docs/operations/DEVELOPMENT_SLACK_REPORTING.md`
 - Internal environment reports: `docs/internal/`
 - Operations and rollback: `docs/operations/`
 - Compose operations: `infra/compose/README.md`
