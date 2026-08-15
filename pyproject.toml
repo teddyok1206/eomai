@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-platform"
+version = "0.1.0"
+description = "EOM protocol-first execution platform skeleton"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "alembic>=1.16,<2",
+  "jsonschema>=4.23,<5",
+  "psycopg[binary]>=3.2,<4",
+  "pydantic>=2.11,<3",
+  "PyYAML>=6.0,<7",
+  "SQLAlchemy>=2.0,<3",
+  "typer>=0.16,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.17,<2",
+  "pytest>=8.4,<9",
+  "ruff>=0.12,<1",
+  "types-jsonschema>=4.23",
+  "types-PyYAML>=6.0",
+]
+
+[project.scripts]
+eomctl = "eomctl.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["packages/protocol", "packages/identifiers", "services/orchestrator", "apps/eomctl"]
+
+[tool.setuptools.package-data]
+eom_protocol = ["schemas/*.json"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers"
+testpaths = ["tests"]
+markers = [
+  "integration: requires a reachable PostgreSQL instance",
+  "codex_live: consumes a live Codex subscription invocation and is opt-in",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["eom_protocol", "eom_identifiers", "eom_orchestrator", "eomctl"]

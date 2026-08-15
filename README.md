@@ -15,27 +15,21 @@ This repository is separate from `/home/eom/EOMIS`. Do not import, copy, or modi
 
 ## Current Phase
 
-This bootstrap phase establishes the infrastructure boundary only:
+Platform skeleton v0 implements one executable vertical slice:
 
-- Docker Engine and Docker Compose v2
-- PostgreSQL via Docker Compose
-- local Conda prefixes under `/srv/eom/conda/envs`
-- isolated Codex worker Linux users
-- local runtime directories
-- NAS artifact and backup directories
-- operational scripts and systemd unit drafts
+```text
+eomctl job submit
+  -> PostgreSQL job and deterministic events
+  -> eom-cdx-01 one-shot codex exec
+  -> schema-validated result.json
+  -> canonical SHA-256 and artifact manifest
+  -> local staging and immutable NAS revision
+  -> PostgreSQL artifact history
+```
 
-The following are intentionally not implemented yet:
-
-- actual science item authoring
-- review prompts
-- image generation
-- HWPX generation
-- orchestrator application logic
-- PostgreSQL business schema
-- Slack integration
-- GitHub remote setup
-- worker account login
+Integrated-science domain behavior, review, image generation, HWPX, Slack, an API service, and a
+GUI remain out of scope. The authoring worker only implements the
+`EOM_PLATFORM_SMOKE_TEST` placeholder.
 
 ## Operating Commands
 
@@ -55,6 +49,28 @@ Use explicit Conda prefixes:
 /srv/eom/conda/envs/eom-image/bin/python --version
 ```
 
+Install this repository and its development checks only into `eom-core`:
+
+```bash
+/srv/eom/conda/envs/eom-core/bin/python -m pip install -e '.[dev]'
+```
+
+Apply the migration and run the control CLI:
+
+```bash
+/srv/eom/conda/envs/eom-core/bin/alembic upgrade head
+/srv/eom/conda/envs/eom-core/bin/eomctl system doctor
+/srv/eom/conda/envs/eom-core/bin/eomctl worker list
+/srv/eom/conda/envs/eom-core/bin/eomctl job submit --message EOM_PLATFORM_SMOKE_TEST
+/srv/eom/conda/envs/eom-core/bin/eomctl job inspect <JOB_ID>
+/srv/eom/conda/envs/eom-core/bin/eomctl job events <JOB_ID>
+```
+
+`job submit` needs permission to create a transient systemd unit because that unit changes to the
+isolated worker Linux user and makes `/mnt/nas` and the Docker socket inaccessible. Database
+credentials are loaded from `EOM_DATABASE_URL` or `/etc/eom/secrets/postgres.env`; they are never
+printed or logged.
+
 ## Security Boundary
 
 Workers run as separate Linux users and use separate HOME directories. Workers do not receive sudo, Docker group access, or direct NAS write access. Generated HWPX, PNG, AI, PDF, backups, worker homes, workspaces, staging files, and secrets are not stored in Git.
@@ -64,6 +80,8 @@ Use UTC for system timestamps. Use Asia/Seoul only for user-facing display.
 ## Documentation
 
 - Architecture decisions: `docs/adr/`
+- Platform skeleton architecture: `docs/architecture/PLATFORM_SKELETON_V0.md`
+- Live smoke test: `docs/operations/PLATFORM_SMOKE_TEST.md`
 - Internal environment reports: `docs/internal/`
 - Operations and rollback: `docs/operations/`
 - Compose operations: `infra/compose/README.md`

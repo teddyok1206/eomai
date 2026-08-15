@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.eom.local/protocol/1.0.1/job-request.schema.json",
+  "title": "EOM JobRequest 1.0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "job_id", "idempotency_key", "task_type", "payload", "artifact", "submitted_at"],
+  "properties": {
+    "protocol_version": {"type": "string", "const": "1.0.1"},
+    "job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 128},
+    "task_type": {"type": "string", "const": "authoring_smoke"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message"],
+      "properties": {"message": {"type": "string", "minLength": 1, "maxLength": 256}}
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logical_artifact_id", "revision_id", "file_name", "media_type"],
+      "properties": {
+        "logical_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "file_name": {"type": "string", "const": "result.json"},
+        "media_type": {"type": "string", "const": "application/json"}
+      }
+    },
+    "submitted_at": {"type": "string", "format": "date-time", "pattern": "Z$"}
+  }
+}

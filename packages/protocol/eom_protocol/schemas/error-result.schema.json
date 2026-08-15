@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.eom.local/protocol/1.0.1/error-result.schema.json",
+  "title": "EOM ErrorResult 1.0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "job_id", "status", "error_code", "message", "details", "occurred_at"],
+  "properties": {
+    "protocol_version": {"type": "string", "const": "1.0.1"},
+    "job_id": {"type": ["string", "null"], "pattern": "^job_[0-9a-f]{32}$"},
+    "status": {"type": "string", "const": "error"},
+    "error_code": {
+      "type": "string",
+      "enum": ["PROTOCOL_VALIDATION_FAILED", "INVALID_STATE_TRANSITION", "WORKER_UNAVAILABLE", "WORKER_TIMEOUT", "WORKER_EXEC_FAILED", "WORKER_RESULT_MISSING", "WORKER_RESULT_INVALID", "ARTIFACT_HASH_MISMATCH", "ARTIFACT_COMMIT_FAILED", "DATABASE_ERROR", "NAS_UNAVAILABLE"]
+    },
+    "message": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "details": {"type": "object"},
+    "occurred_at": {"type": "string", "format": "date-time", "pattern": "Z$"}
+  }
+}
