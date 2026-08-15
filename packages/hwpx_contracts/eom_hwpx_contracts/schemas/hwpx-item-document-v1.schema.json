@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/hwpx/hwpx-item-document-v1.schema.json",
+  "title": "EOM HWPX Placeholder Item Document V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_id", "document_title", "item", "solution"],
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F-\\u009F]+$"
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "document_id": {"type": "string", "pattern": "^placeholder-[a-z0-9-]{1,48}$"},
+    "document_title": {"$ref": "#/$defs/text", "maxLength": 200},
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_number", "upper_stem", "lower_stem", "table", "image", "equation", "statements", "choices", "points"],
+      "properties": {
+        "item_number": {"type": "string", "pattern": "^[1-9][0-9]{0,2}$"},
+        "upper_stem": {"$ref": "#/$defs/text"},
+        "lower_stem": {"$ref": "#/$defs/text"},
+        "table": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rows"],
+          "properties": {
+            "rows": {
+              "type": "array", "minItems": 2, "maxItems": 2,
+              "items": {
+                "type": "array", "minItems": 3, "maxItems": 3,
+                "items": {"$ref": "#/$defs/text", "maxLength": 300}
+              }
+            }
+          }
+        },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_path", "media_type", "sha256", "expected_width_px", "expected_height_px"],
+          "properties": {
+            "source_path": {"const": "eom-placeholder-image-output.png"},
+            "media_type": {"const": "image/png"},
+            "sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+            "expected_width_px": {"const": 800},
+            "expected_height_px": {"const": 500}
+          }
+        },
+        "equation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_format", "source"],
+          "properties": {
+            "source_format": {"const": "hancom-equation-script"},
+            "source": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[A-Za-z0-9+\\-*/=() ._^]+$"}
+          }
+        },
+        "statements": {
+          "type": "object", "additionalProperties": false,
+          "required": ["giyeok", "nieun", "digeut"],
+          "properties": {"giyeok": {"$ref": "#/$defs/text"}, "nieun": {"$ref": "#/$defs/text"}, "digeut": {"$ref": "#/$defs/text"}}
+        },
+        "choices": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"$ref": "#/$defs/text", "maxLength": 500}},
+        "points": {"enum": ["2", "3"]}
+      }
+    },
+    "solution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["answer", "authoring_intent", "overview", "statement_explanations"],
+      "properties": {
+        "answer": {"enum": ["1", "2", "3", "4", "5"]},
+        "authoring_intent": {"$ref": "#/$defs/text"},
+        "overview": {"$ref": "#/$defs/text"},
+        "statement_explanations": {
+          "type": "object", "additionalProperties": false,
+          "required": ["giyeok", "nieun", "digeut"],
+          "properties": {"giyeok": {"$ref": "#/$defs/text"}, "nieun": {"$ref": "#/$defs/text"}, "digeut": {"$ref": "#/$defs/text"}}
+        }
+      }
+    }
+  }
+}

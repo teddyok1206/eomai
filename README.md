@@ -36,13 +36,21 @@ request -> authoring -> image decision -> review -> human CLI gate
 ```
 
 All role results are strict placeholder JSON. There is no real domain content, generated image,
-HWPX, GUI, or external LLM API. Slack is not a workflow feature; `eom_dev_reporter` is a separate,
-best-effort developer milestone sender using only an Incoming Webhook.
+production HWPX, main GUI, or external LLM API. Slack is not a workflow feature;
+`eom_dev_reporter` is a separate, best-effort developer milestone sender using only an Incoming
+Webhook.
 
 Observability Console V0 is a separate, replaceable read-only process at `/observe/`. It projects
 existing PostgreSQL audit data through a versioned `/observe/api/v1/` contract and a shared SSE
 poller. It cannot enqueue commands, mutate database rows, access NAS, inspect worker homes, or run
 Codex. Stopping `eom-observe.service` has no effect on the platform or workflow runtime.
+
+HWPX POC V0 is a separate reference-template-first pipeline. It validates bounded ZIP/XML input,
+compiles template-hash-bound marker and object bindings, replaces placeholder text, a fixed table,
+one PNG, and one observed equation source, then performs structural and semantic round-trip
+validation. The isolated `eom-hwpx` builder is file-only; eom-core owns DB and artifact commit.
+Synthetic fixtures are not Hancom compatibility evidence, and completion requires a manual Windows
+Hancom open/edit/save gate.
 
 ## Operating Commands
 
@@ -107,6 +115,15 @@ Access remains loopback-only. Forward local port 8780 and open `http://127.0.0.1
 The one-time initial token file is `/home/eom/.eom-observe-initial-token`; its value is never logged
 or stored in Git.
 
+HWPX toolkit operations use their own Python 3.12 prefix. Until an approved reference is imported,
+doctor reports `REFERENCE_TEMPLATE=PENDING_MANUAL_ACTION`:
+
+```bash
+/srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx doctor
+/srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx inspect-package --input <HWPX> --output <REPORT>
+/srv/eom/conda/envs/eom-core/bin/eomctl hwpx doctor
+```
+
 `job submit` needs permission to create a transient systemd unit because that unit changes to the
 isolated worker Linux user and makes `/mnt/nas` and the Docker socket inaccessible. Database
 credentials are loaded from `EOM_DATABASE_URL` or `/etc/eom/secrets/postgres.env`; they are never
@@ -130,5 +147,8 @@ Use UTC for system timestamps. Use Asia/Seoul only for user-facing display.
 - Observability setup: `docs/operations/OBSERVABILITY_CONSOLE_SETUP.md`
 - Observability access: `docs/operations/OBSERVABILITY_CONSOLE_ACCESS.md`
 - Internal environment reports: `docs/internal/`
+- HWPX POC architecture: `docs/architecture/HWPX_POC_V0.md`
+- HWPX reference creation: `docs/operations/HWPX_REFERENCE_TEMPLATE_CREATION.md`
+- HWPX format references: `docs/references/HWPX_FORMAT_REFERENCES.md`
 - Operations and rollback: `docs/operations/`
 - Compose operations: `infra/compose/README.md`
