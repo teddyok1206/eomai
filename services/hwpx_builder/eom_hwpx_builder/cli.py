@@ -14,6 +14,7 @@ from eom_hwpx_builder.bindings import compile_bindings
 from eom_hwpx_builder.doctor import run_doctor
 from eom_hwpx_builder.errors import HwpxError
 from eom_hwpx_builder.models import BindingManifest
+from eom_hwpx_builder.reference import prepare_content_team_reference
 from eom_hwpx_builder.renderer import failed_result, render_workspace
 from eom_hwpx_builder.semantic import compare_semantic, extract_semantic
 from eom_hwpx_builder.util import write_json
@@ -54,6 +55,18 @@ def validate_package(
     _echo({"status": report.status, "output": output.name})
     if report.status != "PASS":
         raise typer.Exit(1)
+
+
+@app.command("prepare-content-team-reference")
+def prepare_reference(
+    input_path: Annotated[Path, typer.Option("--input", exists=True, dir_okay=False)],
+    reference_image: Annotated[
+        Path, typer.Option("--reference-image", exists=True, dir_okay=False)
+    ],
+    output: Annotated[Path, typer.Option("--output", dir_okay=False)],
+) -> None:
+    result = prepare_content_team_reference(input_path, reference_image, output)
+    _echo(result)
 
 
 @app.command("compile-bindings")

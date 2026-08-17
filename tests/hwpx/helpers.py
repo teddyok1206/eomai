@@ -183,6 +183,147 @@ def synthetic_parts(
     ]
 
 
+def content_team_source_parts() -> list[tuple[str, bytes, int]]:
+    """Return a minimal synthetic package with the observed content-team table profile."""
+
+    def paragraph(value: str, *, inner: str = "") -> str:
+        return f'<hp:p id="0"><hp:run charPrIDRef="2"><hp:t>{value}</hp:t>{inner}</hp:run></hp:p>'
+
+    def cell(row: int, column: int, value: str, *, column_span: int = 1) -> str:
+        return (
+            '<hp:tc borderFillIDRef="1">'
+            f"<hp:subList>{paragraph(value)}</hp:subList>"
+            f'<hp:cellAddr rowAddr="{row}" colAddr="{column}"/>'
+            f'<hp:cellSpan rowSpan="1" colSpan="{column_span}"/>'
+            '<hp:cellSz width="9000" height="2000"/>'
+            "</hp:tc>"
+        )
+
+    picture_grid = (
+        '<hp:tbl id="picture-grid" rowCnt="2" colCnt="2">'
+        '<hp:sz width="30000" height="6000"/>'
+        f"<hp:tr>{cell(0, 0, 'PICTURE A')}{cell(0, 1, 'PICTURE B')}</hp:tr>"
+        f"<hp:tr>{cell(1, 0, '(A)')}{cell(1, 1, '(B)')}</hp:tr>"
+        "</hp:tbl>"
+    )
+    gnd_table = (
+        '<hp:tbl id="gnd" rowCnt="3" colCnt="3">'
+        '<hp:sz width="30000" height="10000"/>'
+        f"<hp:tr>{cell(0, 0, '')}{cell(0, 1, '&lt;보기&gt;')}{cell(0, 2, '')}</hp:tr>"
+        f"<hp:tr>{cell(1, 0, '')}{cell(1, 2, '')}</hp:tr>"
+        f"<hp:tr>{cell(2, 0, 'EDIT RULES', column_span=3)}</hp:tr>"
+        "</hp:tbl>"
+    )
+    choice_rows = "".join(
+        f"<hp:tr>{cell(row, 0, str(row + 1))}{cell(row, 1, 'GENERIC CHOICE')}</hp:tr>"
+        for row in range(5)
+    )
+    generic_choices = (
+        '<hp:tbl id="generic-choices" rowCnt="5" colCnt="2">'
+        '<hp:sz width="30000" height="10000"/>'
+        f"{choice_rows}</hp:tbl>"
+    )
+    equation = '<hp:equation id="equation-source"><hp:script>x+y=z</hp:script></hp:equation>'
+    problem_paragraphs = "".join(
+        [
+            paragraph("ITEM EDIT RULE", inner=equation),
+            paragraph("", inner=picture_grid),
+            paragraph("LOWER STEM EDIT RULE"),
+            paragraph("", inner=gnd_table),
+            paragraph("① ㄱ"),
+            paragraph("", inner=generic_choices),
+        ]
+    )
+    problem = (
+        '<hp:tbl id="problem" rowCnt="1" colCnt="1">'
+        '<hp:sz width="33523" height="55595"/>'
+        "<hp:tr><hp:tc><hp:subList>"
+        f"{problem_paragraphs}"
+        '</hp:subList><hp:cellAddr rowAddr="0" colAddr="0"/>'
+        '<hp:cellSpan rowSpan="1" colSpan="1"/><hp:cellSz width="33523" height="55595"/>'
+        "</hp:tc></hp:tr></hp:tbl>"
+    )
+    field_cells = "".join(
+        [
+            cell(0, 0, "TEMPLATE FILE", column_span=4),
+            cell(1, 0, "UNIT"),
+            cell(1, 1, "EDIT RULE", column_span=3),
+            cell(2, 0, "SUBUNIT"),
+            cell(2, 1, "EDIT RULE", column_span=3),
+            cell(3, 0, "UNIT FLAG"),
+            cell(3, 1, "X"),
+            cell(3, 2, "INQUIRY FLAG"),
+            cell(3, 3, "X"),
+            cell(4, 0, "SOLUTION"),
+            cell(4, 1, "SOLUTION EDIT RULE", column_span=3),
+            *[
+                value
+                for row, label in (
+                    (5, "REFERENCE"),
+                    (6, "TEAM INTENT"),
+                    (7, "SOURCE"),
+                    (8, "ILLUSTRATION"),
+                )
+                for value in (cell(row, 0, label), cell(row, 1, "EDIT RULE", column_span=3))
+            ],
+        ]
+    )
+    field_table = (
+        '<hp:tbl id="fields" rowCnt="9" colCnt="4">'
+        '<hp:sz width="43881" height="50568"/>'
+        f"<hp:tr>{field_cells}</hp:tr></hp:tbl>"
+    )
+    section = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<hp:section xmlns:hp="{HP}">'
+        f"{paragraph('', inner=problem)}{paragraph('', inner=field_table)}"
+        "</hp:section>"
+    ).encode()
+    content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<opf:package xmlns:opf="{OPF}">
+  <opf:metadata>
+    <opf:title>CONTENT TEAM SYNTHETIC SOURCE</opf:title>
+    <opf:meta name="creator" content="PLACEHOLDER"/>
+    <opf:meta name="lastsaveby" content="PLACEHOLDER"/>
+  </opf:metadata>
+  <opf:manifest>
+    <opf:item id="header" href="Contents/header.xml" media-type="application/xml"/>
+    <opf:item id="section0" href="Contents/section0.xml" media-type="application/xml"/>
+    <opf:item id="settings" href="settings.xml" media-type="application/xml"/>
+  </opf:manifest>
+  <opf:spine><opf:itemref idref="header"/><opf:itemref idref="section0"/></opf:spine>
+</opf:package>'''.encode()
+    return [
+        ("mimetype", b"application/hwp+zip", zipfile.ZIP_STORED),
+        (
+            "version.xml",
+            b'<?xml version="1.0"?><version xmlns="urn:synthetic:version"/>',
+            zipfile.ZIP_DEFLATED,
+        ),
+        (
+            "META-INF/container.xml",
+            (
+                f'<?xml version="1.0"?><container xmlns="{CONTAINER}"><rootfiles>'
+                '<rootfile full-path="Contents/content.hpf"/></rootfiles></container>'
+            ).encode(),
+            zipfile.ZIP_DEFLATED,
+        ),
+        ("Contents/content.hpf", content, zipfile.ZIP_DEFLATED),
+        (
+            "Contents/header.xml",
+            b'<?xml version="1.0"?><header xmlns="urn:synthetic:header"/>',
+            zipfile.ZIP_DEFLATED,
+        ),
+        ("Contents/section0.xml", section, zipfile.ZIP_DEFLATED),
+        (
+            "settings.xml",
+            b'<?xml version="1.0"?><settings xmlns="urn:synthetic:settings"/>',
+            zipfile.ZIP_DEFLATED,
+        ),
+        ("Preview/PrvText.txt", b"CONTENT TEAM SYNTHETIC SOURCE", zipfile.ZIP_DEFLATED),
+    ]
+
+
 def write_hwpx(path: Path, parts: list[tuple[str, bytes, int]] | None = None) -> Path:
     with zipfile.ZipFile(path, "w") as archive:
         for name, data, compression in parts or synthetic_parts():

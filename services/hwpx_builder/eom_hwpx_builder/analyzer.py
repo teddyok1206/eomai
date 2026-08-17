@@ -43,9 +43,19 @@ ACTIVE_EXTENSIONS = {
 }
 
 
-def _resolve_part(base_part: str, href: str) -> str:
-    parent = PurePosixPath(base_part).parent.as_posix()
-    value = posixpath.normpath(posixpath.join(parent, href))
+PACKAGE_ROOT_DIRECTORIES = {"BinData", "Contents", "META-INF", "Preview", "Scripts"}
+PACKAGE_ROOT_FILES = {"mimetype", "settings.xml", "version.xml"}
+
+
+def resolve_part(base_part: str, href: str) -> str:
+    """Resolve both Hancom root-qualified and OPF-relative package references."""
+
+    first_component = PurePosixPath(href).parts[0] if PurePosixPath(href).parts else ""
+    if first_component in PACKAGE_ROOT_DIRECTORIES or href in PACKAGE_ROOT_FILES:
+        value = posixpath.normpath(href)
+    else:
+        parent = PurePosixPath(base_part).parent.as_posix()
+        value = posixpath.normpath(posixpath.join(parent, href))
     if value.startswith("../") or value == ".." or value.startswith("/"):
         raise HwpxError(HwpxErrorCode.HWPX_REFERENCE_BROKEN, "package reference escaped root")
     return value
@@ -81,7 +91,7 @@ def _manifest(
         media_type = _attribute(element, "media-type") or _attribute(element, "mediatype")
         if not identifier or not href:
             continue
-        resolved = _resolve_part(part_name, href)
+        resolved = resolve_part(part_name, href)
         item = {"id": identifier, "href": href, "part": resolved}
         if media_type:
             item["media_type"] = media_type
@@ -171,7 +181,18 @@ def analyze_package(path: Path, limits: PackageLimits | None = None) -> PackageA
             paragraphs = [root]
         for paragraph_index, paragraph in enumerate(paragraphs):
             logical_text = "".join(
-                element.text or "" for element in paragraph.iter() if local_name(element.tag) == "t"
+                element.text or ""
+                for element in paragraph.iter()
+                if local_name(element.tag) == "t"
+                and next(
+                    (
+                        ancestor
+                        for ancestor in element.iterancestors()
+                        if local_name(ancestor.tag) == "p"
+                    ),
+                    None,
+                )
+                is paragraph
             )
             for marker in MARKER_PATTERN.findall(logical_text):
                 marker_locations.append(
@@ -186,7 +207,26 @@ def analyze_package(path: Path, limits: PackageLimits | None = None) -> PackageA
         for element_index, element in enumerate(root.iter()):
             lname = local_name(element.tag)
             lower_name = lname.casefold()
-            if "script" in lower_name or "macro" in lower_name or lower_name == "ole":
+            if lower_name != "t":
+                for marker in MARKER_PATTERN.findall(element.text or ""):
+                    marker_locations.append(
+                        {
+                            "marker": marker,
+                            "part": part_name,
+                            "element_local_name": lname,
+                            "element_index": element_index,
+                            "location": "element_text",
+                        }
+                    )
+            equation_script = lower_name == "script" and any(
+                local_name(ancestor.tag).casefold() == "equation"
+                for ancestor in element.iterancestors()
+            )
+            if (
+                ("script" in lower_name and not equation_script)
+                or "macro" in lower_name
+                or lower_name == "ole"
+            ):
                 active.add(f"xml:{part_name}:{lname}")
             if "encrypt" in lower_name:
                 active.add(f"encryption:{part_name}:{lname}")
@@ -214,7 +254,7 @@ def analyze_package(path: Path, limits: PackageLimits | None = None) -> PackageA
                         external.add(f"{part_name}:{attribute_local}")
                     elif value and not value.startswith("#"):
                         try:
-                            target = _resolve_part(part_name, value)
+                            target = resolve_part(part_name, value)
                         except HwpxError:
                             target = value
                         references.append(

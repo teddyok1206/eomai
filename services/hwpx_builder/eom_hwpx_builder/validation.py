@@ -44,6 +44,22 @@ def _check(
     )
 
 
+UNIQUE_OBJECT_ID_ELEMENTS = {
+    "arc",
+    "container",
+    "curve",
+    "ellipse",
+    "equation",
+    "line",
+    "ole",
+    "pic",
+    "polygon",
+    "rect",
+    "textart",
+    "tbl",
+}
+
+
 def _duplicate_ids(package_path: Path, limits: PackageLimits) -> list[str]:
     package = read_package(package_path, limits)
     duplicates: list[str] = []
@@ -52,16 +68,20 @@ def _duplicate_ids(package_path: Path, limits: PackageLimits) -> list[str]:
         if not entry.info.filename.lower().endswith((".xml", ".hpf")):
             continue
         root = parse_xml(entry.data, entry.info.filename, limits).root
-        local_ids: Counter[str] = Counter()
+        object_ids: Counter[str] = Counter()
         for element in root.iter():
             for attribute_name, value in element.attrib.items():
-                if local_name(attribute_name) == "id":
-                    local_ids[value] += 1
+                if (
+                    local_name(attribute_name) == "id"
+                    and value
+                    and local_name(element.tag).casefold() in UNIQUE_OBJECT_ID_ELEMENTS
+                ):
+                    object_ids[value] += 1
                 if attribute_name == "{http://www.w3.org/XML/1998/namespace}id":
                     global_xml_ids[value] += 1
         duplicates.extend(
             f"{entry.info.filename}:{identifier}"
-            for identifier, count in local_ids.items()
+            for identifier, count in object_ids.items()
             if count > 1
         )
     duplicates.extend(

@@ -13,6 +13,7 @@ from eom_hwpx_builder.archive import _validate_name, read_package
 from eom_hwpx_builder.bindings import BindingKind, compile_bindings
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 from eom_hwpx_builder.models import BindingManifest, PackageLimits
+from eom_hwpx_builder.reference import prepare_content_team_reference
 from eom_hwpx_builder.renderer import failed_result, render_workspace
 from eom_hwpx_builder.semantic import compare_semantic, extract_semantic
 from eom_hwpx_builder.util import sha256_bytes
@@ -23,6 +24,7 @@ from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
 from tests.hwpx.helpers import (
+    content_team_source_parts,
     document,
     png_bytes,
     prepare_workspace,
@@ -138,6 +140,39 @@ def test_active_content_and_external_links_are_reported(tmp_path: Path) -> None:
     assert validate_structure(path).status == "FAIL"
 
 
+def test_content_team_reference_profile_prepares_and_binds_nested_table(tmp_path: Path) -> None:
+    source = write_hwpx(tmp_path / "content-team-source.hwpx", content_team_source_parts())
+    image = tmp_path / "reference.png"
+    image.write_bytes(png_bytes())
+    output = tmp_path / "reference.hwpx"
+
+    result = prepare_content_team_reference(source, image, output)
+    analysis = analyze_package(output)
+    bindings = compile_bindings(
+        output,
+        template_id="hwpxtpl_" + "a" * 32,
+        template_revision_id="hwpxrev_" + "b" * 32,
+        reference_image_sha256=sha256_bytes(image.read_bytes()),
+    )
+
+    assert result["status"] == "PASS"
+    assert analysis.active_content == ()
+    assert analysis.sections == ("Contents/header.xml", "Contents/section0.xml")
+    assert len({location["marker"] for location in analysis.marker_locations}) == 26
+    assert len(analysis.equation_candidates) == 1
+    assert validate_structure(output, bindings=bindings).status == "PASS"
+    table_binding = next(
+        binding for binding in bindings.bindings if binding.field_name == "item.table.rows.1.2"
+    )
+    assert table_binding.locator["cell_index"] == 5
+    assert table_binding.constraints["nested_table"] is True
+    assert table_binding.constraints["enclosing_table"] == "1x1_problem_container"
+    with zipfile.ZipFile(output) as archive:
+        section = archive.read("Contents/section0.xml").decode("utf-8")
+    assert 'rowCnt="5" colCnt="2"' not in section
+    assert 'rowCnt="2" colCnt="3"' in section
+
+
 def test_binding_compiler_handles_split_marker_and_anchor_fallback(tmp_path: Path) -> None:
     reference = png_bytes()
     path = write_hwpx(
@@ -227,7 +262,7 @@ def test_structural_validator_catches_mimetype_manifest_spine_and_duplicate_id(
         ("mimetype", b"application/hwp+zip", b"wrong/type"),
         ("Contents/content.hpf", b"../BinData/image1.png", b"../BinData/missing.png"),
         ("Contents/content.hpf", b'idref="section0"', b'idref="missing"'),
-        ("Contents/section0.xml", b'id="p1"', b'id="p0"'),
+        ("Contents/section0.xml", b'id="table1"', b'id="eq1"'),
     ]
     for case_index, (part_name, old, new) in enumerate(cases):
         parts = synthetic_parts()

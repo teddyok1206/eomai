@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import posixpath
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,7 @@ from typing import Any
 from lxml import etree  # type: ignore[import-untyped]
 from PIL import Image
 
+from eom_hwpx_builder.analyzer import resolve_part
 from eom_hwpx_builder.archive import SafePackage, read_package
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 from eom_hwpx_builder.models import (
@@ -93,7 +93,20 @@ def _text_occurrences(root: etree._Element, part_name: str, marker: str) -> list
         paragraphs = [root]
     occurrences: list[TextOccurrence] = []
     for paragraph_index, paragraph in enumerate(paragraphs):
-        nodes = [element for element in paragraph.iter() if local_name(element.tag) == "t"]
+        nodes = [
+            element
+            for element in paragraph.iter()
+            if local_name(element.tag) == "t"
+            and next(
+                (
+                    ancestor
+                    for ancestor in element.iterancestors()
+                    if local_name(ancestor.tag) == "p"
+                ),
+                None,
+            )
+            is paragraph
+        ]
         combined = "".join(element.text or "" for element in nodes)
         search_from = 0
         while (start := combined.find(marker, search_from)) >= 0:
@@ -191,13 +204,28 @@ def _unique_text_binding(
             for element in bound_node.iterancestors()
             if local_name(element.tag) in {"tc", "cell"}
         ]
-        if len(ancestor_tables) != 1 or len(ancestor_cells) != 1:
+        if not ancestor_tables or not ancestor_cells:
             raise HwpxError(
                 HwpxErrorCode.HWPX_TEMPLATE_BINDING_FAILED,
-                f"table marker is not in one non-nested cell: {field_name}",
+                f"table marker is not in a table cell: {field_name}",
             )
         table = ancestor_tables[0]
         cell = ancestor_cells[0]
+        enclosing_tables = ancestor_tables[1:]
+        enclosing_cells = ancestor_cells[1:]
+        official_problem_container = (
+            len(enclosing_tables) == 1
+            and len(enclosing_cells) == 1
+            and enclosing_tables[0].attrib.get("rowCnt", enclosing_tables[0].attrib.get("rows"))
+            == "1"
+            and enclosing_tables[0].attrib.get("colCnt", enclosing_tables[0].attrib.get("cols"))
+            == "1"
+        )
+        if enclosing_tables and not official_problem_container:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_TEMPLATE_BINDING_FAILED,
+                f"table marker has an unsupported enclosing table: {field_name}",
+            )
         cells = [
             candidate
             for candidate in table.iter()
@@ -222,7 +250,14 @@ def _unique_text_binding(
             )
         locator["table_fingerprint"] = _fingerprint(table)
         locator["cell_index"] = expected_index
-        constraints.update({"rows": 2, "columns": 3, "nested_table": False})
+        constraints.update(
+            {
+                "rows": 2,
+                "columns": 3,
+                "nested_table": bool(enclosing_tables),
+                "enclosing_table": "1x1_problem_container" if official_problem_container else None,
+            }
+        )
     return TemplateBinding(
         field_name=field_name,
         part_name=occurrence.part_name,
@@ -274,7 +309,7 @@ def _image_binding(
             identifier = attributes.get("id")
             if not href or not identifier:
                 continue
-            resolved = posixpath.normpath(posixpath.join("Contents", href))
+            resolved = resolve_part("Contents/content.hpf", href)
             if resolved == entry.info.filename:
                 manifest_ids.append(identifier)
     if len(manifest_ids) != 1:

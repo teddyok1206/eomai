@@ -1,37 +1,39 @@
-# HWPX Reference Template Creation
+# HWPX Content-Team Reference Preparation
 
-The reference must be created on the laboratory Windows PC with the actual Hancom Office Hangul
-application. Record the exact Windows and Hancom versions; do not write a guessed version.
+The POC reference starts from the existing Hancom-saved content-team `문항템플릿.hwpx`. Do not
+create a blank document and do not edit the EOMIS copy. Stage the source HWPX and deterministic
+reference PNG into a local builder workspace, then run the file-only profile transformer.
 
-## Prepare The Kit
+```bash
+/srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx \
+  prepare-content-team-reference \
+  --input <STAGED_CONTENT_TEAM_TEMPLATE.hwpx> \
+  --reference-image <STAGED_REFERENCE.png> \
+  --output <FRESH_WORKSPACE>/eom_hwpx_reference_v1.hwpx
+```
 
-Run `eomctl hwpx reference-kit create` or, before eomctl integration, run the isolated kit script.
-The kit is written only to `/mnt/nas/eom/hwpx/poc-v0/reference-kit/v1/`. Both PNG files are
-deterministic RGB 800x500 images with different SHA-256 values and no scientific meaning.
+The transformer recognizes the fixed observed profile and fails closed if it changes. It preserves:
 
-## Create The Document
+- the `1x1` problem container;
+- page size, margins, paragraph/character styles, border/fill definitions, and namespaces;
+- the `3x3` ㄱ/ㄴ/ㄷ `<보기>` table;
+- the bottom `9x4` management and solution table.
 
-1. Start a new one-section document and record the exact Hancom version.
-2. Build one combined placeholder item and solution with the marker list from
-   `reference-markers.txt`. Do not split a marker with formatting or a line break, attach other text,
-   or use any marker twice.
-3. Create a real 2x3 table and put the six table markers in their respective cells. Do not nest a
-   table.
-4. Insert `eom-placeholder-image-reference.png` as an embedded image, not a link. Do not resize or
-   crop it after insertion.
-5. Insert one equation with the Hangul equation editor. Prefer a stored source containing
-   `EOM_EQ_PLACEHOLDER` with visual meaning `x+y=z`. If that string is not preserved by the installed
-   version, place `{{EOM_EQUATION_ANCHOR}}` immediately adjacent to the only equation.
-6. Do not add scripts, macros, OLE, external links, encryption, signatures, charts, tracked changes,
-   document history, or additional sections.
-7. Save as `eom_hwpx_reference_v1.hwpx` into
-   `/mnt/nas/eom/hwpx/poc-v0/reference/inbox/`. Do not rename another format to `.hwpx`.
-8. Record the Windows version, Hancom version, font warnings, and whether the equation marker or
-   anchor was used in a separate sanitized operator note.
+It deterministically performs only the following profile-bound changes:
 
-The importer treats this file as untrusted and read-only. It will reject unsafe package entries,
-active content, missing or duplicate markers, ambiguous equation/image bindings, and unsupported
-package structure. The original is never edited.
+- converts the template's `2x2` picture layout example into the POC's unmerged `2x3` data table;
+- embeds the deterministic reference PNG as one inline centered picture;
+- retains one observed Hancom equation object and replaces its source with `EOM_EQ_PLACEHOLDER`;
+- replaces editing-compliance example text with strict EOM markers and placeholder metadata;
+- emits five independent ㄱ/ㄴ/ㄷ combination-choice paragraphs;
+- removes the separate `5x2` generic-choice table used by items without ㄱ/ㄴ/ㄷ statements;
+- redacts creator/last-save metadata and refreshes preview text.
 
-This tooling was developed by referring to Hancom's public HWP/OWPML format material; see
-`docs/references/HWPX_FORMAT_REFERENCES.md`.
+The command does not access PostgreSQL, NAS, EOMIS, worker homes, Docker, Codex, or the network. The
+caller supplies files already staged in its workspace. The generated candidate must pass package
+analysis, structural validation, binding compilation, and marker uniqueness before the orchestrator
+imports it into immutable artifact storage.
+
+This Linux preparation does not establish Hancom compatibility. Exact Windows and Hancom versions,
+open/edit/save/reopen behavior, visual layout, stale preview replacement, and re-saved semantic
+comparison remain the later manual compatibility gate.

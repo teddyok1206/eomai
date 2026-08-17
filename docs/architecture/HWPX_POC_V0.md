@@ -29,6 +29,13 @@ The importer preserves the reference `version.xml`, namespace profile, package e
 order, compression methods, declarations, attributes, and unknown passive parts. Scripts, macros,
 OLE, encryption, signatures, external links, executable content, and embedded packages are rejected.
 
+For the initial content-team profile, the Hancom-saved `문항템플릿.hwpx` is staged read-only and a
+file-only transformer creates the marker reference. It preserves the outer `1x1` problem container,
+the `3x3` ㄱ/ㄴ/ㄷ view, and the bottom `9x4` management/solution table. The POC data surface is an
+unmerged `2x3` table nested only inside the official `1x1` container. The generic `5x2` choice table
+is intentionally excluded because it represents a different item surface without ㄱ/ㄴ/ㄷ statements.
+This profile preparation does not weaken the general rule against arbitrary nested tables.
+
 ## Render And Validation
 
 ```mermaid

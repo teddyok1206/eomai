@@ -26,12 +26,15 @@ from the recorded prior release directory, then run `--verify` and `eomctl hwpx 
 
 ```bash
 /srv/eom/conda/envs/eom-core/bin/eomctl hwpx doctor
-/srv/eom/conda/envs/eom-core/bin/eomctl hwpx reference-kit create
 ```
 
-Create `eom_hwpx_reference_v1.hwpx` using
-`HWPX_REFERENCE_TEMPLATE_CREATION.md`. Place it only in the fixed reference inbox. The importer
-opens it read-only and canonical artifacts are committed through the existing artifact boundary.
+Stage the existing Hancom-saved content-team template and reference PNG into a fresh local workspace,
+then create `eom_hwpx_reference_v1.hwpx` with the profile-bound command documented in
+`HWPX_REFERENCE_TEMPLATE_CREATION.md`. Do not edit the EOMIS source. The generated candidate keeps
+the `1x1`, `3x3`, and `9x4` authoring-form surfaces, creates the POC `2x3` data table, and omits the
+unrelated generic-choice `5x2` table. Place only the validated candidate in the fixed reference inbox.
+The importer opens it read-only and canonical artifacts are committed through the existing artifact
+boundary.
 
 ## Inspect And Import
 
