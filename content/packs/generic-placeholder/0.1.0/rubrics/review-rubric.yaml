@@ -1,0 +1,6 @@
+schema_version: "1.0"
+rubric_key: "PLACEHOLDER_REVIEW_RULE"
+checks:
+  - key: "PLACEHOLDER_CHECK"
+    severity: "INFO"
+    description: "PLACEHOLDER_CONTENT"

@@ -1,0 +1,40 @@
+schema_version: "1.0"
+pack:
+  key: "generic-placeholder"
+  name: "Generic Placeholder Pack"
+  version: "0.1.0"
+  locale: "ko-KR"
+  domain_key: "PLACEHOLDER_DOMAIN"
+  description: "Domain-neutral technical validation pack"
+provenance:
+  intake_batch_ids:
+    - "intake_00000000000000000000000000000000"
+  mapping_proposal_ids:
+    - "proposal_placeholder_001"
+compatibility:
+  protocol:
+    minimum: "1.0.1"
+    maximum_exclusive: "2.0.0"
+  workflow_definitions:
+    - key: "generic-item-development"
+      versions: ["1.1.0"]
+  required_worker_roles: ["authoring", "review", "image", "item_management"]
+taxonomies:
+  curriculum: "taxonomies/curriculum.yaml"
+  tags: "taxonomies/tags.yaml"
+item_types:
+  - key: "generic-multiple-choice"
+    source: "item-types/generic-multiple-choice.yaml"
+profiles:
+  authoring:
+    authoring-default: "profiles/authoring-default.yaml"
+  review:
+    review-default: "profiles/review-default.yaml"
+  image:
+    image-placeholder: "profiles/image-placeholder.yaml"
+  registration:
+    registration-default: "profiles/registration-default.yaml"
+metadata_schemas:
+  item: "metadata-schemas/item-metadata.schema.json"
+rubrics:
+  review: "rubrics/review-rubric.yaml"

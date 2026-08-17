@@ -1,0 +1,4 @@
+schema_version: "1.0"
+tags:
+  - key: "PLACEHOLDER_TAG"
+    label: "PLACEHOLDER_CONTENT"

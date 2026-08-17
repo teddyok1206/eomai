@@ -1,0 +1,13 @@
+schema_version: "1.0"
+profile:
+  type: "review"
+  key: "review-default"
+  version: "1.0.0"
+template: "prompt-templates/review.md"
+input_schema_ref: "eom://workflow/review-input@1.0"
+output_schema_ref: "review-result@1.0"
+required_context:
+  - "workflow.id"
+  - "workflow.step_key"
+  - "upstream.authoring.artifact_id"
+  - "pack.release_id"

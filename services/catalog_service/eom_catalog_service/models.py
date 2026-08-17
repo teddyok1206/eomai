@@ -187,7 +187,7 @@ class ContentIntakeEventRecord(Base):
 class ContentPackRecord(Base):
     __tablename__ = "content_packs"
 
-    content_pack_id: Mapped[str] = mapped_column(String(41), primary_key=True)
+    content_pack_id: Mapped[str] = mapped_column(String(44), primary_key=True)
     pack_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)

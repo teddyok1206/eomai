@@ -1,0 +1,14 @@
+schema_version: "1.0"
+profile:
+  type: "authoring"
+  key: "authoring-default"
+  version: "1.0.0"
+template: "prompt-templates/authoring.md"
+input_schema_ref: "eom://workflow/authoring-input@1.0"
+output_schema_ref: "authoring-result@1.0"
+required_context:
+  - "workflow.id"
+  - "workflow.step_key"
+  - "request.request_name"
+  - "request.image_mode"
+  - "pack.release_id"

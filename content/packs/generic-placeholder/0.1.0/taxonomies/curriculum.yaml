@@ -1,0 +1,5 @@
+schema_version: "1.0"
+taxonomy_key: "PLACEHOLDER_TAXONOMY"
+nodes:
+  - key: "PLACEHOLDER_NODE"
+    label: "PLACEHOLDER_CONTENT"

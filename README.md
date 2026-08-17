@@ -57,6 +57,10 @@ Raw files, manual external analysis, and canonical Content Pack source are separ
 validation and a human decision are required before import. Content leads do not need Git, and the
 server does not call ChatGPT or any external LLM API.
 
+Content Pack V0 compiles accepted placeholder policy into a deterministic `.eompack`, commits one
+canonical bundle artifact revision, and records immutable releases plus environment activation.
+Prompt profiles use scalar dot-path substitution only; executable expressions are rejected.
+
 ## Operating Commands
 
 Use root or an approved operations account for Docker administration:
@@ -130,6 +134,17 @@ doctor reports `REFERENCE_TEMPLATE=PENDING_MANUAL_ACTION`:
 /home/eom/EOM/scripts/hwpx/deploy_builder.sh --verify
 ```
 
+Manual Intake and Content Pack commands run in `eom-core`:
+
+```bash
+/srv/eom/conda/envs/eom-core/bin/eomctl content intake doctor
+/srv/eom/conda/envs/eom-core/bin/eomctl content pack validate \
+  content/packs/generic-placeholder/0.1.0
+/srv/eom/conda/envs/eom-core/bin/eomctl content pack doctor
+/srv/eom/conda/envs/eom-core/bin/eomctl content pack resolve \
+  --pack-key generic-placeholder --environment development
+```
+
 `job submit` needs permission to create a transient systemd unit because that unit changes to the
 isolated worker Linux user and makes `/mnt/nas` and the Docker socket inaccessible. Database
 credentials are loaded from `EOM_DATABASE_URL` or `/etc/eom/secrets/postgres.env`; they are never
@@ -156,5 +171,9 @@ Use UTC for system timestamps. Use Asia/Seoul only for user-facing display.
 - HWPX POC architecture: `docs/architecture/HWPX_POC_V0.md`
 - HWPX reference creation: `docs/operations/HWPX_REFERENCE_TEMPLATE_CREATION.md`
 - HWPX format references: `docs/references/HWPX_FORMAT_REFERENCES.md`
+- Manual Intake architecture: `docs/architecture/MANUAL_CONTENT_INTAKE_V0.md`
+- Content Pack architecture: `docs/architecture/CONTENT_PACK_V0.md`
+- Content Pack authoring: `docs/operations/CONTENT_PACK_AUTHORING.md`
+- Content Pack release: `docs/operations/CONTENT_PACK_RELEASE.md`
 - Operations and rollback: `docs/operations/`
 - Compose operations: `infra/compose/README.md`

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-pack/prompt-envelope-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "pack_release_id", "pack_release_sha256", "profile_key", "profile_version", "profile_sha256", "template_path", "template_sha256", "render_context_sha256", "rendered_prompt_sha256", "workflow_id", "step_run_id", "source_intake_batch_ids"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "pack_release_id": {"type": "string", "pattern": "^packrel_[0-9a-f]{32}$"},
+    "pack_release_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "profile_key": {"type": "string"}, "profile_version": {"type": "string"},
+    "profile_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "template_path": {"type": "string"}, "template_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "render_context_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "rendered_prompt_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "step_run_id": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+    "source_intake_batch_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^intake_[0-9a-f]{32}$"}}
+  }
+}

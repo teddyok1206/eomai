@@ -1,0 +1,9 @@
+schema_version: "1.0"
+item_type:
+  key: "generic-multiple-choice"
+  display_name: "PLACEHOLDER_ITEM_TYPE"
+  required_components:
+    - "UPPER_STEM"
+    - "LOWER_STEM"
+    - "CHOICES"
+    - "ANSWER"

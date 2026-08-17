@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://metadata/generic-placeholder@1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["item_type_key", "primary_taxonomy_ref", "difficulty_band", "tags"],
+  "properties": {
+    "item_type_key": {"const": "generic-multiple-choice"},
+    "primary_taxonomy_ref": {"const": "PLACEHOLDER_TAXONOMY"},
+    "difficulty_band": {"const": "PLACEHOLDER_DIFFICULTY"},
+    "tags": {"type": "array", "items": {"const": "PLACEHOLDER_TAG"}, "uniqueItems": true}
+  }
+}

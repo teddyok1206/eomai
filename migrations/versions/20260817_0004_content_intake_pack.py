@@ -220,7 +220,7 @@ def upgrade() -> None:
 
     op.create_table(
         "content_packs",
-        sa.Column("content_pack_id", sa.String(41), primary_key=True),
+        sa.Column("content_pack_id", sa.String(44), primary_key=True),
         sa.Column("pack_key", sa.String(64), nullable=False, unique=True),
         sa.Column("display_name", sa.String(128), nullable=False),
         sa.Column("description", sa.Text(), nullable=False),
@@ -235,7 +235,7 @@ def upgrade() -> None:
         sa.Column("content_pack_release_id", sa.String(40), primary_key=True),
         sa.Column(
             "content_pack_id",
-            sa.String(41),
+            sa.String(44),
             sa.ForeignKey("content_packs.content_pack_id"),
             nullable=False,
         ),

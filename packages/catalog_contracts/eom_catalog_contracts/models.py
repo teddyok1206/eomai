@@ -168,6 +168,70 @@ class HumanDecision(FrozenModel):
     _text = field_validator("notes")(_safe_text)
 
 
+class PackIdentity(FrozenModel):
+    key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    name: str = Field(min_length=1, max_length=128)
+    version: str = Field(pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+    locale: str = Field(pattern=r"^[a-z]{2}-[A-Z]{2}$")
+    domain_key: str = Field(min_length=1, max_length=128)
+    description: str = Field(min_length=1, max_length=500)
+
+
+class PackProvenance(FrozenModel):
+    intake_batch_ids: tuple[IntakeBatchId, ...] = Field(min_length=1)
+    mapping_proposal_ids: tuple[str, ...] = Field(min_length=1)
+
+
+class ProtocolCompatibility(FrozenModel):
+    minimum: str
+    maximum_exclusive: str
+
+
+class WorkflowCompatibility(FrozenModel):
+    key: str
+    versions: tuple[str, ...] = Field(min_length=1)
+
+
+class PackCompatibility(FrozenModel):
+    protocol: ProtocolCompatibility
+    workflow_definitions: tuple[WorkflowCompatibility, ...] = Field(min_length=1)
+    required_worker_roles: tuple[
+        Literal["authoring", "review", "image", "item_management"], ...
+    ] = Field(min_length=1)
+
+
+class ItemTypeSource(FrozenModel):
+    key: str
+    source: str
+
+
+class ContentPackManifest(FrozenModel):
+    schema_version: Literal["1.0"] = "1.0"
+    pack: PackIdentity
+    provenance: PackProvenance
+    compatibility: PackCompatibility
+    taxonomies: dict[str, str]
+    item_types: tuple[ItemTypeSource, ...] = Field(min_length=1)
+    profiles: dict[str, dict[str, str]]
+    metadata_schemas: dict[str, str]
+    rubrics: dict[str, str]
+
+
+class ProfileIdentity(FrozenModel):
+    type: Literal["authoring", "review", "image", "registration"]
+    key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
+    version: str = Field(pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+
+
+class ContentPackProfile(FrozenModel):
+    schema_version: Literal["1.0"] = "1.0"
+    profile: ProfileIdentity
+    template: str
+    input_schema_ref: str
+    output_schema_ref: str
+    required_context: tuple[str, ...]
+
+
 # GUI and future HTTP adapters depend on these DTOs instead of persistence records.
 class CreateIntakeBatch(FrozenModel):
     source_directory: str = Field(min_length=1, max_length=1024)

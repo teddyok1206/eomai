@@ -12,6 +12,7 @@ class CatalogSettings:
     staging_root: Path = Path("/srv/eom/staging/catalog")
     nas_artifact_root: Path = Path("/mnt/nas/eom/artifacts")
     intake_root: Path = Path("/mnt/nas/eom/content-intake")
+    placeholder_pack_source: Path = Path("/home/eom/EOM/content/packs/generic-placeholder/0.1.0")
 
     @classmethod
     def from_environment(cls) -> CatalogSettings:
@@ -19,4 +20,7 @@ class CatalogSettings:
             staging_root=Path(os.environ.get("EOM_CATALOG_STAGING_ROOT", cls.staging_root)),
             nas_artifact_root=Path(os.environ.get("EOM_NAS_ARTIFACT_ROOT", cls.nas_artifact_root)),
             intake_root=Path(os.environ.get("EOM_CONTENT_INTAKE_ROOT", cls.intake_root)),
+            placeholder_pack_source=Path(
+                os.environ.get("EOM_PLACEHOLDER_PACK_SOURCE", cls.placeholder_pack_source)
+            ),
         )

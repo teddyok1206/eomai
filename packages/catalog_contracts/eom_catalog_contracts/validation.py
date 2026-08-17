@@ -15,6 +15,9 @@ SCHEMA_FILES = {
     "mapping-proposal": SCHEMA_ROOT / "content-intake" / "mapping-proposal-v1.schema.json",
     "uncertainties": SCHEMA_ROOT / "content-intake" / "uncertainties-v1.schema.json",
     "human-decision": SCHEMA_ROOT / "content-intake" / "human-decision-v1.schema.json",
+    "content-pack": SCHEMA_ROOT / "content-pack" / "content-pack-v1.schema.json",
+    "content-pack-profile": SCHEMA_ROOT / "content-pack" / "profile-v1.schema.json",
+    "prompt-envelope": SCHEMA_ROOT / "content-pack" / "prompt-envelope-v1.schema.json",
 }
 
 
