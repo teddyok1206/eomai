@@ -95,6 +95,8 @@ mypy_path = [
   "packages/item_registry",
   "packages/operator_identity",
   "services/identity_service",
+  "packages/api_contracts",
+  "apps/application_api",
   "packages/catalog_contracts",
   "services/catalog_service",
   "apps/eomctl",
@@ -115,6 +117,8 @@ packages = [
   "eom_item_registry",
   "eom_operator_identity",
   "eom_identity_service",
+  "eom_api_contracts",
+  "eom_api",
   "eom_catalog_contracts",
   "eom_catalog_service",
 ]

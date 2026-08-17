@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools==82.0.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-api-contracts"
+version = "0.1.0"
+description = "Stable OpenAPI-facing contracts for EOM Application API V1"
+requires-python = ">=3.12,<3.13"
+dependencies = ["pydantic==2.13.4"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_api_contracts*"]
+
+[tool.setuptools.package-data]
+eom_api_contracts = ["schemas/*.json"]

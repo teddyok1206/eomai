@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eom:schema:api:v1:resources",
+  "title": "EOM Application API Resource and Command Contracts",
+  "$defs": {
+    "resource_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource_id", "resource_type", "state", "resource_version", "created_at"],
+      "properties": {
+        "resource_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "resource_type": {"type": "string", "minLength": 1, "maxLength": 64},
+        "state": {"type": "string", "minLength": 1, "maxLength": 64},
+        "resource_version": {"type": "integer", "minimum": 1},
+        "created_at": {"type": "string", "format": "date-time"},
+        "updated_at": {"type": ["string", "null"], "format": "date-time"},
+        "display_name": {"type": ["string", "null"], "maxLength": 256},
+        "parent_id": {"type": ["string", "null"], "maxLength": 128}
+      }
+    },
+    "command_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command_id", "resource_type", "resource_id", "status", "resource_version", "status_url"],
+      "properties": {
+        "command_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "resource_type": {"type": "string", "minLength": 1, "maxLength": 64},
+        "resource_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "status": {"enum": ["ACCEPTED", "COMPLETED"]},
+        "resource_version": {"type": "integer", "minimum": 1},
+        "status_url": {"type": "string", "pattern": "^/api/v1/"}
+      }
+    }
+  }
+}

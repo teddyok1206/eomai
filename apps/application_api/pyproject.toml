@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools==82.0.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-application-api"
+version = "0.1.0"
+description = "Loopback-only versioned EOM Application API"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "eom-api-contracts==0.1.0",
+  "eom-platform==0.1.0",
+  "fastapi==0.141.1",
+  "pydantic==2.13.4",
+  "PyYAML==6.0.3",
+  "SQLAlchemy==2.0.52",
+  "typer==0.24.1",
+  "uvicorn==0.52.3",
+]
+
+[project.scripts]
+eom-api = "eom_api.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_api*"]
+
+[tool.setuptools.package-data]
+eom_api = ["build-info.json"]

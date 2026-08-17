@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eom:schema:api:v1:common",
+  "title": "EOM Application API V1 Common Contracts",
+  "$defs": {
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "api_version"],
+      "properties": {
+        "request_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{2,127}$"},
+        "api_version": {"const": "1"}
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["next_cursor", "has_more", "limit"],
+      "properties": {
+        "next_cursor": {"type": ["string", "null"]},
+        "has_more": {"type": "boolean"},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 200}
+      }
+    },
+    "artifact_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "sha256", "schema_ref", "media_type", "logical_uri"],
+      "properties": {
+        "artifact_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "artifact_revision_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "sha256": {"type": "string", "pattern": "^(sha256:)?[0-9a-f]{64}$"},
+        "schema_ref": {"type": "string", "minLength": 1, "maxLength": 256},
+        "media_type": {"type": "string", "minLength": 1, "maxLength": 127},
+        "logical_uri": {"type": "string", "pattern": "^nas://artifacts/[^/]+/[^/]+$"}
+      }
+    }
+  }
+}

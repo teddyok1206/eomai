@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eom:schema:api:v1:problem-details",
+  "title": "EOM Application API Problem Details",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "title", "status", "detail", "instance", "error_code", "request_id", "errors"],
+  "properties": {
+    "type": {"type": "string", "pattern": "^urn:eom:problem:[a-z0-9-]+$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 160},
+    "status": {"type": "integer", "minimum": 400, "maximum": 599},
+    "detail": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "instance": {"type": "string", "pattern": "^urn:eom:request:[A-Za-z0-9_.-]+$"},
+    "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]+$"},
+    "request_id": {"type": "string"},
+    "errors": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pointer", "code", "detail"],
+        "properties": {
+          "pointer": {"type": "string"},
+          "code": {"type": "string"},
+          "detail": {"type": "string"}
+        }
+      }
+    }
+  }
+}
