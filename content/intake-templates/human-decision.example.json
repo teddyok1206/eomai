@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "intake_00000000000000000000000000000000",
+  "proposal_key": "proposal_placeholder_001",
+  "decision": "ACCEPT",
+  "decided_by": "operator_01",
+  "decided_at": "2026-08-17T00:00:00Z",
+  "accepted_change_keys": [],
+  "rejected_change_keys": [],
+  "required_corrections": [],
+  "notes": "PLACEHOLDER_DECISION_NOTES"
+}

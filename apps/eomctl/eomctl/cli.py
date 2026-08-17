@@ -23,6 +23,7 @@ from eom_workflow_runner.doctor import run_workflow_doctor
 from eom_workflow_runner.settings import WorkflowSettings
 from sqlalchemy import select
 
+from eomctl.catalog import content_app
 from eomctl.hwpx import hwpx_app
 from eomctl.workflow import workflow_app
 
@@ -35,6 +36,7 @@ app.add_typer(worker_app, name="worker")
 app.add_typer(job_app, name="job")
 app.add_typer(workflow_app, name="workflow")
 app.add_typer(hwpx_app, name="hwpx")
+app.add_typer(content_app, name="content")
 
 
 def _emit(data: object) -> None:

@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "intake_00000000000000000000000000000000",
+  "batch_name": "PLACEHOLDER_SOURCE_BATCH",
+  "received_at": "2026-08-17T00:00:00Z",
+  "received_by": "operator_01",
+  "source_owner": {
+    "type": "internal_team_member",
+    "reference": "team_lead_placeholder"
+  },
+  "purpose": "PLACEHOLDER_PURPOSE",
+  "files": [
+    {
+      "source_file_id": "sourcefile_00000000000000000000000000000000",
+      "relative_path": "source/PLACEHOLDER_FILE.txt",
+      "original_filename": "PLACEHOLDER_FILE.txt",
+      "media_type": "text/plain",
+      "size_bytes": 20,
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "declared_role": "REFERENCE",
+      "declared_description": "PLACEHOLDER_DESCRIPTION"
+    }
+  ]
+}

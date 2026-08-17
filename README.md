@@ -52,6 +52,11 @@ validation. The isolated `eom-hwpx` builder is file-only; eom-core owns DB and a
 Synthetic fixtures are not Hancom compatibility evidence, and completion requires a manual Windows
 Hancom open/edit/save gate.
 
+Manual Content Intake V0 adds an artifact-backed boundary for files received from content leads.
+Raw files, manual external analysis, and canonical Content Pack source are separate; deterministic
+validation and a human decision are required before import. Content leads do not need Git, and the
+server does not call ChatGPT or any external LLM API.
+
 ## Operating Commands
 
 Use root or an approved operations account for Docker administration:

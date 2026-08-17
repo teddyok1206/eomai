@@ -1,0 +1,25 @@
+schema_version: "1.0"
+proposal:
+  key: "proposal_placeholder_001"
+  source_batch_id: "intake_00000000000000000000000000000000"
+  analysis_source_type: "MANUAL_EXTERNAL_ANALYSIS"
+  created_by: "operator_01"
+  created_at: "2026-08-17T00:00:00Z"
+changes:
+  taxonomies:
+    add: []
+    update: []
+    retire: []
+  item_types:
+    add: []
+    update: []
+  profiles:
+    authoring: {add: [], update: []}
+    review: {add: [], update: []}
+    image: {add: [], update: []}
+    registration: {add: [], update: []}
+  prompt_templates: {add: [], update: []}
+  metadata_schemas: {add: [], update: []}
+  rubrics: {add: [], update: []}
+uncertainties: []
+excluded: []

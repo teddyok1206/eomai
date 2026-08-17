@@ -42,6 +42,9 @@ where = [
   "services/workflow_runner",
   "packages/hwpx_contracts",
   "services/hwpx_manager",
+  "packages/content_intake",
+  "packages/catalog_contracts",
+  "services/catalog_service",
 ]
 
 [tool.setuptools.package-data]
@@ -79,6 +82,9 @@ mypy_path = [
   "services/workflow_runner",
   "packages/hwpx_contracts",
   "services/hwpx_manager",
+  "packages/content_intake",
+  "packages/catalog_contracts",
+  "services/catalog_service",
   "apps/eomctl",
   "tools/dev_reporter",
 ]
@@ -92,4 +98,7 @@ packages = [
   "eom_dev_reporter",
   "eom_hwpx_contracts",
   "eom_hwpx_manager",
+  "eom_content_intake",
+  "eom_catalog_contracts",
+  "eom_catalog_service",
 ]

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-intake/human-decision-v1",
+  "title": "EOM Content Intake Human Decision V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "batch_id",
+    "proposal_key",
+    "decision",
+    "decided_by",
+    "decided_at",
+    "accepted_change_keys",
+    "rejected_change_keys",
+    "required_corrections",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "batch_id": {"type": "string", "pattern": "^intake_[0-9a-f]{32}$"},
+    "proposal_key": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{2,127}$"},
+    "decision": {
+      "type": "string",
+      "enum": ["PENDING", "ACCEPT", "ACCEPT_WITH_CHANGES", "REJECT", "SUPERSEDE"]
+    },
+    "decided_by": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+    "decided_at": {"type": "string", "format": "date-time"},
+    "accepted_change_keys": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "maxLength": 128}
+    },
+    "rejected_change_keys": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "maxLength": 128}
+    },
+    "required_corrections": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    },
+    "notes": {"type": "string", "minLength": 1, "maxLength": 2000}
+  }
+}

@@ -1,0 +1,166 @@
+"""Core-owned immutable artifact adapter for catalog evidence and bundles."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from eom_identifiers import (
+    content_sha256,
+    new_job_id,
+    new_logical_artifact_id,
+    new_revision_id,
+)
+from eom_orchestrator.artifacts import commit_file_set_artifact, stage_file_set_artifact
+from eom_orchestrator.database import build_session_factory, transaction
+from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
+from eom_orchestrator.repository import (
+    create_artifact_records,
+    ensure_protocol_version,
+    submit_structured_job,
+)
+from eom_orchestrator.state_machine import JobState, transition_job
+from sqlalchemy import Engine, select
+
+from eom_catalog_service.settings import CatalogSettings
+
+CATALOG_PROTOCOL_VERSION = "catalog/1.0"
+CATALOG_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": CATALOG_PROTOCOL_VERSION,
+        "contracts": [
+            "intake-manifest-v1",
+            "mapping-proposal-v1",
+            "human-decision-v1",
+            "content-pack-v1",
+            "item-revision-manifest-v1",
+        ],
+    }
+)
+MAX_JOB_IDEMPOTENCY_KEY_LENGTH = 128
+
+
+def normalize_catalog_idempotency_key(value: str) -> str:
+    """Keep platform keys bounded without discarding the full key's identity."""
+    if len(value) <= MAX_JOB_IDEMPOTENCY_KEY_LENGTH:
+        return value
+    digest = content_sha256({"catalog_idempotency_key": value}).removeprefix("sha256:")
+    return f"catalog:{digest}"
+
+
+@dataclass(frozen=True)
+class CatalogArtifact:
+    job_id: str
+    artifact_id: str
+    revision_id: str
+    content_hash: str
+    manifest_hash: str
+    content_bytes: int
+    nas_path: str
+
+
+class CatalogArtifactService:
+    def __init__(self, engine: Engine, settings: CatalogSettings | None = None) -> None:
+        self.settings = settings or CatalogSettings.from_environment()
+        self.sessions = build_session_factory(engine)
+
+    def commit_file_set(
+        self,
+        *,
+        files: dict[str, Path],
+        primary_file: str,
+        artifact_type: str,
+        idempotency_key: str,
+        request: dict[str, Any],
+        result: dict[str, Any],
+    ) -> CatalogArtifact:
+        idempotency_key = normalize_catalog_idempotency_key(idempotency_key)
+        job_id = new_job_id()
+        artifact_id = new_logical_artifact_id()
+        revision_id = new_revision_id()
+        with transaction(self.sessions) as session:
+            ensure_protocol_version(session, CATALOG_PROTOCOL_VERSION, CATALOG_SCHEMA_HASH)
+            job, created = submit_structured_job(
+                session,
+                job_id=job_id,
+                protocol_version=CATALOG_PROTOCOL_VERSION,
+                idempotency_key=idempotency_key,
+                task_type=artifact_type,
+                request=request,
+                logical_artifact_id=artifact_id,
+                revision_id=revision_id,
+            )
+            job_id = job.job_id
+            artifact_id = job.logical_artifact_id
+            revision_id = job.revision_id
+        if not created:
+            with self.sessions() as session:
+                revision = session.scalar(
+                    select(ArtifactRevisionRecord).where(ArtifactRevisionRecord.job_id == job_id)
+                )
+                if revision is None:
+                    raise RuntimeError("catalog artifact job is incomplete")
+                return CatalogArtifact(
+                    job_id=job_id,
+                    artifact_id=revision.logical_artifact_id,
+                    revision_id=revision.revision_id,
+                    content_hash=revision.content_hash,
+                    manifest_hash=revision.manifest_hash,
+                    content_bytes=revision.content_bytes,
+                    nas_path=revision.nas_path,
+                )
+
+        staging = self.settings.staging_root / job_id / "artifact"
+        staged = stage_file_set_artifact(
+            files=files,
+            primary_file=primary_file,
+            job_id=job_id,
+            logical_artifact_id=artifact_id,
+            revision_id=revision_id,
+            artifact_type=artifact_type,
+            staging=staging,
+            manifest_version="catalog-file-set/1.0",
+        )
+        with transaction(self.sessions) as session:
+            transition_job(session, job_id, JobState.VALIDATED, "CATALOG_ARTIFACT_VALIDATED")
+            transition_job(session, job_id, JobState.QUEUED, "CATALOG_ARTIFACT_QUEUED")
+            transition_job(session, job_id, JobState.CLAIMED, "CATALOG_CORE_CLAIMED")
+            transition_job(session, job_id, JobState.RUNNING, "CATALOG_ARTIFACT_STAGED")
+            transition_job(session, job_id, JobState.VALIDATING_RESULT, "CATALOG_ARTIFACT_HASHED")
+            transition_job(session, job_id, JobState.COMMITTING, "CATALOG_ARTIFACT_COMMITTING")
+        final = commit_file_set_artifact(staged, self.settings.nas_artifact_root)
+        with transaction(self.sessions) as session:
+            job = session.execute(
+                select(JobRecord).where(JobRecord.job_id == job_id).with_for_update()
+            ).scalar_one()
+            create_artifact_records(
+                session,
+                job=job,
+                content_hash=staged.primary_hash,
+                manifest_hash=staged.manifest_hash,
+                content_bytes=staged.primary_bytes,
+                nas_path=str(final),
+                manifest=staged.manifest,
+                result=result,
+            )
+            transition_job(
+                session,
+                job_id,
+                JobState.SUCCEEDED,
+                "CATALOG_ARTIFACT_COMMITTED",
+                data={
+                    "logical_artifact_id": artifact_id,
+                    "revision_id": revision_id,
+                    "content_hash": staged.primary_hash,
+                },
+            )
+        return CatalogArtifact(
+            job_id=job_id,
+            artifact_id=artifact_id,
+            revision_id=revision_id,
+            content_hash=staged.primary_hash,
+            manifest_hash=staged.manifest_hash,
+            content_bytes=staged.primary_bytes,
+            nas_path=str(final),
+        )

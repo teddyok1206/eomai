@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-intake/mapping-proposal-v1",
+  "title": "EOM Content Intake Mapping Proposal V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "proposal", "changes", "uncertainties", "excluded"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "source_batch_id", "analysis_source_type", "created_by", "created_at"],
+      "properties": {
+        "key": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{2,127}$"},
+        "source_batch_id": {"type": "string", "pattern": "^intake_[0-9a-f]{32}$"},
+        "analysis_source_type": {
+          "type": "string",
+          "enum": ["HUMAN", "MANUAL_EXTERNAL_ANALYSIS", "CHATGPT_MANUAL", "CODEX_LOCAL", "OTHER"]
+        },
+        "created_by": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+        "created_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "changes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taxonomies", "item_types", "profiles", "prompt_templates", "metadata_schemas", "rubrics"],
+      "properties": {
+        "taxonomies": {"$ref": "#/$defs/changeSetWithRetire"},
+        "item_types": {"$ref": "#/$defs/changeSet"},
+        "profiles": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["authoring", "review", "image", "registration"],
+          "properties": {
+            "authoring": {"$ref": "#/$defs/changeSet"},
+            "review": {"$ref": "#/$defs/changeSet"},
+            "image": {"$ref": "#/$defs/changeSet"},
+            "registration": {"$ref": "#/$defs/changeSet"}
+          }
+        },
+        "prompt_templates": {"$ref": "#/$defs/changeSet"},
+        "metadata_schemas": {"$ref": "#/$defs/changeSet"},
+        "rubrics": {"$ref": "#/$defs/changeSet"}
+      }
+    },
+    "uncertainties": {"type": "array", "items": {"$ref": "#/$defs/uncertainty"}, "maxItems": 200},
+    "excluded": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_reference", "reason"],
+        "properties": {
+          "source_reference": {"type": "string", "minLength": 1, "maxLength": 128},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "source_reference", "value"],
+      "properties": {
+        "key": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+        "source_reference": {"type": "string", "minLength": 1, "maxLength": 128},
+        "value": {"type": "object"}
+      }
+    },
+    "changeSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["add", "update"],
+      "properties": {
+        "add": {"type": "array", "items": {"$ref": "#/$defs/change"}, "maxItems": 500},
+        "update": {"type": "array", "items": {"$ref": "#/$defs/change"}, "maxItems": 500}
+      }
+    },
+    "changeSetWithRetire": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["add", "update", "retire"],
+      "properties": {
+        "add": {"type": "array", "items": {"$ref": "#/$defs/change"}, "maxItems": 500},
+        "update": {"type": "array", "items": {"$ref": "#/$defs/change"}, "maxItems": 500},
+        "retire": {"type": "array", "items": {"$ref": "#/$defs/change"}, "maxItems": 500}
+      }
+    },
+    "uncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "description", "blocking"],
+      "properties": {
+        "key": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+        "description": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "blocking": {"type": "boolean"}
+      }
+    }
+  }
+}

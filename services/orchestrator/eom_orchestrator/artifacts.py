@@ -154,6 +154,7 @@ def stage_file_set_artifact(
     artifact_type: str,
     staging: Path,
     created_at: datetime | None = None,
+    manifest_version: str = "hwpx-file-set/1.0",
 ) -> StagedFileSet:
     if primary_file not in files or not files:
         raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "primary artifact file is missing")
@@ -190,7 +191,7 @@ def stage_file_set_artifact(
         )
     primary = next(item for item in staged_files if item.relative_path == primary_file)
     manifest: dict[str, object] = {
-        "manifest_version": "hwpx-file-set/1.0",
+        "manifest_version": manifest_version,
         "job_id": job_id,
         "logical_artifact_id": logical_artifact_id,
         "revision_id": revision_id,
