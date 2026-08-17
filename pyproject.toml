@@ -11,6 +11,7 @@ dependencies = [
   "alembic>=1.16,<2",
   "jsonschema>=4.23,<5",
   "psycopg[binary]>=3.2,<4",
+  "pwdlib[argon2]>=0.3.1,<0.4",
   "pydantic>=2.11,<3",
   "PyYAML>=6.0,<7",
   "SQLAlchemy>=2.0,<3",
@@ -45,6 +46,8 @@ where = [
   "packages/content_intake",
   "packages/content_pack",
   "packages/item_registry",
+  "packages/operator_identity",
+  "services/identity_service",
   "packages/catalog_contracts",
   "services/catalog_service",
 ]
@@ -64,6 +67,8 @@ markers = [
   "dev_slack_live: sends one opt-in development report to a configured Slack webhook",
   "observe_integration: requires the installed eom_observe_ro PostgreSQL role",
   "observe_browser_live: validates the installed observability service and browser rendering",
+  "api_integration: requires the isolated PostgreSQL identity schema and is opt-in",
+  "api_service_live: validates the installed Application API service",
   "hwpx_reference_live: uses the fixed Hancom-created reference and immutable artifact storage",
 ]
 
@@ -88,6 +93,8 @@ mypy_path = [
   "packages/content_intake",
   "packages/content_pack",
   "packages/item_registry",
+  "packages/operator_identity",
+  "services/identity_service",
   "packages/catalog_contracts",
   "services/catalog_service",
   "apps/eomctl",
@@ -106,6 +113,8 @@ packages = [
   "eom_content_intake",
   "eom_content_pack",
   "eom_item_registry",
+  "eom_operator_identity",
+  "eom_identity_service",
   "eom_catalog_contracts",
   "eom_catalog_service",
 ]

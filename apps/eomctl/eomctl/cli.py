@@ -31,6 +31,7 @@ from eomctl.catalog import (
     usage_app,
 )
 from eomctl.hwpx import hwpx_app
+from eomctl.operator import operator_app
 from eomctl.workflow import workflow_app
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
@@ -47,6 +48,7 @@ app.add_typer(item_app, name="item")
 app.add_typer(deliverable_app, name="deliverable")
 app.add_typer(usage_app, name="usage")
 app.add_typer(registry_app, name="registry")
+app.add_typer(operator_app, name="operator")
 
 
 def _emit(data: object) -> None:

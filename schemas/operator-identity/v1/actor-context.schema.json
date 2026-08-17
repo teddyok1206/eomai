@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eom:schema:operator-identity:actor-context:1",
+  "title": "EOM Actor Context V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "actor_type",
+    "operator_id",
+    "session_id",
+    "request_id",
+    "authentication_time",
+    "permissions",
+    "source"
+  ],
+  "properties": {
+    "actor_type": {"type": "string", "enum": ["OPERATOR", "SYSTEM"]},
+    "operator_id": {"type": ["string", "null"], "pattern": "^operator_[0-9a-f]{32}$"},
+    "session_id": {"type": ["string", "null"], "pattern": "^apisession_[0-9a-f]{32}$"},
+    "request_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+    },
+    "authentication_time": {"type": "string", "format": "date-time"},
+    "permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z_]+:[a-z_]+$"}
+    },
+    "source": {"type": "string", "enum": ["APPLICATION_API", "CLI"]}
+  }
+}

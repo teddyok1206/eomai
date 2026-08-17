@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eom:schema:operator-identity:operator:1",
+  "title": "EOM Operator V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operator_id",
+    "username",
+    "display_name",
+    "status",
+    "must_change_password",
+    "roles",
+    "effective_permissions",
+    "resource_version",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "username": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+    },
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "status": {"type": "string", "enum": ["ACTIVE", "DISABLED"]},
+    "must_change_password": {"type": "boolean"},
+    "roles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["VIEWER", "AUTHOR", "REVIEWER", "EDITOR", "ADMIN"]}
+    },
+    "effective_permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z_]+:[a-z_]+$"}
+    },
+    "resource_version": {"type": "integer", "minimum": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "disabled_at": {"type": ["string", "null"], "format": "date-time"},
+    "disable_reason": {"type": ["string", "null"], "maxLength": 1000},
+    "last_login_at": {"type": ["string", "null"], "format": "date-time"}
+  }
+}
