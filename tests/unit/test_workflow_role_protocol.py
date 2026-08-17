@@ -131,3 +131,34 @@ def test_role_schema_bundle_hash_is_canonical() -> None:
     first = role_schema_bundle_hash()
     assert first == role_schema_bundle_hash()
     assert first.startswith("sha256:")
+
+
+def test_catalog_request_is_projected_to_the_worker_contract() -> None:
+    request = WorkflowRequest.model_validate(
+        {
+            "request_name": "PLACEHOLDER_REQUEST",
+            "image_mode": "skip",
+            "content_pack": {
+                "pack_key": "generic-placeholder",
+                "environment": "development",
+            },
+            "profiles": {
+                "authoring": "authoring-default",
+                "review": "review-default",
+                "image": "image-placeholder",
+                "registration": "registration-default",
+            },
+            "source_intake": {"batch_ids": ["intake_" + "a" * 32]},
+            "registry_intent": {"mode": "CREATE_ITEM"},
+        }
+    )
+    assert request.worker_request().model_dump(mode="json") == {
+        "request_name": "PLACEHOLDER_REQUEST",
+        "image_mode": "skip",
+    }
+    worker_input = _input("authoring").model_copy(update={"request": request})
+    parsed = RoleWorkerInput.model_validate(worker_input.model_dump(mode="json"))
+    assert parsed.request.model_dump(mode="json") == {
+        "request_name": "PLACEHOLDER_REQUEST",
+        "image_mode": "skip",
+    }

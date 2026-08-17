@@ -71,6 +71,45 @@ result schema, human roles and rework targets, limits, JSON Pointer syntax, and 
 fields. Canonical serialization produces a stable definition hash. PostgreSQL triggers prevent a
 stored definition or instance snapshot from being rewritten.
 
+`generic-item-development@1.1.0` is a separate immutable definition. It retains the deterministic
+graph while requiring the `eomctl` application boundary to resolve a Content Pack and registry
+request before instance creation. Version 1.0.0 is unchanged and remains valid for platform-only
+workflows.
+
+## Content Pack And Registry Boundary
+
+```mermaid
+flowchart LR
+  A[Active development release] -->|resolve once| S[Workflow runtime snapshot]
+  I[Accepted Intake IDs] --> S
+  S --> P[Profile and template hashes]
+  P --> R[Restricted prompt render]
+  R --> PA[Immutable prompt artifact revision]
+  PA --> O[Existing orchestrator]
+  O --> W[Isolated role worker]
+  W --> AR[Validated result artifact revision]
+  AR --> G[Deterministic registration validator]
+  G --> IR[Item Revision manifest]
+  IR --> ITEM[Logical Item current pointer]
+```
+
+The snapshot stores release ID, pack key/version, bundle and manifest hashes, activation evidence,
+all four profile versions/hashes, source Intake IDs, and the create/revise intent. Later activation
+changes cannot affect it. Before each agent run, the adapter re-resolves that exact release and
+profile, verifies all hashes, renders only declared dot-path variables, and commits `prompt.txt`
+plus its prompt envelope as one artifact revision.
+
+The worker input deliberately projects the larger workflow request back to `WorkerRequest`.
+Pack activation, profile metadata, Intake provenance, and registry intent are not exposed as an
+arbitrary JSON blob. The worker sees the rendered prompt and upstream immutable artifact pointers;
+it does not read Git, Intake storage, PostgreSQL, or NAS.
+
+After the item-management result is validated and committed, the catalog application service
+resolves every component pointer and creates either revision 1 or a revision against the exact
+requested base. Its idempotency key includes workflow, registration attempt, intent, and pinned
+release hash. Terminal reconciliation therefore cannot create a second Item, revision, manifest,
+or artifact.
+
 ## Persistence And Concurrency
 
 Revision `20260815_0002` adds `workflow_definitions`, `workflow_instances`,
@@ -90,6 +129,8 @@ Rework marks the target and downstream runs `SUPERSEDED`, creates a higher attem
 old output pointer manifests and NAS revisions. Replacement step links make the audit chain
 explicit. Runtime context retains the complete historical pointer list; the final pointer manifest
 contains only the latest active authoring/image/review chain and registration revision.
+For 1.1.0 it also contains the pinned Content Pack snapshot and the resulting Item, Item Revision,
+manifest artifact revision, and manifest SHA-256.
 
 ## Role Contracts
 

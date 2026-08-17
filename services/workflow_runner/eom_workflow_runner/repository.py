@@ -89,8 +89,9 @@ def create_workflow_instance(
     idempotency_key: str,
     actor_type: str,
     actor_id: str,
+    runtime_context: dict[str, Any] | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
-    request_data = request.model_dump(mode="json")
+    request_data = request.model_dump(mode="json", exclude_none=True)
     request_hash = content_sha256(
         {
             "definition_key": definition.definition_key,
@@ -118,6 +119,8 @@ def create_workflow_instance(
             WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
             "stored definition has no start step",
         )
+    initial_context = dict(runtime_context or {})
+    initial_context["artifact_pointers"] = []
     workflow = WorkflowInstanceRecord(
         workflow_id=new_workflow_id(),
         definition_id=definition.definition_id,
@@ -131,7 +134,7 @@ def create_workflow_instance(
         current_step_key=start_step,
         request_payload=request_data,
         initial_request=request_data,
-        runtime_context={"artifact_pointers": []},
+        runtime_context=initial_context,
         idempotency_key=idempotency_key,
         request_hash=request_hash,
         lock_version=1,

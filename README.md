@@ -61,6 +61,15 @@ Content Pack V0 compiles accepted placeholder policy into a deterministic `.eomp
 canonical bundle artifact revision, and records immutable releases plus environment activation.
 Prompt profiles use scalar dot-path substitution only; executable expressions are rejected.
 
+Item Registry V0 treats an Item as a logical identity and every approved change as a new immutable
+revision. Component payloads remain canonical artifact revisions referenced by typed pointers and
+hashes. Deliverables keep planned placement separate from immutable actual usage records.
+
+`generic-item-development@1.1.0` binds these layers together. Workflow creation resolves one active
+Content Pack release, freezes its hashes and profile snapshots, commits each rendered prompt as an
+artifact, and registers the approved result as a new Item or a revision of a specifically named base.
+Workers still receive only the small workflow role request and upstream artifact pointers.
+
 ## Operating Commands
 
 Use root or an approved operations account for Docker administration:
@@ -145,6 +154,23 @@ Manual Intake and Content Pack commands run in `eom-core`:
   --pack-key generic-placeholder --environment development
 ```
 
+Run a pack-pinned Item workflow and inspect the resulting registry pointers:
+
+```bash
+/srv/eom/conda/envs/eom-core/bin/eomctl workflow definition validate \
+  config/workflows/generic-item-development.v1.1.yaml
+/srv/eom/conda/envs/eom-core/bin/eomctl workflow start \
+  --definition generic-item-development --version 1.1.0 \
+  --request-name PLACEHOLDER_REQUEST --image-mode skip \
+  --idempotency-key <KEY> --pack-key generic-placeholder \
+  --environment development --source-intake-batch <INTAKE_BATCH_ID> \
+  --registry-mode CREATE_ITEM
+/srv/eom/conda/envs/eom-core/bin/eomctl workflow approve <WORKFLOW_ID> \
+  --actor-id reviewer_01
+/srv/eom/conda/envs/eom-core/bin/eomctl item inspect <ITEM_ID>
+/srv/eom/conda/envs/eom-core/bin/eomctl item usage-history <ITEM_ID>
+```
+
 `job submit` needs permission to create a transient systemd unit because that unit changes to the
 isolated worker Linux user and makes `/mnt/nas` and the Docker socket inaccessible. Database
 credentials are loaded from `EOM_DATABASE_URL` or `/etc/eom/secrets/postgres.env`; they are never
@@ -175,5 +201,8 @@ Use UTC for system timestamps. Use Asia/Seoul only for user-facing display.
 - Content Pack architecture: `docs/architecture/CONTENT_PACK_V0.md`
 - Content Pack authoring: `docs/operations/CONTENT_PACK_AUTHORING.md`
 - Content Pack release: `docs/operations/CONTENT_PACK_RELEASE.md`
+- Item Registry runbook: `docs/operations/ITEM_REGISTRY_RUNBOOK.md`
+- Usage Ledger runbook: `docs/operations/USAGE_LEDGER_RUNBOOK.md`
+- Catalog smoke test: `docs/operations/CATALOG_SMOKE_TEST.md`
 - Operations and rollback: `docs/operations/`
 - Compose operations: `infra/compose/README.md`

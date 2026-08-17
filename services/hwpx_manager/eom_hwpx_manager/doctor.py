@@ -8,6 +8,7 @@ import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from sqlalchemy import Engine, text
 
 from eom_hwpx_manager.settings import HwpxSettings
@@ -126,7 +127,7 @@ def run_hwpx_doctor(engine: Engine, settings: HwpxSettings) -> list[HwpxDoctorCh
                     "WHERE approved_at IS NOT NULL AND immutable"
                 )
             ).scalar_one()
-        migration_ok = revision == "20260815_0003"
+        migration_ok = revision == CURRENT_MIGRATION_REVISION
     except Exception:
         revision = "unavailable"
         migration_ok = False

@@ -18,3 +18,14 @@ release.
 
 Rollback changes only the active pointer to a still-eligible released revision. It never mutates or
 deletes release history.
+
+Validate that a workflow pins rather than follows activation:
+
+```bash
+eomctl workflow inspect <WORKFLOW_ID>
+```
+
+The `runtime_context.content_pack` object must retain the release ID, version, bundle hash, and
+manifest hash resolved at creation. `runtime_context.prompt_artifacts` must contain exactly one
+prompt artifact pointer for each executed role attempt. Do not rewrite these snapshots when an
+activation changes.

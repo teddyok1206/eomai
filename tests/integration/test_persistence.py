@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 from alembic.runtime.migration import MigrationContext
 from eom_identifiers import new_job_id, new_logical_artifact_id, new_revision_id
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.models import ArtifactRevisionRecord, JobEventRecord
 from eom_orchestrator.protocol import protocol_schema_hash
 from eom_orchestrator.repository import (
@@ -36,7 +37,9 @@ def _request(idempotency_key: str) -> JobRequest:
 
 def test_migration_revision(integration_engine: Engine) -> None:
     with integration_engine.connect() as connection:
-        assert MigrationContext.configure(connection).get_current_revision() == "20260817_0005"
+        assert MigrationContext.configure(connection).get_current_revision() == (
+            CURRENT_MIGRATION_REVISION
+        )
 
 
 def test_job_events_idempotency_and_immutable_artifact(db_session: Session) -> None:

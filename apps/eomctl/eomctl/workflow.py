@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import typer
+from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_engine, build_session_factory, transaction
 from eom_orchestrator.settings import Settings
@@ -98,9 +99,44 @@ def workflow_start(
     request_name: str = typer.Option(..., "--request-name"),
     image_mode: str = typer.Option(..., "--image-mode"),
     idempotency_key: str = typer.Option(..., "--idempotency-key"),
+    pack_key: str | None = typer.Option(None, "--pack-key"),
+    environment: str = typer.Option("development", "--environment"),
+    authoring_profile: str = typer.Option("authoring-default", "--authoring-profile"),
+    review_profile: str = typer.Option("review-default", "--review-profile"),
+    image_profile: str = typer.Option("image-placeholder", "--image-profile"),
+    registration_profile: str = typer.Option("registration-default", "--registration-profile"),
+    source_intake_batch: Annotated[list[str] | None, typer.Option("--source-intake-batch")] = None,
+    registry_mode: str = typer.Option("CREATE_ITEM", "--registry-mode"),
+    item_id: str | None = typer.Option(None, "--item-id"),
+    base_revision_id: str | None = typer.Option(None, "--base-revision-id"),
 ) -> None:
-    request = WorkflowRequest(request_name=request_name, image_mode=image_mode)  # type: ignore[arg-type]
+    request_data: dict[str, Any] = {
+        "request_name": request_name,
+        "image_mode": image_mode,
+    }
+    if pack_key is not None:
+        request_data.update(
+            {
+                "content_pack": {"pack_key": pack_key, "environment": environment},
+                "profiles": {
+                    "authoring": authoring_profile,
+                    "review": review_profile,
+                    "image": image_profile,
+                    "registration": registration_profile,
+                },
+                "source_intake": {"batch_ids": source_intake_batch or []},
+                "registry_intent": {
+                    "mode": registry_mode,
+                    "item_id": item_id,
+                    "base_revision_id": base_revision_id,
+                },
+            }
+        )
+    request = WorkflowRequest.model_validate(request_data)
+    if version == "1.1.0" and request.content_pack is None:
+        raise typer.BadParameter("workflow 1.1.0 requires --pack-key and Intake input")
     engine = build_engine()
+    catalog = WorkflowCatalogService(engine)
     sessions = build_session_factory(engine)
     with transaction(sessions) as session:
         stored_definition = session.scalar(
@@ -112,6 +148,15 @@ def workflow_start(
         )
         if stored_definition is None:
             raise typer.BadParameter("workflow definition is not imported")
+        runtime_context = (
+            catalog.bind_request(
+                request,
+                definition_key=stored_definition.definition_key,
+                definition_version=stored_definition.definition_version,
+            )
+            if request.content_pack is not None
+            else None
+        )
         workflow, created = create_workflow_instance(
             session,
             definition=stored_definition,
@@ -119,6 +164,7 @@ def workflow_start(
             idempotency_key=idempotency_key,
             actor_type="human",
             actor_id="requester_01",
+            runtime_context=runtime_context,
         )
         if created:
             enqueue_command(
@@ -132,7 +178,7 @@ def workflow_start(
                 idempotency_key=f"start:{workflow.workflow_id}",
             )
         workflow_id = workflow.workflow_id
-    runner = WorkflowRunner(engine)
+    runner = WorkflowRunner(engine, catalog=catalog)
     runner.run_until_idle(workflow_id)
     _emit(_inspect(engine, workflow_id))
     engine.dispose()
@@ -316,7 +362,7 @@ def _enqueue_approval_command(
 
 def _run_and_emit_command(workflow_id: str, command_id: str) -> None:
     engine = build_engine()
-    runner = WorkflowRunner(engine)
+    runner = WorkflowRunner(engine, catalog=WorkflowCatalogService(engine))
     runner.run_until_idle(workflow_id)
     sessions = build_session_factory(engine)
     with sessions() as session:

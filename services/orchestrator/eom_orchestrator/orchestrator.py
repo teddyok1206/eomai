@@ -18,7 +18,7 @@ from eom_protocol import (
     WorkerResult,
     validate_message,
 )
-from eom_workflow.models import ArtifactPointer, RoleWorkerInput, WorkflowRequest
+from eom_workflow.models import ArtifactPointer, RoleWorkerInput, WorkerRequest
 from eom_workflow.models import ArtifactSpec as WorkflowArtifactSpec
 from eom_workflow.schemas import (
     WorkflowSchemaError,
@@ -194,12 +194,15 @@ class Orchestrator:
         step_run_id: str,
         attempt: int,
         role: str,
-        request: WorkflowRequest,
+        request: WorkerRequest,
         upstream_artifacts: tuple[ArtifactPointer, ...],
         result_schema: str,
         idempotency_key: str,
-        prompt_path: Path,
+        prompt_path: Path | None = None,
+        prompt_text: str | None = None,
     ) -> JobRecord:
+        if (prompt_path is None) == (prompt_text is None):
+            raise ValueError("exactly one workflow prompt source is required")
         existing = self._job_by_idempotency_key(idempotency_key)
         if existing is not None:
             stored = existing.request
@@ -228,7 +231,9 @@ class Orchestrator:
         )
         input_document = worker_input.model_dump(mode="json")
         validate_role_input(input_document, role)
-        prompt_text = prompt_path.read_text(encoding="utf-8")
+        if prompt_text is None:
+            assert prompt_path is not None
+            prompt_text = prompt_path.read_text(encoding="utf-8")
         protocol_version = worker_input.protocol_version
         with transaction(self.sessions) as session:
             self._sync_registry(session)

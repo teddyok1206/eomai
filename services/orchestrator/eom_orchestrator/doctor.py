@@ -13,11 +13,10 @@ from alembic.runtime.migration import MigrationContext
 from eom_protocol.validation import load_schema
 from sqlalchemy import Engine, text
 
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.protocol import SCHEMA_NAMES
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry
-
-EXPECTED_MIGRATION_REVISION = "20260815_0003"
 
 
 @dataclass(frozen=True)
@@ -40,7 +39,7 @@ def run_doctor(engine: Engine, settings: Settings) -> list[DoctorCheck]:
         checks.append(
             DoctorCheck(
                 "migration_revision",
-                revision == EXPECTED_MIGRATION_REVISION,
+                revision == CURRENT_MIGRATION_REVISION,
                 revision or "not migrated",
             )
         )

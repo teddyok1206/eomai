@@ -23,10 +23,11 @@ from eom_orchestrator.repository import (
     upsert_worker_slot,
 )
 from eom_orchestrator.state_machine import JobState, transition_job
-from eom_workflow import ArtifactPointer, WorkflowRequest, compile_definition
+from eom_workflow import ArtifactPointer, WorkerRequest, WorkflowRequest, compile_definition
 from eom_workflow.compiler import compile_definition_data
 from eom_workflow.identifiers import new_approval_request_id, new_step_run_id
 from eom_workflow.schemas import role_schema_bundle_hash
+from eom_workflow_runner.catalog_port import PreparedPrompt, RegistrationOutcome
 from eom_workflow_runner.engine import RoleExecutionResult, WorkflowRunner
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.models import (
@@ -76,19 +77,24 @@ class FakeRoleExecutor:
     def __init__(self, sessions: sessionmaker[Session]) -> None:
         self.sessions = sessions
         self.calls: list[tuple[str, int, str]] = []
+        self.worker_requests: list[dict[str, object]] = []
+        self.prompts: list[str | None] = []
 
     def execute(
         self,
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkflowRequest,
+        request: WorkerRequest,
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
+        prompt_text: str | None,
     ) -> RoleExecutionResult:
-        del request, upstream
+        del upstream
         assert step.worker_role is not None
         self.calls.append((step.step_key, step.attempt, step.worker_role))
+        self.worker_requests.append(request.model_dump(mode="json"))
+        self.prompts.append(prompt_text)
         with transaction(self.sessions) as session:
             existing = session.scalar(
                 select(JobRecord).where(JobRecord.idempotency_key == idempotency_key)
@@ -160,6 +166,61 @@ class FakeRoleExecutor:
             return _execution(job, content_hash)
 
 
+class FakeWorkflowCatalog:
+    def __init__(self) -> None:
+        self.prepared: list[tuple[str, int]] = []
+        self.registrations: list[tuple[str, int]] = []
+
+    def prepare_prompt(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: WorkflowRequest,
+        upstream: tuple[ArtifactPointer, ...],
+    ) -> PreparedPrompt:
+        del workflow, request, upstream
+        self.prepared.append((step.step_key, step.attempt))
+        suffix = {
+            "authoring": "1",
+            "review": "2",
+            "registration": "3",
+        }[step.step_key]
+        return PreparedPrompt(
+            text=f"PLACEHOLDER PROMPT {step.step_key}",
+            pointer={
+                "artifact_id": f"artifact_{suffix * 32}",
+                "artifact_revision_id": f"rev_{suffix * 32}",
+                "sha256": "sha256:" + suffix * 64,
+                "manifest_sha256": "sha256:" + suffix * 64,
+                "schema_ref": "eom://schemas/content-pack/prompt-envelope-v1",
+            },
+            envelope={
+                "schema_version": "1.0",
+                "step_run_id": step.step_run_id,
+            },
+        )
+
+    def register_workflow(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: WorkflowRequest,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> RegistrationOutcome:
+        del workflow, request, artifacts
+        self.registrations.append((step.step_key, step.attempt))
+        return RegistrationOutcome(
+            item_id="item_" + "4" * 32,
+            item_revision_id="itemrev_" + "5" * 32,
+            revision_number=1,
+            manifest_artifact_id="artifact_" + "6" * 32,
+            manifest_artifact_revision_id="rev_" + "7" * 32,
+            manifest_sha256="sha256:" + "8" * 64,
+        )
+
+
 class FailedRoleExecutor:
     def __init__(self, sessions: sessionmaker[Session]) -> None:
         self.sessions = sessions
@@ -169,11 +230,12 @@ class FailedRoleExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkflowRequest,
+        request: WorkerRequest,
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
+        prompt_text: str | None,
     ) -> RoleExecutionResult:
-        del request, upstream
+        del request, upstream, prompt_text
         job_id = new_job_id()
         logical_artifact_id = new_logical_artifact_id()
         revision_id = new_revision_id()
@@ -214,11 +276,12 @@ class RaisingRoleExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkflowRequest,
+        request: WorkerRequest,
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
+        prompt_text: str | None,
     ) -> RoleExecutionResult:
-        del workflow, step, request, upstream, idempotency_key
+        del workflow, step, request, upstream, idempotency_key, prompt_text
         raise OSError("untrusted adapter detail")
 
 
@@ -356,6 +419,135 @@ def test_image_skip_approval_and_registration_flow(integration_engine: Engine) -
             assert sequences == list(range(1, len(sequences) + 1))
     finally:
         _close(resources)
+
+
+def test_catalog_workflow_pins_prompts_and_registration_without_leaking_request(
+    integration_engine: Engine,
+) -> None:
+    connection = integration_engine.connect()
+    outer = connection.begin()
+    sessions = sessionmaker(
+        bind=connection,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
+    compiled = compile_definition(
+        Path("config/workflows/generic-item-development.v1.1.yaml"),
+        set(ROLE_SLOTS) | {"support"},
+    )
+    request = WorkflowRequest.model_validate(
+        {
+            "request_name": "PLACEHOLDER_REQUEST",
+            "image_mode": "skip",
+            "content_pack": {
+                "pack_key": "generic-placeholder",
+                "environment": "development",
+            },
+            "profiles": {
+                "authoring": "authoring-default",
+                "review": "review-default",
+                "image": "image-placeholder",
+                "registration": "registration-default",
+            },
+            "source_intake": {"batch_ids": ["intake_" + "a" * 32]},
+            "registry_intent": {"mode": "CREATE_ITEM"},
+        }
+    )
+    runtime_context = {
+        "content_pack": {
+            "release_id": "packrel_" + "b" * 32,
+            "pack_key": "generic-placeholder",
+            "version": "0.1.0",
+            "release_sha256": "sha256:" + "c" * 64,
+            "manifest_sha256": "sha256:" + "d" * 64,
+        },
+        "profiles": request.profiles.model_dump(mode="json") if request.profiles else {},
+        "source_intake": request.source_intake.model_dump(mode="json")
+        if request.source_intake
+        else {},
+        "registry_intent": request.registry_intent.model_dump(mode="json")
+        if request.registry_intent
+        else {},
+        "prompt_artifacts": [],
+    }
+    try:
+        with transaction(sessions) as session:
+            definition, _ = import_workflow_definition(session, compiled)
+            workflow, created = create_workflow_instance(
+                session,
+                definition=definition,
+                request=request,
+                idempotency_key="workflow-catalog-pinning",
+                actor_type="human",
+                actor_id="requester_01",
+                runtime_context=runtime_context,
+            )
+            assert created
+            enqueue_command(
+                session,
+                workflow_id=workflow.workflow_id,
+                command_type=CommandType.START_WORKFLOW,
+                payload={},
+                actor_type="human",
+                actor_id="requester_01",
+                source="test",
+                idempotency_key=f"start:{workflow.workflow_id}",
+            )
+            workflow_id = workflow.workflow_id
+
+        executor = FakeRoleExecutor(sessions)
+        catalog = FakeWorkflowCatalog()
+        runner = WorkflowRunner(
+            integration_engine,
+            WorkflowSettings(),
+            executor,
+            catalog,
+            runner_id="catalog-test-runner",
+        )
+        runner.sessions = sessions
+        runner.run_until_idle(workflow_id)
+        _enqueue_approval(
+            sessions,
+            workflow_id,
+            CommandType.APPROVE_WORKFLOW,
+            "approve-workflow-catalog",
+        )
+        runner.run_until_idle(workflow_id)
+
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            assert workflow.state == WorkflowState.COMPLETED.value
+            assert workflow.runtime_context["content_pack"] == runtime_context["content_pack"]
+            prompt_step_keys = [
+                entry["step_key"] for entry in workflow.runtime_context["prompt_artifacts"]
+            ]
+            assert prompt_step_keys == [
+                "authoring",
+                "review",
+                "registration",
+            ]
+            assert workflow.runtime_context["item_registration"] == {
+                "item_id": "item_" + "4" * 32,
+                "item_revision_id": "itemrev_" + "5" * 32,
+                "revision_number": 1,
+                "manifest_artifact_id": "artifact_" + "6" * 32,
+                "manifest_artifact_revision_id": "rev_" + "7" * 32,
+                "manifest_sha256": "sha256:" + "8" * 64,
+            }
+        assert catalog.prepared == [("authoring", 1), ("review", 1), ("registration", 1)]
+        assert catalog.registrations == [("registration", 1)]
+        assert all(prompt is not None for prompt in executor.prompts)
+        assert (
+            executor.worker_requests
+            == [{"request_name": "PLACEHOLDER_REQUEST", "image_mode": "skip"}] * 3
+        )
+
+        runner.reconcile(workflow_id)
+        assert catalog.registrations == [("registration", 1)]
+    finally:
+        outer.rollback()
+        connection.close()
 
 
 def test_image_required_rework_preserves_attempt_history(integration_engine: Engine) -> None:

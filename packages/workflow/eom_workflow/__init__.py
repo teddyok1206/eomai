@@ -14,6 +14,7 @@ from eom_workflow.models import (
     HumanGateStep,
     RoleWorkerInput,
     TerminalStep,
+    WorkerRequest,
     WorkflowDefinition,
     WorkflowRequest,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "HumanGateStep",
     "RoleWorkerInput",
     "TerminalStep",
+    "WorkerRequest",
     "WorkflowDefinition",
     "WorkflowDefinitionError",
     "WorkflowRequest",

@@ -60,6 +60,7 @@ markers = [
   "integration: requires a reachable PostgreSQL instance",
   "codex_live: consumes a live Codex subscription invocation and is opt-in",
   "workflow_codex_live: consumes multiple live Codex subscription invocations and is opt-in",
+  "catalog_codex_live: validates opt-in live Content Pack workflow and Item registration runs",
   "dev_slack_live: sends one opt-in development report to a configured Slack webhook",
   "observe_integration: requires the installed eom_observe_ro PostgreSQL role",
   "observe_browser_live: validates the installed observability service and browser rendering",

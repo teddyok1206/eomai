@@ -6,7 +6,14 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 
 def _require_utc(value: datetime) -> datetime:
@@ -93,9 +100,66 @@ class WorkflowDefinition(FrozenModel):
     steps: tuple[StepDefinition, ...] = Field(min_length=2, max_length=64)
 
 
-class WorkflowRequest(FrozenModel):
+class WorkerRequest(FrozenModel):
     request_name: Literal["PLACEHOLDER_REQUEST"]
     image_mode: Literal["skip", "required"]
+
+
+class ContentPackSelection(FrozenModel):
+    pack_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    environment: Literal["development", "test"]
+
+
+class WorkflowProfiles(FrozenModel):
+    authoring: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
+    review: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
+    image: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
+    registration: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
+
+
+class SourceIntakeSelection(FrozenModel):
+    batch_ids: tuple[Annotated[str, Field(pattern=r"^intake_[0-9a-f]{32}$")], ...] = Field(
+        min_length=1, max_length=100
+    )
+
+
+class RegistryIntent(FrozenModel):
+    mode: Literal["CREATE_ITEM", "REVISE_ITEM"]
+    item_id: str | None = Field(default=None, pattern=r"^item_[0-9a-f]{32}$")
+    base_revision_id: str | None = Field(default=None, pattern=r"^itemrev_[0-9a-f]{32}$")
+
+    @model_validator(mode="after")
+    def validate_revision_pointers(self) -> RegistryIntent:
+        has_pointers = self.item_id is not None or self.base_revision_id is not None
+        if self.mode == "CREATE_ITEM" and has_pointers:
+            raise ValueError("CREATE_ITEM cannot include existing Item pointers")
+        if self.mode == "REVISE_ITEM" and (self.item_id is None or self.base_revision_id is None):
+            raise ValueError("REVISE_ITEM requires Item and base revision pointers")
+        return self
+
+
+class WorkflowRequest(WorkerRequest):
+    content_pack: ContentPackSelection | None = None
+    profiles: WorkflowProfiles | None = None
+    source_intake: SourceIntakeSelection | None = None
+    registry_intent: RegistryIntent | None = None
+
+    @model_validator(mode="after")
+    def validate_catalog_request(self) -> WorkflowRequest:
+        values = (
+            self.content_pack,
+            self.profiles,
+            self.source_intake,
+            self.registry_intent,
+        )
+        if any(value is not None for value in values) and not all(
+            value is not None for value in values
+        ):
+            raise ValueError("catalog workflow request fields must be supplied together")
+        return self
+
+    def worker_request(self) -> WorkerRequest:
+        return WorkerRequest(request_name=self.request_name, image_mode=self.image_mode)
 
 
 class ArtifactSpec(FrozenModel):
@@ -123,9 +187,20 @@ class RoleWorkerInput(FrozenModel):
     step_run_id: StepRunId
     attempt: int = Field(ge=1, le=10)
     role: Literal["authoring", "image", "review", "item_management"]
-    request: WorkflowRequest
+    request: WorkerRequest
     upstream_artifacts: tuple[ArtifactPointer, ...]
     artifact: ArtifactSpec
+
+    @field_validator("request", mode="before")
+    @classmethod
+    def normalize_worker_request(cls, value: object) -> WorkerRequest:
+        if isinstance(value, BaseModel):
+            value = value.model_dump(mode="json")
+        if not isinstance(value, dict):
+            raise ValueError("worker request must be an object")
+        return WorkerRequest.model_validate(
+            {"request_name": value.get("request_name"), "image_mode": value.get("image_mode")}
+        )
 
 
 class AuthoringDraft(FrozenModel):

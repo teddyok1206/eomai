@@ -22,6 +22,7 @@ from eom_workflow import (
     DecisionStep,
     HumanGateStep,
     TerminalStep,
+    WorkerRequest,
     WorkflowRequest,
     compile_definition_data,
     evaluate_decision,
@@ -29,6 +30,10 @@ from eom_workflow import (
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
+from eom_workflow_runner.catalog_port import (
+    RegistrationOutcome,
+    WorkflowCatalogPort,
+)
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.logging import log_workflow_event
 from eom_workflow_runner.models import (
@@ -86,9 +91,10 @@ class RoleJobExecutor(Protocol):
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkflowRequest,
+        request: WorkerRequest,
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
+        prompt_text: str | None,
     ) -> RoleExecutionResult: ...
 
 
@@ -108,9 +114,10 @@ class PlatformRoleJobExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkflowRequest,
+        request: WorkerRequest,
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
+        prompt_text: str | None,
     ) -> RoleExecutionResult:
         if step.worker_role is None or step.result_schema is None:
             raise WorkflowError(
@@ -118,6 +125,11 @@ class PlatformRoleJobExecutor:
                 "agent step is missing role contract",
             )
         prompt_name = "registration" if step.worker_role == "item_management" else step.worker_role
+        prompt_path = (
+            None
+            if prompt_text is not None
+            else self.workflow_settings.prompt_root / f"{prompt_name}.txt"
+        )
         job = self.orchestrator.submit_workflow_role(
             workflow_id=workflow.workflow_id,
             step_run_id=step.step_run_id,
@@ -127,7 +139,8 @@ class PlatformRoleJobExecutor:
             upstream_artifacts=upstream,
             result_schema=step.result_schema,
             idempotency_key=idempotency_key,
-            prompt_path=self.workflow_settings.prompt_root / f"{prompt_name}.txt",
+            prompt_path=prompt_path,
+            prompt_text=prompt_text,
         )
         content_hash: str | None = None
         if job.status == "SUCCEEDED":
@@ -156,6 +169,7 @@ class WorkflowRunner:
         engine: Engine,
         settings: WorkflowSettings | None = None,
         executor: RoleJobExecutor | None = None,
+        catalog: WorkflowCatalogPort | None = None,
         runner_id: str | None = None,
     ) -> None:
         self.engine = engine
@@ -166,6 +180,7 @@ class WorkflowRunner:
         registry = WorkerRegistry.load(Settings.from_environment().worker_config)
         self.available_roles = {slot.role for slot in registry.config.slots if slot.enabled}
         self.executor = executor or PlatformRoleJobExecutor(engine, self.settings)
+        self.catalog = catalog
         self.runner_id = runner_id or f"runner-{uuid4().hex}"
 
     def run_once(self, workflow_id: str | None = None) -> WorkflowCommandRecord | None:
@@ -453,14 +468,77 @@ class WorkflowRunner:
             workflow.workflow_id, definition.key, attempt, workflow.definition_hash
         )
         self._renew_command_lease(command_id)
+        full_request = WorkflowRequest.model_validate(workflow.initial_request)
+        registration: RegistrationOutcome | None = None
+        result_pointer: ArtifactPointer | None = None
         try:
+            prompt_text: str | None = None
+            if full_request.content_pack is not None:
+                if self.catalog is None:
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                        "catalog workflow adapter is unavailable",
+                    )
+                prepared = self.catalog.prepare_prompt(
+                    workflow=workflow,
+                    step=self._detached_step(step_run_id),
+                    request=full_request,
+                    upstream=upstream,
+                )
+                prompt_text = prepared.text
+                with transaction(self.sessions) as session:
+                    prepared_step = session.execute(
+                        select(WorkflowStepRunRecord)
+                        .where(WorkflowStepRunRecord.step_run_id == step_run_id)
+                        .with_for_update()
+                    ).scalar_one()
+                    input_manifest = dict(prepared_step.input_pointer_manifest)
+                    input_manifest["prompt"] = prepared.pointer
+                    input_manifest["prompt_envelope"] = prepared.envelope
+                    prepared_step.input_pointer_manifest = input_manifest
+                    current = session.get(WorkflowInstanceRecord, workflow.workflow_id)
+                    assert current is not None
+                    context = dict(current.runtime_context)
+                    prompt_artifacts = list(context.get("prompt_artifacts", []))
+                    if not any(
+                        item.get("step_key") == definition.key and item.get("attempt") == attempt
+                        for item in prompt_artifacts
+                        if isinstance(item, dict)
+                    ):
+                        prompt_artifacts.append(
+                            {
+                                "step_key": definition.key,
+                                "attempt": attempt,
+                                **prepared.pointer,
+                            }
+                        )
+                    context["prompt_artifacts"] = prompt_artifacts
+                    current.runtime_context = context
             execution = self.executor.execute(
                 workflow=workflow,
                 step=self._detached_step(step_run_id),
-                request=WorkflowRequest.model_validate(workflow.initial_request),
+                request=full_request.worker_request(),
                 upstream=upstream,
                 idempotency_key=idempotency_key,
+                prompt_text=prompt_text,
             )
+            if execution.status == "SUCCEEDED" and execution.content_hash is not None:
+                result_pointer = ArtifactPointer(
+                    step_key=definition.key,
+                    attempt=attempt,
+                    job_id=execution.job_id,
+                    logical_artifact_id=execution.logical_artifact_id,
+                    revision_id=execution.revision_id,
+                    content_hash=execution.content_hash,
+                    result_schema=definition.result_schema,
+                )
+                if definition.worker_role == "item_management" and self.catalog is not None:
+                    registration = self.catalog.register_workflow(
+                        workflow=workflow,
+                        step=self._detached_step(step_run_id),
+                        request=full_request,
+                        artifacts=(*upstream, result_pointer),
+                    )
         except Exception as exc:
             with transaction(self.sessions) as session:
                 failed_step = session.execute(
@@ -508,17 +586,8 @@ class WorkflowRunner:
                     step.error_code,
                 )
             else:
-                assert execution.content_hash is not None
-                pointer = ArtifactPointer(
-                    step_key=definition.key,
-                    attempt=attempt,
-                    job_id=execution.job_id,
-                    logical_artifact_id=execution.logical_artifact_id,
-                    revision_id=execution.revision_id,
-                    content_hash=execution.content_hash,
-                    result_schema=definition.result_schema,
-                )
-                step.output_pointer_manifest = pointer.model_dump(mode="json")
+                assert result_pointer is not None
+                step.output_pointer_manifest = result_pointer.model_dump(mode="json")
                 transition_step(step, StepState.SUCCEEDED)
                 current = session.get(WorkflowInstanceRecord, workflow.workflow_id)
                 if current is None:
@@ -527,8 +596,19 @@ class WorkflowRunner:
                     )
                 context = dict(current.runtime_context)
                 pointers = list(context.get("artifact_pointers", []))
-                pointers.append(pointer.model_dump(mode="json"))
+                pointers.append(result_pointer.model_dump(mode="json"))
                 context["artifact_pointers"] = pointers
+                if registration is not None:
+                    context["item_registration"] = {
+                        "item_id": registration.item_id,
+                        "item_revision_id": registration.item_revision_id,
+                        "revision_number": registration.revision_number,
+                        "manifest_artifact_id": registration.manifest_artifact_id,
+                        "manifest_artifact_revision_id": (
+                            registration.manifest_artifact_revision_id
+                        ),
+                        "manifest_sha256": registration.manifest_sha256,
+                    }
                 current.runtime_context = context
                 record_workflow_event(
                     session,
@@ -993,6 +1073,8 @@ class WorkflowRunner:
                 "definition_hash": workflow.definition_hash,
                 "artifact_pointers": pointers,
                 "registration": pointers[-1] if pointers else None,
+                "item_registration": context.get("item_registration"),
+                "content_pack": context.get("content_pack"),
             }
             workflow_record.runtime_context = context
             transition_stage(
