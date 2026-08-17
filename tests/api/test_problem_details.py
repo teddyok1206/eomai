@@ -29,6 +29,10 @@ def test_validation_transport_and_security_headers() -> None:
             assert unsupported.status_code == 415
             assert unsupported.json()["error_code"] == "API_CONTENT_TYPE_UNSUPPORTED"
 
+            bodyless = client.post("/api/v1/auth/logout")
+            assert bodyless.status_code == 401
+            assert bodyless.json()["error_code"] == "AUTH_TOKEN_INVALID"
+
             oversized = client.post(
                 "/api/v1/auth/login",
                 content=b"x" * 1_048_577,

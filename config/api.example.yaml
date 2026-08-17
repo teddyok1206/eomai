@@ -1,0 +1,38 @@
+schema_version: 1
+
+server:
+  host: "127.0.0.1"
+  port: 8765
+  workers: 1
+  request_body_limit_bytes: 1048576
+  docs_enabled: false
+
+security:
+  allowed_hosts:
+    - "127.0.0.1"
+    - "localhost"
+
+auth:
+  access_token_seconds: 1800
+  refresh_token_seconds: 2592000
+  session_absolute_seconds: 2592000
+  session_idle_seconds: 604800
+  fresh_auth_seconds: 900
+  login_failure_limit: 5
+  login_failure_window_seconds: 900
+  lock_seconds: 900
+
+rate_limit:
+  general_per_minute: 300
+  expensive_per_minute: 60
+  login_global_per_minute: 10
+  login_username_per_window: 5
+  refresh_per_minute: 10
+  maximum_buckets: 10000
+
+pagination:
+  default_limit: 50
+  maximum_limit: 200
+
+openapi:
+  version: "1"

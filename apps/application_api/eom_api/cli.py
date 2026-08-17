@@ -10,9 +10,10 @@ import typer
 
 from eom_api.app import create_app
 from eom_api.health import active_admin_exists, readiness
-from eom_api.lifespan import build_services
+from eom_api.lifespan import AppServices, build_services
 from eom_api.logging import configure_logging
 from eom_api.openapi import export_openapi
+from eom_api.release_checks import packaged_openapi_valid
 from eom_api.settings import load_settings
 
 app = typer.Typer(no_args_is_help=True)
@@ -59,21 +60,91 @@ def openapi_export(
 def doctor() -> None:
     services = build_services()
     try:
+        database_ready = readiness(services)
+        active_admin = _safe_active_admin(services)
         checks = {
             "config": True,
-            "database": readiness(services),
-            "migration_head": readiness(services),
-            "builtin_rbac": readiness(services),
-            "active_admin": active_admin_exists(services),
+            "secret_file_permission": _secret_file_permission(),
+            "token_hash_key": True,
+            "database": database_ready,
+            "runtime_database_role": _runtime_database_role(services),
+            "migration_head": database_ready,
+            "builtin_rbac": database_ready,
+            "active_admin": active_admin,
             "non_editable_import": "/home/eom/EOM" not in str(Path(__file__).resolve()),
-            "loopback_bind": services.settings.server.host in {"127.0.0.1", "localhost", "::1"},
+            "loopback_bind": services.settings.server.host == "127.0.0.1"
+            and services.settings.server.port == 8765,
+            "allowed_hosts": set(services.settings.security.allowed_hosts)
+            <= {"127.0.0.1", "localhost"},
             "cors_disabled": True,
+            "openapi_hash": packaged_openapi_valid(),
+            "system_user": _system_user(),
+            "systemd_unit": Path("/etc/systemd/system/eom-api.service").is_file(),
+            "repository_inaccessible": _unit_denies("/home/eom/EOM"),
+            "nas_inaccessible": _unit_denies("/mnt/nas"),
+            "docker_inaccessible": _unit_denies("/var/run/docker.sock"),
+            "worker_home_inaccessible": _unit_denies("/srv/eom/worker-homes"),
+            "codex_auth_inaccessible": _unit_denies("/root/.codex"),
         }
     finally:
         services.engine.dispose()
     typer.echo(json.dumps({"status": "PASS" if all(checks.values()) else "FAIL", **checks}))
     if not all(checks.values()):
         raise typer.Exit(1)
+
+
+def _safe_active_admin(services: AppServices) -> bool:
+    try:
+        return active_admin_exists(services)
+    except Exception:
+        return False
+
+
+def _runtime_database_role(services: AppServices) -> bool:
+    try:
+        with services.engine.connect() as connection:
+            return str(connection.exec_driver_sql("SELECT current_user").scalar_one()) == (
+                "eom_api_runtime"
+            )
+    except Exception:
+        return False
+
+
+def _secret_file_permission() -> bool:
+    try:
+        import grp
+
+        path = Path("/etc/eom/secrets/api.env")
+        metadata = path.stat()
+        return (
+            metadata.st_uid == 0
+            and metadata.st_gid == grp.getgrnam("eom-api").gr_gid
+            and metadata.st_mode & 0o777 == 0o640
+        )
+    except (KeyError, OSError):
+        return False
+
+
+def _system_user() -> bool:
+    try:
+        import pwd
+
+        entry = pwd.getpwnam("eom-api")
+        return (
+            entry.pw_name == "eom-api"
+            and entry.pw_dir == "/var/lib/eom-api"
+            and entry.pw_shell == "/usr/sbin/nologin"
+        )
+    except (KeyError, OSError):
+        return False
+
+
+def _unit_denies(path: str) -> bool:
+    try:
+        unit = Path("/etc/systemd/system/eom-api.service").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return f"InaccessiblePaths={path}" in unit
 
 
 def main() -> None:

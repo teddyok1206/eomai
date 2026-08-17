@@ -105,3 +105,25 @@ services and event stores already own those rules.
 
 `OBSERVABILITY_APPLICATION_API_NODE_DEFERRED`: the existing read-only console is unchanged in this
 release.
+
+## Runtime isolation
+
+```mermaid
+flowchart LR
+  SSH[SSH tunnel] --> LOOPBACK[127.0.0.1:8765]
+  LOOPBACK --> UNIT[eom-api.service]
+  UNIT --> WHEELS[Non-editable wheels]
+  UNIT --> DB[(PostgreSQL loopback)]
+  UNIT -. denied .-> SOURCE[Git checkout]
+  UNIT -. denied .-> NAS[NAS]
+  UNIT -. denied .-> DOCKER[Docker socket]
+  UNIT -. denied .-> WORKERS[Worker homes and Codex auth]
+```
+
+The dedicated `eom-api` user has no login shell or supplementary groups. systemd mounts explicit
+forbidden paths as inaccessible, permits only local IP traffic, removes capabilities, and gives
+write access only to `/var/lib/eom-api`. The migration owner creates schema; `eom_api_runtime` has
+only reviewed row DML and cannot create or alter schema objects.
+
+Direct LAN or public binding requires TLS and a later ADR. Loopback HTTP through SSH is the only V0
+transport boundary. No Application API node is added to Observability in this release.

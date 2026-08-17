@@ -71,7 +71,12 @@ class RequestBoundaryMiddleware:
             await self._send_problem(scope, receive, secured_send, 400, "API_REQUEST_INVALID")
             return
         method = scope.get("method", "")
-        if method in JSON_METHODS:
+        content_length = headers.get("content-length")
+        has_body = bool(
+            (content_length and content_length.isdigit() and int(content_length) > 0)
+            or headers.get("transfer-encoding")
+        )
+        if method in JSON_METHODS and has_body:
             media_type = headers.get("content-type", "").split(";", 1)[0].strip().lower()
             if media_type != "application/json" and not (
                 media_type.startswith("application/") and media_type.endswith("+json")
@@ -80,7 +85,6 @@ class RequestBoundaryMiddleware:
                     scope, receive, secured_send, 415, "API_CONTENT_TYPE_UNSUPPORTED"
                 )
                 return
-        content_length = headers.get("content-length")
         if content_length and content_length.isdigit() and int(content_length) > self.body_limit:
             await self._send_problem(scope, receive, secured_send, 413, "API_BODY_TOO_LARGE")
             return

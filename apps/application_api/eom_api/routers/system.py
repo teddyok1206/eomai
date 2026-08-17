@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 
 from eom_api_contracts import SingleResponse
@@ -11,6 +10,7 @@ from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 
+from eom_api.build_info import get_build_info
 from eom_api.dependencies import require_permission
 from eom_api.health import active_admin_exists, readiness
 from eom_api.routers.common import one
@@ -36,13 +36,14 @@ def capabilities(request: Request) -> SingleResponse[Capabilities]:
 )
 def system_info(request: Request) -> SingleResponse[SystemInfo]:
     services = request.app.state.services
+    build = get_build_info()
     with services.engine.connect() as connection:
         revision = str(connection.scalar(text("SELECT version_num FROM alembic_version")))
     return one(
         request,
         SystemInfo(
-            build_version=os.environ.get("EOM_API_BUILD_VERSION", "0.1.0"),
-            source_commit=os.environ.get("EOM_API_SOURCE_COMMIT", "unknown"),
+            build_version=build.package_version,
+            source_commit=build.source_commit,
             migration_revision=revision,
             capabilities=Capabilities(),
             server_time=datetime.now(UTC),
