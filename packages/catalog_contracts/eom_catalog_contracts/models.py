@@ -296,12 +296,22 @@ class RetireItem(FrozenModel):
 
 class CreateDeliverable(FrozenModel):
     deliverable_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
+    deliverable_type: Literal["MOCK_EXAM", "TEXTBOOK", "WEEKLY", "OTHER"]
+    title: str = Field(min_length=1, max_length=256)
+    edition: str = Field(min_length=1, max_length=64)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     actor_id: ActorId
 
 
 class CreateUsagePlan(FrozenModel):
     item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    preferred_item_revision_id: str | None = Field(default=None, pattern=r"^itemrev_[0-9a-f]{32}$")
     deliverable_id: str = Field(pattern=r"^deliverable_[0-9a-f]{32}$")
+    deliverable_revision_id: str | None = Field(default=None, pattern=r"^delivrev_[0-9a-f]{32}$")
+    planned_section: str = Field(min_length=1, max_length=128)
+    planned_sequence: int = Field(ge=1)
+    planned_points: str | None = Field(default=None, max_length=16)
+    planned_role: str | None = Field(default=None, max_length=64)
     actor_id: ActorId
 
 
@@ -311,8 +321,13 @@ class UsagePlanCommand(FrozenModel):
 
 
 ReserveUsagePlan = UsagePlanCommand
-FulfillUsagePlan = UsagePlanCommand
 CancelUsagePlan = UsagePlanCommand
+
+
+class FulfillUsagePlan(UsagePlanCommand):
+    page: int | None = Field(default=None, ge=1)
+    usage_role: str = Field(min_length=1, max_length=64)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class CatalogPageQuery(FrozenModel):

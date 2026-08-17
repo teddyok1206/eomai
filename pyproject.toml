@@ -44,6 +44,7 @@ where = [
   "services/hwpx_manager",
   "packages/content_intake",
   "packages/content_pack",
+  "packages/item_registry",
   "packages/catalog_contracts",
   "services/catalog_service",
 ]
@@ -85,6 +86,7 @@ mypy_path = [
   "services/hwpx_manager",
   "packages/content_intake",
   "packages/content_pack",
+  "packages/item_registry",
   "packages/catalog_contracts",
   "services/catalog_service",
   "apps/eomctl",
@@ -102,6 +104,7 @@ packages = [
   "eom_hwpx_manager",
   "eom_content_intake",
   "eom_content_pack",
+  "eom_item_registry",
   "eom_catalog_contracts",
   "eom_catalog_service",
 ]

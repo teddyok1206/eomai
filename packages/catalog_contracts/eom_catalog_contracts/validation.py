@@ -18,6 +18,9 @@ SCHEMA_FILES = {
     "content-pack": SCHEMA_ROOT / "content-pack" / "content-pack-v1.schema.json",
     "content-pack-profile": SCHEMA_ROOT / "content-pack" / "profile-v1.schema.json",
     "prompt-envelope": SCHEMA_ROOT / "content-pack" / "prompt-envelope-v1.schema.json",
+    "item-revision-manifest": SCHEMA_ROOT
+    / "item-registry"
+    / "item-revision-manifest-v1.schema.json",
 }
 
 
