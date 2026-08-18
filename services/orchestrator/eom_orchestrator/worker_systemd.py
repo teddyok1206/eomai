@@ -23,6 +23,14 @@ JOB_ID_PATTERN = re.compile(r"\Ajob_[0-9a-f]{32}\Z", re.ASCII)
 PROBE_ID_PATTERN = re.compile(r"\Aprobe_[0-9a-f]{32}\Z", re.ASCII)
 SLOT_IDS = frozenset({"01", "02", "03", "04", "05"})
 ACTIVE_STATES = frozenset({"activating", "active", "deactivating", "reloading"})
+NON_ACTIVE_SYSTEMCTL_EXIT_CODES = frozenset({3, 4})
+AUTHORIZATION_DENIED_MARKERS = (
+    b"access denied",
+    b"authentication is required",
+    b"interactive authentication required",
+    b"not authorized",
+    b"permission denied",
+)
 FIXED_WORKER_TIMEOUT_SECONDS = 600
 
 # These hashes are the installed contract. Tests compare them with the canonical repository
@@ -140,6 +148,10 @@ def systemctl_show_argv(unit_name: str) -> tuple[str, ...]:
     )
 
 
+def systemctl_is_active_argv(unit_name: str) -> tuple[str, ...]:
+    return (str(SYSTEMCTL), "is-active", "--quiet", unit_name)
+
+
 def parse_unit_status(output: str) -> FixedUnitStatus:
     values: dict[str, str] = {}
     for line in output.splitlines():
@@ -253,30 +265,58 @@ def inspect_worker_systemd_contract(slot: WorkerSlot) -> WorkerSystemdReadiness:
 def probe_worker_systemd_authorization(slot: WorkerSlot) -> WorkerSystemdReadiness:
     unit_name = probe_unit_name(slot)
     try:
-        run = _start_unit(unit_name, timeout_seconds=30)
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        return WorkerSystemdReadiness(
-            False, "WORKER_SYSTEMD_AUTHORIZATION_DENIED", f"slot {slot.slot_id}"
+        started = subprocess.run(
+            systemctl_start_argv(unit_name),
+            capture_output=True,
+            check=False,
+            env=SYSTEMCTL_ENV,
+            timeout=30,
         )
-    status = run.status
-    completed_before_collection = (
-        status.load_state == "loaded"
-        and status.result == "success"
-        and status.process_started
-        and status.exit_code == 0
-    )
-    collected_after_success = status.load_state == "not-found"
-    ready = (
-        run.exit_code == 0
-        and (completed_before_collection or collected_after_success)
-        and not status.process_lingering
-        and not status.need_daemon_reload
-    )
-    return WorkerSystemdReadiness(
-        ready,
-        "READY" if ready else "WORKER_SYSTEMD_AUTHORIZATION_DENIED",
-        f"slot {slot.slot_id} probe {'passed' if ready else 'failed'}",
-    )
+    except subprocess.TimeoutExpired:
+        return WorkerSystemdReadiness(
+            False, "WORKER_SYSTEMD_PROBE_TIMEOUT", f"slot {slot.slot_id} probe timed out"
+        )
+    except OSError:
+        return WorkerSystemdReadiness(
+            False, "WORKER_SYSTEMD_PROBE_UNAVAILABLE", f"slot {slot.slot_id} probe unavailable"
+        )
+    if started.returncode != 0:
+        diagnostics = (started.stdout + b"\n" + started.stderr).lower()
+        denied = any(marker in diagnostics for marker in AUTHORIZATION_DENIED_MARKERS)
+        return WorkerSystemdReadiness(
+            False,
+            "WORKER_SYSTEMD_AUTHORIZATION_DENIED" if denied else "WORKER_SYSTEMD_PROBE_FAILED",
+            f"slot {slot.slot_id} probe start failed",
+        )
+
+    # CollectMode may unload the completed oneshot before a subsequent `show`, which can then
+    # rehydrate the template without its execution metadata. The successful blocking StartUnit
+    # result is authoritative; is-active is used only to reject a lingering process.
+    try:
+        active = subprocess.run(
+            systemctl_is_active_argv(unit_name),
+            capture_output=True,
+            check=False,
+            env=SYSTEMCTL_ENV,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return WorkerSystemdReadiness(
+            False,
+            "WORKER_SYSTEMD_STATUS_UNEXPECTED",
+            f"slot {slot.slot_id} probe status unavailable",
+        )
+    if active.returncode == 0:
+        return WorkerSystemdReadiness(
+            False, "WORKER_SYSTEMD_PROBE_LINGERING", f"slot {slot.slot_id} probe remained active"
+        )
+    if active.returncode not in NON_ACTIVE_SYSTEMCTL_EXIT_CODES:
+        return WorkerSystemdReadiness(
+            False,
+            "WORKER_SYSTEMD_STATUS_UNEXPECTED",
+            f"slot {slot.slot_id} probe status unexpected",
+        )
+    return WorkerSystemdReadiness(True, "READY", f"slot {slot.slot_id} probe passed")
 
 
 def _validate_root_owned_artifact(path: Path, *, expected_mode: int, expected_sha256: str) -> None:

@@ -19,6 +19,7 @@ from eom_orchestrator.worker_systemd import (
     parse_unit_status,
     probe_unit_name,
     probe_worker_systemd_authorization,
+    systemctl_is_active_argv,
     systemctl_start_argv,
     worker_unit_name,
 )
@@ -26,6 +27,7 @@ from eom_protocol import ErrorCode
 
 ROOT = Path(__file__).resolve().parents[2]
 JOB_ID = "job_0123456789abcdef0123456789abcdef"
+PROBE_UNIT = "eom-worker-probe-01@probe_0123456789abcdef0123456789abcdef.service"
 
 
 def _slot(index: int = 1) -> WorkerSlot:
@@ -186,28 +188,109 @@ def test_collected_probe_status_is_not_a_lingering_process() -> None:
     assert not collected.process_lingering
 
 
-def test_authorization_probe_accepts_successfully_collected_unit(
+@pytest.mark.parametrize("inactive_exit_code", (3, 4))
+def test_authorization_probe_accepts_inactive_or_collected_unit(
+    inactive_exit_code: int,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    status = FixedUnitStatus(
-        load_state="not-found",
-        active_state="inactive",
-        sub_state="dead",
-        result="success",
-        exec_main_code=0,
-        exec_main_status=0,
-        exec_main_started_monotonic=0,
-        need_daemon_reload=False,
+    calls: list[tuple[str, ...]] = []
+    results = iter(
+        (
+            subprocess.CompletedProcess((), 0, b"", b""),
+            subprocess.CompletedProcess((), inactive_exit_code, b"", b""),
+        )
     )
-    monkeypatch.setattr(
-        "eom_orchestrator.worker_systemd._start_unit",
-        lambda unit, **_kwargs: FixedUnitRun(unit, 0, b"", b"", status),
-    )
+
+    def run(argv: tuple[str, ...], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        calls.append(argv)
+        return next(results)
+
+    monkeypatch.setattr("eom_orchestrator.worker_systemd.probe_unit_name", lambda _slot: PROBE_UNIT)
+    monkeypatch.setattr("eom_orchestrator.worker_systemd.subprocess.run", run)
 
     result = probe_worker_systemd_authorization(_slot())
 
     assert result.ready
     assert result.code == "READY"
+    assert calls == [systemctl_start_argv(PROBE_UNIT), systemctl_is_active_argv(PROBE_UNIT)]
+
+
+def test_authorization_probe_classifies_start_denial(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd.subprocess.run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            (), 1, b"", b"Interactive authentication required."
+        ),
+    )
+
+    result = probe_worker_systemd_authorization(_slot())
+
+    assert not result.ready
+    assert result.code == "WORKER_SYSTEMD_AUTHORIZATION_DENIED"
+
+
+def test_authorization_probe_does_not_misclassify_probe_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd.subprocess.run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            (), 1, b"", b"Job failed because the control process exited with error code."
+        ),
+    )
+
+    result = probe_worker_systemd_authorization(_slot())
+
+    assert not result.ready
+    assert result.code == "WORKER_SYSTEMD_PROBE_FAILED"
+
+
+def test_authorization_probe_rejects_lingering_unit(monkeypatch: pytest.MonkeyPatch) -> None:
+    results = iter(
+        (
+            subprocess.CompletedProcess((), 0, b"", b""),
+            subprocess.CompletedProcess((), 0, b"active\n", b""),
+        )
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd.subprocess.run",
+        lambda *_args, **_kwargs: next(results),
+    )
+
+    result = probe_worker_systemd_authorization(_slot())
+
+    assert not result.ready
+    assert result.code == "WORKER_SYSTEMD_PROBE_LINGERING"
+
+
+def test_authorization_probe_rejects_unexpected_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    results = iter(
+        (
+            subprocess.CompletedProcess((), 0, b"", b""),
+            subprocess.CompletedProcess((), 1, b"", b"status unavailable"),
+        )
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd.subprocess.run",
+        lambda *_args, **_kwargs: next(results),
+    )
+
+    result = probe_worker_systemd_authorization(_slot())
+
+    assert not result.ready
+    assert result.code == "WORKER_SYSTEMD_STATUS_UNEXPECTED"
+
+
+def test_authorization_probe_classifies_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    def timeout(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        raise subprocess.TimeoutExpired(("systemctl",), 30)
+
+    monkeypatch.setattr("eom_orchestrator.worker_systemd.subprocess.run", timeout)
+
+    result = probe_worker_systemd_authorization(_slot())
+
+    assert not result.ready
+    assert result.code == "WORKER_SYSTEMD_PROBE_TIMEOUT"
 
 
 def test_worker_exec_uses_fixed_workspace_and_codex_contract() -> None:
