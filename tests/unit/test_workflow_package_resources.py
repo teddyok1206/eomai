@@ -91,6 +91,29 @@ def platform_wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return wheels[0]
 
 
+@pytest.fixture(scope="module")
+def installed_platform(platform_wheel: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
+    target = tmp_path_factory.mktemp("installed-workflow-wheel")
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--no-index",
+            "--no-compile",
+            "--target",
+            str(target),
+            str(platform_wheel),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return target
+
+
 def test_built_wheel_contains_workflow_schemas(platform_wheel: Path) -> None:
     prefix = "eom_workflow/resources/"
     with zipfile.ZipFile(platform_wheel) as archive:
@@ -110,7 +133,7 @@ def test_built_wheel_contains_workflow_schemas(platform_wheel: Path) -> None:
 
 
 def test_installed_wheel_loads_schemas_without_source_checkout(
-    platform_wheel: Path, tmp_path: Path
+    installed_platform: Path, tmp_path: Path
 ) -> None:
     definition = tmp_path / "generic-item-development.v1.1.yaml"
     definition.write_bytes(
@@ -122,10 +145,10 @@ import importlib.util
 import sys
 from pathlib import Path
 
-wheel = sys.argv[1]
+installed_root = Path(sys.argv[1]).resolve()
 repository = sys.argv[2]
 definition_path = Path(sys.argv[3])
-sys.path.insert(0, wheel)
+sys.path.insert(0, str(installed_root))
 
 from eom_workflow.compiler import compile_definition
 from eom_workflow.schemas import (
@@ -138,7 +161,7 @@ from eom_workflow.schemas import (
 
 spec = importlib.util.find_spec("eom_workflow")
 assert spec is not None and spec.origin is not None
-assert wheel in spec.origin
+assert Path(spec.origin).resolve().is_relative_to(installed_root)
 assert repository not in spec.origin
 load_definition_schema()
 for role in INPUT_SCHEMA_FILES:
@@ -159,7 +182,7 @@ print("installed_workflow_wheel_resources=PASS")
             "-I",
             "-c",
             script,
-            str(platform_wheel),
+            str(installed_platform),
             str(REPOSITORY_ROOT),
             str(definition),
         ],

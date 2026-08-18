@@ -218,6 +218,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
 
 with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporary:
     root = Path(temporary)
+    installed_root = root / "site-packages"
     definition = root / "generic-item-development.v1.1.yaml"
     definition.write_bytes(
         (
@@ -225,13 +226,30 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/generic-item-development.v1.1.yaml"
         ).read_bytes()
     )
+    subprocess.run(
+        [
+            os.environ["API_PYTHON"],
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--no-index",
+            "--no-compile",
+            "--target",
+            str(installed_root),
+            str(platform_wheel),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
     check = r'''
 import importlib.util
 import sys
 from pathlib import Path
 
-wheel, repository, definition_path = sys.argv[1:]
-sys.path.insert(0, wheel)
+installed_root = Path(sys.argv[1]).resolve()
+repository, definition_path = sys.argv[2:]
+sys.path.insert(0, str(installed_root))
 from eom_workflow.compiler import compile_definition
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
@@ -242,7 +260,12 @@ from eom_workflow.schemas import (
 )
 
 spec = importlib.util.find_spec("eom_workflow")
-if spec is None or spec.origin is None or wheel not in spec.origin or repository in spec.origin:
+if (
+    spec is None
+    or spec.origin is None
+    or not Path(spec.origin).resolve().is_relative_to(installed_root)
+    or repository in spec.origin
+):
     raise SystemExit("workflow package was not imported from the release wheel")
 load_definition_schema()
 for role in INPUT_SCHEMA_FILES:
@@ -261,7 +284,7 @@ if compiled.definition.definition_version != "1.1.0":
             "-I",
             "-c",
             check,
-            str(platform_wheel),
+            str(installed_root),
             os.environ["REPOSITORY_ROOT"],
             str(definition),
         ],
