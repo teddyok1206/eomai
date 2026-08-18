@@ -125,5 +125,11 @@ forbidden paths as inaccessible, permits only local IP traffic, removes capabili
 write access only to `/var/lib/eom-api`. The migration owner creates schema; `eom_api_runtime` has
 only reviewed row DML and cannot create or alter schema objects.
 
+The secret directory remains `root:eom:0750`; no other-user traversal bit is added. systemd PID 1
+reads the protected `EnvironmentFile` before applying the service identity. The process reads only
+the non-secret `/etc/eom-api/api.yaml` through its service-specific group. Runtime doctor validates
+injected values and connectivity, while a root-owned deployment verifier validates filesystem
+metadata. These checks are separate so runtime access is not widened for an installation concern.
+
 Direct LAN or public binding requires TLS and a later ADR. Loopback HTTP through SSH is the only V0
 transport boundary. No Application API node is added to Observability in this release.

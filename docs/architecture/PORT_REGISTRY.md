@@ -11,3 +11,5 @@
 Application API must not bind to 8000 or 8780 and must not bind 8765 to `0.0.0.0` or `[::]`.
 Observability Console must not bind to 8000 or 8765 and must not bind 8780 to `0.0.0.0` or `[::]`.
 No firewall, router forwarding, or TLS policy is changed by either service installation.
+Deployment hardening changes no listener: API configuration remains in `/etc/eom-api/api.yaml` and
+the only accepted Application API bind remains `127.0.0.1:8765`.

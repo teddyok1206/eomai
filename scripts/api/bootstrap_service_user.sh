@@ -4,6 +4,8 @@ set -euo pipefail
 SERVICE_USER="eom-api"
 SERVICE_GROUP="eom-api"
 STATE_DIRECTORY="/var/lib/eom-api"
+CONFIG_DIRECTORY="/etc/eom-api"
+SECRET_DIRECTORY="/etc/eom/secrets"
 
 if [[ "$(id -u)" -ne 0 ]]; then
   printf 'Run bootstrap_service_user.sh as root.\n' >&2
@@ -42,13 +44,14 @@ actual_shell="$(getent passwd "${SERVICE_USER}" | cut -d: -f7)"
 
 passwd --lock "${SERVICE_USER}" >/dev/null 2>&1 || true
 install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0700 "${STATE_DIRECTORY}"
-if [[ ! -d /etc/eom ]]; then
-  install -d -o root -g root -m 0751 /etc/eom
-fi
-if [[ ! -d /etc/eom/secrets ]]; then
-  install -d -o root -g root -m 0711 /etc/eom/secrets
-fi
-chmod o+x /etc/eom /etc/eom/secrets
+install -d -o root -g "${SERVICE_GROUP}" -m 0750 "${CONFIG_DIRECTORY}"
+
+secret_metadata="$(stat -Lc '%U:%G:%a' "${SECRET_DIRECTORY}" 2>/dev/null || true)"
+[[ "${secret_metadata}" == "root:eom:750" ]] || {
+  printf '%s\n' \
+    'Existing /etc/eom/secrets must retain the protected root:eom:750 boundary.' >&2
+  exit 1
+}
 
 supplementary="$(id -nG "${SERVICE_USER}" | tr ' ' '\n' | grep -vFx "${SERVICE_GROUP}" || true)"
 if [[ -n "${supplementary}" ]]; then

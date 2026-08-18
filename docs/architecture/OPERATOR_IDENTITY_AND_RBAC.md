@@ -36,3 +36,8 @@ only new core dependency because both emergency CLI and HTTP login must use one 
 EOM adds bounded Unicode character and UTF-8 byte length, NUL, identity, and explicit common-value
 checks. Unknown usernames execute dummy Argon2 verification. Client login failures remain the same
 401 message regardless of unknown, mismatch, disabled, or locked internal reason.
+
+Token HMAC and fingerprint keys enter the service only through systemd's protected
+`EnvironmentFile`. They are validated as non-placeholder values and never returned by doctor,
+logs, audit events, or HTTP. Operator and role behavior does not require the runtime identity to
+traverse the shared secret directory.

@@ -31,3 +31,7 @@ EOM_RUN_API_SERVICE_LIVE=1 \
 The broader acceptance sequence uses separate AUTHOR, REVIEWER, EDITOR, and VIEWER accounts. Keep
 their temporary passwords in separate 0600 files and delete them after password changes. Do not
 emit request/response bodies while testing authentication or Operator creation.
+
+Run smoke tests only after the privileged metadata verifier has passed. The verifier runs from the
+root-owned installed copy; acceptance commands remain unprivileged and never require access to
+`/etc/eom/secrets`.

@@ -30,17 +30,18 @@ version-pinned because the API and OpenAPI surfaces are persistent contracts.
 
 ## System Identity And Database Role
 
-Run only these installation boundaries as root:
+Run only these installation boundaries from a reviewed interactive operator shell. The scripts
+themselves do not acquire credentials or invoke nested sudo:
 
 ```bash
-sudo scripts/api/bootstrap_service_user.sh
-sudo scripts/api/bootstrap_runtime_role.sh
+sudo -n scripts/api/bootstrap_service_user.sh
+sudo -n scripts/api/bootstrap_runtime_role.sh
 ```
 
-The first command creates locked `eom-api:eom-api` with `nologin`, no supplementary groups, and a
-0700 `/var/lib/eom-api`. It preserves existing `/etc/eom` ownership and group access and adds only
-execute traversal for other users; directory listing and file reads remain denied by directory and
-file modes. It does not add the service to the `eom` group. The second command creates or reconciles
+The first command creates locked `eom-api:eom-api` with `nologin`, no supplementary groups, a 0700
+`/var/lib/eom-api`, and a root-owned service-specific `/etc/eom-api` directory. It verifies, but
+never changes, the existing `/etc/eom/secrets` `root:eom:0750` boundary. It does not add the service
+to the `eom` group. The second command creates or reconciles
 `eom_api_runtime`, verifies that CREATE and ALTER fail, and atomically writes
 `/etc/eom/secrets/api.env` as `root:eom-api` 0640. Existing token and fingerprint keys are retained
 on repeat execution. It also revokes the PostgreSQL database's default PUBLIC temporary-table
@@ -51,10 +52,13 @@ URL.
 Install the reviewed configuration:
 
 ```bash
-sudo install -o root -g eom-api -m 0640 config/api.example.yaml /etc/eom/api.yaml
+sudo -n install -o root -g eom-api -m 0640 \
+  config/api.example.yaml /etc/eom-api/api.yaml
 ```
 
-Do not add secrets to `api.yaml`. The only secret keys are `EOM_API_DATABASE_URL`,
+Do not add secrets to `api.yaml`. The runtime process reads this non-secret file directly. systemd
+reads `/etc/eom/secrets/api.env` before changing to `eom-api` and injects the environment; the
+runtime does not traverse or stat the protected secret directory. The only secret keys are `EOM_API_DATABASE_URL`,
 `EOM_API_TOKEN_HASH_KEY`, and `EOM_API_FINGERPRINT_KEY` in the protected environment file.
 
 ## Build And Install
@@ -66,9 +70,10 @@ scripts/api/deploy_release.sh --build-only
 scripts/api/deploy_release.sh --install
 ```
 
-The install command runs as `eom`. It builds and inspects all three wheels, installs them without
-editable metadata, then uses sudo only to install/reload/restart systemd and persist a rollback
-record. The installed imports must resolve below
+The install command runs as `eom`. Before building it requires `sudo -n true`; failure causes no
+system change. It builds and inspects all three wheels and installs them without editable metadata
+as `eom`, then uses only `sudo -n` for system files, systemd, and the rollback record. It never runs
+`sudo -v` or waits for a password prompt. The installed imports must resolve below
 `/srv/eom/conda/envs/eom-api/lib/python3.12/site-packages`, never the repository.
 
 The first service start can pass readiness before an Administrator exists. Bootstrap the initial
@@ -82,12 +87,18 @@ confirmed.
 systemctl is-active eom-api.service
 systemctl is-enabled eom-api.service
 ss -lnt 'sport = :8765'
-sudo scripts/api/verify_runtime_isolation.sh
+sudo -n scripts/api/verify_runtime_isolation.sh
+sudo -n /usr/local/libexec/eom-api/verify-deployment-metadata
 ```
 
 The only valid listener is `127.0.0.1:8765`. The unit denies the checkout, EOMIS, NAS, Docker,
 worker homes, Codex authentication, and unrelated secret files. `eom-api` is not a member of sudo,
 Docker, `eom`, or worker groups.
+
+The root-owned metadata verifier checks the secret directory and file ownership/mode, exact
+environment key names, service config metadata, unit paths, and group isolation without printing
+secret values. Runtime `eom-api doctor` checks the injected environment format and database role;
+it deliberately does not inspect secret filesystem metadata.
 
 ## Rollback
 

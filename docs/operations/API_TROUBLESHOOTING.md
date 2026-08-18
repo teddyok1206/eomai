@@ -3,10 +3,10 @@
 Start with sanitized checks that do not reveal secret values:
 
 ```bash
-sudo systemd-run --quiet --wait --pipe --collect \
+sudo -n systemd-run --quiet --wait --pipe --collect \
   --uid=eom-api --gid=eom-api \
   --property=EnvironmentFile=/etc/eom/secrets/api.env \
-  --setenv=EOM_API_CONFIG=/etc/eom/api.yaml \
+  --setenv=EOM_API_CONFIG=/etc/eom-api/api.yaml \
   /srv/eom/conda/envs/eom-api/bin/eom-api doctor
 systemctl status eom-api.service --no-pager
 journalctl -u eom-api.service --since '-10 minutes' --no-pager
@@ -35,4 +35,14 @@ request and key. Never create a new key merely to bypass an uncertain command re
 
 If the process listens on `0.0.0.0:8765`, `[::]:8765`, port 8000, or port 8780, stop it and restore
 the reviewed unit/configuration. Do not modify UFW, router forwarding, or the Observability service.
-Use `sudo scripts/api/verify_runtime_isolation.sh` after every unit change.
+Use `sudo -n scripts/api/verify_runtime_isolation.sh` after every unit change.
+
+Secret metadata failures belong to the privileged deployment verifier, not runtime doctor:
+
+```bash
+sudo -n /usr/local/libexec/eom-api/verify-deployment-metadata
+```
+
+The verifier must report only the failing path or invariant. Do not relax
+`/etc/eom/secrets` from `root:eom:0750`, add `eom-api` to `eom`, or copy secrets into the state
+directory to make the runtime doctor pass.

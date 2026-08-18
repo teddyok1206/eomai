@@ -64,7 +64,7 @@ def doctor() -> None:
         active_admin = _safe_active_admin(services)
         checks = {
             "config": True,
-            "secret_file_permission": _secret_file_permission(),
+            "secret_environment": _runtime_secret_environment(services),
             "token_hash_key": True,
             "database": database_ready,
             "runtime_database_role": _runtime_database_role(services),
@@ -110,19 +110,13 @@ def _runtime_database_role(services: AppServices) -> bool:
         return False
 
 
-def _secret_file_permission() -> bool:
-    try:
-        import grp
-
-        path = Path("/etc/eom/secrets/api.env")
-        metadata = path.stat()
-        return (
-            metadata.st_uid == 0
-            and metadata.st_gid == grp.getgrnam("eom-api").gr_gid
-            and metadata.st_mode & 0o777 == 0o640
-        )
-    except (KeyError, OSError):
-        return False
+def _runtime_secret_environment(services: AppServices) -> bool:
+    values = (
+        services.secrets.database_url.get_secret_value(),
+        services.secrets.token_hash_key.get_secret_value(),
+        services.secrets.fingerprint_key.get_secret_value(),
+    )
+    return all(value and "placeholder" not in value.casefold() for value in values)
 
 
 def _system_user() -> bool:

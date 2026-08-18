@@ -8,6 +8,8 @@ API_PIP="${API_PYTHON} -m pip"
 SERVICE="eom-api.service"
 UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-api.service"
 UNIT_TARGET="/etc/systemd/system/eom-api.service"
+VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_deployment_metadata.sh"
+VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-deployment-metadata"
 ACTION="verify"
 STAGING_ROOT=""
 
@@ -258,8 +260,8 @@ payload = {
 }
 Path(os.environ["RECORD"]).write_text(json.dumps(payload, indent=2) + "\n", encoding="ascii")
 PY
-  sudo install -d -o eom-api -g eom-api -m 0700 /var/lib/eom-api/deployments
-  sudo install -o eom-api -g eom-api -m 0600 "${temporary}" "${record}"
+  sudo -n install -d -o eom-api -g eom-api -m 0700 /var/lib/eom-api/deployments
+  sudo -n install -o eom-api -g eom-api -m 0600 "${temporary}" "${record}"
   rm -f "${temporary}"
   printf 'Rollback record: %s\n' "${record}"
 }
@@ -279,15 +281,15 @@ wait_for_health() {
 }
 
 install_service() {
-  [[ -f /etc/eom/api.yaml ]] || fail "/etc/eom/api.yaml is not installed"
-  [[ -f /etc/eom/secrets/api.env ]] || fail "/etc/eom/secrets/api.env is not installed"
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
-  sudo -v
   systemd-analyze verify "${UNIT_SOURCE}"
-  sudo install -o root -g root -m 0644 "${UNIT_SOURCE}" "${UNIT_TARGET}"
-  sudo systemctl daemon-reload
-  sudo systemctl enable "${SERVICE}" >/dev/null
-  sudo systemctl restart "${SERVICE}"
+  sudo -n install -d -o root -g root -m 0755 /usr/local/libexec/eom-api
+  sudo -n install -o root -g root -m 0755 "${VERIFIER_SOURCE}" "${VERIFIER_TARGET}"
+  sudo -n install -o root -g root -m 0644 "${UNIT_SOURCE}" "${UNIT_TARGET}"
+  sudo -n "${VERIFIER_TARGET}"
+  sudo -n systemctl daemon-reload
+  sudo -n systemctl enable "${SERVICE}" >/dev/null
+  sudo -n systemctl restart "${SERVICE}"
   wait_for_health
   record_release
   if [[ -n "${EOM_API_SMOKE_USERNAME:-}" && -n "${EOM_API_SMOKE_PASSWORD_FILE:-}" ]]; then
@@ -312,6 +314,7 @@ case "${ACTION}" in
     build_release
     ;;
   install)
+    sudo -n true || fail "noninteractive privileged access is required before installation"
     build_release
     install_wheels
     install_service

@@ -92,11 +92,23 @@ class ApiSecrets(StrictSettings):
     def strong_hmac_key(cls, value: SecretStr) -> SecretStr:
         if len(value.get_secret_value().encode("utf-8")) < 32:
             raise ValueError("HMAC keys must contain at least 32 bytes")
+        if "placeholder" in value.get_secret_value().casefold():
+            raise ValueError("placeholder HMAC keys are not allowed")
+        return value
+
+    @field_validator("database_url")
+    @classmethod
+    def runtime_database_url(cls, value: SecretStr) -> SecretStr:
+        raw = value.get_secret_value()
+        if not raw.startswith(("postgresql://", "postgresql+psycopg://")):
+            raise ValueError("Application API requires a PostgreSQL database URL")
+        if "placeholder" in raw.casefold():
+            raise ValueError("placeholder database URLs are not allowed")
         return value
 
 
 def load_settings(path: Path | None = None) -> ApiSettings:
-    actual = path or Path(os.environ.get("EOM_API_CONFIG", "/etc/eom/api.yaml"))
+    actual = path or Path(os.environ.get("EOM_API_CONFIG", "/etc/eom-api/api.yaml"))
     try:
         raw = yaml.safe_load(actual.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
