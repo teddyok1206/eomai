@@ -76,6 +76,7 @@ markers = [
   "hwpx_reference_live: uses the fixed Hancom-created reference and immutable artifact storage",
   "privileged: requires an explicit isolated privileged test environment",
   "hwpx_privileged: validates HWPX ownership with real root-only filesystem operations",
+  "workflow_privileged: validates the real private-group worker filesystem handoff",
 ]
 
 [tool.ruff]

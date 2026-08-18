@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import grp
 import json
 import os
 import pwd
 import stat
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -63,12 +65,43 @@ class CodexWorkerAdapter:
         slot: WorkerSlot,
     ) -> tuple[Path, Path, Path]:
         Draft202012Validator.check_schema(output_schema)
-        workspace = self.settings.workspace_root / slot.linux_user / job_id
+        account = pwd.getpwnam(slot.linux_user)
+        private_group = grp.getgrnam(slot.linux_user)
+        if account.pw_gid != private_group.gr_gid:
+            raise PlatformError(
+                ErrorCode.WORKER_UNAVAILABLE,
+                "worker primary group does not match worker identity",
+            )
+        if private_group.gr_gid not in os.getgroups() and private_group.gr_gid != os.getgid():
+            raise PlatformError(
+                ErrorCode.WORKER_UNAVAILABLE,
+                "runner is not a member of the worker private group",
+            )
+        worker_root = self.settings.workspace_root / slot.linux_user
+        root_stat = worker_root.lstat()
+        root_mode = stat.S_IMODE(root_stat.st_mode)
+        if (
+            worker_root.is_symlink()
+            or not stat.S_ISDIR(root_stat.st_mode)
+            or root_stat.st_gid != private_group.gr_gid
+            or not root_mode & stat.S_ISGID
+            or root_mode & 0o007
+            or root_mode & 0o070 != 0o070
+        ):
+            raise PlatformError(
+                ErrorCode.WORKER_UNAVAILABLE,
+                "worker workspace root violates the private-group boundary",
+            )
+        if Path(job_id).name != job_id or job_id in {".", ".."}:
+            raise PlatformError(ErrorCode.WORKER_EXEC_FAILED, "invalid worker job identity")
+        workspace = worker_root / job_id
+        if workspace.parent != worker_root:
+            raise PlatformError(ErrorCode.WORKER_EXEC_FAILED, "worker workspace escaped root")
         if workspace.exists():
             raise PlatformError(ErrorCode.WORKER_EXEC_FAILED, "worker workspace already exists")
-        workspace.mkdir(mode=0o700, parents=False)
-        account = pwd.getpwnam(slot.linux_user)
-        os.chown(workspace, account.pw_uid, account.pw_gid)
+        workspace.mkdir(mode=0o2770, parents=False)
+        os.chown(workspace, -1, private_group.gr_gid)
+        workspace.chmod(0o2770)
 
         input_path = workspace / "worker-input.json"
         schema_path = workspace / "worker-result.schema.json"
@@ -83,8 +116,14 @@ class CodexWorkerAdapter:
         )
         prompt_path.write_text(prompt_text, encoding="utf-8")
         for path in (input_path, schema_path, prompt_path):
-            os.chown(path, account.pw_uid, account.pw_gid)
-            path.chmod(0o400)
+            file_stat = path.lstat()
+            if path.is_symlink() or not stat.S_ISREG(file_stat.st_mode):
+                raise PlatformError(
+                    ErrorCode.WORKER_EXEC_FAILED,
+                    "worker input is not a regular file",
+                )
+            os.chown(path, -1, private_group.gr_gid)
+            path.chmod(0o640)
         return workspace, schema_path, prompt_path
 
     def _argv(
@@ -120,10 +159,16 @@ class CodexWorkerAdapter:
             "--property=InaccessiblePaths=/srv/eom/staging",
             f"--property=ReadWritePaths={workspace}",
             f"--property=ReadWritePaths={home}",
-            "--property=UMask=0077",
+            "--property=UMask=0007",
             "--property=MemoryMax=6G",
             "--property=CPUQuota=200%",
             "--property=TasksMax=256",
+            sys.executable,
+            "-m",
+            "eom_orchestrator.worker_entry",
+            "--result",
+            str(workspace / "result.json"),
+            "--",
             str(self.settings.codex_binary),
             "exec",
             "--sandbox",
