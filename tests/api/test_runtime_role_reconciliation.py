@@ -106,3 +106,10 @@ def test_runtime_role_shell_syntax(relative: str) -> None:
         text=True,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_disposable_database_runs_workflow_preclaim_integration() -> None:
+    source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
+
+    assert "export EOM_RUN_INTEGRATION=1" in source
+    assert "tests/integration/test_workflow_engine.py" in source

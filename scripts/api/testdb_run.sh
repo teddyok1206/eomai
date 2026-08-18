@@ -82,9 +82,11 @@ runtime_environment="${state_directory}/runtime.env"
   fail "runtime environment metadata mismatch"
 export EOM_API_TEST_RUNTIME_ENV="${runtime_environment}"
 export EOM_RUN_API_INTEGRATION=1
+export EOM_RUN_INTEGRATION=1
 "${PYTHON}" -m pytest -q \
   tests/api/test_runtime_role_live.py \
   tests/api/test_identity_integration.py \
   tests/api/test_api_integration.py \
-  tests/api/test_api_concurrency.py
-printf 'Disposable Application API integration and concurrency tests passed.\n'
+  tests/api/test_api_concurrency.py \
+  tests/integration/test_workflow_engine.py
+printf 'Disposable Application API and workflow integration tests passed.\n'
