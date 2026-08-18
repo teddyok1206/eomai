@@ -169,9 +169,12 @@ class WorkflowRunner:
         engine: Engine,
         settings: WorkflowSettings | None = None,
         executor: RoleJobExecutor | None = None,
-        catalog: WorkflowCatalogPort | None = None,
+        *,
+        catalog: WorkflowCatalogPort,
         runner_id: str | None = None,
     ) -> None:
+        if catalog is None:
+            raise ValueError("workflow catalog adapter is required")
         self.engine = engine
         self.sessions = build_session_factory(engine)
         self.settings = settings or WorkflowSettings.from_environment()
@@ -474,11 +477,6 @@ class WorkflowRunner:
         try:
             prompt_text: str | None = None
             if full_request.content_pack is not None:
-                if self.catalog is None:
-                    raise WorkflowError(
-                        WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
-                        "catalog workflow adapter is unavailable",
-                    )
                 prepared = self.catalog.prepare_prompt(
                     workflow=workflow,
                     step=self._detached_step(step_run_id),
@@ -532,7 +530,7 @@ class WorkflowRunner:
                     content_hash=execution.content_hash,
                     result_schema=definition.result_schema,
                 )
-                if definition.worker_role == "item_management" and self.catalog is not None:
+                if definition.worker_role == "item_management":
                     registration = self.catalog.register_workflow(
                         workflow=workflow,
                         step=self._detached_step(step_run_id),

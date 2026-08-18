@@ -342,7 +342,13 @@ def _environment(
         )
         workflow_id = workflow.workflow_id
     fake = FakeRoleExecutor(sessions)
-    runner = WorkflowRunner(engine, WorkflowSettings(), fake, runner_id="test-runner")
+    runner = WorkflowRunner(
+        engine,
+        WorkflowSettings(),
+        fake,
+        catalog=FakeWorkflowCatalog(),
+        runner_id="test-runner",
+    )
     runner.sessions = sessions
     return runner, fake, sessions, workflow_id, (connection, outer)
 
@@ -501,7 +507,7 @@ def test_catalog_workflow_pins_prompts_and_registration_without_leaking_request(
             integration_engine,
             WorkflowSettings(),
             executor,
-            catalog,
+            catalog=catalog,
             runner_id="catalog-test-runner",
         )
         runner.sessions = sessions
@@ -1180,6 +1186,7 @@ def test_simultaneous_approve_and_rework_resolves_one_decision(
                 integration_engine,
                 WorkflowSettings(),
                 FakeRoleExecutor(sessions),
+                catalog=FakeWorkflowCatalog(),
                 runner_id=f"race-{command_type.value}",
             )
             with sessions() as session:
