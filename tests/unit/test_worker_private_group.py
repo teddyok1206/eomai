@@ -113,26 +113,23 @@ def test_workspace_rejects_symlink_and_non_setgid_root(
         adapter._prepare_workspace_document(**arguments)  # type: ignore[arg-type]
 
 
-def test_worker_command_uses_result_finalizer_and_group_umask(tmp_path: Path) -> None:
+def test_worker_command_starts_only_fixed_template_instance(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     adapter = CodexWorkerAdapter(settings)
-    workspace = tmp_path / "workspace"
     argv = adapter._argv(
-        workspace=workspace,
-        schema_path=workspace / "schema.json",
         slot=WorkerSlot(slot_id="01", linux_user="eom-cdx-01", role="authoring", enabled=True),
-        unit_name="eom-worker-test",
+        job_id="job_0123456789abcdef0123456789abcdef",
     )
 
-    assert "--property=UMask=0007" in argv
-    entry = argv.index("eom_orchestrator.worker_entry")
-    assert argv[entry - 2 : entry + 3] == [
-        sys.executable,
-        "-m",
-        "eom_orchestrator.worker_entry",
-        "--result",
-        str(workspace / "result.json"),
+    assert argv == [
+        "/usr/bin/systemctl",
+        "--no-ask-password",
+        "--wait",
+        "start",
+        "eom-worker-01@job_0123456789abcdef0123456789abcdef.service",
     ]
+    assert "systemd-run" not in argv
+    assert not any(value.startswith(("--uid", "--gid", "--property")) for value in argv)
 
 
 def test_worker_result_finalization_makes_result_group_readable(tmp_path: Path) -> None:

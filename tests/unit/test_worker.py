@@ -24,22 +24,16 @@ def test_worker_output_schema_constrains_all_input_identifiers() -> None:
     assert artifact["revision_id"]["const"] == worker_input.artifact.revision_id
 
 
-def test_worker_command_confines_orchestrator_owned_paths() -> None:
+def test_worker_command_has_no_caller_selected_identity_or_properties() -> None:
     settings = Settings()
     adapter = CodexWorkerAdapter(settings)
     argv = adapter._argv(
-        workspace=settings.workspace_root / "eom-cdx-01" / "job_test",
-        schema_path=settings.workspace_root / "schema.json",
         slot=WorkerSlot(slot_id="01", linux_user="eom-cdx-01", role="authoring", enabled=True),
-        unit_name="eom-worker-test",
+        job_id="job_0123456789abcdef0123456789abcdef",
     )
-    for path in (
-        "/mnt/nas",
-        "/var/run/docker.sock",
-        "/home/eom/EOM",
-        "/etc/eom",
-        "/srv/eom/staging",
-    ):
-        assert f"--property=InaccessiblePaths={path}" in argv
-    assert "--sandbox" in argv
-    assert "read-only" in argv
+    command = " ".join(argv)
+    assert "systemd-run" not in command
+    assert "--uid" not in command
+    assert "--gid" not in command
+    assert "--property" not in command
+    assert command.endswith("start eom-worker-01@job_0123456789abcdef0123456789abcdef.service")

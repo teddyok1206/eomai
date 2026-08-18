@@ -16,8 +16,9 @@ flowchart TD
   CATALOG --> STAGE[/srv/eom/staging/catalog/workflow-prompts]
   RUNNER --> ORCH[Orchestrator]
   ORCH --> WG[worker private-group workspace]
-  WG --> UNIT[systemd-run as eom-cdx-N]
-  UNIT --> RESULT[group-readable result]
+  WG --> UNIT[fixed systemd template for slot N]
+  UNIT --> EXEC[root-owned eom-worker-exec]
+  EXEC --> RESULT[group-readable result]
   RESULT --> ORCH
   ORCH -->|validated artifact pointer| RUNNER
 ```
@@ -58,13 +59,55 @@ Each worker has one workspace root:
 
 `eom` is an intentional supplementary member of each private worker group. It creates one job
 directory beneath the selected root, changes only the group to a group it already belongs to, and
-sets mode `2770`. Input files use `0640`. The setgid bit pins group inheritance. The transient
-worker uses `UMask=0007`, and a worker-side finalizer makes the validated result `0640` before the
-worker exits. Another worker is not a member of that group and cannot traverse the job directory.
+sets mode `2770`. Input files use `0640`. The setgid bit pins group inheritance. The fixed worker
+template uses `UMask=0007`, and a worker-side finalizer makes the validated result `0640` before
+the worker exits. Another worker is not a member of that group and cannot traverse the job
+directory.
 
-Cross-UID ownership transfer is prohibited. The normal path needs no root, `sudo`, `CAP_CHOWN`, or
-`CAP_FOWNER`. The only ownership call uses UID `-1` and changes a path to an existing supplementary
-group, constrained to the newly created job directory.
+Cross-UID ownership transfer is prohibited. The normal path needs no per-job root, `sudo`,
+`CAP_CHOWN`, or `CAP_FOWNER`. The only ownership call uses UID `-1` and changes a path to an
+existing supplementary group, constrained to the newly created job directory. Root participates
+only when an operator installs the reviewed unit, helper, and polkit sources.
+
+## Fixed systemd launch contract
+
+The five root-owned templates are `eom-worker-01@.service` through
+`eom-worker-05@.service`. The instance is a canonical `job_[0-9a-f]{32}` ID. The runner can request
+only `systemctl --no-ask-password --wait start <fixed-instance>`; it cannot choose a user, group,
+command, environment, capability, path, or systemd property. The installed
+`/usr/local/libexec/eom-worker-exec` is also root-owned and runs with root-owned
+`/usr/bin/python3 -I`; it imports no EOM package from an `eom`-writable environment. It
+independently validates the
+slot, job ID, effective identity, workspace containment, file types/modes/groups, worker HOME, and
+root-owned Codex executable before invoking the fixed Codex CLI.
+
+| Previous transient property | Fixed-template equivalent | State and reason |
+| --- | --- | --- |
+| generated `eom-worker-<job>` unit | `eom-worker-<slot>@<job>.service` | changed; slot and canonical job identity are explicit |
+| `--uid` / `--gid` | `User=` / `Group=` in each root-owned template | retained and no longer caller-selectable |
+| `--working-directory` | fixed slot root plus validated `%i` | retained with independent containment check |
+| `HOME`, `CODEX_HOME`, `PATH` | fixed `Environment=` plus helper allowlist | strengthened; caller environment is ignored |
+| `NoNewPrivileges=yes` | `NoNewPrivileges=true` | retained |
+| `ProtectSystem=strict` | `ProtectSystem=strict` | retained |
+| `ProtectHome=read-only` | `ProtectHome=read-only` | retained |
+| `PrivateTmp=yes` | `PrivateTmp=true` | retained |
+| NAS, Docker, Git, `/etc/eom`, staging denial | fixed `InaccessiblePaths=` | retained; EOMIS and other worker paths are also denied |
+| workspace and worker HOME writes | fixed slot-specific `ReadWritePaths=` | retained; no arbitrary path argument |
+| `UMask=0007` | `UMask=0007` | retained |
+| `MemoryMax=6G` | `MemoryMax=6G` | retained |
+| `CPUQuota=200%` | `CPUQuota=200%` | retained |
+| `TasksMax=256` | `TasksMax=256` | retained |
+| client timeout and `systemctl stop` | server `TimeoutStartSec=600`, client guard at 630s | changed; no `stop` authorization is required |
+| `--pipe` capture | bounded workspace stdout/stderr files | changed; correctness depends only on result/status protocols |
+| `--collect` | oneshot process ends; status remains queryable | changed; no process lingers and exit metadata remains available |
+| implicit capability/address policy | empty capabilities, kernel/control-group/SUID/personality/realtime/device/host/clock guards, fixed address families | strengthened without blocking Codex network access |
+
+The installed systemd 255/polkit 124 mechanism exposes `unit` and `verb` for `StartUnit()`. The
+root-owned rule grants `eom` only `verb=start` for fully anchored worker and harmless probe
+instances, explicitly denying its other `manage-units` requests. It grants no transient-unit,
+restart, stop, unit-file, daemon-reload, or arbitrary service permission. If the installed server
+cannot demonstrate these action details, deployment stops and requires a separately reviewed
+narrow broker; a broad rule is never a fallback.
 
 ## Pre-Claim Readiness
 
@@ -96,10 +139,13 @@ sequenceDiagram
 Readiness verifies the mandatory Catalog adapter, both fixed Catalog staging directories and their
 separate bounded create/delete probes, workflow schemas and definition, worker registry, Linux
 user/private group, the current process group snapshot, worker workspace metadata and probe, worker
-HOME metadata, Codex, `systemd-run`, and the runner Python executable. It never invokes Codex,
-reads worker auth, uses `sudo`, or writes a workflow record. A missing, linked, incorrectly owned,
-incorrectly permissioned, or unwritable prompt root returns `CATALOG_PROMPT_STAGING_INVALID` before
-the command claim.
+HOME metadata, Codex, `systemctl`, exact root-owned helper/template hashes, and the runner Python
+executable. It then starts one fixed `/usr/bin/true` authorization probe per enabled slot and
+requires successful exit with no lingering process. It never invokes Codex, reads worker auth,
+uses `sudo`, accesses NAS, or writes a workflow record. A missing, linked, stale, incorrectly
+owned, incorrectly permissioned, or unauthorized worker template returns
+`WORKER_SYSTEMD_TEMPLATE_INVALID` or `WORKER_SYSTEMD_AUTHORIZATION_DENIED` before the command
+claim.
 
 A session whose configured account groups contain a required private group but whose process group
 snapshot does not returns `WORKER_GROUP_MEMBERSHIP_STALE`. The operator must start a new login or
@@ -114,12 +160,13 @@ without consuming work.
 | Group membership | integer `set` | O(1) membership, process snapshot |
 | Pending inspection | indexed command query | O(log n) index lookup, no lock |
 | Command claim | ordered PostgreSQL queue | row lock with skip-locked |
-| Probe cleanup | unique job-local directory | bounded O(1) files |
+| Probe cleanup | unique job-local directory and fixed systemd probe instance | bounded O(1) files/oneshot units |
 | Artifact handoff | typed immutable pointer | no binary database copy |
 
-Readiness is deliberately not cached across commands because group membership and filesystem
-permissions are operational state. Five configured workers make the bounded account and path checks
-small. A long-lived cache would weaken correctness without measurable benefit.
+Readiness is deliberately not cached across commands because group membership, filesystem
+permissions, installed unit hashes, and authorization policy are operational state. Five
+configured workers make the bounded account, path, and `/usr/bin/true` checks small. A long-lived
+cache would weaken correctness without measurable benefit.
 
 ## Failure And Idempotency
 
@@ -129,7 +176,8 @@ authoritative concurrency controls. A worker or validated domain execution failu
 the existing terminal behavior. FAILED workflows remain immutable audit evidence; this boundary
 does not add retry or resurrection states.
 
-The simpler alternative of running the runner as root or granting `CAP_CHOWN` was rejected because
-it expands every job's authority. A privileged handoff daemon was also unnecessary: the existing
-one-private-group-per-worker model provides the required bidirectional file access with ordinary
-Unix permissions.
+The alternatives of running the runner as root, granting `CAP_CHOWN`, granting broad
+`org.freedesktop.systemd1.manage-units`, or permitting arbitrary transient units are rejected
+because they expand every job's authority. A narrow root-owned broker remains the fail-closed
+fallback only when an installed systemd/polkit version cannot safely filter `StartUnit()` by both
+unit and verb.

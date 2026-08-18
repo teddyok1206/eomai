@@ -1,4 +1,4 @@
-"""One-shot Codex worker adapter using a confined transient systemd unit."""
+"""One-shot Codex worker adapter using fixed systemd template units."""
 
 from __future__ import annotations
 
@@ -7,8 +7,6 @@ import json
 import os
 import pwd
 import stat
-import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,6 +18,12 @@ from jsonschema import Draft202012Validator
 from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerSlot
+from eom_orchestrator.worker_systemd import (
+    launch_worker_unit,
+    systemctl_start_argv,
+    validate_job_id,
+    worker_unit_name,
+)
 
 MAX_RESULT_BYTES = 1024 * 1024
 
@@ -92,8 +96,12 @@ class CodexWorkerAdapter:
                 ErrorCode.WORKER_UNAVAILABLE,
                 "worker workspace root violates the private-group boundary",
             )
-        if Path(job_id).name != job_id or job_id in {".", ".."}:
-            raise PlatformError(ErrorCode.WORKER_EXEC_FAILED, "invalid worker job identity")
+        try:
+            validate_job_id(job_id)
+        except ValueError as exc:
+            raise PlatformError(
+                ErrorCode.WORKER_EXEC_FAILED, "invalid worker job identity"
+            ) from exc
         workspace = worker_root / job_id
         if workspace.parent != worker_root:
             raise PlatformError(ErrorCode.WORKER_EXEC_FAILED, "worker workspace escaped root")
@@ -129,63 +137,10 @@ class CodexWorkerAdapter:
     def _argv(
         self,
         *,
-        workspace: Path,
-        schema_path: Path,
         slot: WorkerSlot,
-        unit_name: str,
+        job_id: str,
     ) -> list[str]:
-        home = self.settings.worker_home_root / slot.linux_user
-        return [
-            "/usr/bin/systemd-run",
-            "--quiet",
-            "--wait",
-            "--pipe",
-            "--collect",
-            "--service-type=exec",
-            f"--unit={unit_name}",
-            f"--uid={slot.linux_user}",
-            f"--gid={slot.linux_user}",
-            f"--working-directory={workspace}",
-            f"--setenv=HOME={home}",
-            f"--setenv=CODEX_HOME={home / '.codex'}",
-            "--property=NoNewPrivileges=yes",
-            "--property=ProtectSystem=strict",
-            "--property=ProtectHome=read-only",
-            "--property=PrivateTmp=yes",
-            "--property=InaccessiblePaths=/mnt/nas",
-            "--property=InaccessiblePaths=/var/run/docker.sock",
-            "--property=InaccessiblePaths=/home/eom/EOM",
-            "--property=InaccessiblePaths=/etc/eom",
-            "--property=InaccessiblePaths=/srv/eom/staging",
-            f"--property=ReadWritePaths={workspace}",
-            f"--property=ReadWritePaths={home}",
-            "--property=UMask=0007",
-            "--property=MemoryMax=6G",
-            "--property=CPUQuota=200%",
-            "--property=TasksMax=256",
-            sys.executable,
-            "-m",
-            "eom_orchestrator.worker_entry",
-            "--result",
-            str(workspace / "result.json"),
-            "--",
-            str(self.settings.codex_binary),
-            "exec",
-            "--sandbox",
-            "read-only",
-            "--ephemeral",
-            "--ignore-user-config",
-            "--skip-git-repo-check",
-            "--color",
-            "never",
-            "--cd",
-            str(workspace),
-            "--output-schema",
-            str(schema_path),
-            "--output-last-message",
-            str(workspace / "result.json"),
-            "-",
-        ]
+        return list(systemctl_start_argv(worker_unit_name(slot, job_id)))
 
     def run(self, worker_input: WorkerInput, slot: WorkerSlot, staging: Path) -> WorkerRun:
         workspace, schema_path, prompt_path = self._prepare_workspace(worker_input, slot)
@@ -234,48 +189,46 @@ class CodexWorkerAdapter:
         slot: WorkerSlot,
         staging: Path,
     ) -> WorkerRun:
-        unit_name = f"eom-worker-{job_id.replace('_', '-')}"
-        argv = self._argv(
-            workspace=workspace,
-            schema_path=schema_path,
-            slot=slot,
-            unit_name=unit_name,
-        )
+        del schema_path, prompt_path
+        unit_name = worker_unit_name(slot, job_id)
         stdout_path = staging / "worker.stdout.log"
         stderr_path = staging / "worker.stderr.log"
         try:
-            with prompt_path.open("rb") as prompt:
-                completed = subprocess.run(
-                    argv,
-                    stdin=prompt,
-                    capture_output=True,
-                    timeout=self.settings.worker_timeout_seconds,
-                    check=False,
-                    env={"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"},
-                )
-        except subprocess.TimeoutExpired as exc:
-            subprocess.run(
-                ["/usr/bin/systemctl", "stop", f"{unit_name}.service"],
-                capture_output=True,
-                check=False,
-                timeout=30,
+            completed = launch_worker_unit(
+                slot,
+                job_id,
+                timeout_seconds=self.settings.worker_timeout_seconds,
             )
-            self._write_capture(stdout_path, exc.stdout)
-            self._write_capture(stderr_path, exc.stderr)
-            raise PlatformError(ErrorCode.WORKER_TIMEOUT, "worker execution timed out") from exc
         except OSError as exc:
-            raise PlatformError(ErrorCode.WORKER_EXEC_FAILED, "failed to start worker") from exc
+            raise PlatformError(ErrorCode.WORKER_UNAVAILABLE, "failed to start worker") from exc
 
-        self._write_capture(stdout_path, completed.stdout)
-        self._write_capture(stderr_path, completed.stderr)
+        self._collect_capture(
+            workspace / "worker.stdout.log", stdout_path, completed.command_stdout
+        )
+        self._collect_capture(
+            workspace / "worker.stderr.log", stderr_path, completed.command_stderr
+        )
         run = WorkerRun(
-            exit_code=completed.returncode,
+            exit_code=completed.exit_code,
             result_path=workspace / "result.json",
             stdout_path=stdout_path,
             stderr_path=stderr_path,
             unit_name=unit_name,
         )
         return run
+
+    @classmethod
+    def _collect_capture(cls, source: Path, destination: Path, fallback: bytes) -> None:
+        try:
+            metadata = source.lstat()
+        except FileNotFoundError:
+            cls._write_capture(destination, fallback)
+            return
+        if source.is_symlink() or not stat.S_ISREG(metadata.st_mode):
+            raise PlatformError(ErrorCode.WORKER_EXEC_FAILED, "worker log is not a regular file")
+        if metadata.st_size > MAX_RESULT_BYTES:
+            raise PlatformError(ErrorCode.WORKER_EXEC_FAILED, "worker log exceeds size limit")
+        cls._write_capture(destination, source.read_bytes())
 
     @staticmethod
     def _write_capture(path: Path, value: bytes | str | None) -> None:
