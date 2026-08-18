@@ -35,3 +35,7 @@ emit request/response bodies while testing authentication or Operator creation.
 Run smoke tests only after the privileged metadata verifier has passed. The verifier runs from the
 root-owned installed copy; acceptance commands remain unprivileged and never require access to
 `/etc/eom/secrets`.
+
+PostgreSQL integration and concurrency tests are not an installed-service smoke test. Run them only
+through the disposable lifecycle in `API_INTEGRATION_TEST_DATABASE.md`. Its database owner performs
+fixture cleanup, while a separately reconciled runtime credential proves DML and DDL denial.

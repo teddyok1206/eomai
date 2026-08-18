@@ -20,7 +20,9 @@ outcome, status, duration, and stable error code; correlate with `X-Request-ID`.
 `NOT_READY` usually means configuration validation, database connectivity, migration revision, or
 built-in RBAC seed failed. Apply migrations using the migration owner, not `eom_api_runtime`. The
 expected revision for V0 is `20260817_0006`. Re-run the runtime-role bootstrap only after confirming
-the service user exists; repeat execution retains the existing HMAC keys.
+the service user exists; repeat execution retains the runtime password and HMAC keys while removing
+privilege drift. A missing-table grant after migration is a fail-closed signal to review the access
+plan and rerun bootstrap, not a reason to grant all tables or default privileges.
 
 For `AUTH_INVALID_CREDENTIALS`, do not try to distinguish unknown, disabled, locked, or incorrect
 password from the response. Check sanitized audit state as an Administrator. Account lock expires
@@ -46,3 +48,7 @@ sudo -n /usr/local/libexec/eom-api/verify-deployment-metadata
 The verifier must report only the failing path or invariant. Do not relax
 `/etc/eom/secrets` from `root:eom:0750`, add `eom-api` to `eom`, or copy secrets into the state
 directory to make the runtime doctor pass.
+
+Never run API integration or concurrency tests against the deployed database. Use
+`API_INTEGRATION_TEST_DATABASE.md`; the harness refuses production names and cleanup requires the
+database owner plus database and role marker comments to match its manifest.

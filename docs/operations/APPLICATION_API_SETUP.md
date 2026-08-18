@@ -42,12 +42,18 @@ The first command creates locked `eom-api:eom-api` with `nologin`, no supplement
 `/var/lib/eom-api`, and a root-owned service-specific `/etc/eom-api` directory. It verifies, but
 never changes, the existing `/etc/eom/secrets` `root:eom:0750` boundary. It does not add the service
 to the `eom` group. The second command creates or reconciles
-`eom_api_runtime`, verifies that CREATE and ALTER fail, and atomically writes
+`eom_api_runtime`, verifies the prohibited operations, and atomically writes
 `/etc/eom/secrets/api.env` as `root:eom-api` 0640. Existing token and fingerprint keys are retained
-on repeat execution. It also revokes the PostgreSQL database's default PUBLIC temporary-table
-privilege; the existing database owner retains its explicit privilege while the API role cannot
-create persistent or temporary tables. The script never prints a password, HMAC key, or database
-URL.
+on repeat execution. It removes role memberships and all prior database, schema, table, sequence,
+and function grants before applying reviewed table DML and only sequences owned by INSERT tables.
+It also revokes the database's PUBLIC temporary-table privilege; the database owner retains its
+implicit owner privilege. A rollback-only INSERT must succeed, while CREATE, ALTER, DROP, TRUNCATE,
+extension and role management, and migration metadata mutation must fail. The script never prints a
+password, HMAC key, or database URL.
+
+No default privileges are granted. After every migration, rerun this bootstrap so a new table is
+denied until its exact access pattern is reviewed and added. `DELETE` is not granted because current
+application services use append/revoke state rather than physical deletion.
 
 Install the reviewed configuration:
 

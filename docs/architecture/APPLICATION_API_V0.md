@@ -85,9 +85,12 @@ services own domain orchestration and persistence. Domain and contract packages 
 FastAPI, filesystem, subprocess, or infrastructure modules. CLI and HTTP construct typed commands
 and call the same application service.
 
-The API runtime role receives only table `SELECT`/`INSERT`/`UPDATE`, required sequence `USAGE`, and
-explicit function `EXECUTE`. It cannot create schema objects, migrate, truncate, manage roles, or
-inherit the migration owner. The service binds only `127.0.0.1:8765`; direct LAN/public HTTP is not
+The API runtime role receives only reviewed table `SELECT`/`INSERT`/`UPDATE` and `USAGE` on identity
+sequences owned by INSERT tables. V0 requires no direct application function execution or DELETE.
+Reconciliation removes memberships and every prior grant before reapplying this plan. It cannot
+create schema objects, migrate, truncate, manage roles, or inherit the migration owner. New
+migrations remain inaccessible until bootstrap is reviewed and rerun; broad default privileges are
+intentionally absent. The service binds only `127.0.0.1:8765`; direct LAN/public HTTP is not
 supported. TLS is required before any non-loopback exposure.
 
 ## Failure and simpler alternatives
