@@ -44,6 +44,9 @@ def _runtime(
     catalog = tmp_path / "catalog"
     catalog.mkdir(mode=0o750)
     catalog.chmod(0o750)
+    prompt_staging = catalog / "workflow-prompts"
+    prompt_staging.mkdir(mode=0o750)
+    prompt_staging.chmod(0o750)
     workspaces = tmp_path / "workspaces"
     homes = tmp_path / "homes"
     workspaces.mkdir()
@@ -100,6 +103,7 @@ def test_execution_readiness_passes_and_cleans_probes(
 
     assert report.ready
     assert not list(catalog.glob(".eom-readiness-*"))
+    assert not list((catalog / "workflow-prompts").glob(".eom-readiness-*"))
     assert not list(workspaces.glob("*/.eom-readiness-*"))
 
 
@@ -119,6 +123,35 @@ def test_execution_readiness_detects_unwritable_catalog_staging(
     catalog.chmod(0o550)
 
     assert "CATALOG_STAGING_INVALID" in _codes(readiness)
+
+
+def test_execution_readiness_detects_unwritable_prompt_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, catalog, _ = _runtime(tmp_path, monkeypatch)
+    (catalog / "workflow-prompts").chmod(0o550)
+
+    assert "CATALOG_PROMPT_STAGING_INVALID" in _codes(readiness)
+
+
+def test_execution_readiness_detects_missing_prompt_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, catalog, _ = _runtime(tmp_path, monkeypatch)
+    (catalog / "workflow-prompts").rmdir()
+
+    assert "CATALOG_PROMPT_STAGING_INVALID" in _codes(readiness)
+
+
+def test_execution_readiness_rejects_prompt_staging_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, catalog, _ = _runtime(tmp_path, monkeypatch)
+    prompt_staging = catalog / "workflow-prompts"
+    prompt_staging.rmdir()
+    prompt_staging.symlink_to(tmp_path)
+
+    assert "CATALOG_PROMPT_STAGING_INVALID" in _codes(readiness)
 
 
 def test_execution_readiness_detects_stale_supplementary_groups(

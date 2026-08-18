@@ -8,6 +8,7 @@ only sanitized check names, codes, and metadata summaries.
 | `CATALOG_ADAPTER_MISSING` | production graph is incomplete | redeploy the complete release |
 | `CATALOG_STAGING_INVALID` | owner, group, mode, or access differs | run reviewed runtime path bootstrap |
 | `CATALOG_STAGING_UNWRITABLE` | bounded probe failed | inspect parent mount and permissions |
+| `CATALOG_PROMPT_STAGING_INVALID` | `workflow-prompts` is missing, linked, incorrectly owned/mode, or unwritable | run the exact runtime path bootstrap; do not recursively normalize Catalog staging |
 | `WORKER_ACCOUNT_UNAVAILABLE` | configured Linux identity is absent | repair worker bootstrap |
 | `WORKER_PRIVATE_GROUP_INVALID` | primary private group is inconsistent | repair the exact worker account |
 | `WORKER_GROUP_MEMBERSHIP_MISSING` | `eom` is not configured in the group | repair account membership, then relogin |

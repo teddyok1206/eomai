@@ -89,9 +89,9 @@ class UnreadyWorkflowRuntime:
         return RuntimeReadinessReport(
             (
                 RuntimeReadinessCheck(
-                    name="catalog_staging",
+                    name="catalog_prompt_staging",
                     status=ReadinessStatus.FAIL,
-                    code="CATALOG_STAGING_UNWRITABLE",
+                    code="CATALOG_PROMPT_STAGING_INVALID",
                     detail="permission denied",
                 ),
             )
@@ -464,7 +464,7 @@ def test_runtime_preflight_failure_does_not_claim_or_fail_workflow(
     try:
         with pytest.raises(WorkflowRuntimeNotReady) as captured:
             runner.run_once(workflow_id)
-        assert captured.value.report.failed_codes == ("CATALOG_STAGING_UNWRITABLE",)
+        assert captured.value.report.failed_codes == ("CATALOG_PROMPT_STAGING_INVALID",)
 
         with sessions() as session:
             command = session.scalar(

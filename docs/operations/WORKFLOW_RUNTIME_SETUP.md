@@ -17,14 +17,16 @@ the runner, or `systemd-run`.
 ## Privileged Path Reconciliation
 
 Review `scripts/workflow/bootstrap_runtime_paths.sh` before use. It requires UID 0, calls no
-`sudo`, rejects symlinks and non-directories, and reconciles only the fixed Catalog staging and five
-worker workspace roots. Codex does not execute this phase. The operator runs the reviewed command
-in an interactive privileged shell as described by the generated V3 acceptance runbook.
+`sudo`, rejects symlinks and non-directories, and reconciles only the two fixed Catalog staging
+directories and five worker workspace roots. Codex does not execute this phase. The operator runs
+the reviewed command in an interactive privileged shell as described by the generated acceptance
+runbook.
 
 Expected state:
 
 ```text
 /srv/eom/staging/catalog             eom:eom                 0750
+/srv/eom/staging/catalog/workflow-prompts  eom:eom             0750
 /srv/eom/workspaces/eom-cdx-01       eom-cdx-01:eom-cdx-01   2770
 /srv/eom/workspaces/eom-cdx-02       eom-cdx-02:eom-cdx-02   2770
 /srv/eom/workspaces/eom-cdx-03       eom-cdx-03:eom-cdx-03   2770
@@ -33,6 +35,8 @@ Expected state:
 ```
 
 The script does not recurse through `/srv/eom`, touch worker auth, NAS, or Git, and is idempotent.
+`workflow-prompts` is an exact managed path, not a runtime-created convenience directory. The
+runtime creates only `<workflow_id>/<step_key>-<attempt>` beneath it.
 
 ## Unprivileged Verification
 
@@ -44,9 +48,10 @@ scripts/workflow/verify_runtime_paths.sh
 /srv/eom/conda/envs/eom-core/bin/eom-workflow-runner doctor
 ```
 
-Both commands must pass before creating an acceptance workflow or running `run-once`. Doctor uses a
-unique create/delete probe but never invokes Codex. The privileged filesystem integration is
-separate and opt-in; its exact command is kept in the V3 runbook.
+Both commands must pass before creating an acceptance workflow or running `run-once`. Doctor uses
+separate unique create/delete probes in the Catalog parent, prompt staging root, and worker roots,
+but never invokes Codex. The privileged filesystem integration is separate and opt-in; its exact
+command is kept in the generated acceptance runbook.
 
 ## Execution
 

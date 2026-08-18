@@ -8,10 +8,14 @@ set -euo pipefail
 
 WORKERS=(eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05)
 CATALOG_STAGING=/srv/eom/staging/catalog
+CATALOG_PROMPT_STAGING=/srv/eom/staging/catalog/workflow-prompts
 
 [[ ! -L "${CATALOG_STAGING}" && -d "${CATALOG_STAGING}" ]]
 [[ "$(stat -c '%U:%G:%a' "${CATALOG_STAGING}")" == eom:eom:750 ]]
 [[ -w "${CATALOG_STAGING}" && -x "${CATALOG_STAGING}" ]]
+[[ ! -L "${CATALOG_PROMPT_STAGING}" && -d "${CATALOG_PROMPT_STAGING}" ]]
+[[ "$(stat -c '%U:%G:%a' "${CATALOG_PROMPT_STAGING}")" == eom:eom:750 ]]
+[[ -w "${CATALOG_PROMPT_STAGING}" && -x "${CATALOG_PROMPT_STAGING}" ]]
 
 for worker in "${WORKERS[@]}"; do
   path="/srv/eom/workspaces/${worker}"

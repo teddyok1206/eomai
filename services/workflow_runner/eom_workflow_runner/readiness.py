@@ -100,6 +100,7 @@ class WorkflowRuntimeReadiness:
             )
         )
         checks.append(self._catalog_staging())
+        checks.append(self._catalog_prompt_staging())
 
         registry: WorkerRegistry | None = None
         try:
@@ -191,6 +192,31 @@ class WorkflowRuntimeReadiness:
             return _success("catalog_staging", "writable probe passed")
         except (KeyError, OSError) as exc:
             return _failure("catalog_staging", "CATALOG_STAGING_UNWRITABLE", type(exc).__name__)
+
+    def _catalog_prompt_staging(self) -> RuntimeReadinessCheck:
+        path = self.catalog_settings.prompt_staging_root
+        try:
+            runner = pwd.getpwnam(self.runner_user)
+            valid = _directory_matches(
+                path,
+                owner_id=runner.pw_uid,
+                group_id=runner.pw_gid,
+                mode=0o750,
+            )
+            if not valid:
+                return _failure(
+                    "catalog_prompt_staging",
+                    "CATALOG_PROMPT_STAGING_INVALID",
+                    "ownership, mode, type, or access does not match eom:0750",
+                )
+            _probe_directory(path, group_id=None, file_mode=0o600)
+            return _success("catalog_prompt_staging", "writable probe passed")
+        except (KeyError, OSError) as exc:
+            return _failure(
+                "catalog_prompt_staging",
+                "CATALOG_PROMPT_STAGING_INVALID",
+                type(exc).__name__,
+            )
 
     def _worker(self, slot: WorkerSlot) -> list[RuntimeReadinessCheck]:
         prefix = f"worker_{slot.slot_id}"

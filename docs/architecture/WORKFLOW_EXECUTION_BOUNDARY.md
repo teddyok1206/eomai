@@ -13,7 +13,7 @@ flowchart TD
   DB -->|read-only pending inspection| READY[Execution readiness]
   READY -->|ready, then claim| RUNNER[eom workflow runner]
   RUNNER --> CATALOG[Catalog application adapter]
-  CATALOG --> STAGE[/srv/eom/staging/catalog]
+  CATALOG --> STAGE[/srv/eom/staging/catalog/workflow-prompts]
   RUNNER --> ORCH[Orchestrator]
   ORCH --> WG[worker private-group workspace]
   WG --> UNIT[systemd-run as eom-cdx-N]
@@ -29,8 +29,26 @@ explicit and test-scoped.
 ## Canonical Paths And Ownership
 
 Catalog prompt artifacts are temporary materializations. PostgreSQL metadata, immutable artifact
-revisions, and their hashes remain canonical. `/srv/eom/staging/catalog` is owned by `eom:eom` with
-mode `0750`; the API service does not write it.
+revisions, and their hashes remain canonical. Both `/srv/eom/staging/catalog` and its fixed
+`workflow-prompts` child are owned by `eom:eom` with mode `0750`; the API service does not write
+either path.
+
+The privileged bootstrap is the canonical owner of the fixed `workflow-prompts` directory. Runtime
+code requires that directory to exist and never creates or normalizes it. The runner creates only
+these bounded dynamic directories beneath it:
+
+```text
+/srv/eom/staging/catalog/workflow-prompts/
+  <workflow_id>/
+    <step_key>-<attempt>/
+      prompt.txt
+      prompt-envelope.json
+```
+
+There are no other fixed directories below `workflow-prompts`. Catalog `content-packs`, `registry`,
+and intake staging paths belong to separate use cases and are not part of workflow execution
+readiness. Runtime-created workflow and attempt directories are constrained to the managed root,
+must be real `eom:eom:0750` directories, and are never created with a recursive parent operation.
 
 Each worker has one workspace root:
 
@@ -75,11 +93,13 @@ sequenceDiagram
   end
 ```
 
-Readiness verifies the mandatory Catalog adapter, Catalog staging metadata and a bounded
-create/delete probe, workflow schemas and definition, worker registry, Linux user/private group,
-the current process group snapshot, worker workspace metadata and probe, worker HOME metadata,
-Codex, `systemd-run`, and the runner Python executable. It never invokes Codex, reads worker auth,
-uses `sudo`, or writes a workflow record.
+Readiness verifies the mandatory Catalog adapter, both fixed Catalog staging directories and their
+separate bounded create/delete probes, workflow schemas and definition, worker registry, Linux
+user/private group, the current process group snapshot, worker workspace metadata and probe, worker
+HOME metadata, Codex, `systemd-run`, and the runner Python executable. It never invokes Codex,
+reads worker auth, uses `sudo`, or writes a workflow record. A missing, linked, incorrectly owned,
+incorrectly permissioned, or unwritable prompt root returns `CATALOG_PROMPT_STAGING_INVALID` before
+the command claim.
 
 A session whose configured account groups contain a required private group but whose process group
 snapshot does not returns `WORKER_GROUP_MEMBERSHIP_STALE`. The operator must start a new login or

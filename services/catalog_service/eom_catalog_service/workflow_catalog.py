@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import stat
+from pathlib import Path
 from typing import Any, Literal, cast
 
 from eom_catalog_contracts import validate_contract
@@ -40,6 +43,51 @@ COMPONENT_TYPES = {
     "registration": "METADATA",
 }
 ComponentType = Literal["UPPER_STEM", "IMAGE_SPEC", "REVIEW_REPORT", "METADATA"]
+
+
+def _prepare_prompt_staging(
+    prompt_root: Path,
+    workflow_id: str,
+    step_key: str,
+    attempt: int,
+) -> Path:
+    """Create job-local prompt staging beneath the operator-managed root."""
+    _require_runtime_directory(prompt_root, "prompt staging root is not prepared")
+    workflow_root = _create_runtime_directory(prompt_root, workflow_id)
+    return _create_runtime_directory(workflow_root, f"{step_key}-{attempt}")
+
+
+def _create_runtime_directory(parent: Path, name: str) -> Path:
+    if not name or Path(name).name != name or name in {".", ".."}:
+        raise OSError("prompt staging path component is invalid")
+    path = parent / name
+    created = False
+    try:
+        path.mkdir(mode=0o750, parents=False)
+        created = True
+    except FileExistsError:
+        pass
+    if created:
+        path.chmod(0o750)
+    _require_runtime_directory(path, "prompt staging directory is unsafe")
+    return path
+
+
+def _require_runtime_directory(path: Path, message: str) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise OSError(message) from exc
+    valid = (
+        not path.is_symlink()
+        and stat.S_ISDIR(metadata.st_mode)
+        and metadata.st_uid == os.geteuid()
+        and metadata.st_gid == os.getegid()
+        and stat.S_IMODE(metadata.st_mode) == 0o750
+        and os.access(path, os.W_OK | os.X_OK)
+    )
+    if not valid:
+        raise OSError(message)
 
 
 class WorkflowCatalogService:
@@ -188,13 +236,12 @@ class WorkflowCatalogService:
             "source_intake_batch_ids": workflow.runtime_context["source_intake"]["batch_ids"],
         }
         validate_contract("prompt-envelope", envelope)
-        staging = (
-            self.settings.staging_root
-            / "workflow-prompts"
-            / workflow.workflow_id
-            / f"{step.step_key}-{step.attempt}"
+        staging = _prepare_prompt_staging(
+            self.settings.prompt_staging_root,
+            workflow.workflow_id,
+            step.step_key,
+            step.attempt,
         )
-        staging.mkdir(parents=True, mode=0o750, exist_ok=True)
         prompt_path = staging / "prompt.txt"
         envelope_path = staging / "prompt-envelope.json"
         prompt_path.write_text(rendered.text, encoding="utf-8")

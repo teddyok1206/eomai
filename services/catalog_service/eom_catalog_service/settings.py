@@ -14,6 +14,10 @@ class CatalogSettings:
     intake_root: Path = Path("/mnt/nas/eom/content-intake")
     placeholder_pack_source: Path = Path("/home/eom/EOM/content/packs/generic-placeholder/0.1.0")
 
+    @property
+    def prompt_staging_root(self) -> Path:
+        return self.staging_root / "workflow-prompts"
+
     @classmethod
     def from_environment(cls) -> CatalogSettings:
         return cls(
