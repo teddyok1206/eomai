@@ -77,3 +77,24 @@ Continue with `HWPX_MANUAL_HANCOM_VALIDATION.md`. Before this gate, the expected
 The transient unit runs as `eom-hwpx` with `PrivateNetwork`, no privileges, a strict filesystem,
 and explicit denial of NAS, the Git checkout, Docker, Codex, worker homes, and EOM secrets. Only the
 assigned build workspace is writable.
+
+## Ownership Regression Classification
+
+The default unit suite mocks `pwd.getpwnam` and `os.chown` and verifies the exact workspace,
+directory, and file ownership requests while still exercising regular-file, symlink, and path
+escape rejection. It runs as an unprivileged developer.
+
+The real ownership operation is isolated in `tests/hwpx/test_privileged_ownership.py` with both
+`privileged` and `hwpx_privileged` markers. It skips by default with a precise reason. Run it only
+as an explicit root integration check in an isolated pytest temporary directory:
+
+```bash
+EOM_RUN_HWPX_PRIVILEGED=1 \
+  /srv/eom/conda/envs/eom-hwpx/bin/python -m pytest -q \
+  -p no:cacheprovider \
+  tests/hwpx/test_privileged_ownership.py
+```
+
+The test owns only its temporary workspace and relies on pytest cleanup. This classification is
+`PRIVILEGED_INTEGRATION_ONLY`; it does not skip renderer, parser, archive, semantic, or artifact
+tests and does not change HWPX production behavior.

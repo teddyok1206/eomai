@@ -72,11 +72,15 @@ Workers still receive only the small workflow role request and upstream artifact
 
 ## Operating Commands
 
-Use root or an approved operations account for Docker administration:
+Use an approved operations account for Docker administration. The normal doctor never invokes
+sudo; restricted Docker visibility is a warning when application PostgreSQL connectivity passes.
+Run its explicit `--privileged` mode as root only when container and worker impersonation detail is
+required:
 
 ```bash
 docker compose --env-file /etc/eom/secrets/postgres.env -f /home/eom/EOM/infra/compose/compose.yml ps
 /home/eom/EOM/scripts/infra/doctor.sh
+/home/eom/EOM/scripts/infra/doctor.sh --privileged
 /home/eom/EOM/scripts/infra/check_worker_isolation.sh
 ```
 

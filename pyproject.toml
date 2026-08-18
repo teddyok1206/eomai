@@ -70,6 +70,8 @@ markers = [
   "api_integration: requires the isolated PostgreSQL identity schema and is opt-in",
   "api_service_live: validates the installed Application API service",
   "hwpx_reference_live: uses the fixed Hancom-created reference and immutable artifact storage",
+  "privileged: requires an explicit isolated privileged test environment",
+  "hwpx_privileged: validates HWPX ownership with real root-only filesystem operations",
 ]
 
 [tool.ruff]

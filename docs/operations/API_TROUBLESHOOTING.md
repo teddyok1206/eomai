@@ -52,3 +52,10 @@ directory to make the runtime doctor pass.
 Never run API integration or concurrency tests against the deployed database. Use
 `API_INTEGRATION_TEST_DATABASE.md`; the harness refuses production names and cleanup requires the
 database owner plus database and role marker comments to match its manifest.
+
+The default Infrastructure doctor reports restricted Docker socket visibility as
+`WARN EXPECTED_LEAST_PRIVILEGE_WARNING` when its independent PostgreSQL application connection
+succeeds. `RESULT pass_with_warnings` is the expected least-privilege classification, not a Docker
+health assertion. A failed PostgreSQL connection or a failed privileged Docker inspection remains
+`FAIL`. Use `scripts/infra/doctor.sh --privileged` only from an explicit root operator phase; the
+normal doctor never probes sudo.
