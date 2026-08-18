@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from eom_catalog_contracts import (
+    CatalogSchemaError,
     catalog_schema_inventory,
     load_schema,
     validate_contract,
@@ -56,6 +57,19 @@ def test_prompt_envelope_validates_and_invalid_fixture_is_rejected() -> None:
     validate_contract("prompt-envelope", value)
     with pytest.raises(ValidationError):
         validate_contract("prompt-envelope", {**value, "workflow_id": "invalid"})
+
+
+def test_catalog_loader_has_no_repository_relative_schema_fallback() -> None:
+    source_path = REPOSITORY_ROOT / "packages/catalog_contracts/eom_catalog_contracts/validation.py"
+    source = source_path.read_text(encoding="utf-8")
+    assert "Path(__file__)" not in source
+    assert "parents[" not in source
+    assert "/schemas" not in source
+
+
+def test_unknown_catalog_schema_is_typed_error() -> None:
+    with pytest.raises(CatalogSchemaError, match="unknown catalog contract schema"):
+        load_schema("not-a-real-contract")
 
 
 @pytest.fixture(scope="module")
