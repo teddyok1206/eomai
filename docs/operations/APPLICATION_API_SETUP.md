@@ -82,6 +82,13 @@ as `eom`, then uses only `sudo -n` for system files, systemd, and the rollback r
 `sudo -v` or waits for a password prompt. The installed imports must resolve below
 `/srv/eom/conda/envs/eom-api/lib/python3.12/site-packages`, never the repository.
 
+The build inspection also treats the workflow JSON Schemas as required release resources. It
+requires the canonical `schemas/workflow` definition and eight role schemas to match the
+`eom_workflow/resources` wheel members byte-for-byte, verifies the wheel `RECORD`, imports directly
+from the wheel with an isolated `/tmp` working directory, and compiles
+`generic-item-development@1.1.0`. A missing or stale schema stops `--build-only` before any
+privileged installation.
+
 The first service start can pass readiness before an Administrator exists. Bootstrap the initial
 Administrator, change its temporary password, then run the authenticated smoke test as documented
 in `API_SMOKE_TEST.md`. Delete `/home/eom/.eom-api-initial-admin` after the password change is

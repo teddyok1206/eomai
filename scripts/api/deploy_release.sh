@@ -130,11 +130,14 @@ PY
 
 inspect_release() {
   DIST_DIR="${DIST_DIR}" EXPECTED_COMMIT="${COMMIT}" EXPECTED_VERSION="${VERSION}" \
+    REPOSITORY_ROOT="${REPOSITORY_ROOT}" API_PYTHON="${API_PYTHON}" \
     "${API_PYTHON}" - <<'PY'
 from __future__ import annotations
 
 import json
 import os
+import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -177,6 +180,94 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     ]
     if len(schemas) != 5:
         raise SystemExit(f"expected 5 packaged API schemas, found {len(schemas)}")
+
+workflow_prefix = "eom_workflow/resources/"
+workflow_resources = {
+    "workflow-definition.schema.json",
+    "roles/authoring-input.schema.json",
+    "roles/authoring-result.schema.json",
+    "roles/image-input.schema.json",
+    "roles/image-result.schema.json",
+    "roles/registration-input.schema.json",
+    "roles/registration-result.schema.json",
+    "roles/review-input.schema.json",
+    "roles/review-result.schema.json",
+}
+platform_wheel = by_prefix["eom_platform"]
+with zipfile.ZipFile(platform_wheel) as archive:
+    names = set(archive.namelist())
+    packaged = {
+        name.removeprefix(workflow_prefix)
+        for name in names
+        if name.startswith(workflow_prefix) and name.endswith(".schema.json")
+    }
+    if packaged != workflow_resources:
+        raise SystemExit(
+            "workflow schema wheel resources mismatch: "
+            f"expected={sorted(workflow_resources)} actual={sorted(packaged)}"
+        )
+    record_name = next(name for name in names if name.endswith(".dist-info/RECORD"))
+    record = archive.read(record_name).decode("utf-8")
+    canonical_root = Path(os.environ["REPOSITORY_ROOT"]) / "schemas/workflow"
+    for logical_name in sorted(workflow_resources):
+        member = workflow_prefix + logical_name
+        if archive.read(member) != (canonical_root / logical_name).read_bytes():
+            raise SystemExit(f"workflow schema resource drift: {logical_name}")
+        if member not in record:
+            raise SystemExit(f"workflow schema resource missing from RECORD: {logical_name}")
+
+with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporary:
+    root = Path(temporary)
+    definition = root / "generic-item-development.v1.1.yaml"
+    definition.write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/generic-item-development.v1.1.yaml"
+        ).read_bytes()
+    )
+    check = r'''
+import importlib.util
+import sys
+from pathlib import Path
+
+wheel, repository, definition_path = sys.argv[1:]
+sys.path.insert(0, wheel)
+from eom_workflow.compiler import compile_definition
+from eom_workflow.schemas import (
+    INPUT_SCHEMA_FILES,
+    RESULT_SCHEMA_FILES,
+    load_definition_schema,
+    load_role_input_schema,
+    load_role_result_schema,
+)
+
+spec = importlib.util.find_spec("eom_workflow")
+if spec is None or spec.origin is None or wheel not in spec.origin or repository in spec.origin:
+    raise SystemExit("workflow package was not imported from the release wheel")
+load_definition_schema()
+for role in INPUT_SCHEMA_FILES:
+    load_role_input_schema(role)
+for schema_id in RESULT_SCHEMA_FILES:
+    load_role_result_schema(schema_id)
+compiled = compile_definition(
+    Path(definition_path), {"authoring", "image", "review", "item_management"}
+)
+if compiled.definition.definition_version != "1.1.0":
+    raise SystemExit("generic workflow definition version mismatch")
+'''
+    subprocess.run(
+        [
+            os.environ["API_PYTHON"],
+            "-I",
+            "-c",
+            check,
+            str(platform_wheel),
+            os.environ["REPOSITORY_ROOT"],
+            str(definition),
+        ],
+        cwd=root,
+        check=True,
+    )
 
 for wheel in wheels:
     with zipfile.ZipFile(wheel) as archive:

@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/workflow/workflow-definition.schema.json",
+  "title": "EOM Workflow Definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "definition_key", "definition_version", "start_step", "limits", "steps"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.0"},
+    "definition_key": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+    "definition_version": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"},
+    "start_step": {"$ref": "#/$defs/stepKey"},
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_rework_cycles", "max_step_attempts"],
+      "properties": {
+        "max_rework_cycles": {"type": "integer", "minimum": 0, "maximum": 10},
+        "max_step_attempts": {"type": "integer", "minimum": 1, "maximum": 10}
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 64,
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/agentStep"},
+          {"$ref": "#/$defs/decisionStep"},
+          {"$ref": "#/$defs/humanGateStep"},
+          {"$ref": "#/$defs/terminalStep"}
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "stepKey": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$"},
+    "baseStep": {
+      "type": "object",
+      "required": ["key", "type"],
+      "properties": {
+        "key": {"$ref": "#/$defs/stepKey"},
+        "type": {"type": "string"}
+      }
+    },
+    "agentStep": {
+      "allOf": [
+        {"$ref": "#/$defs/baseStep"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "type", "worker_role", "result_schema", "on_success"],
+          "properties": {
+            "key": {"$ref": "#/$defs/stepKey"},
+            "type": {"const": "agent"},
+            "worker_role": {"enum": ["authoring", "image", "review", "item_management"]},
+            "result_schema": {"type": "string", "pattern": "^[a-z][a-z-]+-result@[0-9]+\\.[0-9]+$"},
+            "on_success": {"$ref": "#/$defs/stepKey"}
+          }
+        }
+      ]
+    },
+    "decisionStep": {
+      "allOf": [
+        {"$ref": "#/$defs/baseStep"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "type", "operator", "field", "branches"],
+          "properties": {
+            "key": {"$ref": "#/$defs/stepKey"},
+            "type": {"const": "decision"},
+            "operator": {"enum": ["input_equals", "input_in", "step_succeeded", "step_skipped", "approval_decision"]},
+            "field": {"type": "string", "pattern": "^(?:/(?:[^~/]|~[01])*)+$"},
+            "branches": {
+              "type": "object",
+              "minProperties": 1,
+              "maxProperties": 10,
+              "additionalProperties": {"$ref": "#/$defs/stepKey"},
+              "propertyNames": {"pattern": "^[a-z][a-z0-9_-]{1,63}$"}
+            }
+          }
+        }
+      ]
+    },
+    "humanGateStep": {
+      "allOf": [
+        {"$ref": "#/$defs/baseStep"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "type", "allowed_actor_roles", "allowed_rework_targets", "on_approve"],
+          "properties": {
+            "key": {"$ref": "#/$defs/stepKey"},
+            "type": {"const": "human_gate"},
+            "allowed_actor_roles": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"enum": ["reviewer", "admin"]}
+            },
+            "allowed_rework_targets": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/stepKey"}
+            },
+            "on_approve": {"$ref": "#/$defs/stepKey"}
+          }
+        }
+      ]
+    },
+    "terminalStep": {
+      "allOf": [
+        {"$ref": "#/$defs/baseStep"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "type", "terminal_status"],
+          "properties": {
+            "key": {"$ref": "#/$defs/stepKey"},
+            "type": {"const": "terminal"},
+            "terminal_status": {"const": "COMPLETED"}
+          }
+        }
+      ]
+    }
+  }
+}

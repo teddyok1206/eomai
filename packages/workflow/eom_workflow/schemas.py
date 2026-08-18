@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import copy
 import json
-from pathlib import Path
+from importlib import metadata, resources
+from importlib.resources.abc import Traversable
 from typing import Any, cast
 
 from eom_identifiers import content_sha256
 from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema.exceptions import SchemaError
 from pydantic import ValidationError
 
 from eom_workflow.models import (
@@ -20,9 +22,8 @@ from eom_workflow.models import (
     RoleWorkerInput,
 )
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-WORKFLOW_SCHEMA_ROOT = REPOSITORY_ROOT / "schemas/workflow"
-ROLE_SCHEMA_ROOT = WORKFLOW_SCHEMA_ROOT / "roles"
+WORKFLOW_RESOURCE_ROOT = resources.files("eom_workflow").joinpath("resources")
+ROLE_RESOURCE_ROOT = WORKFLOW_RESOURCE_ROOT.joinpath("roles")
 ROLE_RESULT_SCHEMAS: dict[str, str] = {
     "authoring": "authoring-result@1.0",
     "image": "image-result@1.0",
@@ -41,22 +42,30 @@ INPUT_SCHEMA_FILES = {
     "review": "review-input.schema.json",
     "item_management": "registration-input.schema.json",
 }
+ROLE_SCHEMA_FILES = tuple(sorted({*RESULT_SCHEMA_FILES.values(), *INPUT_SCHEMA_FILES.values()}))
 
 
 class WorkflowSchemaError(ValueError):
     pass
 
 
-def load_json_schema(path: Path) -> dict[str, Any]:
-    raw: object = json.loads(path.read_text(encoding="utf-8"))
+def load_json_schema(resource: Traversable, logical_name: str) -> dict[str, Any]:
+    try:
+        raw: object = json.loads(resource.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise WorkflowSchemaError(_resource_error(logical_name)) from exc
     if not isinstance(raw, dict):
-        raise WorkflowSchemaError(f"schema is not an object: {path.name}")
-    Draft202012Validator.check_schema(raw)
+        raise WorkflowSchemaError(f"workflow schema is not an object: {logical_name}")
+    try:
+        Draft202012Validator.check_schema(raw)
+    except SchemaError as exc:
+        raise WorkflowSchemaError(f"workflow schema is invalid: {logical_name}") from exc
     return raw
 
 
 def load_definition_schema() -> dict[str, Any]:
-    return load_json_schema(WORKFLOW_SCHEMA_ROOT / "workflow-definition.schema.json")
+    logical_name = "workflow-definition.schema.json"
+    return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
 
 
 def load_role_input_schema(role: str) -> dict[str, Any]:
@@ -64,7 +73,8 @@ def load_role_input_schema(role: str) -> dict[str, Any]:
         file_name = INPUT_SCHEMA_FILES[role]
     except KeyError as exc:
         raise WorkflowSchemaError(f"unknown worker role: {role}") from exc
-    return load_json_schema(ROLE_SCHEMA_ROOT / file_name)
+    logical_name = f"roles/{file_name}"
+    return load_json_schema(ROLE_RESOURCE_ROOT.joinpath(file_name), logical_name)
 
 
 def load_role_result_schema(schema_id: str) -> dict[str, Any]:
@@ -72,7 +82,8 @@ def load_role_result_schema(schema_id: str) -> dict[str, Any]:
         file_name = RESULT_SCHEMA_FILES[schema_id]
     except KeyError as exc:
         raise WorkflowSchemaError(f"unknown role result schema: {schema_id}") from exc
-    return load_json_schema(ROLE_SCHEMA_ROOT / file_name)
+    logical_name = f"roles/{file_name}"
+    return load_json_schema(ROLE_RESOURCE_ROOT.joinpath(file_name), logical_name)
 
 
 def validate_schema_message(schema: dict[str, Any], value: object, name: str) -> None:
@@ -131,9 +142,21 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
 
 def role_schema_bundle_hash() -> str:
     schemas = {
-        path.name: load_json_schema(path) for path in sorted(ROLE_SCHEMA_ROOT.glob("*.schema.json"))
+        file_name: load_json_schema(ROLE_RESOURCE_ROOT.joinpath(file_name), f"roles/{file_name}")
+        for file_name in ROLE_SCHEMA_FILES
     }
     return content_sha256(schemas)
+
+
+def _resource_error(logical_name: str) -> str:
+    try:
+        version = metadata.version("eom-platform")
+    except metadata.PackageNotFoundError:
+        version = "source"
+    return (
+        f"workflow schema resource unavailable: {logical_name} "
+        f"(package=eom_workflow, distribution=eom-platform@{version})"
+    )
 
 
 def _mapping(parent: dict[str, Any], key: str) -> dict[str, Any]:

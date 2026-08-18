@@ -141,3 +141,12 @@ role protocol rather than changing the stored `workflow-role/1.0` schema hash.
 
 The role mapping is authoring to `eom-cdx-01`, review to `eom-cdx-02`, image to `eom-cdx-03`, and
 item management to `eom-cdx-04`. Support remains outside the normal path.
+
+`schemas/workflow` remains the protocol-first canonical editing location. The release wheel carries
+an exact runtime mirror under `eom_workflow/resources`; `importlib.resources` is the only runtime
+resolver. Tests and the Application API release inspector compare every mirrored byte to the
+canonical schema, require the exact nine runtime schema names in the wheel and its `RECORD`, and
+compile `generic-item-development@1.1.0` from an isolated wheel import. The runtime therefore does
+not derive a repository root from `__file__`, search the current directory, or require a source
+checkout. A schema change is incomplete until its package resource mirror is updated and the drift
+check passes.

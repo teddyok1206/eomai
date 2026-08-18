@@ -55,6 +55,10 @@ where = [
 [tool.setuptools.package-data]
 eom_protocol = ["schemas/*.json"]
 eom_hwpx_contracts = ["schemas/*.json"]
+eom_workflow = [
+  "resources/*.json",
+  "resources/roles/*.json",
+]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"

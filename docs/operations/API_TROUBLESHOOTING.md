@@ -24,6 +24,14 @@ the service user exists; repeat execution retains the runtime password and HMAC 
 privilege drift. A missing-table grant after migration is a fail-closed signal to review the access
 plan and rerun bootstrap, not a reason to grant all tables or default privileges.
 
+If `eom-workflow-runner` reports an unavailable workflow schema resource, stop instead of adding a
+repository path or copying schemas into the environment by hand. Run
+`scripts/api/deploy_release.sh --build-only`; it must prove that all nine
+`eom_workflow/resources` members match the canonical schemas and that the generic 1.1.0 definition
+compiles directly from the wheel. Redeploy that
+reviewed wheel, then let the normal expired-lease reclaim path retry the command. Never update a
+workflow or command row to bypass this packaging failure.
+
 For `AUTH_INVALID_CREDENTIALS`, do not try to distinguish unknown, disabled, locked, or incorrect
 password from the response. Check sanitized audit state as an Administrator. Account lock expires
 automatically; disabling an Operator and password changes revoke sessions by design.
