@@ -12,6 +12,13 @@ from eom_workflow_runner import cli
 from eom_workflow_runner.catalog_port import WorkflowCatalogPort
 from eom_workflow_runner.composition import build_workflow_runtime
 from eom_workflow_runner.engine import PlatformRoleJobExecutor, WorkflowRunner
+from eom_workflow_runner.readiness import (
+    ReadinessStatus,
+    RuntimeReadinessCheck,
+    RuntimeReadinessReport,
+    WorkflowExecutionReadiness,
+    WorkflowRuntimeNotReady,
+)
 from eom_workflow_runner.settings import WorkflowSettings
 from sqlalchemy import create_engine
 
@@ -42,15 +49,37 @@ def test_production_composition_supplies_catalog_adapter(tmp_path: Path) -> None
     )
 
     assert isinstance(runtime.runner.catalog, WorkflowCatalogService)
+    assert runtime.catalog is runtime.runner.catalog
     assert isinstance(runtime.runner.executor, PlatformRoleJobExecutor)
+    assert runtime.runner.readiness is runtime.readiness
+    assert runtime.runner.available_roles == frozenset(
+        {"authoring", "review", "image", "item_management", "support"}
+    )
     assert runtime.runner.executor.orchestrator.settings == _platform_settings(tmp_path)
+    engine.dispose()
+
+
+def test_runner_rejects_missing_worker_roles() -> None:
+    engine = create_engine("sqlite://")
+    with pytest.raises(ValueError, match="worker roles are required"):
+        WorkflowRunner(
+            engine,
+            catalog=cast(WorkflowCatalogPort, object()),
+            readiness=cast(WorkflowExecutionReadiness, object()),
+            available_roles=frozenset(),
+        )
     engine.dispose()
 
 
 def test_runner_rejects_missing_mandatory_catalog_adapter() -> None:
     engine = create_engine("sqlite://")
     with pytest.raises(ValueError, match="catalog adapter is required"):
-        WorkflowRunner(engine, catalog=cast(WorkflowCatalogPort, None))
+        WorkflowRunner(
+            engine,
+            catalog=cast(WorkflowCatalogPort, None),
+            readiness=cast(WorkflowExecutionReadiness, object()),
+            available_roles=frozenset({"authoring"}),
+        )
     engine.dispose()
 
 
@@ -71,3 +100,34 @@ def test_cli_uses_composition_root(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert cli.main(["run-once", "--workflow-id", "workflow_test"]) == 2
     assert calls == ["run-once:workflow_test", "dispose"]
+
+
+def test_cli_reports_runtime_not_ready_without_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class FakeEngine:
+        def dispose(self) -> None:
+            return None
+
+    class FakeRunner:
+        def run_once(self, workflow_id: str | None) -> None:
+            del workflow_id
+            report = RuntimeReadinessReport(
+                (
+                    RuntimeReadinessCheck(
+                        "catalog_staging",
+                        ReadinessStatus.FAIL,
+                        "CATALOG_STAGING_UNWRITABLE",
+                        "permission denied",
+                    ),
+                )
+            )
+            raise WorkflowRuntimeNotReady(report)
+
+    runtime = SimpleNamespace(engine=FakeEngine(), runner=FakeRunner())
+    monkeypatch.setattr(cli, "build_workflow_runtime", lambda: runtime)
+
+    assert cli.main(["run-once"]) == 3
+    output = capsys.readouterr().out
+    assert "WORKFLOW_RUNTIME_NOT_READY" in output
+    assert "CATALOG_STAGING_UNWRITABLE" in output

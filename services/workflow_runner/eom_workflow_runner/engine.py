@@ -13,8 +13,6 @@ from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import ArtifactRevisionRecord
 from eom_orchestrator.orchestrator import Orchestrator
-from eom_orchestrator.settings import Settings
-from eom_orchestrator.worker_registry import WorkerRegistry
 from eom_workflow import (
     AgentStep,
     ArtifactPointer,
@@ -43,10 +41,15 @@ from eom_workflow_runner.models import (
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
+from eom_workflow_runner.readiness import (
+    WorkflowExecutionReadiness,
+    WorkflowRuntimeNotReady,
+)
 from eom_workflow_runner.repository import (
     CommandType,
     active_approval,
     claim_next_command,
+    claimable_command_exists,
     create_approval_request,
     create_step_run,
     link_superseded_attempts,
@@ -171,6 +174,8 @@ class WorkflowRunner:
         executor: RoleJobExecutor | None = None,
         *,
         catalog: WorkflowCatalogPort,
+        readiness: WorkflowExecutionReadiness,
+        available_roles: frozenset[str],
         runner_id: str | None = None,
     ) -> None:
         if catalog is None:
@@ -180,13 +185,20 @@ class WorkflowRunner:
         self.settings = settings or WorkflowSettings.from_environment()
         self.runner_config = self.settings.load_runner()
         self.actors = self.settings.load_actors()
-        registry = WorkerRegistry.load(Settings.from_environment().worker_config)
-        self.available_roles = {slot.role for slot in registry.config.slots if slot.enabled}
+        if not available_roles:
+            raise ValueError("workflow worker roles are required")
+        self.available_roles = available_roles
         self.executor = executor or PlatformRoleJobExecutor(engine, self.settings)
         self.catalog = catalog
+        self.readiness = readiness
         self.runner_id = runner_id or f"runner-{uuid4().hex}"
 
     def run_once(self, workflow_id: str | None = None) -> WorkflowCommandRecord | None:
+        with self.sessions() as session:
+            has_work = claimable_command_exists(session, workflow_id=workflow_id)
+        if not has_work:
+            return None
+        self._require_runtime_ready()
         with transaction(self.sessions) as session:
             command = claim_next_command(
                 session,
@@ -247,6 +259,18 @@ class WorkflowRunner:
             session.expunge(result)
             return result
 
+    def _require_runtime_ready(self) -> None:
+        readiness = self.readiness.evaluate()
+        if not readiness.ready:
+            log_workflow_event(
+                LOGGER,
+                logging.ERROR,
+                "workflow runtime is not ready",
+                event="WORKFLOW_RUNTIME_NOT_READY",
+                error_code=",".join(readiness.failed_codes),
+            )
+            raise WorkflowRuntimeNotReady(readiness)
+
     def run_until_idle(self, workflow_id: str, limit: int | None = None) -> int:
         processed = 0
         maximum = limit or self.runner_config.max_commands_per_run
@@ -256,10 +280,15 @@ class WorkflowRunner:
 
     def serve(self) -> None:
         while True:
-            if self.run_once() is None:
+            try:
+                result = self.run_once()
+            except WorkflowRuntimeNotReady:
+                result = None
+            if result is None:
                 time.sleep(self.runner_config.poll_interval_seconds)
 
     def reconcile(self, workflow_id: str) -> None:
+        self._require_runtime_ready()
         self._advance(workflow_id, None, "system", self.runner_id)
 
     def _process_command(self, command_id: str) -> None:
@@ -1158,7 +1187,7 @@ class WorkflowRunner:
             return compile_definition_data(
                 definition.canonical_definition,
                 definition.source_path,
-                self.available_roles,
+                set(self.available_roles),
             )
         except ValueError as exc:
             raise WorkflowError(

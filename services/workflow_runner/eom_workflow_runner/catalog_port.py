@@ -1,4 +1,4 @@
-"""Typed optional boundary between the workflow engine and catalog use cases."""
+"""Mandatory typed boundary between the workflow engine and catalog use cases."""
 
 from __future__ import annotations
 

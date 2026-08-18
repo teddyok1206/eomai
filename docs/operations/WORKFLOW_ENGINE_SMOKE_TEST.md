@@ -2,13 +2,13 @@
 
 ## Prerequisites
 
-Run from `/home/eom/EOM` on branch `feat/workflow-engine-v0` with the explicit environment. Do not
-print secret files.
+Run from `/home/eom/EOM` with the explicit environment. Do not print secret files. Complete
+`WORKFLOW_RUNTIME_SETUP.md` and require the workflow runner doctor to pass before submitting work.
 
 ```bash
 CORE=/srv/eom/conda/envs/eom-core
-$CORE/bin/python -m pip install -e '.[dev]'
 $CORE/bin/alembic upgrade head
+$CORE/bin/eom-workflow-runner doctor
 $CORE/bin/eomctl system doctor
 $CORE/bin/eomctl worker list
 ```

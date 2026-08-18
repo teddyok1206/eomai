@@ -37,6 +37,12 @@ from eom_workflow_runner.models import (
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
+from eom_workflow_runner.readiness import (
+    ReadinessStatus,
+    RuntimeReadinessCheck,
+    RuntimeReadinessReport,
+    WorkflowRuntimeNotReady,
+)
 from eom_workflow_runner.repository import (
     CommandType,
     active_approval,
@@ -71,6 +77,25 @@ ROLE_SLOTS = {
     "image": ("03", "eom-cdx-03"),
     "item_management": ("04", "eom-cdx-04"),
 }
+
+
+class ReadyWorkflowRuntime:
+    def evaluate(self) -> RuntimeReadinessReport:
+        return RuntimeReadinessReport(())
+
+
+class UnreadyWorkflowRuntime:
+    def evaluate(self) -> RuntimeReadinessReport:
+        return RuntimeReadinessReport(
+            (
+                RuntimeReadinessCheck(
+                    name="catalog_staging",
+                    status=ReadinessStatus.FAIL,
+                    code="CATALOG_STAGING_UNWRITABLE",
+                    detail="permission denied",
+                ),
+            )
+        )
 
 
 class FakeRoleExecutor:
@@ -347,6 +372,8 @@ def _environment(
         WorkflowSettings(),
         fake,
         catalog=FakeWorkflowCatalog(),
+        readiness=ReadyWorkflowRuntime(),
+        available_roles=frozenset(ROLE_SLOTS) | {"support"},
         runner_id="test-runner",
     )
     runner.sessions = sessions
@@ -423,6 +450,36 @@ def test_image_skip_approval_and_registration_flow(integration_engine: Engine) -
             assert final["registration"]["step_key"] == "registration"
             sequences = [event.sequence for event in list_workflow_events(session, workflow_id)]
             assert sequences == list(range(1, len(sequences) + 1))
+    finally:
+        _close(resources)
+
+
+def test_runtime_preflight_failure_does_not_claim_or_fail_workflow(
+    integration_engine: Engine,
+) -> None:
+    runner, _, sessions, workflow_id, resources = _environment(
+        integration_engine, "skip", "workflow-preflight-unready"
+    )
+    runner.readiness = UnreadyWorkflowRuntime()
+    try:
+        with pytest.raises(WorkflowRuntimeNotReady) as captured:
+            runner.run_once(workflow_id)
+        assert captured.value.report.failed_codes == ("CATALOG_STAGING_UNWRITABLE",)
+
+        with sessions() as session:
+            command = session.scalar(
+                select(WorkflowCommandRecord).where(
+                    WorkflowCommandRecord.workflow_id == workflow_id
+                )
+            )
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert command is not None and workflow is not None
+            assert command.state == CommandState.PENDING.value
+            assert command.attempts == 0
+            assert command.lease_owner is None
+            assert command.lease_expires_at is None
+            assert workflow.state == WorkflowState.REQUESTED.value
+            assert len(list_workflow_events(session, workflow_id)) == 1
     finally:
         _close(resources)
 
@@ -508,6 +565,8 @@ def test_catalog_workflow_pins_prompts_and_registration_without_leaking_request(
             WorkflowSettings(),
             executor,
             catalog=catalog,
+            readiness=ReadyWorkflowRuntime(),
+            available_roles=frozenset(ROLE_SLOTS) | {"support"},
             runner_id="catalog-test-runner",
         )
         runner.sessions = sessions
@@ -1187,6 +1246,8 @@ def test_simultaneous_approve_and_rework_resolves_one_decision(
                 WorkflowSettings(),
                 FakeRoleExecutor(sessions),
                 catalog=FakeWorkflowCatalog(),
+                readiness=ReadyWorkflowRuntime(),
+                available_roles=frozenset(ROLE_SLOTS) | {"support"},
                 runner_id=f"race-{command_type.value}",
             )
             with sessions() as session:

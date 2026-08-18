@@ -29,6 +29,10 @@ worker. They receive a read-only input, result schema, and placeholder prompt in
 workspace. The orchestrator remains the only component that validates worker output and commits to
 NAS. Production packages do not import the development Slack reporter.
 
+Production runtime composition and filesystem permissions are specified in
+`WORKFLOW_EXECUTION_BOUNDARY.md`. The runner uses the mandatory Catalog adapter and a private-group
+setgid handoff; it does not transfer workspace UID or require elevated capabilities.
+
 ## State Machine
 
 Workflow state and display stage are separate. The engine validates these state transitions:
@@ -122,6 +126,11 @@ the worker timeout and is renewed before each agent subprocess. Expired leased o
 commands return to `PENDING` before a new claim. A step platform idempotency key hashes
 workflow ID, step key, attempt, and definition hash. Reconciliation can therefore reuse an existing
 terminal platform job without another Codex call or artifact.
+
+Before the locked claim, the runner checks whether work exists and evaluates execution readiness.
+An infrastructure readiness failure leaves the command, attempt count, workflow state, and event
+history unchanged. The same typed checks back `eom-workflow-runner doctor`, so doctor success is an
+execution prerequisite rather than a configuration-only signal.
 
 ## Rework And Final Pointer
 

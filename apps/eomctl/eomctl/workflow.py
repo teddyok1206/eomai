@@ -7,13 +7,12 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_engine, build_session_factory, transaction
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry
 from eom_workflow import WorkflowRequest, compile_definition
-from eom_workflow_runner.engine import WorkflowRunner
+from eom_workflow_runner.composition import build_workflow_runtime
 from eom_workflow_runner.models import (
     ApprovalRequestRecord,
     WorkflowCommandRecord,
@@ -136,7 +135,8 @@ def workflow_start(
     if version == "1.1.0" and request.content_pack is None:
         raise typer.BadParameter("workflow 1.1.0 requires --pack-key and Intake input")
     engine = build_engine()
-    catalog = WorkflowCatalogService(engine)
+    runtime = build_workflow_runtime(engine=engine)
+    catalog = runtime.catalog
     sessions = build_session_factory(engine)
     with transaction(sessions) as session:
         stored_definition = session.scalar(
@@ -178,8 +178,7 @@ def workflow_start(
                 idempotency_key=f"start:{workflow.workflow_id}",
             )
         workflow_id = workflow.workflow_id
-    runner = WorkflowRunner(engine, catalog=catalog)
-    runner.run_until_idle(workflow_id)
+    runtime.runner.run_until_idle(workflow_id)
     _emit(_inspect(engine, workflow_id))
     engine.dispose()
 
@@ -362,8 +361,8 @@ def _enqueue_approval_command(
 
 def _run_and_emit_command(workflow_id: str, command_id: str) -> None:
     engine = build_engine()
-    runner = WorkflowRunner(engine, catalog=WorkflowCatalogService(engine))
-    runner.run_until_idle(workflow_id)
+    runtime = build_workflow_runtime(engine=engine)
+    runtime.runner.run_until_idle(workflow_id)
     sessions = build_session_factory(engine)
     with sessions() as session:
         command = session.get(WorkflowCommandRecord, command_id)

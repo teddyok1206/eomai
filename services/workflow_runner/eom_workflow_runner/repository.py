@@ -17,6 +17,7 @@ from eom_workflow.identifiers import (
 )
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.models import (
@@ -211,17 +212,7 @@ def claim_next_command(
     now = datetime.now(UTC)
     query = (
         select(WorkflowCommandRecord)
-        .where(
-            or_(
-                WorkflowCommandRecord.state == CommandState.PENDING.value,
-                (
-                    WorkflowCommandRecord.state.in_(
-                        [CommandState.LEASED.value, CommandState.PROCESSING.value]
-                    )
-                    & (WorkflowCommandRecord.lease_expires_at < now)
-                ),
-            )
-        )
+        .where(_claimable_command_filter(now))
         .order_by(WorkflowCommandRecord.created_at, WorkflowCommandRecord.command_id)
         .with_for_update(skip_locked=True)
         .limit(1)
@@ -239,6 +230,31 @@ def claim_next_command(
     command.lease_expires_at = now + timedelta(seconds=lease_seconds)
     session.flush()
     return command
+
+
+def claimable_command_exists(session: Session, *, workflow_id: str | None = None) -> bool:
+    """Check for pending or reclaimable work without locking or changing it."""
+    query = (
+        select(WorkflowCommandRecord.command_id)
+        .where(_claimable_command_filter(datetime.now(UTC)))
+        .order_by(WorkflowCommandRecord.created_at, WorkflowCommandRecord.command_id)
+        .limit(1)
+    )
+    if workflow_id is not None:
+        query = query.where(WorkflowCommandRecord.workflow_id == workflow_id)
+    return session.scalar(query) is not None
+
+
+def _claimable_command_filter(now: datetime) -> ColumnElement[bool]:
+    return or_(
+        WorkflowCommandRecord.state == CommandState.PENDING.value,
+        (
+            WorkflowCommandRecord.state.in_(
+                [CommandState.LEASED.value, CommandState.PROCESSING.value]
+            )
+            & (WorkflowCommandRecord.lease_expires_at < now)
+        ),
+    )
 
 
 def create_step_run(

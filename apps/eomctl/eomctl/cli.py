@@ -19,6 +19,7 @@ from eom_orchestrator.models import (
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry
+from eom_workflow_runner.composition import build_workflow_runtime
 from eom_workflow_runner.doctor import run_workflow_doctor
 from eom_workflow_runner.settings import WorkflowSettings
 from sqlalchemy import select
@@ -91,15 +92,28 @@ def _event_dict(event: JobEventRecord) -> dict[str, Any]:
 def system_doctor() -> None:
     configure_logging()
     settings = Settings.from_environment()
-    checks = run_doctor(build_engine(), settings)
-    checks.extend(
-        DoctorCheck(check.name, check.passed, check.detail)
-        for check in run_workflow_doctor(WorkflowSettings.from_environment(), settings)
+    engine = build_engine()
+    runtime = build_workflow_runtime(
+        engine=engine,
+        workflow_settings=WorkflowSettings.from_environment(),
+        platform_settings=settings,
     )
-    passed = all(check.passed for check in checks)
-    _emit({"passed": passed, "checks": [asdict(check) for check in checks]})
-    if not passed:
-        raise typer.Exit(1)
+    try:
+        checks = run_doctor(engine, settings)
+        checks.extend(
+            DoctorCheck(check.name, check.passed, check.detail)
+            for check in run_workflow_doctor(
+                runtime.runner.settings,
+                settings,
+                runtime.readiness,
+            )
+        )
+        passed = all(check.passed for check in checks)
+        _emit({"passed": passed, "checks": [asdict(check) for check in checks]})
+        if not passed:
+            raise typer.Exit(1)
+    finally:
+        engine.dispose()
 
 
 @worker_app.command("list")
