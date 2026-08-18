@@ -12,7 +12,28 @@ id -nG | tr ' ' '\n' | grep '^eom-cdx-'
 ```
 
 Do not add worker users to `eom`, `sudo`, or `docker`. Do not grant capabilities to Python, Codex,
-the runner, or `systemd-run`.
+the runner, or `systemctl`. Do not grant `eom` broad systemd `manage-units` permission.
+
+## Root-Owned worker launcher
+
+An operator installs these reviewed sources as root-owned files; normal job execution uses no
+`sudo`:
+
+```text
+infra/systemd/eom-worker-01@.service ... eom-worker-05@.service
+infra/systemd/eom-worker-probe-01@.service ... eom-worker-probe-05@.service
+infra/polkit/50-eom-worker-units.rules
+services/orchestrator/eom_orchestrator/worker_exec.py
+  -> /usr/local/libexec/eom-worker-exec
+```
+
+The unit and helper hashes are part of the installed Python release contract. Unit files and the
+helper must be regular root:root files with modes `0644` and `0755`; `eom` must not be able to
+modify them. The polkit rule applies only to user `eom`, fully anchored EOM worker/probe instances,
+and the `start` verb. It explicitly denies all other `manage-units` requests by `eom`. If the
+installed systemd/polkit mechanism does not expose both `unit` and `verb` for `StartUnit()`, do not
+install that rule and do not substitute a broad allow rule. Use the separately reviewed narrow
+broker fallback.
 
 ## Privileged Path Reconciliation
 
@@ -50,8 +71,10 @@ scripts/workflow/verify_runtime_paths.sh
 
 Both commands must pass before creating an acceptance workflow or running `run-once`. Doctor uses
 separate unique create/delete probes in the Catalog parent, prompt staging root, and worker roots,
-but never invokes Codex. The privileged filesystem integration is separate and opt-in; its exact
-command is kept in the generated acceptance runbook.
+then starts one fixed `/usr/bin/true` authorization probe for each worker slot. It validates exact
+root-owned unit/helper hashes, never invokes Codex, never reads worker auth, and creates no workflow
+state. The privileged filesystem and negative authorization integrations are separate and opt-in;
+their exact commands are kept in the generated acceptance runbook.
 
 ## Execution
 

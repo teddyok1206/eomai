@@ -22,10 +22,22 @@ def test_runtime_verifier_includes_prompt_staging_boundary() -> None:
     assert "eom:eom:750" in source
 
 
+def test_systemd_authorization_verifier_is_nonprivileged_and_negative_by_default() -> None:
+    source = (ROOT / "scripts/workflow/verify_systemd_worker_authorization.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "sudo" not in source
+    assert "codex" not in source.lower()
+    assert "--uid=root --gid=root /usr/bin/true" in source
+    assert "restart" in source
+    assert "malformed.service" in source
+
+
 def test_runtime_scripts_have_valid_shell_syntax() -> None:
     for relative in (
         "scripts/workflow/bootstrap_runtime_paths.sh",
         "scripts/workflow/verify_runtime_paths.sh",
+        "scripts/workflow/verify_systemd_worker_authorization.sh",
     ):
         result = subprocess.run(
             ["bash", "-n", str(ROOT / relative)], capture_output=True, check=False, text=True

@@ -17,7 +17,9 @@ only sanitized check names, codes, and metadata summaries.
 | `WORKER_WORKSPACE_UNWRITABLE` | job-local handoff probe failed | inspect filesystem and mount policy |
 | `WORKER_HOME_INVALID` | worker HOME metadata is inconsistent | repair only that worker HOME |
 | `CODEX_BINARY_UNAVAILABLE` | configured binary is missing/non-executable | repair the installed Codex runtime |
-| `SYSTEMD_RUN_UNAVAILABLE` | launcher is unavailable | repair host systemd installation |
+| `SYSTEMCTL_UNAVAILABLE` | fixed-unit launcher client is unavailable | repair host systemd installation |
+| `WORKER_SYSTEMD_TEMPLATE_INVALID` | root-owned helper/template is missing, stale, linked, writable, or hash-mismatched | reinstall the exact final-HEAD worker artifacts and run `daemon-reload` |
+| `WORKER_SYSTEMD_AUTHORIZATION_DENIED` | `eom` could not start and complete a fixed harmless slot probe | verify installed systemd/polkit unit+verb capability and the reviewed start-only rule; never add a broad allow |
 | `WORKFLOW_SCHEMAS_INVALID` | installed runtime resources are incomplete | rebuild/redeploy the self-contained wheel |
 | `WORKFLOW_DEFINITION_INVALID` | configured definition cannot compile | repair the pinned definition/config |
 
@@ -25,5 +27,7 @@ Readiness failure before claim is operational, not terminal. It does not create 
 event. A failure after claim remains an authoritative workflow audit record and is not resurrected.
 Create a new acceptance workflow after fixing the environment; do not update failed rows or leases.
 
-Never use `chmod 777`, recursive ownership changes, root runner execution, per-job `sudo`, or Linux
-capabilities as a workaround.
+Never use `chmod 777`, recursive ownership changes, root runner execution, per-job `sudo`, Linux
+capabilities, broad `manage-units`, or arbitrary transient-unit permission as a workaround. The
+fixed templates are the only normal worker start path. If unit/verb filtering cannot be proven on
+the installed server, stop and use a separately reviewed narrow broker design.

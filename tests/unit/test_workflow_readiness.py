@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 from eom_catalog_service.settings import CatalogSettings
 from eom_orchestrator.settings import Settings
+from eom_orchestrator.worker_systemd import WorkerSystemdReadiness
 from eom_workflow_runner.readiness import WorkflowRuntimeReadiness
 from eom_workflow_runner.settings import WorkflowSettings
 
@@ -86,6 +87,13 @@ def _runtime(
             placeholder_pack_source=ROOT / "content/packs/generic-placeholder/0.1.0",
         ),
         catalog_configured=True,
+        fixed_worker_codex_binary=Path(sys.executable),
+        systemd_contract_inspector=lambda slot: WorkerSystemdReadiness(
+            True, "READY", f"slot {slot.slot_id} contract v1"
+        ),
+        systemd_authorization_probe=lambda slot: WorkerSystemdReadiness(
+            True, "READY", f"slot {slot.slot_id} probe passed"
+        ),
     )
     return readiness, catalog, workspaces
 
@@ -126,6 +134,37 @@ def test_execution_readiness_detects_missing_catalog_contract_resource(
     )
 
     assert "CATALOG_CONTRACT_RESOURCES_INVALID" in _codes(readiness)
+
+
+def test_execution_readiness_detects_missing_fixed_worker_template(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, _, _ = _runtime(tmp_path, monkeypatch)
+    readiness.systemd_contract_inspector = lambda slot: WorkerSystemdReadiness(
+        slot.slot_id != "01",
+        "READY" if slot.slot_id != "01" else "WORKER_SYSTEMD_TEMPLATE_INVALID",
+        f"slot {slot.slot_id}",
+    )
+
+    report = readiness.evaluate()
+
+    assert "WORKER_SYSTEMD_TEMPLATE_INVALID" in report.failed_codes
+    assert not any(
+        check.name == "worker_01_systemd_authorization" and check.passed for check in report.checks
+    )
+
+
+def test_execution_readiness_detects_worker_systemd_authorization_denial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, _, _ = _runtime(tmp_path, monkeypatch)
+    readiness.systemd_authorization_probe = lambda slot: WorkerSystemdReadiness(
+        slot.slot_id != "01",
+        "READY" if slot.slot_id != "01" else "WORKER_SYSTEMD_AUTHORIZATION_DENIED",
+        f"slot {slot.slot_id}",
+    )
+
+    assert "WORKER_SYSTEMD_AUTHORIZATION_DENIED" in _codes(readiness)
 
 
 def test_execution_readiness_detects_unwritable_catalog_staging(

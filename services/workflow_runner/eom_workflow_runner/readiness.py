@@ -8,6 +8,7 @@ import pwd
 import shutil
 import stat
 import sys
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
@@ -19,6 +20,12 @@ from eom_catalog_contracts import catalog_schema_inventory, load_schema, validat
 from eom_catalog_service.settings import CatalogSettings
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry, WorkerSlot
+from eom_orchestrator.worker_systemd import (
+    FIXED_WORKER_TIMEOUT_SECONDS,
+    WorkerSystemdReadiness,
+    inspect_worker_systemd_contract,
+    probe_worker_systemd_authorization,
+)
 from eom_workflow import compile_definition
 from eom_workflow.schemas import (
     RESULT_SCHEMA_FILES,
@@ -83,12 +90,22 @@ class WorkflowRuntimeReadiness:
         catalog_settings: CatalogSettings,
         catalog_configured: bool,
         runner_user: str = "eom",
+        fixed_worker_codex_binary: Path = Path("/usr/local/bin/codex"),
+        systemd_contract_inspector: Callable[
+            [WorkerSlot], WorkerSystemdReadiness
+        ] = inspect_worker_systemd_contract,
+        systemd_authorization_probe: Callable[
+            [WorkerSlot], WorkerSystemdReadiness
+        ] = probe_worker_systemd_authorization,
     ) -> None:
         self.workflow_settings = workflow_settings
         self.platform_settings = platform_settings
         self.catalog_settings = catalog_settings
         self.catalog_configured = catalog_configured
         self.runner_user = runner_user
+        self.fixed_worker_codex_binary = fixed_worker_codex_binary
+        self.systemd_contract_inspector = systemd_contract_inspector
+        self.systemd_authorization_probe = systemd_authorization_probe
 
     def evaluate(self) -> RuntimeReadinessReport:
         checks: list[RuntimeReadinessCheck] = []
@@ -128,6 +145,7 @@ class WorkflowRuntimeReadiness:
                 key=lambda candidate: candidate.slot_id,
             ):
                 checks.extend(self._worker(slot))
+                checks.extend(self._worker_systemd(slot))
 
         checks.extend(self._runtime_packages(registry))
         return RuntimeReadinessReport(tuple(checks))
@@ -241,11 +259,7 @@ class WorkflowRuntimeReadiness:
         try:
             worker_groups = set(os.getgrouplist(slot.linux_user, account.pw_gid))
             launch_access = _identity_can_execute(
-                self.platform_settings.codex_binary,
-                user_id=account.pw_uid,
-                group_ids=worker_groups,
-            ) and _identity_can_execute(
-                Path(sys.executable),
+                self.fixed_worker_codex_binary,
                 user_id=account.pw_uid,
                 group_ids=worker_groups,
             )
@@ -330,26 +344,57 @@ class WorkflowRuntimeReadiness:
         )
         return checks
 
+    def _worker_systemd(self, slot: WorkerSlot) -> list[RuntimeReadinessCheck]:
+        prefix = f"worker_{slot.slot_id}_systemd"
+        contract = self.systemd_contract_inspector(slot)
+        checks = [_check(prefix + "_template", contract.ready, contract.code, contract.detail)]
+        if not contract.ready:
+            checks.append(
+                _failure(
+                    prefix + "_authorization",
+                    contract.code,
+                    f"slot {slot.slot_id} probe skipped",
+                )
+            )
+            return checks
+        authorization = self.systemd_authorization_probe(slot)
+        checks.append(
+            _check(
+                prefix + "_authorization",
+                authorization.ready,
+                authorization.code,
+                authorization.detail,
+            )
+        )
+        return checks
+
     def _runtime_packages(self, registry: WorkerRegistry | None) -> list[RuntimeReadinessCheck]:
         checks = [
             _check(
                 "codex_binary",
-                self.platform_settings.codex_binary.is_file()
-                and os.access(self.platform_settings.codex_binary, os.X_OK),
+                self.platform_settings.codex_binary == self.fixed_worker_codex_binary
+                and self.fixed_worker_codex_binary.is_file()
+                and os.access(self.fixed_worker_codex_binary, os.X_OK),
                 "CODEX_BINARY_UNAVAILABLE",
-                self.platform_settings.codex_binary.name,
+                self.fixed_worker_codex_binary.name,
             ),
             _check(
-                "systemd_run",
-                shutil.which("systemd-run") is not None,
-                "SYSTEMD_RUN_UNAVAILABLE",
-                "available" if shutil.which("systemd-run") else "missing",
+                "systemctl",
+                shutil.which("systemctl") is not None,
+                "SYSTEMCTL_UNAVAILABLE",
+                "available" if shutil.which("systemctl") else "missing",
             ),
             _check(
                 "runner_python",
                 Path(sys.executable).is_file() and os.access(sys.executable, os.X_OK),
                 "RUNNER_PYTHON_UNAVAILABLE",
                 Path(sys.executable).name,
+            ),
+            _check(
+                "worker_timeout_contract",
+                self.platform_settings.worker_timeout_seconds == FIXED_WORKER_TIMEOUT_SECONDS,
+                "WORKER_TIMEOUT_CONTRACT_INVALID",
+                f"{FIXED_WORKER_TIMEOUT_SECONDS}s fixed template",
             ),
         ]
         try:

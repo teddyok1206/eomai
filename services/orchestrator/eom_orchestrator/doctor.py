@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import pwd
-import shutil
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -17,6 +16,10 @@ from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.protocol import SCHEMA_NAMES
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry
+from eom_orchestrator.worker_systemd import (
+    inspect_worker_systemd_contract,
+    probe_worker_systemd_authorization,
+)
 
 
 @dataclass(frozen=True)
@@ -65,9 +68,9 @@ def run_doctor(engine: Engine, settings: Settings) -> list[DoctorCheck]:
     )
     checks.append(
         DoctorCheck(
-            "systemd_run",
-            shutil.which("systemd-run") is not None,
-            shutil.which("systemd-run") or "missing",
+            "systemctl",
+            Path("/usr/bin/systemctl").is_file() and os.access("/usr/bin/systemctl", os.X_OK),
+            "/usr/bin/systemctl",
         )
     )
     for index in range(1, 6):
@@ -83,6 +86,26 @@ def run_doctor(engine: Engine, settings: Settings) -> list[DoctorCheck]:
         authoring = registry.select("authoring")
         detail = f"authoring={authoring.linux_user},global={registry.global_codex_concurrency}"
         checks.append(DoctorCheck("worker_slot_config", True, detail))
+        for slot in sorted(
+            (candidate for candidate in registry.config.slots if candidate.enabled),
+            key=lambda candidate: candidate.slot_id,
+        ):
+            contract = inspect_worker_systemd_contract(slot)
+            checks.append(
+                DoctorCheck(
+                    f"worker_systemd_template_{slot.slot_id}",
+                    contract.ready,
+                    contract.detail,
+                )
+            )
+            authorization = probe_worker_systemd_authorization(slot) if contract.ready else contract
+            checks.append(
+                DoctorCheck(
+                    f"worker_systemd_authorization_{slot.slot_id}",
+                    authorization.ready,
+                    authorization.detail,
+                )
+            )
     except Exception as exc:
         checks.append(DoctorCheck("worker_slot_config", False, type(exc).__name__))
     expected_prefix = Path("/srv/eom/conda/envs/eom-core")

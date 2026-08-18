@@ -25,7 +25,7 @@ $CORE/bin/eomctl system doctor
 $CORE/bin/eomctl worker list
 ```
 
-Doctor must report PostgreSQL, revision `20260815_0001`, NAS, Codex, systemd-run, five worker users,
+Doctor must report PostgreSQL, revision `20260815_0001`, NAS, Codex, systemctl, five worker users,
 slot config, eom-core, staging, and five schemas as passing. Worker list must map `authoring` to
 `eom-cdx-01` and report global Codex concurrency 3.
 

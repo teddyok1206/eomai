@@ -196,6 +196,13 @@ workflow_resources = {
 platform_wheel = by_prefix["eom_platform"]
 with zipfile.ZipFile(platform_wheel) as archive:
     names = set(archive.namelist())
+    worker_runtime = {
+        "eom_orchestrator/worker.py",
+        "eom_orchestrator/worker_exec.py",
+        "eom_orchestrator/worker_systemd.py",
+    }
+    if missing := worker_runtime - names:
+        raise SystemExit(f"fixed worker runtime missing from wheel: {sorted(missing)}")
     packaged = {
         name.removeprefix(workflow_prefix)
         for name in names
@@ -208,6 +215,15 @@ with zipfile.ZipFile(platform_wheel) as archive:
         )
     record_name = next(name for name in names if name.endswith(".dist-info/RECORD"))
     record = archive.read(record_name).decode("utf-8")
+    for member in sorted(worker_runtime):
+        if member not in record:
+            raise SystemExit(f"fixed worker runtime missing from RECORD: {member}")
+    worker_exec_source = (
+        Path(os.environ["REPOSITORY_ROOT"])
+        / "services/orchestrator/eom_orchestrator/worker_exec.py"
+    )
+    if archive.read("eom_orchestrator/worker_exec.py") != worker_exec_source.read_bytes():
+        raise SystemExit("root-installed worker executable source drift")
     canonical_root = Path(os.environ["REPOSITORY_ROOT"]) / "schemas/workflow"
     for logical_name in sorted(workflow_resources):
         member = workflow_prefix + logical_name
