@@ -216,6 +216,40 @@ with zipfile.ZipFile(platform_wheel) as archive:
         if member not in record:
             raise SystemExit(f"workflow schema resource missing from RECORD: {logical_name}")
 
+catalog_prefix = "eom_catalog_contracts/resources/"
+catalog_resources = {
+    "content-intake/intake-manifest-v1.schema.json": "schemas/content-intake/intake-manifest-v1.schema.json",
+    "content-intake/mapping-proposal-v1.schema.json": "schemas/content-intake/mapping-proposal-v1.schema.json",
+    "content-intake/uncertainties-v1.schema.json": "schemas/content-intake/uncertainties-v1.schema.json",
+    "content-intake/human-decision-v1.schema.json": "schemas/content-intake/human-decision-v1.schema.json",
+    "content-pack/content-pack-v1.schema.json": "schemas/content-pack/content-pack-v1.schema.json",
+    "content-pack/profile-v1.schema.json": "schemas/content-pack/profile-v1.schema.json",
+    "content-pack/prompt-envelope-v1.schema.json": "schemas/content-pack/prompt-envelope-v1.schema.json",
+    "item-registry/item-revision-manifest-v1.schema.json": "schemas/item-registry/item-revision-manifest-v1.schema.json",
+}
+with zipfile.ZipFile(platform_wheel) as archive:
+    names = set(archive.namelist())
+    packaged = {
+        name.removeprefix(catalog_prefix)
+        for name in names
+        if name.startswith(catalog_prefix) and name.endswith(".schema.json")
+    }
+    expected = set(catalog_resources)
+    if packaged != expected:
+        raise SystemExit(
+            "Catalog Contract schema wheel resources mismatch: "
+            f"expected={sorted(expected)} actual={sorted(packaged)}"
+        )
+    record_name = next(name for name in names if name.endswith(".dist-info/RECORD"))
+    record = archive.read(record_name).decode("utf-8")
+    repository_root = Path(os.environ["REPOSITORY_ROOT"])
+    for resource_name, canonical_name in sorted(catalog_resources.items()):
+        member = catalog_prefix + resource_name
+        if archive.read(member) != (repository_root / canonical_name).read_bytes():
+            raise SystemExit(f"Catalog Contract schema resource drift: {resource_name}")
+        if member not in record:
+            raise SystemExit(f"Catalog Contract resource missing from RECORD: {resource_name}")
+
 with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporary:
     root = Path(temporary)
     installed_root = root / "site-packages"
@@ -258,6 +292,7 @@ from eom_workflow.schemas import (
     load_role_input_schema,
     load_role_result_schema,
 )
+from eom_catalog_contracts import catalog_schema_inventory, load_schema, validate_contract
 
 spec = importlib.util.find_spec("eom_workflow")
 if (
@@ -277,6 +312,26 @@ compiled = compile_definition(
 )
 if compiled.definition.definition_version != "1.1.0":
     raise SystemExit("generic workflow definition version mismatch")
+for name, _ in catalog_schema_inventory():
+    load_schema(name)
+validate_contract(
+    "prompt-envelope",
+    {
+        "schema_version": "1.0",
+        "pack_release_id": "packrel_" + "0" * 32,
+        "pack_release_sha256": "sha256:" + "0" * 64,
+        "profile_key": "authoring-default",
+        "profile_version": "0.1.0",
+        "profile_sha256": "sha256:" + "0" * 64,
+        "template_path": "prompt-templates/authoring.md",
+        "template_sha256": "sha256:" + "0" * 64,
+        "render_context_sha256": "sha256:" + "0" * 64,
+        "rendered_prompt_sha256": "sha256:" + "0" * 64,
+        "workflow_id": "workflow_" + "0" * 32,
+        "step_run_id": "steprun_" + "0" * 32,
+        "source_intake_batch_ids": ["intake_" + "0" * 32],
+    },
+)
 '''
     subprocess.run(
         [
@@ -326,7 +381,15 @@ import site
 from pathlib import Path
 
 site_roots = [Path(value).resolve() for value in site.getsitepackages()]
-for module in ("eom_api", "eom_api_contracts", "eom_operator_identity"):
+for module in (
+    "eom_api",
+    "eom_api_contracts",
+    "eom_operator_identity",
+    "eom_catalog_contracts",
+    "eom_workflow",
+    "eom_workflow_runner",
+    "eom_catalog_service",
+):
     spec = importlib.util.find_spec(module)
     if spec is None or spec.origin is None:
         raise SystemExit(f"installed module is missing: {module}")
@@ -343,6 +406,11 @@ for name in ("eom-application-api", "eom-api-contracts", "eom-platform"):
 for root in site_roots:
     for path in root.glob("__editable__*"):
         raise SystemExit(f"editable metadata detected: {path.name}")
+
+from eom_catalog_contracts import catalog_schema_inventory, load_schema
+
+for name, _ in catalog_schema_inventory():
+    load_schema(name)
 PY
 }
 

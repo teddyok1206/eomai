@@ -1,38 +1,144 @@
-"""JSON Schema 2020-12 validation for catalog contracts."""
+"""JSON Schema 2020-12 validation backed by package-owned resources."""
 
 from __future__ import annotations
 
+import hashlib
 import json
+from collections.abc import Mapping
+from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
+from importlib import metadata
+from importlib.resources import files
+from importlib.resources.abc import Traversable
+from types import MappingProxyType
 from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
-
-SCHEMA_ROOT = Path(__file__).resolve().parents[3] / "schemas"
-SCHEMA_FILES = {
-    "intake-manifest": SCHEMA_ROOT / "content-intake" / "intake-manifest-v1.schema.json",
-    "mapping-proposal": SCHEMA_ROOT / "content-intake" / "mapping-proposal-v1.schema.json",
-    "uncertainties": SCHEMA_ROOT / "content-intake" / "uncertainties-v1.schema.json",
-    "human-decision": SCHEMA_ROOT / "content-intake" / "human-decision-v1.schema.json",
-    "content-pack": SCHEMA_ROOT / "content-pack" / "content-pack-v1.schema.json",
-    "content-pack-profile": SCHEMA_ROOT / "content-pack" / "profile-v1.schema.json",
-    "prompt-envelope": SCHEMA_ROOT / "content-pack" / "prompt-envelope-v1.schema.json",
-    "item-revision-manifest": SCHEMA_ROOT
-    / "item-registry"
-    / "item-revision-manifest-v1.schema.json",
-}
+from jsonschema.exceptions import SchemaError
 
 
-@lru_cache(maxsize=32)
-def load_schema(name: str) -> dict[str, Any]:
+@dataclass(frozen=True)
+class CatalogSchemaResource:
+    """Immutable identity for one runtime Catalog Contract schema."""
+
+    canonical_path: str
+    resource_path: str
+    schema_version: str
+    sha256: str
+
+
+CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
+    {
+        "intake-manifest": CatalogSchemaResource(
+            "schemas/content-intake/intake-manifest-v1.schema.json",
+            "resources/content-intake/intake-manifest-v1.schema.json",
+            "1.0",
+            "sha256:5f3b9dcd459988143491557ccf5f220a53c0467d461235ba22de587d0c8b63f0",
+        ),
+        "mapping-proposal": CatalogSchemaResource(
+            "schemas/content-intake/mapping-proposal-v1.schema.json",
+            "resources/content-intake/mapping-proposal-v1.schema.json",
+            "1.0",
+            "sha256:4e2699ca42b8fe0c4ecb0993ce4119110cbebf273eecb135d57414c7e1e40a83",
+        ),
+        "uncertainties": CatalogSchemaResource(
+            "schemas/content-intake/uncertainties-v1.schema.json",
+            "resources/content-intake/uncertainties-v1.schema.json",
+            "1.0",
+            "sha256:6cbe845ff766076ce64d76c7c9483f164a454fac92f8e5ba6dc374c89d79bebf",
+        ),
+        "human-decision": CatalogSchemaResource(
+            "schemas/content-intake/human-decision-v1.schema.json",
+            "resources/content-intake/human-decision-v1.schema.json",
+            "1.0",
+            "sha256:7d8c6f988229f0f6036d586716b228f1c1082ead7bccf02dc2ba66d25f2f8f26",
+        ),
+        "content-pack": CatalogSchemaResource(
+            "schemas/content-pack/content-pack-v1.schema.json",
+            "resources/content-pack/content-pack-v1.schema.json",
+            "1.0",
+            "sha256:8d121d187885a9c1c2b588493d9d7337856614db6d5011306d63b16a9219fb8b",
+        ),
+        "content-pack-profile": CatalogSchemaResource(
+            "schemas/content-pack/profile-v1.schema.json",
+            "resources/content-pack/profile-v1.schema.json",
+            "1.0",
+            "sha256:d8af117b56737b3e9355284665be0d4775f39f6a9230974255c540725f44fcfb",
+        ),
+        "prompt-envelope": CatalogSchemaResource(
+            "schemas/content-pack/prompt-envelope-v1.schema.json",
+            "resources/content-pack/prompt-envelope-v1.schema.json",
+            "1.0",
+            "sha256:ac60d0750780f5b13149e40163823f39773376322bf4f7b7173bb2c9282210dc",
+        ),
+        "item-revision-manifest": CatalogSchemaResource(
+            "schemas/item-registry/item-revision-manifest-v1.schema.json",
+            "resources/item-registry/item-revision-manifest-v1.schema.json",
+            "1.0",
+            "sha256:9c6be99f5331d72fa43d3112f37bda45c0337829d44e8f91a05e145030a2c399",
+        ),
+    }
+)
+
+_RESOURCE_ROOT = files("eom_catalog_contracts").joinpath("resources")
+
+
+class CatalogSchemaError(ValueError):
+    """Raised when a Catalog Contract schema is unknown, missing, or invalid."""
+
+
+def _distribution_version() -> str:
     try:
-        path = SCHEMA_FILES[name]
+        return metadata.version("eom-platform")
+    except metadata.PackageNotFoundError:
+        return "source"
+
+
+def _resource_error(name: str, reason: str) -> CatalogSchemaError:
+    return CatalogSchemaError(
+        f"catalog schema resource unavailable: {name} ({reason}; "
+        f"package=eom_catalog_contracts, distribution=eom-platform@{_distribution_version()})"
+    )
+
+
+def _schema_resource(name: str) -> tuple[CatalogSchemaResource, Traversable]:
+    try:
+        entry = CATALOG_SCHEMA_RESOURCES[name]
     except KeyError as exc:
-        raise ValueError(f"unknown catalog contract: {name}") from exc
-    value: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    Draft202012Validator.check_schema(value)
+        raise CatalogSchemaError(f"unknown catalog contract schema: {name}") from exc
+    parts = entry.resource_path.split("/")
+    if parts[0] != "resources" or any(part in {"", ".", ".."} for part in parts):
+        raise CatalogSchemaError(f"catalog schema resource path is unsafe: {name}")
+    resource: Traversable = _RESOURCE_ROOT
+    for part in parts[1:]:
+        resource = resource.joinpath(part)
+    return entry, resource
+
+
+@lru_cache(maxsize=len(CATALOG_SCHEMA_RESOURCES))
+def load_schema(name: str) -> dict[str, Any]:
+    entry, resource = _schema_resource(name)
+    try:
+        raw = resource.read_bytes()
+    except (OSError, UnicodeError) as exc:
+        raise _resource_error(name, "package resource is missing or unreadable") from exc
+    actual_hash = "sha256:" + hashlib.sha256(raw).hexdigest()
+    if actual_hash != entry.sha256:
+        raise _resource_error(name, "package resource hash mismatch")
+    try:
+        value: object = json.loads(raw.decode("utf-8"))
+        if not isinstance(value, dict):
+            raise CatalogSchemaError(f"catalog schema is not an object: {name}")
+        Draft202012Validator.check_schema(value)
+    except (UnicodeError, json.JSONDecodeError, SchemaError) as exc:
+        raise _resource_error(name, "package resource is malformed") from exc
     return value
+
+
+def catalog_schema_inventory() -> tuple[tuple[str, CatalogSchemaResource], ...]:
+    """Return the deterministic logical schema inventory for release checks."""
+
+    return tuple(sorted(CATALOG_SCHEMA_RESOURCES.items()))
 
 
 def validate_contract(name: str, value: dict[str, Any]) -> None:

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
+from eom_catalog_contracts import catalog_schema_inventory, load_schema, validate_contract
 from eom_catalog_service.settings import CatalogSettings
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry, WorkerSlot
@@ -363,6 +364,8 @@ class WorkflowRuntimeReadiness:
                 _failure("workflow_schemas", "WORKFLOW_SCHEMAS_INVALID", type(exc).__name__)
             )
 
+        checks.append(self._catalog_contract_resources())
+
         if registry is None:
             checks.append(
                 _failure(
@@ -391,6 +394,41 @@ class WorkflowRuntimeReadiness:
                     )
                 )
         return checks
+
+    @staticmethod
+    def _catalog_contract_resources() -> RuntimeReadinessCheck:
+        try:
+            for name, _ in catalog_schema_inventory():
+                # Loading every resource catches missing, malformed, and hash-mismatched files.
+                load_schema(name)
+            validate_contract(
+                "prompt-envelope",
+                {
+                    "schema_version": "1.0",
+                    "pack_release_id": "packrel_" + "0" * 32,
+                    "pack_release_sha256": "sha256:" + "0" * 64,
+                    "profile_key": "authoring-default",
+                    "profile_version": "0.1.0",
+                    "profile_sha256": "sha256:" + "0" * 64,
+                    "template_path": "prompt-templates/authoring.md",
+                    "template_sha256": "sha256:" + "0" * 64,
+                    "render_context_sha256": "sha256:" + "0" * 64,
+                    "rendered_prompt_sha256": "sha256:" + "0" * 64,
+                    "workflow_id": "workflow_" + "0" * 32,
+                    "step_run_id": "steprun_" + "0" * 32,
+                    "source_intake_batch_ids": ["intake_" + "0" * 32],
+                },
+            )
+            return _success(
+                "catalog_contract_resources",
+                f"{len(catalog_schema_inventory())} loaded; prompt-envelope validation passed",
+            )
+        except Exception as exc:
+            return _failure(
+                "catalog_contract_resources",
+                "CATALOG_CONTRACT_RESOURCES_INVALID",
+                type(exc).__name__,
+            )
 
 
 def _directory_matches(

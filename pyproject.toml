@@ -59,6 +59,11 @@ eom_workflow = [
   "resources/*.json",
   "resources/roles/*.json",
 ]
+eom_catalog_contracts = [
+  "resources/content-intake/*.json",
+  "resources/content-pack/*.json",
+  "resources/item-registry/*.json",
+]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"

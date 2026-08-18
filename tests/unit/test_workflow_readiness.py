@@ -116,6 +116,18 @@ def test_execution_readiness_detects_missing_catalog_adapter(
     assert "CATALOG_ADAPTER_MISSING" in _codes(readiness)
 
 
+def test_execution_readiness_detects_missing_catalog_contract_resource(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, _, _ = _runtime(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "eom_workflow_runner.readiness.load_schema",
+        lambda _name: (_ for _ in ()).throw(FileNotFoundError("missing resource")),
+    )
+
+    assert "CATALOG_CONTRACT_RESOURCES_INVALID" in _codes(readiness)
+
+
 def test_execution_readiness_detects_unwritable_catalog_staging(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

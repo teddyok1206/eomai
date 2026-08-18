@@ -24,14 +24,24 @@ from eom_catalog_contracts.models import (
     ReserveUsagePlan,
     UncertaintiesDocument,
 )
-from eom_catalog_contracts.validation import load_schema, validate_contract
+from eom_catalog_contracts.validation import (
+    CATALOG_SCHEMA_RESOURCES,
+    CatalogSchemaError,
+    CatalogSchemaResource,
+    catalog_schema_inventory,
+    load_schema,
+    validate_contract,
+)
 
 __all__ = [
+    "CATALOG_SCHEMA_RESOURCES",
     "ActivateContentPack",
     "AnalysisSourceType",
     "ApproveItemRevision",
     "AttachIntakeAnalysis",
     "CancelUsagePlan",
+    "CatalogSchemaError",
+    "CatalogSchemaResource",
     "ContentPackManifest",
     "ContentPackProfile",
     "CreateDeliverable",
@@ -49,6 +59,7 @@ __all__ = [
     "ReleaseContentPack",
     "ReserveUsagePlan",
     "UncertaintiesDocument",
+    "catalog_schema_inventory",
     "load_schema",
     "validate_contract",
 ]
