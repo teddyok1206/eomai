@@ -233,6 +233,66 @@ def test_canonical_unit_and_helper_hashes_match_runtime_contract() -> None:
     assert hashlib.sha256(executable.read_bytes()).hexdigest() == WORKER_EXECUTABLE_SHA256
 
 
+def test_collect_mode_is_only_in_probe_unit_sections() -> None:
+    def directive_sections(path: Path, directive: str) -> list[str]:
+        section = ""
+        matches: list[str] = []
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if line.startswith("[") and line.endswith("]"):
+                section = line[1:-1]
+            elif line.startswith(f"{directive}="):
+                matches.append(section)
+        return matches
+
+    for index in range(1, 6):
+        slot_id = f"{index:02d}"
+        worker = ROOT / "infra/systemd" / f"eom-worker-{slot_id}@.service"
+        probe = ROOT / "infra/systemd" / f"eom-worker-probe-{slot_id}@.service"
+        assert directive_sections(worker, "CollectMode") == []
+        assert directive_sections(probe, "CollectMode") == ["Unit"]
+
+
+@pytest.mark.skipif(shutil.which("systemd-analyze") is None, reason="systemd-analyze unavailable")
+def test_all_worker_templates_verify_without_diagnostics(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    unit_root = root / "etc/systemd/system"
+    worker_exec = root / "usr/local/libexec/eom-worker-exec"
+    true_binary = root / "usr/bin/true"
+    unit_root.mkdir(parents=True)
+    worker_exec.parent.mkdir(parents=True)
+    true_binary.parent.mkdir(parents=True)
+    shutil.copy2("/usr/bin/true", worker_exec)
+    shutil.copy2("/usr/bin/true", true_binary)
+
+    unit_paths: list[str] = []
+    for index in range(1, 6):
+        slot_id = f"{index:02d}"
+        for name in (
+            f"eom-worker-{slot_id}@.service",
+            f"eom-worker-probe-{slot_id}@.service",
+        ):
+            shutil.copy2(ROOT / "infra/systemd" / name, unit_root / name)
+            unit_paths.append(f"/etc/systemd/system/{name}")
+
+    completed = subprocess.run(
+        [
+            "systemd-analyze",
+            "verify",
+            "--recursive-errors=no",
+            f"--root={root}",
+            *unit_paths,
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == ""
+    assert completed.stderr == ""
+
+
 def test_worker_templates_fix_identity_command_and_sandbox() -> None:
     required = (
         "NoNewPrivileges=true",

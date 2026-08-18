@@ -1,9 +1,9 @@
 [Unit]
 Description=EOM harmless worker authorization probe slot 03 (contract v1), probe %i
+CollectMode=inactive-or-failed
 
 [Service]
 Type=oneshot
-CollectMode=inactive-or-failed
 User=eom-cdx-03
 Group=eom-cdx-03
 ExecStart=/usr/bin/true
