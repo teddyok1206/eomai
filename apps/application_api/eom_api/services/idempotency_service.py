@@ -203,5 +203,18 @@ class IdempotencyService:
     def _key_hash(self, raw_key: str) -> str:
         return "sha256:" + hmac.new(self._key, raw_key.encode("ascii"), hashlib.sha256).hexdigest()
 
+    def submission_key(self, *, operator_id: str, endpoint_key: str, raw_key: str) -> str:
+        """Derive a stable, non-secret domain key from the API command identity."""
+        encoded = json.dumps(
+            {
+                "operator_id": operator_id,
+                "endpoint_key": endpoint_key,
+                "idempotency_key": raw_key,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return "api:" + hmac.new(self._key, encoded, hashlib.sha256).hexdigest()
+
     def sensitive_value_hash(self, value: str) -> str:
         return "sha256:" + hmac.new(self._key, value.encode("utf-8"), hashlib.sha256).hexdigest()

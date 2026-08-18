@@ -12,7 +12,7 @@ from sqlalchemy import func, select, text
 
 from eom_api.lifespan import AppServices
 
-EXPECTED_MIGRATION_HEAD = "20260817_0006"
+EXPECTED_MIGRATION_HEAD = "20260818_0007"
 
 
 def readiness(services: AppServices) -> bool:

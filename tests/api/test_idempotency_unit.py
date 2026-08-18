@@ -23,3 +23,31 @@ def test_request_hash_is_canonical_and_secrets_are_one_way() -> None:
     digest = service.sensitive_value_hash(raw)
     assert raw not in digest
     assert digest == service.sensitive_value_hash(raw)
+
+
+def test_submission_key_is_stable_scoped_and_one_way() -> None:
+    service = IdempotencyService(create_engine("sqlite+pysqlite:///:memory:"), b"k" * 32)
+    raw = "workflow-submission-key-0001"
+    first = service.submission_key(
+        operator_id="operator_" + "a" * 32,
+        endpoint_key="workflow_start",
+        raw_key=raw,
+    )
+
+    assert first == service.submission_key(
+        operator_id="operator_" + "a" * 32,
+        endpoint_key="workflow_start",
+        raw_key=raw,
+    )
+    assert first != service.submission_key(
+        operator_id="operator_" + "b" * 32,
+        endpoint_key="workflow_start",
+        raw_key=raw,
+    )
+    assert first != service.submission_key(
+        operator_id="operator_" + "a" * 32,
+        endpoint_key="workflow_start",
+        raw_key="workflow-submission-key-0002",
+    )
+    assert raw not in first
+    assert len(first) == 68

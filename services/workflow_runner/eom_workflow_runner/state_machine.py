@@ -30,6 +30,36 @@ class WorkflowState(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class WorkflowStateCategory(StrEnum):
+    ACTIVE = "ACTIVE"
+    SUCCESSFUL_TERMINAL = "SUCCESSFUL_TERMINAL"
+    UNSUCCESSFUL_TERMINAL = "UNSUCCESSFUL_TERMINAL"
+
+
+ACTIVE_WORKFLOW_STATES = frozenset(
+    {
+        WorkflowState.REQUESTED,
+        WorkflowState.RUNNING,
+        WorkflowState.AWAITING_HUMAN_APPROVAL,
+        WorkflowState.REWORK_REQUESTED,
+        WorkflowState.APPROVED,
+        WorkflowState.REGISTERING,
+    }
+)
+SUCCESSFUL_TERMINAL_WORKFLOW_STATES = frozenset({WorkflowState.COMPLETED})
+UNSUCCESSFUL_TERMINAL_WORKFLOW_STATES = frozenset({WorkflowState.FAILED, WorkflowState.CANCELLED})
+
+
+def classify_workflow_state(state: WorkflowState) -> WorkflowStateCategory:
+    if state in ACTIVE_WORKFLOW_STATES:
+        return WorkflowStateCategory.ACTIVE
+    if state in SUCCESSFUL_TERMINAL_WORKFLOW_STATES:
+        return WorkflowStateCategory.SUCCESSFUL_TERMINAL
+    if state in UNSUCCESSFUL_TERMINAL_WORKFLOW_STATES:
+        return WorkflowStateCategory.UNSUCCESSFUL_TERMINAL
+    raise ValueError(f"unclassified workflow state: {state}")
+
+
 class WorkflowStage(StrEnum):
     AUTHORING = "AUTHORING"
     IMAGE_REQUIRED = "IMAGE_REQUIRED"

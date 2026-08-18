@@ -127,6 +127,14 @@ commands return to `PENDING` before a new claim. A step platform idempotency key
 workflow ID, step key, attempt, and definition hash. Reconciliation can therefore reuse an existing
 terminal platform job without another Codex call or artifact.
 
+Workflow submission identity and business equivalence are separate. `idempotency_key` identifies
+one accepted submission, `request_hash` fingerprints the pinned definition and normalized request,
+and `workflow_id` identifies one execution occurrence. A partial unique B-tree index on the
+fingerprint applies only while the occurrence is REQUESTED, RUNNING, AWAITING_HUMAN_APPROVAL,
+REWORK_REQUESTED, APPROVED, or REGISTERING. Equivalent active work is reused; FAILED and CANCELLED
+remain immutable but do not poison later submissions. COMPLETED retains the V0 same-actor
+deduplication policy. Concurrent insertion losers resolve the single committed active occurrence.
+
 Before the locked claim, the runner checks whether work exists and evaluates execution readiness.
 An infrastructure readiness failure leaves the command, attempt count, workflow state, and event
 history unchanged. The same typed checks back `eom-workflow-runner doctor`, so doctor success is an

@@ -28,7 +28,7 @@ def test_disposable_runtime_role_allows_dml_and_denies_schema_changes() -> None:
         cursor.execute("SELECT current_user, version_num FROM app.alembic_version")
         current_user, revision = cursor.fetchone() or (None, None)
         assert str(current_user).startswith("eom_api_test_runtime_")
-        assert revision == "20260817_0006"
+        assert revision == "20260818_0007"
         cursor.execute(
             "INSERT INTO app.api_audit_events "
             "(api_audit_event_id, request_id, event_type, operation_id, http_method, "

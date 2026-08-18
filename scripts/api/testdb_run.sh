@@ -88,5 +88,7 @@ export EOM_RUN_INTEGRATION=1
   tests/api/test_identity_integration.py \
   tests/api/test_api_integration.py \
   tests/api/test_api_concurrency.py \
-  tests/integration/test_workflow_engine.py
+  tests/api/test_workflow_start_integration.py \
+  tests/integration/test_workflow_engine.py \
+  tests/integration/test_workflow_submission_idempotency.py
 printf 'Disposable Application API and workflow integration tests passed.\n'

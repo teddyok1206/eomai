@@ -19,7 +19,8 @@ from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_workflow import WorkflowRequest
-from eom_workflow_runner.models import WorkflowDefinitionRecord
+from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
+from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowDefinitionRecord
 from eom_workflow_runner.repository import (
     CommandType,
     active_approval,
@@ -110,7 +111,7 @@ class CommandAdapter:
                 actor_id=actor.actor_id,
                 runtime_context=runtime_context,
             )
-            command_id = new_api_command_id()
+            command: WorkflowCommandRecord | None
             if created:
                 command, _ = enqueue_command(
                     session,
@@ -122,7 +123,26 @@ class CommandAdapter:
                     source="application_api",
                     idempotency_key=f"start:{workflow.workflow_id}",
                 )
-                command_id = command.command_id
+            else:
+                command = session.scalar(
+                    select(WorkflowCommandRecord)
+                    .where(
+                        WorkflowCommandRecord.workflow_id == workflow.workflow_id,
+                        WorkflowCommandRecord.command_type == CommandType.START_WORKFLOW.value,
+                    )
+                    .order_by(
+                        WorkflowCommandRecord.created_at,
+                        WorkflowCommandRecord.command_id,
+                    )
+                    .limit(1)
+                )
+                if command is None:
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                        "existing workflow occurrence has no start command",
+                    )
+            assert command is not None
+            command_id = command.command_id
             return command_id, workflow.workflow_id, workflow.lock_version
 
     def workflow_action(

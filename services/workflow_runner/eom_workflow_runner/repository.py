@@ -16,6 +16,7 @@ from eom_workflow.identifiers import (
     new_workflow_id,
 )
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -29,6 +30,7 @@ from eom_workflow_runner.models import (
     WorkflowStepRunRecord,
 )
 from eom_workflow_runner.state_machine import (
+    ACTIVE_WORKFLOW_STATES,
     ApprovalState,
     CommandState,
     StepState,
@@ -82,6 +84,68 @@ def import_workflow_definition(
     return record, True
 
 
+def workflow_business_fingerprint(
+    definition: WorkflowDefinitionRecord, request: WorkflowRequest
+) -> str:
+    return content_sha256(
+        {
+            "definition_key": definition.definition_key,
+            "definition_version": definition.definition_version,
+            "definition_hash": definition.definition_hash,
+            "request": request.model_dump(mode="json", exclude_none=True),
+        }
+    )
+
+
+def _matching_submission(
+    session: Session, *, idempotency_key: str, request_hash: str
+) -> WorkflowInstanceRecord | None:
+    existing = session.scalar(
+        select(WorkflowInstanceRecord).where(
+            WorkflowInstanceRecord.idempotency_key == idempotency_key
+        )
+    )
+    if existing is not None and existing.request_hash != request_hash:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_COMMAND_DUPLICATE,
+            "workflow idempotency key was reused with different input",
+        )
+    return existing
+
+
+def _active_equivalent(session: Session, request_hash: str) -> WorkflowInstanceRecord | None:
+    return session.scalar(
+        select(WorkflowInstanceRecord)
+        .where(
+            WorkflowInstanceRecord.request_hash == request_hash,
+            WorkflowInstanceRecord.state.in_(
+                tuple(state.value for state in ACTIVE_WORKFLOW_STATES)
+            ),
+        )
+        .order_by(WorkflowInstanceRecord.created_at, WorkflowInstanceRecord.workflow_id)
+        .limit(1)
+    )
+
+
+def _successful_equivalent(
+    session: Session, request_hash: str, *, actor_type: str, actor_id: str
+) -> WorkflowInstanceRecord | None:
+    return session.scalar(
+        select(WorkflowInstanceRecord)
+        .where(
+            WorkflowInstanceRecord.request_hash == request_hash,
+            WorkflowInstanceRecord.state == WorkflowState.COMPLETED.value,
+            WorkflowInstanceRecord.created_actor_type == actor_type,
+            WorkflowInstanceRecord.created_actor_id == actor_id,
+        )
+        .order_by(
+            WorkflowInstanceRecord.created_at.desc(),
+            WorkflowInstanceRecord.workflow_id.desc(),
+        )
+        .limit(1)
+    )
+
+
 def create_workflow_instance(
     session: Session,
     *,
@@ -93,26 +157,20 @@ def create_workflow_instance(
     runtime_context: dict[str, Any] | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
     request_data = request.model_dump(mode="json", exclude_none=True)
-    request_hash = content_sha256(
-        {
-            "definition_key": definition.definition_key,
-            "definition_version": definition.definition_version,
-            "definition_hash": definition.definition_hash,
-            "request": request_data,
-        }
-    )
-    existing = session.scalar(
-        select(WorkflowInstanceRecord).where(
-            WorkflowInstanceRecord.idempotency_key == idempotency_key
-        )
+    request_hash = workflow_business_fingerprint(definition, request)
+    existing = _matching_submission(
+        session, idempotency_key=idempotency_key, request_hash=request_hash
     )
     if existing is not None:
-        if existing.request_hash != request_hash:
-            raise WorkflowError(
-                WorkflowErrorCode.WORKFLOW_COMMAND_DUPLICATE,
-                "workflow idempotency key was reused with different input",
-            )
         return existing, False
+    active = _active_equivalent(session, request_hash)
+    if active is not None:
+        return active, False
+    successful = _successful_equivalent(
+        session, request_hash, actor_type=actor_type, actor_id=actor_id
+    )
+    if successful is not None:
+        return successful, False
     canonical_definition = definition.canonical_definition
     start_step = canonical_definition.get("start_step")
     if not isinstance(start_step, str):
@@ -143,8 +201,20 @@ def create_workflow_instance(
         created_actor_type=actor_type,
         created_actor_id=actor_id,
     )
-    session.add(workflow)
-    session.flush()
+    try:
+        with session.begin_nested():
+            session.add(workflow)
+            session.flush()
+    except IntegrityError:
+        existing = _matching_submission(
+            session, idempotency_key=idempotency_key, request_hash=request_hash
+        )
+        if existing is not None:
+            return existing, False
+        active = _active_equivalent(session, request_hash)
+        if active is not None:
+            return active, False
+        raise
     record_initial_workflow_event(session, workflow, actor_type=actor_type, actor_id=actor_id)
     return workflow, True
 

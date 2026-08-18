@@ -11,7 +11,6 @@ from eom_api_contracts.workflows import (
     WorkflowStepView,
     WorkflowView,
 )
-from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
 from eom_workflow_runner.repository import CommandType
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -62,17 +61,16 @@ def start_workflow(
     del authentication
 
     def execute() -> CommandResult:
-        domain_key = content_sha256(
-            {
-                "operation": "workflow_start",
-                "operator_id": request.state.request_context.actor().actor_id,
-                "body": body.model_dump(mode="json"),
-            }
-        ).removeprefix("sha256:")
+        actor = request.state.request_context.actor()
+        submission_key = request.app.state.services.idempotency.submission_key(
+            operator_id=actor.actor_id,
+            endpoint_key="workflow_start",
+            raw_key=idempotency_key,
+        )
         command_id, workflow_id, version = request.app.state.services.commands.start_workflow(
             body,
-            request.state.request_context.actor(),
-            idempotency_key=f"api:{domain_key}",
+            actor,
+            idempotency_key=submission_key,
         )
         return CommandResult(
             command_id=command_id,

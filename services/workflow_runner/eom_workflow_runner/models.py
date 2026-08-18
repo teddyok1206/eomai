@@ -95,6 +95,16 @@ class WorkflowInstanceRecord(Base):
             "'AWAITING_HUMAN_APPROVAL','REGISTERING','COMPLETED','FAILED','CANCELLED')",
             name="ck_workflow_instances_stage",
         ),
+        Index("ix_workflow_instances_request_hash", "request_hash"),
+        Index(
+            "uq_workflow_active_request_hash",
+            "request_hash",
+            unique=True,
+            postgresql_where=text(
+                "state IN ('REQUESTED','RUNNING','AWAITING_HUMAN_APPROVAL',"
+                "'REWORK_REQUESTED','APPROVED','REGISTERING')"
+            ),
+        ),
     )
 
     workflow_id: Mapped[str] = mapped_column(String(41), primary_key=True)

@@ -57,6 +57,8 @@ from eom_workflow_runner.repository import (
 )
 from eom_workflow_runner.settings import WorkflowSettings
 from eom_workflow_runner.state_machine import (
+    SUCCESSFUL_TERMINAL_WORKFLOW_STATES,
+    UNSUCCESSFUL_TERMINAL_WORKFLOW_STATES,
     ApprovalState,
     CommandState,
     StepState,
@@ -71,9 +73,8 @@ from eom_workflow_runner.state_machine import (
 
 LOGGER = logging.getLogger("eom.workflow.runner")
 TERMINAL_WORKFLOW_STATES = {
-    WorkflowState.COMPLETED.value,
-    WorkflowState.FAILED.value,
-    WorkflowState.CANCELLED.value,
+    state.value
+    for state in SUCCESSFUL_TERMINAL_WORKFLOW_STATES | UNSUCCESSFUL_TERMINAL_WORKFLOW_STATES
 }
 
 

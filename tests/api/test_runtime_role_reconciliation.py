@@ -113,3 +113,5 @@ def test_disposable_database_runs_workflow_preclaim_integration() -> None:
 
     assert "export EOM_RUN_INTEGRATION=1" in source
     assert "tests/integration/test_workflow_engine.py" in source
+    assert "tests/api/test_workflow_start_integration.py" in source
+    assert "tests/integration/test_workflow_submission_idempotency.py" in source

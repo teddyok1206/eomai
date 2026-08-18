@@ -1,6 +1,6 @@
 # Operator Bootstrap
 
-Apply migration `20260817_0006` before bootstrap. The command is allowed only while the Operator
+Apply migration `20260818_0007` before bootstrap. The command is allowed only while the Operator
 table is empty and concurrent calls are serialized in PostgreSQL.
 
 ```bash

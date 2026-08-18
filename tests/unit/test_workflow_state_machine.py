@@ -12,6 +12,8 @@ from eom_workflow_runner.state_machine import (
     CommandState,
     StepState,
     WorkflowState,
+    WorkflowStateCategory,
+    classify_workflow_state,
     require_transition,
     transition_command,
     transition_step,
@@ -49,6 +51,31 @@ def test_invalid_workflow_transition_is_rejected() -> None:
 def test_terminal_workflow_states_have_no_outgoing_transition() -> None:
     for state in (WorkflowState.COMPLETED, WorkflowState.FAILED, WorkflowState.CANCELLED):
         assert WORKFLOW_TRANSITIONS[state] == frozenset()
+
+
+@pytest.mark.parametrize(
+    "state",
+    (
+        WorkflowState.REQUESTED,
+        WorkflowState.RUNNING,
+        WorkflowState.AWAITING_HUMAN_APPROVAL,
+        WorkflowState.REWORK_REQUESTED,
+        WorkflowState.APPROVED,
+        WorkflowState.REGISTERING,
+    ),
+)
+def test_nonterminal_workflow_states_are_active(state: WorkflowState) -> None:
+    assert classify_workflow_state(state) is WorkflowStateCategory.ACTIVE
+
+
+def test_terminal_workflow_submission_categories_are_explicit() -> None:
+    assert (
+        classify_workflow_state(WorkflowState.COMPLETED)
+        is WorkflowStateCategory.SUCCESSFUL_TERMINAL
+    )
+    for state in (WorkflowState.FAILED, WorkflowState.CANCELLED):
+        assert classify_workflow_state(state) is WorkflowStateCategory.UNSUCCESSFUL_TERMINAL
+    assert {classify_workflow_state(state) for state in WorkflowState} == set(WorkflowStateCategory)
 
 
 def test_step_attempt_state_can_be_superseded_but_not_restarted() -> None:

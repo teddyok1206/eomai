@@ -19,7 +19,7 @@ outcome, status, duration, and stable error code; correlate with `X-Request-ID`.
 
 `NOT_READY` usually means configuration validation, database connectivity, migration revision, or
 built-in RBAC seed failed. Apply migrations using the migration owner, not `eom_api_runtime`. The
-expected revision for V0 is `20260817_0006`. Re-run the runtime-role bootstrap only after confirming
+expected revision for V0 is `20260818_0007`. Re-run the runtime-role bootstrap only after confirming
 the service user exists; repeat execution retains the runtime password and HMAC keys while removing
 privilege drift. A missing-table grant after migration is a fail-closed signal to review the access
 plan and rerun bootstrap, not a reason to grant all tables or default privileges.
