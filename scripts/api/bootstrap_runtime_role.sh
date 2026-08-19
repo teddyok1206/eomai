@@ -69,6 +69,7 @@ export EOM_API_ENV_OWNER="${ENV_OWNER}"
 export EOM_API_ENV_TARGET="${API_ENV}"
 export EOM_API_RUNTIME_ROLE="${RUNTIME_ROLE}"
 export EOM_API_TEST_MODE="${TEST_MODE}"
+export EOM_REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 
 "${PYTHON}" <<'PY'
 from __future__ import annotations
@@ -78,11 +79,16 @@ import os
 import pwd
 import secrets
 import stat
+import sys
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
 import psycopg
 from psycopg import sql
+
+repository_root = Path(os.environ["EOM_REPOSITORY_ROOT"])
+sys.path.insert(0, str(repository_root / "apps/application_api"))
+from eom_api.runtime_privileges import INSERT_TABLES, TABLE_PRIVILEGES
 
 ROLE = os.environ["EOM_API_RUNTIME_ROLE"]
 DATABASE = os.environ["EOM_API_DATABASE_NAME"]
@@ -90,79 +96,6 @@ ENV_OWNER = os.environ["EOM_API_ENV_OWNER"]
 ENV_GROUP = os.environ["EOM_API_ENV_GROUP"]
 ENV_MODE = int(os.environ["EOM_API_ENV_MODE"], 8)
 TEST_MODE = os.environ["EOM_API_TEST_MODE"] == "1"
-READ_TABLES = (
-    "alembic_version",
-    "api_audit_events",
-    "api_idempotency_records",
-    "api_sessions",
-    "api_tokens",
-    "approval_requests",
-    "artifact_revisions",
-    "content_intake_batches",
-    "content_intake_events",
-    "content_intake_source_files",
-    "content_pack_activations",
-    "content_pack_events",
-    "content_pack_files",
-    "content_pack_profiles",
-    "content_pack_releases",
-    "content_packs",
-    "deliverable_events",
-    "deliverable_revisions",
-    "deliverables",
-    "item_components",
-    "item_events",
-    "item_relationships",
-    "item_revisions",
-    "items",
-    "operator_credentials",
-    "operator_events",
-    "operator_role_assignments",
-    "operators",
-    "permissions",
-    "role_permissions",
-    "roles",
-    "usage_plans",
-    "usage_records",
-    "workflow_commands",
-    "workflow_definitions",
-    "workflow_events",
-    "workflow_instances",
-    "workflow_step_runs",
-)
-INSERT_TABLES = (
-    "api_audit_events",
-    "api_idempotency_records",
-    "api_sessions",
-    "api_tokens",
-    "content_pack_activations",
-    "content_pack_events",
-    "deliverable_events",
-    "deliverable_revisions",
-    "deliverables",
-    "item_events",
-    "operator_credentials",
-    "operator_events",
-    "operator_role_assignments",
-    "operators",
-    "usage_plans",
-    "usage_records",
-    "workflow_commands",
-    "workflow_events",
-    "workflow_instances",
-)
-UPDATE_TABLES = (
-    "api_idempotency_records",
-    "api_sessions",
-    "api_tokens",
-    "content_pack_activations",
-    "content_pack_releases",
-    "items",
-    "operator_credentials",
-    "operator_role_assignments",
-    "operators",
-    "usage_plans",
-)
 
 
 def load_existing(path: Path) -> tuple[str, str, str] | None:
@@ -317,11 +250,7 @@ with connection.cursor() as cursor:
     cursor.execute(
         sql.SQL("GRANT USAGE ON SCHEMA app TO {}").format(sql.Identifier(ROLE))
     )
-    for privilege, tables in (
-        ("SELECT", READ_TABLES),
-        ("INSERT", INSERT_TABLES),
-        ("UPDATE", UPDATE_TABLES),
-    ):
+    for privilege, tables in TABLE_PRIVILEGES:
         cursor.execute(
             sql.SQL("GRANT {} ON TABLE {} TO {}").format(
                 sql.SQL(privilege),
@@ -400,11 +329,7 @@ with connection.cursor() as cursor:
     for (table_name,) in cursor.fetchall():
         expected = {
             privilege
-            for privilege, tables in (
-                ("SELECT", READ_TABLES),
-                ("INSERT", INSERT_TABLES),
-                ("UPDATE", UPDATE_TABLES),
-            )
+            for privilege, tables in TABLE_PRIVILEGES
             if table_name in tables
         }
         for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"):

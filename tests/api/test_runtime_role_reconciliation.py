@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from eom_api.runtime_privileges import INSERT_TABLES, READ_TABLES, UPDATE_TABLES
 
 from scripts.api import testdb_guard
 
@@ -27,6 +28,18 @@ def test_runtime_role_bootstrap_revokes_drift_before_exact_grants() -> None:
     assert '"TRUNCATE"' in source
     assert "UPDATE app.alembic_version" in source
     assert "CREATE ROLE eom_api_privilege_probe" in source
+    assert "TABLE_PRIVILEGES" in source
+    assert "workflow_instances" in READ_TABLES
+    assert "workflow_instances" in UPDATE_TABLES
+    assert "workflow_commands" in INSERT_TABLES
+
+
+def test_disposable_reconciliation_proves_idempotency_and_removes_drift() -> None:
+    source = (REPOSITORY_ROOT / "scripts/api/testdb_prepare.sh").read_text(encoding="utf-8")
+
+    assert "reconcile_runtime_role" in source
+    assert source.count("reconcile_runtime_role") >= 4  # definition plus three invocations
+    assert "GRANT DELETE ON TABLE app.workflow_instances" in source
 
 
 def test_disposable_manifest_has_safe_deterministic_names() -> None:

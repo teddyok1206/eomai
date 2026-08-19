@@ -191,16 +191,50 @@ database_name="${manifest_values[0]}"
 runtime_role="${manifest_values[1]}"
 marker="${manifest_values[2]}"
 
-EOM_API_TEST_MODE=1 \
-EOM_API_DATABASE_NAME="${database_name}" \
-EOM_API_RUNTIME_ROLE="${runtime_role}" \
-EOM_API_ENV_TARGET="${state_directory}/runtime.env" \
-EOM_API_ENV_OWNER=eom \
-EOM_API_ENV_GROUP=eom \
-EOM_API_ENV_MODE=0600 \
-EOM_POSTGRES_ENV="${POSTGRES_ENV}" \
-EOM_API_PYTHON="${PYTHON}" \
-  "${BOOTSTRAP}"
+reconcile_runtime_role() {
+  EOM_API_TEST_MODE=1 \
+  EOM_API_DATABASE_NAME="${database_name}" \
+  EOM_API_RUNTIME_ROLE="${runtime_role}" \
+  EOM_API_ENV_TARGET="${state_directory}/runtime.env" \
+  EOM_API_ENV_OWNER=eom \
+  EOM_API_ENV_GROUP=eom \
+  EOM_API_ENV_MODE=0600 \
+  EOM_POSTGRES_ENV="${POSTGRES_ENV}" \
+  EOM_API_PYTHON="${PYTHON}" \
+    "${BOOTSTRAP}"
+}
+
+# Replay without drift proves the exact reconciliation is idempotent.
+reconcile_runtime_role
+reconcile_runtime_role
+
+# The third pass proves a stale, overprivileged table grant is removed rather
+# than retained by an additive-only bootstrap.
+export EOM_API_TEST_RUNTIME_ROLE="${runtime_role}"
+export EOM_API_DATABASE_NAME="${database_name}"
+"${PYTHON}" <<'PY'
+import os
+
+import psycopg
+from psycopg import sql
+
+connection = psycopg.connect(
+    host="127.0.0.1",
+    port=5432,
+    user=os.environ.get("POSTGRES_USER", "postgres"),
+    password=os.environ["POSTGRES_PASSWORD"],
+    dbname=os.environ["EOM_API_DATABASE_NAME"],
+    autocommit=True,
+)
+with connection.cursor() as cursor:
+    cursor.execute(
+        sql.SQL("GRANT DELETE ON TABLE app.workflow_instances TO {}").format(
+            sql.Identifier(os.environ["EOM_API_TEST_RUNTIME_ROLE"])
+        )
+    )
+connection.close()
+PY
+reconcile_runtime_role
 
 export EOM_API_TEST_MARKER="${marker}"
 export EOM_API_TEST_RUNTIME_ROLE="${runtime_role}"

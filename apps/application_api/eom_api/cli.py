@@ -9,7 +9,7 @@ from typing import Annotated
 import typer
 
 from eom_api.app import create_app
-from eom_api.health import active_admin_exists, readiness
+from eom_api.health import active_admin_exists, readiness, runtime_database_privileges
 from eom_api.lifespan import AppServices, build_services
 from eom_api.logging import configure_logging
 from eom_api.openapi import export_openapi
@@ -68,6 +68,7 @@ def doctor() -> None:
             "token_hash_key": True,
             "database": database_ready,
             "runtime_database_role": _runtime_database_role(services),
+            "runtime_database_privileges": runtime_database_privileges(services),
             "migration_head": database_ready,
             "builtin_rbac": database_ready,
             "active_admin": active_admin,

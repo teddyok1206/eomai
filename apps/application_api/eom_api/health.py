@@ -11,6 +11,7 @@ from eom_identity_service.models import (
 from sqlalchemy import func, select, text
 
 from eom_api.lifespan import AppServices
+from eom_api.runtime_privileges import runtime_table_privileges_ready
 
 EXPECTED_MIGRATION_HEAD = "20260818_0007"
 
@@ -21,12 +22,24 @@ def readiness(services: AppServices) -> bool:
             revision = connection.scalar(text("SELECT version_num FROM alembic_version"))
             role_count = connection.scalar(select(func.count()).select_from(RoleRecord))
             permission_count = connection.scalar(select(func.count()).select_from(PermissionRecord))
+            runtime_privileges = runtime_table_privileges_ready(connection)
         return bool(
             revision == EXPECTED_MIGRATION_HEAD
             and role_count == 5
             and permission_count == 34
+            and runtime_privileges
             and services.settings.server.host in {"127.0.0.1", "localhost", "::1"}
         )
+    except Exception:
+        return False
+
+
+def runtime_database_privileges(services: AppServices) -> bool:
+    """Check the reviewed positive grant matrix without exposing connection details."""
+
+    try:
+        with services.engine.connect() as connection:
+            return runtime_table_privileges_ready(connection)
     except Exception:
         return False
 
