@@ -20,6 +20,7 @@ from eom_orchestrator.worker_systemd import (
     probe_unit_name,
     probe_worker_systemd_authorization,
     systemctl_is_active_argv,
+    systemctl_show_argv,
     systemctl_start_argv,
     worker_unit_name,
 )
@@ -124,7 +125,7 @@ def test_launcher_preserves_worker_exit_code(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(
         "eom_orchestrator.worker_systemd._start_unit",
         lambda *_args, **_kwargs: FixedUnitRun(
-            unit, 1, b"", b"", _status(result="exit-code", main_status=1)
+            unit, 1, b"", b"", _status(result="exit-code", main_status=1), 3
         ),
     )
 
@@ -143,6 +144,7 @@ def test_launcher_distinguishes_unit_start_failure(monkeypatch: pytest.MonkeyPat
             b"",
             b"Interactive authentication required.",
             _status(main_code=0, started=0),
+            4,
         ),
     )
 
@@ -157,7 +159,7 @@ def test_launcher_distinguishes_systemd_timeout(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(
         "eom_orchestrator.worker_systemd._start_unit",
         lambda *_args, **_kwargs: FixedUnitRun(
-            unit, 1, b"", b"", _status(result="timeout", main_status=15)
+            unit, 1, b"", b"", _status(result="timeout", main_status=15), 3
         ),
     )
 
@@ -165,6 +167,133 @@ def test_launcher_distinguishes_systemd_timeout(monkeypatch: pytest.MonkeyPatch)
         launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
 
     assert captured.value.code is ErrorCode.WORKER_TIMEOUT
+
+
+def test_launcher_accepts_success_with_retained_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    unit = worker_unit_name(_slot(), JOB_ID)
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._start_unit",
+        lambda *_args, **_kwargs: FixedUnitRun(unit, 0, b"", b"", _status(), 3),
+    )
+
+    run = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+
+    assert run.exit_code == 0
+    assert run.status is not None and run.status.process_started
+
+
+def test_launcher_accepts_success_with_collected_reset_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unit = worker_unit_name(_slot(), JOB_ID)
+    reset = _status(main_code=0, started=0)
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._start_unit",
+        lambda *_args, **_kwargs: FixedUnitRun(unit, 0, b"", b"", reset, 3),
+    )
+
+    run = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+
+    assert run.exit_code == 0
+    assert run.status == reset
+    assert not reset.process_started
+
+
+def test_launcher_accepts_production_collected_lifecycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unit = worker_unit_name(_slot(), JOB_ID)
+    calls: list[tuple[str, ...]] = []
+    results = iter(
+        (
+            subprocess.CompletedProcess((), 0, b"", b""),
+            subprocess.CompletedProcess((), 3, b"", b""),
+            subprocess.CompletedProcess(
+                (),
+                0,
+                (
+                    b"LoadState=loaded\nActiveState=inactive\nSubState=dead\n"
+                    b"Result=success\nExecMainCode=0\nExecMainStatus=0\n"
+                    b"ExecMainStartTimestampMonotonic=0\nNeedDaemonReload=no\n"
+                ),
+                b"",
+            ),
+        )
+    )
+
+    def run(argv: tuple[str, ...], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        calls.append(argv)
+        return next(results)
+
+    monkeypatch.setattr("eom_orchestrator.worker_systemd.subprocess.run", run)
+
+    result = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+
+    assert result.exit_code == 0
+    assert result.status is not None and not result.status.process_started
+    assert calls == [
+        systemctl_start_argv(unit),
+        systemctl_is_active_argv(unit),
+        systemctl_show_argv(unit),
+    ]
+
+
+def test_launcher_accepts_success_when_collected_status_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unit = worker_unit_name(_slot(), JOB_ID)
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._start_unit",
+        lambda *_args, **_kwargs: FixedUnitRun(unit, 0, b"", b"", None, 4),
+    )
+
+    run = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+
+    assert run.exit_code == 0
+    assert run.status is None
+
+
+def test_launcher_rejects_missing_unit(monkeypatch: pytest.MonkeyPatch) -> None:
+    unit = worker_unit_name(_slot(), JOB_ID)
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._start_unit",
+        lambda *_args, **_kwargs: FixedUnitRun(unit, 5, b"", b"Unit not found", None, 4),
+    )
+
+    with pytest.raises(PlatformError) as captured:
+        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+
+    assert captured.value.code is ErrorCode.WORKER_UNAVAILABLE
+
+
+def test_launcher_rejects_lingering_unit(monkeypatch: pytest.MonkeyPatch) -> None:
+    unit = worker_unit_name(_slot(), JOB_ID)
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._start_unit",
+        lambda *_args, **_kwargs: FixedUnitRun(
+            unit, 0, b"", b"", _status(active_state="active"), 0
+        ),
+    )
+
+    with pytest.raises(PlatformError) as captured:
+        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+
+    assert captured.value.code is ErrorCode.WORKER_UNAVAILABLE
+
+
+def test_launcher_rejects_unexpected_activity_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unit = worker_unit_name(_slot(), JOB_ID)
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._start_unit",
+        lambda *_args, **_kwargs: FixedUnitRun(unit, 0, b"", b"", None, 1),
+    )
+
+    with pytest.raises(PlatformError) as captured:
+        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+
+    assert captured.value.code is ErrorCode.WORKER_UNAVAILABLE
 
 
 def test_launcher_rejects_timeout_outside_fixed_unit_contract() -> None:

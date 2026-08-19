@@ -86,7 +86,8 @@ class FixedUnitRun:
     exit_code: int
     command_stdout: bytes
     command_stderr: bytes
-    status: FixedUnitStatus
+    status: FixedUnitStatus | None
+    active_returncode: int
 
 
 @dataclass(frozen=True)
@@ -152,6 +153,38 @@ def systemctl_is_active_argv(unit_name: str) -> tuple[str, ...]:
     return (str(SYSTEMCTL), "is-active", "--quiet", unit_name)
 
 
+def _run_unit_start(unit_name: str, *, timeout_seconds: int) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        systemctl_start_argv(unit_name),
+        capture_output=True,
+        check=False,
+        env=SYSTEMCTL_ENV,
+        timeout=timeout_seconds,
+    )
+
+
+def _read_unit_active_returncode(unit_name: str) -> int:
+    try:
+        completed = subprocess.run(
+            systemctl_is_active_argv(unit_name),
+            capture_output=True,
+            check=False,
+            env=SYSTEMCTL_ENV,
+            timeout=15,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise OSError("fixed worker unit activity is unavailable") from exc
+    return completed.returncode
+
+
+def _unit_is_lingering(active_returncode: int) -> bool:
+    if active_returncode == 0:
+        return True
+    if active_returncode in NON_ACTIVE_SYSTEMCTL_EXIT_CODES:
+        return False
+    raise ValueError("fixed worker unit activity is unexpected")
+
+
 def parse_unit_status(output: str) -> FixedUnitStatus:
     values: dict[str, str] = {}
     for line in output.splitlines():
@@ -187,20 +220,19 @@ def _read_unit_status(unit_name: str) -> FixedUnitStatus:
 
 
 def _start_unit(unit_name: str, *, timeout_seconds: int) -> FixedUnitRun:
-    completed = subprocess.run(
-        systemctl_start_argv(unit_name),
-        capture_output=True,
-        check=False,
-        env=SYSTEMCTL_ENV,
-        timeout=timeout_seconds,
-    )
-    status = _read_unit_status(unit_name)
+    completed = _run_unit_start(unit_name, timeout_seconds=timeout_seconds)
+    active_returncode = _read_unit_active_returncode(unit_name)
+    try:
+        status = _read_unit_status(unit_name)
+    except (OSError, ValueError):
+        status = None
     return FixedUnitRun(
         unit_name=unit_name,
         exit_code=completed.returncode,
         command_stdout=completed.stdout,
         command_stderr=completed.stderr,
         status=status,
+        active_returncode=active_returncode,
     )
 
 
@@ -218,22 +250,39 @@ def launch_worker_unit(slot: WorkerSlot, job_id: str, *, timeout_seconds: int) -
         raise PlatformError(
             ErrorCode.WORKER_UNAVAILABLE, "fixed worker unit status is unavailable"
         ) from exc
-    if run.status.need_daemon_reload:
+    status = run.status
+    try:
+        lingering = _unit_is_lingering(run.active_returncode)
+    except ValueError as exc:
+        raise PlatformError(
+            ErrorCode.WORKER_UNAVAILABLE, "fixed worker unit activity is unexpected"
+        ) from exc
+    if status is not None and status.need_daemon_reload:
         raise PlatformError(ErrorCode.WORKER_UNAVAILABLE, "fixed worker unit is stale")
-    if run.status.process_lingering:
+    if lingering or (status is not None and status.process_lingering):
         raise PlatformError(ErrorCode.WORKER_UNAVAILABLE, "fixed worker unit did not stop")
-    if run.status.result == "timeout":
+    if status is not None and status.result == "timeout":
         raise PlatformError(ErrorCode.WORKER_TIMEOUT, "fixed worker unit timed out")
-    if not run.status.process_started:
+    if run.exit_code == 0:
+        return FixedUnitRun(
+            unit_name=run.unit_name,
+            exit_code=0,
+            command_stdout=run.command_stdout,
+            command_stderr=run.command_stderr,
+            status=status,
+            active_returncode=run.active_returncode,
+        )
+    if status is None or not status.process_started or status.exit_code == 0:
         raise PlatformError(
             ErrorCode.WORKER_UNAVAILABLE, "fixed worker unit start was denied or unavailable"
         )
     return FixedUnitRun(
         unit_name=run.unit_name,
-        exit_code=run.status.exit_code,
+        exit_code=status.exit_code,
         command_stdout=run.command_stdout,
         command_stderr=run.command_stderr,
-        status=run.status,
+        status=status,
+        active_returncode=run.active_returncode,
     )
 
 
@@ -265,13 +314,7 @@ def inspect_worker_systemd_contract(slot: WorkerSlot) -> WorkerSystemdReadiness:
 def probe_worker_systemd_authorization(slot: WorkerSlot) -> WorkerSystemdReadiness:
     unit_name = probe_unit_name(slot)
     try:
-        started = subprocess.run(
-            systemctl_start_argv(unit_name),
-            capture_output=True,
-            check=False,
-            env=SYSTEMCTL_ENV,
-            timeout=30,
-        )
+        started = _run_unit_start(unit_name, timeout_seconds=30)
     except subprocess.TimeoutExpired:
         return WorkerSystemdReadiness(
             False, "WORKER_SYSTEMD_PROBE_TIMEOUT", f"slot {slot.slot_id} probe timed out"
@@ -293,28 +336,17 @@ def probe_worker_systemd_authorization(slot: WorkerSlot) -> WorkerSystemdReadine
     # rehydrate the template without its execution metadata. The successful blocking StartUnit
     # result is authoritative; is-active is used only to reject a lingering process.
     try:
-        active = subprocess.run(
-            systemctl_is_active_argv(unit_name),
-            capture_output=True,
-            check=False,
-            env=SYSTEMCTL_ENV,
-            timeout=15,
-        )
-    except (OSError, subprocess.TimeoutExpired):
+        active_returncode = _read_unit_active_returncode(unit_name)
+        lingering = _unit_is_lingering(active_returncode)
+    except (OSError, ValueError):
         return WorkerSystemdReadiness(
             False,
             "WORKER_SYSTEMD_STATUS_UNEXPECTED",
             f"slot {slot.slot_id} probe status unavailable",
         )
-    if active.returncode == 0:
+    if lingering:
         return WorkerSystemdReadiness(
             False, "WORKER_SYSTEMD_PROBE_LINGERING", f"slot {slot.slot_id} probe remained active"
-        )
-    if active.returncode not in NON_ACTIVE_SYSTEMCTL_EXIT_CODES:
-        return WorkerSystemdReadiness(
-            False,
-            "WORKER_SYSTEMD_STATUS_UNEXPECTED",
-            f"slot {slot.slot_id} probe status unexpected",
         )
     return WorkerSystemdReadiness(True, "READY", f"slot {slot.slot_id} probe passed")
 

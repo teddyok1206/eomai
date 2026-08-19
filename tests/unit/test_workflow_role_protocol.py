@@ -6,6 +6,7 @@ import pytest
 from eom_workflow.models import ArtifactPointer, ArtifactSpec, RoleWorkerInput, WorkflowRequest
 from eom_workflow.schemas import (
     RESULT_SCHEMA_FILES,
+    WorkflowSchemaError,
     constrained_result_schema,
     load_definition_schema,
     load_role_input_schema,
@@ -131,6 +132,14 @@ def test_role_schema_bundle_hash_is_canonical() -> None:
     first = role_schema_bundle_hash()
     assert first == role_schema_bundle_hash()
     assert first.startswith("sha256:")
+
+
+def test_completed_worker_error_result_preserves_invalid_result_semantics() -> None:
+    result = _result("authoring")
+    result["status"] = "error"
+
+    with pytest.raises(WorkflowSchemaError, match=r"authoring-result@1\.0 at status"):
+        validate_role_result(result, "authoring", "authoring-result@1.0")
 
 
 def test_catalog_request_is_projected_to_the_worker_contract() -> None:
