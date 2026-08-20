@@ -14,8 +14,8 @@ from sqlalchemy import Engine, text
 
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.protocol import SCHEMA_NAMES
+from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
-from eom_orchestrator.worker_registry import WorkerRegistry
 from eom_orchestrator.worker_systemd import (
     inspect_worker_systemd_contract,
     probe_worker_systemd_authorization,
@@ -30,6 +30,19 @@ class DoctorCheck:
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+def runtime_configuration_check(settings: Settings) -> DoctorCheck:
+    """Inspect explicit worker configuration without starting a worker or probing Codex."""
+    try:
+        resolved = resolve_worker_configuration(settings)
+    except Exception as exc:
+        return DoctorCheck("orchestrator_runtime_configuration", False, type(exc).__name__)
+    return DoctorCheck(
+        "orchestrator_runtime_configuration",
+        True,
+        f"source={resolved.source.value}; version={resolved.registry.config.version}",
+    )
 
 
 def run_doctor(engine: Engine, settings: Settings) -> list[DoctorCheck]:
@@ -81,8 +94,11 @@ def run_doctor(engine: Engine, settings: Settings) -> list[DoctorCheck]:
         except KeyError:
             found = False
         checks.append(DoctorCheck(f"worker_user_{index:02d}", found, user))
+    configuration = runtime_configuration_check(settings)
+    checks.append(configuration)
     try:
-        registry = WorkerRegistry.load(settings.worker_config)
+        resolved = resolve_worker_configuration(settings)
+        registry = resolved.registry
         authoring = registry.select("authoring")
         detail = f"authoring={authoring.linux_user},global={registry.global_codex_concurrency}"
         checks.append(DoctorCheck("worker_slot_config", True, detail))

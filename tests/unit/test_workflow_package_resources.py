@@ -192,3 +192,57 @@ print("installed_workflow_wheel_resources=PASS")
         text=True,
     )
     assert result.stdout.strip() == "installed_workflow_wheel_resources=PASS"
+
+
+def test_installed_orchestrator_uses_explicit_external_worker_configuration(
+    installed_platform: Path, tmp_path: Path
+) -> None:
+    worker_config = tmp_path / "worker-slots.yaml"
+    worker_config.write_bytes((REPOSITORY_ROOT / "config/worker-slots.example.yaml").read_bytes())
+    script = """
+from __future__ import annotations
+import importlib.util
+import os
+import sys
+from pathlib import Path
+
+installed_root = Path(sys.argv[1]).resolve()
+repository = sys.argv[2]
+config = Path(sys.argv[3]).resolve()
+sys.path.insert(0, str(installed_root))
+os.environ["EOM_WORKER_CONFIG"] = str(config)
+
+from eom_orchestrator.doctor import runtime_configuration_check
+from eom_orchestrator.runtime_configuration import resolve_worker_configuration
+from eom_orchestrator.settings import DEFAULT_WORKER_CONFIG, Settings, WorkerConfigSource
+
+spec = importlib.util.find_spec("eom_orchestrator")
+assert spec is not None and spec.origin is not None
+assert Path(spec.origin).resolve().is_relative_to(installed_root)
+assert repository not in spec.origin
+settings = Settings.from_environment()
+assert settings.worker_config == config
+assert settings.worker_config_source is WorkerConfigSource.ENVIRONMENT
+assert DEFAULT_WORKER_CONFIG == Path("/etc/eom/worker-slots.yaml")
+assert settings.worker_config != Path(sys.prefix) / "config" / "worker-slots.example.yaml"
+resolved = resolve_worker_configuration(settings)
+assert resolved.live_worker.slot_id == "01"
+assert runtime_configuration_check(settings).passed
+print("installed_orchestrator_configuration=PASS")
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            script,
+            str(installed_platform),
+            str(REPOSITORY_ROOT),
+            str(worker_config),
+        ],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.strip() == "installed_orchestrator_configuration=PASS"

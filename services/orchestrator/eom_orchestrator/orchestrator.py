@@ -45,10 +45,11 @@ from eom_orchestrator.repository import (
     submit_structured_job,
     upsert_worker_slot,
 )
+from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.state_machine import JobState, transition_job
 from eom_orchestrator.worker import CodexWorkerAdapter, load_worker_result
-from eom_orchestrator.worker_registry import WorkerRegistry, WorkerSlot
+from eom_orchestrator.worker_registry import WorkerSlot
 
 LOGGER = logging.getLogger("eom.orchestrator")
 TERMINAL_STATES = {JobState.SUCCEEDED, JobState.FAILED, JobState.CANCELLED}
@@ -63,7 +64,7 @@ class Orchestrator:
     ) -> None:
         self.settings = settings or Settings.from_environment()
         self.sessions = build_session_factory(engine)
-        self.registry = WorkerRegistry.load(self.settings.worker_config)
+        self.registry = resolve_worker_configuration(self.settings).registry
         self.worker_adapter = worker_adapter or CodexWorkerAdapter(self.settings)
 
     def submit(self, message: str, idempotency_key: str | None = None) -> JobRecord:

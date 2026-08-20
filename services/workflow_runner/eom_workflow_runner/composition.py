@@ -8,8 +8,8 @@ from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_orchestrator.database import build_engine
 from eom_orchestrator.orchestrator import Orchestrator
+from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
-from eom_orchestrator.worker_registry import WorkerRegistry
 from sqlalchemy import Engine
 
 from eom_workflow_runner.actor_authorization import CompositeWorkflowActorAuthorizer
@@ -44,7 +44,7 @@ def build_workflow_runtime(
     actual_engine = engine or build_engine()
     actual_workflow_settings = workflow_settings or WorkflowSettings.from_environment()
     actual_platform_settings = platform_settings or Settings.from_environment()
-    registry = WorkerRegistry.load(actual_platform_settings.worker_config)
+    registry = resolve_worker_configuration(actual_platform_settings).registry
     available_roles = frozenset(slot.role for slot in registry.config.slots if slot.enabled)
     orchestrator = Orchestrator(actual_engine, actual_platform_settings)
     executor = PlatformRoleJobExecutor(

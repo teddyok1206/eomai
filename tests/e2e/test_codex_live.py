@@ -7,8 +7,10 @@ from pathlib import Path
 import pytest
 from eom_identifiers import sha256_file
 from eom_orchestrator.database import build_engine, build_session_factory
+from eom_orchestrator.live_preflight import run_live_worker_preflight
 from eom_orchestrator.models import ArtifactRevisionRecord, JobEventRecord, JobRecord
 from eom_orchestrator.orchestrator import Orchestrator
+from eom_orchestrator.settings import Settings
 from eom_protocol import ArtifactManifest, WorkerResult, validate_message
 from sqlalchemy import select
 
@@ -22,7 +24,13 @@ def test_real_codex_job_committed_to_nas() -> None:
     engine = build_engine()
     job_id = os.environ.get("EOM_LIVE_JOB_ID")
     if job_id is None:
-        submitted_job = Orchestrator(engine).submit("EOM_PLATFORM_SMOKE_TEST")
+        settings = Settings.from_environment()
+        preflight = run_live_worker_preflight(settings)
+        assert preflight.ready, {
+            "failed_codes": preflight.failed_codes,
+            "checks": [check.as_dict() for check in preflight.checks],
+        }
+        submitted_job = Orchestrator(engine, settings).submit("EOM_PLATFORM_SMOKE_TEST")
         job_id = submitted_job.job_id
 
     sessions = build_session_factory(engine)

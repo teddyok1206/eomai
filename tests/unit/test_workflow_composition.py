@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -7,7 +8,7 @@ from typing import cast
 import pytest
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
-from eom_orchestrator.settings import Settings
+from eom_orchestrator.settings import Settings, WorkerConfigSource
 from eom_workflow_runner import cli
 from eom_workflow_runner.actor_authorization import (
     CompositeWorkflowActorAuthorizer,
@@ -151,3 +152,35 @@ def test_cli_reports_runtime_not_ready_without_traceback(
     output = capsys.readouterr().out
     assert "WORKFLOW_RUNTIME_NOT_READY" in output
     assert "CATALOG_STAGING_UNWRITABLE" in output
+
+
+def test_doctor_reports_missing_worker_configuration_before_composition(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = Settings(
+        worker_config=tmp_path / "missing-worker-slots.yaml",
+        worker_config_source=WorkerConfigSource.EXPLICIT,
+    )
+    monkeypatch.setattr(cli.Settings, "from_environment", lambda: settings)
+
+    def unexpected(**_kwargs: object) -> object:
+        raise AssertionError("composition must not run with invalid worker configuration")
+
+    monkeypatch.setattr(cli, "build_workflow_runtime", unexpected)
+
+    assert cli.main(["doctor"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report == {
+        "passed": False,
+        "checks": [
+            {
+                "name": "orchestrator_runtime_configuration",
+                "status": "FAIL",
+                "code": "WORKER_CONFIGURATION_INVALID",
+                "detail": "PlatformError",
+                "passed": False,
+            }
+        ],
+    }

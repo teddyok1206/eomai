@@ -12,6 +12,8 @@ only sanitized check names, codes, and metadata summaries.
 | `CATALOG_REGISTRY_STAGING_INVALID` | `registry` is missing, linked, incorrectly owned/mode, or its create/remove probe failed | run the exact runtime path bootstrap; do not retry a failed workflow |
 | `CATALOG_PROMPT_STAGING_INVALID` | `workflow-prompts` is missing, linked, incorrectly owned/mode, or unwritable | run the exact runtime path bootstrap; do not recursively normalize Catalog staging |
 | `WORKER_ACCOUNT_UNAVAILABLE` | configured Linux identity is absent | repair worker bootstrap |
+| `WORKER_CONFIGURATION_INVALID` | explicit worker config is missing, linked, relative, unreadable, malformed, or incompatible | reconcile `/etc/eom/worker-slots.yaml`; do not point runtime at a repository example |
+| `ORCHESTRATOR_SOURCE_IMPORT_DETECTED` | dedicated verification imported Orchestrator outside installed package roots | redeploy the non-editable wheel and remove source path injection |
 | `WORKER_PRIVATE_GROUP_INVALID` | primary private group is inconsistent | repair the exact worker account |
 | `WORKER_GROUP_MEMBERSHIP_MISSING` | `eom` is not configured in the group | repair account membership, then relogin |
 | `WORKER_GROUP_MEMBERSHIP_STALE` | account is correct but this process is stale | start a new login/tmux process |

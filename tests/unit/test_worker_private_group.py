@@ -22,7 +22,7 @@ def _settings(tmp_path: Path) -> Settings:
     workspaces = tmp_path / "workspaces"
     workspaces.mkdir()
     return Settings(
-        worker_config=Path("config/worker-slots.example.yaml"),
+        worker_config=Path("config/worker-slots.example.yaml").resolve(),
         staging_root=tmp_path / "staging",
         workspace_root=workspaces,
         worker_home_root=tmp_path / "homes",

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import stat
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from eom_protocol import ErrorCode
@@ -21,9 +24,9 @@ class SlotLimits(BaseModel):
 class WorkerSlot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    slot_id: str = Field(pattern=r"^[0-9]{2}$")
-    linux_user: str = Field(pattern=r"^eom-cdx-[0-9]{2}$")
-    role: str = Field(min_length=1, max_length=64)
+    slot_id: Literal["01", "02", "03", "04", "05"]
+    linux_user: Literal["eom-cdx-01", "eom-cdx-02", "eom-cdx-03", "eom-cdx-04", "eom-cdx-05"]
+    role: Literal["authoring", "review", "image", "item_management", "support"]
     enabled: bool
     gpu: bool = False
 
@@ -37,7 +40,7 @@ class WorkerSlot(BaseModel):
 class WorkerSlotConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    version: int = Field(ge=1)
+    version: Literal[1]
     limits: SlotLimits
     slots: tuple[WorkerSlot, ...]
 
@@ -45,8 +48,12 @@ class WorkerSlotConfig(BaseModel):
     def slot_ids_are_unique(self) -> WorkerSlotConfig:
         ids = [slot.slot_id for slot in self.slots]
         users = [slot.linux_user for slot in self.slots]
+        if not ids:
+            raise ValueError("at least one worker slot is required")
         if len(ids) != len(set(ids)) or len(users) != len(set(users)):
             raise ValueError("worker slot ids and linux users must be unique")
+        if self.limits.gpu_concurrency > self.limits.global_codex_concurrency:
+            raise ValueError("GPU concurrency cannot exceed global Codex concurrency")
         return self
 
 
@@ -57,9 +64,25 @@ class WorkerRegistry:
     @classmethod
     def load(cls, path: Path) -> WorkerRegistry:
         try:
-            raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
+            if not path.is_absolute():
+                raise OSError("worker configuration path is not absolute")
+            metadata = path.lstat()
+            if (
+                path.is_symlink()
+                or not stat.S_ISREG(metadata.st_mode)
+                or path.resolve(strict=True) != path.absolute()
+                or not os.access(path, os.R_OK)
+            ):
+                raise OSError("worker configuration file is unsafe")
+            flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(path, flags)
+            with os.fdopen(descriptor, encoding="utf-8") as source:
+                content = source.read(1_048_577)
+            if len(content) > 1_048_576:
+                raise OSError("worker configuration file is too large")
+            raw: object = yaml.safe_load(content)
             config = WorkerSlotConfig.model_validate(raw)
-        except (OSError, yaml.YAMLError, ValidationError) as exc:
+        except (OSError, UnicodeError, yaml.YAMLError, ValidationError) as exc:
             raise PlatformError(ErrorCode.WORKER_UNAVAILABLE, "invalid worker slot config") from exc
         return cls(config)
 

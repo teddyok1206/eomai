@@ -448,7 +448,7 @@ class WorkflowRuntimeReadiness:
             )
         else:
             try:
-                roles = {slot.role for slot in registry.config.slots if slot.enabled}
+                roles: set[str] = {slot.role for slot in registry.config.slots if slot.enabled}
                 compiled = compile_definition(self.workflow_settings.definition_path, roles)
                 checks.append(
                     _success(

@@ -197,6 +197,9 @@ platform_wheel = by_prefix["eom_platform"]
 with zipfile.ZipFile(platform_wheel) as archive:
     names = set(archive.namelist())
     worker_runtime = {
+        "eom_orchestrator/live_preflight.py",
+        "eom_orchestrator/runtime_configuration.py",
+        "eom_orchestrator/settings.py",
         "eom_orchestrator/worker.py",
         "eom_orchestrator/worker_exec.py",
         "eom_orchestrator/worker_systemd.py",
@@ -212,6 +215,14 @@ with zipfile.ZipFile(platform_wheel) as archive:
     }
     if missing := (worker_runtime | actor_runtime | catalog_staging_runtime) - names:
         raise SystemExit(f"platform runtime missing from wheel: {sorted(missing)}")
+    settings_source = archive.read("eom_orchestrator/settings.py")
+    for forbidden in (
+        b"parents[",
+        b"worker-slots.example.yaml",
+        b"/home/eom/EOM",
+    ):
+        if forbidden in settings_source:
+            raise SystemExit("Orchestrator settings retain implicit source/install path inference")
     packaged = {
         name.removeprefix(workflow_prefix)
         for name in names
@@ -291,6 +302,17 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/generic-item-development.v1.1.yaml"
         ).read_bytes()
     )
+    worker_config = root / "worker-slots.yaml"
+    worker_config.write_bytes(
+        (Path(os.environ["REPOSITORY_ROOT"]) / "config/worker-slots.example.yaml").read_bytes()
+    )
+    staging = root / "staging"
+    workspace_root = root / "workspaces"
+    staging.mkdir()
+    (workspace_root / "eom-cdx-01").mkdir(parents=True)
+    codex_binary = root / "codex"
+    codex_binary.write_text("isolated non-live executable placeholder\n", encoding="utf-8")
+    codex_binary.chmod(0o700)
     subprocess.run(
         [
             os.environ["API_PYTHON"],
@@ -309,12 +331,17 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
     )
     check = r'''
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_path = sys.argv[2:]
+repository, definition_path, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
+os.environ["EOM_WORKER_CONFIG"] = worker_config
+os.environ["EOM_STAGING_ROOT"] = staging
+os.environ["EOM_WORKSPACE_ROOT"] = workspace_root
+os.environ["EOM_CODEX_BINARY"] = codex_binary
 from eom_workflow.compiler import compile_definition
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
@@ -326,6 +353,11 @@ from eom_workflow.schemas import (
 from eom_catalog_contracts import catalog_schema_inventory, load_schema, validate_contract
 import eom_workflow_runner.actor_authorization
 import eom_workflow_runner.actor_authorization_adapters
+from eom_orchestrator.doctor import runtime_configuration_check
+from eom_orchestrator.live_preflight import run_live_worker_preflight
+from eom_orchestrator.runtime_configuration import resolve_worker_configuration
+from eom_orchestrator.settings import DEFAULT_WORKER_CONFIG, Settings, WorkerConfigSource
+from eom_orchestrator.worker_systemd import WorkerSystemdReadiness
 
 spec = importlib.util.find_spec("eom_workflow")
 if (
@@ -335,6 +367,36 @@ if (
     or repository in spec.origin
 ):
     raise SystemExit("workflow package was not imported from the release wheel")
+orchestrator_spec = importlib.util.find_spec("eom_orchestrator")
+if (
+    orchestrator_spec is None
+    or orchestrator_spec.origin is None
+    or not Path(orchestrator_spec.origin).resolve().is_relative_to(installed_root)
+    or repository in orchestrator_spec.origin
+):
+    raise SystemExit("Orchestrator package was not imported from the release wheel")
+settings = Settings.from_environment()
+if settings.worker_config != Path(worker_config).resolve():
+    raise SystemExit("explicit worker configuration was not selected")
+if settings.worker_config_source is not WorkerConfigSource.ENVIRONMENT:
+    raise SystemExit("worker configuration source was not retained")
+if DEFAULT_WORKER_CONFIG != Path("/etc/eom/worker-slots.yaml"):
+    raise SystemExit("operator-owned worker configuration default drift")
+if settings.worker_config == Path(sys.prefix) / "config" / "worker-slots.example.yaml":
+    raise SystemExit("install-prefix worker configuration inference detected")
+resolved = resolve_worker_configuration(settings)
+if resolved.live_worker.slot_id != "01" or not runtime_configuration_check(settings).passed:
+    raise SystemExit("installed worker configuration readiness failed")
+def ready(_slot):
+    return WorkerSystemdReadiness(True, "READY", "isolated non-live boundary")
+preflight = run_live_worker_preflight(
+    settings,
+    package_roots=(installed_root,),
+    systemd_contract=ready,
+    authorization_probe=ready,
+)
+if not preflight.ready:
+    raise SystemExit(f"installed non-live worker preflight failed: {preflight.failed_codes}")
 load_definition_schema()
 for role in INPUT_SCHEMA_FILES:
     load_role_input_schema(role)
@@ -375,6 +437,10 @@ validate_contract(
             str(installed_root),
             os.environ["REPOSITORY_ROOT"],
             str(definition),
+            str(worker_config),
+            str(staging),
+            str(workspace_root),
+            str(codex_binary),
         ],
         cwd=root,
         check=True,

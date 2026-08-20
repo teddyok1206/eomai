@@ -8,7 +8,7 @@ from typing import Any
 
 import typer
 from eom_orchestrator.database import build_engine, build_session_factory
-from eom_orchestrator.doctor import DoctorCheck, run_doctor
+from eom_orchestrator.doctor import DoctorCheck, run_doctor, runtime_configuration_check
 from eom_orchestrator.logging import configure_logging
 from eom_orchestrator.models import (
     ArtifactRecord,
@@ -17,7 +17,7 @@ from eom_orchestrator.models import (
     JobRecord,
 )
 from eom_orchestrator.orchestrator import Orchestrator
-from eom_orchestrator.settings import Settings
+from eom_orchestrator.settings import Settings, SettingsError
 from eom_orchestrator.worker_registry import WorkerRegistry
 from eom_workflow_runner.composition import build_workflow_runtime
 from eom_workflow_runner.doctor import run_workflow_doctor
@@ -91,7 +91,28 @@ def _event_dict(event: JobEventRecord) -> dict[str, Any]:
 @system_app.command("doctor")
 def system_doctor() -> None:
     configure_logging()
-    settings = Settings.from_environment()
+    try:
+        settings = Settings.from_environment()
+    except SettingsError as exc:
+        _emit(
+            {
+                "passed": False,
+                "checks": [
+                    asdict(
+                        DoctorCheck(
+                            "orchestrator_runtime_configuration",
+                            False,
+                            type(exc).__name__,
+                        )
+                    )
+                ],
+            }
+        )
+        raise typer.Exit(1) from None
+    configuration = runtime_configuration_check(settings)
+    if not configuration.passed:
+        _emit({"passed": False, "checks": [asdict(configuration)]})
+        raise typer.Exit(1)
     engine = build_engine()
     runtime = build_workflow_runtime(
         engine=engine,

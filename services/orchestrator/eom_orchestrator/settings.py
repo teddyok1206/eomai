@@ -4,14 +4,21 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from urllib.parse import quote_plus
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_WORKER_CONFIG = Path("/etc/eom/worker-slots.yaml")
 
 
 class SettingsError(RuntimeError):
     pass
+
+
+class WorkerConfigSource(StrEnum):
+    OPERATOR_DEFAULT = "operator-default"
+    ENVIRONMENT = "environment"
+    EXPLICIT = "explicit"
 
 
 def _read_secret_environment(path: Path) -> dict[str, str]:
@@ -54,22 +61,25 @@ def database_url() -> str:
 
 @dataclass(frozen=True)
 class Settings:
-    worker_config: Path = REPOSITORY_ROOT / "config" / "worker-slots.example.yaml"
+    worker_config: Path = DEFAULT_WORKER_CONFIG
     staging_root: Path = Path("/srv/eom/staging")
     workspace_root: Path = Path("/srv/eom/workspaces")
     worker_home_root: Path = Path("/srv/eom/worker-homes")
     nas_artifact_root: Path = Path("/mnt/nas/eom/artifacts")
     codex_binary: Path = Path("/usr/local/bin/codex")
     worker_timeout_seconds: int = 600
+    worker_config_source: WorkerConfigSource = WorkerConfigSource.OPERATOR_DEFAULT
 
     @classmethod
     def from_environment(cls) -> Settings:
+        configured_worker_path = os.environ.get("EOM_WORKER_CONFIG")
+        worker_config = (
+            Path(configured_worker_path) if configured_worker_path else DEFAULT_WORKER_CONFIG
+        )
+        if not worker_config.is_absolute():
+            raise SettingsError("EOM_WORKER_CONFIG must be an absolute path")
         return cls(
-            worker_config=Path(
-                os.environ.get(
-                    "EOM_WORKER_CONFIG", str(REPOSITORY_ROOT / "config/worker-slots.example.yaml")
-                )
-            ),
+            worker_config=worker_config,
             staging_root=Path(os.environ.get("EOM_STAGING_ROOT", "/srv/eom/staging")),
             workspace_root=Path(os.environ.get("EOM_WORKSPACE_ROOT", "/srv/eom/workspaces")),
             worker_home_root=Path(os.environ.get("EOM_WORKER_HOME_ROOT", "/srv/eom/worker-homes")),
@@ -78,4 +88,9 @@ class Settings:
             ),
             codex_binary=Path(os.environ.get("EOM_CODEX_BINARY", "/usr/local/bin/codex")),
             worker_timeout_seconds=int(os.environ.get("EOM_WORKER_TIMEOUT_SECONDS", "600")),
+            worker_config_source=(
+                WorkerConfigSource.ENVIRONMENT
+                if configured_worker_path
+                else WorkerConfigSource.OPERATOR_DEFAULT
+            ),
         )

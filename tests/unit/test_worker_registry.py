@@ -6,7 +6,7 @@ from eom_orchestrator.worker_registry import WorkerRegistry
 
 
 def test_example_registry_selects_authoring_slot() -> None:
-    registry = WorkerRegistry.load(Path("config/worker-slots.example.yaml"))
+    registry = WorkerRegistry.load(Path("config/worker-slots.example.yaml").resolve())
     slot = registry.select("authoring")
     assert slot.slot_id == "01"
     assert slot.linux_user == "eom-cdx-01"
@@ -14,6 +14,6 @@ def test_example_registry_selects_authoring_slot() -> None:
 
 
 def test_registry_rejects_missing_role() -> None:
-    registry = WorkerRegistry.load(Path("config/worker-slots.example.yaml"))
+    registry = WorkerRegistry.load(Path("config/worker-slots.example.yaml").resolve())
     with pytest.raises(PlatformError, match="no enabled worker"):
         registry.select("missing")

@@ -35,6 +35,18 @@ installed systemd/polkit mechanism does not expose both `unit` and `verb` for `S
 install that rule and do not substitute a broad allow rule. Use the separately reviewed narrow
 broker fallback.
 
+## Operator-Managed Worker Configuration
+
+The installed Orchestrator reads worker slots from `/etc/eom/worker-slots.yaml`. The file is a
+non-secret operator setting and must be a real `root:eom:0640` regular file. The checked-in
+`config/worker-slots.example.yaml` is only a reviewed source/template for installation; runtime
+code does not infer it from the repository or Python prefix.
+
+`EOM_WORKER_CONFIG` may override the default only with an absolute reviewed path. Relative paths,
+symlinks, malformed YAML, unknown roles or fields, duplicate slot/user identities, and unsupported
+schema versions fail closed before job submission. Use the same explicit value for doctor, runner,
+and an authorized dedicated live verification.
+
 ## Privileged Path Reconciliation
 
 Review `scripts/workflow/bootstrap_runtime_paths.sh` before use. It requires UID 0, calls no
@@ -68,7 +80,8 @@ After the operator phase, return to a fresh `eom` shell:
 ```bash
 cd /home/eom/EOM
 scripts/workflow/verify_runtime_paths.sh
-/srv/eom/conda/envs/eom-core/bin/eom-workflow-runner doctor
+EOM_WORKER_CONFIG=/etc/eom/worker-slots.yaml \
+  /srv/eom/conda/envs/eom-core/bin/eom-workflow-runner doctor
 ```
 
 Both commands must pass before creating an acceptance workflow or running `run-once`. Doctor uses
