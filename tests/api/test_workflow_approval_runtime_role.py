@@ -11,16 +11,7 @@ import yaml
 from eom_api.app import create_app
 from eom_api.lifespan import build_services
 from eom_api.settings import ApiSecrets, ApiSettings
-from eom_identity_service.models import (
-    ApiAuditEventRecord,
-    ApiIdempotencyRecord,
-    ApiSessionRecord,
-    ApiTokenRecord,
-    OperatorCredentialRecord,
-    OperatorEventRecord,
-    OperatorRecord,
-    OperatorRoleAssignmentRecord,
-)
+from eom_identity_service.models import OperatorRecord
 from eom_identity_service.service import CreateOperatorCommand, OperatorService
 from eom_operator_identity import (
     ActorContext,
@@ -34,9 +25,7 @@ from eom_workflow import WorkflowRequest, compile_definition_data
 from eom_workflow_runner.models import (
     ApprovalRequestRecord,
     WorkflowCommandRecord,
-    WorkflowDefinitionRecord,
     WorkflowEventRecord,
-    WorkflowInstanceRecord,
 )
 from eom_workflow_runner.repository import (
     CommandType,
@@ -60,7 +49,7 @@ from eom_workflow_runner.state_machine import (
 from fastapi.testclient import TestClient
 from psycopg import sql
 from pydantic import SecretStr
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
@@ -84,7 +73,7 @@ def _authorization(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _create_waiting_workflow(engine: Engine, actor_id: str, suffix: str) -> tuple[str, str]:
+def _create_waiting_workflow(engine: Engine, actor_id: str, suffix: str) -> str:
     sessions = build_session_factory(engine)
     raw = yaml.safe_load(
         Path("config/workflows/generic-item-development.v1.yaml").read_text(encoding="utf-8")
@@ -175,58 +164,7 @@ def _create_waiting_workflow(engine: Engine, actor_id: str, suffix: str) -> tupl
             allowed_roles=("reviewer", "admin"),
             allowed_rework_targets=("authoring", "image", "review"),
         )
-        return workflow.workflow_id, definition.definition_id
-
-
-def _cleanup(engine: Engine, definition_id: str, usernames: tuple[str, ...]) -> None:
-    sessions = build_session_factory(engine)
-    with transaction(sessions) as session:
-        session.execute(
-            delete(WorkflowInstanceRecord).where(
-                WorkflowInstanceRecord.definition_id == definition_id
-            )
-        )
-        session.execute(
-            delete(WorkflowDefinitionRecord).where(
-                WorkflowDefinitionRecord.definition_id == definition_id
-            )
-        )
-        operator_ids = list(
-            session.scalars(
-                select(OperatorRecord.operator_id).where(OperatorRecord.username.in_(usernames))
-            )
-        )
-        if not operator_ids:
-            return
-        session_ids = select(ApiSessionRecord.api_session_id).where(
-            ApiSessionRecord.operator_id.in_(operator_ids)
-        )
-        session.execute(
-            delete(ApiAuditEventRecord).where(ApiAuditEventRecord.operator_id.in_(operator_ids))
-        )
-        session.execute(
-            delete(ApiTokenRecord).where(ApiTokenRecord.api_session_id.in_(session_ids))
-        )
-        session.execute(
-            delete(ApiIdempotencyRecord).where(ApiIdempotencyRecord.operator_id.in_(operator_ids))
-        )
-        session.execute(
-            delete(ApiSessionRecord).where(ApiSessionRecord.operator_id.in_(operator_ids))
-        )
-        session.execute(
-            delete(OperatorEventRecord).where(OperatorEventRecord.operator_id.in_(operator_ids))
-        )
-        session.execute(
-            delete(OperatorRoleAssignmentRecord).where(
-                OperatorRoleAssignmentRecord.operator_id.in_(operator_ids)
-            )
-        )
-        session.execute(
-            delete(OperatorCredentialRecord).where(
-                OperatorCredentialRecord.operator_id.in_(operator_ids)
-            )
-        )
-        session.execute(delete(OperatorRecord).where(OperatorRecord.operator_id.in_(operator_ids)))
+        return workflow.workflow_id
 
 
 def test_api_approval_requires_only_the_reconciled_runtime_grant_matrix() -> None:
@@ -261,9 +199,7 @@ def test_api_approval_requires_only_the_reconciled_runtime_grant_matrix() -> Non
         ),
         admin_actor,
     )
-    workflow_id, definition_id = _create_waiting_workflow(
-        owner_engine, reviewer.operator_id, suffix
-    )
+    workflow_id = _create_waiting_workflow(owner_engine, reviewer.operator_id, suffix)
     runtime_values = _runtime_environment()
     runtime_url = runtime_values["EOM_API_DATABASE_URL"]
     services = build_services(
@@ -421,5 +357,7 @@ def test_api_approval_requires_only_the_reconciled_runtime_grant_matrix() -> Non
                 )
         owner.close()
         services.engine.dispose()
-        _cleanup(owner_engine, definition_id, (admin_username, reviewer_username))
+        # The approval path writes append-only audit and immutable workflow
+        # history. The guarded disposable-database cleanup removes them as one
+        # unit after this final integration test.
         owner_engine.dispose()

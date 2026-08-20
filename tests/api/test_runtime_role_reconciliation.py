@@ -266,3 +266,24 @@ def test_disposable_scripts_do_not_print_credentials_or_database_urls() -> None:
     ):
         assert prohibited not in prepare
         assert prohibited not in run
+
+
+def test_disposable_workflow_tests_do_not_delete_immutable_history() -> None:
+    sources = {
+        relative: (REPOSITORY_ROOT / relative).read_text(encoding="utf-8")
+        for relative in (
+            "tests/api/test_workflow_start_integration.py",
+            "tests/integration/test_workflow_submission_idempotency.py",
+            "tests/api/test_workflow_approval_runtime_role.py",
+        )
+    }
+
+    assert all("delete(WorkflowDefinitionRecord)" not in source for source in sources.values())
+    assert (
+        "delete(ApiAuditEventRecord)"
+        not in sources["tests/api/test_workflow_approval_runtime_role.py"]
+    )
+    runner = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
+    assert runner.index("tests/integration/test_workflow_submission_idempotency.py") < runner.index(
+        "tests/api/test_workflow_approval_runtime_role.py"
+    )

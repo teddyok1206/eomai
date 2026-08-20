@@ -34,6 +34,11 @@ reconciliation uses the production privilege plan in explicit test mode and crea
 runtime credential. Tests use the owner for fixture cleanup and the runtime role for rollback-only
 DML plus DDL and migration denial probes.
 
+Workflow definitions and API audit rows created during the integration phase remain immutable.
+Per-test teardown must not delete them; the guarded final database cleanup removes the disposable
+database and its history as one unit. The runtime approval test is therefore the final test in the
+disposable test list because it intentionally retains its append-only audit and workflow records.
+
 The prepare phase also reproduces the production schema prerequisite: `app` is owned by the
 disposable migration owner, carries the disposable marker, and the owner's effective search path
 is exactly `app, public`. The unprivileged `verify` action checks this without applying migrations.

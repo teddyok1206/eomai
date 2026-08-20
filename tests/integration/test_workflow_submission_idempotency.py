@@ -113,11 +113,8 @@ def _cleanup(engine: Engine, definition_id: str) -> None:
                 WorkflowInstanceRecord.definition_id == definition_id
             )
         )
-        session.execute(
-            delete(WorkflowDefinitionRecord).where(
-                WorkflowDefinitionRecord.definition_id == definition_id
-            )
-        )
+        # Released definitions remain immutable until the guarded disposable
+        # database is removed as a whole.
 
 
 @pytest.mark.parametrize("terminal", (WorkflowState.FAILED, WorkflowState.CANCELLED))

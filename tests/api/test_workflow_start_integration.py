@@ -22,7 +22,6 @@ from eom_orchestrator.settings import database_url
 from eom_workflow import compile_definition
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
-    WorkflowDefinitionRecord,
     WorkflowEventRecord,
     WorkflowInstanceRecord,
 )
@@ -64,11 +63,8 @@ def _cleanup(engine: Engine, definition_id: str | None) -> None:
                     WorkflowInstanceRecord.definition_id == definition_id
                 )
             )
-            session.execute(
-                delete(WorkflowDefinitionRecord).where(
-                    WorkflowDefinitionRecord.definition_id == definition_id
-                )
-            )
+            # Released definitions are immutable. The guarded disposable-database
+            # cleanup owns their eventual removal together with the database.
         operator_ids = list(
             session.scalars(
                 select(OperatorRecord.operator_id).where(

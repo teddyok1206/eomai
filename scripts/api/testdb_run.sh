@@ -155,6 +155,8 @@ runtime_environment="${state_directory}/runtime.env"
 export EOM_API_TEST_RUNTIME_ENV="${runtime_environment}"
 export EOM_RUN_API_INTEGRATION=1
 export EOM_RUN_INTEGRATION=1
+# The approval test writes immutable workflow history and append-only API audit
+# rows. It must remain last; guarded database cleanup owns those records.
 "${PYTHON}" -m pytest -q \
   tests/api/test_runtime_role_live.py \
   tests/api/test_identity_integration.py \
