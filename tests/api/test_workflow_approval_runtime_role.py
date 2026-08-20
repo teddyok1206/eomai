@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
 from uuid import uuid4
 
 import psycopg
@@ -12,7 +11,12 @@ import yaml
 from eom_api.app import create_app
 from eom_api.lifespan import build_services
 from eom_api.settings import ApiSecrets, ApiSettings
-from eom_identifiers import content_sha256
+from eom_identifiers import (
+    content_sha256,
+    new_job_id,
+    new_logical_artifact_id,
+    new_revision_id,
+)
 from eom_identity_service.models import OperatorRecord
 from eom_identity_service.service import CreateOperatorCommand, OperatorService
 from eom_operator_identity import (
@@ -23,7 +27,14 @@ from eom_operator_identity import (
     RoleKey,
 )
 from eom_orchestrator.database import build_engine, build_session_factory, transaction
-from eom_workflow import WorkflowRequest, compile_definition_data
+from eom_orchestrator.repository import (
+    ensure_protocol_version,
+    submit_structured_job,
+    upsert_worker_slot,
+)
+from eom_orchestrator.state_machine import JobState, transition_job
+from eom_workflow import ArtifactPointer, WorkerRequest, WorkflowRequest, compile_definition_data
+from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.actor_authorization import (
     CompositeWorkflowActorAuthorizer,
 )
@@ -32,13 +43,14 @@ from eom_workflow_runner.actor_authorization_adapters import (
     SqlAlchemyOperatorActorSource,
     StaticWorkflowActorAuthorizer,
 )
-from eom_workflow_runner.catalog_port import WorkflowCatalogPort
-from eom_workflow_runner.engine import RoleJobExecutor, WorkflowRunner
+from eom_workflow_runner.catalog_port import PreparedPrompt, RegistrationOutcome
+from eom_workflow_runner.engine import RoleExecutionResult, WorkflowRunner
 from eom_workflow_runner.models import (
     ApprovalRequestRecord,
     WorkflowCommandRecord,
     WorkflowEventRecord,
     WorkflowInstanceRecord,
+    WorkflowStepRunRecord,
 )
 from eom_workflow_runner.readiness import RuntimeReadinessReport
 from eom_workflow_runner.repository import (
@@ -79,6 +91,114 @@ class ReadyWorkflowRuntime:
         return RuntimeReadinessReport(())
 
 
+class PlaceholderRoleExecutor:
+    def __init__(self, engine: Engine) -> None:
+        self.sessions = build_session_factory(engine)
+
+    def execute(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: WorkerRequest,
+        upstream: tuple[ArtifactPointer, ...],
+        idempotency_key: str,
+        prompt_text: str | None,
+    ) -> RoleExecutionResult:
+        del request, upstream, prompt_text
+        assert step.worker_role is not None
+        with transaction(self.sessions) as session:
+            job_id = new_job_id()
+            logical_artifact_id = new_logical_artifact_id()
+            revision_id = new_revision_id()
+            ensure_protocol_version(session, "workflow-role/1.0.1", role_schema_bundle_hash())
+            upsert_worker_slot(
+                session,
+                slot_id="04",
+                linux_user="eom-cdx-04",
+                role=step.worker_role,
+                enabled=True,
+                gpu=False,
+            )
+            job, created = submit_structured_job(
+                session,
+                job_id=job_id,
+                protocol_version="workflow-role/1.0.1",
+                idempotency_key=idempotency_key,
+                task_type=f"workflow_{step.worker_role}",
+                request={
+                    "workflow_id": workflow.workflow_id,
+                    "step_run_id": step.step_run_id,
+                    "role": step.worker_role,
+                    "attempt": step.attempt,
+                },
+                logical_artifact_id=logical_artifact_id,
+                revision_id=revision_id,
+            )
+            assert created
+            for target, event in (
+                (JobState.VALIDATED, "REQUEST_VALIDATED"),
+                (JobState.QUEUED, "JOB_QUEUED"),
+            ):
+                transition_job(session, job.job_id, target, event)
+            job.worker_slot_id = "04"
+            for target, event in (
+                (JobState.CLAIMED, "WORKER_CLAIMED"),
+                (JobState.RUNNING, "WORKER_STARTED"),
+                (JobState.VALIDATING_RESULT, "WORKER_RESULT_RECEIVED"),
+                (JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED"),
+                (JobState.SUCCEEDED, "ARTIFACT_COMMITTED"),
+            ):
+                transition_job(session, job.job_id, target, event)
+            result_hash = content_sha256(
+                {
+                    "status": "ok",
+                    "role": step.worker_role,
+                    "workflow_id": workflow.workflow_id,
+                }
+            )
+        return RoleExecutionResult(
+            job_id=job_id,
+            status="SUCCEEDED",
+            worker_slot="04",
+            logical_artifact_id=logical_artifact_id,
+            revision_id=revision_id,
+            content_hash=result_hash,
+            error_code=None,
+        )
+
+
+class PlaceholderWorkflowCatalog:
+    def prepare_prompt(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: WorkflowRequest,
+        upstream: tuple[ArtifactPointer, ...],
+    ) -> PreparedPrompt:
+        del workflow, step, request, upstream
+        raise AssertionError("legacy fixture has no Content Pack prompt")
+
+    def register_workflow(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: WorkflowRequest,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> RegistrationOutcome:
+        del workflow, step, request, artifacts
+        return RegistrationOutcome(
+            item_id="item_" + "d" * 32,
+            item_revision_id="itemrev_" + "e" * 32,
+            revision_number=1,
+            manifest_artifact_id="artifact_" + "f" * 32,
+            manifest_artifact_revision_id="rev_" + "1" * 32,
+            manifest_sha256="sha256:" + "2" * 64,
+        )
+
+
 def _enabled() -> None:
     if os.environ.get("EOM_RUN_API_INTEGRATION") != "1":
         pytest.skip("run through scripts/api/testdb_run.sh with a disposable database")
@@ -99,10 +219,6 @@ def _create_waiting_workflow(engine: Engine, actor_id: str, suffix: str) -> tupl
         Path("config/workflows/generic-item-development.v1.yaml").read_text(encoding="utf-8")
     )
     raw["definition_key"] = f"approval-grant-{suffix[:16]}"
-    for step in raw["steps"]:
-        if step["key"] == "human_approval":
-            step["on_approve"] = "complete"
-    raw["steps"] = [step for step in raw["steps"] if step["key"] != "registration"]
     compiled = compile_definition_data(raw, "test-runtime-approval", ROLE_SLOTS)
     with transaction(sessions) as session:
         definition, created = import_workflow_definition(session, compiled)
@@ -420,8 +536,8 @@ def test_api_approval_requires_only_the_reconciled_runtime_grant_matrix() -> Non
             runner = WorkflowRunner(
                 owner_engine,
                 workflow_settings,
-                cast(RoleJobExecutor, object()),
-                catalog=cast(WorkflowCatalogPort, object()),
+                PlaceholderRoleExecutor(owner_engine),
+                catalog=PlaceholderWorkflowCatalog(),
                 actor_authorizer=actor_authorizer,
                 readiness=ReadyWorkflowRuntime(),
                 available_roles=frozenset({"support"}),
