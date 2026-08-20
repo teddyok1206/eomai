@@ -12,6 +12,12 @@ from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry
 from sqlalchemy import Engine
 
+from eom_workflow_runner.actor_authorization import CompositeWorkflowActorAuthorizer
+from eom_workflow_runner.actor_authorization_adapters import (
+    OperatorIdentityWorkflowActorAuthorizer,
+    SqlAlchemyOperatorActorSource,
+    StaticWorkflowActorAuthorizer,
+)
 from eom_workflow_runner.engine import PlatformRoleJobExecutor, WorkflowRunner
 from eom_workflow_runner.readiness import WorkflowRuntimeReadiness
 from eom_workflow_runner.settings import WorkflowSettings
@@ -48,17 +54,25 @@ def build_workflow_runtime(
     )
     actual_catalog_settings = catalog_settings or CatalogSettings.from_environment()
     catalog = WorkflowCatalogService(actual_engine, actual_catalog_settings)
+    actor_authorizer = CompositeWorkflowActorAuthorizer(
+        operator=OperatorIdentityWorkflowActorAuthorizer(
+            SqlAlchemyOperatorActorSource(actual_engine)
+        ),
+        static=StaticWorkflowActorAuthorizer(actual_workflow_settings.load_actors()),
+    )
     readiness = WorkflowRuntimeReadiness(
         workflow_settings=actual_workflow_settings,
         platform_settings=actual_platform_settings,
         catalog_settings=actual_catalog_settings,
         catalog_configured=True,
+        actor_authorizer=actor_authorizer,
     )
     runner = WorkflowRunner(
         actual_engine,
         actual_workflow_settings,
         executor,
         catalog=catalog,
+        actor_authorizer=actor_authorizer,
         readiness=readiness,
         available_roles=available_roles,
     )

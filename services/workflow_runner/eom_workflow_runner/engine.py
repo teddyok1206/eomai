@@ -10,6 +10,7 @@ from typing import Protocol
 from uuid import uuid4
 
 from eom_identifiers import content_sha256
+from eom_operator_identity import PermissionKey
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import ArtifactRevisionRecord
 from eom_orchestrator.orchestrator import Orchestrator
@@ -28,6 +29,11 @@ from eom_workflow import (
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
+from eom_workflow_runner.actor_authorization import (
+    WorkflowActorAuthorization,
+    WorkflowActorAuthorizer,
+    WorkflowActorDenialReason,
+)
 from eom_workflow_runner.catalog_port import (
     RegistrationOutcome,
     WorkflowCatalogPort,
@@ -175,17 +181,20 @@ class WorkflowRunner:
         executor: RoleJobExecutor | None = None,
         *,
         catalog: WorkflowCatalogPort,
+        actor_authorizer: WorkflowActorAuthorizer,
         readiness: WorkflowExecutionReadiness,
         available_roles: frozenset[str],
         runner_id: str | None = None,
     ) -> None:
         if catalog is None:
             raise ValueError("workflow catalog adapter is required")
+        if actor_authorizer is None:
+            raise ValueError("workflow actor authorizer is required")
         self.engine = engine
         self.sessions = build_session_factory(engine)
         self.settings = settings or WorkflowSettings.from_environment()
         self.runner_config = self.settings.load_runner()
-        self.actors = self.settings.load_actors()
+        self.actor_authorizer = actor_authorizer
         if not available_roles:
             raise ValueError("workflow worker roles are required")
         self.available_roles = available_roles
@@ -305,8 +314,23 @@ class WorkflowRunner:
         if command_type in {
             CommandType.START_WORKFLOW,
             CommandType.ADVANCE_WORKFLOW,
-            CommandType.RECONCILE_WORKFLOW,
         }:
+            self._advance(
+                command.workflow_id,
+                command.command_id,
+                command.actor_type,
+                command.actor_id,
+            )
+        elif command_type == CommandType.RECONCILE_WORKFLOW:
+            if command.actor_type == "human":
+                authorization = self._authorize_actor(
+                    command.actor_id, PermissionKey.WORKFLOW_RECONCILE
+                )
+                if "admin" not in authorization.workflow_roles:
+                    raise WorkflowError(
+                        WorkflowErrorCode.APPROVAL_UNAUTHORIZED,
+                        "only an admin can reconcile a workflow",
+                    )
             self._advance(
                 command.workflow_id,
                 command.command_id,
@@ -847,9 +871,11 @@ class WorkflowRunner:
             )
 
     def _approve(self, command: WorkflowCommandRecord) -> None:
-        role = self._authorized_actor_role(command.actor_id)
+        authorization = self._authorize_actor(command.actor_id, PermissionKey.WORKFLOW_APPROVE)
         with transaction(self.sessions) as session:
-            approval = self._validate_pending_approval(session, command, role)
+            approval = self._validate_pending_approval(
+                session, command, authorization.workflow_roles
+            )
             step = session.execute(
                 select(WorkflowStepRunRecord)
                 .where(WorkflowStepRunRecord.step_run_id == approval.step_run_id)
@@ -871,7 +897,10 @@ class WorkflowRunner:
                 actor_id=command.actor_id,
                 command_id=command.command_id,
                 step_key=step.step_key,
-                payload={"approval_request_id": approval.approval_request_id},
+                payload={
+                    "approval_request_id": approval.approval_request_id,
+                    "authorization_source": authorization.namespace.value,
+                },
             )
             compiled = self._compiled_for_record(session, workflow)
             gate = compiled.steps_by_key[step.step_key]
@@ -892,7 +921,9 @@ class WorkflowRunner:
             )
 
     def _request_rework(self, command: WorkflowCommandRecord) -> None:
-        role = self._authorized_actor_role(command.actor_id)
+        authorization = self._authorize_actor(
+            command.actor_id, PermissionKey.WORKFLOW_REQUEST_REWORK
+        )
         target = command.payload.get("target")
         reason = command.payload.get("reason")
         if not isinstance(target, str) or not isinstance(reason, str):
@@ -901,7 +932,9 @@ class WorkflowRunner:
                 "rework command payload is invalid",
             )
         with transaction(self.sessions) as session:
-            approval = self._validate_pending_approval(session, command, role)
+            approval = self._validate_pending_approval(
+                session, command, authorization.workflow_roles
+            )
             if target not in approval.allowed_rework_targets:
                 raise WorkflowError(
                     WorkflowErrorCode.APPROVAL_INVALID_REWORK_TARGET,
@@ -986,6 +1019,7 @@ class WorkflowRunner:
                     "target": target,
                     "reason": reason[:200],
                     "new_step_run_id": new_target.step_run_id,
+                    "authorization_source": authorization.namespace.value,
                 },
             )
             transition_stage(
@@ -1010,7 +1044,8 @@ class WorkflowRunner:
             )
 
     def _cancel(self, command: WorkflowCommandRecord) -> None:
-        if self._authorized_actor_role(command.actor_id) != "admin":
+        authorization = self._authorize_actor(command.actor_id, PermissionKey.WORKFLOW_CANCEL)
+        if "admin" not in authorization.workflow_roles:
             raise WorkflowError(
                 WorkflowErrorCode.APPROVAL_UNAUTHORIZED,
                 "only an admin can cancel a workflow",
@@ -1058,7 +1093,10 @@ class WorkflowRunner:
                 actor_id=command.actor_id,
                 command_id=command.command_id,
                 step_key=workflow.current_step_key,
-                payload={"reason": str(command.payload.get("reason", ""))[:200]},
+                payload={
+                    "reason": str(command.payload.get("reason", ""))[:200],
+                    "authorization_source": authorization.namespace.value,
+                },
             )
 
     def _complete_terminal(
@@ -1128,7 +1166,10 @@ class WorkflowRunner:
             )
 
     def _validate_pending_approval(
-        self, session: Session, command: WorkflowCommandRecord, actor_role: str
+        self,
+        session: Session,
+        command: WorkflowCommandRecord,
+        actor_roles: frozenset[str],
     ) -> ApprovalRequestRecord:
         approval_id = command.payload.get("approval_request_id")
         expected_lock = command.payload.get("approval_lock_version")
@@ -1148,21 +1189,34 @@ class WorkflowRunner:
             )
         if approval.lock_version != expected_lock:
             raise WorkflowError(WorkflowErrorCode.APPROVAL_STALE, "approval snapshot is stale")
-        if actor_role not in approval.allowed_roles:
+        if not actor_roles.intersection(approval.allowed_roles):
             raise WorkflowError(
                 WorkflowErrorCode.APPROVAL_UNAUTHORIZED,
                 "actor role cannot resolve this approval",
             )
         return approval
 
-    def _authorized_actor_role(self, actor_id: str) -> str:
-        try:
-            return self.actors.role_for(actor_id)
-        except ValueError as exc:
+    def _authorize_actor(
+        self, actor_id: str, required_permission: PermissionKey
+    ) -> WorkflowActorAuthorization:
+        decision = self.actor_authorizer.authorize(actor_id, required_permission)
+        if decision.canonical_actor_id != actor_id:
             raise WorkflowError(
                 WorkflowErrorCode.APPROVAL_UNAUTHORIZED,
-                "actor is unknown or disabled",
-            ) from exc
+                "actor authorization changed canonical identity",
+            )
+        if decision.authorized:
+            return decision
+        if decision.denial_reason is WorkflowActorDenialReason.IDENTITY_BACKEND_UNAVAILABLE:
+            raise WorkflowError(
+                WorkflowErrorCode.ACTOR_AUTHORIZATION_UNAVAILABLE,
+                "workflow actor authorization backend is unavailable",
+            )
+        reason = decision.denial_reason or WorkflowActorDenialReason.ACTOR_UNKNOWN
+        raise WorkflowError(
+            WorkflowErrorCode.APPROVAL_UNAUTHORIZED,
+            f"workflow actor authorization denied: {reason.value}",
+        )
 
     def _load_workflow(
         self, workflow_id: str

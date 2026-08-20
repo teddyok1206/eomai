@@ -9,6 +9,8 @@ import pytest
 from eom_catalog_service.settings import CatalogSettings
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_systemd import WorkerSystemdReadiness
+from eom_workflow_runner.actor_authorization import WorkflowActorAuthorizationReadiness
+from eom_workflow_runner.actor_authorization_adapters import StaticWorkflowActorAuthorizer
 from eom_workflow_runner.readiness import WorkflowRuntimeReadiness
 from eom_workflow_runner.settings import WorkflowSettings
 
@@ -87,6 +89,7 @@ def _runtime(
             placeholder_pack_source=ROOT / "content/packs/generic-placeholder/0.1.0",
         ),
         catalog_configured=True,
+        actor_authorizer=StaticWorkflowActorAuthorizer(workflow.load_actors()),
         fixed_worker_codex_binary=Path(sys.executable),
         systemd_contract_inspector=lambda slot: WorkerSystemdReadiness(
             True, "READY", f"slot {slot.slot_id} contract v1"
@@ -113,6 +116,27 @@ def test_execution_readiness_passes_and_cleans_probes(
     assert not list(catalog.glob(".eom-readiness-*"))
     assert not list((catalog / "workflow-prompts").glob(".eom-readiness-*"))
     assert not list(workspaces.glob("*/.eom-readiness-*"))
+    actor_check = next(
+        check for check in report.checks if check.name == "workflow_actor_authorization"
+    )
+    assert actor_check.passed
+
+
+def test_execution_readiness_detects_unavailable_actor_authorization_bridge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, _, _ = _runtime(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        readiness.actor_authorizer,
+        "readiness",
+        lambda: WorkflowActorAuthorizationReadiness(
+            False,
+            "WORKFLOW_ACTOR_IDENTITY_UNAVAILABLE",
+            "identity repository unavailable",
+        ),
+    )
+
+    assert "WORKFLOW_ACTOR_IDENTITY_UNAVAILABLE" in _codes(readiness)
 
 
 def test_execution_readiness_detects_missing_catalog_adapter(

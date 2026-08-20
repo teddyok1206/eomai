@@ -27,6 +27,7 @@ from eom_workflow import ArtifactPointer, WorkerRequest, WorkflowRequest, compil
 from eom_workflow.compiler import compile_definition_data
 from eom_workflow.identifiers import new_approval_request_id, new_step_run_id
 from eom_workflow.schemas import role_schema_bundle_hash
+from eom_workflow_runner.actor_authorization_adapters import StaticWorkflowActorAuthorizer
 from eom_workflow_runner.catalog_port import PreparedPrompt, RegistrationOutcome
 from eom_workflow_runner.engine import RoleExecutionResult, WorkflowRunner
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
@@ -77,6 +78,10 @@ ROLE_SLOTS = {
     "image": ("03", "eom-cdx-03"),
     "item_management": ("04", "eom-cdx-04"),
 }
+
+
+def _static_actor_authorizer() -> StaticWorkflowActorAuthorizer:
+    return StaticWorkflowActorAuthorizer(WorkflowSettings().load_actors())
 
 
 class ReadyWorkflowRuntime:
@@ -386,6 +391,7 @@ def _environment(
         WorkflowSettings(),
         fake,
         catalog=FakeWorkflowCatalog(),
+        actor_authorizer=_static_actor_authorizer(),
         readiness=ReadyWorkflowRuntime(),
         available_roles=frozenset(ROLE_SLOTS) | {"support"},
         runner_id="test-runner",
@@ -610,6 +616,7 @@ def test_catalog_workflow_pins_prompts_and_registration_without_leaking_request(
             WorkflowSettings(),
             executor,
             catalog=catalog,
+            actor_authorizer=_static_actor_authorizer(),
             readiness=ReadyWorkflowRuntime(),
             available_roles=frozenset(ROLE_SLOTS) | {"support"},
             runner_id="catalog-test-runner",
@@ -1291,6 +1298,7 @@ def test_simultaneous_approve_and_rework_resolves_one_decision(
                 WorkflowSettings(),
                 FakeRoleExecutor(sessions),
                 catalog=FakeWorkflowCatalog(),
+                actor_authorizer=_static_actor_authorizer(),
                 readiness=ReadyWorkflowRuntime(),
                 available_roles=frozenset(ROLE_SLOTS) | {"support"},
                 runner_id=f"race-{command_type.value}",

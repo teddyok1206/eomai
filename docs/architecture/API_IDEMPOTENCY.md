@@ -41,3 +41,9 @@ input for active-work detection and audit; it is not a permanent exactly-once ke
 new API key after a terminal FAILED or CANCELLED occurrence can create a new `workflow_id`, while
 same-key replay still returns the original occurrence and an equivalent active occurrence prevents
 parallel work. See ADR 0031.
+
+Workflow human actions use the same transport-to-domain derivation. The durable command key is a
+keyed digest scoped by Operator, action endpoint, and raw Idempotency-Key. This makes an exact
+replay resolve the same command while allowing a new immutable command occurrence after an older
+command failed. The raw key is not persisted, and approval snapshot locking still resolves races
+between different action keys.

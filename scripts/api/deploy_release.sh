@@ -201,8 +201,12 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_orchestrator/worker_exec.py",
         "eom_orchestrator/worker_systemd.py",
     }
-    if missing := worker_runtime - names:
-        raise SystemExit(f"fixed worker runtime missing from wheel: {sorted(missing)}")
+    actor_runtime = {
+        "eom_workflow_runner/actor_authorization.py",
+        "eom_workflow_runner/actor_authorization_adapters.py",
+    }
+    if missing := (worker_runtime | actor_runtime) - names:
+        raise SystemExit(f"platform runtime missing from wheel: {sorted(missing)}")
     packaged = {
         name.removeprefix(workflow_prefix)
         for name in names
@@ -218,6 +222,9 @@ with zipfile.ZipFile(platform_wheel) as archive:
     for member in sorted(worker_runtime):
         if member not in record:
             raise SystemExit(f"fixed worker runtime missing from RECORD: {member}")
+    for member in sorted(actor_runtime):
+        if member not in record:
+            raise SystemExit(f"workflow actor runtime missing from RECORD: {member}")
     worker_exec_source = (
         Path(os.environ["REPOSITORY_ROOT"])
         / "services/orchestrator/eom_orchestrator/worker_exec.py"
@@ -309,6 +316,8 @@ from eom_workflow.schemas import (
     load_role_result_schema,
 )
 from eom_catalog_contracts import catalog_schema_inventory, load_schema, validate_contract
+import eom_workflow_runner.actor_authorization
+import eom_workflow_runner.actor_authorization_adapters
 
 spec = importlib.util.find_spec("eom_workflow")
 if (

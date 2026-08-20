@@ -139,12 +139,19 @@ def _action(
     expected_version: int,
 ) -> CommandResult:
     def execute() -> CommandResult:
+        actor = request.state.request_context.actor()
+        submission_key = request.app.state.services.idempotency.submission_key(
+            operator_id=actor.actor_id,
+            endpoint_key=f"workflow_action:{command_type.value}",
+            raw_key=idempotency_key,
+        )
         command_id, version = request.app.state.services.commands.workflow_action(
             workflow_id,
             command_type,
             body,
-            request.state.request_context.actor(),
+            actor,
             expected_version=expected_version,
+            idempotency_key=submission_key,
         )
         return CommandResult(
             command_id=command_id,

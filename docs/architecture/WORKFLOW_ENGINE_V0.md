@@ -140,6 +140,19 @@ An infrastructure readiness failure leaves the command, attempt count, workflow 
 history unchanged. The same typed checks back `eom-workflow-runner doctor`, so doctor success is an
 execution prerequisite rather than a configuration-only signal.
 
+## Human Actor Authorization
+
+API-created human commands preserve the authenticated canonical `operator_*` ID. At processing
+time the runner's actor-authorization port reloads that Operator from the identity store, requires
+ACTIVE state, and evaluates the current action-specific permission and workflow role. Static YAML
+actors remain available for CLI and internal paths through a separate adapter. A composite routes
+the two namespaces deterministically and never treats an unknown Operator as a static actor.
+
+This second check is intentional defense in depth: disabling an Operator or revoking a role after
+HTTP command creation but before runner processing denies the queued action. The production doctor
+checks that both adapters, the identity repository, and the required permission catalog entries are
+available without mutating identity or workflow state. See ADR 0033.
+
 ## Rework And Final Pointer
 
 Rework marks the target and downstream runs `SUPERSEDED`, creates a higher attempt, and retains all

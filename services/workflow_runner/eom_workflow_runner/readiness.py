@@ -34,6 +34,7 @@ from eom_workflow.schemas import (
     load_role_result_schema,
 )
 
+from eom_workflow_runner.actor_authorization import WorkflowActorAuthorizer
 from eom_workflow_runner.settings import WorkflowSettings
 
 
@@ -89,6 +90,7 @@ class WorkflowRuntimeReadiness:
         platform_settings: Settings,
         catalog_settings: CatalogSettings,
         catalog_configured: bool,
+        actor_authorizer: WorkflowActorAuthorizer,
         runner_user: str = "eom",
         fixed_worker_codex_binary: Path = Path("/usr/local/bin/codex"),
         systemd_contract_inspector: Callable[
@@ -102,6 +104,7 @@ class WorkflowRuntimeReadiness:
         self.platform_settings = platform_settings
         self.catalog_settings = catalog_settings
         self.catalog_configured = catalog_configured
+        self.actor_authorizer = actor_authorizer
         self.runner_user = runner_user
         self.fixed_worker_codex_binary = fixed_worker_codex_binary
         self.systemd_contract_inspector = systemd_contract_inspector
@@ -119,6 +122,15 @@ class WorkflowRuntimeReadiness:
         )
         checks.append(self._catalog_staging())
         checks.append(self._catalog_prompt_staging())
+        actor_authorization = self.actor_authorizer.readiness()
+        checks.append(
+            _check(
+                "workflow_actor_authorization",
+                actor_authorization.ready,
+                actor_authorization.code,
+                actor_authorization.detail,
+            )
+        )
 
         registry: WorkerRegistry | None = None
         try:

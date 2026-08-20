@@ -15,7 +15,6 @@ from eom_catalog_service.content_pack_service import ContentPackService
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.usage_service import UsageLedgerService
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
-from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_workflow import WorkflowRequest
@@ -153,6 +152,7 @@ class CommandAdapter:
         actor: ActorContext,
         *,
         expected_version: int,
+        idempotency_key: str,
     ) -> tuple[str, int]:
         with transaction(self.sessions) as session:
             from eom_workflow_runner.models import WorkflowInstanceRecord
@@ -191,15 +191,6 @@ class CommandAdapter:
                 payload["reason"] = request.reason
             if action is CommandType.REQUEST_REWORK:
                 payload["target"] = "authoring"
-            key = content_sha256(
-                {
-                    "workflow_id": workflow_id,
-                    "action": action.value,
-                    "lock_version": expected_version,
-                    "actor_id": actor.actor_id,
-                    "payload": payload,
-                }
-            )
             command, _ = enqueue_command(
                 session,
                 workflow_id=workflow_id,
@@ -208,7 +199,7 @@ class CommandAdapter:
                 actor_type="human",
                 actor_id=actor.actor_id,
                 source="application_api",
-                idempotency_key=f"api-{key.removeprefix('sha256:')}",
+                idempotency_key=idempotency_key,
             )
             return command.command_id, workflow.lock_version
 

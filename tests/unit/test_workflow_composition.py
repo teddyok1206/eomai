@@ -9,6 +9,10 @@ from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_orchestrator.settings import Settings
 from eom_workflow_runner import cli
+from eom_workflow_runner.actor_authorization import (
+    CompositeWorkflowActorAuthorizer,
+    WorkflowActorAuthorizer,
+)
 from eom_workflow_runner.catalog_port import WorkflowCatalogPort
 from eom_workflow_runner.composition import build_workflow_runtime
 from eom_workflow_runner.engine import PlatformRoleJobExecutor, WorkflowRunner
@@ -52,6 +56,7 @@ def test_production_composition_supplies_catalog_adapter(tmp_path: Path) -> None
     assert runtime.catalog is runtime.runner.catalog
     assert isinstance(runtime.runner.executor, PlatformRoleJobExecutor)
     assert runtime.runner.readiness is runtime.readiness
+    assert isinstance(runtime.runner.actor_authorizer, CompositeWorkflowActorAuthorizer)
     assert runtime.runner.available_roles == frozenset(
         {"authoring", "review", "image", "item_management", "support"}
     )
@@ -65,6 +70,7 @@ def test_runner_rejects_missing_worker_roles() -> None:
         WorkflowRunner(
             engine,
             catalog=cast(WorkflowCatalogPort, object()),
+            actor_authorizer=cast(WorkflowActorAuthorizer, object()),
             readiness=cast(WorkflowExecutionReadiness, object()),
             available_roles=frozenset(),
         )
@@ -77,6 +83,20 @@ def test_runner_rejects_missing_mandatory_catalog_adapter() -> None:
         WorkflowRunner(
             engine,
             catalog=cast(WorkflowCatalogPort, None),
+            actor_authorizer=cast(WorkflowActorAuthorizer, object()),
+            readiness=cast(WorkflowExecutionReadiness, object()),
+            available_roles=frozenset({"authoring"}),
+        )
+    engine.dispose()
+
+
+def test_runner_rejects_missing_actor_authorizer() -> None:
+    engine = create_engine("sqlite://")
+    with pytest.raises(ValueError, match="actor authorizer is required"):
+        WorkflowRunner(
+            engine,
+            catalog=cast(WorkflowCatalogPort, object()),
+            actor_authorizer=cast(WorkflowActorAuthorizer, None),
             readiness=cast(WorkflowExecutionReadiness, object()),
             available_roles=frozenset({"authoring"}),
         )
