@@ -205,7 +205,12 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_workflow_runner/actor_authorization.py",
         "eom_workflow_runner/actor_authorization_adapters.py",
     }
-    if missing := (worker_runtime | actor_runtime) - names:
+    catalog_staging_runtime = {
+        "eom_catalog_service/settings.py",
+        "eom_catalog_service/staging.py",
+        "eom_catalog_service/registry_service.py",
+    }
+    if missing := (worker_runtime | actor_runtime | catalog_staging_runtime) - names:
         raise SystemExit(f"platform runtime missing from wheel: {sorted(missing)}")
     packaged = {
         name.removeprefix(workflow_prefix)
@@ -225,6 +230,9 @@ with zipfile.ZipFile(platform_wheel) as archive:
     for member in sorted(actor_runtime):
         if member not in record:
             raise SystemExit(f"workflow actor runtime missing from RECORD: {member}")
+    for member in sorted(catalog_staging_runtime):
+        if member not in record:
+            raise SystemExit(f"Catalog staging runtime missing from RECORD: {member}")
     worker_exec_source = (
         Path(os.environ["REPOSITORY_ROOT"])
         / "services/orchestrator/eom_orchestrator/worker_exec.py"

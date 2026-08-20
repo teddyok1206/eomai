@@ -4,7 +4,43 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+
+
+class CatalogStagingArea(StrEnum):
+    CONTENT_PACKS = "content-packs"
+    REGISTRY = "registry"
+    WORKFLOW_PROMPTS = "workflow-prompts"
+
+
+@dataclass(frozen=True)
+class CatalogFixedStagingRoot:
+    area: CatalogStagingArea
+    check_name: str
+    failure_code: str
+
+    def path_beneath(self, staging_root: Path) -> Path:
+        return staging_root / self.area.value
+
+
+CATALOG_FIXED_STAGING_ROOTS = (
+    CatalogFixedStagingRoot(
+        CatalogStagingArea.CONTENT_PACKS,
+        "catalog_content_pack_staging",
+        "CATALOG_CONTENT_PACK_STAGING_INVALID",
+    ),
+    CatalogFixedStagingRoot(
+        CatalogStagingArea.REGISTRY,
+        "catalog_registry_staging",
+        "CATALOG_REGISTRY_STAGING_INVALID",
+    ),
+    CatalogFixedStagingRoot(
+        CatalogStagingArea.WORKFLOW_PROMPTS,
+        "catalog_prompt_staging",
+        "CATALOG_PROMPT_STAGING_INVALID",
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -15,8 +51,19 @@ class CatalogSettings:
     placeholder_pack_source: Path = Path("/home/eom/EOM/content/packs/generic-placeholder/0.1.0")
 
     @property
+    def content_pack_staging_root(self) -> Path:
+        return self.fixed_staging_root(CatalogStagingArea.CONTENT_PACKS)
+
+    @property
+    def registry_staging_root(self) -> Path:
+        return self.fixed_staging_root(CatalogStagingArea.REGISTRY)
+
+    @property
     def prompt_staging_root(self) -> Path:
-        return self.staging_root / "workflow-prompts"
+        return self.fixed_staging_root(CatalogStagingArea.WORKFLOW_PROMPTS)
+
+    def fixed_staging_root(self, area: CatalogStagingArea) -> Path:
+        return self.staging_root / area.value
 
     @classmethod
     def from_environment(cls) -> CatalogSettings:

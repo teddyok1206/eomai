@@ -117,6 +117,20 @@ class SystemdAuthorizationDeniedRuntime:
         )
 
 
+class RegistryStagingUnavailableRuntime:
+    def evaluate(self) -> RuntimeReadinessReport:
+        return RuntimeReadinessReport(
+            (
+                RuntimeReadinessCheck(
+                    name="catalog_registry_staging",
+                    status=ReadinessStatus.FAIL,
+                    code="CATALOG_REGISTRY_STAGING_INVALID",
+                    detail="permission denied",
+                ),
+            )
+        )
+
+
 class FakeRoleExecutor:
     def __init__(self, sessions: sessionmaker[Session]) -> None:
         self.sessions = sessions
@@ -531,6 +545,39 @@ def test_systemd_authorization_failure_does_not_consume_attempt_or_fail_workflow
             assert workflow.state == WorkflowState.REQUESTED.value
             assert len(list_workflow_events(session, workflow_id)) == 1
             assert executor.calls == []
+    finally:
+        _close(resources)
+
+
+def test_registry_staging_failure_does_not_consume_attempt_or_enter_catalog(
+    integration_engine: Engine,
+) -> None:
+    runner, executor, sessions, workflow_id, resources = _environment(
+        integration_engine, "skip", "workflow-registry-staging-unready"
+    )
+    runner.readiness = RegistryStagingUnavailableRuntime()
+    try:
+        with pytest.raises(WorkflowRuntimeNotReady) as captured:
+            runner.run_once(workflow_id)
+        assert captured.value.report.failed_codes == ("CATALOG_REGISTRY_STAGING_INVALID",)
+
+        with sessions() as session:
+            command = session.scalar(
+                select(WorkflowCommandRecord).where(
+                    WorkflowCommandRecord.workflow_id == workflow_id
+                )
+            )
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert command is not None and workflow is not None
+            assert command.state == CommandState.PENDING.value
+            assert command.attempts == 0
+            assert command.lease_owner is None
+            assert command.lease_expires_at is None
+            assert workflow.state == WorkflowState.REQUESTED.value
+            assert len(list_workflow_events(session, workflow_id)) == 1
+            assert executor.calls == []
+            assert isinstance(runner.catalog, FakeWorkflowCatalog)
+            assert runner.catalog.registrations == []
     finally:
         _close(resources)
 

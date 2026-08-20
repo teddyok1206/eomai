@@ -29,6 +29,7 @@ from eom_catalog_service.content_pack_files import (
     materialize_pack_source,
 )
 from eom_catalog_service.content_pack_repository import append_pack_event, transition_pack
+from eom_catalog_service.errors import CatalogError
 from eom_catalog_service.models import (
     ContentIntakeAnalysisRecord,
     ContentIntakeBatchRecord,
@@ -38,7 +39,8 @@ from eom_catalog_service.models import (
     ContentPackRecord,
     ContentPackReleaseRecord,
 )
-from eom_catalog_service.settings import CatalogSettings
+from eom_catalog_service.settings import CatalogSettings, CatalogStagingArea
+from eom_catalog_service.staging import require_fixed_catalog_staging_root
 
 
 class ContentPackService:
@@ -110,7 +112,17 @@ class ContentPackService:
                     session.expunge(existing)
                     return existing
 
-        output = self.settings.staging_root / "content-packs" / compiled.source_tree_sha256[7:]
+        try:
+            staging_root = require_fixed_catalog_staging_root(
+                self.settings,
+                CatalogStagingArea.CONTENT_PACKS,
+            )
+        except CatalogError as exc:
+            raise ContentPackError(
+                ContentPackErrorCode.CONTENT_PACK_BUILD_FAILED,
+                "content pack staging root is unavailable",
+            ) from exc
+        output = staging_root / compiled.source_tree_sha256[7:]
         built = build_pack(source_root, output)
         artifact = self.artifacts.commit_file_set(
             files={

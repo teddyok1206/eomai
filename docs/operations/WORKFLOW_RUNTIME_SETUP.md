@@ -38,15 +38,17 @@ broker fallback.
 ## Privileged Path Reconciliation
 
 Review `scripts/workflow/bootstrap_runtime_paths.sh` before use. It requires UID 0, calls no
-`sudo`, rejects symlinks and non-directories, and reconciles only the two fixed Catalog staging
-directories and five worker workspace roots. Codex does not execute this phase. The operator runs
-the reviewed command in an interactive privileged shell as described by the generated acceptance
-runbook.
+`sudo`, rejects symlinks and non-directories, and reconciles only the Catalog parent, three typed
+fixed Catalog staging roots, and five worker workspace roots. Codex does not execute this phase.
+The operator runs the reviewed command in an interactive privileged shell as described by the
+generated acceptance runbook.
 
 Expected state:
 
 ```text
 /srv/eom/staging/catalog             eom:eom                 0750
+/srv/eom/staging/catalog/content-packs  eom:eom              0750
+/srv/eom/staging/catalog/registry    eom:eom                 0750
 /srv/eom/staging/catalog/workflow-prompts  eom:eom             0750
 /srv/eom/workspaces/eom-cdx-01       eom-cdx-01:eom-cdx-01   2770
 /srv/eom/workspaces/eom-cdx-02       eom-cdx-02:eom-cdx-02   2770
@@ -56,8 +58,8 @@ Expected state:
 ```
 
 The script does not recurse through `/srv/eom`, touch worker auth, NAS, or Git, and is idempotent.
-`workflow-prompts` is an exact managed path, not a runtime-created convenience directory. The
-runtime creates only `<workflow_id>/<step_key>-<attempt>` beneath it.
+`content-packs`, `registry`, and `workflow-prompts` are exact managed paths, not runtime-created
+convenience directories. Runtime code creates only operation-keyed children beneath them.
 
 ## Unprivileged Verification
 
@@ -70,11 +72,11 @@ scripts/workflow/verify_runtime_paths.sh
 ```
 
 Both commands must pass before creating an acceptance workflow or running `run-once`. Doctor uses
-separate unique create/delete probes in the Catalog parent, prompt staging root, and worker roots,
-then starts one fixed `/usr/bin/true` authorization probe for each worker slot. It validates exact
-root-owned unit/helper hashes, never invokes Codex, never reads worker auth, and creates no workflow
-state. The privileged filesystem and negative authorization integrations are separate and opt-in;
-their exact commands are kept in the generated acceptance runbook.
+separate unique create/delete probes in the Catalog parent, every fixed Catalog root, and worker
+roots, then starts one fixed `/usr/bin/true` authorization probe for each worker slot. It validates
+exact root-owned unit/helper hashes, never invokes Codex, never reads worker auth, and creates no
+workflow state. The privileged filesystem and negative authorization integrations are separate and
+opt-in; their exact commands are kept in the generated acceptance runbook.
 
 ## Execution
 

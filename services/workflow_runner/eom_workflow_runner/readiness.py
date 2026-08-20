@@ -17,7 +17,7 @@ from typing import Protocol
 from uuid import uuid4
 
 from eom_catalog_contracts import catalog_schema_inventory, load_schema, validate_contract
-from eom_catalog_service.settings import CatalogSettings
+from eom_catalog_service.settings import CATALOG_FIXED_STAGING_ROOTS, CatalogSettings
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry, WorkerSlot
 from eom_orchestrator.worker_systemd import (
@@ -121,7 +121,7 @@ class WorkflowRuntimeReadiness:
             )
         )
         checks.append(self._catalog_staging())
-        checks.append(self._catalog_prompt_staging())
+        checks.extend(self._catalog_fixed_staging_roots())
         actor_authorization = self.actor_authorizer.readiness()
         checks.append(
             _check(
@@ -224,30 +224,45 @@ class WorkflowRuntimeReadiness:
         except (KeyError, OSError) as exc:
             return _failure("catalog_staging", "CATALOG_STAGING_UNWRITABLE", type(exc).__name__)
 
-    def _catalog_prompt_staging(self) -> RuntimeReadinessCheck:
-        path = self.catalog_settings.prompt_staging_root
+    def _catalog_fixed_staging_roots(self) -> list[RuntimeReadinessCheck]:
         try:
             runner = pwd.getpwnam(self.runner_user)
-            valid = _directory_matches(
-                path,
-                owner_id=runner.pw_uid,
-                group_id=runner.pw_gid,
-                mode=0o750,
-            )
-            if not valid:
-                return _failure(
-                    "catalog_prompt_staging",
-                    "CATALOG_PROMPT_STAGING_INVALID",
-                    "ownership, mode, type, or access does not match eom:0750",
+        except KeyError as exc:
+            return [
+                _failure(definition.check_name, definition.failure_code, type(exc).__name__)
+                for definition in CATALOG_FIXED_STAGING_ROOTS
+            ]
+
+        checks: list[RuntimeReadinessCheck] = []
+        for definition in CATALOG_FIXED_STAGING_ROOTS:
+            path = definition.path_beneath(self.catalog_settings.staging_root)
+            try:
+                valid = _directory_matches(
+                    path,
+                    owner_id=runner.pw_uid,
+                    group_id=runner.pw_gid,
+                    mode=0o750,
                 )
-            _probe_directory(path, group_id=None, file_mode=0o600)
-            return _success("catalog_prompt_staging", "writable probe passed")
-        except (KeyError, OSError) as exc:
-            return _failure(
-                "catalog_prompt_staging",
-                "CATALOG_PROMPT_STAGING_INVALID",
-                type(exc).__name__,
-            )
+                if not valid:
+                    checks.append(
+                        _failure(
+                            definition.check_name,
+                            definition.failure_code,
+                            "ownership, mode, type, or access does not match eom:0750",
+                        )
+                    )
+                    continue
+                _probe_directory(path, group_id=None, file_mode=0o600)
+                checks.append(_success(definition.check_name, "writable probe passed"))
+            except OSError as exc:
+                checks.append(
+                    _failure(
+                        definition.check_name,
+                        definition.failure_code,
+                        type(exc).__name__,
+                    )
+                )
+        return checks
 
     def _worker(self, slot: WorkerSlot) -> list[RuntimeReadinessCheck]:
         prefix = f"worker_{slot.slot_id}"
@@ -525,6 +540,8 @@ def _probe_directory(path: Path, *, group_id: int | None, file_mode: int) -> Non
         metadata = probe_file.lstat()
         if probe_file.is_symlink() or not stat.S_ISREG(metadata.st_mode):
             raise OSError("readiness probe is not a regular file")
+        if probe_file.read_bytes() != b"ready\n":
+            raise OSError("readiness probe could not be read back")
     finally:
         try:
             probe_file.unlink(missing_ok=True)

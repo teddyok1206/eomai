@@ -8,14 +8,32 @@ set -euo pipefail
 
 WORKERS=(eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05)
 CATALOG_STAGING=/srv/eom/staging/catalog
-CATALOG_PROMPT_STAGING=/srv/eom/staging/catalog/workflow-prompts
+CATALOG_FIXED_STAGING=(
+  /srv/eom/staging/catalog/content-packs
+  /srv/eom/staging/catalog/registry
+  /srv/eom/staging/catalog/workflow-prompts
+)
 
-[[ ! -L "${CATALOG_STAGING}" && -d "${CATALOG_STAGING}" ]]
-[[ "$(stat -c '%U:%G:%a' "${CATALOG_STAGING}")" == eom:eom:750 ]]
-[[ -w "${CATALOG_STAGING}" && -x "${CATALOG_STAGING}" ]]
-[[ ! -L "${CATALOG_PROMPT_STAGING}" && -d "${CATALOG_PROMPT_STAGING}" ]]
-[[ "$(stat -c '%U:%G:%a' "${CATALOG_PROMPT_STAGING}")" == eom:eom:750 ]]
-[[ -w "${CATALOG_PROMPT_STAGING}" && -x "${CATALOG_PROMPT_STAGING}" ]]
+verify_catalog_directory() {
+  local path="$1" probe probe_file probe_value status=0
+  [[ ! -L "${path}" && -d "${path}" ]]
+  [[ "$(stat -c '%U:%G:%a' "${path}")" == eom:eom:750 ]]
+  [[ -w "${path}" && -x "${path}" ]]
+  probe="$(mktemp -d "${path}/.eom-runtime-probe.XXXXXX")"
+  probe_file="${probe}/probe"
+  (umask 077 && printf '%s\n' ready >"${probe_file}") || status=1
+  [[ ! -L "${probe_file}" && -f "${probe_file}" ]] || status=1
+  IFS= read -r probe_value <"${probe_file}" || status=1
+  [[ "${probe_value:-}" == ready ]] || status=1
+  rm -f -- "${probe_file}"
+  rmdir -- "${probe}"
+  return "${status}"
+}
+
+verify_catalog_directory "${CATALOG_STAGING}"
+for path in "${CATALOG_FIXED_STAGING[@]}"; do
+  verify_catalog_directory "${path}"
+done
 
 for worker in "${WORKERS[@]}"; do
   path="/srv/eom/workspaces/${worker}"

@@ -13,7 +13,7 @@ flowchart TD
   DB -->|read-only pending inspection| READY[Execution readiness]
   READY -->|ready, then claim| RUNNER[eom workflow runner]
   RUNNER --> CATALOG[Catalog application adapter]
-  CATALOG --> STAGE[/srv/eom/staging/catalog/workflow-prompts]
+  CATALOG --> STAGE[/srv/eom/staging/catalog fixed roots]
   RUNNER --> ORCH[Orchestrator]
   ORCH --> WG[worker private-group workspace]
   WG --> UNIT[fixed systemd template for slot N]
@@ -29,14 +29,21 @@ explicit and test-scoped.
 
 ## Canonical Paths And Ownership
 
-Catalog prompt artifacts are temporary materializations. PostgreSQL metadata, immutable artifact
-revisions, and their hashes remain canonical. Both `/srv/eom/staging/catalog` and its fixed
-`workflow-prompts` child are owned by `eom:eom` with mode `0750`; the API service does not write
-either path.
+Catalog prompts, Content Pack builds, and registration manifests are temporary materializations.
+PostgreSQL metadata, immutable artifact revisions, and their hashes remain canonical.
+`/srv/eom/staging/catalog` and each declared fixed child are owned by `eom:eom` with mode `0750`;
+the API service does not write these paths.
 
-The privileged bootstrap is the canonical owner of the fixed `workflow-prompts` directory. Runtime
-code requires that directory to exist and never creates or normalizes it. The runner creates only
-these bounded dynamic directories beneath it:
+The typed Catalog inventory and privileged bootstrap jointly define the fixed roots:
+
+| Fixed root | Runtime materialization |
+| --- | --- |
+| `content-packs` | immutable-hash keyed Content Pack build directories |
+| `registry` | registration-keyed manifest directories |
+| `workflow-prompts` | workflow, step, and attempt prompt directories |
+
+Runtime code requires each fixed root to exist and never creates or normalizes it. The runner
+creates only these bounded dynamic directories beneath `workflow-prompts`:
 
 ```text
 /srv/eom/staging/catalog/workflow-prompts/
@@ -46,10 +53,11 @@ these bounded dynamic directories beneath it:
       prompt-envelope.json
 ```
 
-There are no other fixed directories below `workflow-prompts`. Catalog `content-packs`, `registry`,
-and intake staging paths belong to separate use cases and are not part of workflow execution
-readiness. Runtime-created workflow and attempt directories are constrained to the managed root,
-must be real `eom:eom:0750` directories, and are never created with a recursive parent operation.
+Registration creates one exclusive child beneath `registry` and never overwrites an existing
+manifest. Content Pack import creates a hash-keyed child beneath `content-packs`. Intake IDs and
+Catalog artifact job IDs are dynamic materializations directly beneath the Catalog parent, not
+additional fixed roots. All operation children are constrained to their validated parent. Only the
+orchestrator commits validated artifacts to NAS.
 
 Each worker has one workspace root:
 
@@ -136,11 +144,12 @@ sequenceDiagram
   end
 ```
 
-Readiness verifies the mandatory Catalog adapter, both fixed Catalog staging directories and their
-separate bounded create/delete probes, workflow schemas and definition, worker registry, Linux
-user/private group, the current process group snapshot, worker workspace metadata and probe, worker
-HOME metadata, Codex, `systemctl`, exact root-owned helper/template hashes, and the runner Python
-executable. It then starts one fixed `/usr/bin/true` authorization probe per enabled slot and
+Readiness verifies the mandatory Catalog adapter, the parent and all three fixed Catalog staging
+directories with separate bounded create/read/delete probes, workflow schemas and definition,
+worker registry, Linux user/private group, the current process group snapshot, worker workspace
+metadata and probe, worker HOME metadata, Codex, `systemctl`, exact root-owned helper/template
+hashes, and the runner Python executable. It then starts one fixed `/usr/bin/true` authorization
+probe per enabled slot and
 requires successful exit with no lingering process. It never invokes Codex, reads worker auth,
 uses `sudo`, accesses NAS, or writes a workflow record. A missing, linked, stale, incorrectly
 owned, incorrectly permissioned, or unauthorized worker template returns

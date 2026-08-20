@@ -1,6 +1,8 @@
 import subprocess
 from pathlib import Path
 
+from eom_catalog_service.settings import CATALOG_FIXED_STAGING_ROOTS
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -8,18 +10,45 @@ def test_runtime_bootstrap_is_exact_and_non_recursive() -> None:
     source = (ROOT / "scripts/workflow/bootstrap_runtime_paths.sh").read_text(encoding="utf-8")
     assert '[[ "${EUID}" -eq 0 ]]' in source
     assert "/srv/eom/staging/catalog" in source
+    assert "/srv/eom/staging/catalog/content-packs" in source
+    assert "/srv/eom/staging/catalog/registry" in source
     assert "/srv/eom/staging/catalog/workflow-prompts" in source
     assert "/srv/eom/workspaces" in source
     assert "chmod -R" not in source
     assert "chown -R" not in source
     assert "sudo" not in source
     assert "2770" in source and "0750" in source
+    assert "find " not in source
 
 
-def test_runtime_verifier_includes_prompt_staging_boundary() -> None:
+def test_runtime_verifier_includes_all_fixed_catalog_staging_boundaries() -> None:
     source = (ROOT / "scripts/workflow/verify_runtime_paths.sh").read_text(encoding="utf-8")
+    assert "/srv/eom/staging/catalog/content-packs" in source
+    assert "/srv/eom/staging/catalog/registry" in source
     assert "/srv/eom/staging/catalog/workflow-prompts" in source
     assert "eom:eom:750" in source
+    assert "mktemp -d" in source
+    assert ".eom-runtime-probe." in source
+
+
+def test_runtime_scripts_match_typed_fixed_catalog_inventory() -> None:
+    expected = {
+        str(definition.path_beneath(Path("/srv/eom/staging/catalog")))
+        for definition in CATALOG_FIXED_STAGING_ROOTS
+    }
+    assert expected == {
+        "/srv/eom/staging/catalog/content-packs",
+        "/srv/eom/staging/catalog/registry",
+        "/srv/eom/staging/catalog/workflow-prompts",
+    }
+    for relative in (
+        "scripts/workflow/bootstrap_runtime_paths.sh",
+        "scripts/workflow/verify_runtime_paths.sh",
+    ):
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        assert all(path in source for path in expected)
+        assert "chmod -R" not in source
+        assert "chown -R" not in source
 
 
 def test_systemd_authorization_verifier_is_nonprivileged_and_negative_by_default() -> None:

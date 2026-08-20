@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import stat
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -29,6 +27,10 @@ from eom_catalog_service.models import (
 from eom_catalog_service.pack_resources import PackResourceResolver
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.settings import CatalogSettings
+from eom_catalog_service.staging import (
+    create_catalog_operation_directory,
+    require_catalog_runtime_directory,
+)
 
 ROLE_PROFILE_KEYS = {
     "authoring": "authoring",
@@ -52,42 +54,17 @@ def _prepare_prompt_staging(
     attempt: int,
 ) -> Path:
     """Create job-local prompt staging beneath the operator-managed root."""
-    _require_runtime_directory(prompt_root, "prompt staging root is not prepared")
+    require_catalog_runtime_directory(prompt_root, "prompt staging root is not prepared")
     workflow_root = _create_runtime_directory(prompt_root, workflow_id)
     return _create_runtime_directory(workflow_root, f"{step_key}-{attempt}")
 
 
 def _create_runtime_directory(parent: Path, name: str) -> Path:
-    if not name or Path(name).name != name or name in {".", ".."}:
-        raise OSError("prompt staging path component is invalid")
-    path = parent / name
-    created = False
-    try:
-        path.mkdir(mode=0o750, parents=False)
-        created = True
-    except FileExistsError:
-        pass
-    if created:
-        path.chmod(0o750)
-    _require_runtime_directory(path, "prompt staging directory is unsafe")
-    return path
-
-
-def _require_runtime_directory(path: Path, message: str) -> None:
-    try:
-        metadata = path.lstat()
-    except OSError as exc:
-        raise OSError(message) from exc
-    valid = (
-        not path.is_symlink()
-        and stat.S_ISDIR(metadata.st_mode)
-        and metadata.st_uid == os.geteuid()
-        and metadata.st_gid == os.getegid()
-        and stat.S_IMODE(metadata.st_mode) == 0o750
-        and os.access(path, os.W_OK | os.X_OK)
+    return create_catalog_operation_directory(
+        parent,
+        name,
+        message="prompt staging directory is unsafe",
     )
-    if not valid:
-        raise OSError(message)
 
 
 class WorkflowCatalogService:

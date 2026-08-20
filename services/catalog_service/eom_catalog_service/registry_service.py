@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, cast
 
 from eom_catalog_contracts import validate_contract
@@ -44,6 +45,7 @@ from eom_catalog_service.models import (
 )
 from eom_catalog_service.pack_resources import PackResourceResolver
 from eom_catalog_service.settings import CatalogSettings
+from eom_catalog_service.staging import stage_registry_manifest
 
 
 class RegistryService:
@@ -104,11 +106,7 @@ class RegistryService:
             created_at=workflow.created_at,
         )
         validate_contract("item-revision-manifest", manifest)
-        staging = self.settings.staging_root / "registry" / request.registration_key
-        staging.mkdir(parents=True, mode=0o750, exist_ok=True)
-        manifest_path = staging / "item-revision-manifest.json"
-        manifest_path.write_bytes(canonical_json_bytes(manifest))
-        manifest_path.chmod(0o640)
+        manifest_path = self._stage_registration_manifest(request.registration_key, manifest)
         artifact = self.artifacts.commit_file_set(
             files={"item-revision-manifest.json": manifest_path},
             primary_file="item-revision-manifest.json",
@@ -211,6 +209,13 @@ class RegistryService:
             session.flush()
             session.expunge(revision)
             return revision
+
+    def _stage_registration_manifest(
+        self,
+        registration_key: str,
+        manifest: dict[str, Any],
+    ) -> Path:
+        return stage_registry_manifest(self.settings, registration_key, manifest)
 
     def list_items(
         self,

@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import eom_workflow_runner.readiness as readiness_module
 import pytest
 from eom_catalog_service.settings import CatalogSettings
 from eom_orchestrator.settings import Settings
@@ -47,9 +48,10 @@ def _runtime(
     catalog = tmp_path / "catalog"
     catalog.mkdir(mode=0o750)
     catalog.chmod(0o750)
-    prompt_staging = catalog / "workflow-prompts"
-    prompt_staging.mkdir(mode=0o750)
-    prompt_staging.chmod(0o750)
+    for fixed_name in ("content-packs", "registry", "workflow-prompts"):
+        fixed_staging = catalog / fixed_name
+        fixed_staging.mkdir(mode=0o750)
+        fixed_staging.chmod(0o750)
     workspaces = tmp_path / "workspaces"
     homes = tmp_path / "homes"
     workspaces.mkdir()
@@ -114,6 +116,8 @@ def test_execution_readiness_passes_and_cleans_probes(
 
     assert report.ready
     assert not list(catalog.glob(".eom-readiness-*"))
+    assert not list((catalog / "content-packs").glob(".eom-readiness-*"))
+    assert not list((catalog / "registry").glob(".eom-readiness-*"))
     assert not list((catalog / "workflow-prompts").glob(".eom-readiness-*"))
     assert not list(workspaces.glob("*/.eom-readiness-*"))
     actor_check = next(
@@ -227,6 +231,79 @@ def test_execution_readiness_rejects_prompt_staging_symlink(
     prompt_staging.symlink_to(tmp_path)
 
     assert "CATALOG_PROMPT_STAGING_INVALID" in _codes(readiness)
+
+
+def test_execution_readiness_detects_missing_registry_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, catalog, _ = _runtime(tmp_path, monkeypatch)
+    (catalog / "registry").rmdir()
+
+    report = readiness.evaluate()
+
+    assert not report.ready
+    assert "CATALOG_REGISTRY_STAGING_INVALID" in report.failed_codes
+
+
+def test_execution_readiness_rejects_registry_staging_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, catalog, _ = _runtime(tmp_path, monkeypatch)
+    registry = catalog / "registry"
+    registry.rmdir()
+    registry.symlink_to(catalog / "content-packs")
+
+    assert "CATALOG_REGISTRY_STAGING_INVALID" in _codes(readiness)
+
+
+@pytest.mark.parametrize("mode", [0o550, 0o755])
+def test_execution_readiness_rejects_registry_staging_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: int
+) -> None:
+    readiness, catalog, _ = _runtime(tmp_path, monkeypatch)
+    (catalog / "registry").chmod(mode)
+
+    assert "CATALOG_REGISTRY_STAGING_INVALID" in _codes(readiness)
+
+
+def test_execution_readiness_rejects_registry_staging_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, catalog, _ = _runtime(tmp_path, monkeypatch)
+    other_group = _group_id()
+    if other_group == os.getgid():
+        pytest.skip("a supplementary test group is required")
+    os.chown(catalog / "registry", -1, other_group)
+
+    assert "CATALOG_REGISTRY_STAGING_INVALID" in _codes(readiness)
+
+
+def test_execution_readiness_detects_registry_probe_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, _, _ = _runtime(tmp_path, monkeypatch)
+    original_probe = readiness_module._probe_directory
+
+    def fail_registry_probe(path: Path, *, group_id: int | None, file_mode: int) -> None:
+        if path.name == "registry":
+            raise OSError("probe denied")
+        original_probe(path, group_id=group_id, file_mode=file_mode)
+
+    monkeypatch.setattr(
+        "eom_workflow_runner.readiness._probe_directory",
+        fail_registry_probe,
+    )
+
+    assert "CATALOG_REGISTRY_STAGING_INVALID" in _codes(readiness)
+
+
+def test_execution_readiness_detects_missing_content_pack_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, catalog, _ = _runtime(tmp_path, monkeypatch)
+    (catalog / "content-packs").rmdir()
+
+    assert "CATALOG_CONTENT_PACK_STAGING_INVALID" in _codes(readiness)
 
 
 def test_execution_readiness_detects_stale_supplementary_groups(

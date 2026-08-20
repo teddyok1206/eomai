@@ -7,7 +7,11 @@ set -euo pipefail
 }
 
 CATALOG_STAGING=/srv/eom/staging/catalog
-CATALOG_PROMPT_STAGING=/srv/eom/staging/catalog/workflow-prompts
+CATALOG_FIXED_STAGING=(
+  /srv/eom/staging/catalog/content-packs
+  /srv/eom/staging/catalog/registry
+  /srv/eom/staging/catalog/workflow-prompts
+)
 WORKSPACE_PARENT=/srv/eom/workspaces
 WORKERS=(eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05)
 
@@ -39,7 +43,9 @@ getent passwd eom >/dev/null
 getent group eom >/dev/null
 
 reconcile_directory "${CATALOG_STAGING}" eom eom 0750
-reconcile_directory "${CATALOG_PROMPT_STAGING}" eom eom 0750
+for path in "${CATALOG_FIXED_STAGING[@]}"; do
+  reconcile_directory "${path}" eom eom 0750
+done
 for worker in "${WORKERS[@]}"; do
   getent passwd "${worker}" >/dev/null
   getent group "${worker}" >/dev/null
