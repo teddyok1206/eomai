@@ -20,6 +20,22 @@ fi
 [[ -x "${PYTHON}" ]] || fail "isolated eom-api Python is unavailable"
 
 state_directory="$2"
+[[ "${state_directory}" == /tmp/eom-api-testdb-* ]] || fail "unsafe test state path"
+[[ ! -L "${state_directory}" && -d "${state_directory}" ]] || \
+  fail "test state is unavailable"
+[[ "$(stat -Lc '%U:%G:%a' "${state_directory}")" == "eom:eom:700" ]] || \
+  fail "test state directory metadata mismatch"
+for path in "${state_directory}/manifest.json" "${state_directory}/owner.env"; do
+  [[ ! -L "${path}" && -f "${path}" ]] || fail "test state file is unavailable"
+  [[ "$(stat -Lc '%U:%G:%a' "${path}")" == "eom:eom:600" ]] || \
+    fail "test state file metadata mismatch"
+done
+if [[ -e "${state_directory}/runtime.env" ]]; then
+  [[ ! -L "${state_directory}/runtime.env" && -f "${state_directory}/runtime.env" ]] || \
+    fail "runtime state file is unsafe"
+  [[ "$(stat -Lc '%U:%G:%a' "${state_directory}/runtime.env")" == "eom:eom:600" ]] || \
+    fail "runtime state file metadata mismatch"
+fi
 export EOM_API_TEST_STATE="${state_directory}"
 set -a
 source "${POSTGRES_ENV}"

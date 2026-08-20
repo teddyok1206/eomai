@@ -10,6 +10,7 @@ The phases intentionally cross the privilege boundary twice:
 ```bash
 sudo -n scripts/api/testdb_prepare.sh
 sudo -k
+scripts/api/testdb_run.sh verify /tmp/eom-api-testdb-<ID>
 scripts/api/testdb_run.sh migrate /tmp/eom-api-testdb-<ID>
 
 sudo -v
@@ -32,6 +33,10 @@ Prepare creates only `eom_api_test_*` names and records
 reconciliation uses the production privilege plan in explicit test mode and creates a separate
 runtime credential. Tests use the owner for fixture cleanup and the runtime role for rollback-only
 DML plus DDL and migration denial probes.
+
+The prepare phase also reproduces the production schema prerequisite: `app` is owned by the
+disposable migration owner, carries the disposable marker, and the owner's effective search path
+is exactly `app, public`. The unprivileged `verify` action checks this without applying migrations.
 
 Cleanup requires `--confirm`, a direct `/tmp/eom-api-testdb-*` directory, a valid manifest,
 protected-name rejection, the expected owner, and exact database and role markers. It removes only

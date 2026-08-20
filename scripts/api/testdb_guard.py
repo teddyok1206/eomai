@@ -128,3 +128,25 @@ def validate_catalog_metadata(
         raise TestDatabaseGuardError("disposable database marker mismatch")
     if require_runtime and runtime_comment != manifest.marker:
         raise TestDatabaseGuardError("disposable runtime role marker mismatch")
+
+
+def validate_application_schema_metadata(
+    manifest: TestDatabaseManifest,
+    *,
+    schema_owner: str | None,
+    schema_comment: str | None,
+    effective_search_path: tuple[str, ...],
+    has_usage: bool,
+    has_create: bool,
+) -> None:
+    """Validate the production-equivalent migration schema prerequisite."""
+
+    manifest.validated()
+    if schema_owner != manifest.owner_role:
+        raise TestDatabaseGuardError("disposable app schema owner mismatch")
+    if schema_comment != manifest.marker:
+        raise TestDatabaseGuardError("disposable app schema marker mismatch")
+    if effective_search_path != ("app", "public"):
+        raise TestDatabaseGuardError("disposable migration owner search path mismatch")
+    if not has_usage or not has_create:
+        raise TestDatabaseGuardError("disposable migration owner schema privilege mismatch")

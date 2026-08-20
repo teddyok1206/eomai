@@ -42,6 +42,53 @@ def test_disposable_reconciliation_proves_idempotency_and_removes_drift() -> Non
     assert "GRANT DELETE ON TABLE app.workflow_instances" in source
 
 
+def test_disposable_prepare_matches_production_application_schema_contract() -> None:
+    production = (REPOSITORY_ROOT / "infra/compose/initdb/001-create-app-role.sh").read_text(
+        encoding="utf-8"
+    )
+    disposable = (REPOSITORY_ROOT / "scripts/api/testdb_prepare.sh").read_text(encoding="utf-8")
+
+    assert "CREATE SCHEMA IF NOT EXISTS app AUTHORIZATION" in production
+    assert "CREATE SCHEMA app AUTHORIZATION" in disposable
+    for contract in ("GRANT USAGE, CREATE ON SCHEMA app TO", "SET search_path TO app, public"):
+        assert contract in production and contract in disposable
+    assert "COMMENT ON SCHEMA app IS" in disposable
+    assert "CREATE SCHEMA IF NOT EXISTS" not in disposable
+
+
+def test_disposable_schema_metadata_requires_owner_marker_path_and_minimum_privileges() -> None:
+    manifest = testdb_guard.TestDatabaseManifest.create("20260818112233_deadbeef")
+
+    testdb_guard.validate_application_schema_metadata(
+        manifest,
+        schema_owner=manifest.owner_role,
+        schema_comment=manifest.marker,
+        effective_search_path=("app", "public"),
+        has_usage=True,
+        has_create=True,
+    )
+    invalid = (
+        {"schema_owner": None},
+        {"schema_comment": None},
+        {"effective_search_path": ("public",)},
+        {"has_usage": False},
+        {"has_create": False},
+    )
+    baseline = {
+        "schema_owner": manifest.owner_role,
+        "schema_comment": manifest.marker,
+        "effective_search_path": ("app", "public"),
+        "has_usage": True,
+        "has_create": True,
+    }
+    for override in invalid:
+        with pytest.raises(testdb_guard.TestDatabaseGuardError):
+            testdb_guard.validate_application_schema_metadata(
+                manifest,
+                **(baseline | override),
+            )
+
+
 def test_disposable_manifest_has_safe_deterministic_names() -> None:
     manifest = testdb_guard.TestDatabaseManifest.create("20260818112233_deadbeef")
 
@@ -57,6 +104,55 @@ def test_manifest_rejects_production_or_mismatched_names(tmp_path: Path) -> None
         '{"database":"eom","owner_role":"eom_api_test_owner_20260818112233deadbeef",'
         '"runtime_role":"eom_api_test_runtime_20260818112233deadbeef",'
         '"test_id":"20260818112233_deadbeef"}\n',
+        encoding="ascii",
+    )
+
+    with pytest.raises(testdb_guard.TestDatabaseGuardError):
+        testdb_guard.TestDatabaseManifest.load(path)
+
+
+@pytest.mark.parametrize(
+    ("database", "owner_role", "runtime_role"),
+    (
+        (
+            "eom",
+            "eom_api_test_owner_20260818112233deadbeef",
+            "eom_api_test_runtime_20260818112233deadbeef",
+        ),
+        (
+            "postgres",
+            "eom_api_test_owner_20260818112233deadbeef",
+            "eom_api_test_runtime_20260818112233deadbeef",
+        ),
+        (
+            "eom_api_test_20260818112233deadbeef",
+            "eom_app",
+            "eom_api_test_runtime_20260818112233deadbeef",
+        ),
+        (
+            "eom_api_test_20260818112233deadbeef",
+            "eom_api_test_owner_20260818112233deadbeef",
+            "eom_api_runtime",
+        ),
+    ),
+)
+def test_manifest_rejects_production_database_and_role_names(
+    tmp_path: Path,
+    database: str,
+    owner_role: str,
+    runtime_role: str,
+) -> None:
+    path = tmp_path / "manifest.json"
+    path.write_text(
+        (
+            '{"database":"'
+            + database
+            + '","owner_role":"'
+            + owner_role
+            + '","runtime_role":"'
+            + runtime_role
+            + '","test_id":"20260818112233_deadbeef"}\n'
+        ),
         encoding="ascii",
     )
 
@@ -128,3 +224,45 @@ def test_disposable_database_runs_workflow_preclaim_integration() -> None:
     assert "tests/integration/test_workflow_engine.py" in source
     assert "tests/api/test_workflow_start_integration.py" in source
     assert "tests/integration/test_workflow_submission_idempotency.py" in source
+
+
+def test_disposable_migration_verifies_head_and_migration_0006_objects() -> None:
+    source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
+
+    assert "{verify|migrate|tests}" in source
+    assert "validate_application_schema_metadata" in source
+    assert "SELECT version_num FROM app.alembic_version" in source
+    assert "app.reject_identity_key_change()" in source
+    assert "app.reject_api_audit_mutation()" in source
+    assert "api_audit_events_append_only" in source
+
+
+def test_cleanup_accepts_marked_database_after_failed_migration_without_runtime_role() -> None:
+    manifest = testdb_guard.TestDatabaseManifest.create("20260818112233_deadbeef")
+    testdb_guard.validate_catalog_metadata(
+        manifest,
+        database_owner=manifest.owner_role,
+        database_comment=manifest.marker,
+        owner_comment=manifest.marker,
+        runtime_comment=None,
+        require_runtime=False,
+    )
+    source = (REPOSITORY_ROOT / "scripts/api/testdb_cleanup.sh").read_text(encoding="utf-8")
+    assert "require_runtime=runtime_exists" in source
+    assert "if runtime_exists:" in source
+    assert "--confirm" in source
+    assert "test state directory metadata mismatch" in source
+    assert '"${state_directory}/manifest.json" "${state_directory}/owner.env"' in source
+
+
+def test_disposable_scripts_do_not_print_credentials_or_database_urls() -> None:
+    prepare = (REPOSITORY_ROOT / "scripts/api/testdb_prepare.sh").read_text(encoding="utf-8")
+    run = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
+
+    for prohibited in (
+        "print(owner_password)",
+        "print(owner_url)",
+        "printf '%s\\n' \"${EOM_DATABASE_URL}\"",
+    ):
+        assert prohibited not in prepare
+        assert prohibited not in run

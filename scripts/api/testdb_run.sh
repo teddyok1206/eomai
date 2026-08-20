@@ -10,8 +10,8 @@ fail() {
   exit 1
 }
 
-if (($# != 2)) || [[ "$1" != "migrate" && "$1" != "tests" ]]; then
-  printf '%s\n' "usage: $0 {migrate|tests} /tmp/eom-api-testdb-<ID>" >&2
+if (($# != 2)) || [[ "$1" != "verify" && "$1" != "migrate" && "$1" != "tests" ]]; then
+  printf '%s\n' "usage: $0 {verify|migrate|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -37,7 +37,14 @@ import os
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from scripts.api.testdb_guard import TestDatabaseManifest, validate_state_directory
+import psycopg
+
+from scripts.api.testdb_guard import (
+    TestDatabaseManifest,
+    TestDatabaseGuardError,
+    validate_application_schema_metadata,
+    validate_state_directory,
+)
 
 state = validate_state_directory(Path(os.environ["EOM_API_TEST_STATE"]))
 manifest = TestDatabaseManifest.load(state / "manifest.json")
@@ -48,6 +55,38 @@ if (
     or unquote(parsed.path.removeprefix("/")) != manifest.database
 ):
     raise SystemExit("owner URL is not for the guarded disposable database")
+connection = psycopg.connect(os.environ["EOM_DATABASE_URL"].replace("+psycopg", ""))
+with connection.cursor() as cursor:
+    cursor.execute(
+        "SELECT owner.rolname, description.description "
+        "FROM pg_namespace namespace "
+        "JOIN pg_roles owner ON owner.oid = namespace.nspowner "
+        "LEFT JOIN pg_description description ON description.objoid = namespace.oid "
+        "AND description.classoid = 'pg_namespace'::regclass "
+        "WHERE namespace.nspname = 'app'"
+    )
+    schema_row = cursor.fetchone()
+    if schema_row is None:
+        search_path, has_usage, has_create = [], False, False
+    else:
+        cursor.execute(
+            "SELECT current_schemas(false), "
+            "has_schema_privilege(current_user, 'app', 'USAGE'), "
+            "has_schema_privilege(current_user, 'app', 'CREATE')"
+        )
+        search_path, has_usage, has_create = cursor.fetchone() or ([], False, False)
+connection.close()
+try:
+    validate_application_schema_metadata(
+        manifest,
+        schema_owner=None if schema_row is None else str(schema_row[0]),
+        schema_comment=None if schema_row is None else schema_row[1],
+        effective_search_path=tuple(str(value) for value in search_path),
+        has_usage=bool(has_usage),
+        has_create=bool(has_create),
+    )
+except TestDatabaseGuardError as exc:
+    raise SystemExit(str(exc)) from exc
 PY
 
 SOURCE_PATHS=(
@@ -65,10 +104,43 @@ done
 export PYTHONPATH="${python_path}"
 
 cd "${REPOSITORY_ROOT}"
+if [[ "${action}" == "verify" ]]; then
+  printf 'Disposable application schema prerequisite passed.\n'
+  exit 0
+fi
 if [[ "${action}" == "migrate" ]]; then
   "${PYTHON}" -m alembic upgrade head
   "${PYTHON}" -m alembic downgrade -1
   "${PYTHON}" -m alembic upgrade head
+  "${PYTHON}" - <<'PY'
+from eom_orchestrator.database import build_engine
+
+engine = build_engine()
+with engine.connect() as connection:
+    assert connection.exec_driver_sql(
+        "SELECT version_num FROM app.alembic_version"
+    ).scalar_one() == "20260818_0007"
+    functions = connection.exec_driver_sql(
+        "SELECT to_regprocedure('app.reject_identity_key_change()'), "
+        "to_regprocedure('app.reject_api_audit_mutation()')"
+    ).one()
+    assert all(value is not None for value in functions)
+    triggers = set(
+        connection.exec_driver_sql(
+            "SELECT trigger_name FROM information_schema.triggers "
+            "WHERE trigger_schema = 'app' AND trigger_name IN ("
+            "'roles_key_immutable','permissions_key_immutable',"
+            "'api_audit_events_append_only')"
+        ).scalars()
+    )
+    assert triggers == {
+        "roles_key_immutable",
+        "permissions_key_immutable",
+        "api_audit_events_append_only",
+    }
+engine.dispose()
+print("migration_head=20260818_0007 migration_0006_app_objects=PASS")
+PY
   printf 'Disposable API test database migration cycle passed.\n'
   printf 'Next privileged phase: scripts/api/testdb_prepare.sh --reconcile %s\n' \
     "${state_directory}"

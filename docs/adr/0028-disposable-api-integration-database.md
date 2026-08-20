@@ -11,6 +11,11 @@ disposable PostgreSQL database. A distinct owner performs migrations and fixture
 distinct runtime role is reconciled with the production minimum-privilege plan and used for live
 privilege probes. State and credentials live outside Git in a 0700 `/tmp` directory.
 
+Preparation mirrors the production initdb prerequisite: it creates schema `app` owned by the
+disposable migration owner, grants that owner `USAGE, CREATE`, and fixes its search path to
+`app, public` before Alembic runs. Alembic owns objects inside the prepared schema; it does not own
+creation of the deployment schema itself.
+
 Preparation and cleanup are explicit root-only phases; tests are unprivileged. Cleanup requires
 prefix, deterministic name relation, manifest, database owner, and PostgreSQL comment markers.
 Production, template, and administrator identities are protected names.

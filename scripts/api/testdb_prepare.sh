@@ -44,7 +44,10 @@ from urllib.parse import quote
 import psycopg
 from psycopg import sql
 
-from scripts.api.testdb_guard import TestDatabaseManifest
+from scripts.api.testdb_guard import (
+    TestDatabaseManifest,
+    validate_application_schema_metadata,
+)
 
 manifest = TestDatabaseManifest.create(os.environ["EOM_API_TEST_ID"])
 state = Path(os.environ["EOM_API_TEST_STATE"])
@@ -82,6 +85,11 @@ try:
         )
         database_created = True
         cursor.execute(
+            sql.SQL("ALTER ROLE {} SET search_path TO app, public").format(
+                sql.Identifier(manifest.owner_role)
+            )
+        )
+        cursor.execute(
             sql.SQL("COMMENT ON DATABASE {} IS {}").format(
                 sql.Identifier(manifest.database), sql.Literal(manifest.marker)
             )
@@ -91,6 +99,59 @@ try:
                 sql.Identifier(manifest.owner_role), sql.Literal(manifest.marker)
             )
         )
+    with psycopg.connect(
+        host="127.0.0.1",
+        port=5432,
+        user=os.environ.get("POSTGRES_USER", "postgres"),
+        password=os.environ["POSTGRES_PASSWORD"],
+        dbname=manifest.database,
+        autocommit=True,
+    ) as application_connection:
+        with application_connection.cursor() as cursor:
+            cursor.execute(
+                sql.SQL("CREATE SCHEMA app AUTHORIZATION {}").format(
+                    sql.Identifier(manifest.owner_role)
+                )
+            )
+            cursor.execute(
+                sql.SQL("GRANT USAGE, CREATE ON SCHEMA app TO {}").format(
+                    sql.Identifier(manifest.owner_role)
+                )
+            )
+            cursor.execute(
+                sql.SQL("COMMENT ON SCHEMA app IS {}").format(sql.Literal(manifest.marker))
+            )
+    with psycopg.connect(
+        host="127.0.0.1",
+        port=5432,
+        user=manifest.owner_role,
+        password=owner_password,
+        dbname=manifest.database,
+    ) as owner_connection:
+        with owner_connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT owner.rolname, description.description "
+                "FROM pg_namespace namespace "
+                "JOIN pg_roles owner ON owner.oid = namespace.nspowner "
+                "LEFT JOIN pg_description description ON description.objoid = namespace.oid "
+                "AND description.classoid = 'pg_namespace'::regclass "
+                "WHERE namespace.nspname = 'app'"
+            )
+            schema_row = cursor.fetchone()
+            cursor.execute(
+                "SELECT current_schemas(false), "
+                "has_schema_privilege(current_user, 'app', 'USAGE'), "
+                "has_schema_privilege(current_user, 'app', 'CREATE')"
+            )
+            search_path, has_usage, has_create = cursor.fetchone() or ([], False, False)
+    validate_application_schema_metadata(
+        manifest,
+        schema_owner=None if schema_row is None else str(schema_row[0]),
+        schema_comment=None if schema_row is None else schema_row[1],
+        effective_search_path=tuple(str(value) for value in search_path),
+        has_usage=bool(has_usage),
+        has_create=bool(has_create),
+    )
 except BaseException:
     with connection.cursor() as cursor:
         if database_created:
