@@ -8,8 +8,10 @@ API_PIP="${API_PYTHON} -m pip"
 SERVICE="eom-api.service"
 UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-api.service"
 UNIT_TARGET="/etc/systemd/system/eom-api.service"
-VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_deployment_metadata.sh"
-VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-deployment-metadata"
+METADATA_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_deployment_metadata.sh"
+METADATA_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-deployment-metadata"
+RUNTIME_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_runtime_isolation.sh"
+RUNTIME_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-runtime-isolation"
 ACTION="verify"
 STAGING_ROOT=""
 
@@ -158,14 +160,21 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/build_info.py",
         "eom_api/build-info.json",
         "eom_api/cli.py",
+        "eom_api/runtime_isolation_verifier.py",
         "eom_api/openapi/eom-api-v1.openapi.json",
         "eom_api/openapi/eom-api-v1.sha256",
     }
     if missing := required - names:
         raise SystemExit(f"Application API wheel resources missing: {sorted(missing)}")
     entry_points = next(name for name in names if name.endswith(".dist-info/entry_points.txt"))
-    if "eom-api = eom_api.cli:main" not in archive.read(entry_points).decode():
+    entry_point_source = archive.read(entry_points).decode()
+    if "eom-api = eom_api.cli:main" not in entry_point_source:
         raise SystemExit("eom-api console entry point missing")
+    if (
+        "eom-api-runtime-isolation = eom_api.runtime_isolation_verifier:main"
+        not in entry_point_source
+    ):
+        raise SystemExit("runtime isolation console entry point missing")
     build = json.loads(archive.read("eom_api/build-info.json"))
     if build["source_commit"] != os.environ["EXPECTED_COMMIT"]:
         raise SystemExit("Application API wheel source commit mismatch")
@@ -565,13 +574,17 @@ install_service() {
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
   systemd-analyze verify "${UNIT_SOURCE}"
   sudo -n install -d -o root -g root -m 0755 /usr/local/libexec/eom-api
-  sudo -n install -o root -g root -m 0755 "${VERIFIER_SOURCE}" "${VERIFIER_TARGET}"
+  sudo -n install -o root -g root -m 0755 \
+    "${METADATA_VERIFIER_SOURCE}" "${METADATA_VERIFIER_TARGET}"
+  sudo -n install -o root -g root -m 0755 \
+    "${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}"
   sudo -n install -o root -g root -m 0644 "${UNIT_SOURCE}" "${UNIT_TARGET}"
-  sudo -n "${VERIFIER_TARGET}"
+  sudo -n "${METADATA_VERIFIER_TARGET}"
   sudo -n systemctl daemon-reload
   sudo -n systemctl enable "${SERVICE}" >/dev/null
   sudo -n systemctl restart "${SERVICE}"
   wait_for_health
+  sudo -n "${RUNTIME_VERIFIER_TARGET}"
   record_release
   if [[ -n "${EOM_API_SMOKE_USERNAME:-}" && -n "${EOM_API_SMOKE_PASSWORD_FILE:-}" ]]; then
     "${REPOSITORY_ROOT}/scripts/api/smoke_test.sh"
@@ -583,6 +596,10 @@ install_service() {
 
 verify_service() {
   verify_install_mode
+  cmp --silent "${METADATA_VERIFIER_SOURCE}" "${METADATA_VERIFIER_TARGET}" || \
+    fail "installed metadata verifier source drift"
+  cmp --silent "${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}" || \
+    fail "installed runtime verifier source drift"
   systemctl is-active --quiet "${SERVICE}" || fail "eom-api.service is not active"
   systemctl is-enabled --quiet "${SERVICE}" || fail "eom-api.service is not enabled"
   wait_for_health

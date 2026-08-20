@@ -102,6 +102,49 @@ def test_privileged_metadata_verifier_rejects_secret_directory_mode(
     assert "EOM_API_" not in completed.stdout + completed.stderr
 
 
+def test_runtime_verifier_separates_host_metadata_from_service_access() -> None:
+    source = _source("scripts/api/verify_runtime_isolation.sh")
+
+    assert '"$(id -u)" -ne 0' in source
+    assert 'SERVICE_CONTEXT_VERIFIER="/srv/eom/conda/envs/eom-api/bin/' in source
+    assert '"${SERVICE_CONTEXT_VERIFIER}"' in source
+    assert "nsenter --target" not in source
+    assert "test ! -r" not in source
+    assert "runuser -u eom-api" not in source
+    assert 'systemctl show --property=InaccessiblePaths --value "${SERVICE}"' in source
+    assert 'systemctl show --property=CapabilityBoundingSet --value "${SERVICE}"' in source
+
+
+def test_service_context_helper_has_fixed_command_and_probe_inventory() -> None:
+    source = _source("apps/application_api/eom_api/runtime_isolation_verifier.py")
+
+    assert '"/usr/bin/nsenter"' in source
+    assert '"/usr/bin/setpriv"' in source
+    assert '"--bounding-set=-all"' in source
+    assert '"--reset-env"' in source
+    assert 'FIXED_CHILD_ARGUMENT: Final = "--fixed-service-probe"' in source
+    assert "shell=True" not in source
+    assert "eval(" not in source
+    assert "os.system" not in source
+    assert "caller_path" not in source
+    assert "print(message" not in source
+
+
+def test_release_installs_runtime_verifier_and_packages_fixed_helper() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+    package = _source("apps/application_api/pyproject.toml")
+
+    assert (
+        'RUNTIME_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-runtime-isolation"'
+        in deployment
+    )
+    assert '"${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}"' in deployment
+    assert 'sudo -n "${RUNTIME_VERIFIER_TARGET}"' in deployment
+    assert '"eom_api/runtime_isolation_verifier.py"' in deployment
+    assert "runtime isolation console entry point missing" in deployment
+    assert 'eom-api-runtime-isolation = "eom_api.runtime_isolation_verifier:main"' in package
+
+
 @pytest.mark.parametrize(
     "relative",
     [

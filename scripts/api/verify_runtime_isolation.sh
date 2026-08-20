@@ -2,31 +2,49 @@
 set -euo pipefail
 
 SERVICE="eom-api.service"
-PYTHON="/srv/eom/conda/envs/eom-api/bin/python"
+SERVICE_CONTEXT_VERIFIER="/srv/eom/conda/envs/eom-api/bin/eom-api-runtime-isolation"
+
+fail() {
+  printf 'ERROR: %s\n' "$1" >&2
+  exit 1
+}
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  printf 'Run verify_runtime_isolation.sh as root.\n' >&2
-  exit 1
+  fail "runtime isolation verification must run as root"
 fi
 
-systemctl is-active --quiet "${SERVICE}"
-systemctl is-enabled --quiet "${SERVICE}"
+systemctl is-active --quiet "${SERVICE}" || fail "service is not active"
+systemctl is-enabled --quiet "${SERVICE}" || fail "service is not enabled"
+[[ -x "${SERVICE_CONTEXT_VERIFIER}" ]] || fail "installed service-context verifier is unavailable"
 
 main_pid="$(systemctl show --property=MainPID --value "${SERVICE}")"
-[[ "${main_pid}" =~ ^[1-9][0-9]*$ ]] || {
-  printf 'The Application API service has no live main process.\n' >&2
-  exit 1
-}
+[[ "${main_pid}" =~ ^[1-9][0-9]*$ && "${main_pid}" -gt 1 ]] || \
+  fail "service has no valid main process"
 
 mapfile -t listeners < <(ss -H -lnt 'sport = :8765')
-[[ "${#listeners[@]}" -eq 1 ]] || {
-  printf 'Expected exactly one listener on port 8765.\n' >&2
-  exit 1
-}
-[[ "${listeners[0]}" == *"127.0.0.1:8765"* ]] || {
-  printf 'Port 8765 is not bound exclusively to IPv4 loopback.\n' >&2
-  exit 1
-}
+[[ "${#listeners[@]}" -eq 1 ]] || fail "listener count mismatch"
+[[ "${listeners[0]}" == *"127.0.0.1:8765"* ]] || fail "listener is not IPv4 loopback-only"
+
+[[ "$(systemctl show --property=User --value "${SERVICE}")" == "eom-api" ]] || \
+  fail "service user mismatch"
+[[ "$(systemctl show --property=Group --value "${SERVICE}")" == "eom-api" ]] || \
+  fail "service group mismatch"
+[[ -z "$(systemctl show --property=SupplementaryGroups --value "${SERVICE}")" ]] || \
+  fail "service supplementary groups are not empty"
+[[ "$(systemctl show --property=WorkingDirectory --value "${SERVICE}")" == \
+  "/var/lib/eom-api" ]] || fail "service working directory mismatch"
+[[ "$(systemctl show --property=NoNewPrivileges --value "${SERVICE}")" == "yes" ]] || \
+  fail "NoNewPrivileges is not enabled"
+[[ -z "$(systemctl show --property=CapabilityBoundingSet --value "${SERVICE}")" ]] || \
+  fail "capability bounding set is not empty"
+[[ "$(systemctl show --property=PrivateTmp --value "${SERVICE}")" == "yes" ]] || \
+  fail "PrivateTmp is not enabled"
+[[ "$(systemctl show --property=PrivateUsers --value "${SERVICE}")" == "no" ]] || \
+  fail "unexpected private user namespace"
+[[ "$(systemctl show --property=ProtectSystem --value "${SERVICE}")" == "strict" ]] || \
+  fail "ProtectSystem mismatch"
+[[ "$(systemctl show --property=ProtectHome --value "${SERVICE}")" == "yes" ]] || \
+  fail "ProtectHome mismatch"
 
 unit_paths="$(systemctl show --property=InaccessiblePaths --value "${SERVICE}")"
 for path in \
@@ -43,27 +61,17 @@ for path in \
     printf 'Unit sandbox omits required inaccessible path: %s\n' "${path}" >&2
     exit 1
   }
-  nsenter --target "${main_pid}" --mount -- test ! -r "${path}" || {
-    printf 'Service mount namespace can read a forbidden path: %s\n' "${path}" >&2
-    exit 1
-  }
 done
 
-runuser -u eom-api -- env -u PYTHONPATH "${PYTHON}" - <<'PY'
-import importlib.util
-import site
-from pathlib import Path
+read_only_paths="$(systemctl show --property=ReadOnlyPaths --value "${SERVICE}")"
+for path in /etc/eom-api/api.yaml /etc/eom/secrets/api.env; do
+  [[ " ${read_only_paths} " == *" ${path} "* ]] || \
+    fail "unit sandbox omits a required read-only path"
+done
+read_write_paths="$(systemctl show --property=ReadWritePaths --value "${SERVICE}")"
+[[ " ${read_write_paths} " == *" /var/lib/eom-api "* ]] || \
+  fail "unit sandbox omits the service state path"
 
-roots = [Path(value).resolve() for value in site.getsitepackages()]
-for module in ("eom_api", "eom_api_contracts", "eom_operator_identity"):
-    spec = importlib.util.find_spec(module)
-    if spec is None or spec.origin is None:
-        raise SystemExit(f"missing installed module: {module}")
-    origin = Path(spec.origin).resolve()
-    if not any(origin.is_relative_to(root) for root in roots):
-        raise SystemExit(f"non-installed import: {module}")
-    if str(origin).startswith("/home/eom/EOM"):
-        raise SystemExit(f"source checkout import: {module}")
-PY
+"${SERVICE_CONTEXT_VERIFIER}"
 
 printf 'Application API runtime isolation verified.\n'

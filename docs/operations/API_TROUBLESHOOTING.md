@@ -45,7 +45,9 @@ request and key. Never create a new key merely to bypass an uncertain command re
 
 If the process listens on `0.0.0.0:8765`, `[::]:8765`, port 8000, or port 8780, stop it and restore
 the reviewed unit/configuration. Do not modify UFW, router forwarding, or the Observability service.
-Use `sudo -n scripts/api/verify_runtime_isolation.sh` after every unit change.
+Use `sudo -n /usr/local/libexec/eom-api/verify-runtime-isolation` after every authorized unit or
+release change. The access verdict must come from the fixed service-context probe; host-root path
+access is only a control observation.
 
 Secret metadata failures belong to the privileged deployment verifier, not runtime doctor:
 

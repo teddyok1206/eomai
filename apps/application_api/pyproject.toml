@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 eom-api = "eom_api.cli:main"
+eom-api-runtime-isolation = "eom_api.runtime_isolation_verifier:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

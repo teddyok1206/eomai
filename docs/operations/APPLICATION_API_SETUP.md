@@ -100,7 +100,7 @@ confirmed.
 systemctl is-active eom-api.service
 systemctl is-enabled eom-api.service
 ss -lnt 'sport = :8765'
-sudo -n scripts/api/verify_runtime_isolation.sh
+sudo -n /usr/local/libexec/eom-api/verify-runtime-isolation
 sudo -n /usr/local/libexec/eom-api/verify-deployment-metadata
 ```
 
