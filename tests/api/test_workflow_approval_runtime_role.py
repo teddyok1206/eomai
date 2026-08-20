@@ -540,7 +540,7 @@ def test_api_approval_requires_only_the_reconciled_runtime_grant_matrix() -> Non
                 catalog=PlaceholderWorkflowCatalog(),
                 actor_authorizer=actor_authorizer,
                 readiness=ReadyWorkflowRuntime(),
-                available_roles=frozenset({"support"}),
+                available_roles=frozenset(ROLE_SLOTS),
                 runner_id=f"runtime-approval-{suffix}",
             )
             result = runner.run_once(workflow_id)
