@@ -75,3 +75,16 @@ def test_release_scripts_have_fixed_targets_and_no_recursive_permission_changes(
     assert "chown -R" not in scripts
     assert "sudo " not in scripts
     assert "pip install -e" not in scripts
+
+
+def test_installer_normalizes_metadata_for_the_service_identity() -> None:
+    installer = (ROOT / "scripts/web_gui/install_release.sh").read_text(encoding="utf-8")
+    assert 'DIST_INFO_ROOT="${INSTALLED_PATHS[1]}"' in installer
+    assert 'find "${DIST_INFO_ROOT}" -type d -exec chmod 0755 {} +' in installer
+    assert 'find "${DIST_INFO_ROOT}" -type f -exec chmod 0644 {} +' in installer
+    assert "installed distribution metadata path mismatch" in installer
+    assert "installed distribution metadata root is not unique" in installer
+    assert 'runuser -u eom-web -- env EXPECTED_COMMIT="${EXPECTED_COMMIT}"' in installer
+    assert "web_gui_service_identity_metadata=PASS" in installer
+    assert "chmod -R" not in installer
+    assert "chown -R" not in installer
