@@ -279,3 +279,90 @@ def _equation_value(path: Path, binding: TemplateBinding, limits: PackageLimits)
     return next(
         (value for key, value in element.attrib.items() if local_name(key) == requested), None
     )
+
+
+def validate_kordoc_structure(
+    path: Path,
+    *,
+    expected_equation_count: int,
+    expected_table_count: int,
+    limits: PackageLimits | None = None,
+) -> StructuralValidationReport:
+    """Validate generated Kordoc output without applying template-only invariants."""
+
+    actual_limits = limits or PackageLimits()
+    base = validate_structure(path, require_markers_removed=True, limits=actual_limits)
+    checks = [
+        check
+        for check in base.checks
+        if check.check_id not in {"bindata_references", "required_core_parts"}
+    ]
+    names = set(read_package(path, actual_limits).by_name())
+    generated_core = {
+        "mimetype",
+        "META-INF/container.xml",
+        "Contents/content.hpf",
+        "Contents/header.xml",
+    }
+    checks.append(
+        _check(
+            "required_generated_core_parts",
+            generated_core.issubset(names)
+            and any(
+                name.startswith("Contents/section") and name.endswith(".xml") for name in names
+            ),
+            "generated profile core parts and at least one section exist",
+        )
+    )
+    equation_count, table_count = kordoc_native_structure_counts(path, actual_limits)
+    checks.extend(
+        (
+            _check(
+                "renderer_profile",
+                True,
+                "kordoc-markdown-v1 uses common package checks without template bindings",
+            ),
+            _check(
+                "native_equation_count",
+                equation_count == expected_equation_count,
+                "native equation count matches the validated Markdown contract",
+            ),
+            _check(
+                "native_table_count",
+                table_count == expected_table_count,
+                "native table count matches the validated Markdown contract",
+            ),
+        )
+    )
+    passed = not any(check.status == CheckStatus.FAIL for check in checks)
+    return StructuralValidationReport(
+        status="PASS" if passed else "FAIL",
+        package_sha256=base.package_sha256,
+        checks=tuple(checks),
+    )
+
+
+def kordoc_native_structure_counts(
+    path: Path, limits: PackageLimits | None = None
+) -> tuple[int, int]:
+    """Return equation/table counts after the same bounded package/XML parsing."""
+
+    actual_limits = limits or PackageLimits()
+    package = read_package(path, actual_limits)
+    equations = 0
+    tables = 0
+    for entry in package.entries:
+        name = entry.info.filename
+        suffix = name.removeprefix("Contents/section").removesuffix(".xml")
+        if (
+            not name.startswith("Contents/section")
+            or not name.endswith(".xml")
+            or not suffix.isdigit()
+        ):
+            continue
+        root = parse_xml(entry.data, name, actual_limits).root
+        for element in root.iter():
+            element_name = local_name(element.tag).casefold()
+            equations += element_name == "equation"
+            tables += element_name == "tbl"
+    return equations, tables

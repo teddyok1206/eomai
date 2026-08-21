@@ -176,6 +176,7 @@ def run_hwpx_doctor(engine: Engine, settings: HwpxSettings) -> list[HwpxDoctorCh
             "package_limits",
             "active_content_rejection",
             "equation_binding_capability",
+            "kordoc_runtime",
         }
         passed_names = {
             str(item.get("name"))

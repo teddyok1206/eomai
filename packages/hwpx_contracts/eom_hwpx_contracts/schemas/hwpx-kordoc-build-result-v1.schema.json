@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/hwpx/hwpx-kordoc-build-result-v1.schema.json",
+  "title": "EOM Kordoc HWPX Build Result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "renderer_profile",
+    "build_id",
+    "source_artifact_id",
+    "source_artifact_revision_id",
+    "source_sha256",
+    "renderer_version",
+    "kordoc_version",
+    "status",
+    "output_file",
+    "output_sha256",
+    "package_manifest_file",
+    "validation_report_file",
+    "renderer_report_file",
+    "native_equation_count",
+    "native_table_count",
+    "warnings",
+    "errors",
+    "started_at",
+    "completed_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "renderer_profile": {"const": "kordoc-markdown-v1"},
+    "build_id": {"type": "string", "pattern": "^hwpxbuild_[a-f0-9]{32}$"},
+    "source_artifact_id": {"type": "string", "pattern": "^artifact_[a-f0-9]{32}$"},
+    "source_artifact_revision_id": {"type": "string", "pattern": "^rev_[a-f0-9]{32}$"},
+    "source_sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "renderer_version": {"const": "0.1.0"},
+    "kordoc_version": {"const": "4.9.0"},
+    "status": {"enum": ["FAILED", "PENDING_MANUAL_HANCOM_VALIDATION"]},
+    "output_file": {"type": ["string", "null"], "pattern": "^output/kordoc_document\\.hwpx$"},
+    "output_sha256": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+    "package_manifest_file": {"type": ["string", "null"], "pattern": "^output/package-manifest\\.json$"},
+    "validation_report_file": {"type": ["string", "null"], "pattern": "^output/structural-validation\\.json$"},
+    "renderer_report_file": {"type": ["string", "null"], "pattern": "^output/kordoc-validation\\.json$"},
+    "native_equation_count": {"type": "integer", "minimum": 0, "maximum": 32},
+    "native_table_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "warnings": {"type": "array", "maxItems": 100, "items": {"type": "string", "maxLength": 256}},
+    "errors": {"type": "array", "maxItems": 100, "items": {"type": "string", "maxLength": 256}},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "FAILED"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "output_file": {"type": "null"},
+          "output_sha256": {"type": "null"},
+          "package_manifest_file": {"type": "null"},
+          "validation_report_file": {"type": "null"},
+          "renderer_report_file": {"type": "null"},
+          "errors": {"minItems": 1}
+        }
+      },
+      "else": {
+        "properties": {
+          "output_file": {"const": "output/kordoc_document.hwpx"},
+          "output_sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+          "package_manifest_file": {"const": "output/package-manifest.json"},
+          "validation_report_file": {"const": "output/structural-validation.json"},
+          "renderer_report_file": {"const": "output/kordoc-validation.json"},
+          "errors": {"maxItems": 0}
+        }
+      }
+    }
+  ]
+}

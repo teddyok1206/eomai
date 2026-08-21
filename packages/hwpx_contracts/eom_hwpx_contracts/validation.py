@@ -12,10 +12,12 @@ from jsonschema import Draft202012Validator, FormatChecker
 SCHEMA_FILES = {
     "item-document": "hwpx-item-document-v1.schema.json",
     "build-result": "hwpx-build-result-v1.schema.json",
+    "kordoc-render-request": "hwpx-kordoc-render-request-v1.schema.json",
+    "kordoc-build-result": "hwpx-kordoc-build-result-v1.schema.json",
 }
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=len(SCHEMA_FILES))
 def load_schema(name: str) -> dict[str, Any]:
     try:
         filename = SCHEMA_FILES[name]

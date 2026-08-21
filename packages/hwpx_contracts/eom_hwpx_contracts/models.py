@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def _valid_xml_text(value: str) -> str:
@@ -152,3 +152,89 @@ class HwpxBuildResult(StrictModel):
     errors: tuple[str, ...] = ()
     started_at: datetime
     completed_at: datetime
+
+
+class KordocSourcePointer(StrictModel):
+    artifact_id: str = Field(pattern=r"^artifact_[a-f0-9]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
+    schema_id: Literal["eom.hwpx.markdown-document"] = "eom.hwpx.markdown-document"
+    schema_version: Literal["1.0"] = "1.0"
+    media_type: Literal["text/markdown; charset=utf-8"] = "text/markdown; charset=utf-8"
+    sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    file: Literal["input/document.md"] = "input/document.md"
+
+
+class KordocRendererDependency(StrictModel):
+    package: Literal["kordoc"] = "kordoc"
+    version: Literal["4.9.0"] = "4.9.0"
+    npm_integrity: Literal[
+        "sha512-MPgHDYjuePA1p0yei0Sx8obWdbrGYc5tzMWposRVa9P9fWZ8yW0sNVh0"
+        "YjffPbmZdi7xHoQJn60iTLVG+SI2Iw=="
+    ] = (
+        "sha512-MPgHDYjuePA1p0yei0Sx8obWdbrGYc5tzMWposRVa9P9fWZ8yW0sNVh0"
+        "YjffPbmZdi7xHoQJn60iTLVG+SI2Iw=="
+    )
+
+
+class KordocRenderOptions(StrictModel):
+    offline: Literal[True] = True
+    gongmun_preset: Literal[
+        "official", "report", "plan", "notice", "minutes", "gaejosik", "press"
+    ] = "report"
+
+
+class KordocExpectedStructure(StrictModel):
+    display_equation_count: int = Field(ge=0, le=32)
+    table_count: int = Field(ge=0, le=20)
+
+
+class KordocRenderRequest(StrictModel):
+    schema_version: Literal["1.0"] = "1.0"
+    renderer_profile: Literal["kordoc-markdown-v1"] = "kordoc-markdown-v1"
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    source: KordocSourcePointer
+    renderer_dependency: KordocRendererDependency = Field(default_factory=KordocRendererDependency)
+    options: KordocRenderOptions = Field(default_factory=KordocRenderOptions)
+    expected_structure: KordocExpectedStructure
+    output_directory: Literal["output"] = "output"
+
+
+class KordocBuildResult(StrictModel):
+    schema_version: Literal["1.0"] = "1.0"
+    renderer_profile: Literal["kordoc-markdown-v1"] = "kordoc-markdown-v1"
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    source_artifact_id: str = Field(pattern=r"^artifact_[a-f0-9]{32}$")
+    source_artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
+    source_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    renderer_version: Literal["0.1.0"] = "0.1.0"
+    kordoc_version: Literal["4.9.0"] = "4.9.0"
+    status: Literal["FAILED", "PENDING_MANUAL_HANCOM_VALIDATION"]
+    output_file: Literal["output/kordoc_document.hwpx"] | None
+    output_sha256: str | None = Field(default=None, pattern=r"^sha256:[a-f0-9]{64}$")
+    package_manifest_file: Literal["output/package-manifest.json"] | None
+    validation_report_file: Literal["output/structural-validation.json"] | None
+    renderer_report_file: Literal["output/kordoc-validation.json"] | None
+    native_equation_count: int = Field(ge=0, le=32)
+    native_table_count: int = Field(ge=0, le=20)
+    warnings: tuple[str, ...] = ()
+    errors: tuple[str, ...] = ()
+    started_at: datetime
+    completed_at: datetime
+
+    @model_validator(mode="after")
+    def status_matches_materialized_files(self) -> KordocBuildResult:
+        materialized = (
+            self.output_file,
+            self.output_sha256,
+            self.package_manifest_file,
+            self.validation_report_file,
+            self.renderer_report_file,
+        )
+        if self.status == "FAILED":
+            if any(value is not None for value in materialized) or not self.errors:
+                raise ValueError("failed Kordoc results cannot reference materialized output")
+        elif any(value is None for value in materialized) or self.errors:
+            raise ValueError("successful Kordoc results require validated materialized output")
+        if self.completed_at < self.started_at:
+            raise ValueError("Kordoc result completion precedes its start")
+        return self

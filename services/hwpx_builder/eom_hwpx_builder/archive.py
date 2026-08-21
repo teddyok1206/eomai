@@ -12,6 +12,8 @@ from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 from eom_hwpx_builder.models import EntryRecord, PackageLimits
 from eom_hwpx_builder.util import sha256_bytes, sha256_file
 
+FIXED_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+
 
 @dataclass(frozen=True)
 class PackageEntry:
@@ -135,3 +137,34 @@ def extract_package(package: SafePackage, destination: Path) -> None:
                 remaining = remaining[written:]
         finally:
             os.close(descriptor)
+
+
+def canonicalize_package(source: Path, output: Path) -> SafePackage:
+    """Rewrite a validated package with fixed timestamps and stable entry metadata."""
+
+    package = read_package(source)
+    if output.exists():
+        raise HwpxError(HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED, "output package already exists")
+    output.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    temporary = output.with_name(f".{output.name}.tmp")
+    if temporary.exists():
+        raise HwpxError(HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED, "temporary output already exists")
+    try:
+        with zipfile.ZipFile(temporary, "w", allowZip64=False) as archive:
+            for entry in package.entries:
+                info = zipfile.ZipInfo(entry.info.filename, FIXED_ZIP_TIMESTAMP)
+                info.compress_type = entry.info.compress_type
+                info.comment = entry.info.comment
+                info.extra = b""
+                info.internal_attr = entry.info.internal_attr
+                info.external_attr = entry.info.external_attr
+                info.create_system = entry.info.create_system
+                archive.writestr(info, entry.data)
+        temporary.chmod(0o600)
+        temporary.replace(output)
+    except (OSError, zipfile.BadZipFile) as exc:
+        temporary.unlink(missing_ok=True)
+        raise HwpxError(
+            HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED, "canonical package write failed"
+        ) from exc
+    return read_package(output)

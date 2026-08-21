@@ -13,6 +13,8 @@ from eom_hwpx_builder.analyzer import analyze_package
 from eom_hwpx_builder.bindings import compile_bindings
 from eom_hwpx_builder.doctor import run_doctor
 from eom_hwpx_builder.errors import HwpxError
+from eom_hwpx_builder.kordoc_renderer import failed_kordoc_result, render_kordoc_workspace
+from eom_hwpx_builder.kordoc_runtime import KordocRuntime
 from eom_hwpx_builder.models import BindingManifest
 from eom_hwpx_builder.reference import prepare_content_team_reference
 from eom_hwpx_builder.renderer import failed_result, render_workspace
@@ -101,6 +103,32 @@ def render(
         _echo({"status": "FAILED", "error_code": code, "result_written": failed is not None})
         raise typer.Exit(1) from None
     _echo({"status": build_result.status.value, "result": result.name})
+
+
+@app.command("kordoc-capabilities")
+def kordoc_capabilities() -> None:
+    try:
+        capability = KordocRuntime().capabilities()
+    except HwpxError as exc:
+        _echo({"status": "UNAVAILABLE", "error_code": exc.code.value})
+        raise typer.Exit(1) from None
+    _echo(capability.model_dump(mode="json"))
+
+
+@app.command("render-kordoc")
+def render_kordoc(
+    request: Annotated[Path, typer.Option("--request", exists=True, dir_okay=False)],
+    result: Annotated[Path, typer.Option("--result", dir_okay=False)],
+) -> None:
+    started = datetime.now(UTC)
+    try:
+        build_result = render_kordoc_workspace(request, result)
+    except Exception as exc:
+        failed = failed_kordoc_result(request, result, started, exc)
+        code = exc.code.value if isinstance(exc, HwpxError) else "HWPX_KORDOC_RENDER_FAILED"
+        _echo({"status": "FAILED", "error_code": code, "result_written": failed is not None})
+        raise typer.Exit(1) from None
+    _echo({"status": build_result.status, "result": result.name})
 
 
 def _bindings(path: Path | None, input_path: Path) -> BindingManifest:

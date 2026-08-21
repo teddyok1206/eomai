@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/hwpx/hwpx-kordoc-render-request-v1.schema.json",
+  "title": "EOM Kordoc HWPX Render Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "renderer_profile",
+    "build_id",
+    "source",
+    "renderer_dependency",
+    "options",
+    "expected_structure",
+    "output_directory"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "renderer_profile": {"const": "kordoc-markdown-v1"},
+    "build_id": {"type": "string", "pattern": "^hwpxbuild_[a-f0-9]{32}$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "schema_id",
+        "schema_version",
+        "media_type",
+        "sha256",
+        "file"
+      ],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[a-f0-9]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[a-f0-9]{32}$"},
+        "schema_id": {"const": "eom.hwpx.markdown-document"},
+        "schema_version": {"const": "1.0"},
+        "media_type": {"const": "text/markdown; charset=utf-8"},
+        "sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "file": {"const": "input/document.md"}
+      }
+    },
+    "renderer_dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "version", "npm_integrity"],
+      "properties": {
+        "package": {"const": "kordoc"},
+        "version": {"const": "4.9.0"},
+        "npm_integrity": {
+          "const": "sha512-MPgHDYjuePA1p0yei0Sx8obWdbrGYc5tzMWposRVa9P9fWZ8yW0sNVh0YjffPbmZdi7xHoQJn60iTLVG+SI2Iw=="
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offline", "gongmun_preset"],
+      "properties": {
+        "offline": {"const": true},
+        "gongmun_preset": {"enum": ["official", "report", "plan", "notice", "minutes", "gaejosik", "press"]}
+      }
+    },
+    "expected_structure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["display_equation_count", "table_count"],
+      "properties": {
+        "display_equation_count": {"type": "integer", "minimum": 0, "maximum": 32},
+        "table_count": {"type": "integer", "minimum": 0, "maximum": 20}
+      }
+    },
+    "output_directory": {"const": "output"}
+  }
+}

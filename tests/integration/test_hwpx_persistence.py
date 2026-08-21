@@ -7,8 +7,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from eom_hwpx_contracts import KordocExpectedStructure, KordocSourcePointer
 from eom_hwpx_manager.adapter import BuilderRun, HwpxBuilderAdapter
 from eom_hwpx_manager.errors import HwpxManagerError
+from eom_hwpx_manager.kordoc_service import KordocHwpxService
 from eom_hwpx_manager.models import HwpxBuildRecord, HwpxTemplateRevisionRecord
 from eom_hwpx_manager.repository import (
     add_template_revision,
@@ -48,6 +50,7 @@ def _artifact_job(
     *,
     nas_path: str | None = None,
     content_hash: str = "sha256:" + "a" * 64,
+    manifest: dict[str, Any] | None = None,
 ) -> JobRecord:
     ensure_protocol_version(session, "hwpx-test/1.0", "sha256:" + "f" * 64)
     job, _ = submit_structured_job(
@@ -76,7 +79,7 @@ def _artifact_job(
         manifest_hash="sha256:" + "b" * 64,
         content_bytes=10,
         nas_path=nas_path or f"/tmp/{job.logical_artifact_id}/{job.revision_id}",
-        manifest={"placeholder": True},
+        manifest=manifest or {"placeholder": True},
         result={"placeholder": True},
     )
     transition_job(session, job.job_id, JobState.SUCCEEDED, "TEST_COMMITTED")
@@ -151,6 +154,56 @@ class _FakeBuilderAdapter(HwpxBuilderAdapter):
         return BuilderRun(0, workspace, stdout, stderr, "fake-hwpx-builder")
 
     load_json = staticmethod(HwpxBuilderAdapter.load_json)
+
+
+class _FakeKordocBuilderAdapter(_FakeBuilderAdapter):
+    def run(
+        self, workspace: Path, operation: str, arguments: list[str], log_root: Path
+    ) -> BuilderRun:
+        assert operation == "render-kordoc"
+        assert arguments == ["--request", "request.json", "--result", "result.json"]
+        self.run_count += 1
+        request = json.loads((workspace / "request.json").read_text())
+        output_root = workspace / "output"
+        output_root.mkdir()
+        output = output_root / "kordoc_document.hwpx"
+        output.write_bytes(b"SYNTHETIC_KORDOC_HWPX")
+        for name, value in (
+            ("package-manifest.json", {"manifest_version": "1.0"}),
+            ("structural-validation.json", {"status": "PASS"}),
+            ("kordoc-validation.json", {"validation_ok": True, "parse_success": True}),
+        ):
+            (output_root / name).write_text(json.dumps(value), encoding="utf-8")
+        expected = request["expected_structure"]
+        result = {
+            "schema_version": "1.0",
+            "renderer_profile": "kordoc-markdown-v1",
+            "build_id": request["build_id"],
+            "source_artifact_id": request["source"]["artifact_id"],
+            "source_artifact_revision_id": request["source"]["artifact_revision_id"],
+            "source_sha256": request["source"]["sha256"],
+            "renderer_version": "0.1.0",
+            "kordoc_version": "4.9.0",
+            "status": "PENDING_MANUAL_HANCOM_VALIDATION",
+            "output_file": "output/kordoc_document.hwpx",
+            "output_sha256": sha256_file(output),
+            "package_manifest_file": "output/package-manifest.json",
+            "validation_report_file": "output/structural-validation.json",
+            "renderer_report_file": "output/kordoc-validation.json",
+            "native_equation_count": expected["display_equation_count"],
+            "native_table_count": expected["table_count"],
+            "warnings": [],
+            "errors": [],
+            "started_at": "2026-08-21T00:00:00Z",
+            "completed_at": "2026-08-21T00:00:01Z",
+        }
+        (workspace / "result.json").write_text(json.dumps(result), encoding="utf-8")
+        log_root.mkdir(parents=True, exist_ok=True)
+        stdout = log_root / "stdout.log"
+        stderr = log_root / "stderr.log"
+        stdout.write_bytes(b"")
+        stderr.write_bytes(b"")
+        return BuilderRun(0, workspace, stdout, stderr, "fake-kordoc-builder")
 
 
 def test_hwpx_template_build_idempotency_transition_validation_and_immutability(
@@ -393,3 +446,63 @@ def test_hwpx_service_build_validates_commits_and_reuses_idempotent_result(
     failed_job = db_session.get(JobRecord, failed.platform_job_id)
     assert failed_job is not None
     assert failed_job.status == "FAILED"
+
+
+def test_kordoc_service_pins_source_and_reuses_immutable_result(
+    db_session: Session, integration_engine: Engine, tmp_path: Path
+) -> None:
+    source_root = tmp_path / "markdown-artifact"
+    source_root.mkdir()
+    source_path = source_root / "document.md"
+    source_path.write_text("# 문항\n\n$$E=mc^2$$\n", encoding="utf-8")
+    source_hash = sha256_file(source_path)
+    source_job = _artifact_job(
+        db_session,
+        "kordoc-source-artifact-test",
+        nas_path=str(source_root),
+        content_hash=source_hash,
+        manifest={"primary_file": "document.md"},
+    )
+    pointer = KordocSourcePointer(
+        artifact_id=source_job.logical_artifact_id,
+        artifact_revision_id=source_job.revision_id,
+        sha256=source_hash,
+    )
+    nas_root = tmp_path / "kordoc-nas"
+    nas_root.mkdir()
+    workspace_root = tmp_path / "kordoc-workspaces"
+    workspace_root.mkdir()
+    staging_root = tmp_path / "kordoc-staging"
+    settings = HwpxSettings(
+        workspace_root=workspace_root,
+        staging_root=staging_root,
+        nas_artifact_root=nas_root,
+    )
+    adapter = _FakeKordocBuilderAdapter(workspace_root)
+    service = KordocHwpxService(integration_engine, settings, adapter=adapter)
+    service.sessions = sessionmaker(bind=db_session.get_bind(), expire_on_commit=False)
+    expected = KordocExpectedStructure(display_equation_count=1, table_count=0)
+
+    receipt = service.build(
+        source_path,
+        pointer,
+        expected,
+        idempotency_key="kordoc-service-build-key",
+    )
+    duplicate = service.build(
+        source_path,
+        pointer,
+        expected,
+        idempotency_key="kordoc-service-build-key",
+    )
+
+    assert receipt == duplicate
+    assert receipt.status == "SUCCEEDED"
+    assert receipt.output_sha256 == sha256_bytes(b"SYNTHETIC_KORDOC_HWPX")
+    assert adapter.run_count == 1
+    final = nas_root / receipt.artifact_id / receipt.artifact_revision_id
+    assert (final / "kordoc_document.hwpx").read_bytes() == b"SYNTHETIC_KORDOC_HWPX"
+    revision = db_session.get(ArtifactRevisionRecord, receipt.artifact_revision_id)
+    assert revision is not None
+    assert revision.content_bytes == len(b"SYNTHETIC_KORDOC_HWPX")
+    assert "SYNTHETIC_KORDOC_HWPX" not in json.dumps(revision.result)
