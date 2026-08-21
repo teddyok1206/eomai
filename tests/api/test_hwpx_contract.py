@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+from types import SimpleNamespace
+
+from eom_api.app import create_app
+from eom_api.services.hwpx_projection import project_hwpx_build
+from eom_operator_identity import ROLE_PERMISSIONS, PermissionKey, RoleKey
+from jsonschema import Draft202012Validator
+
+from tests.api.helpers import disconnected_services
+
+
+def test_hwpx_protocol_schema_is_draft_2020_12_and_rejects_commands() -> None:
+    schema = json.loads(
+        Path("schemas/api/v1/hwpx.schema.json").read_text(encoding="utf-8")
+    )
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema["$defs"]["buildRequest"])
+    assert not list(
+        validator.iter_errors(
+            {
+                "renderer": "kordoc",
+                "options": {"require_native_equations": True},
+            }
+        )
+    )
+    assert list(
+        validator.iter_errors(
+            {
+                "renderer": "kordoc",
+                "options": {},
+                "command": "npm install attacker-package",
+            }
+        )
+    )
+
+
+def test_hwpx_openapi_routes_are_additive_and_permissioned() -> None:
+    services = disconnected_services()
+    try:
+        schema = create_app(services).openapi()
+    finally:
+        services.engine.dispose()
+    paths = schema["paths"]
+    assert paths["/api/v1/capabilities/hwpx"]["get"]["x-eom-permission"] == "hwpx:read"
+    create = paths["/api/v1/item-revisions/{item_revision_id}/hwpx-builds"]["post"]
+    assert create["x-eom-permission"] == "hwpx:build_create"
+    assert paths["/api/v1/hwpx-builds/{build_id}"]["get"]["x-eom-permission"] == "hwpx:read"
+    assert (
+        paths["/api/v1/hwpx-builds/{build_id}/download"]["get"]["x-eom-permission"] == "hwpx:read"
+    )
+    assert PermissionKey.HWPX_READ in ROLE_PERMISSIONS[RoleKey.VIEWER]
+    assert PermissionKey.HWPX_BUILD_CREATE not in ROLE_PERMISSIONS[RoleKey.AUTHOR]
+    assert PermissionKey.HWPX_BUILD_CREATE in ROLE_PERMISSIONS[RoleKey.EDITOR]
+
+
+def test_hwpx_build_projection_never_exposes_path_or_command() -> None:
+    record = SimpleNamespace(
+        build_id="hwpxbuild_" + "a" * 32,
+        item_id="item_" + "b" * 32,
+        item_revision_id="itemrev_" + "c" * 32,
+        source_artifact_revision_id="rev_" + "d" * 32,
+        source_sha256="sha256:" + "e" * 64,
+        state="SUCCEEDED",
+        validation_state="PASS",
+        native_equation_count=5,
+        native_table_count=2,
+        output_artifact_id="artifact_" + "f" * 32,
+        output_artifact_revision_id="rev_" + "1" * 32,
+        output_sha256="sha256:" + "2" * 64,
+        failure_code=None,
+        failure_detail_sanitized=None,
+        created_by_operator_id="operator_" + "3" * 32,
+        created_at=datetime(2026, 8, 21, tzinfo=UTC),
+        started_at=datetime(2026, 8, 21, tzinfo=UTC),
+        completed_at=datetime(2026, 8, 21, tzinfo=UTC),
+        resource_version=2,
+    )
+    payload = project_hwpx_build(record).model_dump(mode="json")  # type: ignore[arg-type]
+    assert payload["download_available"] is True
+    assert not ({"path", "nas_uri", "command", "environment", "workspace"} & payload.keys())

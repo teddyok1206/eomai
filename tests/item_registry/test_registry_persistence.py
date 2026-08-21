@@ -14,7 +14,9 @@ from eom_catalog_service.models import (
     UsagePlanRecord,
     UsageRecord,
 )
+from eom_hwpx_manager.models import HwpxApplicationBuildRecord
 from eom_identifiers import new_job_id, new_logical_artifact_id, new_revision_id
+from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.repository import (
     create_artifact_records,
@@ -234,6 +236,76 @@ def test_component_position_and_usage_placement_are_unique(db_session: Session) 
         db_session.add(ItemComponentRecord(item_component_id="itemcomponent_" + "b" * 32, **base))
         db_session.flush()
     assert item.item_id == revision.item_id
+
+
+def test_hwpx_application_build_pins_revision_and_enforces_idempotency(
+    db_session: Session,
+) -> None:
+    item, revision, artifact = _approved_revision(db_session)
+    operator = OperatorRecord(
+        operator_id="operator_" + "c" * 32,
+        username="hwpx-test-operator",
+        normalized_username="hwpx-test-operator",
+        display_name="HWPX Test Operator",
+        status="ACTIVE",
+        must_change_password=False,
+        role_version=1,
+        created_by="test-suite",
+        lock_version=1,
+    )
+    db_session.add(operator)
+    db_session.flush()
+    source_hash = "sha256:" + "2" * 64
+    first = HwpxApplicationBuildRecord(
+        build_id="hwpxbuild_" + "d" * 32,
+        item_id=item.item_id,
+        item_revision_id=revision.item_revision_id,
+        source_artifact_id=artifact.logical_artifact_id,
+        source_artifact_revision_id=artifact.revision_id,
+        source_sha256=source_hash,
+        source_schema_ref="eom.hwpx.markdown-document/1.0",
+        source_media_type="text/markdown",
+        renderer="kordoc",
+        renderer_version="4.9.0",
+        options={"require_native_equations": True},
+        request_sha256="sha256:" + "e" * 64,
+        idempotency_key="test-hwpx-application-key",
+        created_by_operator_id=operator.operator_id,
+        state="REQUESTED",
+        validation_state="PENDING",
+        resource_version=1,
+    )
+    db_session.add(first)
+    db_session.flush()
+
+    assert first.item_revision_id == revision.item_revision_id
+    assert first.source_artifact_revision_id == artifact.revision_id
+    assert first.source_sha256 == source_hash
+    assert not any(column.type.__class__.__name__ == "LargeBinary" for column in first.__table__.c)
+
+    with pytest.raises(IntegrityError), db_session.begin_nested():
+        db_session.add(
+            HwpxApplicationBuildRecord(
+                build_id="hwpxbuild_" + "f" * 32,
+                item_id=item.item_id,
+                item_revision_id=revision.item_revision_id,
+                source_artifact_id=artifact.logical_artifact_id,
+                source_artifact_revision_id=artifact.revision_id,
+                source_sha256=source_hash,
+                source_schema_ref="eom.hwpx.markdown-document/1.0",
+                source_media_type="text/markdown",
+                renderer="kordoc",
+                renderer_version="4.9.0",
+                options={"require_native_equations": False},
+                request_sha256="sha256:" + "0" * 64,
+                idempotency_key="test-hwpx-application-key",
+                created_by_operator_id=operator.operator_id,
+                state="REQUESTED",
+                validation_state="PENDING",
+                resource_version=1,
+            )
+        )
+        db_session.flush()
 
 
 def test_usage_record_requires_approved_revision_and_is_immutable(db_session: Session) -> None:

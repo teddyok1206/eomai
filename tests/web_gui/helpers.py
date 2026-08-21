@@ -7,11 +7,14 @@ from eom_web_gui.app import create_app
 from eom_web_gui.contracts import (
     ExplorerQuery,
     ExplorerResult,
+    HwpxBuildRequest,
+    HwpxBuildView,
+    HwpxCapability,
     ItemPreview,
     PreviewChoice,
     PreviewTable,
 )
-from eom_web_gui.gateways import LoginResult
+from eom_web_gui.gateways import GatewayError, HwpxDownload, LoginResult
 from eom_web_gui.services import WebServices, build_services
 from eom_web_gui.sessions import ApiTokens, WebSession
 from eom_web_gui.settings import ServerSettings, WebSettings
@@ -24,11 +27,18 @@ REVISION_ID = "itemrev_test00000000000000000000000001"
 
 
 class FakeGateway:
-    def __init__(self, *, roles: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        roles: list[str] | None = None,
+        hwpx_state: str = "PREPARED_NOT_DEPLOYED",
+    ) -> None:
         self.start_calls = 0
         self.approval_calls = 0
         self.closed = False
         self.roles = roles or ["ADMIN", "REVIEWER"]
+        self.hwpx_state = hwpx_state
+        self.hwpx_build_calls = 0
 
     async def health(self) -> dict[str, str]:
         return {
@@ -203,6 +213,70 @@ class FakeGateway:
             rows=(
                 ({"workflow_id": WORKFLOW_ID, "state": "COMPLETED", "created_at": NOW.isoformat()}),
             ),
+        )
+
+    async def hwpx_capability(self, session: WebSession) -> HwpxCapability:
+        del session
+        return HwpxCapability.model_validate(
+            {
+                "state": self.hwpx_state,
+                "renderer_key": "kordoc",
+                "renderer_version": "4.9.0",
+                "build_available": self.hwpx_state == "READY",
+                "native_equations": self.hwpx_state == "READY",
+                "native_tables": self.hwpx_state == "READY",
+                "detail_code": (
+                    "HWPX_READY" if self.hwpx_state == "READY" else "HWPX_BUILDER_NOT_DEPLOYED"
+                ),
+                "message": "ready" if self.hwpx_state == "READY" else "운영 배포 필요",
+            }
+        )
+
+    async def create_hwpx_build(
+        self, session: WebSession, value: HwpxBuildRequest
+    ) -> dict[str, Any]:
+        del session
+        if self.hwpx_state != "READY":
+            raise GatewayError(status=503, code="HWPX_RENDERER_NOT_READY")
+        assert value.item_revision_id == REVISION_ID
+        self.hwpx_build_calls += 1
+        return {
+            "command_id": "hwpxcmd_" + "a" * 32,
+            "resource_type": "hwpx_build",
+            "resource_id": "hwpxbuild_" + "a" * 32,
+            "status": "ACCEPTED",
+            "resource_version": 1,
+            "status_url": "/api/v1/hwpx-builds/hwpxbuild_" + "a" * 32,
+        }
+
+    async def hwpx_build(self, session: WebSession, build_id: str) -> HwpxBuildView:
+        del session
+        assert build_id == "hwpxbuild_" + "a" * 32
+        return HwpxBuildView(
+            build_id=build_id,
+            item_id=ITEM_ID,
+            item_revision_id=REVISION_ID,
+            renderer="kordoc",
+            renderer_version="4.9.0",
+            state="SUCCEEDED",
+            validation_state="PASS",
+            native_equation_count=5,
+            native_table_count=2,
+            output_artifact_id="artifact_" + "b" * 32,
+            output_artifact_revision_id="rev_" + "c" * 32,
+            output_sha256="sha256:" + "d" * 64,
+            download_available=True,
+            created_at=NOW,
+            completed_at=NOW + timedelta(seconds=2),
+        )
+
+    async def hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload:
+        del session
+        assert build_id == "hwpxbuild_" + "a" * 32
+        return HwpxDownload(
+            b"TEST_ONLY_HWPX",
+            "application/vnd.hancom.hwpx",
+            'attachment; filename="eom-test.hwpx"',
         )
 
     async def close(self) -> None:

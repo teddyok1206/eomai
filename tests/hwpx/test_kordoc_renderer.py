@@ -13,6 +13,7 @@ from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 from eom_hwpx_builder.kordoc_markdown import inspect_kordoc_markdown
 from eom_hwpx_builder.kordoc_renderer import render_kordoc_workspace
 from eom_hwpx_builder.kordoc_runtime import (
+    KORDOC_PACKAGE_LOCK_SHA256,
     KordocBridgeReport,
     KordocRuntime,
     KordocRuntimeSettings,
@@ -256,8 +257,16 @@ def test_runtime_uses_fixed_node_bridge_and_sanitized_environment(
     node.write_text("fixed", encoding="utf-8")
     node.chmod(0o700)
     runtime_root = tmp_path / "runtime"
-    runtime_root.mkdir()
+    (runtime_root / "node_modules/kordoc").mkdir(parents=True)
     (runtime_root / "package.json").write_text("{}", encoding="utf-8")
+    lock_source = (
+        Path(__file__).resolve().parents[2]
+        / "services/hwpx_builder/kordoc_runtime/package-lock.json"
+    )
+    (runtime_root / "package-lock.json").write_bytes(lock_source.read_bytes())
+    (runtime_root / "node_modules/kordoc/package.json").write_text(
+        '{"name":"kordoc","version":"4.9.0"}\n', encoding="utf-8"
+    )
     observed: dict[str, Any] = {}
 
     def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
@@ -299,10 +308,43 @@ def test_runtime_fails_closed_without_node_and_does_not_expose_details(tmp_path:
     assert "missing-node" not in str(caught.value)
 
 
+def test_runtime_fails_closed_when_pinned_lock_integrity_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    node = tmp_path / "node"
+    node.write_text("fixed", encoding="utf-8")
+    node.chmod(0o700)
+    runtime_root = tmp_path / "runtime"
+    (runtime_root / "node_modules/kordoc").mkdir(parents=True)
+    (runtime_root / "package.json").write_text("{}", encoding="utf-8")
+    (runtime_root / "package-lock.json").write_text("{}\n", encoding="utf-8")
+    (runtime_root / "node_modules/kordoc/package.json").write_text(
+        '{"name":"kordoc","version":"4.9.0"}\n', encoding="utf-8"
+    )
+    called = False
+
+    def unexpected_run(*_args: Any, **_kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        nonlocal called
+        called = True
+        raise AssertionError("Node must not run after an integrity mismatch")
+
+    monkeypatch.setattr("eom_hwpx_builder.kordoc_runtime.subprocess.run", unexpected_run)
+    runtime = KordocRuntime(
+        KordocRuntimeSettings(node_binary=node, runtime_root=runtime_root, home=tmp_path)
+    )
+    with pytest.raises(HwpxError) as caught:
+        runtime.capabilities()
+    assert caught.value.code == HwpxErrorCode.HWPX_KORDOC_DEPENDENCY_MISMATCH
+    assert not called
+
+
 def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     root = Path(__file__).resolve().parents[2]
     lock = json.loads((root / "services/hwpx_builder/kordoc_runtime/package-lock.json").read_text())
     package = lock["packages"]["node_modules/kordoc"]
+    assert sha256_file(root / "services/hwpx_builder/kordoc_runtime/package-lock.json") == (
+        "sha256:" + KORDOC_PACKAGE_LOCK_SHA256
+    )
     assert package["version"] == "4.9.0"
     assert package["integrity"] == KordocRendererDependency().npm_integrity
     environment = (root / "infra/conda/eom-hwpx.environment.yml").read_text()

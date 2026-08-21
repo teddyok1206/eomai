@@ -577,6 +577,13 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             "yes",
         ),
         (
+            "eom",
+            "org.freedesktop.systemd1.manage-units",
+            "eom-hwpx-kordoc@hwpxbuild_0123456789abcdef0123456789abcdef.service",
+            "start",
+            "yes",
+        ),
+        (
             "other",
             "org.freedesktop.systemd1.manage-units",
             f"eom-worker-01@{JOB_ID}.service",
@@ -599,6 +606,13 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             "no",
         ),
         ("eom", "org.freedesktop.systemd1.manage-units", "run-u1.service", None, "no"),
+        (
+            "eom",
+            "org.freedesktop.systemd1.manage-units",
+            "eom-hwpx-kordoc@../../root.service",
+            "start",
+            "no",
+        ),
         (
             "eom",
             "org.freedesktop.systemd1.manage-unit-files",

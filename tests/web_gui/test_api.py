@@ -121,11 +121,44 @@ def test_hwpx_is_application_api_only_and_not_faked() -> None:
         assert value["build_available"] is False
         response = client.post(
             "/studio/api/v1/hwpx/builds",
-            json={"item_revision_id": REVISION_ID},
+            json={
+                "item_revision_id": REVISION_ID,
+                "idempotency_key": "studio:hwpx:not-ready-0001",
+            },
             headers={"X-CSRF-Token": session["csrf_token"]},
         )
         assert response.status_code == 503
-        assert response.json()["error_code"] == "HWPX_RENDERER_NOT_DEPLOYED"
+        assert response.json()["error_code"] == "HWPX_RENDERER_NOT_READY"
+
+
+def test_hwpx_ready_build_status_and_download_use_application_api_boundary() -> None:
+    gateway = FakeGateway(hwpx_state="READY")
+    client, _ = make_client(gateway=gateway)
+    with client:
+        session = login(client)
+        capability = client.get("/studio/api/v1/hwpx/capability")
+        assert capability.status_code == 200
+        assert capability.json()["state"] == "READY"
+        response = client.post(
+            "/studio/api/v1/hwpx/builds",
+            json={
+                "item_revision_id": REVISION_ID,
+                "idempotency_key": "studio:hwpx:test-0001",
+                "require_native_equations": True,
+                "require_native_tables": True,
+            },
+            headers={"X-CSRF-Token": session["csrf_token"]},
+        )
+        assert response.status_code == 202
+        build_id = response.json()["resource_id"]
+        status = client.get(f"/studio/api/v1/hwpx/builds/{build_id}")
+        assert status.json()["native_equation_count"] == 5
+        assert status.json()["native_table_count"] == 2
+        assert status.json()["download_available"] is True
+        download = client.get(f"/studio/api/v1/hwpx/builds/{build_id}/download")
+        assert download.status_code == 200
+        assert download.content == b"TEST_ONLY_HWPX"
+        assert gateway.hwpx_build_calls == 1
 
 
 def test_db_explorer_is_admin_read_only_allowlist() -> None:
@@ -183,13 +216,12 @@ def test_mutations_require_csrf() -> None:
         assert response.json()["error_code"] == "CSRF_TOKEN_INVALID"
 
 
-def test_hwpx_download_route_rejects_unsafe_name_before_capability() -> None:
+def test_hwpx_download_route_rejects_invalid_build_identifier() -> None:
     client, _ = make_client()
     with client:
         login(client)
         response = client.get(
-            "/studio/api/v1/hwpx/builds/hwpxbuild_test0001/download",
-            params={"filename": "../unsafe.hwpx"},
+            "/studio/api/v1/hwpx/builds/not-a-build/download",
         )
         assert response.status_code == 422
-        assert response.json()["error_code"] == "HWPX_DOWNLOAD_NAME_INVALID"
+        assert response.json()["error_code"] == "HWPX_BUILD_ID_INVALID"

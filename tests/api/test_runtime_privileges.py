@@ -23,6 +23,9 @@ def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
     assert "workflow_events" in READ_TABLES
     assert "workflow_events" in INSERT_TABLES
     assert "workflow_events" not in UPDATE_TABLES
+    assert "hwpx_application_builds" in READ_TABLES
+    assert "hwpx_application_builds" in INSERT_TABLES
+    assert "hwpx_application_builds" in UPDATE_TABLES
     assert {privilege for privilege, _tables in TABLE_PRIVILEGES} == {
         "SELECT",
         "INSERT",

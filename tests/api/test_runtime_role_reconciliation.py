@@ -32,6 +32,9 @@ def test_runtime_role_bootstrap_revokes_drift_before_exact_grants() -> None:
     assert "workflow_instances" in READ_TABLES
     assert "workflow_instances" in UPDATE_TABLES
     assert "workflow_commands" in INSERT_TABLES
+    assert "hwpx_application_builds" in READ_TABLES
+    assert "hwpx_application_builds" in INSERT_TABLES
+    assert "hwpx_application_builds" in UPDATE_TABLES
 
 
 def test_disposable_reconciliation_proves_idempotency_and_removes_drift() -> None:
