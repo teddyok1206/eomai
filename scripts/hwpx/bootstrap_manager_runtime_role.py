@@ -287,12 +287,14 @@ def main() -> None:
             if cursor.fetchone() != ((schema, name) in sequences,):
                 fail("HWPX_MANAGER_SEQUENCE_PRIVILEGE_MISMATCH")
         cursor.execute(
-            "SELECT count(*) FROM pg_proc procedure "
+            "SELECT COALESCE(bool_or(has_function_privilege(%s, procedure.oid, 'EXECUTE')), "
+            "false) FROM pg_proc procedure "
             "JOIN pg_namespace namespace ON namespace.oid=procedure.pronamespace "
-            "WHERE namespace.nspname='app'"
+            "WHERE namespace.nspname='app'",
+            (ROLE,),
         )
-        if cursor.fetchone() != (0,):
-            fail("HWPX_MANAGER_FUNCTION_SURFACE_REVIEW_REQUIRED")
+        if cursor.fetchone() != (False,):
+            fail("HWPX_MANAGER_FUNCTION_PRIVILEGE_MISMATCH")
     connection.close()
 
     manager_url = (

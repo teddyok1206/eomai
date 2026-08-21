@@ -69,5 +69,6 @@ def test_manager_bootstrap_is_fixed_and_revokes_before_granting() -> None:
     assert "GRANT USAGE ON ALL SEQUENCES" not in source
     assert "HWPX_MANAGER_ROLE_MEMBERSHIP_MISMATCH" in source
     assert "HWPX_MANAGER_SEQUENCE_PRIVILEGE_MISMATCH" in source
-    assert "HWPX_MANAGER_FUNCTION_SURFACE_REVIEW_REQUIRED" in source
+    assert "has_function_privilege" in source
+    assert "HWPX_MANAGER_FUNCTION_PRIVILEGE_MISMATCH" in source
     assert "EOM_API_TOKEN_HASH_KEY" not in source.split("def main()", 1)[0]
