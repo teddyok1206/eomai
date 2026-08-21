@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import stat
 import subprocess
 from pathlib import Path
@@ -284,3 +285,15 @@ def test_application_adapter_has_no_transient_or_chown_fallback() -> None:
     assert "ExecStart=/srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx render-kordoc" in unit
     assert "CapabilityBoundingSet=" in unit
     assert f"-m {WORKSPACE_ROOT_MODE:o} /srv/eom/hwpx-workspaces" in bootstrap
+
+
+def test_builder_bootstrap_group_matcher_uses_closed_exact_names() -> None:
+    bootstrap = Path("scripts/hwpx/bootstrap_builder_user.sh").read_text(encoding="utf-8")
+    match = re.search(r"^FORBIDDEN_GROUP_PATTERN='([^']+)'$", bootstrap, re.MULTILINE)
+    assert match is not None
+    pattern = re.compile(match.group(1))
+
+    for allowed in ("eom-hwpx", "eom-api", "eom-cdx", "eom-cdx-admin"):
+        assert pattern.fullmatch(allowed) is None
+    for forbidden in ("sudo", "docker", "eom", "eom-cdx-01", "eom-cdx-999"):
+        assert pattern.fullmatch(forbidden) is not None
