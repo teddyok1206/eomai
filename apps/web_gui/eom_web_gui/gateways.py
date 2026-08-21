@@ -414,9 +414,7 @@ class HttpApplicationGateway:
                 entity=query.entity,
                 columns=hwpx_columns,
                 rows=tuple(_filtered_rows(values, hwpx_columns, query)),
-                next_cursor=(
-                    hwpx_page.get("next_cursor") if isinstance(hwpx_page, dict) else None
-                ),
+                next_cursor=(hwpx_page.get("next_cursor") if isinstance(hwpx_page, dict) else None),
                 has_more=(
                     bool(hwpx_page.get("has_more")) if isinstance(hwpx_page, dict) else False
                 ),

@@ -14,9 +14,7 @@ from tests.api.helpers import disconnected_services
 
 
 def test_hwpx_protocol_schema_is_draft_2020_12_and_rejects_commands() -> None:
-    schema = json.loads(
-        Path("schemas/api/v1/hwpx.schema.json").read_text(encoding="utf-8")
-    )
+    schema = json.loads(Path("schemas/api/v1/hwpx.schema.json").read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(schema)
     validator = Draft202012Validator(schema["$defs"]["buildRequest"])
     assert not list(

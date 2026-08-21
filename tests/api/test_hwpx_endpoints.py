@@ -112,9 +112,12 @@ class MemoryIdempotency:
         import hashlib
         import json
 
-        return "sha256:" + hashlib.sha256(
-            json.dumps(values, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
+        return (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(values, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+        )
 
     def claim(self, *, request_sha256: str, **_values: Any) -> IdempotencyClaim:
         if self.request_sha256 is not None and self.request_sha256 != request_sha256:
@@ -180,9 +183,7 @@ def _client(tmp_path: Path, *, ready: bool = True, admin: bool = True) -> tuple[
     output = tmp_path / "fixture.hwpx"
     output.write_bytes(b"TEST_ONLY_HWPX")
     services = disconnected_services()
-    services.hwpx_capability = FakeCapabilityService(
-        "READY" if ready else "PREPARED_NOT_DEPLOYED"
-    )  # type: ignore[assignment]
+    services.hwpx_capability = FakeCapabilityService("READY" if ready else "PREPARED_NOT_DEPLOYED")  # type: ignore[assignment]
     services.hwpx = FakeHwpxService(output)  # type: ignore[assignment]
     services.queries = FakeQueries()  # type: ignore[assignment]
     services.idempotency = MemoryIdempotency()  # type: ignore[assignment]
