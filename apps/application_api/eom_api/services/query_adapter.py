@@ -22,6 +22,7 @@ from eom_api_contracts.content_packs import (
 )
 from eom_api_contracts.deliverables import DeliverableView
 from eom_api_contracts.events import EventView
+from eom_api_contracts.hwpx import HwpxBuildView
 from eom_api_contracts.items import (
     ItemComponentView,
     ItemRelationshipView,
@@ -49,6 +50,7 @@ from eom_catalog_service.models import (
     UsagePlanRecord,
     UsageRecord,
 )
+from eom_hwpx_manager.models import HwpxApplicationBuildRecord
 from eom_identity_service.models import OperatorEventRecord
 from eom_orchestrator.database import build_session_factory
 from eom_workflow_runner.models import (
@@ -60,6 +62,7 @@ from sqlalchemy import Engine, Select, and_, or_, select
 from sqlalchemy.orm import Session
 
 from eom_api.errors import ApiError
+from eom_api.services.hwpx_projection import project_hwpx_build
 
 
 @dataclass(frozen=True)
@@ -113,6 +116,28 @@ class QueryAdapter:
     def __init__(self, engine: Engine, cursor_key: bytes) -> None:
         self.sessions = build_session_factory(engine)
         self.cursors = CursorCodec(cursor_key)
+
+    def list_hwpx_builds(
+        self, *, limit: int, cursor: str | None, state: str | None = None
+    ) -> PageResult[HwpxBuildView]:
+        with self.sessions() as session:
+            statement = select(HwpxApplicationBuildRecord)
+            if state:
+                statement = statement.where(HwpxApplicationBuildRecord.state == state)
+            rows, next_cursor, more = self._page(
+                session,
+                statement,
+                HwpxApplicationBuildRecord.created_at,
+                HwpxApplicationBuildRecord.build_id,
+                "hwpx-build",
+                limit,
+                cursor,
+            )
+            return PageResult(
+                tuple(project_hwpx_build(row) for row in rows),
+                next_cursor,
+                more,
+            )
 
     def list_intakes(
         self, *, limit: int, cursor: str | None, state: str | None = None

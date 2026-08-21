@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPOSITORY_ROOT="/home/eom/EOM"
-EXPECTED_BRANCH="feat/application-api-v0"
+EXPECTED_BRANCHES=("feat/application-api-v0" "feat/hwpx-application-api-v0")
 API_PYTHON="/srv/eom/conda/envs/eom-api/bin/python"
 API_PIP="${API_PYTHON} -m pip"
 SERVICE="eom-api.service"
@@ -47,8 +47,15 @@ trap cleanup EXIT
 [[ "$(id -un)" == "eom" ]] || fail "release builds must run as eom"
 [[ "$(git -C "${REPOSITORY_ROOT}" rev-parse --show-toplevel)" == "${REPOSITORY_ROOT}" ]] || \
   fail "repository root mismatch"
-[[ "$(git -C "${REPOSITORY_ROOT}" branch --show-current)" == "${EXPECTED_BRANCH}" ]] || \
-  fail "branch mismatch"
+CURRENT_BRANCH="$(git -C "${REPOSITORY_ROOT}" branch --show-current)"
+branch_allowed=false
+for candidate in "${EXPECTED_BRANCHES[@]}"; do
+  if [[ "${CURRENT_BRANCH}" == "${candidate}" ]]; then
+    branch_allowed=true
+    break
+  fi
+done
+[[ "${branch_allowed}" == true ]] || fail "branch mismatch"
 [[ -x "${API_PYTHON}" ]] || fail "isolated eom-api Python is unavailable"
 
 COMMIT="$(git -C "${REPOSITORY_ROOT}" rev-parse HEAD)"
@@ -128,6 +135,7 @@ PY
 
   inspect_release
   printf 'Built and inspected EOM Application API %s from %s.\n' "${VERSION}" "${COMMIT}"
+  printf 'application_api_release_wheel_dir=%s\n' "${DIST_DIR}"
 }
 
 inspect_release() {
@@ -188,8 +196,8 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         for name in archive.namelist()
         if name.startswith("eom_api_contracts/schemas/") and name.endswith(".schema.json")
     ]
-    if len(schemas) != 5:
-        raise SystemExit(f"expected 5 packaged API schemas, found {len(schemas)}")
+    if len(schemas) != 6 or "eom_api_contracts/schemas/hwpx.schema.json" not in schemas:
+        raise SystemExit(f"expected 6 packaged API schemas including HWPX, found {schemas}")
 
 workflow_prefix = "eom_workflow/resources/"
 workflow_resources = {
@@ -223,7 +231,17 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/staging.py",
         "eom_catalog_service/registry_service.py",
     }
-    if missing := (worker_runtime | actor_runtime | catalog_staging_runtime) - names:
+    hwpx_application_runtime = {
+        "eom_hwpx_manager/application_adapter.py",
+        "eom_hwpx_manager/application_service.py",
+        "eom_hwpx_manager/application_state.py",
+        "eom_hwpx_manager/capability.py",
+        "eom_hwpx_manager/markdown_structure.py",
+        "eom_hwpx_manager/runner.py",
+    }
+    if missing := (
+        worker_runtime | actor_runtime | catalog_staging_runtime | hwpx_application_runtime
+    ) - names:
         raise SystemExit(f"platform runtime missing from wheel: {sorted(missing)}")
     settings_source = archive.read("eom_orchestrator/settings.py")
     for forbidden in (
@@ -254,6 +272,14 @@ with zipfile.ZipFile(platform_wheel) as archive:
     for member in sorted(catalog_staging_runtime):
         if member not in record:
             raise SystemExit(f"Catalog staging runtime missing from RECORD: {member}")
+    for member in sorted(hwpx_application_runtime):
+        if member not in record:
+            raise SystemExit(f"HWPX application runtime missing from RECORD: {member}")
+    entry_points = next(name for name in names if name.endswith(".dist-info/entry_points.txt"))
+    if "eom-hwpx-application-runner = eom_hwpx_manager.runner:main" not in archive.read(
+        entry_points
+    ).decode():
+        raise SystemExit("HWPX application runner console entry point missing")
     worker_exec_source = (
         Path(os.environ["REPOSITORY_ROOT"])
         / "services/orchestrator/eom_orchestrator/worker_exec.py"

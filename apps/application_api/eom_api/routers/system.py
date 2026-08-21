@@ -25,7 +25,7 @@ router = APIRouter(prefix="/system", tags=["system"])
     dependencies=[Depends(require_permission(PermissionKey.SYSTEM_READ))],
 )
 def capabilities(request: Request) -> SingleResponse[Capabilities]:
-    return one(request, Capabilities())
+    return one(request, _capabilities(request))
 
 
 @router.get(
@@ -45,10 +45,15 @@ def system_info(request: Request) -> SingleResponse[SystemInfo]:
             build_version=build.package_version,
             source_commit=build.source_commit,
             migration_revision=revision,
-            capabilities=Capabilities(),
+            capabilities=_capabilities(request),
             server_time=datetime.now(UTC),
         ),
     )
+
+
+def _capabilities(request: Request) -> Capabilities:
+    hwpx_ready = request.app.state.services.hwpx_capability.inspect().state == "READY"
+    return Capabilities(hwpx=hwpx_ready, binary_download=hwpx_ready)
 
 
 @router.get(

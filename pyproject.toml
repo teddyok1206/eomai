@@ -31,6 +31,7 @@ dev = [
 eomctl = "eomctl.cli:app"
 eom-dev-report = "eom_dev_reporter.cli:main"
 eom-workflow-runner = "eom_workflow_runner.cli:main"
+eom-hwpx-application-runner = "eom_hwpx_manager.runner:main"
 
 [tool.setuptools.packages.find]
 where = [

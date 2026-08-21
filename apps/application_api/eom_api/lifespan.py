@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
+from eom_catalog_service.registry_service import RegistryService
+from eom_hwpx_manager import HwpxApplicationService, HwpxCapabilityService
 from eom_identity_service.auth_service import AuthService, LoginPolicy
 from eom_identity_service.service import OperatorService
 from eom_identity_service.tokens import SessionTokenService, TokenCodec, TokenPolicy
@@ -50,6 +52,8 @@ class AppServices:
         self.commands = CommandAdapter(engine)
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)
+        self.hwpx = HwpxApplicationService(engine, registry=RegistryService(engine))
+        self.hwpx_capability = HwpxCapabilityService(manager_registered=True)
         self.rate_limiter = BoundedRateLimiter(settings.rate_limit.maximum_buckets)
         self.fingerprint_key = fingerprint_key
 

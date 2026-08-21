@@ -61,6 +61,8 @@ class PermissionKey(StrEnum):
     USAGE_CANCEL_PLAN = "usage:cancel_plan"
     USAGE_FULFILL_PLAN = "usage:fulfill_plan"
     EVENT_READ = "event:read"
+    HWPX_READ = "hwpx:read"
+    HWPX_BUILD_CREATE = "hwpx:build_create"
 
 
 VIEWER_PERMISSIONS = frozenset(
@@ -73,6 +75,7 @@ VIEWER_PERMISSIONS = frozenset(
         PermissionKey.DELIVERABLE_READ,
         PermissionKey.USAGE_READ,
         PermissionKey.EVENT_READ,
+        PermissionKey.HWPX_READ,
     }
 )
 
@@ -95,6 +98,7 @@ ROLE_PERMISSIONS = MappingProxyType(
         | {
             PermissionKey.DELIVERABLE_CREATE,
             PermissionKey.DELIVERABLE_UPDATE,
+            PermissionKey.HWPX_BUILD_CREATE,
             PermissionKey.USAGE_CREATE_PLAN,
             PermissionKey.USAGE_RESERVE_PLAN,
             PermissionKey.USAGE_CANCEL_PLAN,

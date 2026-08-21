@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eom:schema:api:v1:hwpx",
+  "title": "EOM HWPX Application API V0",
+  "type": "object",
+  "$defs": {
+    "capabilityState": {
+      "enum": ["READY", "PREPARED_NOT_DEPLOYED", "UNAVAILABLE", "DEGRADED"]
+    },
+    "buildState": {
+      "enum": ["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]
+    },
+    "buildRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer", "options"],
+      "properties": {
+        "renderer": {"const": "kordoc"},
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "include_explanation": {"const": true},
+            "require_native_equations": {"type": "boolean"},
+            "require_native_tables": {"type": "boolean"},
+            "document_preset": {"enum": ["report"]}
+          }
+        }
+      }
+    },
+    "artifactPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "sha256"],
+      "properties": {
+        "artifact_id": {"pattern": "^artifact_[0-9a-f]{32}$", "type": "string"},
+        "artifact_revision_id": {"pattern": "^rev_[0-9a-f]{32}$", "type": "string"},
+        "sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}
+      }
+    }
+  }
+}

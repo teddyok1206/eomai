@@ -8,12 +8,14 @@ from eom_identity_service.models import (
     PermissionRecord,
     RoleRecord,
 )
+from eom_operator_identity import PermissionKey
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from sqlalchemy import func, select, text
 
 from eom_api.lifespan import AppServices
 from eom_api.runtime_privileges import runtime_table_privileges_ready
 
-EXPECTED_MIGRATION_HEAD = "20260818_0007"
+EXPECTED_MIGRATION_HEAD = CURRENT_MIGRATION_REVISION
 
 
 def readiness(services: AppServices) -> bool:
@@ -26,7 +28,7 @@ def readiness(services: AppServices) -> bool:
         return bool(
             revision == EXPECTED_MIGRATION_HEAD
             and role_count == 5
-            and permission_count == 34
+            and permission_count == len(PermissionKey)
             and runtime_privileges
             and services.settings.server.host in {"127.0.0.1", "localhost", "::1"}
         )

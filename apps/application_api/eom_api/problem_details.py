@@ -7,6 +7,7 @@ import re
 from eom_api_contracts import ProblemDetails, ValidationIssue
 from eom_content_intake import IntakeError
 from eom_content_pack import ContentPackError
+from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_item_registry import RegistryError
 from eom_operator_identity.errors import IdentityError, IdentityErrorCode
 from eom_workflow_runner.errors import WorkflowError
@@ -162,6 +163,25 @@ def install_exception_handlers(app: FastAPI) -> None:
 
     for exception_type in (IntakeError, ContentPackError, RegistryError, WorkflowError):
         app.add_exception_handler(exception_type, domain_handler)
+
+    @app.exception_handler(HwpxManagerError)
+    async def hwpx_error_handler(request: Request, exc: HwpxManagerError) -> JSONResponse:
+        if exc.code is HwpxManagerErrorCode.HWPX_APPLICATION_BUILD_NOT_FOUND:
+            status = 404
+        elif exc.code in {
+            HwpxManagerErrorCode.HWPX_BUILDER_UNAVAILABLE,
+            HwpxManagerErrorCode.HWPX_BUILDER_TIMEOUT,
+        }:
+            status = 503
+        else:
+            status = 409
+        return problem_response(
+            request,
+            status=status,
+            error_code=exc.code.value,
+            title="HWPX operation failed",
+            detail="The HWPX operation could not be completed at a validated boundary.",
+        )
 
     @app.exception_handler(Exception)
     async def unexpected_handler(request: Request, exc: Exception) -> JSONResponse:

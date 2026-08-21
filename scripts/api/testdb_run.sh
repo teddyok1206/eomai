@@ -119,7 +119,7 @@ engine = build_engine()
 with engine.connect() as connection:
     assert connection.exec_driver_sql(
         "SELECT version_num FROM app.alembic_version"
-    ).scalar_one() == "20260818_0007"
+    ).scalar_one() == "20260821_0008"
     functions = connection.exec_driver_sql(
         "SELECT to_regprocedure('app.reject_identity_key_change()'), "
         "to_regprocedure('app.reject_api_audit_mutation()')"
@@ -139,7 +139,7 @@ with engine.connect() as connection:
         "api_audit_events_append_only",
     }
 engine.dispose()
-print("migration_head=20260818_0007 migration_0006_app_objects=PASS")
+print("migration_head=20260821_0008 hwpx_application_api=PASS")
 PY
   printf 'Disposable API test database migration cycle passed.\n'
   printf 'Next privileged phase: scripts/api/testdb_prepare.sh --reconcile %s\n' \

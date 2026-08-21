@@ -52,6 +52,9 @@ class KordocBuildReceipt:
     artifact_revision_id: str
     output_sha256: str
     status: str
+    native_equation_count: int
+    native_table_count: int
+    kordoc_version: str
 
 
 class KordocHwpxService:
@@ -73,13 +76,14 @@ class KordocHwpxService:
         *,
         idempotency_key: str,
         options: KordocRenderOptions | None = None,
+        build_id: str | None = None,
     ) -> KordocBuildReceipt:
         actual_options = options or KordocRenderOptions()
         self._resolve_source(source_path, source)
         job_id = new_job_id()
         artifact_id = new_logical_artifact_id()
         artifact_revision_id = new_revision_id()
-        build_id = new_hwpx_build_id()
+        actual_build_id = build_id or new_hwpx_build_id()
         request_identity = {
             "renderer_profile": "kordoc-markdown-v1",
             "source": source.model_dump(mode="json"),
@@ -105,7 +109,7 @@ class KordocHwpxService:
             return self._completed_receipt(existing_job_id)
 
         request = KordocRenderRequest(
-            build_id=build_id,
+            build_id=actual_build_id,
             source=source,
             options=actual_options,
             expected_structure=expected_structure,
@@ -113,7 +117,7 @@ class KordocHwpxService:
         request_raw = request.model_dump(mode="json")
         validate_contract("kordoc-render-request", request_raw)
         try:
-            workspace = self.adapter.create_workspace(build_id)
+            workspace = self.adapter.create_workspace(actual_build_id)
             self.adapter.stage_file(workspace, source.file, source_path)
             self.adapter.write_json(workspace, "request.json", request_raw)
             log_root = self.settings.staging_root / job_id
@@ -164,7 +168,7 @@ class KordocHwpxService:
             )
             if (
                 result.status != "PENDING_MANUAL_HANCOM_VALIDATION"
-                or result.build_id != build_id
+                or result.build_id != actual_build_id
                 or result.source_artifact_id != source.artifact_id
                 or result.source_artifact_revision_id != source.artifact_revision_id
                 or result.source_sha256 != source.sha256
@@ -217,7 +221,7 @@ class KordocHwpxService:
                     JobState.SUCCEEDED,
                     "HWPX_KORDOC_ARTIFACT_COMMITTED",
                     data={
-                        "build_id": build_id,
+                        "build_id": actual_build_id,
                         "logical_artifact_id": artifact_id,
                         "revision_id": artifact_revision_id,
                         "content_hash": staged.primary_hash,
@@ -227,7 +231,7 @@ class KordocHwpxService:
                 LOGGER,
                 logging.INFO,
                 "HWPX_KORDOC_BUILD_COMMITTED",
-                build_id=build_id,
+                build_id=actual_build_id,
                 source_artifact_id=source.artifact_id,
                 source_artifact_revision_id=source.artifact_revision_id,
                 output_sha256=staged.primary_hash,
@@ -235,12 +239,15 @@ class KordocHwpxService:
                 artifact_revision_id=artifact_revision_id,
             )
             return KordocBuildReceipt(
-                build_id=build_id,
+                build_id=actual_build_id,
                 job_id=job_id,
                 artifact_id=artifact_id,
                 artifact_revision_id=artifact_revision_id,
                 output_sha256=staged.primary_hash,
                 status=JobState.SUCCEEDED.value,
+                native_equation_count=result.native_equation_count,
+                native_table_count=result.native_table_count,
+                kordoc_version=result.kordoc_version,
             )
         except Exception as exc:
             self._fail_job(job_id, exc)
@@ -323,6 +330,9 @@ class KordocHwpxService:
                 artifact_revision_id=job.revision_id,
                 output_sha256=revision.content_hash,
                 status=job.status,
+                native_equation_count=result.native_equation_count,
+                native_table_count=result.native_table_count,
+                kordoc_version=result.kordoc_version,
             )
 
     def _transition(self, job_id: str, target: JobState, event: str) -> None:

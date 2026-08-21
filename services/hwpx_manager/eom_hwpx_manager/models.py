@@ -11,6 +11,8 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -148,3 +150,86 @@ class HwpxValidationRunRecord(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     build: Mapped[HwpxBuildRecord] = relationship(back_populates="validations")
+
+
+class HwpxApplicationBuildRecord(Base):
+    """Application-facing build metadata containing only immutable artifact pointers."""
+
+    __tablename__ = "hwpx_application_builds"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('REQUESTED','RUNNING','VALIDATING','SUCCEEDED','FAILED')",
+            name="ck_hwpx_application_builds_state",
+        ),
+        CheckConstraint(
+            "validation_state IN ('PENDING','PASS','FAIL')",
+            name="ck_hwpx_application_builds_validation_state",
+        ),
+        CheckConstraint(
+            "(state IN ('REQUESTED','RUNNING','VALIDATING') AND validation_state = 'PENDING') "
+            "OR (state = 'SUCCEEDED' AND validation_state = 'PASS' "
+            "AND native_equation_count IS NOT NULL AND native_table_count IS NOT NULL "
+            "AND output_artifact_id IS NOT NULL AND output_artifact_revision_id IS NOT NULL "
+            "AND output_sha256 IS NOT NULL AND output_filename IS NOT NULL) "
+            "OR (state = 'FAILED' AND validation_state = 'FAIL' AND failure_code IS NOT NULL)",
+            name="ck_hwpx_application_builds_terminal_evidence",
+        ),
+        UniqueConstraint(
+            "created_by_operator_id",
+            "idempotency_key",
+            name="uq_hwpx_application_builds_operator_idempotency",
+        ),
+        Index(
+            "ix_hwpx_application_builds_item_revision_history",
+            "item_revision_id",
+            "created_at",
+            "build_id",
+        ),
+        Index("ix_hwpx_application_builds_created", "created_at", "build_id"),
+    )
+
+    build_id: Mapped[str] = mapped_column(String(42), primary_key=True)
+    item_id: Mapped[str] = mapped_column(ForeignKey("items.item_id"), nullable=False, index=True)
+    item_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("item_revisions.item_revision_id"), nullable=False
+    )
+    source_artifact_id: Mapped[str] = mapped_column(
+        ForeignKey("artifacts.logical_artifact_id"), nullable=False
+    )
+    source_artifact_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_revisions.revision_id"), nullable=False
+    )
+    source_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    source_schema_ref: Mapped[str] = mapped_column(String(256), nullable=False)
+    source_media_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    renderer: Mapped[str] = mapped_column(String(32), nullable=False)
+    renderer_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    options: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    request_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    created_by_operator_id: Mapped[str] = mapped_column(
+        ForeignKey("operators.operator_id"), nullable=False, index=True
+    )
+    state: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    validation_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    native_equation_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    native_table_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    platform_job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("jobs.job_id"), nullable=True, unique=True
+    )
+    output_artifact_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifacts.logical_artifact_id"), nullable=True
+    )
+    output_artifact_revision_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifact_revisions.revision_id"), nullable=True
+    )
+    output_sha256: Mapped[str | None] = mapped_column(String(71), nullable=True)
+    output_filename: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    failure_detail_sanitized: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resource_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

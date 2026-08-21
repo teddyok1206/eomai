@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
@@ -16,6 +17,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 
 KORDOC_VERSION: Final[Literal["4.9.0"]] = "4.9.0"
+KORDOC_PACKAGE_LOCK_SHA256: Final = (
+    "a2f42396bf7297e548eab00109e6d25aa35c488dffc1c0eda1c7cb150ae297bd"
+)
 MINIMUM_NODE_MAJOR = 20
 MAX_BRIDGE_OUTPUT_BYTES = 64 * 1024
 
@@ -72,6 +76,10 @@ class KordocRuntime:
             node_stat = node.stat()
             runtime_stat = runtime.stat()
             bridge_stat = bridge.stat()
+            lock = runtime / "package-lock.json"
+            package_manifest = runtime / "node_modules/kordoc/package.json"
+            lock_stat = lock.lstat()
+            package_stat = package_manifest.lstat()
         except OSError as exc:
             raise HwpxError(
                 HwpxErrorCode.HWPX_KORDOC_RUNTIME_UNAVAILABLE,
@@ -86,10 +94,32 @@ class KordocRuntime:
             or bridge.is_symlink()
             or not (runtime / "package.json").is_file()
             or (runtime / "package.json").is_symlink()
+            or not stat.S_ISREG(lock_stat.st_mode)
+            or lock.is_symlink()
+            or not stat.S_ISREG(package_stat.st_mode)
+            or package_manifest.is_symlink()
         ):
             raise HwpxError(
                 HwpxErrorCode.HWPX_KORDOC_RUNTIME_UNAVAILABLE,
                 "pinned Kordoc runtime layout is invalid",
+            )
+        try:
+            lock_digest = hashlib.sha256(lock.read_bytes()).hexdigest()
+            package_value: Any = json.loads(package_manifest.read_bytes())
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_KORDOC_DEPENDENCY_MISMATCH,
+                "pinned Kordoc dependency metadata is invalid",
+            ) from exc
+        if (
+            lock_digest != KORDOC_PACKAGE_LOCK_SHA256
+            or not isinstance(package_value, dict)
+            or package_value.get("name") != "kordoc"
+            or package_value.get("version") != KORDOC_VERSION
+        ):
+            raise HwpxError(
+                HwpxErrorCode.HWPX_KORDOC_DEPENDENCY_MISMATCH,
+                "pinned Kordoc dependency integrity does not match",
             )
         return node.resolve(), runtime.resolve(), bridge
 

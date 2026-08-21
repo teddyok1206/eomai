@@ -18,6 +18,7 @@ from eom_api.routers import (
     deliverables,
     events,
     health,
+    hwpx,
     items,
     operators,
     system,
@@ -62,6 +63,7 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     app.state.services = actual
     for module in (
         health,
+        hwpx,
         auth,
         operators,
         content_intakes,
