@@ -239,6 +239,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_manager/download_server.py",
         "eom_hwpx_manager/markdown_structure.py",
         "eom_hwpx_manager/runner.py",
+        "eom_hwpx_manager/runtime_privileges.py",
     }
     if missing := (
         worker_runtime | actor_runtime | catalog_staging_runtime | hwpx_application_runtime

@@ -214,6 +214,7 @@ def test_runner_returns_sanitized_failure_without_traceback(
             )
 
     monkeypatch.setattr(runner, "build_engine", FakeEngine)
+    monkeypatch.setattr(runner, "_runtime_privileges_ready", lambda _engine: True)
     monkeypatch.setattr(runner, "RegistryService", lambda _engine: object())
     monkeypatch.setattr(runner, "HwpxApplicationService", FailingService)
 
@@ -222,6 +223,31 @@ def test_runner_returns_sanitized_failure_without_traceback(
     assert "HWPX_KORDOC_SOURCE_INVALID" in captured.err
     assert "SECRET_SOURCE_PATH" not in captured.err
     assert "Traceback" not in captured.err
+
+
+def test_runner_fails_closed_before_queue_access_when_manager_privileges_are_missing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class FakeEngine:
+        def dispose(self) -> None:
+            pass
+
+    called = False
+
+    class UnexpectedService:
+        def __init__(self, _engine: object, **_kwargs: object) -> None:
+            nonlocal called
+            called = True
+
+    monkeypatch.setattr(runner, "build_engine", FakeEngine)
+    monkeypatch.setattr(runner, "_runtime_privileges_ready", lambda _engine: False)
+    monkeypatch.setattr(runner, "HwpxApplicationService", UnexpectedService)
+
+    assert runner.run_once() == 1
+    captured = capsys.readouterr()
+    assert "HWPX_MANAGER_DATABASE_PRIVILEGES_UNAVAILABLE" in captured.err
+    assert "Traceback" not in captured.err
+    assert not called
 
 
 def test_application_adapter_root_contract_is_private_group_only() -> None:

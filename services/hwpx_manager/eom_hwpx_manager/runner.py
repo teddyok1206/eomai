@@ -10,15 +10,32 @@ import time
 
 from eom_catalog_service.registry_service import RegistryService
 from eom_orchestrator.database import build_engine
+from sqlalchemy import Engine
 
 from eom_hwpx_manager.application_service import HwpxApplicationService
 from eom_hwpx_manager.download_server import HwpxDownloadServer
 from eom_hwpx_manager.errors import HwpxManagerError
+from eom_hwpx_manager.runtime_privileges import manager_runtime_privileges_ready
 
 
-def run_once() -> int:
+def _runtime_privileges_ready(engine: Engine) -> bool:
+    try:
+        with engine.connect() as connection:
+            return manager_runtime_privileges_ready(connection)
+    except Exception:
+        return False
+
+
+def run_once(*, verify_privileges: bool = True) -> int:
     engine = build_engine()
     try:
+        if verify_privileges and not _runtime_privileges_ready(engine):
+            print(
+                "hwpx_application_build=FAILED "
+                "error_code=HWPX_MANAGER_DATABASE_PRIVILEGES_UNAVAILABLE",
+                file=sys.stderr,
+            )
+            return 1
         record = HwpxApplicationService(
             engine,
             registry=RegistryService(engine),
@@ -57,6 +74,13 @@ def serve(interval_seconds: float) -> int:
     download_server: HwpxDownloadServer | None = None
     server_thread: threading.Thread | None = None
     try:
+        if not _runtime_privileges_ready(download_engine):
+            print(
+                "hwpx_application_manager=FAILED "
+                "error_code=HWPX_MANAGER_DATABASE_PRIVILEGES_UNAVAILABLE",
+                file=sys.stderr,
+            )
+            return 1
         download_server = HwpxDownloadServer(
             HwpxApplicationService(
                 download_engine,
@@ -70,7 +94,7 @@ def serve(interval_seconds: float) -> int:
         )
         server_thread.start()
         while not stopping:
-            result = run_once()
+            result = run_once(verify_privileges=False)
             if result == 2:
                 time.sleep(interval_seconds)
             elif result != 0:

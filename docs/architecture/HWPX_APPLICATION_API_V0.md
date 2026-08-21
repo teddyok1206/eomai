@@ -66,6 +66,17 @@ allowlist accepts only `eom-hwpx-kordoc@hwpxbuild_<32 hex>.service`; caller-cont
 commands, paths, and renderer arguments are absent. The legacy template renderer adapter remains
 unchanged.
 
+The runner also uses a dedicated `eom_hwpx_manager_runtime` PostgreSQL role. Its dominant database
+operations are primary-key pointer reads, one FIFO `FOR UPDATE SKIP LOCKED` claim, append-only job
+events, job state updates, and immutable Artifact/Artifact Revision insertion. The role therefore
+has only `SELECT` on the pinned Item and artifact inputs, `SELECT`/`UPDATE` on
+`hwpx_application_builds`, and the exact `SELECT`/`INSERT`/`UPDATE` set needed for Kordoc jobs and
+artifact registration. It has no workflow command, Operator identity, API session, schema-create,
+delete, truncate, database-create, or role-membership authority. Sharing the broader Application
+API role was rejected because it both obscures ownership and still lacks the manager's artifact
+commit permissions. The runner verifies its positive privilege matrix before opening the download
+socket or claiming a build and fails closed if it differs.
+
 ## Failure and validation
 
 Build failures expose only stable codes and sanitized detail. Machine validation requires a valid
