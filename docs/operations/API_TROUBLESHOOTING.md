@@ -49,6 +49,12 @@ Use `sudo -n /usr/local/libexec/eom-api/verify-runtime-isolation` after every au
 release change. The access verdict must come from the fixed service-context probe; host-root path
 access is only a control observation.
 
+Before a privileged verifier run, use
+`/srv/eom/conda/envs/eom-api/bin/eom-api-runtime-isolation --capabilities`. This nonprivileged check
+opens a pidfd only for its own process and must report `READY` with either `PYTHON_OS_PIDFD` or
+`LIBC_PIDFD`. `BLOCKED` is a verifier capability failure, not evidence that service isolation
+failed; do not substitute a plain PID or rerun the privileged verifier automatically.
+
 Secret metadata failures belong to the privileged deployment verifier, not runtime doctor:
 
 ```bash

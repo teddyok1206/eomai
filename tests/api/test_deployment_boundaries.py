@@ -117,6 +117,7 @@ def test_runtime_verifier_separates_host_metadata_from_service_access() -> None:
 
 def test_service_context_helper_has_fixed_command_and_probe_inventory() -> None:
     source = _source("apps/application_api/eom_api/runtime_isolation_verifier.py")
+    pidfd_source = _source("apps/application_api/eom_api/runtime_isolation_pidfd.py")
 
     assert '"/usr/bin/nsenter"' in source
     assert '"/usr/bin/setpriv"' in source
@@ -128,6 +129,12 @@ def test_service_context_helper_has_fixed_command_and_probe_inventory() -> None:
     assert "os.system" not in source
     assert "caller_path" not in source
     assert "print(message" not in source
+    assert "os.pidfd_open(" not in source
+    assert '_LIBC_PIDFD_SYMBOL: Final = "pidfd_open"' in pidfd_source
+    assert "syscall(" not in pidfd_source
+    assert "shell=True" not in pidfd_source
+    assert "PidfdBackend.NONE" in pidfd_source
+    assert "use_main_pid" not in pidfd_source
 
 
 def test_release_installs_runtime_verifier_and_packages_fixed_helper() -> None:
@@ -141,7 +148,10 @@ def test_release_installs_runtime_verifier_and_packages_fixed_helper() -> None:
     assert '"${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}"' in deployment
     assert 'sudo -n "${RUNTIME_VERIFIER_TARGET}"' in deployment
     assert '"eom_api/runtime_isolation_verifier.py"' in deployment
+    assert '"eom_api/runtime_isolation_pidfd.py"' in deployment
     assert "runtime isolation console entry point missing" in deployment
+    assert "runtime_isolation_verifier_capability=READY" in deployment
+    assert "eom_api.runtime_isolation_verifier --capabilities" in deployment
     assert 'eom-api-runtime-isolation = "eom_api.runtime_isolation_verifier:main"' in package
 
 

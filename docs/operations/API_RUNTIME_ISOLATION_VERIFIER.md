@@ -28,11 +28,36 @@ permitted, inheritable, bounding, or ambient capabilities and has `NoNewPrivileg
 ## Context acquisition and race handling
 
 The installed helper reads `MainPID` directly from systemd and requires an active/running service
-with PID greater than one. It opens the `/proc/<MainPID>` directory, a pidfd, and the mount namespace
-before probing. The proc and namespace descriptors stay open, so PID reuse cannot redirect a probe
-to another process. It validates the fixed ExecStart, command line, installed Python executable,
-UID/GID/groups, working directory, root, user namespace, mount namespace, capabilities, and unit
-hardening properties.
+with PID greater than one. It first acquires a pidfd, validates the kernel-owned pidfd identity, then
+opens the `/proc/<MainPID>` directory and mount namespace before probing. The pidfd, proc, and
+namespace descriptors stay open, so PID reuse cannot redirect a probe to another process. It
+validates the fixed ExecStart, command line, installed Python executable, UID/GID/groups, working
+directory, root, user namespace, mount namespace, capabilities, and unit hardening properties.
+
+### pidfd capability contract
+
+| Capability | Production detection | Verifier requirement | Safe fallback | Decision |
+|---|---|---|---|---|
+| Python `os.pidfd_open` | attribute exists, is callable, and opens a self pidfd | preferred stable reference | fixed libc wrapper | use when operational |
+| libc `pidfd_open` | fixed symbol loaded with `use_errno`, fixed signature, flags `0`, and self-open succeeds | compatibility stable reference | none | use only when Python binding is absent |
+| kernel pidfd support | selected backend opens a self pidfd and the pidfd polls alive | required | none | fail closed when unavailable |
+| plain PID | always available but reusable | never sufficient | none | prohibited |
+
+The compatibility wrapper never chooses a caller-provided symbol or syscall number. Negative
+descriptors and `ESRCH`, `EPERM`, `EINVAL`, and `ENOSYS` are converted to sanitized typed failures.
+Every acquired descriptor is close-on-exec and is closed on success or failure. A missing safe
+backend yields `FAIL_PIDFD_UNAVAILABLE`; it never starts a namespace probe with an ordinary PID.
+
+The nonprivileged readiness check is safe to run before deployment because it opens and closes a
+pidfd only for its own process and never reads systemd service state or enters a namespace:
+
+```bash
+/srv/eom/conda/envs/eom-api/bin/eom-api-runtime-isolation --capabilities
+```
+
+It reports only the selected backend, Python/libc availability, `READY`/`BLOCKED`, and the
+fail-closed policy. Release inspection imports the non-editably installed wheel with the exact
+target interpreter and requires this check to return `READY`.
 
 The child enters only the pinned mount namespace. `setpriv` then establishes the validated service
 UID, GID, exact supplementary group set, empty inheritable/ambient/bounding capabilities,
@@ -70,10 +95,11 @@ comparison. The fixed inventory is O(n) time and O(n) output space with n curren
 persistent state, database access, cache, retry, or concurrent claim. The only temporary mutation is
 a unique fixed-prefix 0600 file under `/var/lib/eom-api`, removed in a `finally` boundary.
 
-Failures are fail-closed: unavailable context, identity mismatch, namespace mismatch, unexpected
-allow/deny, and restart race are distinct. Re-running after an inconclusive restart race is safe and
-idempotent. A simpler host `runuser` probe is insufficient because it misses the service mount
-namespace; mount-only `nsenter` is insufficient because it retains host-root credentials.
+Failures are fail-closed: unavailable pidfd capability, unavailable context, process identity
+mismatch, namespace mismatch, unexpected allow/deny, and restart race are distinct. Re-running
+after an inconclusive restart race is safe and idempotent. A simpler host `runuser` probe is
+insufficient because it misses the service mount namespace; mount-only `nsenter` is insufficient
+because it retains host-root credentials.
 
 ## Installed command
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from eom_api.runtime_isolation_pidfd import PidfdBackend
 from eom_api.runtime_isolation_verifier import (
     API_BIN,
     API_ENTRYPOINT,
@@ -22,12 +23,12 @@ from eom_api.runtime_isolation_verifier import (
     IsolationVerificationError,
     LinuxRuntimeIsolationAdapter,
     NamespaceIdentity,
-    PinnedServiceProcess,
     ProbeContext,
     ProbeExecution,
     ProbeResult,
     ResultCode,
     RuntimeIsolationAdapter,
+    ServiceProcessHandle,
     ServiceSnapshot,
     StabilityObservation,
     _execution_payload,
@@ -149,19 +150,19 @@ class _FakeAdapter:
         self.closed = False
         self.fixed_probe_calls = 0
 
-    def open_service(self) -> PinnedServiceProcess:
-        return PinnedServiceProcess(self.snapshot, -1, -1, -1)
+    def open_service(self) -> ServiceProcessHandle:
+        return ServiceProcessHandle(self.snapshot, -1, -1, -1, PidfdBackend.LIBC_PIDFD)
 
-    def run_fixed_probe(self, process: PinnedServiceProcess) -> ProbeExecution:
+    def run_fixed_probe(self, process: ServiceProcessHandle) -> ProbeExecution:
         assert process.snapshot is self.snapshot
         self.fixed_probe_calls += 1
         return self.execution
 
-    def observe_stability(self, process: PinnedServiceProcess) -> StabilityObservation:
+    def observe_stability(self, process: ServiceProcessHandle) -> StabilityObservation:
         assert process.snapshot is self.snapshot
         return self.stability
 
-    def close_service(self, process: PinnedServiceProcess) -> None:
+    def close_service(self, process: ServiceProcessHandle) -> None:
         assert process.snapshot is self.snapshot
         self.closed = True
 
@@ -195,7 +196,7 @@ def test_service_context_failure_has_no_host_root_fallback() -> None:
     snapshot = _valid_snapshot()
 
     class FailingAdapter(_FakeAdapter):
-        def run_fixed_probe(self, process: PinnedServiceProcess) -> ProbeExecution:
+        def run_fixed_probe(self, process: ServiceProcessHandle) -> ProbeExecution:
             self.fixed_probe_calls += 1
             raise IsolationVerificationError(
                 ResultCode.FAIL_SERVICE_CONTEXT_UNAVAILABLE, "fixed_probe"
@@ -255,11 +256,11 @@ def test_denied_probe_unexpectedly_allowed_fails() -> None:
         (replace(_valid_snapshot(), main_pid=0), ResultCode.FAIL_SERVICE_CONTEXT_UNAVAILABLE),
         (
             replace(_valid_snapshot(), command_line=("/usr/bin/python3", "unexpected")),
-            ResultCode.FAIL_IDENTITY_MISMATCH,
+            ResultCode.FAIL_PROCESS_IDENTITY_MISMATCH,
         ),
         (
             replace(_valid_snapshot(), uid=(0, 0, 0, 0)),
-            ResultCode.FAIL_IDENTITY_MISMATCH,
+            ResultCode.FAIL_PROCESS_IDENTITY_MISMATCH,
         ),
         (
             replace(
@@ -356,7 +357,7 @@ def test_linux_adapter_uses_pinned_namespace_and_fixed_child(
     snapshot = _valid_snapshot()
     execution = _valid_execution(snapshot)
     descriptor = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
-    process = PinnedServiceProcess(snapshot, -1, -1, descriptor)
+    process = ServiceProcessHandle(snapshot, -1, -1, descriptor, PidfdBackend.LIBC_PIDFD)
     captured: dict[str, object] = {}
 
     def run(arguments: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[str]:

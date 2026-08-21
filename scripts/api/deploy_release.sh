@@ -160,6 +160,7 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/build_info.py",
         "eom_api/build-info.json",
         "eom_api/cli.py",
+        "eom_api/runtime_isolation_pidfd.py",
         "eom_api/runtime_isolation_verifier.py",
         "eom_api/openapi/eom-api-v1.openapi.json",
         "eom_api/openapi/eom-api-v1.sha256",
@@ -455,6 +456,69 @@ validate_contract(
         check=True,
     )
 
+with tempfile.TemporaryDirectory(prefix="eom-api-verifier-wheel-check.") as temporary:
+    root = Path(temporary)
+    installed_root = root / "site-packages"
+    subprocess.run(
+        [
+            os.environ["API_PYTHON"],
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--no-index",
+            "--no-compile",
+            "--target",
+            str(installed_root),
+            str(by_prefix["eom_application_api"]),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
+    capability_check = r'''
+import importlib.util
+import sys
+from pathlib import Path
+
+installed_root = Path(sys.argv[1]).resolve()
+repository = Path(sys.argv[2]).resolve()
+sys.path.insert(0, str(installed_root))
+spec = importlib.util.find_spec("eom_api.runtime_isolation_verifier")
+if (
+    spec is None
+    or spec.origin is None
+    or not Path(spec.origin).resolve().is_relative_to(installed_root)
+    or Path(spec.origin).resolve().is_relative_to(repository)
+):
+    raise SystemExit("runtime-isolation verifier was not imported from the installed wheel")
+sys.argv = ["eom-api-runtime-isolation", "--capabilities"]
+from eom_api.runtime_isolation_verifier import main
+main()
+'''
+    completed = subprocess.run(
+        [
+            os.environ["API_PYTHON"],
+            "-I",
+            "-c",
+            capability_check,
+            str(installed_root),
+            os.environ["REPOSITORY_ROOT"],
+        ],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    lines = set(completed.stdout.splitlines())
+    if "runtime_isolation_verifier_capability=READY" not in lines:
+        raise SystemExit("installed-wheel runtime-isolation capability is not ready")
+    if not lines.intersection(
+        {"selected_pidfd_backend=PYTHON_OS_PIDFD", "selected_pidfd_backend=LIBC_PIDFD"}
+    ):
+        raise SystemExit("installed-wheel runtime-isolation pidfd backend is unavailable")
+    if "pidfd_policy=FAIL_CLOSED" not in lines or completed.stderr:
+        raise SystemExit("installed-wheel runtime-isolation capability output mismatch")
+
 for wheel in wheels:
     with zipfile.ZipFile(wheel) as archive:
         for name in archive.namelist():
@@ -520,6 +584,7 @@ from eom_catalog_contracts import catalog_schema_inventory, load_schema
 for name, _ in catalog_schema_inventory():
     load_schema(name)
 PY
+  "${API_PYTHON}" -I -m eom_api.runtime_isolation_verifier --capabilities
 }
 
 record_release() {

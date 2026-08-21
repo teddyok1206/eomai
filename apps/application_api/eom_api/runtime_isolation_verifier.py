@@ -14,7 +14,6 @@ import json
 import os
 import pwd
 import secrets
-import select
 import socket
 import stat
 import subprocess
@@ -23,6 +22,16 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final, Protocol
+
+from eom_api.runtime_isolation_pidfd import (
+    PidfdAcquisitionError,
+    PidfdBackend,
+    PidfdFailure,
+    PidfdProvider,
+    inspect_pidfd_capability,
+    pidfd_is_alive,
+    pidfd_referenced_pid,
+)
 
 SERVICE: Final = "eom-api.service"
 SERVICE_USER: Final = "eom-api"
@@ -33,6 +42,7 @@ API_BIN: Final = API_ENV_ROOT / "bin"
 API_PYTHON: Final = API_BIN / "python"
 API_ENTRYPOINT: Final = API_BIN / "eom-api"
 FIXED_CHILD_ARGUMENT: Final = "--fixed-service-probe"
+CAPABILITIES_ARGUMENT: Final = "--capabilities"
 MAX_PROCESS_FILE_BYTES: Final = 65_536
 MAX_CHILD_OUTPUT_BYTES: Final = 65_536
 PROBE_TIMEOUT_SECONDS: Final = 30
@@ -57,6 +67,8 @@ class ResultCode(StrEnum):
     FAIL_UNEXPECTEDLY_ALLOWED = "FAIL_UNEXPECTEDLY_ALLOWED"
     FAIL_UNEXPECTEDLY_DENIED = "FAIL_UNEXPECTEDLY_DENIED"
     FAIL_SERVICE_CONTEXT_UNAVAILABLE = "FAIL_SERVICE_CONTEXT_UNAVAILABLE"
+    FAIL_PIDFD_UNAVAILABLE = "FAIL_PIDFD_UNAVAILABLE"
+    FAIL_PROCESS_IDENTITY_MISMATCH = "FAIL_PROCESS_IDENTITY_MISMATCH"
     FAIL_NAMESPACE_MISMATCH = "FAIL_NAMESPACE_MISMATCH"
     FAIL_IDENTITY_MISMATCH = "FAIL_IDENTITY_MISMATCH"
     FAIL_SERVICE_RESTART_RACE = "FAIL_SERVICE_RESTART_RACE"
@@ -271,21 +283,22 @@ class IsolationVerificationError(RuntimeError):
 
 
 @dataclass
-class PinnedServiceProcess:
+class ServiceProcessHandle:
     snapshot: ServiceSnapshot
     proc_fd: int
     pid_fd: int
     mount_namespace_fd: int
+    pidfd_backend: PidfdBackend
 
 
 class RuntimeIsolationAdapter(Protocol):
-    def open_service(self) -> PinnedServiceProcess: ...
+    def open_service(self) -> ServiceProcessHandle: ...
 
-    def run_fixed_probe(self, process: PinnedServiceProcess) -> ProbeExecution: ...
+    def run_fixed_probe(self, process: ServiceProcessHandle) -> ProbeExecution: ...
 
-    def observe_stability(self, process: PinnedServiceProcess) -> StabilityObservation: ...
+    def observe_stability(self, process: ServiceProcessHandle) -> StabilityObservation: ...
 
-    def close_service(self, process: PinnedServiceProcess) -> None: ...
+    def close_service(self, process: ServiceProcessHandle) -> None: ...
 
 
 EXPECTED_READ_ONLY_PATHS: Final = frozenset({"/etc/eom-api/api.yaml", "/etc/eom/secrets/api.env"})
@@ -316,7 +329,9 @@ def validate_service_snapshot(snapshot: ServiceSnapshot) -> None:
         or any(value != expected_gid for value in snapshot.gid)
         or snapshot.supplementary_gids != (expected_gid,)
     ):
-        raise IsolationVerificationError(ResultCode.FAIL_IDENTITY_MISMATCH, "service_identity")
+        raise IsolationVerificationError(
+            ResultCode.FAIL_PROCESS_IDENTITY_MISMATCH, "service_identity"
+        )
     expected_command = (str(API_PYTHON), str(API_ENTRYPOINT), "serve")
     executable = Path(snapshot.executable)
     if (
@@ -331,7 +346,9 @@ def validate_service_snapshot(snapshot: ServiceSnapshot) -> None:
         or snapshot.unit_root_image
         or snapshot.process_root != "/"
     ):
-        raise IsolationVerificationError(ResultCode.FAIL_IDENTITY_MISMATCH, "service_process")
+        raise IsolationVerificationError(
+            ResultCode.FAIL_PROCESS_IDENTITY_MISMATCH, "service_process"
+        )
     if (
         snapshot.mount_namespace == snapshot.host_mount_namespace
         or snapshot.user_namespace != snapshot.host_user_namespace
@@ -462,7 +479,10 @@ class LinuxRuntimeIsolationAdapter:
         "IPAddressAllow",
     )
 
-    def open_service(self) -> PinnedServiceProcess:
+    def __init__(self, pidfd_provider: PidfdProvider | None = None) -> None:
+        self._pidfd_provider = pidfd_provider or PidfdProvider.from_system()
+
+    def open_service(self) -> ServiceProcessHandle:
         if os.geteuid() != 0:
             raise IsolationVerificationError(
                 ResultCode.FAIL_SERVICE_CONTEXT_UNAVAILABLE, "root_operator_required"
@@ -478,21 +498,54 @@ class LinuxRuntimeIsolationAdapter:
             raise IsolationVerificationError(
                 ResultCode.FAIL_SERVICE_CONTEXT_UNAVAILABLE, "main_pid"
             )
+        if properties.get("ActiveState") != "active" or properties.get("SubState") != "running":
+            raise IsolationVerificationError(
+                ResultCode.FAIL_SERVICE_CONTEXT_UNAVAILABLE, "service_not_running"
+            )
 
         opened: list[int] = []
         try:
-            proc_fd = os.open(
-                f"/proc/{main_pid}", os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
-            )
-            opened.append(proc_fd)
-            pid_fd = os.pidfd_open(main_pid)
+            acquired_pidfd = self._pidfd_provider.open(main_pid)
+            pid_fd = acquired_pidfd.descriptor
             opened.append(pid_fd)
-            mount_fd = os.open("ns/mnt", os.O_RDONLY | os.O_CLOEXEC, dir_fd=proc_fd)
+            referenced_pid = self._pidfd_referenced_pid(pid_fd)
+            if referenced_pid == -1 or not self._pidfd_is_alive(pid_fd):
+                raise IsolationVerificationError(
+                    ResultCode.FAIL_SERVICE_RESTART_RACE, "pidfd_identity"
+                )
+            if referenced_pid != main_pid:
+                raise IsolationVerificationError(
+                    ResultCode.FAIL_PROCESS_IDENTITY_MISMATCH, "pidfd_identity"
+                )
+            proc_fd = self._open_process_directory(main_pid)
+            opened.append(proc_fd)
+            mount_fd = self._open_mount_namespace(proc_fd)
             opened.append(mount_fd)
             snapshot = self._snapshot(properties, main_pid, proc_fd, mount_fd)
-            if self._read_systemd_properties()["MainPID"] != str(main_pid):
+            current = self._read_systemd_properties()
+            referenced_pid = self._pidfd_referenced_pid(pid_fd)
+            if (
+                current.get("ActiveState") != "active"
+                or current.get("SubState") != "running"
+                or current.get("MainPID") != str(main_pid)
+                or referenced_pid == -1
+                or not self._pidfd_is_alive(pid_fd)
+            ):
                 raise IsolationVerificationError(ResultCode.FAIL_SERVICE_RESTART_RACE, "main_pid")
-            return PinnedServiceProcess(snapshot, proc_fd, pid_fd, mount_fd)
+            if referenced_pid != main_pid:
+                raise IsolationVerificationError(
+                    ResultCode.FAIL_PROCESS_IDENTITY_MISMATCH, "pidfd_identity"
+                )
+            return ServiceProcessHandle(snapshot, proc_fd, pid_fd, mount_fd, acquired_pidfd.backend)
+        except PidfdAcquisitionError as error:
+            for descriptor in reversed(opened):
+                os.close(descriptor)
+            code = (
+                ResultCode.FAIL_SERVICE_RESTART_RACE
+                if error.failure is PidfdFailure.PROCESS_EXITED
+                else ResultCode.FAIL_PIDFD_UNAVAILABLE
+            )
+            raise IsolationVerificationError(code, error.failure.value.casefold()) from None
         except IsolationVerificationError:
             for descriptor in reversed(opened):
                 os.close(descriptor)
@@ -500,11 +553,15 @@ class LinuxRuntimeIsolationAdapter:
         except (OSError, KeyError, ValueError) as error:
             for descriptor in reversed(opened):
                 os.close(descriptor)
+            if isinstance(error, OSError) and error.errno in {errno.ENOENT, errno.ESRCH}:
+                raise IsolationVerificationError(
+                    ResultCode.FAIL_SERVICE_RESTART_RACE, "process_exited"
+                ) from None
             raise IsolationVerificationError(
                 ResultCode.FAIL_SERVICE_CONTEXT_UNAVAILABLE, "process_snapshot"
             ) from error
 
-    def run_fixed_probe(self, process: PinnedServiceProcess) -> ProbeExecution:
+    def run_fixed_probe(self, process: ServiceProcessHandle) -> ProbeExecution:
         uid = pwd.getpwnam(SERVICE_USER).pw_uid
         gid = grp.getgrnam(SERVICE_GROUP).gr_gid
         mount_reference = f"/proc/self/fd/{process.mount_namespace_fd}"
@@ -553,10 +610,8 @@ class LinuxRuntimeIsolationAdapter:
             )
         return _parse_probe_execution(completed.stdout)
 
-    def observe_stability(self, process: PinnedServiceProcess) -> StabilityObservation:
-        poller = select.poll()
-        poller.register(process.pid_fd, select.POLLIN)
-        process_alive = not poller.poll(0)
+    def observe_stability(self, process: ServiceProcessHandle) -> StabilityObservation:
+        process_alive = self._pidfd_is_alive(process.pid_fd)
         try:
             properties = self._read_systemd_properties()
             start_time = _process_start_time(process.proc_fd)
@@ -573,13 +628,27 @@ class LinuxRuntimeIsolationAdapter:
             process_alive,
         )
 
-    def close_service(self, process: PinnedServiceProcess) -> None:
+    def close_service(self, process: ServiceProcessHandle) -> None:
         for descriptor in (
             process.mount_namespace_fd,
             process.pid_fd,
             process.proc_fd,
         ):
             os.close(descriptor)
+
+    def _open_process_directory(self, main_pid: int) -> int:
+        return os.open(
+            f"/proc/{main_pid}", os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+        )
+
+    def _open_mount_namespace(self, proc_fd: int) -> int:
+        return os.open("ns/mnt", os.O_RDONLY | os.O_CLOEXEC, dir_fd=proc_fd)
+
+    def _pidfd_referenced_pid(self, pid_fd: int) -> int:
+        return pidfd_referenced_pid(pid_fd)
+
+    def _pidfd_is_alive(self, pid_fd: int) -> bool:
+        return pidfd_is_alive(pid_fd)
 
     def _read_systemd_properties(self) -> dict[str, str]:
         command = ["/usr/bin/systemctl", "show", SERVICE, "--no-pager"]
@@ -992,22 +1061,47 @@ def _execution_payload(execution: ProbeExecution) -> dict[str, object]:
     }
 
 
+def _print_pidfd_capabilities() -> bool:
+    capability = inspect_pidfd_capability()
+    print("runtime_isolation_verifier_capability=" + ("READY" if capability.ready else "BLOCKED"))
+    print(f"selected_pidfd_backend={capability.selected_backend.value}")
+    print(
+        "python_os_pidfd=" + ("AVAILABLE" if capability.python_binding_available else "UNAVAILABLE")
+    )
+    print("libc_pidfd=" + ("AVAILABLE" if capability.libc_backend_available else "UNAVAILABLE"))
+    print("pidfd_policy=FAIL_CLOSED")
+    print(f"pidfd_detail={capability.detail_code}")
+    return capability.ready
+
+
 def main() -> None:
     arguments = tuple(sys.argv[1:])
-    if arguments == (FIXED_CHILD_ARGUMENT,):
-        execution = _fixed_service_probe()
-        print(json.dumps(_execution_payload(execution), sort_keys=True, separators=(",", ":")))
-        return
-    if arguments:
-        print(
-            f"{ResultCode.FAIL_SERVICE_CONTEXT_UNAVAILABLE.value} fixed_arguments",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
     try:
+        if arguments == (CAPABILITIES_ARGUMENT,):
+            if not _print_pidfd_capabilities():
+                raise SystemExit(1)
+            return
+        if arguments == (FIXED_CHILD_ARGUMENT,):
+            execution = _fixed_service_probe()
+            print(json.dumps(_execution_payload(execution), sort_keys=True, separators=(",", ":")))
+            return
+        if arguments:
+            print(
+                f"{ResultCode.FAIL_SERVICE_CONTEXT_UNAVAILABLE.value} fixed_arguments",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
         report = verify_runtime_isolation()
     except IsolationVerificationError as error:
         print(f"{error.code.value} {error.logical_name}", file=sys.stderr)
+        raise SystemExit(1) from None
+    except SystemExit:
+        raise
+    except Exception:
+        print(
+            f"{ResultCode.FAIL_SERVICE_CONTEXT_UNAVAILABLE.value} internal_error",
+            file=sys.stderr,
+        )
         raise SystemExit(1) from None
     for result in report.results:
         print(f"{result.code.value} {result.logical_name}")

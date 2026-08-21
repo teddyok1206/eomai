@@ -89,6 +89,11 @@ from an isolated target installation with a `/tmp` working directory, and compil
 `generic-item-development@1.1.0`. A missing or stale schema stops `--build-only` before any
 privileged installation.
 
+Release inspection also installs the Application API wheel non-editably into an isolated target
+and runs the runtime-isolation pidfd capability self-check with the exact `eom-api` interpreter.
+The check requires an operational Python `os.pidfd_open` or fixed libc `pidfd_open` backend and
+fails closed before installation when neither is usable.
+
 The first service start can pass readiness before an Administrator exists. Bootstrap the initial
 Administrator, change its temporary password, then run the authenticated smoke test as documented
 in `API_SMOKE_TEST.md`. Delete `/home/eom/.eom-api-initial-admin` after the password change is
@@ -100,6 +105,7 @@ confirmed.
 systemctl is-active eom-api.service
 systemctl is-enabled eom-api.service
 ss -lnt 'sport = :8765'
+/srv/eom/conda/envs/eom-api/bin/eom-api-runtime-isolation --capabilities
 sudo -n /usr/local/libexec/eom-api/verify-runtime-isolation
 sudo -n /usr/local/libexec/eom-api/verify-deployment-metadata
 ```
