@@ -147,6 +147,11 @@ def test_release_installs_runtime_verifier_and_packages_fixed_helper() -> None:
     )
     assert '"${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}"' in deployment
     assert 'sudo -n "${RUNTIME_VERIFIER_TARGET}"' in deployment
+    invocation_marker = "runtime_isolation_verifier_invocation=START"
+    assert invocation_marker in deployment
+    assert deployment.index(invocation_marker) < deployment.index(
+        'sudo -n "${RUNTIME_VERIFIER_TARGET}"'
+    )
     assert '"eom_api/runtime_isolation_verifier.py"' in deployment
     assert '"eom_api/runtime_isolation_pidfd.py"' in deployment
     assert "runtime isolation console entry point missing" in deployment
@@ -167,6 +172,7 @@ def test_release_install_normalizes_restrictive_operator_umask() -> None:
     assert "runtime package mode mismatch" in deployment
     assert "runtime entry point mode mismatch" in deployment
     assert "installed simulation mode mismatch" in deployment
+    assert 'path.parent == installed_root / "bin"' in deployment
 
 
 @pytest.mark.parametrize(

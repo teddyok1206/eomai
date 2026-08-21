@@ -346,7 +346,9 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
     for path in (installed_root, *installed_root.rglob("*")):
         if path.is_symlink():
             raise SystemExit("installed simulation contains a symlink")
-        expected_mode = 0o755 if path.is_dir() else 0o644
+        expected_mode = (
+            0o755 if path.is_dir() or path.parent == installed_root / "bin" else 0o644
+        )
         if path.stat().st_mode & 0o777 != expected_mode:
             raise SystemExit(f"installed simulation mode mismatch: {path.name}")
     check = r'''
@@ -492,7 +494,9 @@ with tempfile.TemporaryDirectory(prefix="eom-api-verifier-wheel-check.") as temp
     for path in (installed_root, *installed_root.rglob("*")):
         if path.is_symlink():
             raise SystemExit("Application API installed simulation contains a symlink")
-        expected_mode = 0o755 if path.is_dir() else 0o644
+        expected_mode = (
+            0o755 if path.is_dir() or path.parent == installed_root / "bin" else 0o644
+        )
         if path.stat().st_mode & 0o777 != expected_mode:
             raise SystemExit(f"Application API installed simulation mode mismatch: {path.name}")
     capability_check = r'''
@@ -699,6 +703,7 @@ install_service() {
   sudo -n systemctl enable "${SERVICE}" >/dev/null
   sudo -n systemctl restart "${SERVICE}"
   wait_for_health
+  printf 'runtime_isolation_verifier_invocation=START\n'
   sudo -n "${RUNTIME_VERIFIER_TARGET}"
   record_release
   if [[ -n "${EOM_API_SMOKE_USERNAME:-}" && -n "${EOM_API_SMOKE_PASSWORD_FILE:-}" ]]; then
