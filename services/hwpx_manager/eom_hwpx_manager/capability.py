@@ -40,10 +40,16 @@ REQUIRED_RUNNER_DIRECTIVES = frozenset(
         "SupplementaryGroups=eom-hwpx",
         "RuntimeDirectory=eom-hwpx-api",
         "RuntimeDirectoryMode=0750",
+        "StateDirectory=eom-hwpx-api",
+        "StateDirectoryMode=0700",
+        "WorkingDirectory=/var/lib/eom-hwpx-api",
+        "Environment=HOME=/var/lib/eom-hwpx-api",
         "NoNewPrivileges=true",
         "CapabilityBoundingSet=",
         "ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-hwpx-application-runner serve",
         "ReadWritePaths=/run/eom-hwpx-api",
+        "ReadWritePaths=/var/lib/eom-hwpx-api",
+        "InaccessiblePaths=/var/lib/eom-hwpx",
         "InaccessiblePaths=/etc/eom-api",
     }
 )

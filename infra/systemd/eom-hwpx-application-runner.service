@@ -10,8 +10,10 @@ Group=eom-api
 SupplementaryGroups=eom-hwpx
 RuntimeDirectory=eom-hwpx-api
 RuntimeDirectoryMode=0750
-WorkingDirectory=/var/lib/eom-hwpx
-Environment=HOME=/var/lib/eom-hwpx
+StateDirectory=eom-hwpx-api
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/eom-hwpx-api
+Environment=HOME=/var/lib/eom-hwpx-api
 Environment=TZ=UTC
 EnvironmentFile=/etc/eom/secrets/hwpx-manager.env
 ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-hwpx-application-runner serve
@@ -37,7 +39,9 @@ ReadWritePaths=/srv/eom/hwpx-workspaces
 ReadWritePaths=/srv/eom/staging
 ReadWritePaths=/mnt/nas/eom/artifacts
 ReadWritePaths=/run/eom-hwpx-api
+ReadWritePaths=/var/lib/eom-hwpx-api
 
+InaccessiblePaths=/var/lib/eom-hwpx
 InaccessiblePaths=/home/eom/EOM
 InaccessiblePaths=/home/eom/EOMIS
 InaccessiblePaths=/root/.codex

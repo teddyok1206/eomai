@@ -287,6 +287,17 @@ def test_application_adapter_has_no_transient_or_chown_fallback() -> None:
     assert f"-m {WORKSPACE_ROOT_MODE:o} /srv/eom/hwpx-workspaces" in bootstrap
 
 
+def test_application_runner_separates_manager_state_from_builder_home() -> None:
+    unit = Path("infra/systemd/eom-hwpx-application-runner.service").read_text(encoding="utf-8")
+    assert "StateDirectory=eom-hwpx-api" in unit
+    assert "StateDirectoryMode=0700" in unit
+    assert "WorkingDirectory=/var/lib/eom-hwpx-api" in unit
+    assert "Environment=HOME=/var/lib/eom-hwpx-api" in unit
+    assert "ReadWritePaths=/var/lib/eom-hwpx-api" in unit
+    assert "InaccessiblePaths=/var/lib/eom-hwpx" in unit
+    assert "WorkingDirectory=/var/lib/eom-hwpx\n" not in unit
+
+
 def test_builder_bootstrap_group_matcher_uses_closed_exact_names() -> None:
     bootstrap = Path("scripts/hwpx/bootstrap_builder_user.sh").read_text(encoding="utf-8")
     match = re.search(r"^FORBIDDEN_GROUP_PATTERN='([^']+)'$", bootstrap, re.MULTILINE)
