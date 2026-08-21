@@ -170,6 +170,9 @@ class FakeHwpxService:
             sha256="sha256:" + "9" * 64,
         )
 
+    def download(self, build_id: str) -> SecureHwpxDownload:
+        return self.secure_download(build_id)
+
 
 class FakeQueries:
     @staticmethod
@@ -185,6 +188,7 @@ def _client(tmp_path: Path, *, ready: bool = True, admin: bool = True) -> tuple[
     services = disconnected_services()
     services.hwpx_capability = FakeCapabilityService("READY" if ready else "PREPARED_NOT_DEPLOYED")  # type: ignore[assignment]
     services.hwpx = FakeHwpxService(output)  # type: ignore[assignment]
+    services.hwpx_downloads = services.hwpx  # type: ignore[assignment]
     services.queries = FakeQueries()  # type: ignore[assignment]
     services.idempotency = MemoryIdempotency()  # type: ignore[assignment]
     services.audit = FakeAudit()  # type: ignore[assignment]

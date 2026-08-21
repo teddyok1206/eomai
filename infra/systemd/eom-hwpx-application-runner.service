@@ -6,8 +6,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=eom
-Group=eom
+Group=eom-api
 SupplementaryGroups=eom-hwpx
+RuntimeDirectory=eom-hwpx-api
+RuntimeDirectoryMode=0750
 WorkingDirectory=/var/lib/eom-hwpx
 Environment=HOME=/var/lib/eom-hwpx
 Environment=TZ=UTC
@@ -34,6 +36,7 @@ ReadOnlyPaths=/srv/eom/conda/envs/eom-hwpx
 ReadWritePaths=/srv/eom/hwpx-workspaces
 ReadWritePaths=/srv/eom/staging
 ReadWritePaths=/mnt/nas/eom/artifacts
+ReadWritePaths=/run/eom-hwpx-api
 
 InaccessiblePaths=/home/eom/EOM
 InaccessiblePaths=/home/eom/EOMIS
@@ -43,6 +46,7 @@ InaccessiblePaths=/var/run/docker.sock
 InaccessiblePaths=/etc/eom/secrets/api.env
 InaccessiblePaths=/etc/eom/secrets/observe.env
 InaccessiblePaths=/etc/eom/secrets/web-gui.env
+InaccessiblePaths=/etc/eom-api
 
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 IPAddressDeny=any

@@ -22,6 +22,13 @@ SHA-256. Download repeats artifact identity, revision, primary-file containment,
 non-symlink, size, and SHA-256 checks. Missing, stale, ambiguous, or mismatched pointers fail
 explicitly; no implicit latest revision is substituted.
 
+The accepted Application API sandbox remains unable to access `/mnt/nas`. Download authorization
+therefore opens no artifact path in the API process. The API sends only a validated `build_id` over
+a fixed private Unix socket to the HWPX manager. The manager verifies the peer UID, resolves and
+hashes the canonical Artifact Revision, and streams a bounded response header plus bytes. The API
+verifies the declared size and SHA-256 while proxying. Socket metadata and its closed JSON Schema
+are part of capability readiness; storage paths never cross the protocol.
+
 ## Access patterns and structures
 
 - build lookup and secure download: primary-key lookup by `build_id`, O(log n);

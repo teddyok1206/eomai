@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eom:schema:hwpx-manager-download:1.0",
+  "title": "EOM HWPX Manager Download Protocol V1",
+  "type": "object",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "build_id"],
+      "properties": {
+        "schema_version": {"const": "1.0"},
+        "operation": {"const": "download"},
+        "build_id": {"type": "string", "pattern": "^hwpxbuild_[a-f0-9]{32}$"}
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "status",
+            "filename",
+            "content_length",
+            "sha256"
+          ],
+          "properties": {
+            "schema_version": {"const": "1.0"},
+            "status": {"const": "OK"},
+            "filename": {
+              "type": "string",
+              "minLength": 6,
+              "maxLength": 150,
+              "pattern": "^[A-Za-z0-9_.-]+\\.hwpx$"
+            },
+            "content_length": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 67108864
+            },
+            "sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema_version", "status", "error_code"],
+          "properties": {
+            "schema_version": {"const": "1.0"},
+            "status": {"const": "ERROR"},
+            "error_code": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]{0,79}$"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

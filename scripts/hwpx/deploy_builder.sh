@@ -231,6 +231,7 @@ required = {
         "eom_hwpx_contracts/schemas/hwpx-build-result-v1.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-kordoc-render-request-v1.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-kordoc-build-result-v1.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-manager-download-v1.schema.json",
     },
     "eom_hwpx_builder": {
         "eom_hwpx_builder/__init__.py",

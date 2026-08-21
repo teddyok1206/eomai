@@ -146,7 +146,7 @@ def list_builds(
     dependencies=[Depends(require_permission(PermissionKey.HWPX_READ))],
 )
 def download(request: Request, build_id: str) -> StreamingResponse:
-    value = request.app.state.services.hwpx.secure_download(build_id)
+    value = request.app.state.services.hwpx_downloads.download(build_id)
     request.app.state.services.audit.append(
         request.state.request_context,
         event_type="HWPX_DOWNLOAD_AUTHORIZED",

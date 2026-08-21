@@ -238,3 +238,39 @@ class KordocBuildResult(StrictModel):
         if self.completed_at < self.started_at:
             raise ValueError("Kordoc result completion precedes its start")
         return self
+
+
+class HwpxManagerDownloadRequest(StrictModel):
+    schema_version: Literal["1.0"] = "1.0"
+    operation: Literal["download"] = "download"
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+
+
+class HwpxManagerDownloadResponse(StrictModel):
+    schema_version: Literal["1.0"] = "1.0"
+    status: Literal["OK", "ERROR"]
+    filename: str | None = Field(default=None, min_length=6, max_length=150)
+    content_length: int | None = Field(default=None, ge=1, le=64 * 1024 * 1024)
+    sha256: str | None = Field(default=None, pattern=r"^sha256:[a-f0-9]{64}$")
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{0,79}$")
+
+    @model_validator(mode="after")
+    def status_matches_header(self) -> HwpxManagerDownloadResponse:
+        success = (self.filename, self.content_length, self.sha256)
+        if self.status == "OK":
+            if any(value is None for value in success) or self.error_code is not None:
+                raise ValueError("successful download header requires immutable file evidence")
+            assert self.filename is not None
+            if (
+                not self.filename.isascii()
+                or not self.filename.endswith(".hwpx")
+                or any(
+                    character
+                    not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-"
+                    for character in self.filename
+                )
+            ):
+                raise ValueError("download filename is outside the safe ASCII contract")
+        elif any(value is not None for value in success) or self.error_code is None:
+            raise ValueError("failed download header contains file evidence")
+        return self

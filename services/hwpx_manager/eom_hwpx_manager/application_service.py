@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
-from collections.abc import Iterator
+from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -63,7 +63,7 @@ class SecureHwpxDownload:
     content_length: int
     sha256: str
 
-    def iter_chunks(self, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
+    def iter_chunks(self, chunk_size: int = 1024 * 1024) -> Generator[bytes, None, None]:
         try:
             while chunk := os.read(self.fd, chunk_size):
                 yield chunk

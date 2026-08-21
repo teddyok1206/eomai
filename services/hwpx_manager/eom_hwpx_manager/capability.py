@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import grp
 import json
 import os
+import pwd
 import stat
 import subprocess
 from collections.abc import Callable
@@ -17,6 +19,7 @@ SYSTEMCTL = Path("/usr/bin/systemctl")
 RUNNER_UNIT = "eom-hwpx-application-runner.service"
 BUILDER_UNIT_PATH = Path("/etc/systemd/system/eom-hwpx-kordoc@.service")
 RUNNER_UNIT_PATH = Path("/etc/systemd/system/eom-hwpx-application-runner.service")
+MANAGER_SOCKET_PATH = Path("/run/eom-hwpx-api/manager.sock")
 REQUIRED_BUILDER_DIRECTIVES = frozenset(
     {
         "User=eom-hwpx",
@@ -33,11 +36,15 @@ REQUIRED_BUILDER_DIRECTIVES = frozenset(
 REQUIRED_RUNNER_DIRECTIVES = frozenset(
     {
         "User=eom",
-        "Group=eom",
+        "Group=eom-api",
         "SupplementaryGroups=eom-hwpx",
+        "RuntimeDirectory=eom-hwpx-api",
+        "RuntimeDirectoryMode=0750",
         "NoNewPrivileges=true",
         "CapabilityBoundingSet=",
         "ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-hwpx-application-runner serve",
+        "ReadWritePaths=/run/eom-hwpx-api",
+        "InaccessiblePaths=/etc/eom-api",
     }
 )
 
@@ -163,4 +170,18 @@ def fixed_builder_isolation_preflight() -> tuple[bool, str]:
             return False, "HWPX_MANAGER_RUNTIME_UNAVAILABLE"
         if completed.returncode != 0:
             return False, "HWPX_ISOLATED_BUILDER_NOT_DEPLOYED"
+    try:
+        socket_metadata = MANAGER_SOCKET_PATH.lstat()
+        api_gid = grp.getgrnam("eom-api").gr_gid
+        manager_uid = pwd.getpwnam("eom").pw_uid
+    except (KeyError, OSError):
+        return False, "HWPX_MANAGER_RUNTIME_UNAVAILABLE"
+    if (
+        not stat.S_ISSOCK(socket_metadata.st_mode)
+        or MANAGER_SOCKET_PATH.is_symlink()
+        or socket_metadata.st_uid != manager_uid
+        or socket_metadata.st_gid != api_gid
+        or stat.S_IMODE(socket_metadata.st_mode) != 0o660
+    ):
+        return False, "HWPX_MANAGER_RUNTIME_UNAVAILABLE"
     return True, "HWPX_ISOLATED_BUILDER_READY"

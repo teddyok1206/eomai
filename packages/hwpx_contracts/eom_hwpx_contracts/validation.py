@@ -14,6 +14,7 @@ SCHEMA_FILES = {
     "build-result": "hwpx-build-result-v1.schema.json",
     "kordoc-render-request": "hwpx-kordoc-render-request-v1.schema.json",
     "kordoc-build-result": "hwpx-kordoc-build-result-v1.schema.json",
+    "manager-download": "hwpx-manager-download-v1.schema.json",
 }
 
 
@@ -29,5 +30,11 @@ def load_schema(name: str) -> dict[str, Any]:
     return value
 
 
-def validate_contract(name: str, value: dict[str, Any]) -> None:
-    Draft202012Validator(load_schema(name), format_checker=FormatChecker()).validate(value)
+def validate_contract(name: str, value: dict[str, Any], *, definition: str | None = None) -> None:
+    schema = load_schema(name)
+    if definition is not None:
+        definitions = schema.get("$defs", {})
+        if not isinstance(definitions, dict) or definition not in definitions:
+            raise ValueError(f"unknown HWPX contract definition: {name}:{definition}")
+        schema = definitions[definition]
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(value)

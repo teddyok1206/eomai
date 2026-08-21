@@ -236,6 +236,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_manager/application_service.py",
         "eom_hwpx_manager/application_state.py",
         "eom_hwpx_manager/capability.py",
+        "eom_hwpx_manager/download_server.py",
         "eom_hwpx_manager/markdown_structure.py",
         "eom_hwpx_manager/runner.py",
     }
@@ -616,6 +617,7 @@ for module in (
     "eom_workflow",
     "eom_workflow_runner",
     "eom_catalog_service",
+    "eom_hwpx_manager",
 ):
     spec = importlib.util.find_spec(module)
     if spec is None or spec.origin is None:
@@ -640,7 +642,7 @@ for root in sorted(runtime_package_roots):
         if stat.S_IMODE(metadata.st_mode) != expected_mode:
             raise SystemExit(f"runtime package mode mismatch: {path.name}")
 
-for name in ("eom-api", "eom-api-runtime-isolation"):
+for name in ("eom-api", "eom-api-runtime-isolation", "eom-hwpx-application-runner"):
     entrypoint = Path(os.environ.get("API_PYTHON", "/srv/eom/conda/envs/eom-api/bin/python"))
     entrypoint = entrypoint.resolve().parent / name
     metadata = entrypoint.stat()

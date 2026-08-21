@@ -17,6 +17,7 @@ from sqlalchemy import Engine
 from eom_api.rate_limit import BoundedRateLimiter
 from eom_api.services.audit_service import AuditService
 from eom_api.services.command_adapter import CommandAdapter
+from eom_api.services.hwpx_download_client import HwpxDownloadClient
 from eom_api.services.idempotency_service import IdempotencyService
 from eom_api.services.query_adapter import QueryAdapter
 from eom_api.settings import ApiSecrets, ApiSettings, load_secrets, load_settings
@@ -53,6 +54,7 @@ class AppServices:
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)
         self.hwpx = HwpxApplicationService(engine, registry=RegistryService(engine))
+        self.hwpx_downloads = HwpxDownloadClient()
         self.hwpx_capability = HwpxCapabilityService(manager_registered=True)
         self.rate_limiter = BoundedRateLimiter(settings.rate_limit.maximum_buckets)
         self.fingerprint_key = fingerprint_key

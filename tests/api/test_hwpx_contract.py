@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator
 
 from tests.api.helpers import disconnected_services
 
+BUILD_ID = "hwpxbuild_" + "a" * 32
+
 
 def test_hwpx_protocol_schema_is_draft_2020_12_and_rejects_commands() -> None:
     schema = json.loads(Path("schemas/api/v1/hwpx.schema.json").read_text(encoding="utf-8"))
@@ -31,6 +33,30 @@ def test_hwpx_protocol_schema_is_draft_2020_12_and_rejects_commands() -> None:
                 "renderer": "kordoc",
                 "options": {},
                 "command": "npm install attacker-package",
+            }
+        )
+    )
+
+    manager_schema = json.loads(
+        Path(
+            "packages/hwpx_contracts/eom_hwpx_contracts/schemas/"
+            "hwpx-manager-download-v1.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    Draft202012Validator.check_schema(manager_schema)
+    request_validator = Draft202012Validator(manager_schema["$defs"]["request"])
+    assert not list(
+        request_validator.iter_errors(
+            {"schema_version": "1.0", "operation": "download", "build_id": BUILD_ID}
+        )
+    )
+    assert list(
+        request_validator.iter_errors(
+            {
+                "schema_version": "1.0",
+                "operation": "download",
+                "build_id": BUILD_ID,
+                "path": "/mnt/nas/private.hwpx",
             }
         )
     )
