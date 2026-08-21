@@ -186,7 +186,8 @@ if [[ -d "$RUNTIME_BUILD" ]]; then
 fi
 mkdir -p "$RUNTIME_BUILD"
 cp "$KORDOC_SOURCE/package.json" "$KORDOC_SOURCE/package-lock.json" "$RUNTIME_BUILD/"
-"$NPM" ci --omit=optional --ignore-scripts --no-audit --no-fund --prefix "$RUNTIME_BUILD"
+"$NODE" "$NPM" ci --omit=optional --ignore-scripts --no-audit --no-fund \
+  --prefix "$RUNTIME_BUILD"
 if [[ -d "$RUNTIME_BUILD/node_modules/.bin" ]]; then
   find "$RUNTIME_BUILD/node_modules/.bin" -type l -delete
   rmdir "$RUNTIME_BUILD/node_modules/.bin"

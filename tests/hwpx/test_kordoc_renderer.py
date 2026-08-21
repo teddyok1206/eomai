@@ -353,6 +353,8 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     package_config = (root / "services/hwpx_builder/pyproject.toml").read_text()
     assert "nodejs=20" in environment
     assert "ci --omit=optional --ignore-scripts" in deployment
+    assert '"$NODE" "$NPM" ci' in deployment
+    assert '\n"$NPM" ci' not in deployment
     assert "KORDOC_RUNTIME_LAYOUT=PASS" in deployment
     assert "contains an unexpected symbolic link" in deployment
     assert "KORDOC_FAILED" in deployment
