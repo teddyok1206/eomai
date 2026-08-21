@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import zipfile
@@ -349,6 +350,8 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     assert package["integrity"] == KordocRendererDependency().npm_integrity
     environment = (root / "infra/conda/eom-hwpx.environment.yml").read_text()
     deployment = (root / "scripts/hwpx/deploy_builder.sh").read_text()
+    layout_helper = (root / "scripts/hwpx/python_runtime_layout.py").read_text()
+    layout_tree = ast.parse(layout_helper)
     bridge = (root / "services/hwpx_builder/eom_hwpx_builder/kordoc_bridge.mjs").read_text()
     package_config = (root / "services/hwpx_builder/pyproject.toml").read_text()
     assert "nodejs=20" in environment
@@ -359,7 +362,56 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     assert "contains an unexpected symbolic link" in deployment
     assert "KORDOC_FAILED" in deployment
     assert "normalize_python_layout" in deployment
-    assert "eom-hwpx/bin/eom-hwpx" in deployment
+    assert "--normalize-python-layout" in deployment
+    assert (
+        'PYTHON_LAYOUT_HELPER="$REPOSITORY_ROOT/scripts/hwpx/python_runtime_layout.py"'
+        in deployment
+    )
+    assert '"$PYTHON" "$PYTHON_LAYOUT_HELPER" verify' in deployment
+    assert '"$PYTHON" "$PYTHON_LAYOUT_HELPER" normalize' in deployment
+    assert (
+        "pip install"
+        not in deployment.split('if [[ "$MODE" = "normalize-python-layout" ]]', 1)[1].split(
+            "exit 0", 1
+        )[0]
+    )
+    assignments = {
+        target.id: node.value
+        for node in layout_tree.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance((target := node.targets[0]), ast.Name)
+    }
+    expected_prefix = assignments["EXPECTED_PREFIX"]
+    assert isinstance(expected_prefix, ast.Call)
+    assert isinstance(expected_prefix.func, ast.Name)
+    assert expected_prefix.func.id == "Path"
+    assert len(expected_prefix.args) == 1
+    assert isinstance(expected_prefix.args[0], ast.Constant)
+    assert expected_prefix.args[0].value == "/srv/eom/conda/envs/eom-hwpx"
+    assert any(
+        isinstance(node, ast.Constant) and node.value == "bin/eom-hwpx"
+        for node in ast.walk(layout_tree)
+    )
+    parser_arguments = [
+        node
+        for node in ast.walk(layout_tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "add_argument"
+    ]
+    assert len(parser_arguments) == 1
+    assert len(parser_arguments[0].args) == 1
+    assert isinstance(parser_arguments[0].args[0], ast.Constant)
+    assert parser_arguments[0].args[0].value == "action"
+    choices = next(
+        keyword.value for keyword in parser_arguments[0].keywords if keyword.arg == "choices"
+    )
+    assert isinstance(choices, ast.Tuple)
+    assert [element.value for element in choices.elts if isinstance(element, ast.Constant)] == [
+        "verify",
+        "normalize",
+    ]
     assert "eom_hwpx_builder/kordoc_bridge.mjs" in deployment
     assert 'KORDOC_OFFLINE !== "1"' in bridge
     assert "process.argv.length === 2" in bridge

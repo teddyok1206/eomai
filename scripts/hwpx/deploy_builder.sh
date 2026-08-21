@@ -7,10 +7,11 @@ NODE="/srv/eom/conda/envs/eom-hwpx/bin/node"
 NPM="/srv/eom/conda/envs/eom-hwpx/bin/npm"
 KORDOC_SOURCE="$REPOSITORY_ROOT/services/hwpx_builder/kordoc_runtime"
 KORDOC_TARGET="/srv/eom/conda/envs/eom-hwpx/share/eom-kordoc"
+PYTHON_LAYOUT_HELPER="$REPOSITORY_ROOT/scripts/hwpx/python_runtime_layout.py"
 MODE="install"
 
 usage() {
-  printf 'Usage: %s [--build-only|--install|--verify|--dry-run]\n' "$0"
+  printf 'Usage: %s [--build-only|--install|--verify|--normalize-python-layout|--dry-run]\n' "$0"
 }
 
 if [[ $# -gt 1 ]]; then
@@ -22,6 +23,7 @@ if [[ $# -eq 1 ]]; then
     --build-only) MODE="build" ;;
     --install) MODE="install" ;;
     --verify) MODE="verify" ;;
+    --normalize-python-layout) MODE="normalize-python-layout" ;;
     --dry-run) MODE="dry-run" ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -45,50 +47,15 @@ cleanup() {
 trap cleanup EXIT
 
 python_layout_roots() {
-  local site_packages
-  site_packages="$($PYTHON - <<'PY'
-import sysconfig
-print(sysconfig.get_paths()["purelib"])
-PY
-)"
-  [[ "$site_packages" == /srv/eom/conda/envs/eom-hwpx/lib/python3.12/site-packages ]]
-  find "$site_packages" -mindepth 1 -maxdepth 1 -type d \
-    \( -name eom_hwpx_builder -o -name eom_hwpx_contracts \
-       -o -name 'eom_hwpx_builder-*.dist-info' \
-       -o -name 'eom_hwpx_contracts-*.dist-info' \) -print | sort
+  "$PYTHON" "$PYTHON_LAYOUT_HELPER" verify
 }
 
 verify_python_layout() {
-  local roots=()
-  mapfile -t roots < <(python_layout_roots)
-  [[ "${#roots[@]}" -eq 4 ]]
-  if find "${roots[@]}" ! -type d ! -type f -print -quit | grep -q .; then
-    return 1
-  fi
-  if find "${roots[@]}" \
-      \( ! -user eom -o ! -group eom \
-         -o \( -type d ! -perm 0755 \) \
-         -o \( -type f ! -perm 0644 \) \) -print -quit | grep -q .; then
-    return 1
-  fi
-  test -f /srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx
-  test ! -L /srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx
-  test "$(stat -c '%U:%G:%a' /srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx)" = "eom:eom:755"
+  python_layout_roots >/dev/null
 }
 
 normalize_python_layout() {
-  local roots=()
-  mapfile -t roots < <(python_layout_roots)
-  [[ "${#roots[@]}" -eq 4 ]]
-  if find "${roots[@]}" ! -type d ! -type f -print -quit | grep -q .; then
-    printf 'Installed HWPX distributions contain an unsafe entry.\n' >&2
-    return 1
-  fi
-  find "${roots[@]}" -type d -exec chmod 0755 {} +
-  find "${roots[@]}" -type f -exec chmod 0644 {} +
-  test -f /srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx
-  test ! -L /srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx
-  chmod 0755 /srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx
+  "$PYTHON" "$PYTHON_LAYOUT_HELPER" normalize
 }
 
 verify_install() {
@@ -156,6 +123,12 @@ PY
 
 if [[ "$MODE" = "verify" ]]; then
   verify_install
+  exit 0
+fi
+if [[ "$MODE" = "normalize-python-layout" ]]; then
+  normalize_python_layout
+  verify_install
+  printf 'HWPX_PYTHON_RUNTIME_LAYOUT=REPAIRED_AND_VERIFIED\n'
   exit 0
 fi
 if [[ "$MODE" = "dry-run" ]]; then
