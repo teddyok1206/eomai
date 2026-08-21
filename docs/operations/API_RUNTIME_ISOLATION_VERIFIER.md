@@ -70,7 +70,7 @@ change is `FAIL_SERVICE_RESTART_RACE`; there is no host-root fallback.
 | Logical name | Expected | Subject | Namespace | Operation | Reason |
 |---|---|---|---|---|---|
 | `config_read` | ALLOWED | service | service mount | read fixed config | runtime configuration |
-| `api_environment_read` | ALLOWED | service | service mount | read protected API environment | configured service boundary |
+| `api_environment_read` | DENIED | service | service mount | read protected API environment file | systemd-manager-only secret file |
 | `state_write` | ALLOWED | service | service mount | create/write/delete fixed-prefix 0600 probe | service-owned state |
 | `installed_import` | ALLOWED | service | service mount | import fixed packages | no checkout dependency |
 | `repository_read` | DENIED | service | service mount | list directory | source isolation |
@@ -86,6 +86,12 @@ change is `FAIL_SERVICE_RESTART_RACE`; there is no host-root fallback.
 
 Probe output contains only logical names, `PASS_ALLOWED`, `PASS_DENIED`, or a fixed failure class.
 It never emits file contents, environment values, command lines, or secret values.
+
+`EnvironmentFile=/etc/eom/secrets/api.env` is consumed by the systemd manager before the service
+identity is established. The deployed `root:eom:0750` secret directory and the prohibition on
+adding `eom-api` to group `eom` intentionally prevent the running service from reopening that file.
+The service receives the required values in its environment; direct file access is therefore a
+DENIED probe, while the root-only deployment metadata verifier owns EnvironmentFile validation.
 
 ## Data and failure model
 

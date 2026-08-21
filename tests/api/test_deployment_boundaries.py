@@ -49,11 +49,20 @@ def test_runtime_doctor_does_not_access_secret_path() -> None:
 
 def test_systemd_manager_reads_secret_and_runtime_reads_service_config() -> None:
     source = _source("infra/systemd/eom-api.service")
+    metadata = _source("scripts/api/verify_deployment_metadata.sh")
+    verifier = _source("apps/application_api/eom_api/runtime_isolation_verifier.py")
 
     assert "EnvironmentFile=/etc/eom/secrets/api.env" in source
     assert "Environment=EOM_API_CONFIG=/etc/eom-api/api.yaml" in source
     assert "ReadOnlyPaths=/etc/eom-api/api.yaml" in source
     assert "ReadOnlyPaths=/etc/eom/api.yaml" not in source
+    assert 'check_metadata "${SECRET_DIRECTORY}" "root:eom:750"' in metadata
+    assert "eom-api must not belong to the eom group" in metadata
+    start = verifier.index('"api_environment_read",')
+    end = verifier.index("    ProbeSpec(", start)
+    inventory = verifier[start:end]
+    assert "AccessExpectation.DENIED" in inventory
+    assert "systemd manager supplies the environment" in inventory
 
 
 def test_deploy_release_uses_only_noninteractive_sudo() -> None:

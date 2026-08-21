@@ -93,10 +93,10 @@ PROBE_INVENTORY: Final = (
     ),
     ProbeSpec(
         "api_environment_read",
-        AccessExpectation.ALLOWED,
+        AccessExpectation.DENIED,
         ProbeOperation.READ_FILE,
         Path("/etc/eom/secrets/api.env"),
-        "systemd supplies the protected API environment",
+        "systemd manager supplies the environment; the service cannot read the secret file",
     ),
     ProbeSpec(
         "state_write",
@@ -306,7 +306,10 @@ EXPECTED_READ_WRITE_PATHS: Final = frozenset({str(SERVICE_HOME)})
 EXPECTED_INACCESSIBLE_PATHS: Final = frozenset(
     str(probe.path)
     for probe in PROBE_INVENTORY
-    if probe.expectation is AccessExpectation.DENIED and probe.logical_name != "worker_auth_read"
+    if probe.expectation is AccessExpectation.DENIED
+    # These are denied by the service identity or an inaccessible parent, not by
+    # separate InaccessiblePaths entries in the unit.
+    and probe.logical_name not in {"api_environment_read", "worker_auth_read"}
 )
 
 

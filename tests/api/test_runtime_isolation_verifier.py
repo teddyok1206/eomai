@@ -17,7 +17,10 @@ from eom_api.runtime_isolation_verifier import (
     API_BIN,
     API_ENTRYPOINT,
     API_PYTHON,
+    EXPECTED_INACCESSIBLE_PATHS,
+    EXPECTED_READ_ONLY_PATHS,
     FIXED_CHILD_ARGUMENT,
+    PROBE_BY_NAME,
     PROBE_INVENTORY,
     AccessExpectation,
     IsolationVerificationError,
@@ -25,6 +28,7 @@ from eom_api.runtime_isolation_verifier import (
     NamespaceIdentity,
     ProbeContext,
     ProbeExecution,
+    ProbeOperation,
     ProbeResult,
     ResultCode,
     RuntimeIsolationAdapter,
@@ -190,6 +194,24 @@ def test_false_failure_regression_ignores_host_root_access() -> None:
     )
     assert adapter.fixed_probe_calls == 1
     assert adapter.closed
+
+
+def test_api_environment_file_is_manager_only_and_denied_to_service() -> None:
+    probe = PROBE_BY_NAME["api_environment_read"]
+
+    assert probe.expectation is AccessExpectation.DENIED
+    assert probe.operation is ProbeOperation.READ_FILE
+    assert probe.path == Path("/etc/eom/secrets/api.env")
+    assert str(probe.path) in EXPECTED_READ_ONLY_PATHS
+    assert str(probe.path) not in EXPECTED_INACCESSIBLE_PATHS
+    assert (
+        next(
+            result
+            for result in _valid_execution(_valid_snapshot()).results
+            if result.logical_name == probe.logical_name
+        ).code
+        is ResultCode.PASS_DENIED
+    )
 
 
 def test_service_context_failure_has_no_host_root_fallback() -> None:
