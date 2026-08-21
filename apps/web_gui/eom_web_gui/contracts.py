@@ -166,11 +166,40 @@ class ExplorerResult(WebModel):
 
 
 class HwpxCapability(WebModel):
-    state: Literal["PREPARED_NOT_DEPLOYED"] = "PREPARED_NOT_DEPLOYED"
+    state: Literal["READY", "PREPARED_NOT_DEPLOYED", "UNAVAILABLE", "DEGRADED"]
     renderer_key: str
+    renderer_version: str
     boundary: Literal["APPLICATION_API_ONLY"] = "APPLICATION_API_ONLY"
-    build_available: Literal[False] = False
-    download_available: Literal[False] = False
-    equation_count: None = None
-    table_count: None = None
-    message: str = "HWPX Renderer 운영 배포 필요"
+    build_available: bool
+    native_equations: bool
+    native_tables: bool
+    detail_code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{0,63}$")
+    message: str
+
+
+class HwpxBuildRequest(WebModel):
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+    require_native_equations: bool = False
+    require_native_tables: bool = False
+
+
+class HwpxBuildView(WebModel):
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    item_id: str
+    item_revision_id: str
+    renderer: Literal["kordoc"]
+    renderer_version: Literal["4.9.0"]
+    state: Literal["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]
+    validation_state: Literal["PENDING", "PASS", "FAIL"]
+    native_equation_count: int | None = Field(default=None, ge=0, le=32)
+    native_table_count: int | None = Field(default=None, ge=0, le=20)
+    output_artifact_id: str | None = None
+    output_artifact_revision_id: str | None = None
+    output_sha256: str | None = None
+    download_available: bool
+    failure_code: str | None = None
+    failure_detail_sanitized: str | None = None
+    created_at: UtcDatetime
+    started_at: UtcDatetime | None = None
+    completed_at: UtcDatetime | None = None

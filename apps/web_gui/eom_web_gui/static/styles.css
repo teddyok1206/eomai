@@ -188,6 +188,10 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
 .capability-card h2 { margin: 4px 0 8px; }
 .capability-card p { color: var(--eom-text-muted); }
 .capability-grid { padding-left: 0; }
+.hwpx-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 14px; }
+.hwpx-build-panel .panel-body { display: grid; gap: 13px; padding: 18px; }
+.checkbox-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.checkbox-row label { display: flex; align-items: center; gap: 7px; }
 
 .explorer-panel { overflow: hidden; }
 .explorer-filters { display: grid; grid-template-columns: 1.1fr 1.5fr 1fr 1fr 90px auto; align-items: end; gap: 10px; padding: 14px; background: #f8f9fb; border-bottom: 1px solid var(--eom-border); }
@@ -261,6 +265,7 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
   .quality-picker { grid-template-columns: 1fr; }
   .document-canvas { min-height: 700px; padding: 27px 25px; }
   .capability-card { grid-template-columns: 1fr; padding: 25px; }
+  .hwpx-layout { grid-template-columns: 1fr; }
   .explorer-filters { grid-template-columns: 1fr; }
   .metric-grid, .dashboard-grid { grid-template-columns: 1fr; }
 }

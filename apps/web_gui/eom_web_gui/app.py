@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
-from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from eom_web_gui.contracts import (
     DraftSubmission,
     ExplorerQuery,
+    HwpxBuildRequest,
     RequestDraftInput,
     RequestDraftUpdate,
     WorkflowApproval,
@@ -39,11 +40,6 @@ class LoginPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     username: str = Field(min_length=3, max_length=64)
     password: SecretStr = Field(min_length=1, max_length=128)
-
-
-class HwpxBuildRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
 
 
 def create_app(
@@ -286,25 +282,36 @@ def create_app(
 
     @app.get(f"{API_PREFIX}/hwpx/capability")
     async def hwpx_capability(
-        _: Annotated[WebSession, Depends(require_session)],
+        session: Annotated[WebSession, Depends(require_session)],
     ) -> dict[str, Any]:
-        return actual.hwpx_capability().model_dump(mode="json")
+        return (await actual.hwpx_capability(session)).model_dump(mode="json")
 
     @app.post(f"{API_PREFIX}/hwpx/builds", status_code=202)
     async def hwpx_build(
-        _: HwpxBuildRequest,
-        __: Annotated[WebSession, Depends(require_csrf)],
-    ) -> None:
-        raise GatewayError(status=503, code="HWPX_RENDERER_NOT_DEPLOYED")
+        value: HwpxBuildRequest,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.create_hwpx_build(session, value)
+
+    @app.get(f"{API_PREFIX}/hwpx/builds/{{build_id}}")
+    async def hwpx_build_status(
+        build_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (await actual.hwpx_build(session, build_id)).model_dump(mode="json")
 
     @app.get(f"{API_PREFIX}/hwpx/builds/{{build_id}}/download")
     async def hwpx_download(
         build_id: str,
-        _: Annotated[WebSession, Depends(require_session)],
-        filename: Annotated[str, Query(min_length=6, max_length=160)] = "eom-item.hwpx",
-    ) -> None:
-        validate_download_request(build_id, filename)
-        raise GatewayError(status=503, code="HWPX_RENDERER_NOT_DEPLOYED")
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> Response:
+        validate_download_request(build_id)
+        value = await actual.gateway.hwpx_download(session, build_id)
+        return Response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={"Content-Disposition": value.content_disposition},
+        )
 
     @app.post(f"{API_PREFIX}/explorer/query")
     async def explorer(

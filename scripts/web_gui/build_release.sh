@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPOSITORY_ROOT="/home/eom/EOM"
-EXPECTED_BRANCH="feat/web-gui-v0"
+EXPECTED_BRANCHES=("feat/web-gui-v0" "feat/hwpx-application-api-v0")
 BUILD_PYTHON="/srv/eom/conda/envs/eom-api/bin/python"
 
 fail() {
@@ -13,8 +13,15 @@ fail() {
 [[ "$(id -un)" == "eom" ]] || fail "release builds must run as eom"
 [[ "$(git -C "${REPOSITORY_ROOT}" rev-parse --show-toplevel)" == "${REPOSITORY_ROOT}" ]] || \
   fail "repository root mismatch"
-[[ "$(git -C "${REPOSITORY_ROOT}" branch --show-current)" == "${EXPECTED_BRANCH}" ]] || \
-  fail "branch mismatch"
+CURRENT_BRANCH="$(git -C "${REPOSITORY_ROOT}" branch --show-current)"
+branch_allowed=false
+for candidate in "${EXPECTED_BRANCHES[@]}"; do
+  if [[ "${CURRENT_BRANCH}" == "${candidate}" ]]; then
+    branch_allowed=true
+    break
+  fi
+done
+[[ "${branch_allowed}" == true ]] || fail "branch mismatch"
 [[ -z "$(git -C "${REPOSITORY_ROOT}" status --porcelain)" ]] || \
   fail "working tree must be clean before release build"
 [[ -x "${BUILD_PYTHON}" ]] || fail "explicit Python 3.12 build environment is unavailable"

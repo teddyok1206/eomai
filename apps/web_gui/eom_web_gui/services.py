@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -9,6 +10,8 @@ from typing import Any
 from eom_web_gui.contracts import (
     ExplorerQuery,
     ExplorerResult,
+    HwpxBuildRequest,
+    HwpxBuildView,
     HwpxCapability,
     ItemPreview,
     RequestDraft,
@@ -122,8 +125,16 @@ class WebServices:
             raise GatewayError(status=403, code="ADMIN_ROLE_REQUIRED")
         return await self.gateway.explorer(session, query)
 
-    def hwpx_capability(self) -> HwpxCapability:
-        return HwpxCapability(renderer_key=self.settings.hwpx.renderer_key)
+    async def hwpx_capability(self, session: WebSession) -> HwpxCapability:
+        return await self.gateway.hwpx_capability(session)
+
+    async def create_hwpx_build(
+        self, session: WebSession, value: HwpxBuildRequest
+    ) -> dict[str, Any]:
+        return await self.gateway.create_hwpx_build(session, value)
+
+    async def hwpx_build(self, session: WebSession, build_id: str) -> HwpxBuildView:
+        return await self.gateway.hwpx_build(session, build_id)
 
 
 def build_services(settings: WebSettings, gateway: ApplicationGateway) -> WebServices:
@@ -138,16 +149,6 @@ def build_services(settings: WebSettings, gateway: ApplicationGateway) -> WebSer
     )
 
 
-def validate_download_request(build_id: str, filename: str) -> None:
-    if not build_id.startswith("hwpxbuild_") or not build_id.removeprefix("hwpxbuild_").isalnum():
+def validate_download_request(build_id: str) -> None:
+    if re.fullmatch(r"hwpxbuild_[a-f0-9]{32}", build_id) is None:
         raise GatewayError(status=422, code="HWPX_BUILD_ID_INVALID")
-    if (
-        not filename.endswith(".hwpx")
-        or filename in {".hwpx", "..hwpx"}
-        or "/" in filename
-        or "\\" in filename
-        or ".." in filename
-        or "\x00" in filename
-        or len(filename) > 160
-    ):
-        raise GatewayError(status=422, code="HWPX_DOWNLOAD_NAME_INVALID")

@@ -59,7 +59,7 @@
                   <li><span>3</span><div><strong>Review</strong><small>대기</small></div></li>
                   <li><span>4</span><div><strong>승인</strong><small>대기</small></div></li>
                   <li><span>5</span><div><strong>Registration</strong><small>대기</small></div></li>
-                  <li><span>6</span><div><strong>HWPX</strong><small>운영 배포 필요</small></div></li>
+                  <li><span>6</span><div><strong>HWPX</strong><small id="hwpx-step-state">Capability 확인 중</small></div></li>
                 </ol>
               </aside>
 
@@ -78,7 +78,7 @@
                 <div class="panel-heading"><div><p class="eyebrow">INSPECTOR</p><h2>Workflow 정보</h2></div></div>
                 <dl id="workflow-inspector" class="inspector-list"><dt>Workflow</dt><dd>-</dd><dt>상태</dt><dd>-</dd><dt>현재 단계</dt><dd>-</dd><dt>ETag</dt><dd>-</dd></dl>
                 <div class="inspector-section"><h3>실행 정책</h3><p>Generic Demo · balanced</p></div>
-                <div class="inspector-section"><h3>HWPX 상태</h3><span class="status-badge tone-warning"><span class="status-icon">◆</span> 운영 배포 필요</span></div>
+                <div class="inspector-section"><h3>HWPX 상태</h3><span id="hwpx-inspector-badge" class="status-badge tone-warning"><span class="status-icon">◆</span> 확인 중</span></div>
               </aside>
             </div>
           </section>
@@ -139,7 +139,10 @@
 
           <section class="view" data-view="hwpx" aria-labelledby="hwpx-title">
             <div class="page-heading"><div><p class="eyebrow">DOCUMENT DELIVERY</p><h1 id="hwpx-title">HWPX Capability</h1><p>Browser는 renderer나 파일 경로를 직접 다루지 않습니다.</p></div></div>
-            <section class="capability-card panel"><div class="capability-symbol" aria-hidden="true">▱</div><div><p class="eyebrow">APPLICATION API ONLY</p><h2 id="hwpx-state-title">HWPX Renderer 상태 확인 중</h2><p id="hwpx-message">Capability를 불러오고 있습니다.</p><dl class="capability-grid"><dt>Renderer key</dt><dd id="renderer-key">-</dd><dt>Build</dt><dd id="hwpx-build-state">-</dd><dt>Validation</dt><dd id="hwpx-validation">-</dd><dt>Native equations</dt><dd id="hwpx-equations">-</dd><dt>Native tables</dt><dd id="hwpx-tables">-</dd><dt>Download</dt><dd id="hwpx-download">-</dd></dl><span id="hwpx-state-badge" class="status-badge tone-warning"><span class="status-icon">◆</span> 준비 확인 중</span></div></section>
+            <div class="hwpx-layout">
+              <section class="capability-card panel"><div class="capability-symbol" aria-hidden="true">▱</div><div><p class="eyebrow">APPLICATION API ONLY</p><h2 id="hwpx-state-title">HWPX Renderer 상태 확인 중</h2><p id="hwpx-message">Capability를 불러오고 있습니다.</p><dl class="capability-grid"><dt>Renderer key</dt><dd id="renderer-key">-</dd><dt>Version</dt><dd id="renderer-version">-</dd><dt>Build</dt><dd id="hwpx-build-state">-</dd><dt>Validation</dt><dd id="hwpx-validation">-</dd><dt>Native equations</dt><dd id="hwpx-equations">-</dd><dt>Native tables</dt><dd id="hwpx-tables">-</dd><dt>Download</dt><dd id="hwpx-download">-</dd></dl><span id="hwpx-state-badge" class="status-badge tone-warning"><span class="status-icon">◆</span> 준비 확인 중</span></div></section>
+              <section class="panel hwpx-build-panel"><div class="panel-heading"><div><p class="eyebrow">PINNED REVISION</p><h2>HWPX Build</h2></div><span id="hwpx-job-badge" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div><div class="panel-body"><label>Approved Item Revision ID<input id="hwpx-revision-id" placeholder="itemrev_…"></label><div class="checkbox-row"><label><input id="hwpx-require-equations" type="checkbox"> Native equation 필수</label><label><input id="hwpx-require-tables" type="checkbox"> Native table 필수</label></div><div class="form-actions"><button id="hwpx-build-submit" class="button primary" type="button" disabled>HWPX build 요청</button><button id="hwpx-build-refresh" class="button secondary" type="button" disabled>상태 새로고침</button><a id="hwpx-download-link" class="button secondary" href="#" hidden>HWPX 다운로드</a></div><p id="hwpx-build-message" class="form-message" aria-live="polite"></p><dl class="summary-grid"><dt>Build ID</dt><dd id="hwpx-build-id">-</dd><dt>State</dt><dd id="hwpx-resource-state">-</dd><dt>Artifact Revision</dt><dd id="hwpx-artifact-revision">-</dd><dt>Completed</dt><dd id="hwpx-completed-at">-</dd></dl></div></section>
+            </div>
           </section>
 
           <section class="view" data-view="explorer" aria-labelledby="explorer-title">
@@ -150,7 +153,7 @@
 
           <section class="view" data-view="dashboard" aria-labelledby="dashboard-title">
             <div class="page-heading"><div><p class="eyebrow">SYSTEM OVERVIEW</p><h1 id="dashboard-title">대시보드</h1><p>큰 상태를 확인하고 상세 작업면으로 이동합니다.</p></div></div>
-            <div class="metric-grid"><article><span>Application API</span><strong id="metric-api">-</strong></article><article><span>Observability</span><strong id="metric-observe">-</strong></article><article><span>HWPX Renderer</span><strong>배포 필요</strong></article><article><span>현재 모드</span><strong>Generic Demo</strong></article></div>
+            <div class="metric-grid"><article><span>Application API</span><strong id="metric-api">-</strong></article><article><span>Observability</span><strong id="metric-observe">-</strong></article><article><span>HWPX Renderer</span><strong id="metric-hwpx">-</strong></article><article><span>현재 모드</span><strong>Generic Demo</strong></article></div>
             <div class="dashboard-grid"><section class="panel"><div class="panel-heading"><h2>빠른 시작</h2></div><div class="quick-actions"><button class="button secondary view-link" data-view-target="request" type="button">새 문항 Brief 작성</button><button class="button secondary view-link" data-view-target="workflow" type="button">Workflow 상세 확인</button><button class="button secondary view-link" data-view-target="item" type="button">완성 문항 Preview</button></div></section><section class="panel"><div class="panel-heading"><h2>Baseline</h2></div><dl class="summary-grid"><dt>Application API V0</dt><dd>COMPLETE</dd><dt>Platform</dt><dd>STABLE</dd><dt>Release</dt><dd>v0.6.0-application-api</dd><dt>GUI deployment</dt><dd>OPERATOR PENDING</dd></dl></section></div>
           </section>
         </main>

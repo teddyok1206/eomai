@@ -9,6 +9,9 @@ const state = {
   pollTimer: null,
   explorerCursor: null,
   explorerRow: null,
+  hwpxCapability: null,
+  hwpxBuildId: null,
+  hwpxPollTimer: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -287,7 +290,8 @@ function renderStages(workflow, steps) {
     element.classList.toggle("complete", completed.has(key));
     element.classList.toggle("current", key === current && !completed.has(key));
     const detail = element.querySelector("small");
-    detail.textContent = completed.has(key) ? "완료" : key === current ? "현재 단계" : key === "hwpx" ? "운영 배포 필요" : "대기";
+    const hwpxState = state.hwpxCapability?.state || "CAPABILITY 확인 필요";
+    detail.textContent = completed.has(key) ? "완료" : key === current ? "현재 단계" : key === "hwpx" ? hwpxState : "대기";
     element.querySelector("span").textContent = completed.has(key) ? "✓" : String(index + 1);
   });
 }
@@ -484,18 +488,82 @@ function buildDocumentTable(value) {
 async function loadHwpx() {
   try {
     const value = await api("/hwpx/capability");
-    $("#hwpx-state-title").textContent = "HWPX Renderer 운영 배포 필요";
+    state.hwpxCapability = value;
+    $("#hwpx-state-title").textContent = value.state === "READY" ? "HWPX Renderer 준비 완료" : value.state === "PREPARED_NOT_DEPLOYED" ? "HWPX Renderer 운영 배포 필요" : "HWPX Renderer 상태 확인 필요";
     $("#hwpx-message").textContent = value.message;
     $("#renderer-key").textContent = value.renderer_key;
+    $("#renderer-version").textContent = value.renderer_version;
     $("#hwpx-build-state").textContent = value.build_available ? "AVAILABLE" : "NOT AVAILABLE";
-    $("#hwpx-validation").textContent = value.state;
-    $("#hwpx-equations").textContent = value.equation_count === null ? "빌드 후 제공" : String(value.equation_count);
-    $("#hwpx-tables").textContent = value.table_count === null ? "빌드 후 제공" : String(value.table_count);
-    $("#hwpx-download").textContent = value.download_available ? "AVAILABLE" : "NOT AVAILABLE";
-    setStatus($("#hwpx-state-badge"), "warning", "◆", value.state);
+    $("#hwpx-validation").textContent = value.detail_code;
+    $("#hwpx-equations").textContent = value.native_equations ? "SUPPORTED" : "NOT READY";
+    $("#hwpx-tables").textContent = value.native_tables ? "SUPPORTED" : "NOT READY";
+    $("#hwpx-download").textContent = value.build_available ? "AFTER VALIDATION" : "NOT AVAILABLE";
+    const [tone, icon] = statusStyle(value.state);
+    setStatus($("#hwpx-state-badge"), tone, icon, value.state);
+    setStatus($("#hwpx-inspector-badge"), tone, icon, value.state);
+    $("#hwpx-step-state").textContent = value.state;
+    $("#metric-hwpx").textContent = value.state;
+    $("#hwpx-build-submit").disabled = !value.build_available;
   } catch (failure) {
     setStatus($("#hwpx-state-badge"), "danger", "!", "CAPABILITY BLOCKED");
     $("#hwpx-message").textContent = failure.message;
+    $("#hwpx-build-submit").disabled = true;
+  }
+}
+
+function installHwpx() {
+  $("#hwpx-build-submit").addEventListener("click", createHwpxBuild);
+  $("#hwpx-build-refresh").addEventListener("click", loadHwpxBuild);
+}
+
+async function createHwpxBuild() {
+  const revision = $("#hwpx-revision-id").value.trim();
+  if (!revision.startsWith("itemrev_")) return toast("Approved Item Revision ID를 입력하세요.");
+  const idempotency = `studio:hwpx:${revision}:${crypto.randomUUID()}`;
+  try {
+    const command = await api("/hwpx/builds", {
+      method: "POST",
+      mutation: true,
+      body: {
+        item_revision_id: revision,
+        idempotency_key: idempotency,
+        require_native_equations: $("#hwpx-require-equations").checked,
+        require_native_tables: $("#hwpx-require-tables").checked,
+      },
+    });
+    state.hwpxBuildId = command.resource_id;
+    $("#hwpx-build-id").textContent = state.hwpxBuildId;
+    $("#hwpx-build-refresh").disabled = false;
+    showMessage($("#hwpx-build-message"), "HWPX manager queue에 요청했습니다.", "success");
+    await loadHwpxBuild();
+  } catch (failure) {
+    showMessage($("#hwpx-build-message"), `Build 요청 실패: ${failure.message}`, "error");
+  }
+}
+
+async function loadHwpxBuild() {
+  if (!state.hwpxBuildId) return;
+  try {
+    const value = await api(`/hwpx/builds/${encodeURIComponent(state.hwpxBuildId)}`);
+    const [tone, icon] = statusStyle(value.state);
+    setStatus($("#hwpx-job-badge"), tone, icon, value.state);
+    $("#hwpx-resource-state").textContent = `${value.state} / ${value.validation_state}`;
+    $("#hwpx-validation").textContent = value.validation_state;
+    $("#hwpx-equations").textContent = value.native_equation_count === null ? "대기" : String(value.native_equation_count);
+    $("#hwpx-tables").textContent = value.native_table_count === null ? "대기" : String(value.native_table_count);
+    $("#hwpx-artifact-revision").textContent = value.output_artifact_revision_id || "-";
+    $("#hwpx-completed-at").textContent = value.completed_at || "-";
+    const download = $("#hwpx-download-link");
+    download.hidden = !value.download_available;
+    download.href = value.download_available ? `${API}/hwpx/builds/${encodeURIComponent(value.build_id)}/download` : "#";
+    $("#hwpx-download").textContent = value.download_available ? "AVAILABLE" : "NOT AVAILABLE";
+    window.clearTimeout(state.hwpxPollTimer);
+    if (["REQUESTED", "RUNNING", "VALIDATING"].includes(value.state)) {
+      state.hwpxPollTimer = window.setTimeout(loadHwpxBuild, 2000);
+    }
+    if (value.failure_code) showMessage($("#hwpx-build-message"), `Build 실패: ${value.failure_code}`, "error");
+  } catch (failure) {
+    showMessage($("#hwpx-build-message"), `상태 조회 실패: ${failure.message}`, "error");
   }
 }
 
@@ -584,6 +652,7 @@ async function boot() {
   installWorkflow();
   installApproval();
   installItemPreview();
+  installHwpx();
   installExplorer();
   $("#logout").addEventListener("click", logout);
   await initializeSession();

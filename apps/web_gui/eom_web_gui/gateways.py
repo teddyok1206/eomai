@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -12,6 +13,9 @@ from eom_web_gui.contracts import (
     ExplorerEntity,
     ExplorerQuery,
     ExplorerResult,
+    HwpxBuildRequest,
+    HwpxBuildView,
+    HwpxCapability,
     ItemPreview,
 )
 from eom_web_gui.redaction import sanitize_mapping
@@ -31,6 +35,13 @@ class LoginResult:
     def __init__(self, *, operator: dict[str, Any], tokens: ApiTokens) -> None:
         self.operator = operator
         self.tokens = tokens
+
+
+@dataclass(frozen=True)
+class HwpxDownload:
+    content: bytes
+    content_type: str
+    content_disposition: str
 
 
 class ApplicationGateway(Protocol):
@@ -61,6 +72,16 @@ class ApplicationGateway(Protocol):
     ) -> ItemPreview: ...
 
     async def explorer(self, session: WebSession, query: ExplorerQuery) -> ExplorerResult: ...
+
+    async def hwpx_capability(self, session: WebSession) -> HwpxCapability: ...
+
+    async def create_hwpx_build(
+        self, session: WebSession, value: HwpxBuildRequest
+    ) -> dict[str, Any]: ...
+
+    async def hwpx_build(self, session: WebSession, build_id: str) -> HwpxBuildView: ...
+
+    async def hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload: ...
 
     async def close(self) -> None: ...
 
@@ -280,6 +301,75 @@ class HttpApplicationGateway:
             content_pack_release_id=str(revision.get("content_pack_release_id") or "unknown"),
         )
 
+    async def hwpx_capability(self, session: WebSession) -> HwpxCapability:
+        response = await self._authorized(session, "GET", "/api/v1/capabilities/hwpx")
+        value = self._data(response)
+        state = str(value.get("state") or "UNAVAILABLE")
+        supports_value = value.get("supports")
+        supports: dict[str, Any] = supports_value if isinstance(supports_value, dict) else {}
+        messages = {
+            "READY": "Kordoc renderer가 격리된 HWPX manager 경계에서 준비되었습니다.",
+            "PREPARED_NOT_DEPLOYED": "HWPX Renderer 운영 배포 필요",
+            "DEGRADED": "HWPX renderer 무결성 또는 manager 상태를 점검해야 합니다.",
+            "UNAVAILABLE": "HWPX renderer를 사용할 수 없습니다.",
+        }
+        return HwpxCapability.model_validate(
+            {
+                "state": state,
+                "renderer_key": "kordoc",
+                "renderer_version": str(value.get("renderer_version") or "4.9.0"),
+                "build_available": state == "READY",
+                "native_equations": bool(supports.get("native_equations")),
+                "native_tables": bool(supports.get("native_tables")),
+                "detail_code": str(value.get("detail_code") or "HWPX_CAPABILITY_UNKNOWN"),
+                "message": messages.get(state, messages["UNAVAILABLE"]),
+            }
+        )
+
+    async def create_hwpx_build(
+        self, session: WebSession, value: HwpxBuildRequest
+    ) -> dict[str, Any]:
+        _require_id(value.item_revision_id, "itemrev_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/item-revisions/{value.item_revision_id}/hwpx-builds",
+            json={
+                "renderer": "kordoc",
+                "options": {
+                    "include_explanation": True,
+                    "require_native_equations": value.require_native_equations,
+                    "require_native_tables": value.require_native_tables,
+                    "document_preset": "report",
+                },
+            },
+            headers={"Idempotency-Key": value.idempotency_key},
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def hwpx_build(self, session: WebSession, build_id: str) -> HwpxBuildView:
+        _require_id(build_id, "hwpxbuild_")
+        response = await self._authorized(session, "GET", f"/api/v1/hwpx-builds/{build_id}")
+        return HwpxBuildView.model_validate(self._data(response))
+
+    async def hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload:
+        _require_id(build_id, "hwpxbuild_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/hwpx-builds/{build_id}/download",
+            headers={"Accept": "application/vnd.hancom.hwpx"},
+        )
+        content_type = response.headers.get("content-type", "")
+        disposition = response.headers.get("content-disposition", "")
+        if (
+            content_type.split(";", 1)[0] != "application/vnd.hancom.hwpx"
+            or not disposition.startswith('attachment; filename="')
+            or len(response.content) > 64 * 1024 * 1024
+        ):
+            raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
+        return HwpxDownload(response.content, content_type, disposition)
+
     async def explorer(self, session: WebSession, query: ExplorerQuery) -> ExplorerResult:
         if query.entity == ExplorerEntity.ITEM_REVISIONS:
             return await self._item_revision_explorer(session, query)
@@ -288,11 +378,48 @@ class HttpApplicationGateway:
         if query.entity in OBSERVE_EXACT_ENTITIES:
             return await self._observe_explorer(query)
         if query.entity == ExplorerEntity.HWPX_BUILDS:
+            hwpx_columns = (
+                "build_id",
+                "item_id",
+                "item_revision_id",
+                "state",
+                "renderer",
+                "validation_state",
+                "native_equation_count",
+                "native_table_count",
+                "output_artifact_revision_id",
+                "created_at",
+                "completed_at",
+            )
+            if query.exact_id:
+                _require_id(query.exact_id, "hwpxbuild_")
+                response = await self._authorized(
+                    session, "GET", f"/api/v1/hwpx-builds/{query.exact_id}"
+                )
+                values = [self._data(response)]
+            else:
+                response = await self._authorized(
+                    session,
+                    "GET",
+                    "/api/v1/hwpx-builds",
+                    params={
+                        "limit": query.limit,
+                        "cursor": query.cursor,
+                        "state": query.status,
+                    },
+                )
+                values = self._list_data(response)
+            hwpx_page = response.json().get("page", {})
             return ExplorerResult(
                 entity=query.entity,
-                columns=(),
-                rows=(),
-                capability="PREPARED_NOT_DEPLOYED",
+                columns=hwpx_columns,
+                rows=tuple(_filtered_rows(values, hwpx_columns, query)),
+                next_cursor=(
+                    hwpx_page.get("next_cursor") if isinstance(hwpx_page, dict) else None
+                ),
+                has_more=(
+                    bool(hwpx_page.get("has_more")) if isinstance(hwpx_page, dict) else False
+                ),
             )
         spec = EXPLORER_SPECS.get(query.entity)
         if spec is None:
