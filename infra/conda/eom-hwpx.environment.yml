@@ -3,6 +3,8 @@ channels:
   - defaults
 dependencies:
   - python=3.12
+  # Kordoc 4.9.0 has a transitive runtime dependency requiring Node.js 20.
+  - nodejs=20
   - pip
   - setuptools
   - wheel

@@ -12,6 +12,8 @@ from pathlib import Path
 from eom_hwpx_contracts.validation import SCHEMA_FILES, load_schema
 from PIL import features
 
+from eom_hwpx_builder.errors import HwpxError
+from eom_hwpx_builder.kordoc_runtime import KordocRuntime
 from eom_hwpx_builder.models import PackageLimits
 
 ENV_PREFIX = Path("/srv/eom/conda/envs/eom-hwpx")
@@ -60,7 +62,21 @@ def run_doctor() -> dict[str, object]:
             load_schema(name)
     except Exception:
         schema_ok = False
-    checks.append(DoctorCheck("schema_package", "PASS" if schema_ok else "FAIL", "2 schemas"))
+    checks.append(
+        DoctorCheck(
+            "schema_package",
+            "PASS" if schema_ok else "FAIL",
+            f"{len(SCHEMA_FILES)} schemas",
+        )
+    )
+    try:
+        capability = KordocRuntime().capabilities()
+        kordoc_status = "PASS"
+        kordoc_detail = f"node={capability.node_major},kordoc={capability.kordoc_version},offline"
+    except HwpxError:
+        kordoc_status = "FAIL"
+        kordoc_detail = "pinned Node/Kordoc runtime unavailable"
+    checks.append(DoctorCheck("kordoc_runtime", kordoc_status, kordoc_detail))
     try:
         account = pwd.getpwnam("eom-hwpx")
         user_ok = account.pw_shell.endswith("nologin")

@@ -21,3 +21,6 @@ eom-hwpx = "eom_hwpx_builder.cli:app"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["eom_hwpx_builder*"]
+
+[tool.setuptools.package-data]
+eom_hwpx_builder = ["*.mjs"]
