@@ -1,0 +1,37 @@
+{
+  "$id": "https://eom.local/schemas/web-gui/timeline-event-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_id": {"type": ["string", "null"]},
+    "attempt": {"minimum": 1, "type": ["integer", "null"]},
+    "elapsed_ms": {"minimum": 0, "type": ["integer", "null"]},
+    "error_code": {"pattern": "^[A-Z][A-Z0-9_]{0,63}$", "type": ["string", "null"]},
+    "event_id": {"maxLength": 128, "minLength": 1, "type": "string"},
+    "job_id": {"type": ["string", "null"]},
+    "label": {"maxLength": 120, "minLength": 1, "type": "string"},
+    "schema_version": {"const": "1.0"},
+    "state": {"maxLength": 40, "minLength": 1, "type": "string"},
+    "step": {"type": ["string", "null"]},
+    "timestamp": {"format": "date-time", "type": "string"},
+    "validation_result": {"type": ["string", "null"]},
+    "worker_slot": {"type": ["string", "null"]}
+  },
+  "required": [
+    "schema_version",
+    "event_id",
+    "timestamp",
+    "label",
+    "state",
+    "step",
+    "worker_slot",
+    "job_id",
+    "attempt",
+    "artifact_id",
+    "validation_result",
+    "elapsed_ms",
+    "error_code"
+  ],
+  "title": "EOM Web GUI Timeline Event V1",
+  "type": "object"
+}

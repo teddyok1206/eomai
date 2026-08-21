@@ -1,0 +1,20 @@
+schema_version: 1
+server:
+  host: 127.0.0.1
+  port: 8790
+  workers: 1
+  allowed_hosts:
+    - 127.0.0.1
+    - localhost
+upstreams:
+  application_api_url: http://127.0.0.1:8765
+  observability_url: http://127.0.0.1:8780
+  request_timeout_seconds: 5.0
+sessions:
+  cookie_secure: false
+  ttl_seconds: 1800
+  maximum_sessions: 256
+  maximum_drafts_per_session: 20
+hwpx:
+  renderer_key: kordoc-4.9.0
+  deployment_state: PREPARED_NOT_DEPLOYED

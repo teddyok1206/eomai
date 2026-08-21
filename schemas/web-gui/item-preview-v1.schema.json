@@ -1,0 +1,66 @@
+{
+  "$id": "https://eom.local/schemas/web-gui/item-preview-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "answer": {"maxLength": 4000, "type": ["string", "null"]},
+    "body": {"maxLength": 20000, "type": ["string", "null"]},
+    "choices": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {"maxLength": 16, "minLength": 1, "type": "string"},
+          "text": {"maxLength": 4000, "minLength": 1, "type": "string"}
+        },
+        "required": ["label", "text"],
+        "type": "object"
+      },
+      "maxItems": 10,
+      "type": "array"
+    },
+    "content_pack_release_id": {"type": "string"},
+    "equations": {"items": {"maxLength": 4000, "type": "string"}, "maxItems": 50, "type": "array"},
+    "explanation": {"maxLength": 20000, "type": ["string", "null"]},
+    "item_id": {"type": "string"},
+    "item_revision_id": {"type": "string"},
+    "preview_state": {"enum": ["AVAILABLE", "METADATA_ONLY"]},
+    "revision_state": {"type": "string"},
+    "schema_version": {"const": "1.0"},
+    "tables": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "caption": {"maxLength": 500, "type": ["string", "null"]},
+          "headers": {"items": {"maxLength": 500, "type": "string"}, "maxItems": 20, "type": "array"},
+          "rows": {
+            "items": {"items": {"maxLength": 1000, "type": "string"}, "maxItems": 20, "type": "array"},
+            "maxItems": 100,
+            "type": "array"
+          }
+        },
+        "required": ["caption", "headers", "rows"],
+        "type": "object"
+      },
+      "maxItems": 20,
+      "type": "array"
+    },
+    "workflow_id": {"type": "string"}
+  },
+  "required": [
+    "schema_version",
+    "preview_state",
+    "workflow_id",
+    "item_id",
+    "item_revision_id",
+    "revision_state",
+    "content_pack_release_id",
+    "body",
+    "choices",
+    "answer",
+    "explanation",
+    "equations",
+    "tables"
+  ],
+  "title": "EOM Web GUI Item Preview V1",
+  "type": "object"
+}

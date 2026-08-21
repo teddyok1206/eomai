@@ -1,0 +1,35 @@
+{
+  "$id": "https://eom.local/schemas/web-gui/explorer-query-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cursor": {"maxLength": 1024, "type": ["string", "null"]},
+    "date_from": {"format": "date-time", "type": ["string", "null"]},
+    "date_to": {"format": "date-time", "type": ["string", "null"]},
+    "entity": {
+      "enum": [
+        "workflows",
+        "workflow_commands",
+        "workflow_events",
+        "step_runs",
+        "jobs",
+        "artifacts",
+        "artifact_revisions",
+        "items",
+        "item_revisions",
+        "content_pack_releases",
+        "usage_plans",
+        "usage_records",
+        "hwpx_builds"
+      ]
+    },
+    "exact_id": {"maxLength": 128, "type": ["string", "null"]},
+    "limit": {"default": 50, "maximum": 100, "minimum": 1, "type": "integer"},
+    "schema_version": {"const": "1.0"},
+    "sort": {"enum": ["created_desc", "created_asc", "updated_desc", "updated_asc"]},
+    "status": {"maxLength": 40, "pattern": "^[A-Z][A-Z0-9_]*$", "type": ["string", "null"]}
+  },
+  "required": ["schema_version", "entity", "exact_id", "status", "date_from", "date_to", "sort", "cursor", "limit"],
+  "title": "EOM Web GUI Explorer Query V1",
+  "type": "object"
+}

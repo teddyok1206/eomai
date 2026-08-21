@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EOM Scientific Studio</title>
+    <link rel="stylesheet" href="/studio/assets/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="주 메뉴">
+        <div class="brand">
+          <span class="brand-seal" aria-hidden="true">E</span>
+          <span><strong>EOM</strong><small>Scientific Studio</small></span>
+        </div>
+        <div class="mode-label"><span class="mode-dot" aria-hidden="true"></span> Generic Demo Mode</div>
+        <nav class="navigation">
+          <button type="button" class="nav-item active" data-view-target="workflow"><span aria-hidden="true">▤</span> Workflow 상세</button>
+          <button type="button" class="nav-item" data-view-target="request"><span aria-hidden="true">＋</span> 새 문항 요청</button>
+          <button type="button" class="nav-item" data-view-target="item"><span aria-hidden="true">▧</span> 완성 문항</button>
+          <button type="button" class="nav-item" data-view-target="approval"><span aria-hidden="true">◆</span> 승인 대기</button>
+          <button type="button" class="nav-item" data-view-target="hwpx"><span aria-hidden="true">▱</span> HWPX</button>
+          <button type="button" class="nav-item admin-only" data-view-target="explorer"><span aria-hidden="true">⌘</span> DB Explorer</button>
+          <button type="button" class="nav-item" data-view-target="dashboard"><span aria-hidden="true">⌂</span> 대시보드</button>
+        </nav>
+        <div class="sidebar-footer">
+          <p>Application API V0</p>
+          <span class="status-badge tone-success"><span class="status-icon" aria-hidden="true">✓</span> Stable baseline</span>
+        </div>
+      </aside>
+
+      <div class="app-frame">
+        <header class="topbar">
+          <div class="command-bar">
+            <button class="mobile-menu" id="mobile-menu" type="button" aria-label="메뉴 열기">☰</button>
+            <label class="global-search"><span aria-hidden="true">⌕</span><input id="global-id" placeholder="Workflow, Item, Job ID 검색" autocomplete="off"></label>
+            <button class="button quiet" id="global-load" type="button">열기</button>
+          </div>
+          <div class="topbar-status" aria-live="polite">
+            <span id="api-health" class="status-badge tone-neutral"><span class="status-icon" aria-hidden="true">●</span> API 확인 중</span>
+            <span id="observe-health" class="status-badge tone-neutral"><span class="status-icon" aria-hidden="true">●</span> Observe 확인 중</span>
+            <span class="user-block"><span><strong id="current-user">-</strong><small id="current-role">-</small></span><span class="avatar" aria-hidden="true">EO</span></span>
+            <button class="button quiet" id="logout" type="button">로그아웃</button>
+          </div>
+        </header>
+
+        <main class="main-area">
+          <section class="view active" data-view="workflow" aria-labelledby="workflow-title">
+            <div class="page-heading">
+              <div><p class="eyebrow">WORKFLOW WORKSPACE</p><h1 id="workflow-title">Workflow 상세</h1><p>사람이 이해할 수 있는 단계와 검증 근거만 표시합니다.</p></div>
+              <div class="heading-actions"><input id="workflow-id" class="id-input" placeholder="workflow_…"><button id="workflow-load" class="button primary" type="button">Workflow 불러오기</button></div>
+            </div>
+            <div class="three-column-workspace">
+              <aside class="stage-rail panel">
+                <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h2>제작 단계</h2></div><span id="workflow-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div>
+                <ol id="stage-list" class="stage-list">
+                  <li class="current"><span>1</span><div><strong>요청 접수</strong><small>Workflow를 선택하세요</small></div></li>
+                  <li><span>2</span><div><strong>Authoring</strong><small>대기</small></div></li>
+                  <li><span>3</span><div><strong>Review</strong><small>대기</small></div></li>
+                  <li><span>4</span><div><strong>승인</strong><small>대기</small></div></li>
+                  <li><span>5</span><div><strong>Registration</strong><small>대기</small></div></li>
+                  <li><span>6</span><div><strong>HWPX</strong><small>운영 배포 필요</small></div></li>
+                </ol>
+              </aside>
+
+              <div class="workflow-center">
+                <section class="panel timeline-panel">
+                  <div class="panel-heading"><div><p class="eyebrow">OPERATIONAL EVENTS</p><h2>실행 Timeline</h2></div><div class="stream-state"><span id="stream-status" class="status-badge tone-neutral"><span class="status-icon">●</span> Polling</span><button id="timeline-refresh" class="icon-button" type="button" aria-label="Timeline 새로고침">↻</button></div></div>
+                  <ol id="timeline" class="timeline"><li class="empty-state">Workflow를 불러오면 실행 이력이 표시됩니다.</li></ol>
+                </section>
+                <section class="panel operational-log-panel">
+                  <div class="panel-heading compact"><div><p class="eyebrow">SANITIZED LOG</p><h2>운영 기록</h2></div><span class="muted-label">No raw shell / No chain-of-thought</span></div>
+                  <div id="operational-log" class="operational-log"><p>표시할 기록이 없습니다.</p></div>
+                </section>
+              </div>
+
+              <aside class="inspector panel">
+                <div class="panel-heading"><div><p class="eyebrow">INSPECTOR</p><h2>Workflow 정보</h2></div></div>
+                <dl id="workflow-inspector" class="inspector-list"><dt>Workflow</dt><dd>-</dd><dt>상태</dt><dd>-</dd><dt>현재 단계</dt><dd>-</dd><dt>ETag</dt><dd>-</dd></dl>
+                <div class="inspector-section"><h3>실행 정책</h3><p>Generic Demo · balanced</p></div>
+                <div class="inspector-section"><h3>HWPX 상태</h3><span class="status-badge tone-warning"><span class="status-icon">◆</span> 운영 배포 필요</span></div>
+              </aside>
+            </div>
+          </section>
+
+          <section class="view" data-view="request" aria-labelledby="request-title">
+            <div class="page-heading"><div><p class="eyebrow">REQUEST DRAFT</p><h1 id="request-title">새 문항 요청</h1><p>자연어를 먼저 검토 가능한 제작 Brief로 정규화합니다.</p></div><span class="status-badge tone-primary"><span class="status-icon">◆</span> Generic Demo Mode</span></div>
+            <div class="request-layout">
+              <section class="panel request-composer">
+                <div class="panel-heading"><div><p class="eyebrow">NATURAL LANGUAGE</p><h2>어떤 문항을 만들까요?</h2></div></div>
+                <div class="panel-body">
+                  <textarea id="request-text" rows="7" maxlength="2000">물리학에서 2차원 포물선 운동에 관한 계산 문항을 출제해줘.</textarea>
+                  <div class="composer-footer"><small>원문은 raw model prompt로 전달되지 않습니다.</small><button id="draft-analyze" class="button primary" type="button">요청 분석</button></div>
+                </div>
+              </section>
+              <section class="panel draft-panel">
+                <div class="panel-heading"><div><p class="eyebrow">STRUCTURED BRIEF</p><h2>Request Draft</h2></div><span id="draft-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 분석 전</span></div>
+                <form id="draft-form" class="draft-form">
+                  <label>언어<input name="language" value="한국어" disabled></label>
+                  <label>과목<input name="subject" required maxlength="80"></label>
+                  <label class="wide">주제<input name="topic" required maxlength="160"></label>
+                  <label>문항 유형<select name="item_format"><option value="multiple_choice">객관식</option></select></label>
+                  <label>과제 유형<select name="task_type"><option value="calculation">계산형</option><option value="conceptual">개념형</option><option value="data_interpretation">자료 해석형</option></select></label>
+                  <label>난이도<select name="difficulty"><option value="easy">하</option><option value="medium" selected>중</option><option value="hard">상</option></select></label>
+                  <label>선택지 수<input name="choice_count" type="number" min="2" max="5" value="5"></label>
+                  <fieldset class="wide"><legend>필요 요소</legend><label class="check"><input name="equation_required" type="checkbox"> 수식</label><label class="check"><input name="image_required" type="checkbox"> 이미지</label></fieldset>
+                  <fieldset class="wide quality-picker"><legend>품질 프로필</legend><label><input type="radio" name="quality_profile" value="fast"><span><strong>빠름</strong><small>빠른 초안</small></span></label><label><input type="radio" name="quality_profile" value="balanced" checked><span><strong>균형</strong><small>품질과 속도</small></span></label><label><input type="radio" name="quality_profile" value="deep"><span><strong>심층</strong><small>면밀한 검토</small></span></label></fieldset>
+                  <div class="wide draft-meta"><span>Draft ID</span><code id="draft-id">-</code><span>Request SHA</span><code id="draft-sha">-</code></div>
+                  <p id="draft-message" class="form-message wide" aria-live="polite"></p>
+                  <div class="wide form-actions"><button id="draft-save" class="button secondary" type="button" disabled>Draft 저장</button><button id="draft-submit" class="button primary" type="button" disabled>문항 생성 시작</button></div>
+                </form>
+              </section>
+            </div>
+          </section>
+
+          <section class="view" data-view="item" aria-labelledby="item-title">
+            <div class="page-heading"><div><p class="eyebrow">EDITORIAL PREVIEW</p><h1 id="item-title">완성 문항</h1><p>고정된 Item Revision을 출판 문서와 같은 작업면에서 검토합니다.</p></div><div class="heading-actions"><input id="item-id" class="id-input" placeholder="item_…"><input id="revision-id" class="id-input" placeholder="itemrev_…"><button id="item-load" class="button primary" type="button">Preview</button></div></div>
+            <div class="preview-workspace">
+              <article id="document-preview" class="document-canvas" aria-label="A4 문항 미리보기">
+                <header><span>EOM SCIENCE ITEM</span><span id="preview-page-state">METADATA ONLY</span></header>
+                <div id="preview-empty" class="document-empty"><strong>문항 Preview</strong><p>Item과 고정 Revision을 선택하세요.</p></div>
+                <div id="preview-content" hidden>
+                  <p class="question-number">1.</p><p id="preview-body" class="question-body"></p><ol id="preview-choices" class="choice-list"></ol>
+                  <section id="preview-equations" class="equation-block"></section><section id="preview-tables" class="document-tables"></section>
+                  <div class="answer-rule"></div><section class="answer-section"><h3>정답</h3><p id="preview-answer"></p><h3>해설</h3><p id="preview-explanation"></p></section>
+                </div>
+              </article>
+              <aside class="inspector panel"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE</p><h2>Revision 정보</h2></div><span id="revision-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div><dl id="item-inspector" class="inspector-list"><dt>Item</dt><dd>-</dd><dt>Revision</dt><dd>-</dd><dt>Workflow</dt><dd>-</dd><dt>Content Pack</dt><dd>-</dd></dl><div class="inspector-section"><h3>Kordoc / HWPX</h3><p>Application API capability를 통해서만 접근합니다.</p><button class="button secondary view-link" data-view-target="hwpx" type="button">HWPX 상태 보기</button></div></aside>
+            </div>
+          </section>
+
+          <section class="view" data-view="approval" aria-labelledby="approval-title">
+            <div class="page-heading"><div><p class="eyebrow">HUMAN DECISION</p><h1 id="approval-title">Reviewer 승인</h1><p>현재 ETag를 확인한 replay-safe command만 전송합니다.</p></div></div>
+            <div class="approval-layout">
+              <section class="panel approval-preview"><div class="panel-heading"><div><p class="eyebrow">CURRENT RESOURCE</p><h2>승인 대상 Workflow</h2></div><span id="approval-state" class="status-badge tone-warning"><span class="status-icon">◆</span> 확인 필요</span></div><dl id="approval-summary" class="summary-grid"><dt>Workflow</dt><dd>-</dd><dt>상태</dt><dd>-</dd><dt>현재 단계</dt><dd>-</dd><dt>ETag</dt><dd>-</dd></dl></section>
+              <section class="panel approval-form-panel"><div class="panel-heading"><div><p class="eyebrow">APPROVAL COMMAND</p><h2>검토 결정</h2></div></div><div class="panel-body"><label>Workflow ID<input id="approval-workflow-id" placeholder="workflow_…"></label><label>현재 ETag<input id="approval-etag" placeholder='"1"' readonly></label><label>승인 메모<textarea id="approval-reason" rows="5" maxlength="2000"></textarea></label><p id="approval-message" class="form-message" aria-live="polite"></p><div class="form-actions"><button id="approval-load" class="button secondary" type="button">현재 상태 확인</button><button id="approval-submit" class="button primary" type="button" disabled>승인 command 전송</button></div></div></section>
+            </div>
+          </section>
+
+          <section class="view" data-view="hwpx" aria-labelledby="hwpx-title">
+            <div class="page-heading"><div><p class="eyebrow">DOCUMENT DELIVERY</p><h1 id="hwpx-title">HWPX Capability</h1><p>Browser는 renderer나 파일 경로를 직접 다루지 않습니다.</p></div></div>
+            <section class="capability-card panel"><div class="capability-symbol" aria-hidden="true">▱</div><div><p class="eyebrow">APPLICATION API ONLY</p><h2 id="hwpx-state-title">HWPX Renderer 상태 확인 중</h2><p id="hwpx-message">Capability를 불러오고 있습니다.</p><dl class="capability-grid"><dt>Renderer key</dt><dd id="renderer-key">-</dd><dt>Build</dt><dd id="hwpx-build-state">-</dd><dt>Validation</dt><dd id="hwpx-validation">-</dd><dt>Native equations</dt><dd id="hwpx-equations">-</dd><dt>Native tables</dt><dd id="hwpx-tables">-</dd><dt>Download</dt><dd id="hwpx-download">-</dd></dl><span id="hwpx-state-badge" class="status-badge tone-warning"><span class="status-icon">◆</span> 준비 확인 중</span></div></section>
+          </section>
+
+          <section class="view" data-view="explorer" aria-labelledby="explorer-title">
+            <div class="page-heading"><div><p class="eyebrow">ADMIN · READ ONLY</p><h1 id="explorer-title">DB Explorer Lite</h1><p>허용된 Application API/Observability projection만 조회합니다.</p></div><span class="status-badge tone-success"><span class="status-icon">✓</span> Raw SQL 없음</span></div>
+            <section class="panel explorer-panel"><form id="explorer-form" class="explorer-filters"><label>Entity<select name="entity"><option value="workflows">Workflows</option><option value="workflow_events">Workflow events</option><option value="step_runs">Step runs</option><option value="jobs">Jobs</option><option value="artifacts">Artifacts</option><option value="artifact_revisions">Artifact revisions</option><option value="items">Items</option><option value="item_revisions">Item revisions</option><option value="content_pack_releases">Content Pack releases</option><option value="usage_plans">Usage plans</option><option value="usage_records">Usage records</option><option value="hwpx_builds">HWPX builds</option></select></label><label>Exact ID<input name="exact_id" placeholder="선택 사항"></label><label>Status<input name="status" placeholder="COMPLETED" pattern="[A-Z][A-Z0-9_]*"></label><label>시작 시각<input name="date_from" type="datetime-local"></label><label>종료 시각<input name="date_to" type="datetime-local"></label><label>정렬<select name="sort"><option value="created_desc">Created ↓</option><option value="created_asc">Created ↑</option><option value="updated_desc">Updated ↓</option><option value="updated_asc">Updated ↑</option></select></label><label>표시 수<input name="limit" type="number" min="1" max="100" value="50"></label><button class="button primary" type="submit">조회</button></form><div class="explorer-result"><div class="table-toolbar"><span id="explorer-capability">READ ONLY</span><div><button id="explorer-next" class="button quiet" type="button" disabled>다음 페이지</button><button id="density-toggle" class="button quiet" type="button">조밀하게</button></div></div><div class="data-table-wrap"><table id="explorer-table"><thead></thead><tbody><tr><td class="empty-state">조회 조건을 선택하세요.</td></tr></tbody></table></div><p id="explorer-message" class="form-message" aria-live="polite"></p></div></section>
+            <aside id="json-drawer" class="json-drawer" hidden><div class="panel-heading"><h2>Row detail</h2><div><button id="json-copy" class="button quiet" type="button">ID 복사</button><button id="json-close" class="icon-button" type="button" aria-label="닫기">×</button></div></div><pre id="json-detail"></pre></aside>
+          </section>
+
+          <section class="view" data-view="dashboard" aria-labelledby="dashboard-title">
+            <div class="page-heading"><div><p class="eyebrow">SYSTEM OVERVIEW</p><h1 id="dashboard-title">대시보드</h1><p>큰 상태를 확인하고 상세 작업면으로 이동합니다.</p></div></div>
+            <div class="metric-grid"><article><span>Application API</span><strong id="metric-api">-</strong></article><article><span>Observability</span><strong id="metric-observe">-</strong></article><article><span>HWPX Renderer</span><strong>배포 필요</strong></article><article><span>현재 모드</span><strong>Generic Demo</strong></article></div>
+            <div class="dashboard-grid"><section class="panel"><div class="panel-heading"><h2>빠른 시작</h2></div><div class="quick-actions"><button class="button secondary view-link" data-view-target="request" type="button">새 문항 Brief 작성</button><button class="button secondary view-link" data-view-target="workflow" type="button">Workflow 상세 확인</button><button class="button secondary view-link" data-view-target="item" type="button">완성 문항 Preview</button></div></section><section class="panel"><div class="panel-heading"><h2>Baseline</h2></div><dl class="summary-grid"><dt>Application API V0</dt><dd>COMPLETE</dd><dt>Platform</dt><dd>STABLE</dd><dt>Release</dt><dd>v0.6.0-application-api</dd><dt>GUI deployment</dt><dd>OPERATOR PENDING</dd></dl></section></div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="/studio/assets/app.js"></script>
+  </body>
+</html>

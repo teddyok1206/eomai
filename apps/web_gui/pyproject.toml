@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-web-gui"
+version = "0.1.0"
+description = "Browser-facing EOM Scientific Studio BFF"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi==0.141.1",
+  "httpx==0.28.1",
+  "pydantic==2.13.4",
+  "PyYAML==6.0.3",
+  "typer==0.27.1",
+  "uvicorn==0.52.3",
+]
+
+[project.scripts]
+eom-web-gui = "eom_web_gui.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_web_gui*"]
+
+[tool.setuptools.package-data]
+eom_web_gui = ["build-info.json", "static/*"]
