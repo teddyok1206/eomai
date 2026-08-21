@@ -323,22 +323,32 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
     codex_binary = root / "codex"
     codex_binary.write_text("isolated non-live executable placeholder\n", encoding="utf-8")
     codex_binary.chmod(0o700)
-    subprocess.run(
-        [
-            os.environ["API_PYTHON"],
-            "-m",
-            "pip",
-            "install",
-            "--no-deps",
-            "--no-index",
-            "--no-compile",
-            "--target",
-            str(installed_root),
-            str(platform_wheel),
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-    )
+    previous_umask = os.umask(0o022)
+    try:
+        subprocess.run(
+            [
+                os.environ["API_PYTHON"],
+                "-m",
+                "pip",
+                "install",
+                "--no-deps",
+                "--no-index",
+                "--no-compile",
+                "--target",
+                str(installed_root),
+                str(platform_wheel),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+    finally:
+        os.umask(previous_umask)
+    for path in (installed_root, *installed_root.rglob("*")):
+        if path.is_symlink():
+            raise SystemExit("installed simulation contains a symlink")
+        expected_mode = 0o755 if path.is_dir() else 0o644
+        if path.stat().st_mode & 0o777 != expected_mode:
+            raise SystemExit(f"installed simulation mode mismatch: {path.name}")
     check = r'''
 import importlib.util
 import os
@@ -459,22 +469,32 @@ validate_contract(
 with tempfile.TemporaryDirectory(prefix="eom-api-verifier-wheel-check.") as temporary:
     root = Path(temporary)
     installed_root = root / "site-packages"
-    subprocess.run(
-        [
-            os.environ["API_PYTHON"],
-            "-m",
-            "pip",
-            "install",
-            "--no-deps",
-            "--no-index",
-            "--no-compile",
-            "--target",
-            str(installed_root),
-            str(by_prefix["eom_application_api"]),
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-    )
+    previous_umask = os.umask(0o022)
+    try:
+        subprocess.run(
+            [
+                os.environ["API_PYTHON"],
+                "-m",
+                "pip",
+                "install",
+                "--no-deps",
+                "--no-index",
+                "--no-compile",
+                "--target",
+                str(installed_root),
+                str(by_prefix["eom_application_api"]),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+    finally:
+        os.umask(previous_umask)
+    for path in (installed_root, *installed_root.rglob("*")):
+        if path.is_symlink():
+            raise SystemExit("Application API installed simulation contains a symlink")
+        expected_mode = 0o755 if path.is_dir() else 0o644
+        if path.stat().st_mode & 0o777 != expected_mode:
+            raise SystemExit(f"Application API installed simulation mode mismatch: {path.name}")
     capability_check = r'''
 import importlib.util
 import sys
@@ -536,7 +556,10 @@ PY
 install_wheels() {
   mapfile -t wheels < <(find "${DIST_DIR}" -maxdepth 1 -type f -name '*.whl' | sort)
   ((${#wheels[@]} == 3)) || fail "release wheels are unavailable"
-  ${API_PIP} install --no-deps --force-reinstall "${wheels[@]}" >/dev/null
+  (
+    umask 022
+    ${API_PIP} install --no-deps --force-reinstall "${wheels[@]}" >/dev/null
+  )
   ${API_PIP} check
   verify_install_mode
 }
@@ -550,9 +573,11 @@ import importlib.util
 import json
 import os
 import site
+import stat
 from pathlib import Path
 
 site_roots = [Path(value).resolve() for value in site.getsitepackages()]
+runtime_package_roots: set[Path] = set()
 for module in (
     "eom_api",
     "eom_api_contracts",
@@ -570,6 +595,31 @@ for module in (
         raise SystemExit(f"module is outside site-packages: {module}")
     if str(origin).startswith(os.environ["REPOSITORY_ROOT"]):
         raise SystemExit(f"source checkout import detected: {module}")
+    runtime_package_roots.add(origin.parent)
+
+expected_uid = os.getuid()
+expected_gid = os.getgid()
+for root in sorted(runtime_package_roots):
+    for path in (root, *root.rglob("*")):
+        if path.is_symlink():
+            raise SystemExit(f"runtime package contains a symlink: {path.name}")
+        metadata = path.stat()
+        if metadata.st_uid != expected_uid or metadata.st_gid != expected_gid:
+            raise SystemExit(f"runtime package ownership mismatch: {path.name}")
+        expected_mode = 0o755 if path.is_dir() else 0o644
+        if stat.S_IMODE(metadata.st_mode) != expected_mode:
+            raise SystemExit(f"runtime package mode mismatch: {path.name}")
+
+for name in ("eom-api", "eom-api-runtime-isolation"):
+    entrypoint = Path(os.environ.get("API_PYTHON", "/srv/eom/conda/envs/eom-api/bin/python"))
+    entrypoint = entrypoint.resolve().parent / name
+    metadata = entrypoint.stat()
+    if (
+        metadata.st_uid != expected_uid
+        or metadata.st_gid != expected_gid
+        or stat.S_IMODE(metadata.st_mode) != 0o755
+    ):
+        raise SystemExit(f"runtime entry point mode mismatch: {name}")
 for name in ("eom-application-api", "eom-api-contracts", "eom-platform"):
     distribution = importlib.metadata.distribution(name)
     direct_url = distribution.read_text("direct_url.json")

@@ -155,6 +155,20 @@ def test_release_installs_runtime_verifier_and_packages_fixed_helper() -> None:
     assert 'eom-api-runtime-isolation = "eom_api.runtime_isolation_verifier:main"' in package
 
 
+def test_release_install_normalizes_restrictive_operator_umask() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+    install_body = deployment.partition("install_wheels() {")[2].partition("\n}")[0]
+
+    assert "umask 022" in install_body
+    install_command = "${API_PIP} install --no-deps --force-reinstall"
+    assert install_command in install_body
+    assert install_body.index("umask 022") < install_body.index(install_command)
+    assert "runtime package ownership mismatch" in deployment
+    assert "runtime package mode mismatch" in deployment
+    assert "runtime entry point mode mismatch" in deployment
+    assert "installed simulation mode mismatch" in deployment
+
+
 @pytest.mark.parametrize(
     "relative",
     [
