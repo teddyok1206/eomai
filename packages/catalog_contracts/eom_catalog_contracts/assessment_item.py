@@ -200,34 +200,47 @@ class AssessmentItemContent(FrozenModel):
 
     @model_validator(mode="after")
     def consistent_references(self) -> AssessmentItemContent:
-        block_ids = [block.block_id for block in self.body]
-        if len(block_ids) != len(set(block_ids)):
-            raise ValueError("block IDs must be unique")
-
-        statements = {
-            statement.statement_id
-            for block in self.body
-            if isinstance(block, StatementSetBlock)
-            for statement in block.statements
-        }
-        explanation_ids = {value.statement_id for value in self.solution.statement_explanations}
-        if explanation_ids != statements:
-            raise ValueError("statement explanations must exactly cover statement IDs")
-
-        if isinstance(self.interaction, SingleChoiceInteraction):
-            choices = {choice.choice_id for choice in self.interaction.choices}
-            if len(self.solution.correct_choice_ids) != 1:
-                raise ValueError("single-choice content requires exactly one correct choice")
-            if not set(self.solution.correct_choice_ids).issubset(choices):
-                raise ValueError("correct choice pointer does not resolve")
-            if self.solution.accepted_answers:
-                raise ValueError("single-choice content cannot declare accepted text answers")
-        else:
-            if self.solution.correct_choice_ids:
-                raise ValueError("constructed response cannot declare choice pointers")
-            if not self.solution.accepted_answers:
-                raise ValueError("constructed response requires at least one accepted answer")
+        validate_item_reference_contract(
+            block_ids=tuple(block.block_id for block in self.body),
+            statement_ids=tuple(
+                statement.statement_id
+                for block in self.body
+                if isinstance(block, StatementSetBlock)
+                for statement in block.statements
+            ),
+            interaction=self.interaction,
+            solution=self.solution,
+        )
         return self
+
+
+def validate_item_reference_contract(
+    *,
+    block_ids: tuple[str, ...],
+    statement_ids: tuple[str, ...],
+    interaction: Interaction,
+    solution: ItemSolution,
+) -> None:
+    """Validate canonical references shared by complete items and staged authoring drafts."""
+
+    if len(block_ids) != len(set(block_ids)):
+        raise ValueError("block IDs must be unique")
+    explanation_ids = {value.statement_id for value in solution.statement_explanations}
+    if explanation_ids != set(statement_ids):
+        raise ValueError("statement explanations must exactly cover statement IDs")
+    if isinstance(interaction, SingleChoiceInteraction):
+        choices = {choice.choice_id for choice in interaction.choices}
+        if len(solution.correct_choice_ids) != 1:
+            raise ValueError("single-choice content requires exactly one correct choice")
+        if not set(solution.correct_choice_ids).issubset(choices):
+            raise ValueError("correct choice pointer does not resolve")
+        if solution.accepted_answers:
+            raise ValueError("single-choice content cannot declare accepted text answers")
+        return
+    if solution.correct_choice_ids:
+        raise ValueError("constructed response cannot declare choice pointers")
+    if not solution.accepted_answers:
+        raise ValueError("constructed response requires at least one accepted answer")
 
 
 def validate_eom_question_template_content(

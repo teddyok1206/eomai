@@ -6,7 +6,7 @@ import pytest
 from alembic.runtime.migration import MigrationContext
 from eom_identifiers import new_job_id, new_logical_artifact_id, new_revision_id
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
-from eom_orchestrator.models import ArtifactRevisionRecord, JobEventRecord
+from eom_orchestrator.models import ArtifactRevisionRecord, JobEventRecord, ProtocolVersionRecord
 from eom_orchestrator.protocol import protocol_schema_hash
 from eom_orchestrator.repository import (
     create_artifact_records,
@@ -16,6 +16,7 @@ from eom_orchestrator.repository import (
 )
 from eom_orchestrator.state_machine import JobState, transition_job
 from eom_protocol import ArtifactSpec, JobRequest, SmokePayload
+from eom_workflow.schemas import role_schema_bundle_hash
 from sqlalchemy import Engine, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
@@ -40,6 +41,24 @@ def test_migration_revision(integration_engine: Engine) -> None:
         assert MigrationContext.configure(connection).get_current_revision() == (
             CURRENT_MIGRATION_REVISION
         )
+
+
+def test_role_protocol_versions_coexist_without_reinterpreting_history(
+    db_session: Session,
+) -> None:
+    old_hash = role_schema_bundle_hash("workflow-role/1.2.0")
+    new_hash = role_schema_bundle_hash("workflow-role/1.3.0")
+    ensure_protocol_version(db_session, "workflow-role/1.2.0", old_hash)
+    ensure_protocol_version(db_session, "workflow-role/1.3.0", new_hash)
+    ensure_protocol_version(db_session, "workflow-role/1.3.0", new_hash)
+    db_session.flush()
+
+    old_record = db_session.get(ProtocolVersionRecord, "workflow-role/1.2.0")
+    new_record = db_session.get(ProtocolVersionRecord, "workflow-role/1.3.0")
+    assert old_record is not None and old_record.schema_sha256 == old_hash
+    assert new_record is not None and new_record.schema_sha256 == new_hash
+    with pytest.raises(RuntimeError, match="schema hash mismatch"):
+        ensure_protocol_version(db_session, "workflow-role/1.2.0", new_hash)
 
 
 def test_job_events_idempotency_and_immutable_artifact(db_session: Session) -> None:

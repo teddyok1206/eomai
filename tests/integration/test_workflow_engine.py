@@ -749,8 +749,18 @@ def test_catalog_workflow_pins_prompts_and_registration_without_leaking_request(
         connection.close()
 
 
+@pytest.mark.parametrize(
+    ("definition_version", "pack_version", "role_protocol"),
+    [
+        ("1.3", "1.0.0", "workflow-role/1.2.0"),
+        ("1.4", "1.1.0", "workflow-role/1.3.0"),
+    ],
+)
 def test_generated_workflow_materializes_and_pins_image_before_review(
     integration_engine: Engine,
+    definition_version: str,
+    pack_version: str,
+    role_protocol: str,
 ) -> None:
     connection = integration_engine.connect()
     outer = connection.begin()
@@ -760,7 +770,7 @@ def test_generated_workflow_materializes_and_pins_image_before_review(
         join_transaction_mode="create_savepoint",
     )
     compiled = compile_definition(
-        Path("config/workflows/generic-item-development.v1.3.yaml"),
+        Path(f"config/workflows/generic-item-development.v{definition_version}.yaml"),
         set(ROLE_SLOTS) | {"support"},
     )
     request = WorkflowRequest.model_validate(
@@ -793,7 +803,7 @@ def test_generated_workflow_materializes_and_pins_image_before_review(
         "content_pack": {
             "release_id": "packrel_" + "d" * 32,
             "pack_key": "generated-knowledge-item",
-            "version": "1.0.0",
+            "version": pack_version,
             "release_sha256": "sha256:" + "e" * 64,
             "manifest_sha256": "sha256:" + "f" * 64,
         },
@@ -811,7 +821,7 @@ def test_generated_workflow_materializes_and_pins_image_before_review(
                 session,
                 definition=definition,
                 request=request,
-                idempotency_key="workflow-generated-stimulus-pinning",
+                idempotency_key=f"workflow-generated-stimulus-pinning-{definition_version}",
                 actor_type="human",
                 actor_id="requester_01",
                 runtime_context=runtime_context,
@@ -848,6 +858,7 @@ def test_generated_workflow_materializes_and_pins_image_before_review(
             workflow = session.get(WorkflowInstanceRecord, workflow_id)
             assert workflow is not None
             assert workflow.state == WorkflowState.AWAITING_HUMAN_APPROVAL.value
+            assert workflow.role_schema_version == role_protocol
             image = next(
                 step for step in list_step_runs(session, workflow_id) if step.step_key == "image"
             )
@@ -866,7 +877,7 @@ def test_generated_workflow_materializes_and_pins_image_before_review(
             sessions,
             workflow_id,
             CommandType.APPROVE_WORKFLOW,
-            "approve-workflow-generated-stimulus",
+            f"approve-workflow-generated-stimulus-{definition_version}",
         )
         runner.run_until_idle(workflow_id)
         with sessions() as session:

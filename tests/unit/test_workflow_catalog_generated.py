@@ -7,9 +7,10 @@ from typing import Any, cast
 
 import pytest
 from eom_catalog_service.settings import CatalogSettings
-from eom_catalog_service.workflow_catalog import WorkflowCatalogService
+from eom_catalog_service.workflow_catalog import ROLE_BY_RESULT_SCHEMA, WorkflowCatalogService
 from eom_identifiers import sha256_file
 from eom_workflow import ArtifactPointer, WorkflowRequest
+from eom_workflow.schemas import ROLE_ALLOWED_RESULT_SCHEMAS
 from eom_workflow_runner.models import WorkflowInstanceRecord
 
 WORKFLOW_ID = "workflow_" + "1" * 32
@@ -29,6 +30,8 @@ def _pointer(step: str, marker: str, schema: str) -> ArtifactPointer:
 
 AUTHORING = _pointer("authoring", "a", "authoring-result@3.0")
 IMAGE = _pointer("image", "b", "image-result@3.0")
+AUTHORING_V4 = _pointer("authoring", "e", "authoring-result@4.0")
+IMAGE_V4 = _pointer("image", "f", "image-result@4.0")
 
 
 def _image_brief() -> dict[str, object]:
@@ -173,11 +176,31 @@ def _image_result(*, changed_y: bool = False) -> dict[str, object]:
     }
 
 
+def _authoring_result_v4() -> dict[str, object]:
+    result = json.loads(json.dumps(_authoring_result()))
+    result["protocol_version"] = "workflow-role/1.3.0"
+    result["job_id"] = AUTHORING_V4.job_id
+    result["artifact"]["logical_artifact_id"] = AUTHORING_V4.logical_artifact_id
+    result["artifact"]["revision_id"] = AUTHORING_V4.revision_id
+    return cast(dict[str, object], result)
+
+
+def _image_result_v4() -> dict[str, object]:
+    result = json.loads(json.dumps(_image_result()))
+    result["protocol_version"] = "workflow-role/1.3.0"
+    result["job_id"] = IMAGE_V4.job_id
+    result["artifact"]["logical_artifact_id"] = IMAGE_V4.logical_artifact_id
+    result["artifact"]["revision_id"] = IMAGE_V4.revision_id
+    return cast(dict[str, object], result)
+
+
 class _Artifacts:
     def __init__(self, *, changed_y: bool = False) -> None:
         self.values = {
             AUTHORING.revision_id: _authoring_result(),
             IMAGE.revision_id: _image_result(changed_y=changed_y),
+            AUTHORING_V4.revision_id: _authoring_result_v4(),
+            IMAGE_V4.revision_id: _image_result_v4(),
         }
         self.commits: list[dict[str, Any]] = []
         self.verified: list[dict[str, str]] = []
@@ -315,3 +338,68 @@ def test_generated_item_rejects_a_stale_materialized_image_pointer(tmp_path: Pat
             _workflow({"generated_stimulus": media}), _request(), (AUTHORING, IMAGE)
         )
     assert len(artifacts.commits) == 1
+
+
+def test_v4_generated_results_materialize_and_assemble_canonical_content(tmp_path: Path) -> None:
+    service, artifacts = _service(tmp_path)
+    media = service.materialize_generated_stimulus(
+        workflow=_workflow(), artifacts=(AUTHORING_V4, IMAGE_V4)
+    )
+    workflow = _workflow({"generated_stimulus": media.as_dict()})
+
+    component = service._generated_knowledge_item_content(
+        workflow, _request(), (AUTHORING_V4, IMAGE_V4)
+    )
+
+    assert component.component_type == "ITEM_CONTENT"
+    assert len(artifacts.commits) == 2
+    assert artifacts.verified[0]["revision_id"] == media.artifact_revision_id
+
+
+def test_generated_result_schema_families_cannot_be_mixed(tmp_path: Path) -> None:
+    service, artifacts = _service(tmp_path)
+
+    with pytest.raises(ValueError, match="schema versions are mixed"):
+        service.materialize_generated_stimulus(
+            workflow=_workflow(), artifacts=(AUTHORING, IMAGE_V4)
+        )
+
+    assert artifacts.commits == []
+
+
+def test_generated_item_content_rejects_mixed_result_schema_families(tmp_path: Path) -> None:
+    service, artifacts = _service(tmp_path)
+    media = service.materialize_generated_stimulus(
+        workflow=_workflow(), artifacts=(AUTHORING, IMAGE)
+    )
+
+    with pytest.raises(ValueError, match="schema versions are mixed"):
+        service._generated_knowledge_item_content(
+            _workflow({"generated_stimulus": media.as_dict()}),
+            _request(),
+            (AUTHORING, IMAGE_V4),
+        )
+
+    assert len(artifacts.commits) == 1
+
+
+def test_catalog_result_schema_roles_match_the_workflow_contract_registry() -> None:
+    expected = {
+        schema_id: role
+        for role, schema_ids in ROLE_ALLOWED_RESULT_SCHEMAS.items()
+        for schema_id in schema_ids
+    }
+    assert expected == ROLE_BY_RESULT_SCHEMA
+
+
+def test_invalid_v4_authoring_result_never_materializes_an_artifact(tmp_path: Path) -> None:
+    service, artifacts = _service(tmp_path)
+    invalid = cast(dict[str, Any], artifacts.values[AUTHORING_V4.revision_id])
+    invalid["output"]["draft"]["solution"]["accepted_answers"] = ["5 N"]
+
+    with pytest.raises(ValueError, match="accepted_answers"):
+        service.materialize_generated_stimulus(
+            workflow=_workflow(), artifacts=(AUTHORING_V4, IMAGE_V4)
+        )
+
+    assert artifacts.commits == []

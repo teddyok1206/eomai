@@ -16,9 +16,13 @@ from pydantic import ValidationError
 from eom_workflow.models import (
     AuthoringRoleResult,
     GeneratedAuthoringRoleResult,
+    GeneratedAuthoringRoleResultV4,
     GeneratedImageRoleResult,
+    GeneratedImageRoleResultV4,
     GeneratedRegistrationRoleResult,
+    GeneratedRegistrationRoleResultV4,
     GeneratedReviewRoleResult,
+    GeneratedReviewRoleResultV4,
     ImageRoleResult,
     KnowledgeAuthoringRoleResult,
     KnowledgeImageRoleResult,
@@ -40,12 +44,31 @@ ROLE_RESULT_SCHEMAS: dict[str, str] = {
 }
 ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
     "authoring": frozenset(
-        {"authoring-result@1.0", "authoring-result@2.0", "authoring-result@3.0"}
+        {
+            "authoring-result@1.0",
+            "authoring-result@2.0",
+            "authoring-result@3.0",
+            "authoring-result@4.0",
+        }
     ),
-    "image": frozenset({"image-result@1.0", "image-result@2.0", "image-result@3.0"}),
-    "review": frozenset({"review-result@1.0", "review-result@2.0", "review-result@3.0"}),
+    "image": frozenset(
+        {"image-result@1.0", "image-result@2.0", "image-result@3.0", "image-result@4.0"}
+    ),
+    "review": frozenset(
+        {
+            "review-result@1.0",
+            "review-result@2.0",
+            "review-result@3.0",
+            "review-result@4.0",
+        }
+    ),
     "item_management": frozenset(
-        {"registration-result@1.0", "registration-result@2.0", "registration-result@3.0"}
+        {
+            "registration-result@1.0",
+            "registration-result@2.0",
+            "registration-result@3.0",
+            "registration-result@4.0",
+        }
     ),
 }
 RESULT_SCHEMA_FILES = {
@@ -61,6 +84,10 @@ RESULT_SCHEMA_FILES = {
     "image-result@3.0": "image-result-v3.schema.json",
     "review-result@3.0": "review-result-v3.schema.json",
     "registration-result@3.0": "registration-result-v3.schema.json",
+    "authoring-result@4.0": "authoring-result-v4.schema.json",
+    "image-result@4.0": "image-result-v4.schema.json",
+    "review-result@4.0": "review-result-v4.schema.json",
+    "registration-result@4.0": "registration-result-v4.schema.json",
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -81,14 +108,23 @@ RESULT_SCHEMA_PROTOCOLS = {
         for schema_id in RESULT_SCHEMA_FILES
         if schema_id.endswith("@3.0")
     },
+    **{
+        schema_id: "workflow-role/1.3.0"
+        for schema_id in RESULT_SCHEMA_FILES
+        if schema_id.endswith("@4.0")
+    },
 }
 PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.0.1": INPUT_SCHEMA_FILES,
     "workflow-role/1.1.0": INPUT_SCHEMA_FILES_V1_1,
     "workflow-role/1.2.0": INPUT_SCHEMA_FILES_V1_1,
+    "workflow-role/1.3.0": INPUT_SCHEMA_FILES_V1_1,
 }
 WorkflowProtocolVersion = Literal[
-    "workflow-role/1.0.1", "workflow-role/1.1.0", "workflow-role/1.2.0"
+    "workflow-role/1.0.1",
+    "workflow-role/1.1.0",
+    "workflow-role/1.2.0",
+    "workflow-role/1.3.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -140,7 +176,11 @@ def load_role_input_schema(
         ) from exc
     logical_name = f"roles/{file_name}"
     schema = load_json_schema(ROLE_RESOURCE_ROOT.joinpath(file_name), logical_name)
-    if protocol_version in {"workflow-role/1.1.0", "workflow-role/1.2.0"}:
+    if protocol_version in {
+        "workflow-role/1.1.0",
+        "workflow-role/1.2.0",
+        "workflow-role/1.3.0",
+    }:
         schema = copy.deepcopy(schema)
         _mapping(_mapping(schema, "properties"), "protocol_version")["const"] = protocol_version
         request = _mapping(_mapping(schema, "$defs"), "request")
@@ -148,7 +188,7 @@ def load_role_input_schema(
         request_name.pop("const", None)
         request_name["const"] = (
             "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-            if protocol_version == "workflow-role/1.2.0"
+            if protocol_version in {"workflow-role/1.2.0", "workflow-role/1.3.0"}
             else "KNOWLEDGE_ITEM_REQUEST"
         )
     return schema
@@ -189,6 +229,14 @@ def validate_role_input(
 def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult:
     validate_schema_message(load_role_result_schema(schema_id), value, schema_id)
     try:
+        if schema_id == "authoring-result@4.0" and role == "authoring":
+            return GeneratedAuthoringRoleResultV4.model_validate(value)
+        if schema_id == "image-result@4.0" and role == "image":
+            return GeneratedImageRoleResultV4.model_validate(value)
+        if schema_id == "review-result@4.0" and role == "review":
+            return GeneratedReviewRoleResultV4.model_validate(value)
+        if schema_id == "registration-result@4.0" and role == "item_management":
+            return GeneratedRegistrationRoleResultV4.model_validate(value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":

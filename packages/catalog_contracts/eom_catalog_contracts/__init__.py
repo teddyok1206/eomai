@@ -28,6 +28,7 @@ from eom_catalog_contracts.assessment_item import (
     StatementSetBlock,
     TableBlock,
     validate_eom_question_template_content,
+    validate_item_reference_contract,
 )
 from eom_catalog_contracts.models import (
     ActivateContentPack,
@@ -116,4 +117,5 @@ __all__ = [
     "load_schema",
     "validate_contract",
     "validate_eom_question_template_content",
+    "validate_item_reference_contract",
 ]

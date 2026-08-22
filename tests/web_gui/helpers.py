@@ -178,7 +178,7 @@ class FakeGateway:
     ) -> dict[str, Any]:
         del session, idempotency_key
         assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-        assert payload["definition_version"] == "1.3.0"
+        assert payload["definition_version"] == "1.4.0"
         assert payload["pack_key"] == "generated-knowledge-item"
         assert payload["stimulus_asset_key"] is None
         assert payload["source_intake_batch_ids"] == []

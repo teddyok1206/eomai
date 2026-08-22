@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     SingleChoiceInteraction,
     StatementSetBlock,
     TableBlock,
+    validate_item_reference_contract,
 )
 from pydantic import (
     AfterValidator,
@@ -246,7 +247,10 @@ class ArtifactPointer(FrozenModel):
 class RoleWorkerInput(FrozenModel):
     schema_version: Literal["1.0"] = "1.0"
     protocol_version: Literal[
-        "workflow-role/1.0.1", "workflow-role/1.1.0", "workflow-role/1.2.0"
+        "workflow-role/1.0.1",
+        "workflow-role/1.1.0",
+        "workflow-role/1.2.0",
+        "workflow-role/1.3.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -314,7 +318,10 @@ class RegistrationOutput(FrozenModel):
 class RoleResultBase(FrozenModel):
     schema_version: Literal["1.0"] = "1.0"
     protocol_version: Literal[
-        "workflow-role/1.0.1", "workflow-role/1.1.0", "workflow-role/1.2.0"
+        "workflow-role/1.0.1",
+        "workflow-role/1.1.0",
+        "workflow-role/1.2.0",
+        "workflow-role/1.3.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -325,21 +332,25 @@ class RoleResultBase(FrozenModel):
 
 
 class AuthoringRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.0.1"] = "workflow-role/1.0.1"
     role: Literal["authoring"]
     output: AuthoringOutput
 
 
 class ImageRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.0.1"] = "workflow-role/1.0.1"
     role: Literal["image"]
     output: ImageOutput
 
 
 class ReviewRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.0.1"] = "workflow-role/1.0.1"
     role: Literal["review"]
     output: ReviewOutput
 
 
 class RegistrationRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.0.1"] = "workflow-role/1.0.1"
     role: Literal["item_management"]
     output: RegistrationOutput
 
@@ -512,6 +523,56 @@ class GeneratedRegistrationRoleResult(RoleResultBase):
     output: KnowledgeRegistrationOutput
 
 
+class GeneratedItemDraftV4(GeneratedItemDraft):
+    """Generated draft whose references are safe to assemble into canonical item content."""
+
+    @model_validator(mode="after")
+    def validate_canonical_references(self) -> GeneratedItemDraftV4:
+        validate_item_reference_contract(
+            block_ids=(
+                self.stem.block_id,
+                self.data_table.block_id,
+                self.image_brief.block_id,
+                self.equation.block_id,
+                self.prompt.block_id,
+                self.statements.block_id,
+            ),
+            statement_ids=tuple(statement.statement_id for statement in self.statements.statements),
+            interaction=self.interaction,
+            solution=self.solution,
+        )
+        return self
+
+
+class GeneratedAuthoringOutputV4(FrozenModel):
+    draft: GeneratedItemDraftV4
+    metadata: KnowledgeAuthoringMetadata
+
+
+class GeneratedAuthoringRoleResultV4(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.3.0"] = "workflow-role/1.3.0"
+    role: Literal["authoring"]
+    output: GeneratedAuthoringOutputV4
+
+
+class GeneratedImageRoleResultV4(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.3.0"] = "workflow-role/1.3.0"
+    role: Literal["image"]
+    output: GeneratedImageOutput
+
+
+class GeneratedReviewRoleResultV4(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.3.0"] = "workflow-role/1.3.0"
+    role: Literal["review"]
+    output: KnowledgeReviewOutput
+
+
+class GeneratedRegistrationRoleResultV4(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.3.0"] = "workflow-role/1.3.0"
+    role: Literal["item_management"]
+    output: KnowledgeRegistrationOutput
+
+
 RoleResult = (
     AuthoringRoleResult
     | ImageRoleResult
@@ -525,4 +586,8 @@ RoleResult = (
     | GeneratedImageRoleResult
     | GeneratedReviewRoleResult
     | GeneratedRegistrationRoleResult
+    | GeneratedAuthoringRoleResultV4
+    | GeneratedImageRoleResultV4
+    | GeneratedReviewRoleResultV4
+    | GeneratedRegistrationRoleResultV4
 )

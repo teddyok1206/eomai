@@ -366,7 +366,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
     root = Path(temporary)
     installed_root = root / "site-packages"
     definitions = []
-    for version in ("1.1", "1.2", "1.3"):
+    for version in ("1.1", "1.2", "1.3", "1.4"):
         definition = root / f"generic-item-development.v{version}.yaml"
         definition.write_bytes(
             (
@@ -421,7 +421,7 @@ import sys
 from pathlib import Path
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -488,6 +488,7 @@ for role in INPUT_SCHEMA_FILES:
     load_role_input_schema(role)
     load_role_input_schema(role, "workflow-role/1.1.0")
     load_role_input_schema(role, "workflow-role/1.2.0")
+    load_role_input_schema(role, "workflow-role/1.3.0")
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
     load_codex_result_schema(schema_id)
@@ -495,9 +496,9 @@ compiled_versions = {
     compile_definition(
         Path(definition_path), {"authoring", "image", "review", "item_management"}
     ).definition.definition_version
-    for definition_path in (definition_v1_1, definition_v1_2, definition_v1_3)
+    for definition_path in (definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4)
 }
-if compiled_versions != {"1.1.0", "1.2.0", "1.3.0"}:
+if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0"}:
     raise SystemExit("generic workflow definition versions mismatch")
 for name, _ in catalog_schema_inventory():
     load_schema(name)

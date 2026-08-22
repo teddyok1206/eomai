@@ -19,7 +19,9 @@ from eom_orchestrator.database import build_session_factory
 from eom_workflow import ArtifactPointer, WorkflowRequest
 from eom_workflow.models import (
     GeneratedAuthoringRoleResult,
+    GeneratedAuthoringRoleResultV4,
     GeneratedImageRoleResult,
+    GeneratedImageRoleResultV4,
     KnowledgeAuthoringRoleResult,
     RoleResult,
 )
@@ -83,7 +85,46 @@ ROLE_BY_RESULT_SCHEMA = {
     "registration-result@1.0": "item_management",
     "registration-result@2.0": "item_management",
     "registration-result@3.0": "item_management",
+    "authoring-result@4.0": "authoring",
+    "image-result@4.0": "image",
+    "review-result@4.0": "review",
+    "registration-result@4.0": "item_management",
 }
+GENERATED_RESULT_SCHEMA_PAIRS = frozenset(
+    {
+        ("authoring-result@3.0", "image-result@3.0"),
+        ("authoring-result@4.0", "image-result@4.0"),
+    }
+)
+GENERATED_AUTHORING_SCHEMAS = frozenset(pair[0] for pair in GENERATED_RESULT_SCHEMA_PAIRS)
+GENERATED_IMAGE_SCHEMAS = frozenset(pair[1] for pair in GENERATED_RESULT_SCHEMA_PAIRS)
+
+
+def _generated_result_pointers(
+    artifacts: tuple[ArtifactPointer, ...],
+) -> tuple[ArtifactPointer, ArtifactPointer]:
+    authoring = next(
+        (
+            pointer
+            for pointer in artifacts
+            if pointer.step_key == "authoring"
+            and pointer.result_schema in GENERATED_AUTHORING_SCHEMAS
+        ),
+        None,
+    )
+    image = next(
+        (
+            pointer
+            for pointer in artifacts
+            if pointer.step_key == "image" and pointer.result_schema in GENERATED_IMAGE_SCHEMAS
+        ),
+        None,
+    )
+    if authoring is None or image is None:
+        raise ValueError("generated workflow result pointers are incomplete")
+    if (authoring.result_schema, image.result_schema) not in GENERATED_RESULT_SCHEMA_PAIRS:
+        raise ValueError("generated workflow result schema versions are mixed")
+    return authoring, image
 
 
 def _prepare_prompt_staging(
@@ -308,30 +349,12 @@ class WorkflowCatalogService:
         workflow: WorkflowInstanceRecord,
         artifacts: tuple[ArtifactPointer, ...],
     ) -> GeneratedStimulusPointer:
-        authoring = next(
-            (
-                pointer
-                for pointer in artifacts
-                if pointer.step_key == "authoring"
-                and pointer.result_schema == "authoring-result@3.0"
-            ),
-            None,
-        )
-        image = next(
-            (
-                pointer
-                for pointer in artifacts
-                if pointer.step_key == "image" and pointer.result_schema == "image-result@3.0"
-            ),
-            None,
-        )
-        if authoring is None or image is None:
-            raise ValueError("generated stimulus inputs are incomplete")
+        authoring, image = _generated_result_pointers(artifacts)
         _, authoring_result = self._load_upstream_result(workflow, authoring)
         _, image_result = self._load_upstream_result(workflow, image)
-        if not isinstance(authoring_result, GeneratedAuthoringRoleResult) or not isinstance(
-            image_result, GeneratedImageRoleResult
-        ):
+        if not isinstance(
+            authoring_result, GeneratedAuthoringRoleResult | GeneratedAuthoringRoleResultV4
+        ) or not isinstance(image_result, GeneratedImageRoleResult | GeneratedImageRoleResultV4):
             raise ValueError("generated stimulus result types are invalid")
         brief = authoring_result.output.draft.image_brief
         drawing = image_result.output.drawing
@@ -668,27 +691,9 @@ class WorkflowCatalogService:
         request: WorkflowRequest,
         artifacts: tuple[ArtifactPointer, ...],
     ) -> ComponentPointer:
-        authoring = next(
-            (
-                pointer
-                for pointer in artifacts
-                if pointer.step_key == "authoring"
-                and pointer.result_schema == "authoring-result@3.0"
-            ),
-            None,
-        )
-        image_result = next(
-            (
-                pointer
-                for pointer in artifacts
-                if pointer.step_key == "image" and pointer.result_schema == "image-result@3.0"
-            ),
-            None,
-        )
-        if authoring is None or image_result is None:
-            raise ValueError("generated knowledge workflow results are incomplete")
+        authoring, image_result = _generated_result_pointers(artifacts)
         _, parsed = self._load_upstream_result(workflow, authoring)
-        if not isinstance(parsed, GeneratedAuthoringRoleResult):
+        if not isinstance(parsed, GeneratedAuthoringRoleResult | GeneratedAuthoringRoleResultV4):
             raise ValueError("generated authoring result type is invalid")
         stimulus = workflow.runtime_context.get("generated_stimulus")
         if (

@@ -1,0 +1,23 @@
+{
+  "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+  "image_mode": "required",
+  "content_pack": {"pack_key": "generated-knowledge-item", "environment": "development"},
+  "profiles": {
+    "authoring": "generated-knowledge-authoring",
+    "review": "generated-knowledge-review",
+    "image": "generated-stimulus-drawing",
+    "registration": "generated-structured-registration"
+  },
+  "registry_intent": {"mode": "CREATE_ITEM"},
+  "item_brief": {
+    "subject": "일반 과학",
+    "topic": "변인 사이의 선형 관계",
+    "task_type": "data_interpretation",
+    "difficulty": "medium",
+    "choice_count": 5,
+    "equation_required": true,
+    "image_required": true,
+    "quality_profile": "balanced",
+    "original_request_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

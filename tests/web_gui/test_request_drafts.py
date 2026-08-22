@@ -40,7 +40,7 @@ def test_request_text_is_not_raw_workflow_prompt() -> None:
     draft = draft.model_copy(update={"source_intake_batch_id": INTAKE_ID})
     payload = workflow_start_payload(draft)
     assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-    assert payload["definition_version"] == "1.3.0"
+    assert payload["definition_version"] == "1.4.0"
     assert payload["pack_key"] == "generated-knowledge-item"
     assert payload["source_intake_batch_ids"] == []
     assert DEMO_REQUEST not in str(payload)

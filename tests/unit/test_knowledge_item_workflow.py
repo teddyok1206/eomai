@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -14,8 +15,16 @@ from eom_catalog_contracts import (
 )
 from eom_catalog_service.content_pack_files import compile_pack
 from eom_workflow import ItemBrief, compile_definition
-from eom_workflow.models import ArtifactSpec, RoleWorkerInput, WorkerRequest
+from eom_workflow.models import (
+    ArtifactSpec,
+    AuthoringRoleResult,
+    GeneratedAuthoringRoleResultV4,
+    GeneratedItemDraftV4,
+    RoleWorkerInput,
+    WorkerRequest,
+)
 from eom_workflow.schemas import (
+    WorkflowSchemaError,
     constrained_result_schema,
     load_codex_result_schema,
     load_knowledge_item_brief_schema,
@@ -144,6 +153,54 @@ def _worker_input() -> RoleWorkerInput:
     )
 
 
+def _generated_authoring_result(worker_input: RoleWorkerInput) -> dict[str, object]:
+    content = _content()
+    body = content["body"]
+    assert isinstance(body, list)
+    return {
+        "schema_version": "1.0",
+        "protocol_version": worker_input.protocol_version,
+        "job_id": worker_input.job_id,
+        "workflow_id": worker_input.workflow_id,
+        "step_run_id": worker_input.step_run_id,
+        "role": "authoring",
+        "status": "ok",
+        "artifact": worker_input.artifact.model_dump(mode="json"),
+        "output": {
+            "draft": {
+                "schema_version": "1.0",
+                "locale": "ko-KR",
+                "title": content["title"],
+                "stem": body[0],
+                "data_table": body[1],
+                "image_brief": {
+                    "kind": "line_graph",
+                    "block_id": "block_image",
+                    "alt_text": "시간에 따라 거리가 일정하게 증가하는 선그래프",
+                    "x_axis_label": "time(s)",
+                    "y_axis_label": "distance(m)",
+                    "series_label": "object-A",
+                    "x_values": [1, 2, 3],
+                    "y_values": [5, 10, 15],
+                },
+                "equation": body[3],
+                "prompt": body[4],
+                "statements": body[5],
+                "interaction": content["interaction"],
+                "solution": content["solution"],
+                "score": content["score"],
+            },
+            "metadata": {
+                "subject": "일반 과학",
+                "topic": "변인 사이의 선형 관계",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+        "completed_at": datetime(2026, 8, 22, tzinfo=UTC).isoformat(),
+    }
+
+
 def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
     definition = compile_definition(
         ROOT / "config/workflows/generic-item-development.v1.2.yaml", ROLES
@@ -168,6 +225,9 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
     )
     generated_pack = compile_pack(ROOT / "content/packs/generated-knowledge-item/1.0.0")
     assert generated_definition.definition.definition_version == "1.3.0"
+    assert generated_definition.sha256 == (
+        "sha256:0be1c592de2b341461e95876666e7ae60c8391f259ac89caeb61de028b1b5124"
+    )
     assert [
         step.result_schema
         for step in generated_definition.definition.steps
@@ -179,8 +239,41 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
         "registration-result@3.0",
     ]
     assert generated_pack.manifest.pack.key == "generated-knowledge-item"
+    assert generated_pack.source_tree_sha256 == (
+        "sha256:ff2adac399c0b0adfe68fd8fb5206d97eaaf886b011c0d08f23ceb079bd884f1"
+    )
     assert generated_pack.manifest.provenance.mode == "built_in_general_knowledge"
     assert generated_pack.manifest.provenance.intake_batch_ids == ()
+
+    generated_v4_definition = compile_definition(
+        ROOT / "config/workflows/generic-item-development.v1.4.yaml", ROLES
+    )
+    generated_v4_pack = compile_pack(ROOT / "content/packs/generated-knowledge-item/1.1.0")
+    assert generated_v4_definition.definition.definition_version == "1.4.0"
+    assert generated_v4_definition.sha256 == (
+        "sha256:3b7c0bc7c16b961cc7b0e63544e32ddab8fd4619027b22cc6b25e4c4f90ef4b8"
+    )
+    assert [
+        step.result_schema
+        for step in generated_v4_definition.definition.steps
+        if hasattr(step, "result_schema")
+    ] == [
+        "authoring-result@4.0",
+        "image-result@4.0",
+        "review-result@4.0",
+        "registration-result@4.0",
+    ]
+    assert generated_v4_pack.manifest.pack.version == "1.1.0"
+    assert generated_v4_pack.source_tree_sha256 == (
+        "sha256:978f2514f6a88ab2860884eb24e5aa8d6a4ac6f7c3ad4f17b498d57ab2749b16"
+    )
+    assert generated_v4_pack.manifest.compatibility.workflow_definitions[0].versions == ("1.4.0",)
+    assert {profile.output_schema_ref for profile in generated_v4_pack.profiles} == {
+        "authoring-result@4.0",
+        "image-result@4.0",
+        "review-result@4.0",
+        "registration-result@4.0",
+    }
 
 
 def test_content_pack_provenance_never_fakes_a_source_pointer() -> None:
@@ -297,6 +390,35 @@ def test_protocol_versions_preserve_legacy_hash_and_isolate_v2() -> None:
         "workflow-role/1.0.1"
     )
     assert result_schema_protocol("authoring-result@3.0") == "workflow-role/1.2.0"
+    assert role_schema_bundle_hash("workflow-role/1.2.0") == (
+        "sha256:09c325824484d1bbcb46e14fa3007aa2b51f9750235a1969dee67b2b795d60f4"
+    )
+    assert result_schema_protocol("authoring-result@4.0") == "workflow-role/1.3.0"
+    assert role_schema_bundle_hash("workflow-role/1.3.0") == (
+        "sha256:dce3e0921cf2d0d236f813101406286cb86cabaef07c95030f05028fad664ab8"
+    )
+
+
+def test_generated_v3_schema_resources_remain_historically_immutable() -> None:
+    expected = {
+        "authoring-result-v3.schema.json": (
+            "c49ca324ec4ba487cf93062d835953c82074ee1a49e751560bc28570e9d5f1c5"
+        ),
+        "image-result-v3.schema.json": (
+            "5f7c809b60df94b6b817d351af8a1506f27294dca2a7c161d9cfd5d9bf728231"
+        ),
+        "review-result-v3.schema.json": (
+            "81f6a8536d947d816d67c21d6f2deb686096ea5f6cd0e2f2ee3a03fd129241c0"
+        ),
+        "registration-result-v3.schema.json": (
+            "7cb6fc5f3c4a5dfc154c9c1316051ed8727825303e3ca5c4a74463df9a8baeb6"
+        ),
+    }
+    for file_name, digest in expected.items():
+        canonical = ROOT / "schemas/workflow/roles" / file_name
+        packaged = ROOT / "packages/workflow/eom_workflow/resources/roles" / file_name
+        assert sha256(canonical.read_bytes()).hexdigest() == digest
+        assert packaged.read_bytes() == canonical.read_bytes()
 
 
 def test_generated_authoring_result_is_a_draft_without_a_fake_media_pointer() -> None:
@@ -360,6 +482,11 @@ def test_generated_authoring_result_is_a_draft_without_a_fake_media_pointer() ->
     assert parsed.output.draft.image_brief.x_values == (1, 2, 3)  # type: ignore[union-attr]
     assert "artifact" not in result["output"]["draft"]["image_brief"]  # type: ignore[index]
 
+    historical_result = json.loads(json.dumps(result))
+    historical_result["output"]["draft"]["solution"]["accepted_answers"] = ["5 N"]
+    historical = validate_role_result(historical_result, "authoring", "authoring-result@3.0")
+    assert historical.output.draft.solution.accepted_answers == ("5 N",)  # type: ignore[union-attr]
+
     projected = load_codex_result_schema("authoring-result@3.0")
     definitions = projected["$defs"]
     draft = definitions["GeneratedItemDraft"]["properties"]
@@ -368,3 +495,97 @@ def test_generated_authoring_result_is_a_draft_without_a_fake_media_pointer() ->
     assert definitions["GeneratedImageBrief"]["properties"]["x_values"]["minItems"] == 2
     assert definitions["SingleChoiceInteraction"]["properties"]["choices"]["minItems"] == 5
     assert definitions["SingleChoiceInteraction"]["properties"]["choices"]["maxItems"] == 5
+
+
+def test_generated_authoring_v4_closes_the_canonical_item_reference_contract() -> None:
+    worker_input = _worker_input().model_copy(
+        update={
+            "protocol_version": "workflow-role/1.3.0",
+            "request": WorkerRequest(
+                request_name="GENERATED_KNOWLEDGE_ITEM_REQUEST",
+                image_mode="required",
+            ),
+        }
+    )
+    result = _generated_authoring_result(worker_input)
+    constrained = constrained_result_schema("authoring-result@4.0", worker_input)
+    validate_schema_message(constrained, result, "generated-authoring-v4")
+    parsed = validate_role_result(result, "authoring", "authoring-result@4.0")
+    assert parsed.protocol_version == "workflow-role/1.3.0"
+
+    projected = load_codex_result_schema("authoring-result@4.0")
+    solution_schema = projected["$defs"]["ItemSolution"]["properties"]
+    assert solution_schema["correct_choice_ids"]["minItems"] == 1
+    assert solution_schema["correct_choice_ids"]["maxItems"] == 1
+    assert solution_schema["accepted_answers"]["maxItems"] == 0
+    assert solution_schema["statement_explanations"]["minItems"] == 3
+    assert solution_schema["statement_explanations"]["maxItems"] == 3
+
+    for correct_choice_ids in ([], ["choice_1", "choice_2"]):
+        wrong_cardinality = json.loads(json.dumps(result))
+        wrong_cardinality["output"]["draft"]["solution"]["correct_choice_ids"] = correct_choice_ids
+        with pytest.raises(WorkflowSchemaError, match="correct_choice_ids"):
+            validate_role_result(wrong_cardinality, "authoring", "authoring-result@4.0")
+
+    accepted_text_answer = json.loads(json.dumps(result))
+    accepted_text_answer["output"]["draft"]["solution"]["accepted_answers"] = ["5 N"]
+    with pytest.raises(WorkflowSchemaError, match="accepted_answers"):
+        validate_role_result(accepted_text_answer, "authoring", "authoring-result@4.0")
+
+    unresolved_choice = json.loads(json.dumps(result))["output"]["draft"]
+    unresolved_choice["solution"]["correct_choice_ids"] = ["choice_missing"]
+    with pytest.raises(PydanticValidationError, match="correct choice pointer does not resolve"):
+        GeneratedItemDraftV4.model_validate(unresolved_choice)
+
+    duplicate_block = json.loads(json.dumps(result))["output"]["draft"]
+    duplicate_block["prompt"]["block_id"] = duplicate_block["stem"]["block_id"]
+    with pytest.raises(PydanticValidationError, match="block IDs must be unique"):
+        GeneratedItemDraftV4.model_validate(duplicate_block)
+
+    incomplete_explanations = json.loads(json.dumps(result))["output"]["draft"]
+    incomplete_explanations["solution"]["statement_explanations"] = incomplete_explanations[
+        "solution"
+    ]["statement_explanations"][:2]
+    with pytest.raises(
+        PydanticValidationError,
+        match="statement explanations must exactly cover statement IDs",
+    ):
+        GeneratedItemDraftV4.model_validate(incomplete_explanations)
+
+    wrong_explanation_pointer = json.loads(json.dumps(result))["output"]["draft"]
+    wrong_explanation_pointer["solution"]["statement_explanations"][2]["statement_id"] = (
+        "statement_x"
+    )
+    with pytest.raises(
+        PydanticValidationError,
+        match="statement explanations must exactly cover statement IDs",
+    ):
+        GeneratedItemDraftV4.model_validate(wrong_explanation_pointer)
+
+
+def test_typed_role_results_retain_exact_protocol_identity() -> None:
+    worker_input = _worker_input()
+    legacy = {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.3.0",
+        "job_id": worker_input.job_id,
+        "workflow_id": worker_input.workflow_id,
+        "step_run_id": worker_input.step_run_id,
+        "role": "authoring",
+        "status": "ok",
+        "artifact": worker_input.artifact.model_dump(mode="json"),
+        "output": {
+            "draft": {"title": "PLACEHOLDER_CONTENT", "body": "PLACEHOLDER_CONTENT"},
+            "metadata": {"domain": "placeholder"},
+        },
+        "completed_at": datetime(2026, 8, 22, tzinfo=UTC).isoformat(),
+    }
+    with pytest.raises(PydanticValidationError, match="protocol_version"):
+        AuthoringRoleResult.model_validate(legacy)
+
+    generated = _generated_authoring_result(
+        worker_input.model_copy(update={"protocol_version": "workflow-role/1.3.0"})
+    )
+    assert GeneratedAuthoringRoleResultV4.model_validate(generated).protocol_version == (
+        "workflow-role/1.3.0"
+    )
