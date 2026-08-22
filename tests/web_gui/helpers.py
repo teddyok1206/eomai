@@ -5,6 +5,7 @@ from typing import Any
 
 from eom_web_gui.app import create_app
 from eom_web_gui.contracts import (
+    ContentIntakeOption,
     ExplorerQuery,
     ExplorerResult,
     HwpxBuildRequest,
@@ -24,6 +25,7 @@ NOW = datetime(2026, 8, 21, 7, 0, tzinfo=UTC)
 WORKFLOW_ID = "workflow_test0000000000000000000000000001"
 ITEM_ID = "item_test000000000000000000000000000001"
 REVISION_ID = "itemrev_test00000000000000000000000001"
+INTAKE_ID = "intake_00000000000000000000000000000001"
 
 
 class FakeGateway:
@@ -71,11 +73,23 @@ class FakeGateway:
     async def logout(self, session: WebSession) -> None:
         del session
 
+    async def accepted_intakes(self, session: WebSession) -> tuple[ContentIntakeOption, ...]:
+        del session
+        return (
+            ContentIntakeOption(
+                intake_batch_id=INTAKE_ID,
+                batch_name="테스트 물리학 소스",
+                purpose="Generic Demo",
+                updated_at=NOW,
+            ),
+        )
+
     async def start_workflow(
         self, session: WebSession, payload: dict[str, object], idempotency_key: str
     ) -> dict[str, Any]:
         del session, idempotency_key
         assert payload["request_name"] == "PLACEHOLDER_REQUEST"
+        assert payload["source_intake_batch_ids"] == [INTAKE_ID]
         self.start_calls += 1
         return {
             "command_id": "command_test_workflow_start",

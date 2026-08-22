@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.web_gui.helpers import ITEM_ID, REVISION_ID, WORKFLOW_ID, login, make_client
+from tests.web_gui.helpers import INTAKE_ID, ITEM_ID, REVISION_ID, WORKFLOW_ID, login, make_client
 
 
 def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
@@ -31,6 +31,22 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "/studio/api/v1/request-drafts",
             json={
                 "original_request_text": "물리학에서 2차원 포물선 운동에 관한 계산 문항을 출제해줘."
+            },
+            headers=csrf,
+        ).json()
+        draft = client.put(
+            f"/studio/api/v1/request-drafts/{draft['request_draft_id']}",
+            json={
+                "subject": draft["subject"],
+                "topic": draft["topic"],
+                "item_format": draft["item_format"],
+                "task_type": draft["task_type"],
+                "difficulty": draft["difficulty"],
+                "choice_count": draft["choice_count"],
+                "equation_required": draft["equation_required"],
+                "image_required": draft["image_required"],
+                "quality_profile": draft["quality_profile"],
+                "source_intake_batch_id": INTAKE_ID,
             },
             headers=csrf,
         ).json()

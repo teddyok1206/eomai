@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from eom_api_contracts.auth import LoginRequest
 from eom_api_contracts.operators import CreateOperatorRequest
+from eom_api_contracts.workflows import WorkflowStartRequest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
@@ -47,3 +48,21 @@ def test_operator_contract_never_serializes_temporary_password() -> None:
         initial_roles=("REVIEWER",),
     )
     assert "TEST_ONLY temporary password 42" not in request.model_dump_json()
+
+
+def test_pack_pinned_workflow_requires_valid_source_intake_pointer() -> None:
+    base = {
+        "definition_key": "generic-item-development",
+        "definition_version": "1.1.0",
+        "request_name": "PLACEHOLDER_REQUEST",
+        "image_mode": "skip",
+        "pack_key": "generic-placeholder",
+    }
+    with pytest.raises(ValidationError, match="source intake batch"):
+        WorkflowStartRequest.model_validate({**base, "source_intake_batch_ids": []})
+    with pytest.raises(ValidationError):
+        WorkflowStartRequest.model_validate({**base, "source_intake_batch_ids": ["not-an-intake"]})
+    value = WorkflowStartRequest.model_validate(
+        {**base, "source_intake_batch_ids": ["intake_" + "0" * 32]}
+    )
+    assert value.source_intake_batch_ids == ("intake_" + "0" * 32,)

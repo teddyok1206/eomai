@@ -12,6 +12,7 @@ const state = {
   hwpxCapability: null,
   hwpxBuildId: null,
   hwpxPollTimer: null,
+  acceptedIntakes: [],
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -145,6 +146,30 @@ function installRequestDraft() {
   $("#draft-analyze").addEventListener("click", analyzeDraft);
   $("#draft-save").addEventListener("click", saveDraft);
   $("#draft-submit").addEventListener("click", submitDraft);
+  $("#draft-form").elements.source_intake_batch_id.addEventListener("change", () => {
+    const selected = $("#draft-form").elements.source_intake_batch_id.value;
+    $("#draft-submit").disabled = !state.draft || !selected;
+  });
+}
+
+async function loadAcceptedIntakes(selectedId = null) {
+  const select = $("#draft-form").elements.source_intake_batch_id;
+  const values = await api("/content-intakes/accepted");
+  if (!Array.isArray(values)) throw new Error("APPLICATION_API_RESPONSE_INVALID");
+  state.acceptedIntakes = values;
+  select.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = values.length ? "ACCEPTED intake를 선택하세요" : "사용 가능한 ACCEPTED intake가 없습니다";
+  select.append(placeholder);
+  values.forEach((value) => {
+    const option = document.createElement("option");
+    option.value = value.intake_batch_id;
+    option.textContent = `${value.batch_name} · ${value.intake_batch_id}`;
+    select.append(option);
+  });
+  select.value = selectedId || "";
+  return values.length;
 }
 
 async function analyzeDraft() {
@@ -157,11 +182,12 @@ async function analyzeDraft() {
       body: {original_request_text: $("#request-text").value},
     });
     state.draft = draft;
+    const intakeCount = await loadAcceptedIntakes(draft.source_intake_batch_id);
     fillDraft(draft);
     setStatus($("#draft-state"), "success", "✓", "검토 가능");
-    showMessage(message, "Draft를 검토하고 필요한 값을 수정한 뒤 저장하세요.", "success");
+    showMessage(message, intakeCount ? "Draft를 검토하고 ACCEPTED intake를 선택한 뒤 저장하세요." : "ACCEPTED source intake가 없어 Workflow를 제출할 수 없습니다.", intakeCount ? "success" : "error");
     $("#draft-save").disabled = false;
-    $("#draft-submit").disabled = false;
+    $("#draft-submit").disabled = true;
   } catch (failure) {
     showMessage(message, `요청 분석 실패: ${failure.message}`, "error");
   }
@@ -175,6 +201,7 @@ function fillDraft(draft) {
   form.elements.equation_required.checked = draft.equation_required;
   form.elements.image_required.checked = draft.image_required;
   form.elements.quality_profile.value = draft.quality_profile;
+  form.elements.source_intake_batch_id.value = draft.source_intake_batch_id || "";
   $("#draft-id").textContent = draft.request_draft_id;
   $("#draft-sha").textContent = draft.original_request_sha256;
 }
@@ -191,25 +218,33 @@ function draftUpdateBody() {
     equation_required: form.elements.equation_required.checked,
     image_required: form.elements.image_required.checked,
     quality_profile: form.elements.quality_profile.value,
+    source_intake_batch_id: form.elements.source_intake_batch_id.value || null,
   };
 }
 
 async function saveDraft() {
-  if (!state.draft) return;
+  if (!state.draft) return false;
   try {
     state.draft = await api(`/request-drafts/${encodeURIComponent(state.draft.request_draft_id)}`, {
       method: "PUT", mutation: true, body: draftUpdateBody(),
     });
     fillDraft(state.draft);
     showMessage($("#draft-message"), "Request Draft가 저장되었습니다.", "success");
+    $("#draft-submit").disabled = !state.draft.source_intake_batch_id;
+    return true;
   } catch (failure) {
     showMessage($("#draft-message"), `Draft 저장 실패: ${failure.message}`, "error");
+    return false;
   }
 }
 
 async function submitDraft() {
   if (!state.draft) return;
-  await saveDraft();
+  if (!(await saveDraft())) return;
+  if (!state.draft.source_intake_batch_id) {
+    showMessage($("#draft-message"), "ACCEPTED source intake를 선택하세요.", "error");
+    return;
+  }
   const key = `studio:${state.draft.request_draft_id}:${state.draft.original_request_sha256.slice(0, 16)}`;
   try {
     const result = await api(`/request-drafts/${encodeURIComponent(state.draft.request_draft_id)}/submissions`, {

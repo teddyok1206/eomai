@@ -82,6 +82,8 @@ def quality_policy(profile: str) -> dict[str, str]:
 
 def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
     """Map a reviewed V0 draft to the accepted Generic Demo workflow contract."""
+    if draft.source_intake_batch_id is None:
+        raise ValueError("an accepted source intake batch must be pinned before submission")
     return {
         "definition_key": "generic-item-development",
         "definition_version": "1.1.0",
@@ -89,7 +91,7 @@ def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
         "image_mode": "required" if draft.image_required else "skip",
         "pack_key": "generic-placeholder",
         "environment": "development",
-        "source_intake_batch_ids": [],
+        "source_intake_batch_ids": [draft.source_intake_batch_id],
         "registry_mode": "CREATE_ITEM",
         "item_id": None,
         "base_revision_id": None,

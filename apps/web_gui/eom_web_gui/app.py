@@ -210,6 +210,12 @@ def create_app(
         draft = actual.create_draft(session, value)
         return draft.model_dump(mode="json")
 
+    @app.get(f"{API_PREFIX}/content-intakes/accepted")
+    async def accepted_content_intakes(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> list[dict[str, Any]]:
+        return [value.model_dump(mode="json") for value in await actual.accepted_intakes(session)]
+
     @app.get(f"{API_PREFIX}/request-drafts/{{draft_id}}")
     async def get_draft(
         draft_id: str, session: Annotated[WebSession, Depends(require_session)]

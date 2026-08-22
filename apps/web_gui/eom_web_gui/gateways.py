@@ -10,6 +10,7 @@ from typing import Any, Protocol
 import httpx
 
 from eom_web_gui.contracts import (
+    ContentIntakeOption,
     ExplorerEntity,
     ExplorerQuery,
     ExplorerResult,
@@ -50,6 +51,8 @@ class ApplicationGateway(Protocol):
     async def login(self, username: str, password: str) -> LoginResult: ...
 
     async def logout(self, session: WebSession) -> None: ...
+
+    async def accepted_intakes(self, session: WebSession) -> tuple[ContentIntakeOption, ...]: ...
 
     async def start_workflow(
         self, session: WebSession, payload: dict[str, object], idempotency_key: str
@@ -221,6 +224,30 @@ class HttpApplicationGateway:
             await self._authorized(session, "POST", "/api/v1/auth/logout", json={})
         except GatewayError:
             return
+
+    async def accepted_intakes(self, session: WebSession) -> tuple[ContentIntakeOption, ...]:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/content-intakes",
+            params={"state": "ACCEPTED", "limit": 100},
+        )
+        values = self._list_data(response)
+        try:
+            return tuple(
+                ContentIntakeOption.model_validate(
+                    {
+                        "intake_batch_id": value["intake_batch_id"],
+                        "batch_name": value["batch_name"],
+                        "state": value["state"],
+                        "purpose": value["purpose"],
+                        "updated_at": value["updated_at"],
+                    }
+                )
+                for value in values
+            )
+        except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def start_workflow(
         self, session: WebSession, payload: dict[str, object], idempotency_key: str

@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from tests.web_gui.helpers import ITEM_ID, REVISION_ID, WORKFLOW_ID, FakeGateway, login, make_client
+from tests.web_gui.helpers import (
+    INTAKE_ID,
+    ITEM_ID,
+    REVISION_ID,
+    WORKFLOW_ID,
+    FakeGateway,
+    login,
+    make_client,
+)
 
 
 def test_login_session_cookie_csrf_and_security_headers() -> None:
@@ -45,6 +53,10 @@ def test_request_draft_workflow_submission_and_replay() -> None:
         assert draft.status_code == 201
         value = draft.json()
         assert value["topic"] == "2차원 포물선 운동"
+        assert value["source_intake_batch_id"] is None
+        intakes = client.get("/studio/api/v1/content-intakes/accepted")
+        assert intakes.status_code == 200
+        assert intakes.json()[0]["intake_batch_id"] == INTAKE_ID
         updated = client.put(
             f"/studio/api/v1/request-drafts/{value['request_draft_id']}",
             json={
@@ -57,6 +69,7 @@ def test_request_draft_workflow_submission_and_replay() -> None:
                 "equation_required": True,
                 "image_required": False,
                 "quality_profile": "deep",
+                "source_intake_batch_id": INTAKE_ID,
             },
             headers=headers,
         )
@@ -76,6 +89,25 @@ def test_request_draft_workflow_submission_and_replay() -> None:
         assert first.json()["replayed"] is False
         assert second.json()["replayed"] is True
         assert gateway.start_calls == 1
+
+
+def test_request_draft_submission_requires_explicit_accepted_intake() -> None:
+    client, gateway = make_client()
+    with client:
+        session = login(client)
+        draft = client.post(
+            "/studio/api/v1/request-drafts",
+            json={"original_request_text": "충분히 긴 물리학 계산 문항 생성 요청입니다."},
+            headers={"X-CSRF-Token": session["csrf_token"]},
+        ).json()
+        response = client.post(
+            f"/studio/api/v1/request-drafts/{draft['request_draft_id']}/submissions",
+            json={"idempotency_key": "studio:missing-intake-0001"},
+            headers={"X-CSRF-Token": session["csrf_token"]},
+        )
+        assert response.status_code == 422
+        assert response.json()["error_code"] == "SOURCE_INTAKE_REQUIRED"
+        assert gateway.start_calls == 0
 
 
 def test_workflow_timeline_approval_etag_and_item_preview() -> None:

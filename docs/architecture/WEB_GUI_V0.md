@@ -38,6 +38,14 @@ The accepted Application API currently supports `PLACEHOLDER_REQUEST`. V0 labels
 `Generic Demo Mode` and maps a reviewed draft to the existing `generic-item-development` workflow.
 The draft is not presented as an Integrated Science curriculum contract or a raw model prompt.
 
+Catalog-backed workflow creation pins one immutable Content Intake batch. The BFF reads at most 100
+`ACCEPTED` intake summaries through the authenticated Application API and requires the operator to
+select one; it never silently resolves a latest intake. The selected `intake_batch_id` is stored in
+the short-lived draft and submitted as a typed pointer. Application API validation rejects a pack
+request without a valid intake pointer with HTTP 422 before command execution, while the catalog
+service remains authoritative for existence and accepted lifecycle state. The list is bounded and
+rendered with `textContent`; the browser receives no artifact bytes or storage paths.
+
 ## Access patterns and data structures
 
 - session and draft lookup: bounded dictionaries keyed by cryptographically random IDs, expected

@@ -15,6 +15,12 @@
     "quality_profile": {"enum": ["fast", "balanced", "deep"]},
     "request_draft_id": {"pattern": "^requestdraft_[0-9a-f]{32}$", "type": "string"},
     "schema_version": {"const": "1.0"},
+    "source_intake_batch_id": {
+      "anyOf": [
+        {"pattern": "^intake_[0-9a-f]{32}$", "type": "string"},
+        {"type": "null"}
+      ]
+    },
     "status": {"const": "DRAFT"},
     "subject": {"maxLength": 80, "minLength": 1, "type": "string"},
     "task_type": {"enum": ["calculation", "conceptual", "data_interpretation"]},

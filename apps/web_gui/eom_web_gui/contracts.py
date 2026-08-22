@@ -28,6 +28,14 @@ class QualityProfile(StrEnum):
     DEEP = "deep"
 
 
+class ContentIntakeOption(WebModel):
+    intake_batch_id: str = Field(pattern=r"^intake_[0-9a-f]{32}$")
+    batch_name: str = Field(min_length=1, max_length=256)
+    state: Literal["ACCEPTED"] = "ACCEPTED"
+    purpose: str = Field(max_length=2000)
+    updated_at: UtcDatetime
+
+
 class RequestDraftInput(WebModel):
     original_request_text: str = Field(min_length=10, max_length=2000)
 
@@ -49,6 +57,7 @@ class RequestDraftUpdate(WebModel):
     equation_required: bool
     image_required: bool
     quality_profile: QualityProfile
+    source_intake_batch_id: str | None = Field(default=None, pattern=r"^intake_[0-9a-f]{32}$")
 
 
 class RequestDraft(RequestDraftUpdate):

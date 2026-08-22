@@ -14,6 +14,7 @@ from eom_web_gui.request_drafts import (
 from pydantic import ValidationError
 
 NOW = datetime(2026, 8, 21, 8, 0, tzinfo=UTC)
+INTAKE_ID = "intake_00000000000000000000000000000001"
 
 
 def test_demo_request_normalization_is_deterministic_and_structured() -> None:
@@ -36,8 +37,10 @@ def test_request_text_is_not_raw_workflow_prompt() -> None:
     draft = normalize_request(
         RequestDraftInput(original_request_text=DEMO_REQUEST), now=NOW, token="3" * 32
     )
+    draft = draft.model_copy(update={"source_intake_batch_id": INTAKE_ID})
     payload = workflow_start_payload(draft)
     assert payload["request_name"] == "PLACEHOLDER_REQUEST"
+    assert payload["source_intake_batch_ids"] == [INTAKE_ID]
     assert DEMO_REQUEST not in str(payload)
     assert "model" not in payload and "reasoning" not in payload
 
@@ -65,12 +68,22 @@ def test_draft_update_preserves_identity_and_source_hash() -> None:
             equation_required=True,
             image_required=True,
             quality_profile="deep",
+            source_intake_batch_id=INTAKE_ID,
         ),
         now=NOW,
     )
     assert updated.request_draft_id == draft.request_draft_id
     assert updated.original_request_sha256 == draft.original_request_sha256
     assert updated.topic == "포물체 운동"
+    assert updated.source_intake_batch_id == INTAKE_ID
+
+
+def test_workflow_payload_requires_pinned_source_intake() -> None:
+    draft = normalize_request(
+        RequestDraftInput(original_request_text=DEMO_REQUEST), now=NOW, token="5" * 32
+    )
+    with pytest.raises(ValueError, match="source intake"):
+        workflow_start_payload(draft)
 
 
 def test_draft_validation_rejects_unbounded_choice_count() -> None:

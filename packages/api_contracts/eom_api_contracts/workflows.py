@@ -1,8 +1,10 @@
 """Workflow command and query DTOs."""
 
-from typing import Literal
+from __future__ import annotations
 
-from pydantic import Field
+from typing import Annotated, Literal
+
+from pydantic import Field, model_validator
 
 from eom_api_contracts.common import ApiModel, OpaqueId, UtcDatetime
 
@@ -14,10 +16,20 @@ class WorkflowStartRequest(ApiModel):
     image_mode: Literal["skip", "required"]
     pack_key: str | None = Field(default=None, max_length=64)
     environment: Literal["development", "test"] = "development"
-    source_intake_batch_ids: tuple[str, ...] = Field(default=(), max_length=100)
+    source_intake_batch_ids: tuple[Annotated[str, Field(pattern=r"^intake_[0-9a-f]{32}$")], ...] = (
+        Field(default=(), max_length=100)
+    )
     registry_mode: Literal["CREATE_ITEM", "REVISE_ITEM"] = "CREATE_ITEM"
     item_id: str | None = Field(default=None, max_length=128)
     base_revision_id: str | None = Field(default=None, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_content_pack_pointer(self) -> WorkflowStartRequest:
+        if self.pack_key is None and self.source_intake_batch_ids:
+            raise ValueError("source intake batches require a content pack")
+        if self.pack_key is not None and not self.source_intake_batch_ids:
+            raise ValueError("content pack workflows require at least one source intake batch")
+        return self
 
 
 class WorkflowView(ApiModel):

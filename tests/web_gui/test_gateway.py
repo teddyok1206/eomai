@@ -142,6 +142,47 @@ async def test_gateway_refreshes_once_and_preserves_idempotency_key() -> None:
 
 
 @pytest.mark.anyio
+async def test_gateway_lists_only_accepted_content_intakes() -> None:
+    intake_id = "intake_" + "1" * 32
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/content-intakes"
+        assert dict(request.url.params) == {"state": "ACCEPTED", "limit": "100"}
+        assert request.headers["authorization"].startswith("Bearer ")
+        return httpx.Response(
+            200,
+            json=_list(
+                [
+                    {
+                        "intake_batch_id": intake_id,
+                        "batch_name": "물리학 검토 소스",
+                        "state": "ACCEPTED",
+                        "purpose": "Generic Demo",
+                        "received_by": "operator_test",
+                        "resource_version": 3,
+                        "created_at": NOW.isoformat(),
+                        "updated_at": NOW.isoformat(),
+                        "source_manifest": None,
+                    }
+                ]
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    values = await gateway.accepted_intakes(_session())
+    assert len(values) == 1
+    assert values[0].intake_batch_id == intake_id
+    assert values[0].state == "ACCEPTED"
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_item_preview_fails_on_revision_pointer_mismatch() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.startswith("/api/v1/items/"):

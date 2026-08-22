@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from eom_web_gui.contracts import (
+    ContentIntakeOption,
     ExplorerQuery,
     ExplorerResult,
     HwpxBuildRequest,
@@ -42,6 +43,9 @@ class WebServices:
     async def logout(self, session: WebSession) -> None:
         self.sessions.delete(session.session_id)
         await self.gateway.logout(session)
+
+    async def accepted_intakes(self, session: WebSession) -> tuple[ContentIntakeOption, ...]:
+        return await self.gateway.accepted_intakes(session)
 
     def create_draft(
         self, session: WebSession, value: RequestDraftInput, *, now: datetime | None = None
@@ -78,6 +82,8 @@ class WebServices:
         if existing is not None:
             return {**existing, "replayed": True}
         draft = self.draft(session, draft_id)
+        if draft.source_intake_batch_id is None:
+            raise GatewayError(status=422, code="SOURCE_INTAKE_REQUIRED")
         command = await self.gateway.start_workflow(
             session, workflow_start_payload(draft), idempotency_key
         )
