@@ -353,8 +353,11 @@ def test_kordoc_handoff_is_manager_read_only_under_restrictive_umask(tmp_path: P
     assert stat.S_IMODE(request.parent.stat().st_mode) == 0o2770
     assert not stat.S_IMODE(request.parent.stat().st_mode) & 0o007
     assert stat.S_IMODE(output.stat().st_mode) == HANDOFF_DIRECTORY_MODE
+    assert output.stat().st_uid == os.geteuid()
+    assert output.stat().st_gid == os.getegid()
     assert stat.S_IMODE(output.stat().st_mode) & 0o050 == 0o050
     assert stat.S_IMODE(output.stat().st_mode) & 0o027 == 0
+    assert not stat.S_IMODE(output.stat().st_mode) & stat.S_ISGID
     handoff_files = (
         request.parent / "result.json",
         output / "kordoc_document.hwpx",
@@ -365,9 +368,36 @@ def test_kordoc_handoff_is_manager_read_only_under_restrictive_umask(tmp_path: P
     for path in handoff_files:
         mode = stat.S_IMODE(path.stat().st_mode)
         assert mode == HANDOFF_FILE_MODE
+        assert path.stat().st_uid == os.geteuid()
+        assert path.stat().st_gid == os.getegid()
         assert mode & stat.S_IRGRP
         assert not mode & stat.S_IWGRP
         assert not mode & 0o007
+
+
+def test_kordoc_handoff_avoids_setid_modes_under_restrict_suid_sgid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "workspace"
+    output, result = prepare_handoff_files(workspace)
+    real_fchmod = os.fchmod
+    requested_modes: list[int] = []
+
+    def restrict_setid(descriptor: int, mode: int) -> None:
+        requested_modes.append(mode)
+        if mode & (stat.S_ISUID | stat.S_ISGID):
+            raise PermissionError("RestrictSUIDSGID test boundary")
+        real_fchmod(descriptor, mode)
+
+    monkeypatch.setattr("eom_hwpx_builder.kordoc_handoff.os.fchmod", restrict_setid)
+    finalize_success_handoff(workspace, result)
+
+    assert requested_modes
+    assert all(not mode & (stat.S_ISUID | stat.S_ISGID) for mode in requested_modes)
+    assert stat.S_IMODE(output.stat().st_mode) == 0o750
+    assert output.stat().st_gid == os.getegid()
+    assert stat.S_IMODE(result.stat().st_mode) == 0o640
+    assert result.stat().st_gid == os.getegid()
 
 
 def test_kordoc_handoff_finalization_is_idempotent_and_leaves_private_files_private(

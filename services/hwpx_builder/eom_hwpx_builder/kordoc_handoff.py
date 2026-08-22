@@ -8,7 +8,7 @@ from pathlib import Path
 
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 
-HANDOFF_DIRECTORY_MODE = 0o2750
+HANDOFF_DIRECTORY_MODE = 0o750
 HANDOFF_FILE_MODE = 0o640
 _PRIVATE_DIRECTORY_MODES = frozenset({0o700, 0o2700, HANDOFF_DIRECTORY_MODE})
 _PRIVATE_FILE_MODES = frozenset({0o600, HANDOFF_FILE_MODE})

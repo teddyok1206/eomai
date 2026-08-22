@@ -312,6 +312,12 @@ def test_application_adapter_has_no_transient_or_chown_fallback() -> None:
     assert "CapabilityBoundingSet=" in unit
     assert "UMask=0007" in unit
     assert "UMask=0077" not in unit
+    assert "RestrictSUIDSGID=true" in unit
+    handoff = Path("services/hwpx_builder/eom_hwpx_builder/kordoc_handoff.py").read_text(
+        encoding="utf-8"
+    )
+    assert "HANDOFF_DIRECTORY_MODE = 0o750" in handoff
+    assert "HANDOFF_DIRECTORY_MODE = 0o2750" not in handoff
     assert f"-m {WORKSPACE_ROOT_MODE:o} /srv/eom/hwpx-workspaces" in bootstrap
 
 
