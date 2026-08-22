@@ -18,6 +18,7 @@ MAX_CAPABILITY_OUTPUT_BYTES = 16 * 1024
 SYSTEMCTL = Path("/usr/bin/systemctl")
 RUNNER_UNIT = "eom-hwpx-application-runner.service"
 BUILDER_UNIT_PATH = Path("/etc/systemd/system/eom-hwpx-kordoc@.service")
+QUESTION_TEMPLATE_BUILDER_UNIT_PATH = Path("/etc/systemd/system/eom-hwpx-builder@.service")
 RUNNER_UNIT_PATH = Path("/etc/systemd/system/eom-hwpx-application-runner.service")
 MANAGER_SOCKET_PATH = Path("/run/eom-hwpx-api/manager.sock")
 REQUIRED_BUILDER_DIRECTIVES = frozenset(
@@ -28,6 +29,20 @@ REQUIRED_BUILDER_DIRECTIVES = frozenset(
         "NoNewPrivileges=true",
         "CapabilityBoundingSet=",
         "ExecStart=/srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx render-kordoc "
+        "--request request.json --result result.json",
+        "InaccessiblePaths=/mnt/nas",
+        "ReadWritePaths=/srv/eom/hwpx-workspaces/%i",
+    }
+)
+REQUIRED_QUESTION_TEMPLATE_BUILDER_DIRECTIVES = frozenset(
+    {
+        "User=eom-hwpx",
+        "Group=eom-hwpx",
+        "PrivateNetwork=true",
+        "NoNewPrivileges=true",
+        "CapabilityBoundingSet=",
+        "RestrictSUIDSGID=true",
+        "ExecStart=/srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx render "
         "--request request.json --result result.json",
         "InaccessiblePaths=/mnt/nas",
         "ReadWritePaths=/srv/eom/hwpx-workspaces/%i",
@@ -145,6 +160,10 @@ def fixed_builder_isolation_preflight() -> tuple[bool, str]:
     """Verify the fixed installed unit boundary without starting a unit or build."""
     for path, required in (
         (BUILDER_UNIT_PATH, REQUIRED_BUILDER_DIRECTIVES),
+        (
+            QUESTION_TEMPLATE_BUILDER_UNIT_PATH,
+            REQUIRED_QUESTION_TEMPLATE_BUILDER_DIRECTIVES,
+        ),
         (RUNNER_UNIT_PATH, REQUIRED_RUNNER_DIRECTIVES),
     ):
         try:

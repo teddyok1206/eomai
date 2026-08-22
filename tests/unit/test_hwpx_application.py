@@ -95,6 +95,7 @@ def test_isolation_preflight_rejects_non_root_or_wrong_mode_units(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     builder = tmp_path / "eom-hwpx-kordoc@.service"
+    question_builder = tmp_path / "eom-hwpx-builder@.service"
     runner_unit = tmp_path / "eom-hwpx-application-runner.service"
     builder.write_text(
         "\n".join(sorted(capability_module.REQUIRED_BUILDER_DIRECTIVES)) + "\n",
@@ -105,8 +106,18 @@ def test_isolation_preflight_rejects_non_root_or_wrong_mode_units(
         encoding="utf-8",
     )
     builder.chmod(0o644)
+    question_builder.write_text(
+        "\n".join(sorted(capability_module.REQUIRED_QUESTION_TEMPLATE_BUILDER_DIRECTIVES)) + "\n",
+        encoding="utf-8",
+    )
+    question_builder.chmod(0o644)
     runner_unit.chmod(0o644)
     monkeypatch.setattr(capability_module, "BUILDER_UNIT_PATH", builder)
+    monkeypatch.setattr(
+        capability_module,
+        "QUESTION_TEMPLATE_BUILDER_UNIT_PATH",
+        question_builder,
+    )
     monkeypatch.setattr(capability_module, "RUNNER_UNIT_PATH", runner_unit)
     monkeypatch.setattr(capability_module, "SYSTEMCTL", Path("/usr/bin/true"))
 
