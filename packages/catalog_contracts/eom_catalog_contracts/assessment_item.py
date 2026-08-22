@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
@@ -16,8 +17,22 @@ BoundedAnswer = Annotated[str, Field(min_length=1, max_length=20_000)]
 class MediaArtifactPointer(FrozenModel):
     artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
     artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    artifact_member: str = Field(min_length=1, max_length=256)
     sha256: Sha256
     media_type: Literal["image/png", "image/jpeg"]
+
+    @field_validator("artifact_member")
+    @classmethod
+    def safe_artifact_member(cls, value: str) -> str:
+        member = PurePosixPath(value)
+        if (
+            value.startswith("/")
+            or "\\" in value
+            or any(part in {"", ".", ".."} for part in value.split("/"))
+            or member.as_posix() != value
+        ):
+            raise ValueError("artifact member must be a safe relative POSIX path")
+        return value
 
 
 class ParagraphBlock(FrozenModel):

@@ -7,11 +7,12 @@ from typing import Any
 
 from eom_api_contracts.content_packs import ActivateContentPackRequest
 from eom_api_contracts.deliverables import CreateDeliverableRequest
-from eom_api_contracts.items import ItemRetirementRequest
+from eom_api_contracts.items import ItemRetirementRequest, StructuredItemContentImportRequest
 from eom_api_contracts.usage import CreateUsagePlanRequest, FulfillUsagePlanRequest
 from eom_api_contracts.workflows import WorkflowActionRequest, WorkflowStartRequest
 from eom_catalog_contracts import CreateDeliverable, CreateUsagePlan, FulfillUsagePlan
 from eom_catalog_service.content_pack_service import ContentPackService
+from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.usage_service import UsageLedgerService
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
@@ -42,6 +43,7 @@ class CommandAdapter:
         self.catalog = WorkflowCatalogService(engine)
         self.content_packs = ContentPackService(engine)
         self.registry = RegistryService(engine)
+        self.item_content_imports = StructuredItemContentImportService(engine)
         self.usage = UsageLedgerService(engine)
 
     def start_workflow(
@@ -237,6 +239,23 @@ class CommandAdapter:
         self._check_version(ItemRecord, item_id, expected_version, "ITEM_NOT_FOUND")
         row = self.registry.retire(item_id, actor_id=actor.actor_id, reason=request.reason)
         return new_api_command_id(), row.lock_version
+
+    def import_structured_item_content(
+        self,
+        base_revision_id: str,
+        request: StructuredItemContentImportRequest,
+        actor: ActorContext,
+        *,
+        expected_version: int,
+    ) -> tuple[str, str, int]:
+        result = self.item_content_imports.import_reviewed(
+            base_revision_id,
+            request.content,
+            reviewed_by=actor.actor_id,
+            review_reason=request.review_reason,
+            expected_version=expected_version,
+        )
+        return new_api_command_id(), result.item_revision_id, result.resource_version
 
     def create_deliverable(
         self, request: CreateDeliverableRequest, actor: ActorContext

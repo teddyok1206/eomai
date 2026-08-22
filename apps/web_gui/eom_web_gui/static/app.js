@@ -13,6 +13,7 @@ const state = {
   hwpxBuildId: null,
   hwpxPollTimer: null,
   acceptedIntakes: [],
+  structuredSource: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -474,6 +475,8 @@ function renderItemPreview(preview) {
   const style = statusStyle(preview.revision_state);
   setStatus($("#revision-state"), style[0], style[1], preview.revision_state);
   renderDefinitionList($("#item-inspector"), {Item: preview.item_id, Revision: preview.item_revision_id, Workflow: preview.workflow_id, "Content Pack": preview.content_pack_release_id, "EOM Template": preview.template_delivery_available ? "AVAILABLE" : "STRUCTURED CONTENT REQUIRED"});
+  $("#structured-base-revision").value = preview.item_revision_id;
+  $("#structured-revision-etag").value = preview.revision_etag;
   if (preview.template_delivery_available) $("#hwpx-revision-id").value = preview.item_revision_id;
   $("#preview-page-state").textContent = preview.preview_state;
   if (preview.preview_state !== "AVAILABLE") {
@@ -505,6 +508,84 @@ function renderItemPreview(preview) {
   const tables = $("#preview-tables");
   tables.replaceChildren();
   for (const value of preview.tables || []) tables.append(buildDocumentTable(value));
+}
+
+function installStructuredImport() {
+  $("#structured-load-sources").addEventListener("click", loadStructuredSources);
+  $("#structured-import-submit").addEventListener("click", importStructuredItem);
+  loadStructuredImportIntakes().catch((failure) => showMessage($("#structured-import-message"), failure.message, "error"));
+}
+
+async function loadStructuredImportIntakes() {
+  const values = state.acceptedIntakes.length ? state.acceptedIntakes : await api("/content-intakes/accepted");
+  state.acceptedIntakes = values;
+  const select = $("#structured-intake");
+  select.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = values.length ? "ACCEPTED intake 선택" : "사용 가능한 ACCEPTED intake 없음";
+  select.append(placeholder);
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value.intake_batch_id;
+    option.textContent = `${value.batch_name} · ${value.intake_batch_id}`;
+    select.append(option);
+  }
+}
+
+async function loadStructuredSources() {
+  const intakeId = $("#structured-intake").value;
+  if (!intakeId) return showMessage($("#structured-import-message"), "ACCEPTED intake를 선택하세요.", "error");
+  try {
+    const sources = await api(`/content-intakes/${encodeURIComponent(intakeId)}/sources`);
+    const pointer = sources.find((value) => ["image/png", "image/jpeg"].includes(value.media_type));
+    if (!pointer) throw new Error("INTAKE_IMAGE_SOURCE_REQUIRED");
+    state.structuredSource = pointer;
+    $("#structured-source-pointer").textContent = JSON.stringify(pointer, null, 2);
+    if (!$("#structured-content-json").value.trim()) {
+      $("#structured-content-json").value = JSON.stringify(structuredItemSkeleton(pointer), null, 2);
+    }
+    showMessage($("#structured-import-message"), "정확한 artifact member와 SHA를 불러왔습니다. 문항 의미를 편집하고 검토하세요.", "success");
+  } catch (failure) {
+    showMessage($("#structured-import-message"), `Source 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+function structuredItemSkeleton(pointer) {
+  return {
+    schema_version: "1.0", locale: "ko-KR", title: "검토된 구조화 문항",
+    body: [
+      {block_id: "block_stem", type: "paragraph", purpose: "stem", text: "문항 본문을 입력하세요."},
+      {block_id: "block_data", type: "table", purpose: "data", caption: null, headers: ["구분", "값"], rows: [["자료", "내용"]]},
+      {block_id: "block_image", type: "image", purpose: "stimulus", artifact: {artifact_id: pointer.artifact_id, artifact_revision_id: pointer.artifact_revision_id, artifact_member: pointer.artifact_member, sha256: pointer.sha256, media_type: pointer.media_type}, alt_text: pointer.filename, width_px: 800, height_px: 500},
+      {block_id: "block_equation", type: "equation", purpose: "stimulus", notation: "hancom-equation-script", source: "a^2+b^2=c^2"},
+      {block_id: "block_prompt", type: "paragraph", purpose: "prompt", text: "옳은 것을 고르시오."},
+      {block_id: "block_claims", type: "statement_set", purpose: "claims", statements: [{statement_id: "statement_g", label: "ㄱ", text: "명제 ㄱ"}, {statement_id: "statement_n", label: "ㄴ", text: "명제 ㄴ"}, {statement_id: "statement_d", label: "ㄷ", text: "명제 ㄷ"}]},
+    ],
+    interaction: {type: "single_choice", choices: [1, 2, 3, 4, 5].map((value) => ({choice_id: `choice_${value}`, label: String(value), text: `선택지 ${value}`}))},
+    solution: {correct_choice_ids: ["choice_1"], accepted_answers: [], explanation: "정답 해설을 입력하세요.", authoring_intent: "평가 의도를 입력하세요.", statement_explanations: [{statement_id: "statement_g", text: "ㄱ 해설"}, {statement_id: "statement_n", text: "ㄴ 해설"}, {statement_id: "statement_d", text: "ㄷ 해설"}]},
+    score: {points: 3},
+  };
+}
+
+async function importStructuredItem() {
+  const message = $("#structured-import-message");
+  if (!$("#structured-reviewed").checked) return showMessage(message, "명시적 검토 확인이 필요합니다.", "error");
+  let content;
+  try { content = JSON.parse($("#structured-content-json").value); } catch (_) { return showMessage(message, "구조화 콘텐츠 JSON이 올바르지 않습니다.", "error"); }
+  const baseRevision = $("#structured-base-revision").value.trim();
+  try {
+    const result = await api("/items/structured-content-imports", {
+      method: "POST", mutation: true,
+      body: {base_revision_id: baseRevision, revision_etag: $("#structured-revision-etag").value.trim(), idempotency_key: `studio:structured-import:${baseRevision}:${crypto.randomUUID()}`, reviewed: true, review_reason: $("#structured-review-reason").value.trim(), content},
+    });
+    $("#revision-id").value = result.resource_id;
+    $("#hwpx-revision-id").value = result.resource_id;
+    showMessage(message, `새 immutable Revision ${result.resource_id}가 등록되었습니다.`, "success");
+    await loadItemPreview();
+  } catch (failure) {
+    showMessage(message, `등록 실패: ${failure.message}`, "error");
+  }
 }
 
 function buildDocumentTable(value) {
@@ -691,6 +772,7 @@ async function boot() {
   installWorkflow();
   installApproval();
   installItemPreview();
+  installStructuredImport();
   installHwpx();
   installExplorer();
   $("#logout").addEventListener("click", logout);

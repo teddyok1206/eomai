@@ -51,6 +51,7 @@ class PermissionKey(StrEnum):
     WORKFLOW_CANCEL = "workflow:cancel"
     WORKFLOW_RECONCILE = "workflow:reconcile"
     ITEM_READ = "item:read"
+    ITEM_STRUCTURED_CONTENT_IMPORT = "item:import_structured_content"
     ITEM_RETIRE = "item:retire"
     DELIVERABLE_READ = "deliverable:read"
     DELIVERABLE_CREATE = "deliverable:create"

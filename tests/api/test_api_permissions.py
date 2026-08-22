@@ -57,3 +57,4 @@ def test_admin_only_operations_are_explicit() -> None:
     assert "operator_disable" in admin_operations
     assert "system_doctor" in admin_operations
     assert "workflow_reconcile" in admin_operations
+    assert "item_structured_content_import" in admin_operations

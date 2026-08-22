@@ -11,6 +11,7 @@ import httpx
 
 from eom_web_gui.contracts import (
     ContentIntakeOption,
+    ContentIntakeSourcePointer,
     ExplorerEntity,
     ExplorerQuery,
     ExplorerResult,
@@ -18,6 +19,9 @@ from eom_web_gui.contracts import (
     HwpxBuildView,
     HwpxCapability,
     ItemPreview,
+    PreviewChoice,
+    PreviewTable,
+    StructuredItemImportRequest,
 )
 from eom_web_gui.redaction import sanitize_mapping
 from eom_web_gui.sessions import ApiTokens, WebSession
@@ -54,6 +58,10 @@ class ApplicationGateway(Protocol):
 
     async def accepted_intakes(self, session: WebSession) -> tuple[ContentIntakeOption, ...]: ...
 
+    async def intake_sources(
+        self, session: WebSession, intake_id: str
+    ) -> tuple[ContentIntakeSourcePointer, ...]: ...
+
     async def start_workflow(
         self, session: WebSession, payload: dict[str, object], idempotency_key: str
     ) -> dict[str, Any]: ...
@@ -73,6 +81,10 @@ class ApplicationGateway(Protocol):
     async def item_preview(
         self, session: WebSession, item_id: str, item_revision_id: str
     ) -> ItemPreview: ...
+
+    async def import_structured_item(
+        self, session: WebSession, value: StructuredItemImportRequest
+    ) -> dict[str, Any]: ...
 
     async def explorer(self, session: WebSession, query: ExplorerQuery) -> ExplorerResult: ...
 
@@ -249,6 +261,36 @@ class HttpApplicationGateway:
         except (KeyError, ValueError) as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
+    async def intake_sources(
+        self, session: WebSession, intake_id: str
+    ) -> tuple[ContentIntakeSourcePointer, ...]:
+        _require_id(intake_id, "intake_")
+        response = await self._authorized(session, "GET", f"/api/v1/content-intakes/{intake_id}")
+        detail = self._data(response)
+        sources = detail.get("source_files")
+        if not isinstance(sources, list):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        try:
+            return tuple(
+                ContentIntakeSourcePointer.model_validate(
+                    {
+                        "source_file_id": source["source_file_id"],
+                        "filename": source["filename"],
+                        "artifact_id": source["artifact"]["artifact_id"],
+                        "artifact_revision_id": source["artifact"]["artifact_revision_id"],
+                        "artifact_member": source["artifact"]["artifact_member"],
+                        "sha256": source["sha256"],
+                        "media_type": source["media_type"],
+                    }
+                )
+                for source in sources
+                if isinstance(source, dict)
+                and isinstance(source.get("artifact"), dict)
+                and source.get("media_type") in {"image/png", "image/jpeg"}
+            )
+        except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
     async def start_workflow(
         self, session: WebSession, payload: dict[str, object], idempotency_key: str
     ) -> dict[str, Any]:
@@ -314,9 +356,11 @@ class HttpApplicationGateway:
         )
         item = self._data(item_response)
         revision = self._data(revision_response)
+        revision_etag = revision_response.headers.get("etag")
         if (
             revision.get("item_id") != item_id
             or item.get("current_revision_id") != item_revision_id
+            or revision_etag is None
         ):
             raise GatewayError(status=409, code="ITEM_REVISION_POINTER_MISMATCH")
         components = self._list_data(components_response)
@@ -329,15 +373,90 @@ class HttpApplicationGateway:
             and component["artifact"].get("schema_ref") == "eom.assessment.item-content/1.0"
             for component in components
         )
+        content: dict[str, Any] | None = None
+        if template_delivery_available:
+            content_response = await self._authorized(
+                session,
+                "GET",
+                f"/api/v1/item-revisions/{item_revision_id}/structured-content",
+            )
+            content = self._data(content_response)
+        paragraphs = [
+            str(block.get("text"))
+            for block in (content or {}).get("body", [])
+            if isinstance(block, dict) and block.get("type") == "paragraph"
+        ]
+        equations = tuple(
+            str(block.get("source"))
+            for block in (content or {}).get("body", [])
+            if isinstance(block, dict) and block.get("type") == "equation"
+        )
+        tables = tuple(
+            PreviewTable.model_validate(
+                {
+                    "caption": block.get("caption"),
+                    "headers": block.get("headers", []),
+                    "rows": block.get("rows", []),
+                }
+            )
+            for block in (content or {}).get("body", [])
+            if isinstance(block, dict) and block.get("type") == "table"
+        )
+        interaction = (content or {}).get("interaction")
+        choices = interaction.get("choices", []) if isinstance(interaction, dict) else []
+        solution = (content or {}).get("solution")
+        correct_ids = solution.get("correct_choice_ids", []) if isinstance(solution, dict) else []
+        answer = next(
+            (
+                str(choice.get("label"))
+                for choice in choices
+                if isinstance(choice, dict) and choice.get("choice_id") in correct_ids
+            ),
+            None,
+        )
         return ItemPreview(
-            preview_state="METADATA_ONLY",
+            preview_state="AVAILABLE" if content is not None else "METADATA_ONLY",
             workflow_id=str(revision.get("workflow_id") or "unknown"),
             item_id=item_id,
             item_revision_id=item_revision_id,
+            revision_etag=revision_etag,
             revision_state=str(revision.get("revision_state") or "UNKNOWN"),
             content_pack_release_id=str(revision.get("content_pack_release_id") or "unknown"),
             template_delivery_available=template_delivery_available,
+            body="\n\n".join(paragraphs) if content is not None else None,
+            choices=tuple(
+                PreviewChoice(
+                    label=str(choice.get("label")),
+                    text=str(choice.get("text")),
+                )
+                for choice in choices
+                if isinstance(choice, dict)
+            ),
+            answer=answer,
+            explanation=(str(solution.get("explanation")) if isinstance(solution, dict) else None),
+            equations=equations,
+            tables=tables,
         )
+
+    async def import_structured_item(
+        self, session: WebSession, value: StructuredItemImportRequest
+    ) -> dict[str, Any]:
+        _require_id(value.base_revision_id, "itemrev_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/item-revisions/{value.base_revision_id}/structured-content-imports",
+            json={
+                "reviewed": value.reviewed,
+                "review_reason": value.review_reason,
+                "content": value.content,
+            },
+            headers={
+                "If-Match": value.revision_etag,
+                "Idempotency-Key": value.idempotency_key,
+            },
+        )
+        return sanitize_mapping(self._data(response))
 
     async def hwpx_capability(self, session: WebSession) -> HwpxCapability:
         response = await self._authorized(session, "GET", "/api/v1/capabilities/hwpx")

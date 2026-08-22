@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
 
 def _utc(value: datetime) -> datetime:
@@ -51,10 +52,26 @@ class ListResponse[DataT](ApiModel):
 class ArtifactPointer(ApiModel):
     artifact_id: OpaqueId
     artifact_revision_id: OpaqueId
+    artifact_member: str | None = Field(default=None, min_length=1, max_length=256)
     sha256: Sha256
     schema_ref: str = Field(min_length=1, max_length=256)
     media_type: str = Field(min_length=1, max_length=127)
     logical_uri: str = Field(pattern=r"^nas://artifacts/[^/]+/[^/]+$")
+
+    @field_validator("artifact_member")
+    @classmethod
+    def safe_artifact_member(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        member = PurePosixPath(value)
+        if (
+            value.startswith("/")
+            or "\\" in value
+            or any(part in {"", ".", ".."} for part in value.split("/"))
+            or member.as_posix() != value
+        ):
+            raise ValueError("artifact member must be a safe relative POSIX path")
+        return value
 
 
 class EmptyResult(ApiModel):

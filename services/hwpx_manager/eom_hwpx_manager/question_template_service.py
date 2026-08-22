@@ -188,9 +188,10 @@ class QuestionTemplateHwpxService:
             item_number=item_number,
         )
         image_pointer = projection.image.artifact
-        image_path = self._resolve_artifact_primary(
+        image_path = self._resolve_artifact_member(
             image_pointer.artifact_id,
             image_pointer.artifact_revision_id,
+            image_pointer.artifact_member,
             image_pointer.sha256,
         )
         template_root = self._resolve_template(template_snapshot)
@@ -494,19 +495,69 @@ class QuestionTemplateHwpxService:
                     "artifact pointer is stale or invalid",
                 )
             primary_name = revision.manifest.get("primary_file")
-            root = Path(revision.nas_path)
         if not isinstance(primary_name, str):
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
                 "artifact has no typed primary file",
             )
-        primary = self._artifact_file(root, primary_name)
-        if sha256_file(primary) != expected_sha256:
+        return self._resolve_artifact_member(
+            artifact_id,
+            revision_id,
+            primary_name,
+            expected_sha256,
+        )
+
+    def _resolve_artifact_member(
+        self,
+        artifact_id: str,
+        revision_id: str,
+        member_name: str,
+        expected_sha256: str,
+    ) -> Path:
+        with self.sessions() as session:
+            artifact = session.get(ArtifactRecord, artifact_id)
+            revision = session.get(ArtifactRevisionRecord, revision_id)
+            if (
+                artifact is None
+                or revision is None
+                or not artifact.approved
+                or not revision.approved
+                or revision.logical_artifact_id != artifact_id
+            ):
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                    "artifact pointer is stale or invalid",
+                )
+            files = revision.manifest.get("files")
+            root = Path(revision.nas_path)
+        entries = (
+            [
+                entry
+                for entry in files
+                if isinstance(entry, dict) and entry.get("file_name") == member_name
+            ]
+            if isinstance(files, list)
+            else []
+        )
+        member = self._artifact_file(root, member_name)
+        try:
+            invalid = (
+                len(entries) != 1
+                or entries[0].get("sha256") != expected_sha256
+                or entries[0].get("bytes") != member.stat().st_size
+                or sha256_file(member) != expected_sha256
+            )
+        except OSError as exc:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
-                "artifact bytes do not match the pinned revision",
+                "artifact member is unreadable",
+            ) from exc
+        if invalid:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                "artifact member does not match its pinned manifest entry",
             )
-        return primary
+        return member
 
     @staticmethod
     def _artifact_file(root: Path, name: str) -> Path:

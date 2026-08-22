@@ -9,6 +9,7 @@ from typing import Any
 
 from eom_web_gui.contracts import (
     ContentIntakeOption,
+    ContentIntakeSourcePointer,
     ExplorerQuery,
     ExplorerResult,
     HwpxBuildRequest,
@@ -18,6 +19,7 @@ from eom_web_gui.contracts import (
     RequestDraft,
     RequestDraftInput,
     RequestDraftUpdate,
+    StructuredItemImportRequest,
     WorkflowApproval,
 )
 from eom_web_gui.gateways import ApplicationGateway, GatewayError, LoginResult
@@ -46,6 +48,11 @@ class WebServices:
 
     async def accepted_intakes(self, session: WebSession) -> tuple[ContentIntakeOption, ...]:
         return await self.gateway.accepted_intakes(session)
+
+    async def intake_sources(
+        self, session: WebSession, intake_id: str
+    ) -> tuple[ContentIntakeSourcePointer, ...]:
+        return await self.gateway.intake_sources(session, intake_id)
 
     def create_draft(
         self, session: WebSession, value: RequestDraftInput, *, now: datetime | None = None
@@ -124,6 +131,16 @@ class WebServices:
         self, session: WebSession, item_id: str, item_revision_id: str
     ) -> ItemPreview:
         return await self.gateway.item_preview(session, item_id, item_revision_id)
+
+    async def import_structured_item(
+        self,
+        session: WebSession,
+        value: StructuredItemImportRequest,
+    ) -> dict[str, Any]:
+        roles = session.operator.get("roles", ())
+        if not isinstance(roles, (list, tuple)) or "ADMIN" not in roles:
+            raise GatewayError(status=403, code="ADMIN_ROLE_REQUIRED")
+        return await self.gateway.import_structured_item(session, value)
 
     async def explore(self, session: WebSession, query: ExplorerQuery) -> ExplorerResult:
         roles = session.operator.get("roles", ())

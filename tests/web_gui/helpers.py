@@ -6,6 +6,7 @@ from typing import Any
 from eom_web_gui.app import create_app
 from eom_web_gui.contracts import (
     ContentIntakeOption,
+    ContentIntakeSourcePointer,
     ExplorerQuery,
     ExplorerResult,
     HwpxBuildRequest,
@@ -14,6 +15,7 @@ from eom_web_gui.contracts import (
     ItemPreview,
     PreviewChoice,
     PreviewTable,
+    StructuredItemImportRequest,
 )
 from eom_web_gui.gateways import GatewayError, HwpxDownload, LoginResult
 from eom_web_gui.services import WebServices, build_services
@@ -29,6 +31,74 @@ REVISION_ID = "itemrev_test00000000000000000000000001"
 INTAKE_ID = "intake_00000000000000000000000000000001"
 
 
+def structured_item_content() -> dict[str, object]:
+    """Return a Web-boundary fixture without importing Catalog runtime packages."""
+    return {
+        "schema_version": "1.0",
+        "locale": "ko-KR",
+        "title": "삼각함수 문항",
+        "body": [
+            {
+                "block_id": "block_stem",
+                "type": "paragraph",
+                "purpose": "stem",
+                "text": "다음 자료를 보고 물음에 답하시오.",
+            },
+            {
+                "block_id": "block_data",
+                "type": "table",
+                "purpose": "data",
+                "caption": None,
+                "headers": ["각", "사인", "코사인"],
+                "rows": [["30", "1/2", "sqrt(3)/2"]],
+            },
+            {
+                "block_id": "block_image",
+                "type": "image",
+                "purpose": "stimulus",
+                "artifact": {
+                    "artifact_id": "artifact_" + "1" * 32,
+                    "artifact_revision_id": "rev_" + "2" * 32,
+                    "artifact_member": "diagram.png",
+                    "sha256": "sha256:" + "3" * 64,
+                    "media_type": "image/png",
+                },
+                "alt_text": "삼각형 도식",
+                "width_px": 800,
+                "height_px": 500,
+            },
+            {
+                "block_id": "block_equation",
+                "type": "equation",
+                "purpose": "stimulus",
+                "notation": "hancom-equation-script",
+                "source": "a^2+b^2=c^2",
+            },
+            {
+                "block_id": "block_prompt",
+                "type": "paragraph",
+                "purpose": "prompt",
+                "text": "옳은 것만을 고른 것은?",
+            },
+        ],
+        "interaction": {
+            "type": "single_choice",
+            "choices": [
+                {"choice_id": f"choice_{index}", "label": str(index), "text": f"선택지 {index}"}
+                for index in range(1, 6)
+            ],
+        },
+        "solution": {
+            "correct_choice_ids": ["choice_3"],
+            "accepted_answers": [],
+            "explanation": "정답 해설",
+            "authoring_intent": "삼각함수의 기본 관계를 평가한다.",
+            "statement_explanations": [],
+        },
+        "score": {"points": 3},
+    }
+
+
 class FakeGateway:
     def __init__(
         self,
@@ -42,6 +112,7 @@ class FakeGateway:
         self.roles = roles or ["ADMIN", "REVIEWER"]
         self.hwpx_state = hwpx_state
         self.hwpx_build_calls = 0
+        self.structured_import_calls = 0
 
     async def health(self) -> dict[str, str]:
         return {
@@ -82,6 +153,23 @@ class FakeGateway:
                 batch_name="테스트 물리학 소스",
                 purpose="Generic Demo",
                 updated_at=NOW,
+            ),
+        )
+
+    async def intake_sources(
+        self, session: WebSession, intake_id: str
+    ) -> tuple[ContentIntakeSourcePointer, ...]:
+        del session
+        assert intake_id == INTAKE_ID
+        return (
+            ContentIntakeSourcePointer(
+                source_file_id="sourcefile_" + "1" * 32,
+                filename="diagram.png",
+                artifact_id="artifact_" + "2" * 32,
+                artifact_revision_id="rev_" + "3" * 32,
+                artifact_member="source/diagram.png",
+                sha256="sha256:" + "4" * 64,
+                media_type="image/png",
             ),
         )
 
@@ -202,6 +290,7 @@ class FakeGateway:
             workflow_id=WORKFLOW_ID,
             item_id=item_id,
             item_revision_id=item_revision_id,
+            revision_etag='"v1"',
             revision_state="APPROVED",
             content_pack_release_id="packrel_test_physics",
             template_delivery_available=True,
@@ -220,6 +309,21 @@ class FakeGateway:
                 ),
             ),
         )
+
+    async def import_structured_item(
+        self, session: WebSession, value: StructuredItemImportRequest
+    ) -> dict[str, Any]:
+        del session
+        assert value.base_revision_id == REVISION_ID
+        self.structured_import_calls += 1
+        return {
+            "command_id": "apicmd_" + "5" * 32,
+            "resource_type": "item_revision",
+            "resource_id": "itemrev_" + "6" * 32,
+            "status": "COMPLETED",
+            "resource_version": 1,
+            "status_url": "/api/v1/item-revisions/" + "itemrev_" + "6" * 32,
+        }
 
     async def explorer(self, session: WebSession, query: ExplorerQuery) -> ExplorerResult:
         del session

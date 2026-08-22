@@ -36,6 +36,16 @@ class ContentIntakeOption(WebModel):
     updated_at: UtcDatetime
 
 
+class ContentIntakeSourcePointer(WebModel):
+    source_file_id: str = Field(pattern=r"^sourcefile_[0-9a-f]{32}$")
+    filename: str = Field(min_length=1, max_length=255)
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    artifact_member: str = Field(min_length=1, max_length=256)
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    media_type: Literal["image/png", "image/jpeg"]
+
+
 class RequestDraftInput(WebModel):
     original_request_text: str = Field(min_length=10, max_length=2000)
 
@@ -121,6 +131,7 @@ class ItemPreview(WebModel):
     workflow_id: str
     item_id: str
     item_revision_id: str
+    revision_etag: str = Field(pattern=r'^"v[1-9][0-9]*"$')
     revision_state: str
     content_pack_release_id: str
     template_delivery_available: bool = False
@@ -130,6 +141,22 @@ class ItemPreview(WebModel):
     explanation: str | None = Field(default=None, max_length=20000)
     equations: tuple[str, ...] = Field(default=(), max_length=50)
     tables: tuple[PreviewTable, ...] = Field(default=(), max_length=20)
+
+
+class StructuredItemImportRequest(WebModel):
+    base_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
+    revision_etag: str = Field(pattern=r'^"v[1-9][0-9]*"$')
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+    reviewed: Literal[True]
+    review_reason: str = Field(min_length=10, max_length=2000)
+    content: dict[str, Any]
+
+    @model_validator(mode="after")
+    def canonical_api_contract(self) -> StructuredItemImportRequest:
+        required = {"schema_version", "locale", "title", "body", "interaction", "solution", "score"}
+        if self.content.get("schema_version") != "1.0" or not required.issubset(self.content):
+            raise ValueError("structured content envelope is incomplete")
+        return self
 
 
 class ExplorerEntity(StrEnum):

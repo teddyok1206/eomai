@@ -7,7 +7,11 @@ name = "eom-api-contracts"
 version = "0.1.0"
 description = "Stable OpenAPI-facing contracts for EOM Application API V1"
 requires-python = ">=3.12,<3.13"
-dependencies = ["pydantic==2.13.4"]
+dependencies = [
+  # Reuse the canonical presentation-neutral item contract at the HTTP boundary.
+  "eom-platform==0.1.0",
+  "pydantic==2.13.4",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -9,8 +9,10 @@ from eom_api_contracts.items import (
     ItemRetirementRequest,
     ItemRevisionView,
     ItemView,
+    StructuredItemContentImportRequest,
 )
 from eom_api_contracts.usage import UsageRecordView
+from eom_catalog_contracts import AssessmentItemContent
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Query, Request, Response
 
@@ -18,6 +20,59 @@ from eom_api.dependencies import Auth, ExpectedVersion, IdempotencyKey, etag, re
 from eom_api.routers.common import many, one, run_command
 
 router = APIRouter(tags=["items"])
+
+
+@router.post(
+    "/item-revisions/{item_revision_id}/structured-content-imports",
+    operation_id="item_structured_content_import",
+    response_model=SingleResponse[CommandResult],
+    dependencies=[
+        Depends(
+            require_permission(
+                PermissionKey.ITEM_STRUCTURED_CONTENT_IMPORT,
+                admin_only=True,
+            )
+        )
+    ],
+)
+def import_structured_content(
+    request: Request,
+    item_revision_id: str,
+    body: StructuredItemContentImportRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    expected_version: ExpectedVersion,
+) -> SingleResponse[CommandResult]:
+    del authentication
+
+    def execute() -> CommandResult:
+        command_id, revision_id, version = (
+            request.app.state.services.commands.import_structured_item_content(
+                item_revision_id,
+                body,
+                request.state.request_context.actor(),
+                expected_version=expected_version,
+            )
+        )
+        return CommandResult(
+            command_id=command_id,
+            resource_type="item_revision",
+            resource_id=revision_id,
+            status="COMPLETED",
+            resource_version=version,
+            status_url=f"/api/v1/item-revisions/{revision_id}",
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body=body.model_dump(mode="json"),
+            resource_type="item_revision",
+            callback=execute,
+        ),
+    )
 
 
 @router.get(
@@ -77,6 +132,19 @@ def get_revision(
     value = request.app.state.services.queries.revision(item_revision_id)
     response.headers["ETag"] = etag(value.resource_version)
     return one(request, value)
+
+
+@router.get(
+    "/item-revisions/{item_revision_id}/structured-content",
+    operation_id="item_structured_content_get",
+    response_model=SingleResponse[AssessmentItemContent],
+    dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
+)
+def get_structured_content(
+    request: Request,
+    item_revision_id: str,
+) -> SingleResponse[AssessmentItemContent]:
+    return one(request, request.app.state.services.registry.load_item_content(item_revision_id))
 
 
 @router.get(

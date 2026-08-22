@@ -190,6 +190,13 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
 .capability-grid { padding-left: 0; }
 .hwpx-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 14px; }
 .hwpx-build-panel .panel-body { display: grid; gap: 13px; padding: 18px; }
+.structured-import-panel { margin-top: 18px; }
+.structured-import-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.structured-import-grid .wide { grid-column: 1 / -1; }
+.structured-import-grid input, .structured-import-grid select, .structured-import-grid textarea { width: 100%; border: 1px solid #b9c2d0; border-radius: 5px; padding: 8px 10px; background: white; color: var(--eom-text); }
+.structured-import-grid textarea { resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.45; }
+.pointer-preview { overflow: auto; margin: 0; padding: 10px; border-radius: 5px; background: #f2f5f8; color: #344054; white-space: pre-wrap; overflow-wrap: anywhere; }
+.source-actions { align-items: end; }
 .checkbox-row { display: flex; flex-wrap: wrap; gap: 12px; }
 .checkbox-row label { display: flex; align-items: center; gap: 7px; }
 
@@ -262,6 +269,8 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
   .id-input { min-width: 0; width: 100%; }
   .draft-form { grid-template-columns: 1fr; }
   .draft-form .wide { grid-column: auto; }
+  .structured-import-grid { grid-template-columns: 1fr; }
+  .structured-import-grid .wide { grid-column: auto; }
   .quality-picker { grid-template-columns: 1fr; }
   .document-canvas { min-height: 700px; padding: 27px 25px; }
   .capability-card { grid-template-columns: 1fr; padding: 25px; }

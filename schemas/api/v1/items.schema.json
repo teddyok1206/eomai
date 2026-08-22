@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eom:schema:api:v1:items",
+  "title": "EOM Application API Item Contracts",
+  "$defs": {
+    "structured_content_import": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewed", "review_reason", "content"],
+      "properties": {
+        "reviewed": {"const": true},
+        "review_reason": {"type": "string", "minLength": 10, "maxLength": 2000},
+        "content": {"$ref": "eom://schemas/item-registry/assessment-item-content-v1"}
+      }
+    }
+  }
+}

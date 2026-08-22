@@ -196,8 +196,12 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         for name in archive.namelist()
         if name.startswith("eom_api_contracts/schemas/") and name.endswith(".schema.json")
     ]
-    if len(schemas) != 6 or "eom_api_contracts/schemas/hwpx.schema.json" not in schemas:
-        raise SystemExit(f"expected 6 packaged API schemas including HWPX, found {schemas}")
+    if (
+        len(schemas) != 7
+        or "eom_api_contracts/schemas/hwpx.schema.json" not in schemas
+        or "eom_api_contracts/schemas/items.schema.json" not in schemas
+    ):
+        raise SystemExit(f"expected 7 packaged API schemas including HWPX and Items, found {schemas}")
 
 workflow_prefix = "eom_workflow/resources/"
 workflow_resources = {
@@ -229,6 +233,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
     catalog_staging_runtime = {
         "eom_catalog_contracts/assessment_item.py",
         "eom_catalog_contracts/validation.py",
+        "eom_catalog_service/item_content_import.py",
         "eom_catalog_service/settings.py",
         "eom_catalog_service/staging.py",
         "eom_catalog_service/registry_service.py",

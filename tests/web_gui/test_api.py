@@ -8,6 +8,7 @@ from tests.web_gui.helpers import (
     FakeGateway,
     login,
     make_client,
+    structured_item_content,
 )
 
 
@@ -141,6 +142,32 @@ def test_workflow_timeline_approval_etag_and_item_preview() -> None:
         assert preview.json()["preview_state"] == "AVAILABLE"
         assert len(preview.json()["equations"]) == 2
         assert len(preview.json()["tables"]) == 1
+
+
+def test_reviewed_structured_item_import_uses_pinned_intake_member_and_revision() -> None:
+    client, gateway = make_client()
+    with client:
+        session = login(client)
+        headers = {"X-CSRF-Token": session["csrf_token"]}
+        sources = client.get(f"/studio/api/v1/content-intakes/{INTAKE_ID}/sources")
+        assert sources.status_code == 200
+        assert sources.json()[0]["artifact_member"] == "source/diagram.png"
+
+        response = client.post(
+            "/studio/api/v1/items/structured-content-imports",
+            headers=headers,
+            json={
+                "base_revision_id": REVISION_ID,
+                "revision_etag": '"v1"',
+                "idempotency_key": "studio:structured-import:0001",
+                "reviewed": True,
+                "review_reason": "구조화 문항의 의미와 source pointer를 검토했습니다.",
+                "content": structured_item_content(),
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["resource_type"] == "item_revision"
+        assert gateway.structured_import_calls == 1
 
 
 def test_hwpx_is_application_api_only_and_not_faked() -> None:

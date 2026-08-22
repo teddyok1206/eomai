@@ -8,6 +8,8 @@ from eom_web_gui.contracts import ExplorerQuery
 from eom_web_gui.gateways import GatewayError, HttpApplicationGateway
 from eom_web_gui.sessions import ApiTokens, WebSession
 
+from tests.web_gui.helpers import structured_item_content
+
 NOW = datetime(2026, 8, 21, 9, 0, tzinfo=UTC)
 TEST_REFRESH = "eom_rt_TEST_ONLY_REFRESH_" + "0" * 48
 
@@ -224,6 +226,7 @@ async def test_item_preview_reports_exact_structured_template_component() -> Non
         if request.url.path == f"/api/v1/item-revisions/{revision_id}":
             return httpx.Response(
                 200,
+                headers={"ETag": '"v1"'},
                 json=_single(
                     {
                         "item_id": item_id,
@@ -250,6 +253,8 @@ async def test_item_preview_reports_exact_structured_template_component() -> Non
                     ]
                 ),
             )
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}/structured-content":
+            return httpx.Response(200, json=_single(structured_item_content()))
         raise AssertionError(request.url.path)
 
     gateway = HttpApplicationGateway(
@@ -261,6 +266,9 @@ async def test_item_preview_reports_exact_structured_template_component() -> Non
     )
     preview = await gateway.item_preview(_session(), item_id, revision_id)
     assert preview.template_delivery_available is True
+    assert preview.preview_state == "AVAILABLE"
+    assert preview.revision_etag == '"v1"'
+    assert preview.equations == ("a^2+b^2=c^2",)
     await gateway.close()
 
 

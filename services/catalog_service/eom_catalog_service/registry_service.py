@@ -309,6 +309,56 @@ class RegistryService:
                 "components": [self.component_dict(item) for item in components]
             }
 
+    def load_item_content(self, revision_id: str) -> AssessmentItemContent:
+        """Resolve and validate the exact canonical content pinned by one revision."""
+
+        with self.sessions() as session:
+            revision = session.get(ItemRevisionRecord, revision_id)
+            if revision is None:
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_REVISION_NOT_FOUND,
+                    "item revision not found",
+                )
+            component = session.scalar(
+                select(ItemComponentRecord).where(
+                    ItemComponentRecord.item_revision_id == revision_id,
+                    ItemComponentRecord.component_type == "ITEM_CONTENT",
+                    ItemComponentRecord.ordinal == 0,
+                )
+            )
+            if component is None:
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                    "item revision has no canonical content component",
+                )
+            artifact_revision = session.get(
+                ArtifactRevisionRecord,
+                component.artifact_revision_id,
+            )
+            if (
+                artifact_revision is None
+                or artifact_revision.logical_artifact_id != component.artifact_id
+                or artifact_revision.content_hash != component.sha256
+                or not artifact_revision.approved
+            ):
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                    "item content component pointer does not resolve",
+                )
+            pointer = ComponentPointer(
+                component_type="ITEM_CONTENT",
+                ordinal=component.ordinal,
+                schema_ref=component.schema_ref,
+                media_type=component.media_type,
+                artifact_id=component.artifact_id,
+                artifact_revision_id=component.artifact_revision_id,
+                sha256=component.sha256,
+                logical_name=component.logical_name,
+                required=component.required,
+                metadata=component.metadata_json,
+            )
+            return self._validate_item_content_component(session, pointer, artifact_revision)
+
     def relationships(self, item_id: str) -> list[dict[str, Any]]:
         with self.sessions() as session:
             if session.get(ItemRecord, item_id) is None:
@@ -456,7 +506,7 @@ class RegistryService:
         session: Session,
         pointer: ComponentPointer,
         revision: ArtifactRevisionRecord,
-    ) -> None:
+    ) -> AssessmentItemContent:
         if (
             pointer.ordinal != 0
             or pointer.schema_ref
@@ -497,17 +547,21 @@ class RegistryService:
                 or not artifact.approved
                 or not media_revision.approved
                 or media_revision.logical_artifact_id != artifact_pointer.artifact_id
-                or media_revision.content_hash != artifact_pointer.sha256
             ):
                 raise RegistryError(
                     RegistryErrorCode.ITEM_COMPONENT_INVALID,
                     "item content media pointer does not resolve",
                 )
-            media_primary = RegistryService._artifact_primary_file(media_revision)
+            media_primary = RegistryService._artifact_member_file(
+                media_revision,
+                artifact_pointer.artifact_member,
+                artifact_pointer.sha256,
+            )
             RegistryService._validate_media_file(
                 media_primary,
                 artifact_pointer.media_type,
             )
+        return content
 
     @staticmethod
     def _artifact_primary_file(revision: ArtifactRevisionRecord) -> Path:
@@ -517,13 +571,40 @@ class RegistryService:
                 RegistryErrorCode.ITEM_COMPONENT_INVALID,
                 "component artifact has no typed primary file",
             )
-        relative = Path(primary_name)
-        root = Path(revision.nas_path)
-        candidate = root / relative
-        if relative.is_absolute() or ".." in relative.parts or "\\" in primary_name:
+        return RegistryService._artifact_member_file(
+            revision,
+            primary_name,
+            revision.content_hash,
+        )
+
+    @staticmethod
+    def _artifact_member_file(
+        revision: ArtifactRevisionRecord,
+        member_name: str,
+        expected_sha256: str,
+    ) -> Path:
+        files = revision.manifest.get("files")
+        entries = (
+            [
+                entry
+                for entry in files
+                if isinstance(entry, dict) and entry.get("file_name") == member_name
+            ]
+            if isinstance(files, list)
+            else []
+        )
+        if len(entries) != 1 or entries[0].get("sha256") != expected_sha256:
             raise RegistryError(
                 RegistryErrorCode.ITEM_COMPONENT_INVALID,
-                "component artifact primary file is unsafe or stale",
+                "component artifact member is missing or stale",
+            )
+        relative = Path(member_name)
+        root = Path(revision.nas_path)
+        candidate = root / relative
+        if relative.is_absolute() or ".." in relative.parts or "\\" in member_name:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "component artifact member is unsafe or stale",
             )
         try:
             root_metadata = root.lstat()
@@ -540,13 +621,14 @@ class RegistryService:
             if (
                 not stat.S_ISREG(metadata.st_mode)
                 or not candidate.resolve(strict=True).is_relative_to(resolved_root)
-                or sha256_file(candidate) != revision.content_hash
+                or sha256_file(candidate) != expected_sha256
+                or entries[0].get("bytes") != metadata.st_size
             ):
                 raise ValueError("component file is stale or unsafe")
         except (OSError, ValueError) as exc:
             raise RegistryError(
                 RegistryErrorCode.ITEM_COMPONENT_INVALID,
-                "component artifact primary file is unsafe or stale",
+                "component artifact member is unsafe or stale",
             ) from exc
         return candidate
 

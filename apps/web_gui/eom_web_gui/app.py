@@ -23,6 +23,7 @@ from eom_web_gui.contracts import (
     HwpxBuildRequest,
     RequestDraftInput,
     RequestDraftUpdate,
+    StructuredItemImportRequest,
     WorkflowApproval,
 )
 from eom_web_gui.gateways import ApplicationGateway, GatewayError, HttpApplicationGateway
@@ -216,6 +217,16 @@ def create_app(
     ) -> list[dict[str, Any]]:
         return [value.model_dump(mode="json") for value in await actual.accepted_intakes(session)]
 
+    @app.get(f"{API_PREFIX}/content-intakes/{{intake_id}}/sources")
+    async def content_intake_sources(
+        intake_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> list[dict[str, Any]]:
+        return [
+            value.model_dump(mode="json")
+            for value in await actual.intake_sources(session, intake_id)
+        ]
+
     @app.get(f"{API_PREFIX}/request-drafts/{{draft_id}}")
     async def get_draft(
         draft_id: str, session: Annotated[WebSession, Depends(require_session)]
@@ -285,6 +296,13 @@ def create_app(
     ) -> dict[str, Any]:
         value = await actual.preview(session, item_id, item_revision_id)
         return value.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/items/structured-content-imports")
+    async def structured_item_import(
+        value: StructuredItemImportRequest,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.import_structured_item(session, value)
 
     @app.get(f"{API_PREFIX}/hwpx/capability")
     async def hwpx_capability(

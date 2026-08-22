@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eom:schema:web-gui:structured-item-import:1.0",
+  "title": "Scientific Studio Reviewed Structured Item Import",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["base_revision_id", "revision_etag", "idempotency_key", "reviewed", "review_reason", "content"],
+  "properties": {
+    "base_revision_id": {"type": "string", "pattern": "^itemrev_[a-z0-9]{8,55}$"},
+    "revision_etag": {"type": "string", "pattern": "^\\\"v[1-9][0-9]*\\\"$"},
+    "idempotency_key": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$"},
+    "reviewed": {"const": true},
+    "review_reason": {"type": "string", "minLength": 10, "maxLength": 2000},
+    "content": {"$ref": "eom://schemas/item-registry/assessment-item-content-v1"}
+  }
+}

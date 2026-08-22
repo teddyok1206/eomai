@@ -538,12 +538,29 @@ def test_question_template_service_resolves_canonical_content_and_commits_output
     image_path = image_root / "diagram.png"
     image_path.write_bytes(b"\x89PNG\r\n\x1a\nTEST_ONLY_IMAGE")
     image_sha = sha256_file(image_path)
+    intake_manifest = image_root / "intake-manifest.json"
+    intake_manifest.write_text('{"schema_version":"1.0"}', encoding="utf-8")
+    intake_manifest_sha = sha256_file(intake_manifest)
     image_job = _artifact_job(
         db_session,
         "question-template-image",
         nas_path=str(image_root),
-        content_hash=image_sha,
-        manifest={"primary_file": image_path.name},
+        content_hash=intake_manifest_sha,
+        manifest={
+            "primary_file": intake_manifest.name,
+            "files": [
+                {
+                    "file_name": intake_manifest.name,
+                    "sha256": intake_manifest_sha,
+                    "bytes": intake_manifest.stat().st_size,
+                },
+                {
+                    "file_name": image_path.name,
+                    "sha256": image_sha,
+                    "bytes": image_path.stat().st_size,
+                },
+            ],
+        },
     )
 
     content = {
@@ -572,6 +589,7 @@ def test_question_template_service_resolves_canonical_content_and_commits_output
                 "artifact": {
                     "artifact_id": image_job.logical_artifact_id,
                     "artifact_revision_id": image_job.revision_id,
+                    "artifact_member": image_path.name,
                     "sha256": image_sha,
                     "media_type": "image/png",
                 },

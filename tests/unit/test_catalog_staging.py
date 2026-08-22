@@ -12,8 +12,8 @@ from eom_catalog_service.settings import (
     CatalogSettings,
     CatalogStagingArea,
 )
-from eom_catalog_service.staging import stage_registry_manifest
-from eom_identifiers import canonical_json_bytes
+from eom_catalog_service.staging import stage_registry_item_content, stage_registry_manifest
+from eom_identifiers import canonical_json_bytes, content_sha256
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -185,3 +185,32 @@ def test_registry_manifest_serialization_failure_leaves_no_partial_operation(
 
     assert captured.value.code == CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID.value
     assert not (settings.registry_staging_root / registration_key).exists()
+
+
+def test_registry_item_content_staging_is_hash_keyed_and_idempotent(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    content = {"schema_version": "1.0", "title": "검토된 문항"}
+
+    first, first_hash = stage_registry_item_content(settings, content)
+    second, second_hash = stage_registry_item_content(settings, content)
+
+    assert first == second
+    assert first_hash == second_hash == content_sha256(content)
+    assert first.parent.name == f"item-content-{first_hash.removeprefix('sha256:')}"
+    assert first.lstat().st_mode & 0o777 == 0o640
+    assert first.read_bytes() == canonical_json_bytes(content)
+
+
+def test_registry_item_content_staging_rejects_stale_or_unsafe_materialization(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    content = {"schema_version": "1.0", "title": "검토된 문항"}
+    path, _ = stage_registry_item_content(settings, content)
+    path.chmod(0o600)
+
+    with pytest.raises(CatalogError) as captured:
+        stage_registry_item_content(settings, content)
+
+    assert captured.value.code == CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID.value
+    assert path.lstat().st_mode & 0o777 == 0o600

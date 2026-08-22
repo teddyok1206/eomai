@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from eom_api_contracts.auth import LoginRequest
+from eom_api_contracts.common import ArtifactPointer
 from eom_api_contracts.operators import CreateOperatorRequest
 from eom_api_contracts.workflows import WorkflowStartRequest
 from jsonschema import Draft202012Validator
@@ -66,3 +67,18 @@ def test_pack_pinned_workflow_requires_valid_source_intake_pointer() -> None:
         {**base, "source_intake_batch_ids": ["intake_" + "0" * 32]}
     )
     assert value.source_intake_batch_ids == ("intake_" + "0" * 32,)
+
+
+def test_artifact_pointer_can_pin_one_safe_member_without_exposing_storage_path() -> None:
+    pointer = ArtifactPointer(
+        artifact_id="artifact_" + "1" * 32,
+        artifact_revision_id="rev_" + "2" * 32,
+        artifact_member="source/diagram.png",
+        sha256="sha256:" + "3" * 64,
+        schema_ref="urn:eom:schema:content-intake-source:1.0",
+        media_type="image/png",
+        logical_uri="nas://artifacts/artifact_1/rev_2",
+    )
+    assert pointer.artifact_member == "source/diagram.png"
+    with pytest.raises(ValidationError, match="artifact member"):
+        ArtifactPointer.model_validate(pointer.model_dump() | {"artifact_member": "../diagram.png"})

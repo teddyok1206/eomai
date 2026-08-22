@@ -1,5 +1,8 @@
 """Item Registry query DTOs."""
 
+from typing import Literal
+
+from eom_catalog_contracts import AssessmentItemContent
 from pydantic import Field
 
 from eom_api_contracts.common import ApiModel, ArtifactPointer, OpaqueId, UtcDatetime
@@ -47,3 +50,11 @@ class ItemRelationshipView(ApiModel):
 
 class ItemRetirementRequest(ApiModel):
     reason: str = Field(min_length=1, max_length=1000)
+
+
+class StructuredItemContentImportRequest(ApiModel):
+    """Explicitly reviewed import of one canonical content snapshot."""
+
+    reviewed: Literal[True]
+    review_reason: str = Field(min_length=10, max_length=2000)
+    content: AssessmentItemContent

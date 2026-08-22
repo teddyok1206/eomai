@@ -27,7 +27,10 @@ Delivery -> ordered pinned Item Revision pointers + presentation profile revisio
 
 The Item Revision is the reproducible snapshot. The content JSON is a small immutable value
 artifact. Images and other binary media remain independent artifacts and are referenced by typed,
-pinned pointers. A filesystem path is never part of this contract.
+pinned pointers. A media pointer includes the exact safe POSIX artifact member and that member's
+SHA-256 because an accepted Content Intake may package several files under one Artifact Revision.
+The member is an immutable location inside the artifact manifest, not a storage path. A NAS or host
+filesystem path is never part of this contract.
 
 ## Data model
 
@@ -67,6 +70,26 @@ resolves and validates the exact artifact revision and hash, then atomically cre
 Item Revision and its component pointers. Idempotent replay returns the existing revision only when
 the registration identity is unchanged. Delivery builds pin the Item Revision, content artifact
 revision, template revision, and hashes in their request identity.
+
+The reviewed import adapter follows the same boundary. An ADMIN pins a current APPROVED Item
+Revision, submits schema-valid content, and explicitly records a review reason. The Catalog
+application service commits one canonical content Artifact Revision and asks the Registry to create
+a new immutable APPROVED Item Revision while preserving the base revision's Content Pack,
+workflow, metadata, provenance, and every non-content component pointer. Registry registration
+atomically supersedes the base revision. HTTP idempotency protects request replay; content-hash and
+registration identities deduplicate the artifact and revision boundaries.
+
+The dominant operations are exact Item/Revision lookup, component-position replacement, and media
+member lookup. DB access uses primary and unique indexes. Components are collected once into a
+keyed map, O(n), instead of repeatedly scanned. Artifact member lookup is one bounded manifest scan
+followed by a hash check of the exact immutable member. No binary bytes enter DB rows. If artifact
+commit succeeds but concurrent Registry registration loses, the immutable unreferenced artifact
+remains valid evidence and a later idempotent request can reuse it.
+
+This path is deliberately an administrative reviewed boundary, not a worker shortcut. A future
+workflow protocol v2 can emit the identical content contract and use the same Registry service.
+Textbook and mock-exam assembly pin ordered Item Revision tuples plus their own delivery profile
+revision, so they reuse canonical content without copying it.
 
 ## Dependency direction
 

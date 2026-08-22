@@ -29,6 +29,7 @@
       "properties": {
         "artifact_id": {"type": "string", "minLength": 1, "maxLength": 128},
         "artifact_revision_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "artifact_member": {"type": ["string", "null"], "minLength": 1, "maxLength": 256, "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)[^/]+(?:/[^/]+)*$"},
         "sha256": {"type": "string", "pattern": "^(sha256:)?[0-9a-f]{64}$"},
         "schema_ref": {"type": "string", "minLength": 1, "maxLength": 256},
         "media_type": {"type": "string", "minLength": 1, "maxLength": 127},

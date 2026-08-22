@@ -547,10 +547,12 @@ class QueryAdapter:
         sha256: str,
         schema_ref: str,
         media_type: str,
+        artifact_member: str | None = None,
     ) -> ArtifactPointer:
         return ArtifactPointer(
             artifact_id=artifact_id,
             artifact_revision_id=revision_id,
+            artifact_member=artifact_member,
             sha256=sha256,
             schema_ref=schema_ref,
             media_type=media_type,
@@ -596,6 +598,7 @@ class QueryAdapter:
                 row.sha256,
                 "urn:eom:schema:content-intake-source:1.0",
                 row.media_type,
+                row.relative_path,
             ),
             declared_role=row.declared_role,
         )

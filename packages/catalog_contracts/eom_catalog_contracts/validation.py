@@ -81,7 +81,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/item-registry/assessment-item-content-v1.schema.json",
             "resources/item-registry/assessment-item-content-v1.schema.json",
             "1.0",
-            "sha256:f0ba34b0fef22bd36fa391bd5fc3994591cfcc073dec7cc41ef915e0626a7595",
+            "sha256:ca0d360c209d26cce7e9283d42509204ccd8e50f519a85be871a2bbfc625a4bd",
         ),
     }
 )

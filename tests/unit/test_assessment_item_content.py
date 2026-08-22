@@ -39,6 +39,7 @@ def item_content() -> dict[str, object]:
                 "artifact": {
                     "artifact_id": "artifact_" + "1" * 32,
                     "artifact_revision_id": "rev_" + "2" * 32,
+                    "artifact_member": "diagram.png",
                     "sha256": "sha256:" + "3" * 64,
                     "media_type": "image/png",
                 },
@@ -121,6 +122,36 @@ def test_assessment_item_rejects_duplicate_or_dangling_references() -> None:
     solution["correct_choice_ids"] = ["choice_missing"]
     with pytest.raises(ValidationError, match="correct choice pointer does not resolve"):
         AssessmentItemContent.model_validate(dangling)
+
+
+@pytest.mark.parametrize(
+    "member",
+    (
+        "/diagram.png",
+        ".",
+        "source/./diagram.png",
+        "../diagram.png",
+        "source/../diagram.png",
+        "source\\diagram.png",
+        "a//b",
+    ),
+)
+def test_assessment_item_rejects_unsafe_media_member(member: str) -> None:
+    value = item_content()
+    body = value["body"]
+    assert isinstance(body, list) and isinstance(body[2], dict)
+    artifact = body[2]["artifact"]
+    assert isinstance(artifact, dict)
+    artifact["artifact_member"] = member
+
+    schema = json.loads(
+        Path("schemas/item-registry/assessment-item-content-v1.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert list(Draft202012Validator(schema).iter_errors(value))
+    with pytest.raises(ValidationError, match="artifact member"):
+        AssessmentItemContent.model_validate(value)
 
 
 def test_question_template_projection_is_explicit_and_deterministic() -> None:

@@ -9,12 +9,13 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from eom_identifiers import canonical_json_bytes
+from eom_identifiers import canonical_json_bytes, sha256_bytes, sha256_file
 
 from eom_catalog_service.errors import CatalogError, CatalogErrorCode
 from eom_catalog_service.settings import CatalogSettings, CatalogStagingArea
 
 _REGISTRATION_KEY = re.compile(r"[A-Za-z0-9][A-Za-z0-9:_-]{0,199}\Z")
+_SHA256_HEX = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def require_catalog_runtime_directory(path: Path, message: str) -> Path:
@@ -140,3 +141,74 @@ def stage_registry_manifest(
             CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID,
             "registration manifest staging failed",
         ) from exc
+
+
+def stage_registry_item_content(
+    settings: CatalogSettings,
+    content: dict[str, Any],
+) -> tuple[Path, str]:
+    """Idempotently materialize canonical item JSON in one hash-keyed registry operation."""
+
+    try:
+        content_bytes = canonical_json_bytes(content)
+    except (TypeError, ValueError) as exc:
+        raise CatalogError(
+            CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID,
+            "item content cannot be staged canonically",
+        ) from exc
+    content_hash = sha256_bytes(content_bytes)
+    digest = content_hash.removeprefix("sha256:")
+    if _SHA256_HEX.fullmatch(digest) is None:
+        raise CatalogError(
+            CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID,
+            "item content staging identity is invalid",
+        )
+    root = require_fixed_catalog_staging_root(settings, CatalogStagingArea.REGISTRY)
+    operation = create_catalog_operation_directory(
+        root,
+        f"item-content-{digest}",
+        message="item content staging directory is unsafe",
+        allow_existing=True,
+    )
+    content_path = operation / "assessment-item-content.json"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(content_path, flags, 0o640)
+    except FileExistsError:
+        descriptor = None
+    except OSError as exc:
+        raise CatalogError(
+            CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID,
+            "item content staging failed",
+        ) from exc
+    if descriptor is not None:
+        try:
+            with os.fdopen(descriptor, "wb") as output:
+                os.fchmod(output.fileno(), 0o640)
+                output.write(content_bytes)
+        except OSError as exc:
+            with suppress(OSError):
+                content_path.unlink()
+            raise CatalogError(
+                CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID,
+                "item content staging failed",
+            ) from exc
+    try:
+        metadata = content_path.lstat()
+        if (
+            content_path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or metadata.st_gid != os.getegid()
+            or stat.S_IMODE(metadata.st_mode) != 0o640
+            or metadata.st_size != len(content_bytes)
+            or sha256_file(content_path) != content_hash
+            or content_path.read_bytes() != content_bytes
+        ):
+            raise OSError("staged item content is stale or unsafe")
+    except OSError as exc:
+        raise CatalogError(
+            CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID,
+            "item content staging verification failed",
+        ) from exc
+    return content_path, content_hash
