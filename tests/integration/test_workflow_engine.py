@@ -28,7 +28,11 @@ from eom_workflow.compiler import compile_definition_data
 from eom_workflow.identifiers import new_approval_request_id, new_step_run_id
 from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.actor_authorization_adapters import StaticWorkflowActorAuthorizer
-from eom_workflow_runner.catalog_port import PreparedPrompt, RegistrationOutcome
+from eom_workflow_runner.catalog_port import (
+    GeneratedStimulusPointer,
+    PreparedPrompt,
+    RegistrationOutcome,
+)
 from eom_workflow_runner.engine import RoleExecutionResult, WorkflowRunner
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.models import (
@@ -238,6 +242,7 @@ class FakeWorkflowCatalog:
     def __init__(self) -> None:
         self.prepared: list[tuple[str, int]] = []
         self.registrations: list[tuple[str, int]] = []
+        self.materializations: list[tuple[str, str]] = []
 
     def prepare_prompt(
         self,
@@ -286,6 +291,25 @@ class FakeWorkflowCatalog:
             manifest_artifact_id="artifact_" + "6" * 32,
             manifest_artifact_revision_id="rev_" + "7" * 32,
             manifest_sha256="sha256:" + "8" * 64,
+        )
+
+    def materialize_generated_stimulus(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> GeneratedStimulusPointer:
+        image = next(pointer for pointer in artifacts if pointer.step_key == "image")
+        self.materializations.append((workflow.workflow_id, image.revision_id))
+        return GeneratedStimulusPointer(
+            artifact_id="artifact_" + "9" * 32,
+            artifact_revision_id="rev_" + "a" * 32,
+            artifact_member="generated-stimulus.png",
+            sha256="sha256:" + "b" * 64,
+            media_type="image/png",
+            width_px=800,
+            height_px=500,
+            source_result_revision_id=image.revision_id,
         )
 
 
@@ -718,6 +742,137 @@ def test_catalog_workflow_pins_prompts_and_registration_without_leaking_request(
         )
 
         runner.reconcile(workflow_id)
+        assert catalog.registrations == [("registration", 1)]
+    finally:
+        outer.rollback()
+        connection.close()
+
+
+def test_generated_workflow_materializes_and_pins_image_before_review(
+    integration_engine: Engine,
+) -> None:
+    connection = integration_engine.connect()
+    outer = connection.begin()
+    sessions = sessionmaker(
+        bind=connection,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
+    compiled = compile_definition(
+        Path("config/workflows/generic-item-development.v1.3.yaml"),
+        set(ROLE_SLOTS) | {"support"},
+    )
+    request = WorkflowRequest.model_validate(
+        {
+            "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+            "image_mode": "required",
+            "content_pack": {
+                "pack_key": "generated-knowledge-item",
+                "environment": "development",
+            },
+            "profiles": {
+                "authoring": "generated-knowledge-authoring",
+                "review": "generated-knowledge-review",
+                "image": "generated-stimulus-drawing",
+                "registration": "generated-structured-registration",
+            },
+            "source_intake": {"batch_ids": []},
+            "registry_intent": {"mode": "CREATE_ITEM"},
+            "item_brief": {
+                "subject": "일반 과학",
+                "topic": "등속 운동",
+                "task_type": "data_interpretation",
+                "difficulty": "medium",
+                "quality_profile": "balanced",
+                "original_request_sha256": "c" * 64,
+            },
+        }
+    )
+    runtime_context = {
+        "content_pack": {
+            "release_id": "packrel_" + "d" * 32,
+            "pack_key": "generated-knowledge-item",
+            "version": "1.0.0",
+            "release_sha256": "sha256:" + "e" * 64,
+            "manifest_sha256": "sha256:" + "f" * 64,
+        },
+        "profiles": request.profiles.model_dump(mode="json") if request.profiles else {},
+        "source_intake": {"batch_ids": []},
+        "registry_intent": request.registry_intent.model_dump(mode="json")
+        if request.registry_intent
+        else {},
+        "prompt_artifacts": [],
+    }
+    try:
+        with transaction(sessions) as session:
+            definition, _ = import_workflow_definition(session, compiled)
+            workflow, created = create_workflow_instance(
+                session,
+                definition=definition,
+                request=request,
+                idempotency_key="workflow-generated-stimulus-pinning",
+                actor_type="human",
+                actor_id="requester_01",
+                runtime_context=runtime_context,
+            )
+            assert created
+            enqueue_command(
+                session,
+                workflow_id=workflow.workflow_id,
+                command_type=CommandType.START_WORKFLOW,
+                payload={},
+                actor_type="human",
+                actor_id="requester_01",
+                source="test",
+                idempotency_key=f"start:{workflow.workflow_id}",
+            )
+            workflow_id = workflow.workflow_id
+
+        executor = FakeRoleExecutor(sessions)
+        catalog = FakeWorkflowCatalog()
+        runner = WorkflowRunner(
+            integration_engine,
+            _workflow_settings(),
+            executor,
+            catalog=catalog,
+            actor_authorizer=_static_actor_authorizer(),
+            readiness=ReadyWorkflowRuntime(),
+            available_roles=frozenset(ROLE_SLOTS) | {"support"},
+            runner_id="generated-stimulus-test-runner",
+        )
+        runner.sessions = sessions
+        runner.run_until_idle(workflow_id)
+
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            assert workflow.state == WorkflowState.AWAITING_HUMAN_APPROVAL.value
+            image = next(
+                step for step in list_step_runs(session, workflow_id) if step.step_key == "image"
+            )
+            assert image.output_pointer_manifest is not None
+            generated = workflow.runtime_context["generated_stimulus"]
+            assert (
+                generated["source_result_revision_id"]
+                == image.output_pointer_manifest["revision_id"]
+            )
+            assert generated["artifact_member"] == "generated-stimulus.png"
+        assert len(catalog.materializations) == 1
+        assert [role for _, _, role in executor.calls] == ["authoring", "image", "review"]
+
+        _enqueue_approval(
+            sessions,
+            workflow_id,
+            CommandType.APPROVE_WORKFLOW,
+            "approve-workflow-generated-stimulus",
+        )
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            assert workflow.state == WorkflowState.COMPLETED.value
+            assert workflow.runtime_context["final_pointer_manifest"]["item_registration"]
+        assert len(catalog.materializations) == 1
         assert catalog.registrations == [("registration", 1)]
     finally:
         outer.rollback()

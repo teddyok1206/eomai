@@ -27,6 +27,30 @@ class RegistrationOutcome:
     manifest_sha256: str
 
 
+@dataclass(frozen=True)
+class GeneratedStimulusPointer:
+    artifact_id: str
+    artifact_revision_id: str
+    artifact_member: str
+    sha256: str
+    media_type: str
+    width_px: int
+    height_px: int
+    source_result_revision_id: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "artifact_id": self.artifact_id,
+            "artifact_revision_id": self.artifact_revision_id,
+            "artifact_member": self.artifact_member,
+            "sha256": self.sha256,
+            "media_type": self.media_type,
+            "width_px": self.width_px,
+            "height_px": self.height_px,
+            "source_result_revision_id": self.source_result_revision_id,
+        }
+
+
 class WorkflowCatalogPort(Protocol):
     def prepare_prompt(
         self,
@@ -45,3 +69,10 @@ class WorkflowCatalogPort(Protocol):
         request: WorkflowRequest,
         artifacts: tuple[ArtifactPointer, ...],
     ) -> RegistrationOutcome: ...
+
+    def materialize_generated_stimulus(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> GeneratedStimulusPointer: ...

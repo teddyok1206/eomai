@@ -149,26 +149,6 @@ function installRequestDraft() {
   $("#draft-submit").addEventListener("click", submitDraft);
 }
 
-async function loadAcceptedIntakes(selectedId = null) {
-  const select = $("#draft-form").elements.source_intake_batch_id;
-  const values = await api("/content-intakes/accepted");
-  if (!Array.isArray(values)) throw new Error("APPLICATION_API_RESPONSE_INVALID");
-  state.acceptedIntakes = values;
-  select.replaceChildren();
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = "일반 지식 모드 — Source Intake 없음";
-  select.append(placeholder);
-  values.forEach((value) => {
-    const option = document.createElement("option");
-    option.value = value.intake_batch_id;
-    option.textContent = `${value.batch_name} · ${value.intake_batch_id}`;
-    select.append(option);
-  });
-  select.value = selectedId || "";
-  return values.length;
-}
-
 async function analyzeDraft() {
   const message = $("#draft-message");
   showMessage(message, "요청을 구조화하고 있습니다.");
@@ -179,10 +159,9 @@ async function analyzeDraft() {
       body: {original_request_text: $("#request-text").value},
     });
     state.draft = draft;
-    const intakeCount = await loadAcceptedIntakes(draft.source_intake_batch_id);
     fillDraft(draft);
     setStatus($("#draft-state"), "success", "✓", "검토 가능");
-    showMessage(message, intakeCount ? "Draft를 검토하세요. Source Intake는 선택 사항입니다." : "Draft를 검토하세요. 일반 지식 모드로 바로 제출할 수 있습니다.", "success");
+    showMessage(message, "Draft를 검토하세요. Source Intake 없이 일반 지식 모드로 바로 제출할 수 있습니다.", "success");
     $("#draft-save").disabled = false;
     $("#draft-submit").disabled = false;
   } catch (failure) {

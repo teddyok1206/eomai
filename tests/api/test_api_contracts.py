@@ -97,6 +97,40 @@ def test_knowledge_item_workflow_is_source_optional_but_template_constrained() -
         WorkflowStartRequest.model_validate(request | {"image_mode": "skip"})
 
 
+def test_generated_item_workflow_requires_image_role_without_a_prebuilt_stimulus() -> None:
+    request = {
+        "definition_key": "generic-item-development",
+        "definition_version": "1.3.0",
+        "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+        "image_mode": "required",
+        "pack_key": "generated-knowledge-item",
+        "source_intake_batch_ids": [],
+        "item_brief": {
+            "subject": "일반 과학",
+            "topic": "변인 사이의 선형 관계",
+            "task_type": "data_interpretation",
+            "difficulty": "medium",
+            "choice_count": 5,
+            "equation_required": True,
+            "image_required": True,
+            "quality_profile": "balanced",
+            "original_request_sha256": "0" * 64,
+        },
+        "stimulus_asset_key": None,
+    }
+    parsed = WorkflowStartRequest.model_validate(request)
+    assert parsed.pack_key == "generated-knowledge-item"
+    assert parsed.stimulus_asset_key is None
+    with pytest.raises(ValidationError, match="generated item request"):
+        WorkflowStartRequest.model_validate(
+            request | {"source_intake_batch_ids": ["intake_" + "1" * 32]}
+        )
+    with pytest.raises(ValidationError, match="generated item request"):
+        WorkflowStartRequest.model_validate(
+            request | {"stimulus_asset_key": "eom-question-template-reference-v1"}
+        )
+
+
 def test_artifact_pointer_can_pin_one_safe_member_without_exposing_storage_path() -> None:
     pointer = ArtifactPointer(
         artifact_id="artifact_" + "1" * 32,

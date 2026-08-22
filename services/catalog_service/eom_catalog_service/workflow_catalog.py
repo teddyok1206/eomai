@@ -8,6 +8,7 @@ from typing import Any, Literal, cast
 from eom_catalog_contracts import (
     AssessmentItemContent,
     ImageBlock,
+    MediaArtifactPointer,
     validate_contract,
     validate_eom_question_template_content,
 )
@@ -16,14 +17,29 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_item_registry import ComponentPointer, RegistrationRequest
 from eom_orchestrator.database import build_session_factory
 from eom_workflow import ArtifactPointer, WorkflowRequest
-from eom_workflow.models import KnowledgeAuthoringRoleResult, RoleResult
+from eom_workflow.models import (
+    GeneratedAuthoringRoleResult,
+    GeneratedImageRoleResult,
+    KnowledgeAuthoringRoleResult,
+    RoleResult,
+)
 from eom_workflow.schemas import validate_role_result
-from eom_workflow_runner.catalog_port import PreparedPrompt, RegistrationOutcome
+from eom_workflow_runner.catalog_port import (
+    GeneratedStimulusPointer,
+    PreparedPrompt,
+    RegistrationOutcome,
+)
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.generated_stimulus import (
+    PNG_HEIGHT,
+    PNG_MEMBER,
+    PNG_WIDTH,
+    render_generated_stimulus,
+)
 from eom_catalog_service.knowledge_stimulus import KnowledgeStimulusService
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
@@ -57,12 +73,16 @@ ComponentType = Literal["UPPER_STEM", "IMAGE_SPEC", "REVIEW_REPORT", "METADATA",
 ROLE_BY_RESULT_SCHEMA = {
     "authoring-result@1.0": "authoring",
     "authoring-result@2.0": "authoring",
+    "authoring-result@3.0": "authoring",
     "image-result@1.0": "image",
     "image-result@2.0": "image",
+    "image-result@3.0": "image",
     "review-result@1.0": "review",
     "review-result@2.0": "review",
+    "review-result@3.0": "review",
     "registration-result@1.0": "item_management",
     "registration-result@2.0": "item_management",
+    "registration-result@3.0": "item_management",
 }
 
 
@@ -179,12 +199,16 @@ class WorkflowCatalogService:
                 ),
                 "prompt_artifacts": [],
             }
-            if request.request_name == "KNOWLEDGE_ITEM_REQUEST":
-                assert request.item_brief is not None and request.stimulus_asset is not None
+            if request.request_name in {
+                "KNOWLEDGE_ITEM_REQUEST",
+                "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+            }:
+                assert request.item_brief is not None
                 context["item_brief"] = request.item_brief.model_dump(mode="json")
-                context["stimulus_asset"] = self.stimulus.resolve(
-                    request.stimulus_asset.asset_key
-                ).as_dict()
+                if request.stimulus_asset is not None:
+                    context["stimulus_asset"] = self.stimulus.resolve(
+                        request.stimulus_asset.asset_key
+                    ).as_dict()
             return context
 
     def prepare_prompt(
@@ -278,6 +302,81 @@ class WorkflowCatalogService:
         }
         return PreparedPrompt(rendered.text, pointer, envelope)
 
+    def materialize_generated_stimulus(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> GeneratedStimulusPointer:
+        authoring = next(
+            (
+                pointer
+                for pointer in artifacts
+                if pointer.step_key == "authoring"
+                and pointer.result_schema == "authoring-result@3.0"
+            ),
+            None,
+        )
+        image = next(
+            (
+                pointer
+                for pointer in artifacts
+                if pointer.step_key == "image" and pointer.result_schema == "image-result@3.0"
+            ),
+            None,
+        )
+        if authoring is None or image is None:
+            raise ValueError("generated stimulus inputs are incomplete")
+        _, authoring_result = self._load_upstream_result(workflow, authoring)
+        _, image_result = self._load_upstream_result(workflow, image)
+        if not isinstance(authoring_result, GeneratedAuthoringRoleResult) or not isinstance(
+            image_result, GeneratedImageRoleResult
+        ):
+            raise ValueError("generated stimulus result types are invalid")
+        brief = authoring_result.output.draft.image_brief
+        drawing = image_result.output.drawing
+        for field in (
+            "kind",
+            "block_id",
+            "alt_text",
+            "x_axis_label",
+            "y_axis_label",
+            "series_label",
+            "x_values",
+            "y_values",
+        ):
+            if getattr(brief, field) != getattr(drawing, field):
+                raise ValueError("image worker changed the authoring image brief")
+        source = render_generated_stimulus(
+            self.settings,
+            workflow_id=workflow.workflow_id,
+            result_revision_id=image.revision_id,
+            drawing=drawing,
+        )
+        drawing_hash = content_sha256(drawing.model_dump(mode="json"))
+        artifact = self.artifacts.commit_file_set(
+            files={PNG_MEMBER: source},
+            primary_file=PNG_MEMBER,
+            artifact_type="generated-item-stimulus",
+            idempotency_key=f"generated-stimulus:{workflow.workflow_id}:{image.revision_id}",
+            request={
+                "workflow_id": workflow.workflow_id,
+                "source_result_revision_id": image.revision_id,
+                "drawing_schema": "eom.generated-line-graph/1.0",
+            },
+            result={"drawing_sha256": drawing_hash},
+        )
+        return GeneratedStimulusPointer(
+            artifact_id=artifact.artifact_id,
+            artifact_revision_id=artifact.revision_id,
+            artifact_member=PNG_MEMBER,
+            sha256=artifact.content_hash,
+            media_type="image/png",
+            width_px=PNG_WIDTH,
+            height_px=PNG_HEIGHT,
+            source_result_revision_id=image.revision_id,
+        )
+
     def register_workflow(
         self,
         *,
@@ -313,7 +412,10 @@ class WorkflowCatalogService:
             if pointer.step_key in COMPONENT_TYPES
         )
         tags: tuple[str, ...]
-        if request.request_name == "KNOWLEDGE_ITEM_REQUEST":
+        if request.request_name in {
+            "KNOWLEDGE_ITEM_REQUEST",
+            "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+        }:
             components = (*components, self._knowledge_item_content(workflow, request, artifacts))
             assert request.item_brief is not None
             brief = request.item_brief
@@ -480,6 +582,9 @@ class WorkflowCatalogService:
         stimulus = workflow.runtime_context.get("stimulus_asset")
         if isinstance(stimulus, dict):
             context["stimulus"] = stimulus
+        generated = workflow.runtime_context.get("generated_stimulus")
+        if isinstance(generated, dict):
+            context["generated_stimulus"] = generated
         return context
 
     def _knowledge_item_content(
@@ -488,6 +593,8 @@ class WorkflowCatalogService:
         request: WorkflowRequest,
         artifacts: tuple[ArtifactPointer, ...],
     ) -> ComponentPointer:
+        if request.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST":
+            return self._generated_knowledge_item_content(workflow, request, artifacts)
         authoring = next(
             (
                 pointer
@@ -545,6 +652,122 @@ class WorkflowCatalogService:
             logical_name="assessment-item-content.json",
             metadata={
                 "authoring_artifact_revision_id": authoring.revision_id,
+                "knowledge_source_mode": "general_model_knowledge",
+                "delivery_profile": "eom-question-template-v1",
+                "request_sha256": (
+                    request.item_brief.original_request_sha256
+                    if request.item_brief is not None
+                    else ""
+                ),
+            },
+        )
+
+    def _generated_knowledge_item_content(
+        self,
+        workflow: WorkflowInstanceRecord,
+        request: WorkflowRequest,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> ComponentPointer:
+        authoring = next(
+            (
+                pointer
+                for pointer in artifacts
+                if pointer.step_key == "authoring"
+                and pointer.result_schema == "authoring-result@3.0"
+            ),
+            None,
+        )
+        image_result = next(
+            (
+                pointer
+                for pointer in artifacts
+                if pointer.step_key == "image" and pointer.result_schema == "image-result@3.0"
+            ),
+            None,
+        )
+        if authoring is None or image_result is None:
+            raise ValueError("generated knowledge workflow results are incomplete")
+        _, parsed = self._load_upstream_result(workflow, authoring)
+        if not isinstance(parsed, GeneratedAuthoringRoleResult):
+            raise ValueError("generated authoring result type is invalid")
+        stimulus = workflow.runtime_context.get("generated_stimulus")
+        if (
+            not isinstance(stimulus, dict)
+            or stimulus.get("source_result_revision_id") != image_result.revision_id
+            or stimulus.get("media_type") != "image/png"
+            or stimulus.get("width_px") != PNG_WIDTH
+            or stimulus.get("height_px") != PNG_HEIGHT
+        ):
+            raise ValueError("generated stimulus pointer is missing or stale")
+        pointer = MediaArtifactPointer.model_validate(
+            {
+                key: stimulus[key]
+                for key in (
+                    "artifact_id",
+                    "artifact_revision_id",
+                    "artifact_member",
+                    "sha256",
+                    "media_type",
+                )
+            }
+        )
+        self.artifacts.verify_file_pointer(
+            artifact_id=pointer.artifact_id,
+            revision_id=pointer.artifact_revision_id,
+            content_hash=pointer.sha256,
+            member=pointer.artifact_member,
+        )
+        draft = parsed.output.draft
+        content = AssessmentItemContent(
+            schema_version="1.0",
+            locale=draft.locale,
+            title=draft.title,
+            body=(
+                draft.stem,
+                draft.data_table,
+                ImageBlock(
+                    block_id=draft.image_brief.block_id,
+                    purpose="stimulus",
+                    artifact=pointer,
+                    alt_text=draft.image_brief.alt_text,
+                    width_px=PNG_WIDTH,
+                    height_px=PNG_HEIGHT,
+                ),
+                draft.equation,
+                draft.prompt,
+                draft.statements,
+            ),
+            interaction=draft.interaction,
+            solution=draft.solution,
+            score=draft.score,
+        )
+        validate_eom_question_template_content(content)
+        content_data = content.model_dump(mode="json")
+        staged, staged_hash = stage_registry_item_content(self.settings, content_data)
+        expected_hash = content_sha256(content_data)
+        if staged_hash != expected_hash:
+            raise ValueError("generated item content changed during staging")
+        artifact = self.artifacts.commit_file_set(
+            files={"assessment-item-content.json": staged},
+            primary_file="assessment-item-content.json",
+            artifact_type="assessment-item-content",
+            idempotency_key=f"workflow-item-content:{workflow.workflow_id}:{expected_hash}",
+            request={"workflow_id": workflow.workflow_id, "schema_version": "1.0"},
+            result={"content_sha256": expected_hash},
+        )
+        return ComponentPointer(
+            component_type="ITEM_CONTENT",
+            ordinal=0,
+            schema_ref="eom.assessment.item-content/1.0",
+            media_type="application/json",
+            artifact_id=artifact.artifact_id,
+            artifact_revision_id=artifact.revision_id,
+            sha256=artifact.content_hash,
+            logical_name="assessment-item-content.json",
+            metadata={
+                "authoring_artifact_revision_id": authoring.revision_id,
+                "image_artifact_revision_id": pointer.artifact_revision_id,
+                "image_result_revision_id": image_result.revision_id,
                 "knowledge_source_mode": "general_model_knowledge",
                 "delivery_profile": "eom-question-template-v1",
                 "request_sha256": (

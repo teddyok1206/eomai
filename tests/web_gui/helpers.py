@@ -177,11 +177,11 @@ class FakeGateway:
         self, session: WebSession, payload: dict[str, object], idempotency_key: str
     ) -> dict[str, Any]:
         del session, idempotency_key
-        assert payload["request_name"] == "KNOWLEDGE_ITEM_REQUEST"
-        assert payload["definition_version"] == "1.2.0"
-        assert payload["pack_key"] == "general-knowledge-item"
-        assert payload["stimulus_asset_key"] == "eom-question-template-reference-v1"
-        assert payload["source_intake_batch_ids"] in ([], [INTAKE_ID])
+        assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
+        assert payload["definition_version"] == "1.3.0"
+        assert payload["pack_key"] == "generated-knowledge-item"
+        assert payload["stimulus_asset_key"] is None
+        assert payload["source_intake_batch_ids"] == []
         self.start_calls += 1
         return {
             "command_id": "command_test_workflow_start",

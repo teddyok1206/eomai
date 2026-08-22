@@ -15,6 +15,10 @@ from pydantic import ValidationError
 
 from eom_workflow.models import (
     AuthoringRoleResult,
+    GeneratedAuthoringRoleResult,
+    GeneratedImageRoleResult,
+    GeneratedRegistrationRoleResult,
+    GeneratedReviewRoleResult,
     ImageRoleResult,
     KnowledgeAuthoringRoleResult,
     KnowledgeImageRoleResult,
@@ -35,10 +39,14 @@ ROLE_RESULT_SCHEMAS: dict[str, str] = {
     "item_management": "registration-result@1.0",
 }
 ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
-    "authoring": frozenset({"authoring-result@1.0", "authoring-result@2.0"}),
-    "image": frozenset({"image-result@1.0", "image-result@2.0"}),
-    "review": frozenset({"review-result@1.0", "review-result@2.0"}),
-    "item_management": frozenset({"registration-result@1.0", "registration-result@2.0"}),
+    "authoring": frozenset(
+        {"authoring-result@1.0", "authoring-result@2.0", "authoring-result@3.0"}
+    ),
+    "image": frozenset({"image-result@1.0", "image-result@2.0", "image-result@3.0"}),
+    "review": frozenset({"review-result@1.0", "review-result@2.0", "review-result@3.0"}),
+    "item_management": frozenset(
+        {"registration-result@1.0", "registration-result@2.0", "registration-result@3.0"}
+    ),
 }
 RESULT_SCHEMA_FILES = {
     "authoring-result@1.0": "authoring-result.schema.json",
@@ -49,6 +57,10 @@ RESULT_SCHEMA_FILES = {
     "image-result@2.0": "image-result-v2.schema.json",
     "review-result@2.0": "review-result-v2.schema.json",
     "registration-result@2.0": "registration-result-v2.schema.json",
+    "authoring-result@3.0": "authoring-result-v3.schema.json",
+    "image-result@3.0": "image-result-v3.schema.json",
+    "review-result@3.0": "review-result-v3.schema.json",
+    "registration-result@3.0": "registration-result-v3.schema.json",
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -64,12 +76,20 @@ RESULT_SCHEMA_PROTOCOLS = {
         for schema_id in RESULT_SCHEMA_FILES
         if schema_id.endswith("@2.0")
     },
+    **{
+        schema_id: "workflow-role/1.2.0"
+        for schema_id in RESULT_SCHEMA_FILES
+        if schema_id.endswith("@3.0")
+    },
 }
 PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.0.1": INPUT_SCHEMA_FILES,
     "workflow-role/1.1.0": INPUT_SCHEMA_FILES_V1_1,
+    "workflow-role/1.2.0": INPUT_SCHEMA_FILES_V1_1,
 }
-WorkflowProtocolVersion = Literal["workflow-role/1.0.1", "workflow-role/1.1.0"]
+WorkflowProtocolVersion = Literal[
+    "workflow-role/1.0.1", "workflow-role/1.1.0", "workflow-role/1.2.0"
+]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
         {
@@ -120,13 +140,17 @@ def load_role_input_schema(
         ) from exc
     logical_name = f"roles/{file_name}"
     schema = load_json_schema(ROLE_RESOURCE_ROOT.joinpath(file_name), logical_name)
-    if protocol_version == "workflow-role/1.1.0":
+    if protocol_version in {"workflow-role/1.1.0", "workflow-role/1.2.0"}:
         schema = copy.deepcopy(schema)
         _mapping(_mapping(schema, "properties"), "protocol_version")["const"] = protocol_version
         request = _mapping(_mapping(schema, "$defs"), "request")
         request_name = _mapping(_mapping(request, "properties"), "request_name")
         request_name.pop("const", None)
-        request_name["const"] = "KNOWLEDGE_ITEM_REQUEST"
+        request_name["const"] = (
+            "GENERATED_KNOWLEDGE_ITEM_REQUEST"
+            if protocol_version == "workflow-role/1.2.0"
+            else "KNOWLEDGE_ITEM_REQUEST"
+        )
     return schema
 
 
@@ -165,6 +189,14 @@ def validate_role_input(
 def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult:
     validate_schema_message(load_role_result_schema(schema_id), value, schema_id)
     try:
+        if schema_id == "authoring-result@3.0" and role == "authoring":
+            return GeneratedAuthoringRoleResult.model_validate(value)
+        if schema_id == "image-result@3.0" and role == "image":
+            return GeneratedImageRoleResult.model_validate(value)
+        if schema_id == "review-result@3.0" and role == "review":
+            return GeneratedReviewRoleResult.model_validate(value)
+        if schema_id == "registration-result@3.0" and role == "item_management":
+            return GeneratedRegistrationRoleResult.model_validate(value)
         if schema_id == "authoring-result@2.0" and role == "authoring":
             return KnowledgeAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@2.0" and role == "image":
@@ -195,7 +227,10 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
         ("step_run_id", worker_input.step_run_id),
     ):
         _mapping(properties, key)["const"] = value
-    artifact = _mapping(_mapping(schema, "$defs"), "artifact")
+    definitions = _mapping(schema, "$defs")
+    artifact = definitions.get("artifact", definitions.get("ArtifactSpec"))
+    if not isinstance(artifact, dict):
+        raise WorkflowSchemaError("schema is missing artifact definition")
     artifact_properties = _mapping(artifact, "properties")
     _mapping(artifact_properties, "logical_artifact_id")["const"] = (
         worker_input.artifact.logical_artifact_id

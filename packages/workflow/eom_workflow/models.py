@@ -4,9 +4,19 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from enum import StrEnum
+from itertools import pairwise
 from typing import Annotated, Any, Literal
 
-from eom_catalog_contracts import AssessmentItemContent
+from eom_catalog_contracts import (
+    AssessmentItemContent,
+    EquationBlock,
+    ItemScore,
+    ItemSolution,
+    ParagraphBlock,
+    SingleChoiceInteraction,
+    StatementSetBlock,
+    TableBlock,
+)
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -102,7 +112,11 @@ class WorkflowDefinition(FrozenModel):
 
 
 class WorkerRequest(FrozenModel):
-    request_name: Literal["PLACEHOLDER_REQUEST", "KNOWLEDGE_ITEM_REQUEST"]
+    request_name: Literal[
+        "PLACEHOLDER_REQUEST",
+        "KNOWLEDGE_ITEM_REQUEST",
+        "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+    ]
     image_mode: Literal["skip", "required"]
 
 
@@ -156,7 +170,11 @@ class RegistryIntent(FrozenModel):
 
 
 class WorkflowRequest(FrozenModel):
-    request_name: Literal["PLACEHOLDER_REQUEST", "KNOWLEDGE_ITEM_REQUEST"]
+    request_name: Literal[
+        "PLACEHOLDER_REQUEST",
+        "KNOWLEDGE_ITEM_REQUEST",
+        "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+    ]
     image_mode: Literal["skip", "required"]
     content_pack: ContentPackSelection | None = None
     profiles: WorkflowProfiles | None = None
@@ -183,6 +201,17 @@ class WorkflowRequest(FrozenModel):
             ):
                 raise ValueError(
                     "knowledge item workflow requires pack, brief, fixed stimulus, and image"
+                )
+        elif self.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST":
+            if (
+                self.content_pack is None
+                or self.item_brief is None
+                or self.stimulus_asset is not None
+                or self.image_mode != "required"
+                or (self.source_intake is not None and self.source_intake.batch_ids)
+            ):
+                raise ValueError(
+                    "generated knowledge workflow requires source-free pack, brief, and image role"
                 )
         else:
             if self.item_brief is not None or self.stimulus_asset is not None:
@@ -216,7 +245,9 @@ class ArtifactPointer(FrozenModel):
 
 class RoleWorkerInput(FrozenModel):
     schema_version: Literal["1.0"] = "1.0"
-    protocol_version: Literal["workflow-role/1.0.1", "workflow-role/1.1.0"] = "workflow-role/1.0.1"
+    protocol_version: Literal[
+        "workflow-role/1.0.1", "workflow-role/1.1.0", "workflow-role/1.2.0"
+    ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
     step_run_id: StepRunId
@@ -282,7 +313,9 @@ class RegistrationOutput(FrozenModel):
 
 class RoleResultBase(FrozenModel):
     schema_version: Literal["1.0"] = "1.0"
-    protocol_version: Literal["workflow-role/1.0.1", "workflow-role/1.1.0"] = "workflow-role/1.0.1"
+    protocol_version: Literal[
+        "workflow-role/1.0.1", "workflow-role/1.1.0", "workflow-role/1.2.0"
+    ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
     step_run_id: StepRunId
@@ -382,6 +415,103 @@ class KnowledgeRegistrationRoleResult(RoleResultBase):
     output: KnowledgeRegistrationOutput
 
 
+class GeneratedImageBrief(FrozenModel):
+    kind: Literal["line_graph"] = "line_graph"
+    block_id: Literal["block_image"] = "block_image"
+    alt_text: str = Field(min_length=1, max_length=1000)
+    x_axis_label: str = Field(pattern=r"^[A-Za-z0-9 ()/_-]{1,24}$")
+    y_axis_label: str = Field(pattern=r"^[A-Za-z0-9 ()/_-]{1,24}$")
+    series_label: str = Field(pattern=r"^[A-Za-z0-9 ()/_-]{1,24}$")
+    x_values: tuple[int, ...] = Field(min_length=2, max_length=8)
+    y_values: tuple[int, ...] = Field(min_length=2, max_length=8)
+
+    @model_validator(mode="after")
+    def validate_series(self) -> GeneratedImageBrief:
+        if len(self.x_values) != len(self.y_values):
+            raise ValueError("generated image coordinates must have equal lengths")
+        if any(value < -1000 or value > 1000 for value in (*self.x_values, *self.y_values)):
+            raise ValueError("generated image coordinate is outside the bounded range")
+        if any(right <= left for left, right in pairwise(self.x_values)):
+            raise ValueError("generated image x coordinates must be strictly increasing")
+        return self
+
+
+class GeneratedItemDraft(FrozenModel):
+    schema_version: Literal["1.0"] = "1.0"
+    locale: Literal["ko-KR"] = "ko-KR"
+    title: str = Field(min_length=1, max_length=20_000)
+    stem: ParagraphBlock
+    data_table: TableBlock
+    image_brief: GeneratedImageBrief
+    equation: EquationBlock
+    prompt: ParagraphBlock
+    statements: StatementSetBlock
+    interaction: SingleChoiceInteraction
+    solution: ItemSolution
+    score: ItemScore
+
+    @model_validator(mode="after")
+    def validate_template_shape(self) -> GeneratedItemDraft:
+        if self.stem.purpose != "stem" or self.data_table.purpose != "data":
+            raise ValueError("generated item stem or data table purpose is invalid")
+        if self.equation.purpose != "stimulus" or self.equation.notation != (
+            "hancom-equation-script"
+        ):
+            raise ValueError("generated item equation contract is invalid")
+        if self.prompt.purpose != "prompt":
+            raise ValueError("generated item prompt purpose is invalid")
+        if len(self.data_table.headers) != 3 or len(self.data_table.rows) != 1:
+            raise ValueError("generated item table must be 3 columns by 1 row")
+        if len(self.statements.statements) != 3 or tuple(
+            item.label for item in self.statements.statements
+        ) != ("ㄱ", "ㄴ", "ㄷ"):
+            raise ValueError("generated item statements must be ordered ㄱ/ㄴ/ㄷ")
+        if len(self.interaction.choices) != 5 or self.score.points not in {2, 3}:
+            raise ValueError("generated item choice or score contract is invalid")
+        return self
+
+
+class GeneratedAuthoringOutput(FrozenModel):
+    draft: GeneratedItemDraft
+    metadata: KnowledgeAuthoringMetadata
+
+
+class GeneratedAuthoringRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.2.0"] = "workflow-role/1.2.0"
+    role: Literal["authoring"]
+    output: GeneratedAuthoringOutput
+
+
+class GeneratedLineGraphDrawing(GeneratedImageBrief):
+    width_px: Literal[800] = 800
+    height_px: Literal[500] = 500
+    stroke_color: Literal["blue", "green", "orange"]
+    point_style: Literal["circle", "square"]
+
+
+class GeneratedImageOutput(FrozenModel):
+    drawing: GeneratedLineGraphDrawing
+    summary: str = Field(min_length=1, max_length=2000)
+
+
+class GeneratedImageRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.2.0"] = "workflow-role/1.2.0"
+    role: Literal["image"]
+    output: GeneratedImageOutput
+
+
+class GeneratedReviewRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.2.0"] = "workflow-role/1.2.0"
+    role: Literal["review"]
+    output: KnowledgeReviewOutput
+
+
+class GeneratedRegistrationRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.2.0"] = "workflow-role/1.2.0"
+    role: Literal["item_management"]
+    output: KnowledgeRegistrationOutput
+
+
 RoleResult = (
     AuthoringRoleResult
     | ImageRoleResult
@@ -391,4 +521,8 @@ RoleResult = (
     | KnowledgeImageRoleResult
     | KnowledgeReviewRoleResult
     | KnowledgeRegistrationRoleResult
+    | GeneratedAuthoringRoleResult
+    | GeneratedImageRoleResult
+    | GeneratedReviewRoleResult
+    | GeneratedRegistrationRoleResult
 )

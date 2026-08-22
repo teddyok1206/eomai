@@ -39,10 +39,10 @@ def test_request_text_is_not_raw_workflow_prompt() -> None:
     )
     draft = draft.model_copy(update={"source_intake_batch_id": INTAKE_ID})
     payload = workflow_start_payload(draft)
-    assert payload["request_name"] == "KNOWLEDGE_ITEM_REQUEST"
-    assert payload["definition_version"] == "1.2.0"
-    assert payload["pack_key"] == "general-knowledge-item"
-    assert payload["source_intake_batch_ids"] == [INTAKE_ID]
+    assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
+    assert payload["definition_version"] == "1.3.0"
+    assert payload["pack_key"] == "generated-knowledge-item"
+    assert payload["source_intake_batch_ids"] == []
     assert DEMO_REQUEST not in str(payload)
     assert "model" not in payload and "reasoning" not in payload
 
@@ -86,7 +86,7 @@ def test_workflow_payload_allows_source_free_general_knowledge() -> None:
     )
     payload = workflow_start_payload(draft)
     assert payload["source_intake_batch_ids"] == []
-    assert payload["stimulus_asset_key"] == "eom-question-template-reference-v1"
+    assert payload["stimulus_asset_key"] is None
 
 
 def test_draft_validation_rejects_unbounded_choice_count() -> None:

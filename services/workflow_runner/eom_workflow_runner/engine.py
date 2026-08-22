@@ -35,6 +35,7 @@ from eom_workflow_runner.actor_authorization import (
     WorkflowActorDenialReason,
 )
 from eom_workflow_runner.catalog_port import (
+    GeneratedStimulusPointer,
     RegistrationOutcome,
     WorkflowCatalogPort,
 )
@@ -527,6 +528,7 @@ class WorkflowRunner:
         self._renew_command_lease(command_id)
         full_request = WorkflowRequest.model_validate(workflow.initial_request)
         registration: RegistrationOutcome | None = None
+        generated_stimulus: GeneratedStimulusPointer | None = None
         result_pointer: ArtifactPointer | None = None
         try:
             prompt_text: str | None = None
@@ -591,6 +593,14 @@ class WorkflowRunner:
                         request=full_request,
                         artifacts=(*upstream, result_pointer),
                     )
+                elif (
+                    definition.worker_role == "image"
+                    and full_request.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
+                ):
+                    generated_stimulus = self.catalog.materialize_generated_stimulus(
+                        workflow=workflow,
+                        artifacts=(*upstream, result_pointer),
+                    )
         except Exception as exc:
             with transaction(self.sessions) as session:
                 failed_step = session.execute(
@@ -650,6 +660,8 @@ class WorkflowRunner:
                 pointers = list(context.get("artifact_pointers", []))
                 pointers.append(result_pointer.model_dump(mode="json"))
                 context["artifact_pointers"] = pointers
+                if generated_stimulus is not None:
+                    context["generated_stimulus"] = generated_stimulus.as_dict()
                 if registration is not None:
                     context["item_registration"] = {
                         "item_id": registration.item_id,

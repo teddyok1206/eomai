@@ -22,6 +22,8 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "HWPX Capability",
             "DB Explorer Lite",
             "Generic Demo Mode",
+            "eom-cdx가 문항에 맞춰 생성하는 자료 그림",
+            "Source Intake 없이 구조화 Brief와 worker의 일반 과학 지식",
         ):
             assert marker in shell.text
         assert client.get("/studio/assets/styles.css").status_code == 200

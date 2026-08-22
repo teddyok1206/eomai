@@ -1,0 +1,18 @@
+schema_version: "1.0"
+profile:
+  type: "review"
+  key: "generated-knowledge-review"
+  version: "1.0.0"
+template: "prompt-templates/review.md"
+input_schema_ref: "eom://workflow/review-input@1.2"
+output_schema_ref: "review-result@3.0"
+required_context:
+  - "workflow.id"
+  - "workflow.step_key"
+  - "brief.subject"
+  - "brief.topic"
+  - "upstream.authoring.result_json"
+  - "upstream.image.result_json"
+  - "generated_stimulus.artifact_revision_id"
+  - "generated_stimulus.sha256"
+  - "pack.release_id"

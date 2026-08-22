@@ -80,14 +80,12 @@ def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
     """Map a reviewed draft to the source-optional knowledge-item workflow contract."""
     return {
         "definition_key": "generic-item-development",
-        "definition_version": "1.2.0",
-        "request_name": "KNOWLEDGE_ITEM_REQUEST",
+        "definition_version": "1.3.0",
+        "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
         "image_mode": "required",
-        "pack_key": "general-knowledge-item",
+        "pack_key": "generated-knowledge-item",
         "environment": "development",
-        "source_intake_batch_ids": (
-            [draft.source_intake_batch_id] if draft.source_intake_batch_id else []
-        ),
+        "source_intake_batch_ids": [],
         "registry_mode": "CREATE_ITEM",
         "item_id": None,
         "base_revision_id": None,
@@ -102,7 +100,7 @@ def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
             "quality_profile": draft.quality_profile,
             "original_request_sha256": draft.original_request_sha256,
         },
-        "stimulus_asset_key": "eom-question-template-reference-v1",
+        "stimulus_asset_key": None,
     }
 
 

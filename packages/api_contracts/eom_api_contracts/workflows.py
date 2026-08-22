@@ -24,7 +24,11 @@ class KnowledgeItemBriefRequest(ApiModel):
 class WorkflowStartRequest(ApiModel):
     definition_key: str = Field(min_length=1, max_length=64)
     definition_version: str = Field(min_length=1, max_length=32)
-    request_name: Literal["PLACEHOLDER_REQUEST", "KNOWLEDGE_ITEM_REQUEST"] = "PLACEHOLDER_REQUEST"
+    request_name: Literal[
+        "PLACEHOLDER_REQUEST",
+        "KNOWLEDGE_ITEM_REQUEST",
+        "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+    ] = "PLACEHOLDER_REQUEST"
     image_mode: Literal["skip", "required"]
     pack_key: str | None = Field(default=None, max_length=64)
     environment: Literal["development", "test"] = "development"
@@ -44,7 +48,8 @@ class WorkflowStartRequest(ApiModel):
         if (
             self.pack_key is not None
             and not self.source_intake_batch_ids
-            and self.request_name != "KNOWLEDGE_ITEM_REQUEST"
+            and self.request_name
+            not in {"KNOWLEDGE_ITEM_REQUEST", "GENERATED_KNOWLEDGE_ITEM_REQUEST"}
         ):
             raise ValueError("content pack workflows require at least one source intake batch")
         if self.request_name == "KNOWLEDGE_ITEM_REQUEST":
@@ -55,6 +60,15 @@ class WorkflowStartRequest(ApiModel):
                 or self.stimulus_asset_key != "eom-question-template-reference-v1"
             ):
                 raise ValueError("knowledge item request is missing its fixed workflow contract")
+        elif self.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST":
+            if (
+                self.pack_key != "generated-knowledge-item"
+                or self.image_mode != "required"
+                or self.item_brief is None
+                or self.stimulus_asset_key is not None
+                or self.source_intake_batch_ids
+            ):
+                raise ValueError("generated item request is missing its workflow contract")
         elif self.item_brief is not None or self.stimulus_asset_key is not None:
             raise ValueError("placeholder request cannot include a knowledge item brief")
         return self

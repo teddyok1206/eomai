@@ -163,6 +163,25 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
     assert pack.manifest.provenance.intake_batch_ids == ()
     assert len(pack.profiles) == 4
 
+    generated_definition = compile_definition(
+        ROOT / "config/workflows/generic-item-development.v1.3.yaml", ROLES
+    )
+    generated_pack = compile_pack(ROOT / "content/packs/generated-knowledge-item/1.0.0")
+    assert generated_definition.definition.definition_version == "1.3.0"
+    assert [
+        step.result_schema
+        for step in generated_definition.definition.steps
+        if hasattr(step, "result_schema")
+    ] == [
+        "authoring-result@3.0",
+        "image-result@3.0",
+        "review-result@3.0",
+        "registration-result@3.0",
+    ]
+    assert generated_pack.manifest.pack.key == "generated-knowledge-item"
+    assert generated_pack.manifest.provenance.mode == "built_in_general_knowledge"
+    assert generated_pack.manifest.provenance.intake_batch_ids == ()
+
 
 def test_content_pack_provenance_never_fakes_a_source_pointer() -> None:
     pack_path = ROOT / "content/packs/general-knowledge-item/1.0.0/pack.yaml"
@@ -277,3 +296,75 @@ def test_protocol_versions_preserve_legacy_hash_and_isolate_v2() -> None:
     assert role_schema_bundle_hash("workflow-role/1.1.0") != role_schema_bundle_hash(
         "workflow-role/1.0.1"
     )
+    assert result_schema_protocol("authoring-result@3.0") == "workflow-role/1.2.0"
+
+
+def test_generated_authoring_result_is_a_draft_without_a_fake_media_pointer() -> None:
+    worker_input = _worker_input().model_copy(
+        update={
+            "protocol_version": "workflow-role/1.2.0",
+            "request": WorkerRequest(
+                request_name="GENERATED_KNOWLEDGE_ITEM_REQUEST",
+                image_mode="required",
+            ),
+        }
+    )
+    content = _content()
+    body = content["body"]
+    assert isinstance(body, list)
+    result = {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.2.0",
+        "job_id": worker_input.job_id,
+        "workflow_id": worker_input.workflow_id,
+        "step_run_id": worker_input.step_run_id,
+        "role": "authoring",
+        "status": "ok",
+        "artifact": worker_input.artifact.model_dump(mode="json"),
+        "output": {
+            "draft": {
+                "schema_version": "1.0",
+                "locale": "ko-KR",
+                "title": content["title"],
+                "stem": body[0],
+                "data_table": body[1],
+                "image_brief": {
+                    "kind": "line_graph",
+                    "block_id": "block_image",
+                    "alt_text": "시간에 따라 거리가 일정하게 증가하는 선그래프",
+                    "x_axis_label": "time(s)",
+                    "y_axis_label": "distance(m)",
+                    "series_label": "object-A",
+                    "x_values": [1, 2, 3],
+                    "y_values": [5, 10, 15],
+                },
+                "equation": body[3],
+                "prompt": body[4],
+                "statements": body[5],
+                "interaction": content["interaction"],
+                "solution": content["solution"],
+                "score": content["score"],
+            },
+            "metadata": {
+                "subject": "일반 과학",
+                "topic": "변인 사이의 선형 관계",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+        "completed_at": datetime(2026, 8, 22, tzinfo=UTC).isoformat(),
+    }
+    constrained = constrained_result_schema("authoring-result@3.0", worker_input)
+    validate_schema_message(constrained, result, "generated-authoring")
+    parsed = validate_role_result(result, "authoring", "authoring-result@3.0")
+    assert parsed.output.draft.image_brief.x_values == (1, 2, 3)  # type: ignore[union-attr]
+    assert "artifact" not in result["output"]["draft"]["image_brief"]  # type: ignore[index]
+
+    projected = load_codex_result_schema("authoring-result@3.0")
+    definitions = projected["$defs"]
+    draft = definitions["GeneratedItemDraft"]["properties"]
+    assert draft["data_table"]["$ref"].endswith("/TableBlock")
+    assert definitions["GeneratedImageBrief"]["properties"]["kind"]["const"] == "line_graph"
+    assert definitions["GeneratedImageBrief"]["properties"]["x_values"]["minItems"] == 2
+    assert definitions["SingleChoiceInteraction"]["properties"]["choices"]["minItems"] == 5
+    assert definitions["SingleChoiceInteraction"]["properties"]["choices"]["maxItems"] == 5

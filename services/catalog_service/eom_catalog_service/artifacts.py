@@ -209,3 +209,53 @@ class CatalogArtifactService:
             if not isinstance(value, dict):
                 raise ValueError("JSON artifact is not an object")
             return value
+
+    def verify_file_pointer(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        content_hash: str,
+        member: str,
+    ) -> None:
+        """Resolve one exact regular file member without exposing its storage location."""
+
+        relative = Path(member)
+        if (
+            relative.is_absolute()
+            or relative.as_posix() != member
+            or len(relative.parts) != 1
+            or ".." in relative.parts
+        ):
+            raise ValueError("artifact member is unsafe")
+        with self.sessions() as session:
+            revision = session.get(ArtifactRevisionRecord, revision_id)
+            if (
+                revision is None
+                or not revision.approved
+                or revision.logical_artifact_id != artifact_id
+                or revision.content_hash != content_hash
+            ):
+                raise ValueError("file artifact pointer does not resolve")
+            files = revision.manifest.get("files")
+            if not isinstance(files, list) or revision.manifest.get("primary_file") != member:
+                raise ValueError("file artifact manifest is invalid")
+            matching = [
+                value
+                for value in files
+                if isinstance(value, dict) and value.get("file_name") == member
+            ]
+            if len(matching) != 1 or matching[0].get("sha256") != content_hash:
+                raise ValueError("file artifact manifest does not match pointer")
+            storage_root = self.settings.nas_artifact_root.resolve(strict=True)
+            artifact_root = Path(revision.nas_path).resolve(strict=True)
+            if not artifact_root.is_relative_to(storage_root):
+                raise ValueError("file artifact escaped storage root")
+            target = artifact_root / member
+            metadata = target.lstat()
+            if (
+                target.is_symlink()
+                or not stat.S_ISREG(metadata.st_mode)
+                or sha256_file(target) != content_hash
+            ):
+                raise ValueError("file artifact materialization is invalid")
