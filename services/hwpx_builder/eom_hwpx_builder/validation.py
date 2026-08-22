@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Final, Literal, cast
 
 from eom_hwpx_builder.analyzer import CORE_PARTS, MIMETYPE, analyze_package
 from eom_hwpx_builder.archive import read_package
 from eom_hwpx_builder.bindings import TEXT_MARKERS
+from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 from eom_hwpx_builder.models import (
     BindingManifest,
     CheckStatus,
@@ -58,6 +60,46 @@ UNIQUE_OBJECT_ID_ELEMENTS = {
     "textart",
     "tbl",
 }
+
+KORDOC_REPORT_LAYOUT_CELL_MARKER: Final = "__kordoc_h1"
+KORDOC_LAYOUT_TABLE_CONTRACTS: Final[dict[tuple[str, str], int]] = {
+    ("4.9.0", "report"): 1,
+}
+
+
+@dataclass(frozen=True)
+class KordocNativeStructureCounts:
+    native_equation_count: int
+    content_native_table_count: int
+    layout_native_table_count: int
+    total_native_table_count: int
+    invalid_layout_table_count: int = 0
+
+
+def _attribute(element: Any, requested: str) -> str | None:
+    return cast(
+        str | None,
+        next(
+            (value for key, value in element.attrib.items() if local_name(key) == requested), None
+        ),
+    )
+
+
+def _is_report_layout_table(element: Any) -> tuple[bool, bool]:
+    descendants = tuple(element.iter())
+    cells = tuple(item for item in descendants if local_name(item.tag).casefold() == "tc")
+    markers = tuple(
+        item for item in cells if _attribute(item, "name") == KORDOC_REPORT_LAYOUT_CELL_MARKER
+    )
+    if not markers:
+        return False, False
+    valid = (
+        len(markers) == 1
+        and _attribute(element, "rowCnt") == "3"
+        and _attribute(element, "colCnt") == "1"
+        and len(cells) == 3
+    )
+    return True, valid
 
 
 def _duplicate_ids(package_path: Path, limits: PackageLimits) -> list[str]:
@@ -286,6 +328,8 @@ def validate_kordoc_structure(
     *,
     expected_equation_count: int,
     expected_table_count: int,
+    kordoc_version: str,
+    gongmun_preset: str,
     limits: PackageLimits | None = None,
 ) -> StructuralValidationReport:
     """Validate generated Kordoc output without applying template-only invariants."""
@@ -314,7 +358,13 @@ def validate_kordoc_structure(
             "generated profile core parts and at least one section exist",
         )
     )
-    equation_count, table_count = kordoc_native_structure_counts(path, actual_limits)
+    counts = classify_kordoc_native_structure(
+        path,
+        kordoc_version=kordoc_version,
+        gongmun_preset=gongmun_preset,
+        limits=actual_limits,
+    )
+    expected_layout_count = KORDOC_LAYOUT_TABLE_CONTRACTS[(kordoc_version, gongmun_preset)]
     checks.extend(
         (
             _check(
@@ -324,13 +374,26 @@ def validate_kordoc_structure(
             ),
             _check(
                 "native_equation_count",
-                equation_count == expected_equation_count,
+                counts.native_equation_count == expected_equation_count,
                 "native equation count matches the validated Markdown contract",
             ),
             _check(
                 "native_table_count",
-                table_count == expected_table_count,
-                "native table count matches the validated Markdown contract",
+                counts.content_native_table_count == expected_table_count,
+                "content-native table count matches the validated Markdown contract",
+            ),
+            _check(
+                "layout_native_table_count",
+                counts.layout_native_table_count == expected_layout_count
+                and counts.invalid_layout_table_count == 0,
+                "report-layout table count and reserved structure match the pinned contract",
+            ),
+            _check(
+                "total_native_table_count",
+                counts.total_native_table_count
+                == counts.content_native_table_count + counts.layout_native_table_count
+                and counts.invalid_layout_table_count == 0,
+                "total native tables decompose into content and validated layout tables",
             ),
         )
     )
@@ -339,6 +402,66 @@ def validate_kordoc_structure(
         status="PASS" if passed else "FAIL",
         package_sha256=base.package_sha256,
         checks=tuple(checks),
+        metrics={
+            "native_equation_count": counts.native_equation_count,
+            "content_native_table_count": counts.content_native_table_count,
+            "layout_native_table_count": counts.layout_native_table_count,
+            "total_native_table_count": counts.total_native_table_count,
+        },
+    )
+
+
+def classify_kordoc_native_structure(
+    path: Path,
+    *,
+    kordoc_version: str,
+    gongmun_preset: str,
+    limits: PackageLimits | None = None,
+) -> KordocNativeStructureCounts:
+    """Classify content and Kordoc-owned layout tables using a pinned structural contract."""
+
+    if (kordoc_version, gongmun_preset) not in KORDOC_LAYOUT_TABLE_CONTRACTS:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_KORDOC_VALIDATION_FAILED,
+            "Kordoc layout-table contract is unavailable for the renderer profile",
+        )
+    actual_limits = limits or PackageLimits()
+    package = read_package(path, actual_limits)
+    equations = 0
+    content_tables = 0
+    layout_tables = 0
+    invalid_layout_tables = 0
+    total_tables = 0
+    for entry in package.entries:
+        name = entry.info.filename
+        suffix = name.removeprefix("Contents/section").removesuffix(".xml")
+        if (
+            not name.startswith("Contents/section")
+            or not name.endswith(".xml")
+            or not suffix.isdigit()
+        ):
+            continue
+        root = parse_xml(entry.data, name, actual_limits).root
+        for element in root.iter():
+            element_name = local_name(element.tag).casefold()
+            if element_name == "equation":
+                equations += 1
+            if element_name != "tbl":
+                continue
+            total_tables += 1
+            has_layout_marker, valid_layout = _is_report_layout_table(element)
+            if not has_layout_marker:
+                content_tables += 1
+            elif valid_layout:
+                layout_tables += 1
+            else:
+                invalid_layout_tables += 1
+    return KordocNativeStructureCounts(
+        native_equation_count=equations,
+        content_native_table_count=content_tables,
+        layout_native_table_count=layout_tables,
+        total_native_table_count=total_tables,
+        invalid_layout_table_count=invalid_layout_tables,
     )
 
 

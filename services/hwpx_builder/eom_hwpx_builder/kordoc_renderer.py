@@ -21,7 +21,8 @@ from eom_hwpx_builder.kordoc_runtime import (
 )
 from eom_hwpx_builder.util import sha256_file, write_json
 from eom_hwpx_builder.validation import (
-    kordoc_native_structure_counts,
+    KordocNativeStructureCounts,
+    classify_kordoc_native_structure,
     validate_kordoc_structure,
 )
 
@@ -35,7 +36,7 @@ def _workspace_path(workspace: Path, relative: str) -> Path:
 
 
 def _manifest(
-    output: Path, request: KordocRenderRequest, equations: int, tables: int
+    output: Path, request: KordocRenderRequest, counts: KordocNativeStructureCounts
 ) -> dict[str, Any]:
     package = read_package(output)
     return {
@@ -47,8 +48,10 @@ def _manifest(
         "file_name": output.name,
         "media_type": "application/hwp+zip",
         "package_sha256": package.package_sha256,
-        "native_equation_count": equations,
-        "native_table_count": tables,
+        "native_equation_count": counts.native_equation_count,
+        "native_table_count": counts.content_native_table_count,
+        "layout_native_table_count": counts.layout_native_table_count,
+        "total_native_table_count": counts.total_native_table_count,
         "entries": [record.model_dump(mode="json") for record in package.records()],
     }
 
@@ -112,11 +115,17 @@ def render_kordoc_workspace(
     output_dir.mkdir(mode=0o700)
     output = output_dir / "kordoc_document.hwpx"
     canonicalize_package(raw_output, output)
-    equations, tables = kordoc_native_structure_counts(output)
+    counts = classify_kordoc_native_structure(
+        output,
+        kordoc_version=bridge.kordoc_version,
+        gongmun_preset=request.options.gongmun_preset,
+    )
     structural = validate_kordoc_structure(
         output,
         expected_equation_count=profile.display_equation_count,
         expected_table_count=profile.table_count,
+        kordoc_version=bridge.kordoc_version,
+        gongmun_preset=request.options.gongmun_preset,
     )
     if structural.status != "PASS":
         raise HwpxError(
@@ -131,7 +140,7 @@ def render_kordoc_workspace(
     )
     write_json(output_dir / "structural-validation.json", structural.model_dump(mode="json"))
     write_json(output_dir / "kordoc-validation.json", bridge.model_dump(mode="json"))
-    write_json(output_dir / "package-manifest.json", _manifest(output, request, equations, tables))
+    write_json(output_dir / "package-manifest.json", _manifest(output, request, counts))
     result = KordocBuildResult(
         build_id=request.build_id,
         source_artifact_id=request.source.artifact_id,
@@ -145,8 +154,8 @@ def render_kordoc_workspace(
         package_manifest_file="output/package-manifest.json",
         validation_report_file="output/structural-validation.json",
         renderer_report_file="output/kordoc-validation.json",
-        native_equation_count=equations,
-        native_table_count=tables,
+        native_equation_count=counts.native_equation_count,
+        native_table_count=counts.content_native_table_count,
         warnings=warnings,
         errors=(),
         started_at=started,

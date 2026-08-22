@@ -109,6 +109,7 @@ class StructuralValidationReport(StrictModel):
     status: Literal["PASS", "FAIL"]
     package_sha256: str
     checks: tuple[ValidationCheck, ...]
+    metrics: dict[str, int] = Field(default_factory=dict)
 
 
 class SemanticComparison(StrEnum):

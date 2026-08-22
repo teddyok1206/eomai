@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import subprocess
 import zipfile
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 import pytest
 from eom_hwpx_builder.archive import canonicalize_package
@@ -20,7 +22,11 @@ from eom_hwpx_builder.kordoc_runtime import (
     KordocRuntimeSettings,
 )
 from eom_hwpx_builder.util import sha256_bytes, sha256_file
-from eom_hwpx_builder.validation import validate_kordoc_structure, validate_structure
+from eom_hwpx_builder.validation import (
+    classify_kordoc_native_structure,
+    validate_kordoc_structure,
+    validate_structure,
+)
 from eom_hwpx_contracts import (
     KordocBuildResult,
     KordocRendererDependency,
@@ -29,7 +35,7 @@ from eom_hwpx_contracts import (
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
 
-from tests.hwpx.helpers import synthetic_parts
+from tests.hwpx.helpers import HP, synthetic_parts
 
 MARKDOWN = """# 통합과학 문항
 
@@ -66,18 +72,76 @@ def request_value(source: bytes) -> dict[str, Any]:
     }
 
 
-def kordoc_like_parts() -> list[tuple[str, bytes, int]]:
+def _report_layout_table(identifier: str, *, malformed: bool = False) -> ElementTree.Element:
+    row_count = "2" if malformed else "3"
+    return ElementTree.fromstring(
+        f'<hp:tbl xmlns:hp="{HP}" id="{identifier}" rowCnt="{row_count}" colCnt="1">'
+        '<hp:tr><hp:tc><hp:p id="layout-top"/></hp:tc></hp:tr>'
+        '<hp:tr><hp:tc name="__kordoc_h1"><hp:p id="layout-title"/></hp:tc></hp:tr>'
+        '<hp:tr><hp:tc><hp:p id="layout-bottom"/></hp:tc></hp:tr>'
+        "</hp:tbl>"
+    )
+
+
+def kordoc_like_parts(
+    *,
+    content_table_count: int = 1,
+    layout_table_count: int = 1,
+    equation_count: int = 1,
+    malformed_layout: bool = False,
+    extra_structural_table_count: int = 0,
+) -> list[tuple[str, bytes, int]]:
+    assert content_table_count >= 1
+    assert equation_count >= 1
     parts: list[tuple[str, bytes, int]] = []
     for name, data, compression in synthetic_parts(split_marker=False):
         for marker in (*TEXT_MARKERS.values(), "EOM_EQ_PLACEHOLDER"):
             data = data.replace(marker.encode(), b"KORDOC_VALUE")
+        if name == "Contents/section0.xml":
+            root = ElementTree.fromstring(data)
+            content_table = next(
+                element for element in root.iter() if element.tag.rsplit("}", 1)[-1] == "tbl"
+            )
+            equation = next(
+                element for element in root.iter() if element.tag.rsplit("}", 1)[-1] == "equation"
+            )
+            for index in range(1, content_table_count + extra_structural_table_count):
+                duplicate = copy.deepcopy(content_table)
+                duplicate.set("id", f"content-table-{index + 1}")
+                root.append(duplicate)
+            for index in range(1, equation_count):
+                duplicate = copy.deepcopy(equation)
+                duplicate.set("id", f"equation-{index + 1}")
+                root.append(duplicate)
+            for index in range(layout_table_count):
+                root.insert(
+                    index,
+                    _report_layout_table(f"report-layout-{index + 1}", malformed=malformed_layout),
+                )
+            data = ElementTree.tostring(root, encoding="utf-8", xml_declaration=True)
         parts.append((name, data, compression))
     return parts
 
 
+def write_kordoc_like_package(path: Path, **kwargs: Any) -> None:
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, data, compression in kordoc_like_parts(**kwargs):
+            archive.writestr(name, data, compress_type=compression)
+
+
 class FakeKordocRuntime:
-    def __init__(self, *, timestamp: tuple[int, int, int, int, int, int]) -> None:
+    def __init__(
+        self,
+        *,
+        timestamp: tuple[int, int, int, int, int, int],
+        content_table_count: int = 1,
+        layout_table_count: int = 1,
+        malformed_layout: bool = False,
+    ) -> None:
         self.timestamp = timestamp
+        self.content_table_count = content_table_count
+        self.layout_table_count = layout_table_count
+        self.malformed_layout = malformed_layout
         self.calls = 0
 
     def render(self, workspace: Path, preset: str) -> KordocBridgeReport:
@@ -85,7 +149,11 @@ class FakeKordocRuntime:
         self.calls += 1
         output = workspace / ".kordoc-generated.hwpx"
         with zipfile.ZipFile(output, "w") as archive:
-            for name, data, compression in kordoc_like_parts():
+            for name, data, compression in kordoc_like_parts(
+                content_table_count=self.content_table_count,
+                layout_table_count=self.layout_table_count,
+                malformed_layout=self.malformed_layout,
+            ):
                 info = zipfile.ZipInfo(name, self.timestamp)
                 info.compress_type = compression
                 archive.writestr(info, data)
@@ -101,7 +169,7 @@ class FakeKordocRuntime:
             parse_success=True,
             parsed_markdown_sha256="sha256:" + "d" * 64,
             parse_warning_count=0,
-            parsed_table_count=1,
+            parsed_table_count=self.content_table_count,
         )
 
 
@@ -210,16 +278,124 @@ def test_kordoc_renderer_preserves_template_validator_and_is_deterministic(tmp_p
     assert first.status == "PENDING_MANUAL_HANCOM_VALIDATION"
     assert first.native_equation_count == 1
     assert first.native_table_count == 1
+    validation = json.loads(
+        (first_request.parent / "output/structural-validation.json").read_text()
+    )
+    manifest = json.loads((first_request.parent / "output/package-manifest.json").read_text())
+    expected_metrics = {
+        "native_equation_count": 1,
+        "content_native_table_count": 1,
+        "layout_native_table_count": 1,
+        "total_native_table_count": 2,
+    }
+    assert validation["metrics"] == expected_metrics
+    assert manifest["native_table_count"] == 1
+    assert manifest["layout_native_table_count"] == 1
+    assert manifest["total_native_table_count"] == 2
     assert first.output_sha256 == second.output_sha256
     assert first_output.read_bytes() == second_output.read_bytes()
     assert (
         validate_kordoc_structure(
-            first_output, expected_equation_count=1, expected_table_count=1
+            first_output,
+            expected_equation_count=1,
+            expected_table_count=1,
+            kordoc_version="4.9.0",
+            gongmun_preset="report",
         ).status
         == "PASS"
     )
     assert validate_structure(first_output).status == "FAIL"
     assert first_runtime.calls == second_runtime.calls == 1
+
+
+def test_report_profile_separates_content_layout_and_total_tables(tmp_path: Path) -> None:
+    package = tmp_path / "r5-shaped.hwpx"
+    write_kordoc_like_package(
+        package,
+        content_table_count=2,
+        layout_table_count=1,
+        equation_count=5,
+    )
+
+    counts = classify_kordoc_native_structure(
+        package, kordoc_version="4.9.0", gongmun_preset="report"
+    )
+    assert counts.native_equation_count == 5
+    assert counts.content_native_table_count == 2
+    assert counts.layout_native_table_count == 1
+    assert counts.total_native_table_count == 3
+    report = validate_kordoc_structure(
+        package,
+        expected_equation_count=5,
+        expected_table_count=2,
+        kordoc_version="4.9.0",
+        gongmun_preset="report",
+    )
+    assert report.status == "PASS"
+    assert report.metrics == {
+        "native_equation_count": 5,
+        "content_native_table_count": 2,
+        "layout_native_table_count": 1,
+        "total_native_table_count": 3,
+    }
+
+
+@pytest.mark.parametrize(
+    ("package_options", "failed_check"),
+    [
+        ({"content_table_count": 1, "layout_table_count": 1}, "native_table_count"),
+        ({"content_table_count": 2, "layout_table_count": 0}, "layout_native_table_count"),
+        (
+            {"content_table_count": 2, "layout_table_count": 1, "malformed_layout": True},
+            "layout_native_table_count",
+        ),
+        (
+            {"content_table_count": 2, "layout_table_count": 1, "extra_structural_table_count": 1},
+            "native_table_count",
+        ),
+        ({"content_table_count": 2, "layout_table_count": 2}, "layout_native_table_count"),
+    ],
+)
+def test_report_profile_fails_closed_on_table_contract_mismatch(
+    tmp_path: Path, package_options: dict[str, int | bool], failed_check: str
+) -> None:
+    package = tmp_path / "invalid-report.hwpx"
+    write_kordoc_like_package(package, **package_options)
+    report = validate_kordoc_structure(
+        package,
+        expected_equation_count=1,
+        expected_table_count=2,
+        kordoc_version="4.9.0",
+        gongmun_preset="report",
+    )
+    assert report.status == "FAIL"
+    checks = {check.check_id: check.status.value for check in report.checks}
+    assert checks[failed_check] == "FAIL"
+
+
+@pytest.mark.parametrize(
+    ("version", "preset"),
+    [("4.9.1", "report"), ("4.9.0", "official")],
+)
+def test_table_classifier_rejects_unknown_renderer_layout_contract(
+    tmp_path: Path, version: str, preset: str
+) -> None:
+    package = tmp_path / "unknown-contract.hwpx"
+    write_kordoc_like_package(package)
+    with pytest.raises(HwpxError) as caught:
+        classify_kordoc_native_structure(package, kordoc_version=version, gongmun_preset=preset)
+    assert caught.value.code == HwpxErrorCode.HWPX_KORDOC_VALIDATION_FAILED
+
+
+def test_failed_table_validation_never_emits_a_success_result(tmp_path: Path) -> None:
+    request = prepare_workspace(tmp_path / "workspace")
+    result = request.parent / "result.json"
+    runtime = FakeKordocRuntime(timestamp=(2026, 8, 21, 1, 2, 4), layout_table_count=0)
+    with pytest.raises(HwpxError) as caught:
+        render_kordoc_workspace(request, result, runtime=runtime)
+    assert caught.value.code == HwpxErrorCode.HWPX_KORDOC_VALIDATION_FAILED
+    assert not result.exists()
+    assert (request.parent / "output/kordoc_document.hwpx").is_file()
 
 
 def test_kordoc_renderer_fails_before_runtime_on_declared_count_mismatch(tmp_path: Path) -> None:
