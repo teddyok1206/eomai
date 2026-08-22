@@ -365,6 +365,8 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     assert "--normalize-python-layout" in deployment
     assert "normalize_node_layout" in deployment
     assert "--normalize-node-layout" in deployment
+    assert "normalize_node_libraries" in deployment
+    assert "--normalize-node-libraries" in deployment
     assert (
         'PYTHON_LAYOUT_HELPER="$REPOSITORY_ROOT/scripts/hwpx/python_runtime_layout.py"'
         in deployment
@@ -372,6 +374,7 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     assert '"$PYTHON" "$PYTHON_LAYOUT_HELPER" verify' in deployment
     assert '"$PYTHON" "$PYTHON_LAYOUT_HELPER" normalize' in deployment
     assert '"$PYTHON" "$PYTHON_LAYOUT_HELPER" normalize-node' in deployment
+    assert '"$PYTHON" "$PYTHON_LAYOUT_HELPER" normalize-node-libraries' in deployment
     assert (
         "pip install"
         not in deployment.split('if [[ "$MODE" = "normalize-python-layout" ]]', 1)[1].split(
@@ -420,9 +423,14 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
         "normalize",
         "verify-node",
         "normalize-node",
+        "verify-node-libraries",
+        "normalize-node-libraries",
     ]
     assert "st_nlink" in layout_helper
     assert "os.replace" in layout_helper
+    assert "NODE_RUNTIME_LIBRARY_NAMES" in layout_helper
+    assert '"libnode.so.115"' in layout_helper
+    assert '"libuv.so.1"' in layout_helper
     assert "eom_hwpx_builder/kordoc_bridge.mjs" in deployment
     assert 'KORDOC_OFFLINE !== "1"' in bridge
     assert "process.argv.length === 2" in bridge

@@ -12,8 +12,10 @@ from scripts.hwpx.python_runtime_layout import (
     inventory_layout,
     normalize_layout,
     normalize_runtime_executables,
+    normalize_runtime_libraries,
     verify_layout,
     verify_runtime_executables,
+    verify_runtime_libraries,
 )
 
 
@@ -230,10 +232,156 @@ def test_node_special_file_fails_closed(tmp_path: Path) -> None:
     binary_directory.mkdir(parents=True)
     node = binary_directory / "node"
     os.mkfifo(node)
-    with pytest.raises(PythonRuntimeLayoutError, match="HWPX_RUNTIME_EXECUTABLE_UNSAFE"):
+    with pytest.raises(PythonRuntimeLayoutError, match="HWPX_RUNTIME_FILE_UNSAFE"):
         normalize_runtime_executables(
             (node,),
             boundary=boundary,
             expected_uid=os.getuid(),
             expected_gid=os.getgid(),
+        )
+
+
+def _shared_library_fixture(
+    tmp_path: Path,
+) -> tuple[Path, tuple[Path, ...], tuple[Path, ...], Path]:
+    boundary = tmp_path / "eom-hwpx"
+    library_directory = boundary / "lib"
+    cache_directory = tmp_path / "package-cache"
+    library_directory.mkdir(parents=True)
+    cache_directory.mkdir()
+    environment_libraries: list[Path] = []
+    cache_libraries: list[Path] = []
+    for name in ("libnode.so.115", "libuv.so.1.0.0"):
+        cache_library = cache_directory / name
+        cache_library.write_bytes((name + "\n").encode())
+        cache_library.chmod(0o700)
+        environment_library = library_directory / name
+        os.link(cache_library, environment_library)
+        environment_libraries.append(environment_library)
+        cache_libraries.append(cache_library)
+    readable_library = library_directory / "libcrypto.so.3"
+    readable_library.write_bytes(b"already-readable\n")
+    readable_library.chmod(0o644)
+    return (
+        boundary,
+        tuple(environment_libraries),
+        tuple(cache_libraries),
+        readable_library,
+    )
+
+
+def test_node_executable_is_insufficient_without_readable_library_closure(
+    tmp_path: Path,
+) -> None:
+    boundary, environment_libraries, cache_libraries, readable_library = _shared_library_fixture(
+        tmp_path
+    )
+    all_libraries = (*environment_libraries, readable_library)
+    original_cache = {
+        path.name: (path.stat().st_ino, path.read_bytes(), stat.S_IMODE(path.stat().st_mode))
+        for path in cache_libraries
+    }
+    with pytest.raises(
+        PythonRuntimeLayoutError,
+        match="HWPX_RUNTIME_LIBRARY_ACCESS_MISMATCH",
+    ):
+        verify_runtime_libraries(
+            all_libraries,
+            boundary=boundary,
+            expected_uid=os.getuid(),
+            expected_gid=os.getgid(),
+            service_uid=os.getuid() + 10_000,
+            service_gids=set(),
+        )
+
+    first = normalize_runtime_libraries(
+        all_libraries,
+        boundary=boundary,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+        service_uid=os.getuid() + 10_000,
+        service_gids=set(),
+    )
+    assert first.changes == 2
+    assert stat.S_IMODE(readable_library.stat().st_mode) == 0o644
+    for environment_library, cache_library in zip(
+        environment_libraries, cache_libraries, strict=True
+    ):
+        cache_inode, cache_bytes, cache_mode = original_cache[cache_library.name]
+        assert environment_library.stat().st_ino != cache_inode
+        assert stat.S_IMODE(environment_library.stat().st_mode) == 0o755
+        assert environment_library.read_bytes() == cache_bytes
+        assert cache_library.stat().st_ino == cache_inode
+        assert cache_library.read_bytes() == cache_bytes
+        assert stat.S_IMODE(cache_library.stat().st_mode) == cache_mode == 0o700
+
+    verify_runtime_libraries(
+        all_libraries,
+        boundary=boundary,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+        service_uid=os.getuid() + 10_000,
+        service_gids=set(),
+    )
+    second = normalize_runtime_libraries(
+        all_libraries,
+        boundary=boundary,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+        service_uid=os.getuid() + 10_000,
+        service_gids=set(),
+    )
+    assert second.changes == 0
+
+
+def test_shared_library_symlink_must_resolve_inside_runtime_boundary(tmp_path: Path) -> None:
+    boundary = tmp_path / "eom-hwpx"
+    library_directory = boundary / "lib"
+    library_directory.mkdir(parents=True)
+    target = library_directory / "libnode.so.115.0"
+    target.write_bytes(b"node-library\n")
+    target.chmod(0o700)
+    library = library_directory / "libnode.so.115"
+    library.symlink_to(target.name)
+    normalize_runtime_libraries(
+        (library,),
+        boundary=boundary,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+        service_uid=os.getuid() + 10_000,
+        service_gids=set(),
+    )
+    assert library.is_symlink()
+    assert stat.S_IMODE(target.stat().st_mode) == 0o755
+
+    outside = tmp_path / "outside-library"
+    outside.write_bytes(b"outside\n")
+    outside.chmod(0o700)
+    library.unlink()
+    library.symlink_to(outside)
+    with pytest.raises(PythonRuntimeLayoutError, match="HWPX_RUNTIME_LAYOUT_SYMLINK_ESCAPE"):
+        normalize_runtime_libraries(
+            (library,),
+            boundary=boundary,
+            expected_uid=os.getuid(),
+            expected_gid=os.getgid(),
+            service_uid=os.getuid() + 10_000,
+            service_gids=set(),
+        )
+
+
+def test_shared_library_special_file_fails_closed(tmp_path: Path) -> None:
+    boundary = tmp_path / "eom-hwpx"
+    library_directory = boundary / "lib"
+    library_directory.mkdir(parents=True)
+    library = library_directory / "libnode.so.115"
+    os.mkfifo(library)
+    with pytest.raises(PythonRuntimeLayoutError, match="HWPX_RUNTIME_FILE_UNSAFE"):
+        normalize_runtime_libraries(
+            (library,),
+            boundary=boundary,
+            expected_uid=os.getuid(),
+            expected_gid=os.getgid(),
+            service_uid=os.getuid() + 10_000,
+            service_gids=set(),
         )
