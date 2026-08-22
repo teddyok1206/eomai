@@ -20,8 +20,9 @@ from eom_workflow.models import (
 )
 from eom_workflow.schemas import (
     RESULT_SCHEMA_FILES,
-    ROLE_RESULT_SCHEMAS,
+    ROLE_ALLOWED_RESULT_SCHEMAS,
     load_definition_schema,
+    result_schema_protocol,
     validate_schema_message,
 )
 
@@ -103,6 +104,13 @@ def _validate_semantics(definition: WorkflowDefinition, available_worker_roles: 
     terminals = [step for step in definition.steps if isinstance(step, TerminalStep)]
     if not terminals:
         raise WorkflowDefinitionError("workflow definition requires a terminal step")
+    role_protocols = {
+        result_schema_protocol(step.result_schema)
+        for step in definition.steps
+        if isinstance(step, AgentStep)
+    }
+    if len(role_protocols) != 1:
+        raise WorkflowDefinitionError("agent steps must use one role protocol version")
 
     forward: dict[str, tuple[str, ...]] = {}
     for step in definition.steps:
@@ -110,9 +118,8 @@ def _validate_semantics(definition: WorkflowDefinition, available_worker_roles: 
         if isinstance(step, AgentStep):
             if step.worker_role not in available_worker_roles:
                 raise WorkflowDefinitionError(f"worker role is unavailable: {step.worker_role}")
-            expected_schema = ROLE_RESULT_SCHEMAS[step.worker_role]
             if (
-                step.result_schema != expected_schema
+                step.result_schema not in ROLE_ALLOWED_RESULT_SCHEMAS[step.worker_role]
                 or step.result_schema not in RESULT_SCHEMA_FILES
             ):
                 raise WorkflowDefinitionError(

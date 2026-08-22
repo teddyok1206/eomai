@@ -1,0 +1,39 @@
+schema_version: "1.1"
+pack:
+  key: "general-knowledge-item"
+  name: "General Knowledge EOM Template Item"
+  version: "1.0.0"
+  locale: "ko-KR"
+  domain_key: "general-science"
+  description: "Source-free general-knowledge authoring constrained to the EOM question template"
+provenance:
+  mode: "built_in_general_knowledge"
+  intake_batch_ids: []
+  mapping_proposal_ids: []
+compatibility:
+  protocol:
+    minimum: "1.1.0"
+    maximum_exclusive: "2.0.0"
+  workflow_definitions:
+    - key: "generic-item-development"
+      versions: ["1.2.0"]
+  required_worker_roles: ["authoring", "review", "image", "item_management"]
+taxonomies:
+  curriculum: "taxonomies/curriculum.yaml"
+  tags: "taxonomies/tags.yaml"
+item_types:
+  - key: "eom-template-multiple-choice"
+    source: "item-types/eom-template-multiple-choice.yaml"
+profiles:
+  authoring:
+    knowledge-authoring: "profiles/knowledge-authoring.yaml"
+  review:
+    knowledge-review: "profiles/knowledge-review.yaml"
+  image:
+    fixed-stimulus-review: "profiles/fixed-stimulus-review.yaml"
+  registration:
+    structured-registration: "profiles/structured-registration.yaml"
+metadata_schemas:
+  item: "metadata-schemas/item-metadata.schema.json"
+rubrics:
+  review: "rubrics/review-rubric.yaml"

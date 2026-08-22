@@ -15,6 +15,7 @@ from eom_workflow.identifiers import (
     new_step_run_id,
     new_workflow_id,
 )
+from eom_workflow.schemas import result_schema_protocol
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -178,6 +179,17 @@ def create_workflow_instance(
             WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
             "stored definition has no start step",
         )
+    role_protocols = {
+        result_schema_protocol(str(step["result_schema"]))
+        for step in canonical_definition.get("steps", [])
+        if isinstance(step, dict) and step.get("type") == "agent"
+    }
+    if len(role_protocols) != 1:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
+            "stored definition has inconsistent role protocol versions",
+        )
+    role_schema_version = next(iter(role_protocols))
     initial_context = dict(runtime_context or {})
     initial_context["artifact_pointers"] = []
     workflow = WorkflowInstanceRecord(
@@ -187,7 +199,7 @@ def create_workflow_instance(
         definition_version=definition.definition_version,
         definition_hash=definition.definition_hash,
         protocol_version="1.0.1",
-        role_schema_version="workflow-role/1.0.1",
+        role_schema_version=role_schema_version,
         state=WorkflowState.REQUESTED.value,
         stage=WorkflowStage.AUTHORING.value,
         current_step_key=start_step,

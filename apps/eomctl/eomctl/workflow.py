@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+from eom_catalog_service.intake_files import load_strict_json
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_engine, build_session_factory, transaction
 from eom_orchestrator.settings import Settings
@@ -108,6 +109,10 @@ def workflow_start(
     registry_mode: str = typer.Option("CREATE_ITEM", "--registry-mode"),
     item_id: str | None = typer.Option(None, "--item-id"),
     base_revision_id: str | None = typer.Option(None, "--base-revision-id"),
+    item_brief: Annotated[
+        Path | None, typer.Option("--item-brief", exists=True, dir_okay=False)
+    ] = None,
+    stimulus_asset_key: str | None = typer.Option(None, "--stimulus-asset-key"),
 ) -> None:
     request_data: dict[str, Any] = {
         "request_name": request_name,
@@ -131,9 +136,15 @@ def workflow_start(
                 },
             }
         )
+        if item_brief is not None:
+            request_data["item_brief"] = load_strict_json(item_brief.resolve())
+        if stimulus_asset_key is not None:
+            request_data["stimulus_asset"] = {"asset_key": stimulus_asset_key}
     request = WorkflowRequest.model_validate(request_data)
     if version == "1.1.0" and request.content_pack is None:
         raise typer.BadParameter("workflow 1.1.0 requires --pack-key and Intake input")
+    if version == "1.2.0" and request.request_name != "KNOWLEDGE_ITEM_REQUEST":
+        raise typer.BadParameter("workflow 1.2.0 requires the knowledge-item request contract")
     engine = build_engine()
     runtime = build_workflow_runtime(engine=engine)
     catalog = runtime.catalog

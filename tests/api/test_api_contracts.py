@@ -69,6 +69,34 @@ def test_pack_pinned_workflow_requires_valid_source_intake_pointer() -> None:
     assert value.source_intake_batch_ids == ("intake_" + "0" * 32,)
 
 
+def test_knowledge_item_workflow_is_source_optional_but_template_constrained() -> None:
+    request = {
+        "definition_key": "generic-item-development",
+        "definition_version": "1.2.0",
+        "request_name": "KNOWLEDGE_ITEM_REQUEST",
+        "image_mode": "required",
+        "pack_key": "general-knowledge-item",
+        "source_intake_batch_ids": [],
+        "item_brief": {
+            "subject": "일반 과학",
+            "topic": "변인 사이의 선형 관계",
+            "task_type": "data_interpretation",
+            "difficulty": "medium",
+            "choice_count": 5,
+            "equation_required": True,
+            "image_required": True,
+            "quality_profile": "balanced",
+            "original_request_sha256": "0" * 64,
+        },
+        "stimulus_asset_key": "eom-question-template-reference-v1",
+    }
+    parsed = WorkflowStartRequest.model_validate(request)
+    assert parsed.source_intake_batch_ids == ()
+    assert parsed.item_brief is not None and parsed.item_brief.choice_count == 5
+    with pytest.raises(ValidationError, match="fixed workflow contract"):
+        WorkflowStartRequest.model_validate(request | {"image_mode": "skip"})
+
+
 def test_artifact_pointer_can_pin_one_safe_member_without_exposing_storage_path() -> None:
     pointer = ArtifactPointer(
         artifact_id="artifact_" + "1" * 32,

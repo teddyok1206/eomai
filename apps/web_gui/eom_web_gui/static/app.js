@@ -147,10 +147,6 @@ function installRequestDraft() {
   $("#draft-analyze").addEventListener("click", analyzeDraft);
   $("#draft-save").addEventListener("click", saveDraft);
   $("#draft-submit").addEventListener("click", submitDraft);
-  $("#draft-form").elements.source_intake_batch_id.addEventListener("change", () => {
-    const selected = $("#draft-form").elements.source_intake_batch_id.value;
-    $("#draft-submit").disabled = !state.draft || !selected;
-  });
 }
 
 async function loadAcceptedIntakes(selectedId = null) {
@@ -161,7 +157,7 @@ async function loadAcceptedIntakes(selectedId = null) {
   select.replaceChildren();
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = values.length ? "ACCEPTED intake를 선택하세요" : "사용 가능한 ACCEPTED intake가 없습니다";
+  placeholder.textContent = "일반 지식 모드 — Source Intake 없음";
   select.append(placeholder);
   values.forEach((value) => {
     const option = document.createElement("option");
@@ -186,9 +182,9 @@ async function analyzeDraft() {
     const intakeCount = await loadAcceptedIntakes(draft.source_intake_batch_id);
     fillDraft(draft);
     setStatus($("#draft-state"), "success", "✓", "검토 가능");
-    showMessage(message, intakeCount ? "Draft를 검토하고 ACCEPTED intake를 선택한 뒤 저장하세요." : "ACCEPTED source intake가 없어 Workflow를 제출할 수 없습니다.", intakeCount ? "success" : "error");
+    showMessage(message, intakeCount ? "Draft를 검토하세요. Source Intake는 선택 사항입니다." : "Draft를 검토하세요. 일반 지식 모드로 바로 제출할 수 있습니다.", "success");
     $("#draft-save").disabled = false;
-    $("#draft-submit").disabled = true;
+    $("#draft-submit").disabled = false;
   } catch (failure) {
     showMessage(message, `요청 분석 실패: ${failure.message}`, "error");
   }
@@ -231,7 +227,7 @@ async function saveDraft() {
     });
     fillDraft(state.draft);
     showMessage($("#draft-message"), "Request Draft가 저장되었습니다.", "success");
-    $("#draft-submit").disabled = !state.draft.source_intake_batch_id;
+    $("#draft-submit").disabled = false;
     return true;
   } catch (failure) {
     showMessage($("#draft-message"), `Draft 저장 실패: ${failure.message}`, "error");
@@ -242,10 +238,6 @@ async function saveDraft() {
 async function submitDraft() {
   if (!state.draft) return;
   if (!(await saveDraft())) return;
-  if (!state.draft.source_intake_batch_id) {
-    showMessage($("#draft-message"), "ACCEPTED source intake를 선택하세요.", "error");
-    return;
-  }
   const key = `studio:${state.draft.request_draft_id}:${state.draft.original_request_sha256.slice(0, 16)}`;
   try {
     const result = await api(`/request-drafts/${encodeURIComponent(state.draft.request_draft_id)}/submissions`, {

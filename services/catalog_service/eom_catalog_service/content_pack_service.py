@@ -88,10 +88,11 @@ class ContentPackService:
     def import_source(self, source_root: Path) -> ContentPackReleaseRecord:
         compiled = compile_pack(source_root)
         identity = compiled.manifest.pack
-        self._validate_intake_provenance(
-            compiled.manifest.provenance.intake_batch_ids,
-            compiled.manifest.provenance.mapping_proposal_ids,
-        )
+        if compiled.manifest.provenance.mode == "manual_external_source":
+            self._validate_intake_provenance(
+                compiled.manifest.provenance.intake_batch_ids,
+                compiled.manifest.provenance.mapping_proposal_ids,
+            )
         with self.sessions() as session:
             pack = session.scalar(
                 select(ContentPackRecord).where(ContentPackRecord.pack_key == identity.key)

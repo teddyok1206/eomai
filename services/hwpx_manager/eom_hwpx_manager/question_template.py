@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Literal, NoReturn, cast
 
@@ -14,6 +13,7 @@ from eom_catalog_contracts import (
     SingleChoiceInteraction,
     StatementSetBlock,
     TableBlock,
+    validate_eom_question_template_content,
 )
 from eom_hwpx_contracts import (
     EquationInput,
@@ -45,8 +45,12 @@ def project_question_template(
 ) -> QuestionTemplateProjection:
     """Fail-closed projection for the fixed content-team question template."""
 
-    if content.locale != "ko-KR":
-        _incompatible("question template requires ko-KR content")
+    try:
+        validate_eom_question_template_content(content)
+    except ValueError as exc:
+        _incompatible(str(exc))
+    if not isinstance(content.interaction, SingleChoiceInteraction):
+        _incompatible("question template requires single-choice content")
     blocks = _index_blocks(content)
     stem = cast(ParagraphBlock, _one(blocks, ParagraphBlock, "paragraph", "stem"))
     prompt = cast(ParagraphBlock, _one(blocks, ParagraphBlock, "paragraph", "prompt"))
@@ -57,27 +61,6 @@ def project_question_template(
         StatementSetBlock,
         _one(blocks, StatementSetBlock, "statement_set", "claims"),
     )
-
-    if len(table.headers) != 3 or len(table.rows) != 1:
-        _incompatible("question template requires one header row and one data row of width three")
-    if image.artifact.media_type != "image/png" or (image.width_px, image.height_px) != (800, 500):
-        _incompatible("question template requires one pinned 800x500 PNG")
-    if equation.notation != "hancom-equation-script":
-        _incompatible("question template requires a bounded Hancom equation script")
-    if re.fullmatch(r"[A-Za-z0-9+\-*/=() ._^]+", equation.source) is None:
-        _incompatible("question template equation is outside the bounded Hancom grammar")
-    if len(claims.statements) != 3 or [value.label for value in claims.statements] != [
-        "ㄱ",
-        "ㄴ",
-        "ㄷ",
-    ]:
-        _incompatible("question template requires the ordered ㄱ/ㄴ/ㄷ statement set")
-    if not isinstance(content.interaction, SingleChoiceInteraction):
-        _incompatible("question template supports single-choice interaction only")
-    if len(content.interaction.choices) != 5:
-        _incompatible("question template requires exactly five choices")
-    if content.score.points not in {2, 3}:
-        _incompatible("question template supports a score of two or three points")
 
     correct_id = content.solution.correct_choice_ids[0]
     correct_index = next(

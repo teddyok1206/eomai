@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def _utc(value: datetime) -> datetime:
@@ -178,8 +178,19 @@ class PackIdentity(FrozenModel):
 
 
 class PackProvenance(FrozenModel):
-    intake_batch_ids: tuple[IntakeBatchId, ...] = Field(min_length=1)
-    mapping_proposal_ids: tuple[str, ...] = Field(min_length=1)
+    mode: Literal["manual_external_source", "built_in_general_knowledge"] = "manual_external_source"
+    intake_batch_ids: tuple[IntakeBatchId, ...]
+    mapping_proposal_ids: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def validate_source_boundary(self) -> PackProvenance:
+        has_intakes = bool(self.intake_batch_ids)
+        has_proposals = bool(self.mapping_proposal_ids)
+        if self.mode == "manual_external_source" and (not has_intakes or not has_proposals):
+            raise ValueError("manual source provenance requires intake and mapping pointers")
+        if self.mode == "built_in_general_knowledge" and (has_intakes or has_proposals):
+            raise ValueError("built-in knowledge provenance cannot claim external source pointers")
+        return self
 
 
 class ProtocolCompatibility(FrozenModel):
@@ -206,7 +217,7 @@ class ItemTypeSource(FrozenModel):
 
 
 class ContentPackManifest(FrozenModel):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.0", "1.1"] = "1.0"
     pack: PackIdentity
     provenance: PackProvenance
     compatibility: PackCompatibility

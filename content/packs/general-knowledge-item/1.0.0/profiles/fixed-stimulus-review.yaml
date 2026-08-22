@@ -1,0 +1,14 @@
+schema_version: "1.0"
+profile:
+  type: "image"
+  key: "fixed-stimulus-review"
+  version: "1.0.0"
+template: "prompt-templates/image.md"
+input_schema_ref: "eom://workflow/image-input@1.1"
+output_schema_ref: "image-result@2.0"
+required_context:
+  - "workflow.id"
+  - "workflow.step_key"
+  - "upstream.authoring.result_json"
+  - "stimulus.artifact_revision_id"
+  - "pack.release_id"

@@ -69,7 +69,8 @@ def compile_pack(source_root: Path) -> CompiledPack:
             ContentPackErrorCode.CONTENT_PACK_REFERENCE_MISSING, "pack.yaml is missing"
         )
     raw = load_strict_yaml(pack_file.path)
-    validate_contract("content-pack", raw)
+    contract_name = "content-pack-v2" if raw.get("schema_version") == "1.1" else "content-pack"
+    validate_contract(contract_name, raw)
     manifest = ContentPackManifest.model_validate(raw)
     referenced = _referenced_paths(manifest)
     missing = sorted(referenced - by_path.keys())

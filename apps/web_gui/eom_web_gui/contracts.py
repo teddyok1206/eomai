@@ -63,9 +63,9 @@ class RequestDraftUpdate(WebModel):
     item_format: Literal["multiple_choice"] = "multiple_choice"
     task_type: Literal["calculation", "conceptual", "data_interpretation"]
     difficulty: Literal["easy", "medium", "hard"]
-    choice_count: int = Field(ge=2, le=5)
-    equation_required: bool
-    image_required: bool
+    choice_count: Literal[5] = 5
+    equation_required: Literal[True] = True
+    image_required: Literal[True] = True
     quality_profile: QualityProfile
     source_intake_batch_id: str | None = Field(default=None, pattern=r"^intake_[0-9a-f]{32}$")
 

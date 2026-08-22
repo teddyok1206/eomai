@@ -89,13 +89,11 @@ class WebServices:
         if existing is not None:
             return {**existing, "replayed": True}
         draft = self.draft(session, draft_id)
-        if draft.source_intake_batch_id is None:
-            raise GatewayError(status=422, code="SOURCE_INTAKE_REQUIRED")
         command = await self.gateway.start_workflow(
             session, workflow_start_payload(draft), idempotency_key
         )
         result = {
-            "mode": "GENERIC_DEMO",
+            "mode": "KNOWLEDGE_ITEM",
             "request_draft_id": draft.request_draft_id,
             "request_sha256": draft.original_request_sha256,
             "command": command,

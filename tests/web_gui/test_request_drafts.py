@@ -28,7 +28,7 @@ def test_demo_request_normalization_is_deterministic_and_structured() -> None:
     assert first.topic == second.topic == "2차원 포물선 운동"
     assert first.task_type == "calculation"
     assert first.equation_required is True
-    assert first.image_required is False
+    assert first.image_required is True
     assert first.choice_count == 5
     assert first.original_request_sha256 == second.original_request_sha256
 
@@ -39,7 +39,9 @@ def test_request_text_is_not_raw_workflow_prompt() -> None:
     )
     draft = draft.model_copy(update={"source_intake_batch_id": INTAKE_ID})
     payload = workflow_start_payload(draft)
-    assert payload["request_name"] == "PLACEHOLDER_REQUEST"
+    assert payload["request_name"] == "KNOWLEDGE_ITEM_REQUEST"
+    assert payload["definition_version"] == "1.2.0"
+    assert payload["pack_key"] == "general-knowledge-item"
     assert payload["source_intake_batch_ids"] == [INTAKE_ID]
     assert DEMO_REQUEST not in str(payload)
     assert "model" not in payload and "reasoning" not in payload
@@ -64,7 +66,7 @@ def test_draft_update_preserves_identity_and_source_hash() -> None:
             topic="포물체 운동",
             task_type="calculation",
             difficulty="hard",
-            choice_count=4,
+            choice_count=5,
             equation_required=True,
             image_required=True,
             quality_profile="deep",
@@ -78,12 +80,13 @@ def test_draft_update_preserves_identity_and_source_hash() -> None:
     assert updated.source_intake_batch_id == INTAKE_ID
 
 
-def test_workflow_payload_requires_pinned_source_intake() -> None:
+def test_workflow_payload_allows_source_free_general_knowledge() -> None:
     draft = normalize_request(
         RequestDraftInput(original_request_text=DEMO_REQUEST), now=NOW, token="5" * 32
     )
-    with pytest.raises(ValueError, match="source intake"):
-        workflow_start_payload(draft)
+    payload = workflow_start_payload(draft)
+    assert payload["source_intake_batch_ids"] == []
+    assert payload["stimulus_asset_key"] == "eom-question-template-reference-v1"
 
 
 def test_draft_validation_rejects_unbounded_choice_count() -> None:

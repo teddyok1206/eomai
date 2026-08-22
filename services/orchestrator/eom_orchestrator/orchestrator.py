@@ -23,6 +23,7 @@ from eom_workflow.models import ArtifactSpec as WorkflowArtifactSpec
 from eom_workflow.schemas import (
     WorkflowSchemaError,
     constrained_result_schema,
+    result_schema_protocol,
     role_schema_bundle_hash,
     validate_role_input,
     validate_role_result,
@@ -220,7 +221,9 @@ class Orchestrator:
         artifact = WorkflowArtifactSpec(
             logical_artifact_id=new_logical_artifact_id(), revision_id=new_revision_id()
         )
+        protocol_version = result_schema_protocol(result_schema)
         worker_input = RoleWorkerInput(
+            protocol_version=protocol_version,
             job_id=job_id,
             workflow_id=workflow_id,
             step_run_id=step_run_id,
@@ -231,14 +234,15 @@ class Orchestrator:
             artifact=artifact,
         )
         input_document = worker_input.model_dump(mode="json")
-        validate_role_input(input_document, role)
+        validate_role_input(input_document, role, protocol_version)
         if prompt_text is None:
             assert prompt_path is not None
             prompt_text = prompt_path.read_text(encoding="utf-8")
-        protocol_version = worker_input.protocol_version
         with transaction(self.sessions) as session:
             self._sync_registry(session)
-            ensure_protocol_version(session, protocol_version, role_schema_bundle_hash())
+            ensure_protocol_version(
+                session, protocol_version, role_schema_bundle_hash(protocol_version)
+            )
             job, created = submit_structured_job(
                 session,
                 job_id=job_id,

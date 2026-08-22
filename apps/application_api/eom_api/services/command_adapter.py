@@ -68,6 +68,7 @@ class CommandAdapter:
             "image_mode": request.image_mode,
         }
         if request.pack_key is not None:
+            knowledge_request = request.request_name == "KNOWLEDGE_ITEM_REQUEST"
             request_data.update(
                 {
                     "content_pack": {
@@ -75,10 +76,18 @@ class CommandAdapter:
                         "environment": request.environment,
                     },
                     "profiles": {
-                        "authoring": "authoring-default",
-                        "review": "review-default",
-                        "image": "image-placeholder",
-                        "registration": "registration-default",
+                        "authoring": (
+                            "knowledge-authoring" if knowledge_request else "authoring-default"
+                        ),
+                        "review": "knowledge-review" if knowledge_request else "review-default",
+                        "image": (
+                            "fixed-stimulus-review" if knowledge_request else "image-placeholder"
+                        ),
+                        "registration": (
+                            "structured-registration"
+                            if knowledge_request
+                            else "registration-default"
+                        ),
                     },
                     "source_intake": {"batch_ids": list(request.source_intake_batch_ids)},
                     "registry_intent": {
@@ -88,6 +97,10 @@ class CommandAdapter:
                     },
                 }
             )
+            if knowledge_request:
+                assert request.item_brief is not None and request.stimulus_asset_key is not None
+                request_data["item_brief"] = request.item_brief.model_dump(mode="json")
+                request_data["stimulus_asset"] = {"asset_key": request.stimulus_asset_key}
         workflow_request = WorkflowRequest.model_validate(request_data)
         with transaction(self.sessions) as session:
             definition = session.scalar(

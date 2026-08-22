@@ -49,6 +49,9 @@ class CatalogSettings:
     nas_artifact_root: Path = Path("/mnt/nas/eom/artifacts")
     intake_root: Path = Path("/mnt/nas/eom/content-intake")
     placeholder_pack_source: Path = Path("/home/eom/EOM/content/packs/generic-placeholder/0.1.0")
+    knowledge_stimulus_source: Path = Path(
+        "/mnt/nas/eom/hwpx/poc-v0/reference-kit/v1/eom-placeholder-image-output.png"
+    )
 
     @property
     def content_pack_staging_root(self) -> Path:
@@ -73,5 +76,8 @@ class CatalogSettings:
             intake_root=Path(os.environ.get("EOM_CONTENT_INTAKE_ROOT", cls.intake_root)),
             placeholder_pack_source=Path(
                 os.environ.get("EOM_PLACEHOLDER_PACK_SOURCE", cls.placeholder_pack_source)
+            ),
+            knowledge_stimulus_source=Path(
+                os.environ.get("EOM_KNOWLEDGE_STIMULUS_SOURCE", cls.knowledge_stimulus_source)
             ),
         )

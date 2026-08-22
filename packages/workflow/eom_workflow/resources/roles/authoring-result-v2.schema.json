@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/workflow/roles/authoring-result-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "protocol_version", "job_id", "workflow_id", "step_run_id", "role", "status", "artifact", "output", "completed_at"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "protocol_version": {"const": "workflow-role/1.1.0"},
+    "job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+    "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "step_run_id": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+    "role": {"const": "authoring"},
+    "status": {"const": "ok"},
+    "artifact": {"$ref": "#/$defs/artifact"},
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content", "metadata"],
+      "properties": {
+        "content": {
+          "allOf": [
+            {"$ref": "eom://schemas/item-registry/assessment-item-content-v1"},
+            {
+              "type": "object",
+              "properties": {
+                "locale": {"const": "ko-KR"},
+                "body": {
+                  "type": "array",
+                  "minItems": 6,
+                  "maxItems": 6,
+                  "prefixItems": [
+                    {"type": "object", "properties": {"type": {"const": "paragraph"}, "purpose": {"const": "stem"}}},
+                    {"type": "object", "properties": {"type": {"const": "table"}, "purpose": {"const": "data"}, "headers": {"minItems": 3, "maxItems": 3}, "rows": {"minItems": 1, "maxItems": 1, "items": {"minItems": 3, "maxItems": 3}}}},
+                    {"type": "object", "properties": {"type": {"const": "image"}, "purpose": {"const": "stimulus"}, "width_px": {"const": 800}, "height_px": {"const": 500}, "artifact": {"type": "object", "properties": {"media_type": {"const": "image/png"}}}}},
+                    {"type": "object", "properties": {"type": {"const": "equation"}, "purpose": {"const": "stimulus"}, "notation": {"const": "hancom-equation-script"}, "source": {"pattern": "^[A-Za-z0-9+\\-*/=() ._^]+$"}}},
+                    {"type": "object", "properties": {"type": {"const": "paragraph"}, "purpose": {"const": "prompt"}}},
+                    {"type": "object", "properties": {"type": {"const": "statement_set"}, "purpose": {"const": "claims"}, "statements": {"minItems": 3, "maxItems": 3, "prefixItems": [{"type": "object", "properties": {"label": {"const": "ㄱ"}}}, {"type": "object", "properties": {"label": {"const": "ㄴ"}}}, {"type": "object", "properties": {"label": {"const": "ㄷ"}}}]}}}
+                  ]
+                },
+                "interaction": {"type": "object", "properties": {"type": {"const": "single_choice"}, "choices": {"minItems": 5, "maxItems": 5}}},
+                "score": {"type": "object", "properties": {"points": {"enum": [2, 3]}}}
+              }
+            }
+          ]
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["subject", "topic", "difficulty", "knowledge_source_mode"],
+          "properties": {
+            "subject": {"type": "string", "minLength": 1, "maxLength": 80},
+            "topic": {"type": "string", "minLength": 1, "maxLength": 160},
+            "difficulty": {"enum": ["easy", "medium", "hard"]},
+            "knowledge_source_mode": {"const": "general_model_knowledge"}
+          }
+        }
+      }
+    },
+    "completed_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "artifact": {"type": "object", "additionalProperties": false, "required": ["logical_artifact_id", "revision_id", "file_name", "media_type"], "properties": {"logical_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"}, "revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"}, "file_name": {"const": "result.json"}, "media_type": {"const": "application/json"}}}
+  }
+}

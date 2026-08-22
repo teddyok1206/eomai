@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/workflow/roles/registration-result-v2.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "protocol_version", "job_id", "workflow_id", "step_run_id", "role", "status", "artifact", "output", "completed_at"],
+  "properties": {
+    "schema_version": {"const": "1.0"}, "protocol_version": {"const": "workflow-role/1.1.0"},
+    "job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"}, "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"}, "step_run_id": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+    "role": {"const": "item_management"}, "status": {"const": "ok"}, "artifact": {"$ref": "#/$defs/artifact"},
+    "output": {"type": "object", "additionalProperties": false, "required": ["registration"], "properties": {"registration": {"type": "object", "additionalProperties": false, "required": ["result", "summary"], "properties": {"result": {"const": "ready_for_registration"}, "summary": {"type": "string", "minLength": 1, "maxLength": 2000}}}}},
+    "completed_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {"artifact": {"type": "object", "additionalProperties": false, "required": ["logical_artifact_id", "revision_id", "file_name", "media_type"], "properties": {"logical_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"}, "revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"}, "file_name": {"const": "result.json"}, "media_type": {"const": "application/json"}}}}
+}

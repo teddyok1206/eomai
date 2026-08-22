@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://metadata/general-knowledge-item@1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["item_type_key", "primary_taxonomy_ref", "difficulty_band", "tags", "subject", "topic", "task_type", "knowledge_source_mode", "request_sha256"],
+  "properties": {
+    "item_type_key": {"const": "eom-template-multiple-choice"},
+    "primary_taxonomy_ref": {"const": "GENERAL_SCIENCE"},
+    "difficulty_band": {"enum": ["easy", "medium", "hard"]},
+    "tags": {"type": "array", "const": ["EOM_QUESTION_TEMPLATE", "GENERAL_KNOWLEDGE_GENERATED"]},
+    "subject": {"type": "string", "minLength": 1, "maxLength": 80},
+    "topic": {"type": "string", "minLength": 1, "maxLength": 160},
+    "task_type": {"enum": ["calculation", "conceptual", "data_interpretation"]},
+    "knowledge_source_mode": {"const": "general_model_knowledge"},
+    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

@@ -68,7 +68,7 @@ def test_request_draft_workflow_submission_and_replay() -> None:
                 "difficulty": "hard",
                 "choice_count": 5,
                 "equation_required": True,
-                "image_required": False,
+                "image_required": True,
                 "quality_profile": "deep",
                 "source_intake_batch_id": INTAKE_ID,
             },
@@ -92,7 +92,7 @@ def test_request_draft_workflow_submission_and_replay() -> None:
         assert gateway.start_calls == 1
 
 
-def test_request_draft_submission_requires_explicit_accepted_intake() -> None:
+def test_request_draft_submission_allows_source_free_general_knowledge() -> None:
     client, gateway = make_client()
     with client:
         session = login(client)
@@ -106,9 +106,9 @@ def test_request_draft_submission_requires_explicit_accepted_intake() -> None:
             json={"idempotency_key": "studio:missing-intake-0001"},
             headers={"X-CSRF-Token": session["csrf_token"]},
         )
-        assert response.status_code == 422
-        assert response.json()["error_code"] == "SOURCE_INTAKE_REQUIRED"
-        assert gateway.start_calls == 0
+        assert response.status_code == 202
+        assert response.json()["mode"] == "KNOWLEDGE_ITEM"
+        assert gateway.start_calls == 1
 
 
 def test_workflow_timeline_approval_etag_and_item_preview() -> None:

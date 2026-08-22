@@ -13,6 +13,7 @@ from eom_workflow.schemas import (
     WorkflowSchemaError,
     load_definition_schema,
     load_json_schema,
+    load_knowledge_item_brief_schema,
     load_role_input_schema,
     load_role_result_schema,
 )
@@ -23,6 +24,7 @@ RESOURCE_ROOT = files("eom_workflow").joinpath("resources")
 EXPECTED_RESOURCES = frozenset(
     {
         "workflow-definition.schema.json",
+        "knowledge-item-brief-v1.schema.json",
         *(f"roles/{name}" for name in INPUT_SCHEMA_FILES.values()),
         *(f"roles/{name}" for name in RESULT_SCHEMA_FILES.values()),
     }
@@ -39,6 +41,8 @@ def test_workflow_schema_resources_match_canonical_sources() -> None:
     }
     if RESOURCE_ROOT.joinpath("workflow-definition.schema.json").is_file():
         actual.add("workflow-definition.schema.json")
+    if RESOURCE_ROOT.joinpath("knowledge-item-brief-v1.schema.json").is_file():
+        actual.add("knowledge-item-brief-v1.schema.json")
     assert actual == EXPECTED_RESOURCES
     for logical_name in sorted(EXPECTED_RESOURCES):
         assert (
@@ -49,10 +53,11 @@ def test_workflow_schema_resources_match_canonical_sources() -> None:
 
 def test_workflow_schemas_load_from_package_resources() -> None:
     assert load_definition_schema()["$id"].endswith("/workflow-definition.schema.json")
+    assert load_knowledge_item_brief_schema()["$id"].endswith("knowledge-item-brief-v1")
     for role in INPUT_SCHEMA_FILES:
         assert load_role_input_schema(role)["$id"].endswith("-input.schema.json")
     for schema_id in RESULT_SCHEMA_FILES:
-        assert load_role_result_schema(schema_id)["$id"].endswith("-result.schema.json")
+        assert "-result" in load_role_result_schema(schema_id)["$id"]
 
 
 def test_missing_workflow_schema_is_a_typed_resource_error(tmp_path: Path) -> None:

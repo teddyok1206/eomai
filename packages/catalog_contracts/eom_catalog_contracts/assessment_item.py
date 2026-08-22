@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
@@ -227,3 +228,56 @@ class AssessmentItemContent(FrozenModel):
             if not self.solution.accepted_answers:
                 raise ValueError("constructed response requires at least one accepted answer")
         return self
+
+
+def validate_eom_question_template_content(
+    content: AssessmentItemContent,
+) -> AssessmentItemContent:
+    """Validate the delivery-neutral content against the fixed EOM template profile."""
+
+    if content.locale != "ko-KR":
+        raise ValueError("question template requires ko-KR content")
+    by_position: dict[tuple[str, str], list[ContentBlock]] = {}
+    for block in content.body:
+        by_position.setdefault((block.type, block.purpose), []).append(block)
+
+    def exactly_one(block_type: str, purpose: str) -> ContentBlock:
+        values = by_position.get((block_type, purpose), [])
+        if len(values) != 1:
+            raise ValueError(f"question template requires one {purpose} {block_type} block")
+        return values[0]
+
+    exactly_one("paragraph", "stem")
+    table = exactly_one("table", "data")
+    image = exactly_one("image", "stimulus")
+    equation = exactly_one("equation", "stimulus")
+    exactly_one("paragraph", "prompt")
+    statements = exactly_one("statement_set", "claims")
+    if len(content.body) != 6:
+        raise ValueError("question template requires exactly six supported content blocks")
+    if not isinstance(table, TableBlock) or len(table.headers) != 3 or len(table.rows) != 1:
+        raise ValueError("question template requires one data row of width three")
+    if not isinstance(image, ImageBlock) or (
+        image.artifact.media_type,
+        image.width_px,
+        image.height_px,
+    ) != ("image/png", 800, 500):
+        raise ValueError("question template requires one pinned 800x500 PNG")
+    if (
+        not isinstance(equation, EquationBlock)
+        or equation.notation != "hancom-equation-script"
+        or re.fullmatch(r"[A-Za-z0-9+\-*/=() ._^]+", equation.source) is None
+    ):
+        raise ValueError("question template equation is outside the bounded Hancom grammar")
+    if not isinstance(statements, StatementSetBlock) or [
+        value.label for value in statements.statements
+    ] != ["ㄱ", "ㄴ", "ㄷ"]:
+        raise ValueError("question template requires the ordered ㄱ/ㄴ/ㄷ statement set")
+    if (
+        not isinstance(content.interaction, SingleChoiceInteraction)
+        or len(content.interaction.choices) != 5
+    ):
+        raise ValueError("question template requires exactly five single-choice choices")
+    if content.score.points not in {2, 3}:
+        raise ValueError("question template supports a score of two or three points")
+    return content

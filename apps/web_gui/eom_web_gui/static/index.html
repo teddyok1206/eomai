@@ -84,7 +84,7 @@
           </section>
 
           <section class="view" data-view="request" aria-labelledby="request-title">
-            <div class="page-heading"><div><p class="eyebrow">REQUEST DRAFT</p><h1 id="request-title">새 문항 요청</h1><p>자연어를 먼저 검토 가능한 제작 Brief로 정규화합니다.</p></div><span class="status-badge tone-primary"><span class="status-icon">◆</span> Generic Demo Mode</span></div>
+            <div class="page-heading"><div><p class="eyebrow">REQUEST DRAFT</p><h1 id="request-title">새 문항 요청</h1><p>자연어를 검토 가능한 Brief로 정규화하고 일반 과학 지식으로 실제 문항을 제작합니다.</p></div><span class="status-badge tone-primary"><span class="status-icon">◆</span> EOM Template Mode</span></div>
             <div class="request-layout">
               <section class="panel request-composer">
                 <div class="panel-heading"><div><p class="eyebrow">NATURAL LANGUAGE</p><h2>어떤 문항을 만들까요?</h2></div></div>
@@ -102,9 +102,9 @@
                   <label>문항 유형<select name="item_format"><option value="multiple_choice">객관식</option></select></label>
                   <label>과제 유형<select name="task_type"><option value="calculation">계산형</option><option value="conceptual">개념형</option><option value="data_interpretation">자료 해석형</option></select></label>
                   <label>난이도<select name="difficulty"><option value="easy">하</option><option value="medium" selected>중</option><option value="hard">상</option></select></label>
-                  <label>선택지 수<input name="choice_count" type="number" min="2" max="5" value="5"></label>
-                  <label class="wide">Source Intake<select name="source_intake_batch_id" required><option value="">ACCEPTED intake를 선택하세요</option></select><small>선택한 immutable intake batch ID가 Workflow에 고정됩니다.</small></label>
-                  <fieldset class="wide"><legend>필요 요소</legend><label class="check"><input name="equation_required" type="checkbox"> 수식</label><label class="check"><input name="image_required" type="checkbox"> 이미지</label></fieldset>
+                  <label>선택지 수<input name="choice_count" type="number" value="5" readonly></label>
+                  <label class="wide">Source Intake (선택)<select name="source_intake_batch_id"><option value="">일반 지식 모드 — Source Intake 없음</option></select><small>선택하지 않으면 worker의 일반 과학 지식과 구조화 Brief만 사용합니다.</small></label>
+                  <fieldset class="wide"><legend>EOM 템플릿 필수 요소</legend><label class="check"><input name="equation_required" type="checkbox" checked disabled> 수식</label><label class="check"><input name="image_required" type="checkbox" checked disabled> 고정 stimulus 이미지</label></fieldset>
                   <fieldset class="wide quality-picker"><legend>품질 프로필</legend><label><input type="radio" name="quality_profile" value="fast"><span><strong>빠름</strong><small>빠른 초안</small></span></label><label><input type="radio" name="quality_profile" value="balanced" checked><span><strong>균형</strong><small>품질과 속도</small></span></label><label><input type="radio" name="quality_profile" value="deep"><span><strong>심층</strong><small>면밀한 검토</small></span></label></fieldset>
                   <div class="wide draft-meta"><span>Draft ID</span><code id="draft-id">-</code><span>Request SHA</span><code id="draft-sha">-</code></div>
                   <p id="draft-message" class="form-message wide" aria-live="polite"></p>

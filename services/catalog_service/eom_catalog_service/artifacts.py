@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +13,7 @@ from eom_identifiers import (
     new_job_id,
     new_logical_artifact_id,
     new_revision_id,
+    sha256_file,
 )
 from eom_orchestrator.artifacts import commit_file_set_artifact, stage_file_set_artifact
 from eom_orchestrator.database import build_session_factory, transaction
@@ -25,7 +28,7 @@ from sqlalchemy import Engine, select
 
 from eom_catalog_service.settings import CatalogSettings
 
-CATALOG_PROTOCOL_VERSION = "catalog/1.0"
+CATALOG_PROTOCOL_VERSION = "catalog/1.1"
 CATALOG_SCHEMA_HASH = content_sha256(
     {
         "protocol": CATALOG_PROTOCOL_VERSION,
@@ -34,6 +37,7 @@ CATALOG_SCHEMA_HASH = content_sha256(
             "mapping-proposal-v1",
             "human-decision-v1",
             "content-pack-v1",
+            "content-pack-v2",
             "item-revision-manifest-v1",
             "assessment-item-content-v1",
         ],
@@ -165,3 +169,43 @@ class CatalogArtifactService:
             content_bytes=staged.primary_bytes,
             nas_path=str(final),
         )
+
+    def load_json_revision(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        content_hash: str,
+        max_bytes: int = 1_048_576,
+    ) -> dict[str, Any]:
+        """Resolve one immutable small JSON result through its pinned artifact identity."""
+
+        with self.sessions() as session:
+            revision = session.get(ArtifactRevisionRecord, revision_id)
+            if (
+                revision is None
+                or not revision.approved
+                or revision.logical_artifact_id != artifact_id
+                or revision.content_hash != content_hash
+            ):
+                raise ValueError("JSON artifact pointer does not resolve")
+            primary_name = revision.manifest.get("primary_file", "result.json")
+            if primary_name != "result.json":
+                raise ValueError("JSON artifact primary member is invalid")
+            storage_root = self.settings.nas_artifact_root.resolve(strict=True)
+            artifact_root = Path(revision.nas_path).resolve(strict=True)
+            if not artifact_root.is_relative_to(storage_root):
+                raise ValueError("JSON artifact escaped storage root")
+            primary = artifact_root / primary_name
+            metadata = primary.lstat()
+            if (
+                primary.is_symlink()
+                or not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_size > max_bytes
+                or sha256_file(primary) != content_hash
+            ):
+                raise ValueError("JSON artifact materialization is invalid")
+            value: object = json.loads(primary.read_text(encoding="utf-8"))
+            if not isinstance(value, dict):
+                raise ValueError("JSON artifact is not an object")
+            return value

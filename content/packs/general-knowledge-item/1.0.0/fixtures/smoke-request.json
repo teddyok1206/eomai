@@ -1,0 +1,16 @@
+{
+  "request_name": "KNOWLEDGE_ITEM_REQUEST",
+  "image_mode": "required",
+  "item_brief": {
+    "subject": "일반 과학",
+    "topic": "변인 사이의 선형 관계",
+    "task_type": "data_interpretation",
+    "difficulty": "medium",
+    "choice_count": 5,
+    "equation_required": true,
+    "image_required": true,
+    "quality_profile": "balanced",
+    "original_request_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "stimulus_asset": {"asset_key": "eom-question-template-reference-v1"}
+}

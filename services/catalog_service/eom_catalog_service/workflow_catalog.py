@@ -5,18 +5,26 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from eom_catalog_contracts import validate_contract
+from eom_catalog_contracts import (
+    AssessmentItemContent,
+    ImageBlock,
+    validate_contract,
+    validate_eom_question_template_content,
+)
 from eom_content_pack import ContentPackError, ContentPackErrorCode, render_prompt
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_item_registry import ComponentPointer, RegistrationRequest
 from eom_orchestrator.database import build_session_factory
 from eom_workflow import ArtifactPointer, WorkflowRequest
+from eom_workflow.models import KnowledgeAuthoringRoleResult, RoleResult
+from eom_workflow.schemas import validate_role_result
 from eom_workflow_runner.catalog_port import PreparedPrompt, RegistrationOutcome
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.knowledge_stimulus import KnowledgeStimulusService
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
     ContentPackActivationRecord,
@@ -30,6 +38,7 @@ from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.staging import (
     create_catalog_operation_directory,
     require_catalog_runtime_directory,
+    stage_registry_item_content,
 )
 
 ROLE_PROFILE_KEYS = {
@@ -44,7 +53,17 @@ COMPONENT_TYPES = {
     "review": "REVIEW_REPORT",
     "registration": "METADATA",
 }
-ComponentType = Literal["UPPER_STEM", "IMAGE_SPEC", "REVIEW_REPORT", "METADATA"]
+ComponentType = Literal["UPPER_STEM", "IMAGE_SPEC", "REVIEW_REPORT", "METADATA", "ITEM_CONTENT"]
+ROLE_BY_RESULT_SCHEMA = {
+    "authoring-result@1.0": "authoring",
+    "authoring-result@2.0": "authoring",
+    "image-result@1.0": "image",
+    "image-result@2.0": "image",
+    "review-result@1.0": "review",
+    "review-result@2.0": "review",
+    "registration-result@1.0": "item_management",
+    "registration-result@2.0": "item_management",
+}
 
 
 def _prepare_prompt_staging(
@@ -74,6 +93,7 @@ class WorkflowCatalogService:
         self.artifacts = CatalogArtifactService(engine, self.settings)
         self.resources = PackResourceResolver()
         self.registry = RegistryService(engine, self.settings)
+        self.stimulus = KnowledgeStimulusService(engine, self.settings)
 
     def bind_request(
         self,
@@ -85,12 +105,11 @@ class WorkflowCatalogService:
         if (
             request.content_pack is None
             or request.profiles is None
-            or request.source_intake is None
             or request.registry_intent is None
         ):
             raise ContentPackError(
                 ContentPackErrorCode.CONTENT_PACK_INVALID,
-                "workflow 1.1 requires complete Content Pack and registry input",
+                "Content Pack workflow requires complete pack, profile, and registry input",
             )
         with self.sessions() as session:
             activation = session.scalar(
@@ -124,23 +143,26 @@ class WorkflowCatalogService:
             self._require_compatibility(release, definition_key, definition_version)
             profile_keys = request.profiles.model_dump(mode="json")
             profiles = self._profile_snapshots(session, release, profile_keys)
-            batches = list(
-                session.scalars(
-                    select(ContentIntakeBatchRecord).where(
-                        ContentIntakeBatchRecord.intake_batch_id.in_(
-                            request.source_intake.batch_ids
+            intake_ids = request.source_intake.batch_ids if request.source_intake else ()
+            batches = (
+                list(
+                    session.scalars(
+                        select(ContentIntakeBatchRecord).where(
+                            ContentIntakeBatchRecord.intake_batch_id.in_(intake_ids)
                         )
                     )
                 )
+                if intake_ids
+                else []
             )
-            if len(batches) != len(set(request.source_intake.batch_ids)) or any(
+            if len(batches) != len(set(intake_ids)) or any(
                 batch.state not in {"ACCEPTED", "IMPORTED"} for batch in batches
             ):
                 raise ContentPackError(
                     ContentPackErrorCode.CONTENT_PACK_INVALID,
                     "source Intake snapshot does not resolve to accepted evidence",
                 )
-            return {
+            context = {
                 "content_pack": {
                     "release_id": release.content_pack_release_id,
                     "pack_key": pack.pack_key,
@@ -151,12 +173,19 @@ class WorkflowCatalogService:
                     "environment": activation.environment,
                 },
                 "profiles": profiles,
-                "source_intake": {"batch_ids": sorted(request.source_intake.batch_ids)},
+                "source_intake": {"batch_ids": sorted(intake_ids)},
                 "registry_intent": request.registry_intent.model_dump(
                     mode="json", exclude_none=True
                 ),
                 "prompt_artifacts": [],
             }
+            if request.request_name == "KNOWLEDGE_ITEM_REQUEST":
+                assert request.item_brief is not None and request.stimulus_asset is not None
+                context["item_brief"] = request.item_brief.model_dump(mode="json")
+                context["stimulus_asset"] = self.stimulus.resolve(
+                    request.stimulus_asset.asset_key
+                ).as_dict()
+            return context
 
     def prepare_prompt(
         self,
@@ -269,7 +298,7 @@ class WorkflowCatalogService:
                 "pack_release_sha256": pack_snapshot["release_sha256"],
             }
         ).removeprefix("sha256:")
-        components = tuple(
+        components: tuple[ComponentPointer, ...] = tuple(
             ComponentPointer(
                 component_type=cast(ComponentType, COMPONENT_TYPES[pointer.step_key]),
                 ordinal=0,
@@ -283,6 +312,37 @@ class WorkflowCatalogService:
             for pointer in artifacts
             if pointer.step_key in COMPONENT_TYPES
         )
+        tags: tuple[str, ...]
+        if request.request_name == "KNOWLEDGE_ITEM_REQUEST":
+            components = (*components, self._knowledge_item_content(workflow, request, artifacts))
+            assert request.item_brief is not None
+            brief = request.item_brief
+            item_type_key = "eom-template-multiple-choice"
+            taxonomy = "GENERAL_SCIENCE"
+            tags = ("EOM_QUESTION_TEMPLATE", "GENERAL_KNOWLEDGE_GENERATED")
+            metadata_schema = "eom://metadata/general-knowledge-item@1.0"
+            metadata = {
+                "item_type_key": item_type_key,
+                "primary_taxonomy_ref": taxonomy,
+                "difficulty_band": brief.difficulty,
+                "tags": list(tags),
+                "subject": brief.subject,
+                "topic": brief.topic,
+                "task_type": brief.task_type,
+                "knowledge_source_mode": "general_model_knowledge",
+                "request_sha256": brief.original_request_sha256,
+            }
+        else:
+            item_type_key = "generic-multiple-choice"
+            taxonomy = "PLACEHOLDER_TAXONOMY"
+            tags = ("PLACEHOLDER_TAG",)
+            metadata_schema = "eom://metadata/generic-placeholder@1.0"
+            metadata = {
+                "item_type_key": item_type_key,
+                "primary_taxonomy_ref": taxonomy,
+                "difficulty_band": "PLACEHOLDER_DIFFICULTY",
+                "tags": list(tags),
+            }
         revision = self.registry.register(
             RegistrationRequest(
                 mode=intent["mode"],
@@ -295,17 +355,16 @@ class WorkflowCatalogService:
                 workflow_definition_version=workflow.definition_version,
                 source_workflow_step_run_id=step.step_run_id,
                 source_intake_batch_ids=tuple(source_intake["batch_ids"]),
-                item_type_key="generic-multiple-choice",
-                primary_taxonomy_ref="PLACEHOLDER_TAXONOMY",
-                difficulty_band="PLACEHOLDER_DIFFICULTY",
-                tag_keys=("PLACEHOLDER_TAG",),
-                metadata_schema_ref="eom://metadata/generic-placeholder@1.0",
-                metadata={
-                    "item_type_key": "generic-multiple-choice",
-                    "primary_taxonomy_ref": "PLACEHOLDER_TAXONOMY",
-                    "difficulty_band": "PLACEHOLDER_DIFFICULTY",
-                    "tags": ["PLACEHOLDER_TAG"],
-                },
+                item_type_key=item_type_key,
+                primary_taxonomy_ref=taxonomy,
+                difficulty_band=(
+                    request.item_brief.difficulty
+                    if request.item_brief is not None
+                    else "PLACEHOLDER_DIFFICULTY"
+                ),
+                tag_keys=tags,
+                metadata_schema_ref=metadata_schema,
+                metadata=metadata,
                 components=components,
                 created_by=workflow.created_actor_id,
             )
@@ -388,18 +447,26 @@ class WorkflowCatalogService:
             )
         return cast(dict[str, Any], pack), cast(dict[str, Any], profile)
 
-    @staticmethod
     def _prompt_context(
+        self,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
         request: WorkflowRequest,
         upstream: tuple[ArtifactPointer, ...],
         release_id: str,
     ) -> dict[str, Any]:
-        upstream_context = {
-            pointer.step_key: {"artifact_id": pointer.logical_artifact_id} for pointer in upstream
-        }
-        return {
+        upstream_context: dict[str, dict[str, str]] = {}
+        for pointer in upstream:
+            if pointer.step_key in upstream_context:
+                raise ValueError("duplicate upstream step pointer")
+            result, _ = self._load_upstream_result(workflow, pointer)
+            upstream_context[pointer.step_key] = {
+                "artifact_id": pointer.logical_artifact_id,
+                "artifact_revision_id": pointer.revision_id,
+                "sha256": pointer.content_hash,
+                "result_json": canonical_json_bytes(result).decode("utf-8"),
+            }
+        context: dict[str, Any] = {
             "workflow": {"id": workflow.workflow_id, "step_key": step.step_key},
             "request": {
                 "request_name": request.request_name,
@@ -408,6 +475,113 @@ class WorkflowCatalogService:
             "upstream": upstream_context,
             "pack": {"release_id": release_id},
         }
+        if request.item_brief is not None:
+            context["brief"] = request.item_brief.model_dump(mode="json")
+        stimulus = workflow.runtime_context.get("stimulus_asset")
+        if isinstance(stimulus, dict):
+            context["stimulus"] = stimulus
+        return context
+
+    def _knowledge_item_content(
+        self,
+        workflow: WorkflowInstanceRecord,
+        request: WorkflowRequest,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> ComponentPointer:
+        authoring = next(
+            (
+                pointer
+                for pointer in artifacts
+                if pointer.step_key == "authoring"
+                and pointer.result_schema == "authoring-result@2.0"
+            ),
+            None,
+        )
+        if authoring is None:
+            raise ValueError("knowledge workflow has no structured authoring result")
+        _, parsed = self._load_upstream_result(workflow, authoring)
+        if not isinstance(parsed, KnowledgeAuthoringRoleResult):
+            raise ValueError("knowledge authoring result type is invalid")
+        content: AssessmentItemContent = parsed.output.content
+        validate_eom_question_template_content(content)
+        expected_stimulus = workflow.runtime_context.get("stimulus_asset")
+        image = next((block for block in content.body if isinstance(block, ImageBlock)), None)
+        if not isinstance(expected_stimulus, dict) or image is None:
+            raise ValueError("knowledge workflow stimulus snapshot is missing")
+        actual_pointer = image.artifact.model_dump(mode="json")
+        expected_pointer = {
+            key: expected_stimulus[key]
+            for key in (
+                "artifact_id",
+                "artifact_revision_id",
+                "artifact_member",
+                "sha256",
+                "media_type",
+            )
+        }
+        if actual_pointer != expected_pointer:
+            raise ValueError("authoring result changed the pinned stimulus pointer")
+        content_data = content.model_dump(mode="json")
+        staged, staged_hash = stage_registry_item_content(self.settings, content_data)
+        expected_hash = content_sha256(content_data)
+        if staged_hash != expected_hash:
+            raise ValueError("knowledge item content changed during staging")
+        artifact = self.artifacts.commit_file_set(
+            files={"assessment-item-content.json": staged},
+            primary_file="assessment-item-content.json",
+            artifact_type="assessment-item-content",
+            idempotency_key=f"workflow-item-content:{workflow.workflow_id}:{expected_hash}",
+            request={"workflow_id": workflow.workflow_id, "schema_version": "1.0"},
+            result={"content_sha256": expected_hash},
+        )
+        return ComponentPointer(
+            component_type="ITEM_CONTENT",
+            ordinal=0,
+            schema_ref="eom.assessment.item-content/1.0",
+            media_type="application/json",
+            artifact_id=artifact.artifact_id,
+            artifact_revision_id=artifact.revision_id,
+            sha256=artifact.content_hash,
+            logical_name="assessment-item-content.json",
+            metadata={
+                "authoring_artifact_revision_id": authoring.revision_id,
+                "knowledge_source_mode": "general_model_knowledge",
+                "delivery_profile": "eom-question-template-v1",
+                "request_sha256": (
+                    request.item_brief.original_request_sha256
+                    if request.item_brief is not None
+                    else ""
+                ),
+            },
+        )
+
+    def _load_upstream_result(
+        self,
+        workflow: WorkflowInstanceRecord,
+        pointer: ArtifactPointer,
+    ) -> tuple[dict[str, Any], RoleResult]:
+        """Resolve and bind one schema-valid result to its exact workflow/job/artifact pointer."""
+
+        result = self.artifacts.load_json_revision(
+            artifact_id=pointer.logical_artifact_id,
+            revision_id=pointer.revision_id,
+            content_hash=pointer.content_hash,
+        )
+        role = ROLE_BY_RESULT_SCHEMA.get(pointer.result_schema)
+        if role is None:
+            raise ContentPackError(
+                ContentPackErrorCode.CONTENT_PACK_PROFILE_INVALID,
+                "upstream result schema is unsupported",
+            )
+        parsed = validate_role_result(result, role, pointer.result_schema)
+        if (
+            parsed.workflow_id != workflow.workflow_id
+            or parsed.job_id != pointer.job_id
+            or parsed.artifact.logical_artifact_id != pointer.logical_artifact_id
+            or parsed.artifact.revision_id != pointer.revision_id
+        ):
+            raise ValueError("upstream result identity does not match its immutable pointer")
+        return result, parsed
 
     @staticmethod
     def _pinned_release(session: Session, snapshot: dict[str, Any]) -> ContentPackReleaseRecord:

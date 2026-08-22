@@ -1,0 +1,16 @@
+schema_version: "1.0"
+profile:
+  type: "review"
+  key: "knowledge-review"
+  version: "1.0.0"
+template: "prompt-templates/review.md"
+input_schema_ref: "eom://workflow/review-input@1.1"
+output_schema_ref: "review-result@2.0"
+required_context:
+  - "workflow.id"
+  - "workflow.step_key"
+  - "brief.subject"
+  - "brief.topic"
+  - "upstream.authoring.result_json"
+  - "upstream.image.result_json"
+  - "pack.release_id"

@@ -85,6 +85,18 @@ def test_result_schema_must_match_worker_role() -> None:
         compile_definition_data(raw, "test.yaml", ROLES)
 
 
+def test_agent_steps_cannot_mix_role_protocol_versions() -> None:
+    raw: object = yaml.safe_load(
+        Path("config/workflows/generic-item-development.v1.2.yaml").read_text(encoding="utf-8")
+    )
+    assert isinstance(raw, dict)
+    steps = raw["steps"]
+    assert isinstance(steps, list) and isinstance(steps[1], dict)
+    steps[1]["result_schema"] = "image-result@1.0"
+    with pytest.raises(WorkflowDefinitionError, match="one role protocol"):
+        compile_definition_data(raw, "test.yaml", ROLES)
+
+
 @pytest.mark.parametrize(("image_mode", "target"), [("skip", "review"), ("required", "image")])
 def test_image_decision_is_deterministic(image_mode: str, target: str) -> None:
     compiled = compile_definition(DEFINITION_PATH, ROLES)

@@ -60,6 +60,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:8d121d187885a9c1c2b588493d9d7337856614db6d5011306d63b16a9219fb8b",
         ),
+        "content-pack-v2": CatalogSchemaResource(
+            "schemas/content-pack/content-pack-v2.schema.json",
+            "resources/content-pack/content-pack-v2.schema.json",
+            "1.1",
+            "sha256:c2f7e5456ac15eaa2526a33ba9de8bef81e9640925a05b1531e9abf80744a664",
+        ),
         "content-pack-profile": CatalogSchemaResource(
             "schemas/content-pack/profile-v1.schema.json",
             "resources/content-pack/profile-v1.schema.json",

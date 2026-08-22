@@ -39,10 +39,6 @@ def normalize_request(
     task_type: Literal["calculation", "conceptual"] = (
         "calculation" if any(word in lowered for word in ("계산", "구하", "값")) else "conceptual"
     )
-    equation_required = task_type == "calculation" or any(
-        word in lowered for word in ("수식", "방정식", "함수")
-    )
-    image_required = any(word in lowered for word in ("그림", "그래프", "도표", "이미지"))
     current = now or datetime.now(UTC)
     return RequestDraft(
         request_draft_id=f"requestdraft_{token or secrets.token_hex(16)}",
@@ -52,8 +48,8 @@ def normalize_request(
         task_type=task_type,
         difficulty="medium",
         choice_count=5,
-        equation_required=equation_required,
-        image_required=image_required,
+        equation_required=True,
+        image_required=True,
         quality_profile=QualityProfile.BALANCED,
         original_request_text=text,
         original_request_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
@@ -81,20 +77,32 @@ def quality_policy(profile: str) -> dict[str, str]:
 
 
 def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
-    """Map a reviewed V0 draft to the accepted Generic Demo workflow contract."""
-    if draft.source_intake_batch_id is None:
-        raise ValueError("an accepted source intake batch must be pinned before submission")
+    """Map a reviewed draft to the source-optional knowledge-item workflow contract."""
     return {
         "definition_key": "generic-item-development",
-        "definition_version": "1.1.0",
-        "request_name": "PLACEHOLDER_REQUEST",
-        "image_mode": "required" if draft.image_required else "skip",
-        "pack_key": "generic-placeholder",
+        "definition_version": "1.2.0",
+        "request_name": "KNOWLEDGE_ITEM_REQUEST",
+        "image_mode": "required",
+        "pack_key": "general-knowledge-item",
         "environment": "development",
-        "source_intake_batch_ids": [draft.source_intake_batch_id],
+        "source_intake_batch_ids": (
+            [draft.source_intake_batch_id] if draft.source_intake_batch_id else []
+        ),
         "registry_mode": "CREATE_ITEM",
         "item_id": None,
         "base_revision_id": None,
+        "item_brief": {
+            "subject": draft.subject,
+            "topic": draft.topic,
+            "task_type": draft.task_type,
+            "difficulty": draft.difficulty,
+            "choice_count": 5,
+            "equation_required": True,
+            "image_required": True,
+            "quality_profile": draft.quality_profile,
+            "original_request_sha256": draft.original_request_sha256,
+        },
+        "stimulus_asset_key": "eom-question-template-reference-v1",
     }
 
 

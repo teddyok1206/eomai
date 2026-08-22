@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 
+from eom_catalog_contracts import AssessmentItemContent
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -101,8 +102,24 @@ class WorkflowDefinition(FrozenModel):
 
 
 class WorkerRequest(FrozenModel):
-    request_name: Literal["PLACEHOLDER_REQUEST"]
+    request_name: Literal["PLACEHOLDER_REQUEST", "KNOWLEDGE_ITEM_REQUEST"]
     image_mode: Literal["skip", "required"]
+
+
+class ItemBrief(FrozenModel):
+    subject: str = Field(min_length=1, max_length=80)
+    topic: str = Field(min_length=1, max_length=160)
+    task_type: Literal["calculation", "conceptual", "data_interpretation"]
+    difficulty: Literal["easy", "medium", "hard"]
+    choice_count: Literal[5] = 5
+    equation_required: Literal[True] = True
+    image_required: Literal[True] = True
+    quality_profile: Literal["fast", "balanced", "deep"]
+    original_request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class StimulusAssetSelection(FrozenModel):
+    asset_key: Literal["eom-question-template-reference-v1"]
 
 
 class ContentPackSelection(FrozenModel):
@@ -119,7 +136,7 @@ class WorkflowProfiles(FrozenModel):
 
 class SourceIntakeSelection(FrozenModel):
     batch_ids: tuple[Annotated[str, Field(pattern=r"^intake_[0-9a-f]{32}$")], ...] = Field(
-        min_length=1, max_length=100
+        max_length=100
     )
 
 
@@ -138,24 +155,42 @@ class RegistryIntent(FrozenModel):
         return self
 
 
-class WorkflowRequest(WorkerRequest):
+class WorkflowRequest(FrozenModel):
+    request_name: Literal["PLACEHOLDER_REQUEST", "KNOWLEDGE_ITEM_REQUEST"]
+    image_mode: Literal["skip", "required"]
     content_pack: ContentPackSelection | None = None
     profiles: WorkflowProfiles | None = None
     source_intake: SourceIntakeSelection | None = None
     registry_intent: RegistryIntent | None = None
+    item_brief: ItemBrief | None = None
+    stimulus_asset: StimulusAssetSelection | None = None
 
     @model_validator(mode="after")
     def validate_catalog_request(self) -> WorkflowRequest:
-        values = (
-            self.content_pack,
-            self.profiles,
-            self.source_intake,
-            self.registry_intent,
-        )
-        if any(value is not None for value in values) and not all(
-            value is not None for value in values
+        required_catalog_values = (self.content_pack, self.profiles, self.registry_intent)
+        if any(value is not None for value in required_catalog_values) and not all(
+            value is not None for value in required_catalog_values
         ):
             raise ValueError("catalog workflow request fields must be supplied together")
+        if self.source_intake is not None and self.content_pack is None:
+            raise ValueError("source Intake pointers require a Content Pack")
+        if self.request_name == "KNOWLEDGE_ITEM_REQUEST":
+            if (
+                self.content_pack is None
+                or self.item_brief is None
+                or self.stimulus_asset is None
+                or self.image_mode != "required"
+            ):
+                raise ValueError(
+                    "knowledge item workflow requires pack, brief, fixed stimulus, and image"
+                )
+        else:
+            if self.item_brief is not None or self.stimulus_asset is not None:
+                raise ValueError("placeholder workflow cannot include a knowledge item brief")
+            if self.content_pack is not None and (
+                self.source_intake is None or not self.source_intake.batch_ids
+            ):
+                raise ValueError("placeholder Content Pack requires source Intake evidence")
         return self
 
     def worker_request(self) -> WorkerRequest:
@@ -181,7 +216,7 @@ class ArtifactPointer(FrozenModel):
 
 class RoleWorkerInput(FrozenModel):
     schema_version: Literal["1.0"] = "1.0"
-    protocol_version: Literal["workflow-role/1.0.1"] = "workflow-role/1.0.1"
+    protocol_version: Literal["workflow-role/1.0.1", "workflow-role/1.1.0"] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
     step_run_id: StepRunId
@@ -247,7 +282,7 @@ class RegistrationOutput(FrozenModel):
 
 class RoleResultBase(FrozenModel):
     schema_version: Literal["1.0"] = "1.0"
-    protocol_version: Literal["workflow-role/1.0.1"] = "workflow-role/1.0.1"
+    protocol_version: Literal["workflow-role/1.0.1", "workflow-role/1.1.0"] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
     step_run_id: StepRunId
@@ -276,4 +311,84 @@ class RegistrationRoleResult(RoleResultBase):
     output: RegistrationOutput
 
 
-RoleResult = AuthoringRoleResult | ImageRoleResult | ReviewRoleResult | RegistrationRoleResult
+class KnowledgeAuthoringMetadata(FrozenModel):
+    subject: str = Field(min_length=1, max_length=80)
+    topic: str = Field(min_length=1, max_length=160)
+    difficulty: Literal["easy", "medium", "hard"]
+    knowledge_source_mode: Literal["general_model_knowledge"]
+
+
+class KnowledgeAuthoringOutput(FrozenModel):
+    content: AssessmentItemContent
+    metadata: KnowledgeAuthoringMetadata
+
+
+class KnowledgeAuthoringRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.1.0"] = "workflow-role/1.1.0"
+    role: Literal["authoring"]
+    output: KnowledgeAuthoringOutput
+
+
+class KnowledgeImageReview(FrozenModel):
+    decision: Literal["asset_approved"]
+    artifact_revision_id: RevisionId
+    summary: str = Field(min_length=1, max_length=2000)
+
+
+class KnowledgeImageOutput(FrozenModel):
+    image_review: KnowledgeImageReview
+
+
+class KnowledgeImageRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.1.0"] = "workflow-role/1.1.0"
+    role: Literal["image"]
+    output: KnowledgeImageOutput
+
+
+class ReviewFinding(FrozenModel):
+    code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    severity: Literal["info", "warning", "blocking"]
+    message: str = Field(min_length=1, max_length=2000)
+
+
+class KnowledgeReview(FrozenModel):
+    decision: Literal["ready_for_human"]
+    findings: tuple[ReviewFinding, ...] = Field(max_length=20)
+    summary: str = Field(min_length=1, max_length=4000)
+
+
+class KnowledgeReviewOutput(FrozenModel):
+    review: KnowledgeReview
+
+
+class KnowledgeReviewRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.1.0"] = "workflow-role/1.1.0"
+    role: Literal["review"]
+    output: KnowledgeReviewOutput
+
+
+class KnowledgeRegistration(FrozenModel):
+    result: Literal["ready_for_registration"]
+    summary: str = Field(min_length=1, max_length=2000)
+
+
+class KnowledgeRegistrationOutput(FrozenModel):
+    registration: KnowledgeRegistration
+
+
+class KnowledgeRegistrationRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.1.0"] = "workflow-role/1.1.0"
+    role: Literal["item_management"]
+    output: KnowledgeRegistrationOutput
+
+
+RoleResult = (
+    AuthoringRoleResult
+    | ImageRoleResult
+    | ReviewRoleResult
+    | RegistrationRoleResult
+    | KnowledgeAuthoringRoleResult
+    | KnowledgeImageRoleResult
+    | KnowledgeReviewRoleResult
+    | KnowledgeRegistrationRoleResult
+)

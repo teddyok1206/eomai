@@ -17,6 +17,10 @@ from eom_catalog_service.content_pack_files import build_pack, compile_pack, ins
 from eom_catalog_service.content_pack_service import ContentPackService
 from eom_catalog_service.intake_files import load_strict_json
 from eom_catalog_service.intake_service import IntakeService
+from eom_catalog_service.knowledge_stimulus import (
+    KNOWLEDGE_STIMULUS_ASSET_KEY,
+    KnowledgeStimulusService,
+)
 from eom_catalog_service.registry_export import ExportFormat, ExportKind, RegistryExporter
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.settings import CatalogSettings
@@ -27,6 +31,7 @@ from sqlalchemy import Engine, inspect
 content_app = typer.Typer(no_args_is_help=True)
 intake_app = typer.Typer(no_args_is_help=True)
 pack_app = typer.Typer(no_args_is_help=True)
+stimulus_app = typer.Typer(no_args_is_help=True)
 item_app = typer.Typer(no_args_is_help=True)
 item_revision_app = typer.Typer(no_args_is_help=True)
 deliverable_app = typer.Typer(no_args_is_help=True)
@@ -37,6 +42,7 @@ registry_app = typer.Typer(no_args_is_help=True)
 registry_export_app = typer.Typer(no_args_is_help=True)
 content_app.add_typer(intake_app, name="intake")
 content_app.add_typer(pack_app, name="pack")
+content_app.add_typer(stimulus_app, name="stimulus")
 item_app.add_typer(item_revision_app, name="revision")
 usage_app.add_typer(usage_plan_app, name="plan")
 usage_app.add_typer(usage_record_app, name="record")
@@ -65,6 +71,26 @@ def _registry_service() -> tuple[RegistryService, Engine]:
 def _usage_service() -> tuple[UsageLedgerService, Engine]:
     engine = build_engine()
     return UsageLedgerService(engine), engine
+
+
+@stimulus_app.command("provision")
+def stimulus_provision() -> None:
+    engine = build_engine()
+    try:
+        pointer = KnowledgeStimulusService(engine).provision()
+        _emit(pointer.as_dict())
+    finally:
+        engine.dispose()
+
+
+@stimulus_app.command("inspect")
+def stimulus_inspect() -> None:
+    engine = build_engine()
+    try:
+        pointer = KnowledgeStimulusService(engine).resolve(KNOWLEDGE_STIMULUS_ASSET_KEY)
+        _emit(pointer.as_dict())
+    finally:
+        engine.dispose()
 
 
 @intake_app.command("create")

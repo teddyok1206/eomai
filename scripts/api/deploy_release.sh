@@ -205,15 +205,20 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
 
 workflow_prefix = "eom_workflow/resources/"
 workflow_resources = {
+    "knowledge-item-brief-v1.schema.json",
     "workflow-definition.schema.json",
     "roles/authoring-input.schema.json",
     "roles/authoring-result.schema.json",
+    "roles/authoring-result-v2.schema.json",
     "roles/image-input.schema.json",
     "roles/image-result.schema.json",
+    "roles/image-result-v2.schema.json",
     "roles/registration-input.schema.json",
     "roles/registration-result.schema.json",
+    "roles/registration-result-v2.schema.json",
     "roles/review-input.schema.json",
     "roles/review-result.schema.json",
+    "roles/review-result-v2.schema.json",
 }
 platform_wheel = by_prefix["eom_platform"]
 with zipfile.ZipFile(platform_wheel) as archive:
@@ -237,6 +242,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/application_runner.py",
         "eom_catalog_service/application_server.py",
         "eom_catalog_service/item_content_import.py",
+        "eom_catalog_service/knowledge_stimulus.py",
         "eom_catalog_service/settings.py",
         "eom_catalog_service/staging.py",
         "eom_catalog_service/registry_service.py",
@@ -321,6 +327,7 @@ catalog_resources = {
     "content-intake/uncertainties-v1.schema.json": "schemas/content-intake/uncertainties-v1.schema.json",
     "content-intake/human-decision-v1.schema.json": "schemas/content-intake/human-decision-v1.schema.json",
     "content-pack/content-pack-v1.schema.json": "schemas/content-pack/content-pack-v1.schema.json",
+    "content-pack/content-pack-v2.schema.json": "schemas/content-pack/content-pack-v2.schema.json",
     "content-pack/profile-v1.schema.json": "schemas/content-pack/profile-v1.schema.json",
     "content-pack/prompt-envelope-v1.schema.json": "schemas/content-pack/prompt-envelope-v1.schema.json",
     "item-registry/assessment-item-content-v1.schema.json": "schemas/item-registry/assessment-item-content-v1.schema.json",
@@ -352,13 +359,16 @@ with zipfile.ZipFile(platform_wheel) as archive:
 with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporary:
     root = Path(temporary)
     installed_root = root / "site-packages"
-    definition = root / "generic-item-development.v1.1.yaml"
-    definition.write_bytes(
-        (
-            Path(os.environ["REPOSITORY_ROOT"])
-            / "config/workflows/generic-item-development.v1.1.yaml"
-        ).read_bytes()
-    )
+    definitions = []
+    for version in ("1.1", "1.2"):
+        definition = root / f"generic-item-development.v{version}.yaml"
+        definition.write_bytes(
+            (
+                Path(os.environ["REPOSITORY_ROOT"])
+                / f"config/workflows/generic-item-development.v{version}.yaml"
+            ).read_bytes()
+        )
+        definitions.append(definition)
     worker_config = root / "worker-slots.yaml"
     worker_config.write_bytes(
         (Path(os.environ["REPOSITORY_ROOT"]) / "config/worker-slots.example.yaml").read_bytes()
@@ -405,7 +415,7 @@ import sys
 from pathlib import Path
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_path, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -469,13 +479,17 @@ if not preflight.ready:
 load_definition_schema()
 for role in INPUT_SCHEMA_FILES:
     load_role_input_schema(role)
+    load_role_input_schema(role, "workflow-role/1.1.0")
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
-compiled = compile_definition(
-    Path(definition_path), {"authoring", "image", "review", "item_management"}
-)
-if compiled.definition.definition_version != "1.1.0":
-    raise SystemExit("generic workflow definition version mismatch")
+compiled_versions = {
+    compile_definition(
+        Path(definition_path), {"authoring", "image", "review", "item_management"}
+    ).definition.definition_version
+    for definition_path in (definition_v1_1, definition_v1_2)
+}
+if compiled_versions != {"1.1.0", "1.2.0"}:
+    raise SystemExit("generic workflow definition versions mismatch")
 for name, _ in catalog_schema_inventory():
     load_schema(name)
 validate_contract(
@@ -505,7 +519,7 @@ validate_contract(
             check,
             str(installed_root),
             os.environ["REPOSITORY_ROOT"],
-            str(definition),
+            *(str(definition) for definition in definitions),
             str(worker_config),
             str(staging),
             str(workspace_root),
