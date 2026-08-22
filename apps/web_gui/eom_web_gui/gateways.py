@@ -309,7 +309,7 @@ class HttpApplicationGateway:
         revision_response = await self._authorized(
             session, "GET", f"/api/v1/item-revisions/{item_revision_id}"
         )
-        await self._authorized(
+        components_response = await self._authorized(
             session, "GET", f"/api/v1/item-revisions/{item_revision_id}/components"
         )
         item = self._data(item_response)
@@ -319,6 +319,16 @@ class HttpApplicationGateway:
             or item.get("current_revision_id") != item_revision_id
         ):
             raise GatewayError(status=409, code="ITEM_REVISION_POINTER_MISMATCH")
+        components = self._list_data(components_response)
+        template_delivery_available = any(
+            component.get("item_revision_id") == item_revision_id
+            and component.get("component_type") == "ITEM_CONTENT"
+            and component.get("ordinal") == 0
+            and component.get("required") is True
+            and isinstance(component.get("artifact"), dict)
+            and component["artifact"].get("schema_ref") == "eom.assessment.item-content/1.0"
+            for component in components
+        )
         return ItemPreview(
             preview_state="METADATA_ONLY",
             workflow_id=str(revision.get("workflow_id") or "unknown"),
@@ -326,16 +336,29 @@ class HttpApplicationGateway:
             item_revision_id=item_revision_id,
             revision_state=str(revision.get("revision_state") or "UNKNOWN"),
             content_pack_release_id=str(revision.get("content_pack_release_id") or "unknown"),
+            template_delivery_available=template_delivery_available,
         )
 
     async def hwpx_capability(self, session: WebSession) -> HwpxCapability:
         response = await self._authorized(session, "GET", "/api/v1/capabilities/hwpx")
         value = self._data(response)
         state = str(value.get("state") or "UNAVAILABLE")
+        profiles_value = value.get("delivery_profiles")
+        profiles = profiles_value if isinstance(profiles_value, list) else []
+        template_ready = any(
+            isinstance(profile, dict)
+            and profile.get("renderer") == "eom-template"
+            and profile.get("renderer_version") == "1.0.0"
+            and profile.get("document_profile") == "eom-question-template-v1"
+            and profile.get("source_schema_ref") == "eom.assessment.item-content/1.0"
+            for profile in profiles
+        )
+        if state == "READY" and not template_ready:
+            state = "DEGRADED"
         supports_value = value.get("supports")
         supports: dict[str, Any] = supports_value if isinstance(supports_value, dict) else {}
         messages = {
-            "READY": "Kordoc renderer가 격리된 HWPX manager 경계에서 준비되었습니다.",
+            "READY": ("승인된 EOM 문항 템플릿이 격리된 Kordoc 4.9.0 경계에서 준비되었습니다."),
             "PREPARED_NOT_DEPLOYED": "HWPX Renderer 운영 배포 필요",
             "DEGRADED": "HWPX renderer 무결성 또는 manager 상태를 점검해야 합니다.",
             "UNAVAILABLE": "HWPX renderer를 사용할 수 없습니다.",
@@ -343,9 +366,10 @@ class HttpApplicationGateway:
         return HwpxCapability.model_validate(
             {
                 "state": state,
-                "renderer_key": "kordoc",
-                "renderer_version": str(value.get("renderer_version") or "4.9.0"),
-                "build_available": state == "READY",
+                "renderer_key": "eom-template",
+                "renderer_version": "1.0.0",
+                "document_profile": "eom-question-template-v1",
+                "build_available": state == "READY" and template_ready,
                 "native_equations": bool(supports.get("native_equations")),
                 "native_tables": bool(supports.get("native_tables")),
                 "detail_code": str(value.get("detail_code") or "HWPX_CAPABILITY_UNKNOWN"),
@@ -362,12 +386,14 @@ class HttpApplicationGateway:
             "POST",
             f"/api/v1/item-revisions/{value.item_revision_id}/hwpx-builds",
             json={
-                "renderer": "kordoc",
+                "renderer": "eom-template",
                 "options": {
                     "include_explanation": True,
-                    "require_native_equations": value.require_native_equations,
-                    "require_native_tables": value.require_native_tables,
+                    "require_native_equations": True,
+                    "require_native_tables": True,
                     "document_preset": "report",
+                    "document_profile": "eom-question-template-v1",
+                    "item_number": value.item_number,
                 },
             },
             headers={"Idempotency-Key": value.idempotency_key},

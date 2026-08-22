@@ -29,6 +29,7 @@ class ComponentPointer(RegistryModel):
         "REVIEW_REPORT",
         "SOURCE_REFERENCE",
         "METADATA",
+        "ITEM_CONTENT",
         "OTHER",
     ]
     ordinal: int = Field(ge=0, le=1000)

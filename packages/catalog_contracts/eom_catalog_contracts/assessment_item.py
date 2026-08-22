@@ -1,0 +1,214 @@
+"""Presentation-neutral immutable assessment item content contract."""
+
+from __future__ import annotations
+
+from typing import Annotated, Literal
+
+from pydantic import Field, field_validator, model_validator
+
+from eom_catalog_contracts.models import FrozenModel, Sha256, _safe_text
+
+ChoiceId = Annotated[str, Field(pattern=r"^choice_[a-z0-9][a-z0-9_]{0,31}$")]
+StatementId = Annotated[str, Field(pattern=r"^statement_[a-z][a-z0-9_]{0,31}$")]
+BoundedAnswer = Annotated[str, Field(min_length=1, max_length=20_000)]
+
+
+class MediaArtifactPointer(FrozenModel):
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    sha256: Sha256
+    media_type: Literal["image/png", "image/jpeg"]
+
+
+class ParagraphBlock(FrozenModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["paragraph"] = "paragraph"
+    purpose: Literal["stem", "prompt", "context"]
+    text: str = Field(min_length=1, max_length=20_000)
+
+    _text = field_validator("text")(_safe_text)
+
+
+class EquationBlock(FrozenModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["equation"] = "equation"
+    purpose: Literal["stimulus", "stem"]
+    notation: Literal["latex", "hancom-equation-script"]
+    source: str = Field(min_length=1, max_length=4000)
+
+    _text = field_validator("source")(_safe_text)
+
+
+class TableBlock(FrozenModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["table"] = "table"
+    purpose: Literal["stimulus", "data", "reference"]
+    caption: str | None = Field(default=None, max_length=500)
+    headers: tuple[str, ...] = Field(min_length=1, max_length=20)
+    rows: tuple[tuple[str, ...], ...] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def rectangular_and_safe(self) -> TableBlock:
+        width = len(self.headers)
+        if any(len(row) != width for row in self.rows):
+            raise ValueError("table rows must match the header width")
+        if any(len(value) > 500 for value in self.headers):
+            raise ValueError("table header exceeds the bounded content size")
+        for value in (cell for row in self.rows for cell in row):
+            if len(value) > 1000:
+                raise ValueError("table cell exceeds the bounded content size")
+        for value in (*self.headers, *(cell for row in self.rows for cell in row)):
+            _safe_text(value)
+        if self.caption is not None:
+            _safe_text(self.caption)
+        return self
+
+
+class ImageBlock(FrozenModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["image"] = "image"
+    purpose: Literal["stimulus", "reference"]
+    artifact: MediaArtifactPointer
+    alt_text: str = Field(min_length=1, max_length=1000)
+    width_px: int = Field(ge=1, le=10_000)
+    height_px: int = Field(ge=1, le=10_000)
+
+    _text = field_validator("alt_text")(_safe_text)
+
+
+class Statement(FrozenModel):
+    statement_id: StatementId
+    label: str = Field(min_length=1, max_length=16)
+    text: str = Field(min_length=1, max_length=20_000)
+
+    _text = field_validator("label", "text")(_safe_text)
+
+
+class StatementSetBlock(FrozenModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["statement_set"] = "statement_set"
+    purpose: Literal["claims"] = "claims"
+    statements: tuple[Statement, ...] = Field(min_length=2, max_length=10)
+
+    @model_validator(mode="after")
+    def unique_statement_ids(self) -> StatementSetBlock:
+        identifiers = [value.statement_id for value in self.statements]
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("statement IDs must be unique")
+        return self
+
+
+ContentBlock = Annotated[
+    ParagraphBlock | EquationBlock | TableBlock | ImageBlock | StatementSetBlock,
+    Field(discriminator="type"),
+]
+
+
+class Choice(FrozenModel):
+    choice_id: ChoiceId
+    label: str = Field(min_length=1, max_length=16)
+    text: str = Field(min_length=1, max_length=20_000)
+
+    _text = field_validator("label", "text")(_safe_text)
+
+
+class SingleChoiceInteraction(FrozenModel):
+    type: Literal["single_choice"] = "single_choice"
+    choices: tuple[Choice, ...] = Field(min_length=2, max_length=10)
+
+    @model_validator(mode="after")
+    def unique_choice_ids(self) -> SingleChoiceInteraction:
+        identifiers = [value.choice_id for value in self.choices]
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("choice IDs must be unique")
+        return self
+
+
+class ConstructedResponseInteraction(FrozenModel):
+    type: Literal["constructed_response"] = "constructed_response"
+    response_format: Literal["short_text", "long_text", "numeric"]
+
+
+Interaction = Annotated[
+    SingleChoiceInteraction | ConstructedResponseInteraction,
+    Field(discriminator="type"),
+]
+
+
+class StatementExplanation(FrozenModel):
+    statement_id: StatementId
+    text: str = Field(min_length=1, max_length=20_000)
+
+    _text = field_validator("text")(_safe_text)
+
+
+class ItemSolution(FrozenModel):
+    correct_choice_ids: tuple[ChoiceId, ...] = Field(default=(), max_length=10)
+    accepted_answers: tuple[BoundedAnswer, ...] = Field(default=(), max_length=20)
+    explanation: str = Field(min_length=1, max_length=20_000)
+    authoring_intent: str = Field(min_length=1, max_length=20_000)
+    statement_explanations: tuple[StatementExplanation, ...] = Field(default=(), max_length=10)
+
+    _text = field_validator("explanation", "authoring_intent")(_safe_text)
+
+    @model_validator(mode="after")
+    def unique_solution_references(self) -> ItemSolution:
+        if len(self.correct_choice_ids) != len(set(self.correct_choice_ids)):
+            raise ValueError("correct choice IDs must be unique")
+        if len(self.accepted_answers) != len(set(self.accepted_answers)):
+            raise ValueError("accepted answers must be unique")
+        identifiers = [value.statement_id for value in self.statement_explanations]
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("statement explanation IDs must be unique")
+        for value in (*self.correct_choice_ids, *self.accepted_answers):
+            _safe_text(value)
+        return self
+
+
+class ItemScore(FrozenModel):
+    points: int = Field(ge=0, le=100)
+
+
+class AssessmentItemContent(FrozenModel):
+    """Canonical small value artifact pinned by an Item Revision component."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    locale: str = Field(pattern=r"^[a-z]{2}-[A-Z]{2}$")
+    title: str = Field(min_length=1, max_length=20_000)
+    body: tuple[ContentBlock, ...] = Field(min_length=1, max_length=100)
+    interaction: Interaction
+    solution: ItemSolution
+    score: ItemScore
+
+    _text = field_validator("title")(_safe_text)
+
+    @model_validator(mode="after")
+    def consistent_references(self) -> AssessmentItemContent:
+        block_ids = [block.block_id for block in self.body]
+        if len(block_ids) != len(set(block_ids)):
+            raise ValueError("block IDs must be unique")
+
+        statements = {
+            statement.statement_id
+            for block in self.body
+            if isinstance(block, StatementSetBlock)
+            for statement in block.statements
+        }
+        explanation_ids = {value.statement_id for value in self.solution.statement_explanations}
+        if explanation_ids != statements:
+            raise ValueError("statement explanations must exactly cover statement IDs")
+
+        if isinstance(self.interaction, SingleChoiceInteraction):
+            choices = {choice.choice_id for choice in self.interaction.choices}
+            if len(self.solution.correct_choice_ids) != 1:
+                raise ValueError("single-choice content requires exactly one correct choice")
+            if not set(self.solution.correct_choice_ids).issubset(choices):
+                raise ValueError("correct choice pointer does not resolve")
+            if self.solution.accepted_answers:
+                raise ValueError("single-choice content cannot declare accepted text answers")
+        else:
+            if self.solution.correct_choice_ids:
+                raise ValueError("constructed response cannot declare choice pointers")
+            if not self.solution.accepted_answers:
+                raise ValueError("constructed response requires at least one accepted answer")
+        return self

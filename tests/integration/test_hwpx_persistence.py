@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,10 @@ from eom_hwpx_manager.adapter import BuilderRun, HwpxBuilderAdapter
 from eom_hwpx_manager.errors import HwpxManagerError
 from eom_hwpx_manager.kordoc_service import KordocHwpxService
 from eom_hwpx_manager.models import HwpxBuildRecord, HwpxTemplateRevisionRecord
+from eom_hwpx_manager.question_template_service import (
+    ItemContentSourcePointer,
+    QuestionTemplateHwpxService,
+)
 from eom_hwpx_manager.repository import (
     add_template_revision,
     add_validation,
@@ -51,7 +56,15 @@ def _artifact_job(
     nas_path: str | None = None,
     content_hash: str = "sha256:" + "a" * 64,
     manifest: dict[str, Any] | None = None,
+    manifest_factory: Callable[[str, str], dict[str, Any]] | None = None,
 ) -> JobRecord:
+    logical_artifact_id = new_logical_artifact_id()
+    revision_id = new_revision_id()
+    resolved_manifest = (
+        manifest_factory(logical_artifact_id, revision_id)
+        if manifest_factory is not None
+        else manifest
+    )
     ensure_protocol_version(session, "hwpx-test/1.0", "sha256:" + "f" * 64)
     job, _ = submit_structured_job(
         session,
@@ -60,8 +73,8 @@ def _artifact_job(
         idempotency_key=key,
         task_type="hwpx-test",
         request={"placeholder": True},
-        logical_artifact_id=new_logical_artifact_id(),
-        revision_id=new_revision_id(),
+        logical_artifact_id=logical_artifact_id,
+        revision_id=revision_id,
     )
     for state in (
         JobState.VALIDATED,
@@ -79,7 +92,7 @@ def _artifact_job(
         manifest_hash="sha256:" + "b" * 64,
         content_bytes=10,
         nas_path=nas_path or f"/tmp/{job.logical_artifact_id}/{job.revision_id}",
-        manifest=manifest or {"placeholder": True},
+        manifest=resolved_manifest or {"placeholder": True},
         result={"placeholder": True},
     )
     transition_job(session, job.job_id, JobState.SUCCEEDED, "TEST_COMMITTED")
@@ -123,7 +136,16 @@ class _FakeBuilderAdapter(HwpxBuilderAdapter):
         output.write_bytes(b"SYNTHETIC_INTEGRATION_HWPX")
         for name, value in (
             ("package-manifest.json", {"manifest_version": "1.0"}),
-            ("structural-validation.json", {"status": "PASS"}),
+            (
+                "structural-validation.json",
+                {
+                    "status": "PASS",
+                    "metrics": {
+                        "native_equation_count": 1,
+                        "total_native_table_count": 4,
+                    },
+                },
+            ),
             ("semantic-validation.json", {"status": "PASS"}),
         ):
             (output_root / name).write_text(json.dumps(value), encoding="utf-8")
@@ -506,3 +528,221 @@ def test_kordoc_service_pins_source_and_reuses_immutable_result(
     assert revision is not None
     assert revision.content_bytes == len(b"SYNTHETIC_KORDOC_HWPX")
     assert "SYNTHETIC_KORDOC_HWPX" not in json.dumps(revision.result)
+
+
+def test_question_template_service_resolves_canonical_content_and_commits_output(
+    db_session: Session, integration_engine: Engine, tmp_path: Path
+) -> None:
+    image_root = tmp_path / "image-artifact"
+    image_root.mkdir()
+    image_path = image_root / "diagram.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nTEST_ONLY_IMAGE")
+    image_sha = sha256_file(image_path)
+    image_job = _artifact_job(
+        db_session,
+        "question-template-image",
+        nas_path=str(image_root),
+        content_hash=image_sha,
+        manifest={"primary_file": image_path.name},
+    )
+
+    content = {
+        "schema_version": "1.0",
+        "locale": "ko-KR",
+        "title": "재사용 가능한 구조화 문항",
+        "body": [
+            {
+                "block_id": "block_stem",
+                "type": "paragraph",
+                "purpose": "stem",
+                "text": "다음 자료를 보고 물음에 답하시오.",
+            },
+            {
+                "block_id": "block_data",
+                "type": "table",
+                "purpose": "data",
+                "caption": None,
+                "headers": ["각", "사인", "코사인"],
+                "rows": [["30", "1/2", "sqrt(3)/2"]],
+            },
+            {
+                "block_id": "block_image",
+                "type": "image",
+                "purpose": "stimulus",
+                "artifact": {
+                    "artifact_id": image_job.logical_artifact_id,
+                    "artifact_revision_id": image_job.revision_id,
+                    "sha256": image_sha,
+                    "media_type": "image/png",
+                },
+                "alt_text": "삼각형 도식",
+                "width_px": 800,
+                "height_px": 500,
+            },
+            {
+                "block_id": "block_equation",
+                "type": "equation",
+                "purpose": "stimulus",
+                "notation": "hancom-equation-script",
+                "source": "a^2+b^2=c^2",
+            },
+            {
+                "block_id": "block_prompt",
+                "type": "paragraph",
+                "purpose": "prompt",
+                "text": "옳은 것만을 고른 것은?",
+            },
+            {
+                "block_id": "block_claims",
+                "type": "statement_set",
+                "purpose": "claims",
+                "statements": [
+                    {"statement_id": "statement_g", "label": "ㄱ", "text": "ㄱ 진술"},
+                    {"statement_id": "statement_n", "label": "ㄴ", "text": "ㄴ 진술"},
+                    {"statement_id": "statement_d", "label": "ㄷ", "text": "ㄷ 진술"},
+                ],
+            },
+        ],
+        "interaction": {
+            "type": "single_choice",
+            "choices": [
+                {
+                    "choice_id": f"choice_{index}",
+                    "label": str(index),
+                    "text": f"선택지 {index}",
+                }
+                for index in range(1, 6)
+            ],
+        },
+        "solution": {
+            "correct_choice_ids": ["choice_3"],
+            "accepted_answers": [],
+            "explanation": "정답 해설",
+            "authoring_intent": "개념 이해를 평가한다.",
+            "statement_explanations": [
+                {"statement_id": "statement_g", "text": "ㄱ 해설"},
+                {"statement_id": "statement_n", "text": "ㄴ 해설"},
+                {"statement_id": "statement_d", "text": "ㄷ 해설"},
+            ],
+        },
+        "score": {"points": 3},
+    }
+    content_root = tmp_path / "content-artifact"
+    content_root.mkdir()
+    content_path = content_root / "assessment-item-content.json"
+    content_path.write_text(json.dumps(content, ensure_ascii=False), encoding="utf-8")
+    content_sha = sha256_file(content_path)
+    content_job = _artifact_job(
+        db_session,
+        "question-template-content",
+        nas_path=str(content_root),
+        content_hash=content_sha,
+        manifest={"primary_file": content_path.name},
+    )
+
+    template_id = "hwpxtpl_" + "1" * 32
+    template_revision_id = "hwpxrev_" + "2" * 32
+    binding_identity = "sha256:" + "3" * 64
+    template_root = tmp_path / "question-template"
+    template_root.mkdir()
+    template_path = template_root / "template.hwpx"
+    template_path.write_bytes(b"SYNTHETIC_TEMPLATE")
+    template_sha = sha256_file(template_path)
+    binding_path = template_root / "template-bindings.json"
+    binding_path.write_text(
+        json.dumps(
+            {
+                "manifest_version": "1.0",
+                "template_id": template_id,
+                "template_revision_id": template_revision_id,
+                "template_sha256": template_sha,
+                "binding_manifest_sha256": binding_identity,
+                "bindings": [],
+                "warnings": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    template_job = _artifact_job(
+        db_session,
+        "question-template-release",
+        nas_path=str(template_root),
+        content_hash=template_sha,
+        manifest_factory=lambda logical_artifact_id, revision_id: {
+            "artifact_type": "hwpx-template-revision",
+            "logical_artifact_id": logical_artifact_id,
+            "revision_id": revision_id,
+            "primary_file": template_path.name,
+            "content_hash": template_sha,
+            "files": [
+                {
+                    "file_name": binding_path.name,
+                    "sha256": sha256_file(binding_path),
+                    "bytes": binding_path.stat().st_size,
+                },
+                {
+                    "file_name": template_path.name,
+                    "sha256": template_sha,
+                    "bytes": template_path.stat().st_size,
+                },
+            ],
+        },
+    )
+
+    nas_root = tmp_path / "output-artifacts"
+    nas_root.mkdir()
+    workspace_root = tmp_path / "question-workspaces"
+    workspace_root.mkdir()
+    staging_root = tmp_path / "question-staging"
+    settings = HwpxSettings(
+        workspace_root=workspace_root,
+        staging_root=staging_root,
+        nas_artifact_root=nas_root,
+        question_template_id=template_id,
+        question_template_revision_id=template_revision_id,
+        question_template_artifact_id=template_job.logical_artifact_id,
+        question_template_artifact_revision_id=template_job.revision_id,
+        question_template_source_sha256=template_sha,
+        question_template_binding_manifest_sha256=binding_identity,
+    )
+    adapter = _FakeBuilderAdapter(workspace_root)
+    service = QuestionTemplateHwpxService(integration_engine, settings)
+    service.sessions = sessionmaker(bind=db_session.get_bind(), expire_on_commit=False)
+    service.adapter = adapter  # type: ignore[assignment]
+    snapshot = service.snapshot()
+    pointer = ItemContentSourcePointer(
+        artifact_id=content_job.logical_artifact_id,
+        artifact_revision_id=content_job.revision_id,
+        sha256=content_sha,
+    )
+    build_id = "hwpxbuild_" + "4" * 32
+    receipt = service.build(
+        content_path,
+        pointer,
+        item_revision_id="itemrev_" + "5" * 32,
+        item_number=11,
+        idempotency_key="question-template-integration",
+        build_id=build_id,
+        template_snapshot=snapshot,
+    )
+    duplicate = service.build(
+        content_path,
+        pointer,
+        item_revision_id="itemrev_" + "5" * 32,
+        item_number=11,
+        idempotency_key="question-template-integration",
+        build_id=build_id,
+        template_snapshot=snapshot,
+    )
+
+    assert receipt == duplicate
+    assert receipt.native_equation_count == 1
+    assert receipt.native_table_count == 1
+    assert receipt.total_native_table_count == 4
+    assert adapter.run_count == 1
+    revision = db_session.get(ArtifactRevisionRecord, receipt.artifact_revision_id)
+    assert revision is not None
+    assert revision.result["native_table_count"] == 1
+    assert revision.result["total_native_table_count"] == 4
+    final = nas_root / receipt.artifact_id / receipt.artifact_revision_id
+    assert (final / "placeholder_item_combined.hwpx").is_file()

@@ -279,6 +279,8 @@ def test_renderer_round_trip_replaces_all_bound_values_and_is_deterministic(tmp_
     first_output = first_request.parent / str(first_result.output_file)
     assert first_result.status == "PENDING_MANUAL_HANCOM_VALIDATION"
     assert first_result.output_sha256 == sha256_bytes(first_output.read_bytes())
+    assert first_output.stat().st_mode & 0o777 == 0o640
+    assert (first_request.parent / "result.json").stat().st_mode & 0o777 == 0o640
     assert (
         validate_structure(
             first_output,

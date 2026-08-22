@@ -1,5 +1,7 @@
 """Sanitized Application API projection for an HWPX build resource."""
 
+from typing import Literal, cast
+
 from eom_api_contracts.hwpx import (
     HwpxBuildState,
     HwpxBuildView,
@@ -15,8 +17,8 @@ def project_hwpx_build(record: HwpxApplicationBuildRecord) -> HwpxBuildView:
         item_revision_id=record.item_revision_id,
         source_artifact_revision_id=record.source_artifact_revision_id,
         source_sha256=record.source_sha256,
-        renderer="kordoc",
-        renderer_version="4.9.0",
+        renderer=cast(Literal["kordoc", "eom-template"], record.renderer),
+        renderer_version=cast(Literal["4.9.0", "1.0.0"], record.renderer_version),
         state=HwpxBuildState(record.state),
         validation_state=HwpxValidationState(record.validation_state),
         native_equation_count=record.native_equation_count,

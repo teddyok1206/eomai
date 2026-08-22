@@ -473,7 +473,8 @@ async function loadItemPreview() {
 function renderItemPreview(preview) {
   const style = statusStyle(preview.revision_state);
   setStatus($("#revision-state"), style[0], style[1], preview.revision_state);
-  renderDefinitionList($("#item-inspector"), {Item: preview.item_id, Revision: preview.item_revision_id, Workflow: preview.workflow_id, "Content Pack": preview.content_pack_release_id});
+  renderDefinitionList($("#item-inspector"), {Item: preview.item_id, Revision: preview.item_revision_id, Workflow: preview.workflow_id, "Content Pack": preview.content_pack_release_id, "EOM Template": preview.template_delivery_available ? "AVAILABLE" : "STRUCTURED CONTENT REQUIRED"});
+  if (preview.template_delivery_available) $("#hwpx-revision-id").value = preview.item_revision_id;
   $("#preview-page-state").textContent = preview.preview_state;
   if (preview.preview_state !== "AVAILABLE") {
     $("#preview-content").hidden = true;
@@ -527,7 +528,7 @@ async function loadHwpx() {
     $("#hwpx-state-title").textContent = value.state === "READY" ? "HWPX Renderer 준비 완료" : value.state === "PREPARED_NOT_DEPLOYED" ? "HWPX Renderer 운영 배포 필요" : "HWPX Renderer 상태 확인 필요";
     $("#hwpx-message").textContent = value.message;
     $("#renderer-key").textContent = value.renderer_key;
-    $("#renderer-version").textContent = value.renderer_version;
+    $("#renderer-version").textContent = `${value.renderer_version} / ${value.document_profile}`;
     $("#hwpx-build-state").textContent = value.build_available ? "AVAILABLE" : "NOT AVAILABLE";
     $("#hwpx-validation").textContent = value.detail_code;
     $("#hwpx-equations").textContent = value.native_equations ? "SUPPORTED" : "NOT READY";
@@ -554,6 +555,8 @@ function installHwpx() {
 async function createHwpxBuild() {
   const revision = $("#hwpx-revision-id").value.trim();
   if (!revision.startsWith("itemrev_")) return toast("Approved Item Revision ID를 입력하세요.");
+  const itemNumber = Number.parseInt($("#hwpx-item-number").value, 10);
+  if (!Number.isInteger(itemNumber) || itemNumber < 1 || itemNumber > 999) return toast("문항 번호는 1~999 범위여야 합니다.");
   const idempotency = `studio:hwpx:${revision}:${crypto.randomUUID()}`;
   try {
     const command = await api("/hwpx/builds", {
@@ -562,8 +565,9 @@ async function createHwpxBuild() {
       body: {
         item_revision_id: revision,
         idempotency_key: idempotency,
-        require_native_equations: $("#hwpx-require-equations").checked,
-        require_native_tables: $("#hwpx-require-tables").checked,
+        require_native_equations: true,
+        require_native_tables: true,
+        item_number: itemNumber,
       },
     });
     state.hwpxBuildId = command.resource_id;

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from eom_api.app import create_app
 from eom_api.services.hwpx_projection import project_hwpx_build
+from eom_api_contracts.hwpx import CreateHwpxBuildRequest
 from eom_operator_identity import ROLE_PERMISSIONS, PermissionKey, RoleKey
 from jsonschema import Draft202012Validator
 
@@ -24,6 +25,20 @@ def test_hwpx_protocol_schema_is_draft_2020_12_and_rejects_commands() -> None:
             {
                 "renderer": "kordoc",
                 "options": {"require_native_equations": True},
+            }
+        )
+    )
+    template_request = {
+        "renderer": "eom-template",
+        "options": {"document_profile": "eom-question-template-v1", "item_number": 7},
+    }
+    assert not list(validator.iter_errors(template_request))
+    assert CreateHwpxBuildRequest.model_validate(template_request).options.item_number == 7
+    assert list(
+        validator.iter_errors(
+            {
+                "renderer": "eom-template",
+                "options": {"document_profile": "kordoc-report"},
             }
         )
     )
@@ -88,6 +103,8 @@ def test_hwpx_build_projection_never_exposes_path_or_command() -> None:
         item_revision_id="itemrev_" + "c" * 32,
         source_artifact_revision_id="rev_" + "d" * 32,
         source_sha256="sha256:" + "e" * 64,
+        renderer="eom-template",
+        renderer_version="1.0.0",
         state="SUCCEEDED",
         validation_state="PASS",
         native_equation_count=5,

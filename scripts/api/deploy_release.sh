@@ -227,6 +227,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_workflow_runner/actor_authorization_adapters.py",
     }
     catalog_staging_runtime = {
+        "eom_catalog_contracts/assessment_item.py",
+        "eom_catalog_contracts/validation.py",
         "eom_catalog_service/settings.py",
         "eom_catalog_service/staging.py",
         "eom_catalog_service/registry_service.py",
@@ -238,6 +240,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_manager/capability.py",
         "eom_hwpx_manager/download_server.py",
         "eom_hwpx_manager/markdown_structure.py",
+        "eom_hwpx_manager/question_template.py",
+        "eom_hwpx_manager/question_template_service.py",
         "eom_hwpx_manager/runner.py",
         "eom_hwpx_manager/runtime_privileges.py",
     }
@@ -305,6 +309,7 @@ catalog_resources = {
     "content-pack/content-pack-v1.schema.json": "schemas/content-pack/content-pack-v1.schema.json",
     "content-pack/profile-v1.schema.json": "schemas/content-pack/profile-v1.schema.json",
     "content-pack/prompt-envelope-v1.schema.json": "schemas/content-pack/prompt-envelope-v1.schema.json",
+    "item-registry/assessment-item-content-v1.schema.json": "schemas/item-registry/assessment-item-content-v1.schema.json",
     "item-registry/item-revision-manifest-v1.schema.json": "schemas/item-registry/item-revision-manifest-v1.schema.json",
 }
 with zipfile.ZipFile(platform_wheel) as archive:

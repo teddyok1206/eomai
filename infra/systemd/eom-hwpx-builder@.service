@@ -21,6 +21,7 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
 RestrictRealtime=true
+CapabilityBoundingSet=
 UMask=0077
 
 InaccessiblePaths=/mnt/nas
@@ -29,6 +30,7 @@ InaccessiblePaths=/srv/eom/worker-homes
 InaccessiblePaths=/var/run/docker.sock
 InaccessiblePaths=/etc/eom
 InaccessiblePaths=/home/eom/EOM
+InaccessiblePaths=/home/eom/EOMIS
 InaccessiblePaths=/usr/local/bin/codex
 ReadWritePaths=/srv/eom/hwpx-workspaces/%i
 
@@ -36,6 +38,3 @@ MemoryMax=1G
 CPUQuota=200%
 TasksMax=64
 TimeoutStartSec=180
-
-# The core adapter normally creates an equivalent transient unit with systemd-run so every build
-# has an explicit command and a fresh workspace. This template documents and validates the policy.

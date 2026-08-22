@@ -17,6 +17,7 @@ from eom_api_contracts.hwpx import (
     HwpxBuildView,
     HwpxCapabilityState,
     HwpxCapabilityView,
+    HwpxDeliveryProfile,
     HwpxSupports,
     HwpxValidationState,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "HwpxBuildView",
     "HwpxCapabilityState",
     "HwpxCapabilityView",
+    "HwpxDeliveryProfile",
     "HwpxSupports",
     "HwpxValidationState",
     "ListResponse",

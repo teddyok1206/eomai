@@ -35,6 +35,7 @@ CATALOG_SCHEMA_HASH = content_sha256(
             "human-decision-v1",
             "content-pack-v1",
             "item-revision-manifest-v1",
+            "assessment-item-content-v1",
         ],
     }
 )

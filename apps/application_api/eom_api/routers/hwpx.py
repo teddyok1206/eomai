@@ -9,6 +9,7 @@ from eom_api_contracts.hwpx import (
     HwpxBuildView,
     HwpxCapabilityState,
     HwpxCapabilityView,
+    HwpxDeliveryProfile,
     HwpxSupports,
 )
 from eom_operator_identity import PermissionKey
@@ -41,6 +42,15 @@ def capability(request: Request) -> SingleResponse[HwpxCapabilityView]:
             supports=HwpxSupports(
                 native_equations=value.native_equations,
                 native_tables=value.native_tables,
+            ),
+            default_delivery_profile="eom-question-template-v1",
+            delivery_profiles=(
+                HwpxDeliveryProfile(
+                    renderer="eom-template",
+                    renderer_version="1.0.0",
+                    document_profile="eom-question-template-v1",
+                    source_schema_ref="eom.assessment.item-content/1.0",
+                ),
             ),
             manager_registered=value.manager_registered,
             detail_code=value.detail_code,
@@ -78,6 +88,7 @@ def create_build(
         )
         record, _ = request.app.state.services.hwpx.request_build(
             item_revision_id,
+            renderer=body.renderer,
             options=body.options.model_dump(mode="json"),
             operator_id=authentication.operator.operator_id,
             idempotency_key=domain_key,

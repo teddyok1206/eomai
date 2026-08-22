@@ -36,12 +36,21 @@ class HwpxSupports(ApiModel):
     native_tables: bool
 
 
+class HwpxDeliveryProfile(ApiModel):
+    renderer: Literal["eom-template"]
+    renderer_version: Literal["1.0.0"]
+    document_profile: Literal["eom-question-template-v1"]
+    source_schema_ref: Literal["eom.assessment.item-content/1.0"]
+
+
 class HwpxCapabilityView(ApiModel):
     capability: Literal["hwpx"] = "hwpx"
     state: HwpxCapabilityState
     renderer: Literal["kordoc"] = "kordoc"
     renderer_version: Literal["4.9.0"] = "4.9.0"
     supports: HwpxSupports
+    default_delivery_profile: Literal["eom-question-template-v1"]
+    delivery_profiles: tuple[HwpxDeliveryProfile, ...] = Field(min_length=1, max_length=8)
     manager_registered: bool
     detail_code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{0,63}$")
 
@@ -51,11 +60,20 @@ class HwpxBuildOptions(ApiModel):
     require_native_equations: bool = False
     require_native_tables: bool = False
     document_preset: Literal["report"] = "report"
+    document_profile: Literal["kordoc-report", "eom-question-template-v1"] = "kordoc-report"
+    item_number: int = Field(default=1, ge=1, le=999)
 
 
 class CreateHwpxBuildRequest(ApiModel):
-    renderer: Literal["kordoc"]
+    renderer: Literal["kordoc", "eom-template"]
     options: HwpxBuildOptions
+
+    @model_validator(mode="after")
+    def renderer_profile_consistency(self) -> CreateHwpxBuildRequest:
+        expected = "kordoc-report" if self.renderer == "kordoc" else "eom-question-template-v1"
+        if self.options.document_profile != expected:
+            raise ValueError("renderer and document profile must identify the same closed adapter")
+        return self
 
 
 class HwpxBuildView(ApiModel):
@@ -64,8 +82,8 @@ class HwpxBuildView(ApiModel):
     item_revision_id: OpaqueId
     source_artifact_revision_id: OpaqueId
     source_sha256: Sha256
-    renderer: Literal["kordoc"] = "kordoc"
-    renderer_version: Literal["4.9.0"] = "4.9.0"
+    renderer: Literal["kordoc", "eom-template"]
+    renderer_version: Literal["4.9.0", "1.0.0"]
     state: HwpxBuildState
     validation_state: HwpxValidationState
     native_equation_count: int | None = Field(default=None, ge=0, le=32)

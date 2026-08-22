@@ -22,6 +22,7 @@ from eom_web_gui.settings import ServerSettings, WebSettings
 from fastapi.testclient import TestClient
 
 NOW = datetime(2026, 8, 21, 7, 0, tzinfo=UTC)
+TOKEN_EXPIRY_BASE = datetime(2099, 1, 1, 0, 0, tzinfo=UTC)
 WORKFLOW_ID = "workflow_test0000000000000000000000000001"
 ITEM_ID = "item_test000000000000000000000000000001"
 REVISION_ID = "itemrev_test00000000000000000000000001"
@@ -65,8 +66,8 @@ class FakeGateway:
             tokens=ApiTokens(
                 "TEST_ONLY_ACCESS",
                 "TEST_ONLY_REFRESH",
-                NOW + timedelta(hours=1),
-                NOW + timedelta(days=1),
+                TOKEN_EXPIRY_BASE,
+                TOKEN_EXPIRY_BASE + timedelta(days=1),
             ),
         )
 
@@ -203,6 +204,7 @@ class FakeGateway:
             item_revision_id=item_revision_id,
             revision_state="APPROVED",
             content_pack_release_id="packrel_test_physics",
+            template_delivery_available=True,
             body="공기 저항을 무시할 때 수평으로 던진 물체의 2초 후 수평 이동 거리를 구하시오.",
             choices=tuple(
                 PreviewChoice(label=f"{index}.", text=f"{index * 5} m") for index in range(1, 6)
@@ -234,8 +236,9 @@ class FakeGateway:
         return HwpxCapability.model_validate(
             {
                 "state": self.hwpx_state,
-                "renderer_key": "kordoc",
-                "renderer_version": "4.9.0",
+                "renderer_key": "eom-template",
+                "renderer_version": "1.0.0",
+                "document_profile": "eom-question-template-v1",
                 "build_available": self.hwpx_state == "READY",
                 "native_equations": self.hwpx_state == "READY",
                 "native_tables": self.hwpx_state == "READY",
@@ -270,8 +273,8 @@ class FakeGateway:
             build_id=build_id,
             item_id=ITEM_ID,
             item_revision_id=REVISION_ID,
-            renderer="kordoc",
-            renderer_version="4.9.0",
+            renderer="eom-template",
+            renderer_version="1.0.0",
             state="SUCCEEDED",
             validation_state="PASS",
             native_equation_count=5,
@@ -299,20 +302,23 @@ class FakeGateway:
 
 def make_services(*, gateway: FakeGateway | None = None) -> tuple[WebServices, FakeGateway]:
     fake = gateway or FakeGateway()
-    settings = WebSettings(server=ServerSettings(allowed_hosts=("testserver",)))
+    settings = WebSettings(server=ServerSettings(allowed_hosts=("testserver.local",)))
     return build_services(settings, fake), fake
 
 
 def make_client(*, gateway: FakeGateway | None = None) -> tuple[TestClient, FakeGateway]:
     services, fake = make_services(gateway=gateway)
-    return TestClient(create_app(services)), fake
+    # RFC 6265 cookie jars normalize single-label hosts to a synthetic .local
+    # domain. Use that explicit test host so session path/domain behavior matches
+    # a real browser rather than depending on a client-library compatibility quirk.
+    return TestClient(create_app(services), base_url="http://testserver.local"), fake
 
 
 def login(client: TestClient) -> dict[str, Any]:
     response = client.post(
         "/studio/api/v1/session",
         json={"username": "admin", "password": "TEST_ONLY_PASSWORD"},
-        headers={"Origin": "http://testserver"},
+        headers={"Origin": "http://testserver.local"},
     )
     assert response.status_code == 201
     return response.json()

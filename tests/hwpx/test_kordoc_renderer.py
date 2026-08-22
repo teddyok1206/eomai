@@ -389,7 +389,7 @@ def test_kordoc_handoff_avoids_setid_modes_under_restrict_suid_sgid(
             raise PermissionError("RestrictSUIDSGID test boundary")
         real_fchmod(descriptor, mode)
 
-    monkeypatch.setattr("eom_hwpx_builder.kordoc_handoff.os.fchmod", restrict_setid)
+    monkeypatch.setattr("eom_hwpx_builder.handoff.os.fchmod", restrict_setid)
     finalize_success_handoff(workspace, result)
 
     assert requested_modes
@@ -462,7 +462,7 @@ def test_kordoc_handoff_rejects_wrong_service_group(
     workspace = tmp_path / "workspace"
     _, result = prepare_handoff_files(workspace)
     wrong_gid = os.getegid() + 1
-    monkeypatch.setattr("eom_hwpx_builder.kordoc_handoff.os.getegid", lambda: wrong_gid)
+    monkeypatch.setattr("eom_hwpx_builder.handoff.os.getegid", lambda: wrong_gid)
 
     with pytest.raises(HwpxError) as caught:
         finalize_success_handoff(workspace, result)

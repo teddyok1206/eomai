@@ -62,6 +62,8 @@ def _record(*, state: str = "REQUESTED") -> SimpleNamespace:
         item_revision_id=REVISION_ID,
         source_artifact_revision_id=ARTIFACT_REVISION_ID,
         source_sha256="sha256:" + "8" * 64,
+        renderer="kordoc",
+        renderer_version="4.9.0",
         state=state,
         validation_state="PASS" if succeeded else "PENDING",
         native_equation_count=5 if succeeded else None,
@@ -152,10 +154,12 @@ class FakeAudit:
 class FakeHwpxService:
     def __init__(self, download_path: Path) -> None:
         self.request_count = 0
+        self.last_request: dict[str, Any] | None = None
         self.download_path = download_path
 
-    def request_build(self, *_args: Any, **_kwargs: Any) -> tuple[SimpleNamespace, bool]:
+    def request_build(self, *_args: Any, **kwargs: Any) -> tuple[SimpleNamespace, bool]:
         self.request_count += 1
+        self.last_request = kwargs
         return _record(), True
 
     @staticmethod
@@ -210,6 +214,17 @@ def test_hwpx_capability_and_not_deployed_build_boundary(tmp_path: Path) -> None
             capability = client.get("/api/v1/capabilities/hwpx")
             assert capability.status_code == 200
             assert capability.json()["data"]["state"] == "PREPARED_NOT_DEPLOYED"
+            assert (
+                capability.json()["data"]["default_delivery_profile"] == "eom-question-template-v1"
+            )
+            assert capability.json()["data"]["delivery_profiles"] == [
+                {
+                    "renderer": "eom-template",
+                    "renderer_version": "1.0.0",
+                    "document_profile": "eom-question-template-v1",
+                    "source_schema_ref": "eom.assessment.item-content/1.0",
+                }
+            ]
             refused = client.post(
                 f"/api/v1/item-revisions/{REVISION_ID}/hwpx-builds",
                 headers={"Idempotency-Key": "hwpx-api-test-0001"},
@@ -266,6 +281,30 @@ def test_hwpx_build_replay_status_download_and_admin_list(tmp_path: Path) -> Non
             assert download.headers["content-type"] == "application/vnd.hancom.hwpx"
             assert download.headers["content-disposition"] == 'attachment; filename="eom-test.hwpx"'
             assert "HWPX_DOWNLOAD_AUTHORIZED" in services.audit.events
+    finally:
+        services.engine.dispose()
+
+
+def test_hwpx_build_accepts_closed_question_template_profile(tmp_path: Path) -> None:
+    client, services = _client(tmp_path)
+    body = {
+        "renderer": "eom-template",
+        "options": {
+            "document_profile": "eom-question-template-v1",
+            "item_number": 3,
+        },
+    }
+    try:
+        with client:
+            response = client.post(
+                f"/api/v1/item-revisions/{REVISION_ID}/hwpx-builds",
+                headers={"Idempotency-Key": "hwpx-api-template-0001"},
+                json=body,
+            )
+            assert response.status_code == 202
+            assert services.hwpx.last_request is not None
+            assert services.hwpx.last_request["renderer"] == "eom-template"
+            assert services.hwpx.last_request["options"]["item_number"] == 3
     finally:
         services.engine.dispose()
 

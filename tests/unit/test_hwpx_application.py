@@ -14,6 +14,7 @@ from eom_hwpx_manager import runner
 from eom_hwpx_manager.application_adapter import (
     WORKSPACE_ROOT_MODE,
     FixedKordocBuilderAdapter,
+    FixedQuestionTemplateBuilderAdapter,
 )
 from eom_hwpx_manager.application_service import HwpxApplicationService
 from eom_hwpx_manager.application_state import (
@@ -313,12 +314,50 @@ def test_application_adapter_has_no_transient_or_chown_fallback() -> None:
     assert "UMask=0007" in unit
     assert "UMask=0077" not in unit
     assert "RestrictSUIDSGID=true" in unit
-    handoff = Path("services/hwpx_builder/eom_hwpx_builder/kordoc_handoff.py").read_text(
-        encoding="utf-8"
-    )
+    handoff = Path("services/hwpx_builder/eom_hwpx_builder/handoff.py").read_text(encoding="utf-8")
     assert "HANDOFF_DIRECTORY_MODE = 0o750" in handoff
     assert "HANDOFF_DIRECTORY_MODE = 0o2750" not in handoff
     assert f"-m {WORKSPACE_ROOT_MODE:o} /srv/eom/hwpx-workspaces" in bootstrap
+
+
+def test_question_template_adapter_uses_only_its_fixed_unit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace_root = tmp_path / "workspaces"
+    workspace_root.mkdir()
+    build_id = "hwpxbuild_" + "b" * 32
+    workspace = workspace_root / build_id
+    workspace.mkdir()
+    workspace.chmod(WORKSPACE_ROOT_MODE)
+    calls: list[list[str]] = []
+
+    def run_fixed(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+    monkeypatch.setattr("eom_hwpx_manager.application_adapter.subprocess.run", run_fixed)
+    adapter = FixedQuestionTemplateBuilderAdapter(
+        HwpxSettings(workspace_root=workspace_root, timeout_seconds=180)
+    )
+    result = adapter.run(
+        workspace,
+        "render",
+        ["--request", "request.json", "--result", "result.json"],
+        tmp_path / "logs",
+    )
+    assert result.unit_name == f"eom-hwpx-builder@{build_id}.service"
+    assert calls == [
+        [
+            "/usr/bin/systemctl",
+            "--no-ask-password",
+            "--wait",
+            "start",
+            f"eom-hwpx-builder@{build_id}.service",
+        ]
+    ]
+    with pytest.raises(HwpxManagerError):
+        adapter.run(workspace, "render-kordoc", ["--request", "request.json"], tmp_path / "logs")
+    assert len(calls) == 1
 
 
 def test_application_runner_separates_manager_state_from_builder_home() -> None:

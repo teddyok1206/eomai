@@ -26,10 +26,25 @@ from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.kordoc_service import KordocBuildReceipt, KordocHwpxService
 from eom_hwpx_manager.markdown_structure import inspect_markdown_structure
 from eom_hwpx_manager.models import HwpxApplicationBuildRecord
+from eom_hwpx_manager.question_template_service import (
+    QUESTION_TEMPLATE_RENDERER,
+    QUESTION_TEMPLATE_RENDERER_VERSION,
+    ItemContentSourcePointer,
+    QuestionTemplateBuildReceipt,
+    QuestionTemplateHwpxService,
+    QuestionTemplateSnapshot,
+)
 from eom_hwpx_manager.settings import HwpxSettings
 
 MARKDOWN_MEDIA_TYPES = frozenset({"text/markdown", "text/markdown; charset=utf-8"})
 MARKDOWN_SCHEMA_REFS = frozenset({"eom.hwpx.markdown-document", "eom.hwpx.markdown-document/1.0"})
+ITEM_CONTENT_MEDIA_TYPE = "application/json"
+ITEM_CONTENT_SCHEMA_REFS = frozenset(
+    {
+        "eom.assessment.item-content/1.0",
+        "eom://schemas/item-registry/assessment-item-content-v1",
+    }
+)
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
 
 
@@ -56,6 +71,22 @@ class HwpxRenderer(Protocol):
     ) -> KordocBuildReceipt: ...
 
 
+class QuestionTemplateRenderer(Protocol):
+    def snapshot(self) -> QuestionTemplateSnapshot: ...
+
+    def build(
+        self,
+        source_path: Path,
+        source: ItemContentSourcePointer,
+        *,
+        item_revision_id: str,
+        item_number: int,
+        idempotency_key: str,
+        build_id: str,
+        template_snapshot: QuestionTemplateSnapshot,
+    ) -> QuestionTemplateBuildReceipt: ...
+
+
 @dataclass(frozen=True)
 class SecureHwpxDownload:
     fd: int
@@ -80,6 +111,7 @@ class HwpxApplicationService:
         *,
         registry: ItemRevisionResolver,
         renderer: HwpxRenderer | None = None,
+        template_renderer: QuestionTemplateRenderer | None = None,
     ) -> None:
         self.engine = engine
         self.sessions = build_session_factory(engine)
@@ -88,21 +120,36 @@ class HwpxApplicationService:
             engine,
             adapter=FixedKordocBuilderAdapter(HwpxSettings.from_environment()),
         )
+        self.template_renderer = template_renderer or QuestionTemplateHwpxService(engine)
 
     def request_build(
         self,
         item_revision_id: str,
         *,
+        renderer: str = "kordoc",
         options: dict[str, Any],
         operator_id: str,
         idempotency_key: str,
     ) -> tuple[HwpxApplicationBuildRecord, bool]:
         revision = self._eligible_revision(item_revision_id)
-        component = self._markdown_component(revision)
+        if renderer == "kordoc":
+            component = self._markdown_component(revision)
+            normalized_options = dict(options)
+            renderer_version = "4.9.0"
+        elif renderer == QUESTION_TEMPLATE_RENDERER:
+            component = self._item_content_component(revision)
+            snapshot = self.template_renderer.snapshot()
+            normalized_options = dict(options) | snapshot.request_identity()
+            renderer_version = QUESTION_TEMPLATE_RENDERER_VERSION
+        else:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "unsupported HWPX renderer profile",
+            )
         request_identity = {
             "item_revision_id": item_revision_id,
-            "renderer": "kordoc",
-            "options": options,
+            "renderer": renderer,
+            "options": normalized_options,
             "source_artifact_id": component["artifact_id"],
             "source_artifact_revision_id": component["artifact_revision_id"],
             "source_sha256": component["sha256"],
@@ -123,7 +170,7 @@ class HwpxApplicationService:
             ):
                 raise HwpxManagerError(
                     HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
-                    "Item Revision Markdown artifact pointer is stale or invalid",
+                    "Item Revision source artifact pointer is stale or invalid",
                 )
             existing = session.scalar(
                 select(HwpxApplicationBuildRecord).where(
@@ -148,9 +195,9 @@ class HwpxApplicationService:
                 source_sha256=component["sha256"],
                 source_schema_ref=component["schema_ref"],
                 source_media_type=component["media_type"],
-                renderer="kordoc",
-                renderer_version="4.9.0",
-                options=options,
+                renderer=renderer,
+                renderer_version=renderer_version,
+                options=normalized_options,
                 request_sha256=request_sha256,
                 idempotency_key=idempotency_key,
                 created_by_operator_id=operator_id,
@@ -196,36 +243,57 @@ class HwpxApplicationService:
             session.expunge(record)
         try:
             source_path = self._source_path(record)
-            structure = inspect_markdown_structure(source_path.read_bytes())
-            if record.options.get("require_native_equations") and not (
-                structure.native_equation_count > 0
-            ):
-                raise HwpxManagerError(
-                    HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
-                    "required native equation is absent from Markdown",
+            receipt: KordocBuildReceipt | QuestionTemplateBuildReceipt
+            if record.renderer == "kordoc":
+                structure = inspect_markdown_structure(source_path.read_bytes())
+                if record.options.get("require_native_equations") and not (
+                    structure.native_equation_count > 0
+                ):
+                    raise HwpxManagerError(
+                        HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                        "required native equation is absent from Markdown",
+                    )
+                if record.options.get("require_native_tables") and not (
+                    structure.native_table_count > 0
+                ):
+                    raise HwpxManagerError(
+                        HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                        "required native table is absent from Markdown",
+                    )
+                receipt = self.renderer.build(
+                    source_path,
+                    KordocSourcePointer(
+                        artifact_id=record.source_artifact_id,
+                        artifact_revision_id=record.source_artifact_revision_id,
+                        sha256=record.source_sha256,
+                    ),
+                    KordocExpectedStructure(
+                        display_equation_count=structure.native_equation_count,
+                        table_count=structure.native_table_count,
+                    ),
+                    idempotency_key=record.idempotency_key,
+                    options=KordocRenderOptions(gongmun_preset="report"),
+                    build_id=record.build_id,
                 )
-            if record.options.get("require_native_tables") and not (
-                structure.native_table_count > 0
-            ):
-                raise HwpxManagerError(
-                    HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
-                    "required native table is absent from Markdown",
+            elif record.renderer == QUESTION_TEMPLATE_RENDERER:
+                receipt = self.template_renderer.build(
+                    source_path,
+                    ItemContentSourcePointer(
+                        artifact_id=record.source_artifact_id,
+                        artifact_revision_id=record.source_artifact_revision_id,
+                        sha256=record.source_sha256,
+                    ),
+                    item_revision_id=record.item_revision_id,
+                    item_number=int(record.options["item_number"]),
+                    idempotency_key=record.idempotency_key,
+                    build_id=record.build_id,
+                    template_snapshot=QuestionTemplateSnapshot.from_request_options(record.options),
                 )
-            receipt = self.renderer.build(
-                source_path,
-                KordocSourcePointer(
-                    artifact_id=record.source_artifact_id,
-                    artifact_revision_id=record.source_artifact_revision_id,
-                    sha256=record.source_sha256,
-                ),
-                KordocExpectedStructure(
-                    display_equation_count=structure.native_equation_count,
-                    table_count=structure.native_table_count,
-                ),
-                idempotency_key=record.idempotency_key,
-                options=KordocRenderOptions(gongmun_preset="report"),
-                build_id=record.build_id,
-            )
+            else:
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                    "stored HWPX renderer profile is unsupported",
+                )
             with transaction(self.sessions) as session:
                 current = session.get(HwpxApplicationBuildRecord, record.build_id)
                 if current is None:
@@ -316,6 +384,25 @@ class HwpxApplicationService:
             )
         return eligible[0]
 
+    @staticmethod
+    def _item_content_component(revision: dict[str, Any]) -> dict[str, Any]:
+        components = revision.get("components", [])
+        eligible = [
+            component
+            for component in components
+            if isinstance(component, dict)
+            and component.get("component_type") == "ITEM_CONTENT"
+            and component.get("ordinal") == 0
+            and component.get("media_type") == ITEM_CONTENT_MEDIA_TYPE
+            and component.get("schema_ref") in ITEM_CONTENT_SCHEMA_REFS
+        ]
+        if len(eligible) != 1:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "Item Revision must have exactly one canonical ITEM_CONTENT component",
+            )
+        return eligible[0]
+
     def _source_path(self, record: HwpxApplicationBuildRecord) -> Path:
         with self.sessions() as session:
             revision = session.get(ArtifactRevisionRecord, record.source_artifact_revision_id)
@@ -327,7 +414,7 @@ class HwpxApplicationService:
             ):
                 raise HwpxManagerError(
                     HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
-                    "pinned Markdown Artifact Revision is stale",
+                    "pinned Item source Artifact Revision is stale",
                 )
             return self._primary_file(revision)
 

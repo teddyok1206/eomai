@@ -19,6 +19,16 @@ class HwpxSettings:
     reference_inbox: Path = Path("/mnt/nas/eom/hwpx/poc-v0/reference/inbox")
     manual_inbox: Path = Path("/mnt/nas/eom/hwpx/poc-v0/manual-validation/inbox")
     builder_user: str = "eom-hwpx"
+    question_template_id: str = "hwpxtpl_4f0243bf966c4b9e81f987e448f68e24"
+    question_template_revision_id: str = "hwpxrev_b6e818d569de4684a7a48d825b163b8e"
+    question_template_artifact_id: str = "artifact_26dfd0347df0442982f539f98498b416"
+    question_template_artifact_revision_id: str = "rev_aa42b43580d44652818b1a78469fe109"
+    question_template_source_sha256: str = (
+        "sha256:4287cfe4db91f497368c3e0c32b7efadab05e2137512c1341cc3b220cda8cefc"
+    )
+    question_template_binding_manifest_sha256: str = (
+        "sha256:770f07c9f710870c45b4e4bad8cbe49781ec8e3eff9ea6229ddd1b6145c8598c"
+    )
     timeout_seconds: int = 180
     memory_max: str = "1G"
 
@@ -40,5 +50,29 @@ class HwpxSettings:
             ),
             hwpx_root=Path(os.environ.get("EOM_HWPX_ROOT", "/mnt/nas/eom/hwpx/poc-v0")),
             builder_user=os.environ.get("EOM_HWPX_BUILDER_USER", "eom-hwpx"),
+            question_template_id=os.environ.get(
+                "EOM_HWPX_QUESTION_TEMPLATE_ID",
+                "hwpxtpl_4f0243bf966c4b9e81f987e448f68e24",
+            ),
+            question_template_revision_id=os.environ.get(
+                "EOM_HWPX_QUESTION_TEMPLATE_REVISION_ID",
+                "hwpxrev_b6e818d569de4684a7a48d825b163b8e",
+            ),
+            question_template_artifact_id=os.environ.get(
+                "EOM_HWPX_QUESTION_TEMPLATE_ARTIFACT_ID",
+                "artifact_26dfd0347df0442982f539f98498b416",
+            ),
+            question_template_artifact_revision_id=os.environ.get(
+                "EOM_HWPX_QUESTION_TEMPLATE_ARTIFACT_REVISION_ID",
+                "rev_aa42b43580d44652818b1a78469fe109",
+            ),
+            question_template_source_sha256=os.environ.get(
+                "EOM_HWPX_QUESTION_TEMPLATE_SOURCE_SHA256",
+                "sha256:4287cfe4db91f497368c3e0c32b7efadab05e2137512c1341cc3b220cda8cefc",
+            ),
+            question_template_binding_manifest_sha256=os.environ.get(
+                "EOM_HWPX_QUESTION_TEMPLATE_BINDING_MANIFEST_SHA256",
+                "sha256:770f07c9f710870c45b4e4bad8cbe49781ec8e3eff9ea6229ddd1b6145c8598c",
+            ),
             timeout_seconds=int(os.environ.get("EOM_HWPX_TIMEOUT_SECONDS", "180")),
         )

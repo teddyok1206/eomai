@@ -214,6 +214,57 @@ async def test_item_preview_fails_on_revision_pointer_mismatch() -> None:
 
 
 @pytest.mark.anyio
+async def test_item_preview_reports_exact_structured_template_component() -> None:
+    item_id = "item_test0001"
+    revision_id = "itemrev_test0001"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == f"/api/v1/items/{item_id}":
+            return httpx.Response(200, json=_single({"current_revision_id": revision_id}))
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}":
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "item_id": item_id,
+                        "workflow_id": "workflow_test0001",
+                        "revision_state": "APPROVED",
+                        "content_pack_release_id": "packrel_test0001",
+                    }
+                ),
+            )
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}/components":
+            return httpx.Response(
+                200,
+                json=_list(
+                    [
+                        {
+                            "item_revision_id": revision_id,
+                            "component_type": "ITEM_CONTENT",
+                            "ordinal": 0,
+                            "required": True,
+                            "artifact": {
+                                "schema_ref": "eom.assessment.item-content/1.0",
+                            },
+                        }
+                    ]
+                ),
+            )
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    preview = await gateway.item_preview(_session(), item_id, revision_id)
+    assert preview.template_delivery_available is True
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_item_revision_explorer_requires_exact_pinned_identity() -> None:
     gateway = HttpApplicationGateway(
         application_api_url="http://127.0.0.1:8765",

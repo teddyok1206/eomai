@@ -23,14 +23,20 @@ from eom_hwpx_builder import RENDERER_VERSION
 from eom_hwpx_builder.archive import extract_package, read_package
 from eom_hwpx_builder.bindings import replace_text_binding
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
+from eom_hwpx_builder.handoff import (
+    finalize_failure_result,
+    finalize_success_handoff,
+    prepare_private_handoff_file,
+    write_private_json,
+)
 from eom_hwpx_builder.models import (
     BindingKind,
     BindingManifest,
     RenderRequest,
 )
 from eom_hwpx_builder.semantic import compare_semantic
-from eom_hwpx_builder.util import canonical_json_bytes, sha256_bytes, sha256_file, write_json
-from eom_hwpx_builder.validation import validate_structure
+from eom_hwpx_builder.util import canonical_json_bytes, sha256_bytes, sha256_file
+from eom_hwpx_builder.validation import kordoc_native_structure_counts, validate_structure
 from eom_hwpx_builder.xmlsafe import local_name, parse_xml, serialize_xml
 
 FIXED_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
@@ -265,6 +271,7 @@ def render_workspace(request_path: Path, result_path: Path) -> HwpxBuildResult:
     output_dir.mkdir(mode=0o700)
     output = output_dir / "placeholder_item_combined.hwpx"
     reconstruct_package(package, extracted, output)
+    prepare_private_handoff_file(output)
     structural = validate_structure(
         output,
         bindings=bindings,
@@ -273,8 +280,19 @@ def render_workspace(request_path: Path, result_path: Path) -> HwpxBuildResult:
         require_markers_removed=True,
     )
     semantic = compare_semantic(document_raw, output, bindings)
-    write_json(output_dir / "structural-validation.json", structural.model_dump(mode="json"))
-    write_json(output_dir / "semantic-validation.json", semantic.model_dump(mode="json"))
+    native_equations, native_tables = kordoc_native_structure_counts(output)
+    structural = structural.model_copy(
+        update={
+            "metrics": {
+                "native_equation_count": native_equations,
+                "total_native_table_count": native_tables,
+            }
+        }
+    )
+    write_private_json(
+        output_dir / "structural-validation.json", structural.model_dump(mode="json")
+    )
+    write_private_json(output_dir / "semantic-validation.json", semantic.model_dump(mode="json"))
     warnings = list(bindings.warnings)
     if any(entry.info.filename.startswith("Preview/") for entry in package.entries):
         warnings.extend(["PREVIEW_IMAGE_STALE", "PREVIEW_TEXT_STALE"])
@@ -286,7 +304,7 @@ def render_workspace(request_path: Path, result_path: Path) -> HwpxBuildResult:
         )
     if semantic.status != "PASS":
         raise HwpxError(HwpxErrorCode.HWPX_SEMANTIC_MISMATCH, "semantic validation failed")
-    write_json(
+    write_private_json(
         output_dir / "package-manifest.json",
         _package_manifest(output, semantic.semantic_hash, warnings),
     )
@@ -308,7 +326,17 @@ def render_workspace(request_path: Path, result_path: Path) -> HwpxBuildResult:
         completed_at=datetime.now(UTC),
     )
     validate_contract("build-result", result.model_dump(mode="json"))
-    write_json(result_path, result.model_dump(mode="json"))
+    write_private_json(result_path, result.model_dump(mode="json"))
+    finalize_success_handoff(
+        workspace,
+        result_path,
+        output_file_names=(
+            "placeholder_item_combined.hwpx",
+            "package-manifest.json",
+            "structural-validation.json",
+            "semantic-validation.json",
+        ),
+    )
     return result
 
 
@@ -351,5 +379,6 @@ def failed_result(
         completed_at=datetime.now(UTC),
     )
     validate_contract("build-result", result.model_dump(mode="json"))
-    write_json(result_path, result.model_dump(mode="json"))
+    write_private_json(result_path, result.model_dump(mode="json"))
+    finalize_failure_result(request_path.parent.resolve(strict=True), result_path)
     return result

@@ -335,6 +335,7 @@ def write_hwpx(path: Path, parts: list[tuple[str, bytes, int]] | None = None) ->
 
 def prepare_workspace(root: Path, *, equation_anchor: bool = False) -> tuple[Path, bytes]:
     root.mkdir()
+    root.chmod(0o700)
     (root / "input").mkdir()
     output_image = png_bytes(output=True)
     reference_image = png_bytes(output=False)

@@ -66,10 +66,11 @@ builder explicitly finalizes only the output handoff directory as `0750` and its
 files as `0640`; private intermediate files are not widened. The builder's fixed primary group is
 `eom-hwpx`, so child group identity is verified directly and the handoff does not depend on setgid.
 Creation modes alone are not treated as the handoff contract.
-A start-only polkit
-allowlist accepts only `eom-hwpx-kordoc@hwpxbuild_<32 hex>.service`; caller-controlled units,
-commands, paths, and renderer arguments are absent. The legacy template renderer adapter remains
-unchanged.
+A start-only polkit allowlist accepts only the closed
+`eom-hwpx-kordoc@hwpxbuild_<32 hex>.service` and
+`eom-hwpx-builder@hwpxbuild_<32 hex>.service` forms. Caller-controlled units, commands, paths,
+and renderer arguments are absent. The latter is the approved question-template delivery adapter;
+it consumes a pinned `ITEM_CONTENT` component and immutable template Artifact Revision.
 
 The runner also uses a dedicated `eom_hwpx_manager_runtime` PostgreSQL role. Its dominant database
 operations are primary-key pointer reads, one FIFO `FOR UPDATE SKIP LOCKED` claim, append-only job

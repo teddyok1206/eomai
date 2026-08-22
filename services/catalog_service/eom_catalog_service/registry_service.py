@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import base64
 import json
+import stat
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-from eom_catalog_contracts import validate_contract
-from eom_identifiers import canonical_json_bytes, content_sha256
+from eom_catalog_contracts import AssessmentItemContent, validate_contract
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
 from eom_item_registry import (
+    ComponentPointer,
     ItemRevisionState,
     ItemState,
     RegistrationRequest,
@@ -23,7 +25,7 @@ from eom_item_registry import (
     new_item_revision_id,
 )
 from eom_orchestrator.database import build_session_factory, transaction
-from eom_orchestrator.models import ArtifactRevisionRecord
+from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from jsonschema import Draft202012Validator
 from sqlalchemy import Engine, and_, or_, select
@@ -446,6 +448,135 @@ class RegistryService:
                     RegistryErrorCode.ITEM_COMPONENT_INVALID,
                     "component artifact pointer does not resolve",
                 )
+            if pointer.component_type == "ITEM_CONTENT":
+                RegistryService._validate_item_content_component(session, pointer, revision)
+
+    @staticmethod
+    def _validate_item_content_component(
+        session: Session,
+        pointer: ComponentPointer,
+        revision: ArtifactRevisionRecord,
+    ) -> None:
+        if (
+            pointer.ordinal != 0
+            or pointer.schema_ref
+            not in {
+                "eom.assessment.item-content/1.0",
+                "eom://schemas/item-registry/assessment-item-content-v1",
+            }
+            or pointer.media_type != "application/json"
+        ):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "canonical item content component identity is invalid",
+            )
+        primary = RegistryService._artifact_primary_file(revision)
+        try:
+            raw: object = json.loads(primary.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raise ValueError("item content is not an object")
+            validate_contract("assessment-item-content", raw)
+            content = AssessmentItemContent.model_validate(raw)
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "canonical item content artifact is invalid",
+            ) from exc
+
+        for block in content.body:
+            artifact_pointer = getattr(block, "artifact", None)
+            if artifact_pointer is None:
+                continue
+            artifact = session.get(ArtifactRecord, artifact_pointer.artifact_id)
+            media_revision = session.get(
+                ArtifactRevisionRecord, artifact_pointer.artifact_revision_id
+            )
+            if (
+                artifact is None
+                or media_revision is None
+                or not artifact.approved
+                or not media_revision.approved
+                or media_revision.logical_artifact_id != artifact_pointer.artifact_id
+                or media_revision.content_hash != artifact_pointer.sha256
+            ):
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                    "item content media pointer does not resolve",
+                )
+            media_primary = RegistryService._artifact_primary_file(media_revision)
+            RegistryService._validate_media_file(
+                media_primary,
+                artifact_pointer.media_type,
+            )
+
+    @staticmethod
+    def _artifact_primary_file(revision: ArtifactRevisionRecord) -> Path:
+        primary_name = revision.manifest.get("primary_file")
+        if not isinstance(primary_name, str):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "component artifact has no typed primary file",
+            )
+        relative = Path(primary_name)
+        root = Path(revision.nas_path)
+        candidate = root / relative
+        if relative.is_absolute() or ".." in relative.parts or "\\" in primary_name:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "component artifact primary file is unsafe or stale",
+            )
+        try:
+            root_metadata = root.lstat()
+            if not stat.S_ISDIR(root_metadata.st_mode) or root.is_symlink():
+                raise ValueError("component artifact root is unsafe")
+            resolved_root = root.resolve(strict=True)
+            current = root
+            for component in relative.parts:
+                current = current / component
+                metadata = current.lstat()
+                if stat.S_ISLNK(metadata.st_mode):
+                    raise ValueError("component path contains a symlink")
+            metadata = candidate.lstat()
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or not candidate.resolve(strict=True).is_relative_to(resolved_root)
+                or sha256_file(candidate) != revision.content_hash
+            ):
+                raise ValueError("component file is stale or unsafe")
+        except (OSError, ValueError) as exc:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "component artifact primary file is unsafe or stale",
+            ) from exc
+        return candidate
+
+    @staticmethod
+    def _validate_media_file(path: Path, media_type: str) -> None:
+        try:
+            with path.open("rb") as stream:
+                prefix = stream.read(12)
+                stream.seek(-2, 2)
+                suffix = stream.read(2)
+        except OSError as exc:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "item content media artifact is unreadable",
+            ) from exc
+        valid = (
+            media_type == "image/png"
+            and path.suffix.casefold() == ".png"
+            and prefix.startswith(b"\x89PNG\r\n\x1a\n")
+        ) or (
+            media_type == "image/jpeg"
+            and path.suffix.casefold() in {".jpg", ".jpeg"}
+            and prefix.startswith(b"\xff\xd8\xff")
+            and suffix == b"\xff\xd9"
+        )
+        if not valid:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "item content media type does not match pinned artifact bytes",
+            )
 
     @staticmethod
     def _manifest(
