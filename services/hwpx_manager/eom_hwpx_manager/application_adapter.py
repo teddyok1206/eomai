@@ -19,6 +19,7 @@ BUILD_ID = re.compile(r"\Ahwpxbuild_[0-9a-f]{32}\Z", re.ASCII)
 SYSTEMCTL = Path("/usr/bin/systemctl")
 SYSTEMCTL_ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin"}
 WORKSPACE_ROOT_MODE = 0o2770
+WORKSPACE_DIRECTORY_MODE = 0o770
 WORKSPACE_FILE_MODE = 0o440
 
 
@@ -57,8 +58,12 @@ class _FixedApplicationBuilderAdapter(HwpxBuilderAdapter):
             )
         workspace = root / workspace_id
         try:
-            workspace.mkdir(mode=WORKSPACE_ROOT_MODE)
-            workspace.chmod(WORKSPACE_ROOT_MODE)
+            # The root-owned workspace parent supplies the trusted handoff group.
+            # Per-build directories intentionally have no setgid bit because the
+            # hardened Manager service runs with RestrictSUIDSGID=yes.  Descendant
+            # groups are applied explicitly through fd-safe finalization instead.
+            workspace.mkdir(mode=0o700)
+            self._finalize_directory(workspace, builder_gid)
         except OSError as exc:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_BUILDER_FAILED,
@@ -68,7 +73,7 @@ class _FixedApplicationBuilderAdapter(HwpxBuilderAdapter):
         if (
             metadata.st_uid != os.geteuid()
             or metadata.st_gid != root_metadata.st_gid
-            or stat.S_IMODE(metadata.st_mode) != WORKSPACE_ROOT_MODE
+            or stat.S_IMODE(metadata.st_mode) != WORKSPACE_DIRECTORY_MODE
         ):
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_BUILDER_FAILED,
@@ -104,7 +109,7 @@ class _FixedApplicationBuilderAdapter(HwpxBuilderAdapter):
             )
         self._prepare_parent(workspace, target.parent)
         shutil.copyfile(source, target)
-        target.chmod(WORKSPACE_FILE_MODE)
+        self._finalize_file(target, workspace.lstat().st_gid)
         self._verify_staged_file(workspace, target)
         return target
 
@@ -115,7 +120,7 @@ class _FixedApplicationBuilderAdapter(HwpxBuilderAdapter):
             json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
             encoding="utf-8",
         )
-        target.chmod(WORKSPACE_FILE_MODE)
+        self._finalize_file(target, workspace.lstat().st_gid)
         self._verify_staged_file(workspace, target)
         return target
 
@@ -174,7 +179,7 @@ class _FixedApplicationBuilderAdapter(HwpxBuilderAdapter):
                 "unsafe HWPX application workspace",
             )
         workspace_metadata = workspace.lstat()
-        parent.mkdir(mode=WORKSPACE_ROOT_MODE, parents=True, exist_ok=True)
+        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         current = workspace
         for part in parent.relative_to(workspace).parts:
             current = current / part
@@ -183,13 +188,12 @@ class _FixedApplicationBuilderAdapter(HwpxBuilderAdapter):
                 not stat.S_ISDIR(metadata.st_mode)
                 or current.is_symlink()
                 or metadata.st_uid != os.geteuid()
-                or metadata.st_gid != workspace_metadata.st_gid
             ):
                 raise HwpxManagerError(
                     HwpxManagerErrorCode.HWPX_BUILDER_FAILED,
                     "unsafe HWPX application workspace directory",
                 )
-            current.chmod(WORKSPACE_ROOT_MODE)
+            _FixedApplicationBuilderAdapter._finalize_directory(current, workspace_metadata.st_gid)
 
     @staticmethod
     def _workspace_ready(workspace: Path) -> bool:
@@ -202,8 +206,49 @@ class _FixedApplicationBuilderAdapter(HwpxBuilderAdapter):
             and not workspace.is_symlink()
             and metadata.st_uid == os.geteuid()
             and metadata.st_gid in os.getgroups()
-            and stat.S_IMODE(metadata.st_mode) == WORKSPACE_ROOT_MODE
+            and stat.S_IMODE(metadata.st_mode) == WORKSPACE_DIRECTORY_MODE
         )
+
+    @staticmethod
+    def _finalize_directory(path: Path, builder_gid: int) -> None:
+        flags = os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_DIRECTORY", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(path, flags)
+        try:
+            metadata = os.fstat(fd)
+            if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.geteuid():
+                raise OSError("unsafe HWPX application workspace directory")
+            os.fchown(fd, -1, builder_gid)
+            os.fchmod(fd, WORKSPACE_DIRECTORY_MODE)
+            finalized = os.fstat(fd)
+            if (
+                finalized.st_uid != os.geteuid()
+                or finalized.st_gid != builder_gid
+                or stat.S_IMODE(finalized.st_mode) != WORKSPACE_DIRECTORY_MODE
+            ):
+                raise OSError("HWPX application workspace directory contract mismatch")
+        finally:
+            os.close(fd)
+
+    @staticmethod
+    def _finalize_file(path: Path, builder_gid: int) -> None:
+        flags = os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(path, flags)
+        try:
+            metadata = os.fstat(fd)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.geteuid():
+                raise OSError("unsafe HWPX application staged file")
+            os.fchown(fd, -1, builder_gid)
+            os.fchmod(fd, WORKSPACE_FILE_MODE)
+            finalized = os.fstat(fd)
+            if (
+                finalized.st_uid != os.geteuid()
+                or finalized.st_gid != builder_gid
+                or stat.S_IMODE(finalized.st_mode) != WORKSPACE_FILE_MODE
+            ):
+                raise OSError("HWPX application staged file contract mismatch")
+        finally:
+            os.close(fd)
 
     @staticmethod
     def _verify_staged_file(workspace: Path, target: Path) -> None:

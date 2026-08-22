@@ -12,6 +12,8 @@ import pytest
 from eom_hwpx_manager import capability as capability_module
 from eom_hwpx_manager import runner
 from eom_hwpx_manager.application_adapter import (
+    WORKSPACE_DIRECTORY_MODE,
+    WORKSPACE_FILE_MODE,
     WORKSPACE_ROOT_MODE,
     FixedKordocBuilderAdapter,
     FixedQuestionTemplateBuilderAdapter,
@@ -270,6 +272,25 @@ def test_application_adapter_root_contract_is_private_group_only() -> None:
     assert not FixedKordocBuilderAdapter._root_contract_ready(wrong_mode, 986, [986])
 
 
+def test_application_adapter_finalizes_private_group_paths_without_setgid(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(mode=0o700)
+    target = workspace / "request.json"
+    target.write_text("{}", encoding="ascii")
+
+    FixedQuestionTemplateBuilderAdapter._finalize_directory(workspace, os.getgid())
+    FixedQuestionTemplateBuilderAdapter._finalize_file(target, os.getgid())
+
+    workspace_metadata = workspace.stat()
+    target_metadata = target.stat()
+    assert stat.S_IMODE(workspace_metadata.st_mode) == WORKSPACE_DIRECTORY_MODE
+    assert workspace_metadata.st_mode & stat.S_ISGID == 0
+    assert workspace_metadata.st_gid == os.getgid()
+    assert stat.S_IMODE(target_metadata.st_mode) == WORKSPACE_FILE_MODE
+    assert target_metadata.st_gid == os.getgid()
+    assert target_metadata.st_mode & 0o007 == 0
+
+
 def test_application_adapter_uses_only_fixed_unit_and_arguments(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -278,7 +299,7 @@ def test_application_adapter_uses_only_fixed_unit_and_arguments(
     build_id = "hwpxbuild_" + "a" * 32
     workspace = workspace_root / build_id
     workspace.mkdir()
-    workspace.chmod(WORKSPACE_ROOT_MODE)
+    workspace.chmod(WORKSPACE_DIRECTORY_MODE)
     log_root = tmp_path / "logs"
     calls: list[list[str]] = []
 
@@ -339,7 +360,7 @@ def test_question_template_adapter_uses_only_its_fixed_unit(
     build_id = "hwpxbuild_" + "b" * 32
     workspace = workspace_root / build_id
     workspace.mkdir()
-    workspace.chmod(WORKSPACE_ROOT_MODE)
+    workspace.chmod(WORKSPACE_DIRECTORY_MODE)
     calls: list[list[str]] = []
 
     def run_fixed(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
