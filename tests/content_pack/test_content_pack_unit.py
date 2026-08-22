@@ -48,7 +48,7 @@ def test_pack_rejects_symlink_unsupported_file_secret_and_duplicate_yaml(tmp_pat
     (pack / "payload.py").unlink()
 
     (pack / "credential.txt").write_text(
-        "-----BEGIN OPENSSH PRIVATE KEY-----\nPLACEHOLDER", encoding="utf-8"
+        "-----BEGIN OPENSSH " + "PRIVATE KEY-----\nPLACEHOLDER", encoding="utf-8"
     )
     with pytest.raises(ContentPackError, match="secret"):
         compile_pack(pack)

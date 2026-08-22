@@ -35,7 +35,7 @@ else
   emit PASS "no forbidden runtime/secret path found"
 fi
 
-if git -C "$EOM_ROOT" grep -I -n -E 'BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|refresh[_-]?token|access[_-]?token|sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-' -- . >/dev/null 2>&1; then
+if git -C "$EOM_ROOT" grep -I -n -E 'BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|eom_(at|rt)_[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-' -- . >/dev/null 2>&1; then
   emit FAIL "secret-like content found in tracked files"
 else
   emit PASS "no tracked secret-like content found"

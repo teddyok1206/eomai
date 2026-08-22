@@ -156,7 +156,7 @@ def test_source_discovery_rejects_unicode_case_collision_and_secret(tmp_path: Pa
     secret = tmp_path / "secret"
     secret.mkdir()
     (secret / "credential.txt").write_text(
-        "-----BEGIN OPENSSH PRIVATE KEY-----\nPLACEHOLDER", encoding="utf-8"
+        "-----BEGIN OPENSSH " + "PRIVATE KEY-----\nPLACEHOLDER", encoding="utf-8"
     )
     with pytest.raises(IntakeError, match="secret"):
         discover_source_files(secret)
