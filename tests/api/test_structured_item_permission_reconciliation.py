@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import MagicMock
 
 import pytest
 from eom_operator_identity import ROLE_PERMISSIONS, PermissionKey, RoleKey
@@ -137,3 +138,13 @@ def test_reconciler_rejects_database_identity_drift(api_url: str, message: str) 
 
     with pytest.raises(SystemExit, match=message):
         reconciler._build_admin_database_url(admin, api_url)  # type: ignore[attr-defined]
+
+
+def test_reconciler_scopes_application_search_path_to_its_transaction() -> None:
+    reconciler = _reconciler()
+    session = MagicMock()
+
+    reconciler._select_application_schema(session)  # type: ignore[attr-defined]
+
+    statement = session.execute.call_args.args[0]
+    assert str(statement) == "SET LOCAL search_path TO app, pg_catalog"

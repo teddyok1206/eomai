@@ -17,7 +17,8 @@ from eom_identity_service.models import PermissionRecord, RolePermissionRecord, 
 from eom_identity_service.repository import seed_builtin_rbac
 from eom_operator_identity import ROLE_PERMISSIONS, PermissionKey, RoleKey
 from eom_orchestrator.database import build_session_factory
-from sqlalchemy import URL, create_engine, select
+from sqlalchemy import URL, create_engine, select, text
+from sqlalchemy.orm import Session
 
 REPOSITORY = Path("/home/eom/EOM")
 POSTGRES_ENV = Path("/etc/eom/secrets/postgres.env")
@@ -129,6 +130,12 @@ def _authoritative_database_url() -> URL:
     return _build_admin_database_url(admin, api["EOM_API_DATABASE_URL"])
 
 
+def _select_application_schema(session: Session) -> None:
+    # The runtime role pins this search path at the role boundary. The root-only
+    # operator connection must scope the equivalent setting to this transaction.
+    session.execute(text("SET LOCAL search_path TO app, pg_catalog"))
+
+
 def verify_allowed_delta(
     role_keys: set[str],
     permission_keys: set[str],
@@ -185,6 +192,7 @@ def main() -> None:
     sessions = build_session_factory(engine)
     try:
         with sessions.begin() as session:
+            _select_application_schema(session)
             roles = {row.role_key: row for row in session.scalars(select(RoleRecord))}
             permissions = {
                 row.permission_key: row for row in session.scalars(select(PermissionRecord))
