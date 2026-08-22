@@ -39,11 +39,24 @@ def _platform_settings(tmp_path: Path) -> Settings:
     )
 
 
+def _workflow_settings(tmp_path: Path) -> WorkflowSettings:
+    actors = tmp_path / "human-actors.yaml"
+    runner = tmp_path / "workflow-runner.yaml"
+    actors.write_bytes(Path("config/human-actors.example.yaml").resolve().read_bytes())
+    runner.write_bytes(Path("config/workflow-runner.example.yaml").resolve().read_bytes())
+    return WorkflowSettings(
+        definition_path=Path("config/workflows/generic-item-development.v1.2.yaml").resolve(),
+        actor_config_path=actors,
+        runner_config_path=runner,
+        prompt_root=Path("content/prompt-templates/placeholders").resolve(),
+    )
+
+
 def test_production_composition_supplies_catalog_adapter(tmp_path: Path) -> None:
     engine = create_engine("sqlite://")
     runtime = build_workflow_runtime(
         engine=engine,
-        workflow_settings=WorkflowSettings(),
+        workflow_settings=_workflow_settings(tmp_path),
         platform_settings=_platform_settings(tmp_path),
         catalog_settings=CatalogSettings(
             staging_root=tmp_path / "catalog",

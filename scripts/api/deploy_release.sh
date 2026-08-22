@@ -234,6 +234,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
     actor_runtime = {
         "eom_workflow_runner/actor_authorization.py",
         "eom_workflow_runner/actor_authorization_adapters.py",
+        "eom_workflow_runner/settings.py",
     }
     catalog_staging_runtime = {
         "eom_catalog_contracts/assessment_item.py",
@@ -271,6 +272,22 @@ with zipfile.ZipFile(platform_wheel) as archive:
     ):
         if forbidden in settings_source:
             raise SystemExit("Orchestrator settings retain implicit source/install path inference")
+    workflow_settings_source = archive.read("eom_workflow_runner/settings.py")
+    for forbidden in (
+        b"parents[",
+        b".example.yaml",
+        b"/home/eom/EOM",
+    ):
+        if forbidden in workflow_settings_source:
+            raise SystemExit("workflow settings retain implicit source/install path inference")
+    for required in (
+        b"/etc/eom/workflows/generic-item-development.yaml",
+        b"/etc/eom/human-actors.yaml",
+        b"/etc/eom/workflow-runner.yaml",
+        b"/etc/eom/workflow-prompts",
+    ):
+        if required not in workflow_settings_source:
+            raise SystemExit("workflow settings operator path contract is missing")
     packaged = {
         name.removeprefix(workflow_prefix)
         for name in names

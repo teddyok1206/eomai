@@ -84,6 +84,16 @@ pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 REVIEWER_TEMPORARY_PASSWORD = "TEST_ONLY approval reviewer temporary 61"
 REVIEWER_PASSWORD = "TEST_ONLY approval reviewer password 83"
 ROLE_SLOTS = {"authoring", "review", "image", "item_management", "support"}
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _workflow_settings() -> WorkflowSettings:
+    return WorkflowSettings(
+        definition_path=ROOT / "config/workflows/generic-item-development.v1.2.yaml",
+        actor_config_path=ROOT / "config/human-actors.example.yaml",
+        runner_config_path=ROOT / "config/workflow-runner.example.yaml",
+        prompt_root=ROOT / "content/prompt-templates/placeholders",
+    )
 
 
 class ReadyWorkflowRuntime:
@@ -526,7 +536,7 @@ def test_api_approval_requires_only_the_reconciled_runtime_grant_matrix() -> Non
                 assert by_id[approval_command_id].actor_id == reviewer.operator_id
                 assert events_after == events_before
 
-            workflow_settings = WorkflowSettings()
+            workflow_settings = _workflow_settings()
             actor_authorizer = CompositeWorkflowActorAuthorizer(
                 operator=OperatorIdentityWorkflowActorAuthorizer(
                     SqlAlchemyOperatorActorSource(owner_engine)

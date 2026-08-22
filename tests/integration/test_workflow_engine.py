@@ -78,10 +78,20 @@ ROLE_SLOTS = {
     "image": ("03", "eom-cdx-03"),
     "item_management": ("04", "eom-cdx-04"),
 }
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _workflow_settings() -> WorkflowSettings:
+    return WorkflowSettings(
+        definition_path=ROOT / "config/workflows/generic-item-development.v1.2.yaml",
+        actor_config_path=ROOT / "config/human-actors.example.yaml",
+        runner_config_path=ROOT / "config/workflow-runner.example.yaml",
+        prompt_root=ROOT / "content/prompt-templates/placeholders",
+    )
 
 
 def _static_actor_authorizer() -> StaticWorkflowActorAuthorizer:
-    return StaticWorkflowActorAuthorizer(WorkflowSettings().load_actors())
+    return StaticWorkflowActorAuthorizer(_workflow_settings().load_actors())
 
 
 class ReadyWorkflowRuntime:
@@ -402,7 +412,7 @@ def _environment(
     fake = FakeRoleExecutor(sessions)
     runner = WorkflowRunner(
         engine,
-        WorkflowSettings(),
+        _workflow_settings(),
         fake,
         catalog=FakeWorkflowCatalog(),
         actor_authorizer=_static_actor_authorizer(),
@@ -660,7 +670,7 @@ def test_catalog_workflow_pins_prompts_and_registration_without_leaking_request(
         catalog = FakeWorkflowCatalog()
         runner = WorkflowRunner(
             integration_engine,
-            WorkflowSettings(),
+            _workflow_settings(),
             executor,
             catalog=catalog,
             actor_authorizer=_static_actor_authorizer(),
@@ -1342,7 +1352,7 @@ def test_simultaneous_approve_and_rework_resolves_one_decision(
         def resolve(command_id: str, command_type: CommandType) -> str:
             runner = WorkflowRunner(
                 integration_engine,
-                WorkflowSettings(),
+                _workflow_settings(),
                 FakeRoleExecutor(sessions),
                 catalog=FakeWorkflowCatalog(),
                 actor_authorizer=_static_actor_authorizer(),

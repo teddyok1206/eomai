@@ -26,7 +26,7 @@ from eom_orchestrator.worker_systemd import (
     inspect_worker_systemd_contract,
     probe_worker_systemd_authorization,
 )
-from eom_workflow import compile_definition
+from eom_workflow import compile_definition_data
 from eom_workflow.schemas import (
     RESULT_SCHEMA_FILES,
     load_definition_schema,
@@ -35,7 +35,7 @@ from eom_workflow.schemas import (
 )
 
 from eom_workflow_runner.actor_authorization import WorkflowActorAuthorizer
-from eom_workflow_runner.settings import WorkflowSettings
+from eom_workflow_runner.settings import WorkflowSettings, load_workflow_yaml
 
 
 class ReadinessStatus(StrEnum):
@@ -449,7 +449,11 @@ class WorkflowRuntimeReadiness:
         else:
             try:
                 roles: set[str] = {slot.role for slot in registry.config.slots if slot.enabled}
-                compiled = compile_definition(self.workflow_settings.definition_path, roles)
+                compiled = compile_definition_data(
+                    load_workflow_yaml(self.workflow_settings.definition_path),
+                    str(self.workflow_settings.definition_path),
+                    roles,
+                )
                 checks.append(
                     _success(
                         "generic_workflow_definition",

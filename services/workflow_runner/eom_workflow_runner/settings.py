@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_WORKFLOW_DEFINITION = Path("/etc/eom/workflows/generic-item-development.yaml")
+DEFAULT_HUMAN_ACTOR_CONFIG = Path("/etc/eom/human-actors.yaml")
+DEFAULT_WORKFLOW_RUNNER_CONFIG = Path("/etc/eom/workflow-runner.yaml")
+DEFAULT_WORKFLOW_PROMPT_ROOT = Path("/etc/eom/workflow-prompts")
+MAX_WORKFLOW_CONFIGURATION_BYTES = 1_048_576
 
 
 class HumanActor(BaseModel):
@@ -51,10 +56,21 @@ class RunnerConfig(BaseModel):
 
 @dataclass(frozen=True)
 class WorkflowSettings:
-    definition_path: Path = REPOSITORY_ROOT / "config/workflows/generic-item-development.v1.yaml"
-    actor_config_path: Path = REPOSITORY_ROOT / "config/human-actors.example.yaml"
-    runner_config_path: Path = REPOSITORY_ROOT / "config/workflow-runner.example.yaml"
-    prompt_root: Path = REPOSITORY_ROOT / "content/prompt-templates/placeholders"
+    definition_path: Path = DEFAULT_WORKFLOW_DEFINITION
+    actor_config_path: Path = DEFAULT_HUMAN_ACTOR_CONFIG
+    runner_config_path: Path = DEFAULT_WORKFLOW_RUNNER_CONFIG
+    prompt_root: Path = DEFAULT_WORKFLOW_PROMPT_ROOT
+
+    def __post_init__(self) -> None:
+        configured = {
+            "EOM_WORKFLOW_DEFINITION": self.definition_path,
+            "EOM_HUMAN_ACTOR_CONFIG": self.actor_config_path,
+            "EOM_WORKFLOW_RUNNER_CONFIG": self.runner_config_path,
+            "EOM_WORKFLOW_PROMPT_ROOT": self.prompt_root,
+        }
+        for variable, path in configured.items():
+            if not path.is_absolute():
+                raise ValueError(f"{variable} must be an absolute path")
 
     @classmethod
     def from_environment(cls) -> WorkflowSettings:
@@ -62,25 +78,25 @@ class WorkflowSettings:
             definition_path=Path(
                 os.environ.get(
                     "EOM_WORKFLOW_DEFINITION",
-                    str(REPOSITORY_ROOT / "config/workflows/generic-item-development.v1.yaml"),
+                    str(DEFAULT_WORKFLOW_DEFINITION),
                 )
             ),
             actor_config_path=Path(
                 os.environ.get(
                     "EOM_HUMAN_ACTOR_CONFIG",
-                    str(REPOSITORY_ROOT / "config/human-actors.example.yaml"),
+                    str(DEFAULT_HUMAN_ACTOR_CONFIG),
                 )
             ),
             runner_config_path=Path(
                 os.environ.get(
                     "EOM_WORKFLOW_RUNNER_CONFIG",
-                    str(REPOSITORY_ROOT / "config/workflow-runner.example.yaml"),
+                    str(DEFAULT_WORKFLOW_RUNNER_CONFIG),
                 )
             ),
             prompt_root=Path(
                 os.environ.get(
                     "EOM_WORKFLOW_PROMPT_ROOT",
-                    str(REPOSITORY_ROOT / "content/prompt-templates/placeholders"),
+                    str(DEFAULT_WORKFLOW_PROMPT_ROOT),
                 )
             ),
         )
@@ -92,9 +108,33 @@ class WorkflowSettings:
         return _load_yaml_model(self.runner_config_path, RunnerConfig)
 
 
+def load_workflow_yaml(path: Path) -> object:
+    """Load bounded operator configuration without following the final symlink."""
+
+    try:
+        if not path.is_absolute():
+            raise OSError("workflow configuration path is not absolute")
+        metadata = path.lstat()
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or path.resolve(strict=True) != path.absolute()
+            or not os.access(path, os.R_OK)
+        ):
+            raise OSError("workflow configuration file is unsafe")
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        with os.fdopen(descriptor, encoding="utf-8") as source:
+            content = source.read(MAX_WORKFLOW_CONFIGURATION_BYTES + 1)
+        if len(content) > MAX_WORKFLOW_CONFIGURATION_BYTES:
+            raise OSError("workflow configuration file is too large")
+        return yaml.safe_load(content)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise ValueError(f"invalid workflow configuration: {path.name}") from exc
+
+
 def _load_yaml_model[ModelT: BaseModel](path: Path, model: type[ModelT]) -> ModelT:
     try:
-        raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
-        return model.model_validate(raw)
-    except (OSError, yaml.YAMLError, ValidationError) as exc:
+        return model.model_validate(load_workflow_yaml(path))
+    except ValidationError as exc:
         raise ValueError(f"invalid workflow configuration: {path.name}") from exc

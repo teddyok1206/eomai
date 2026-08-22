@@ -190,13 +190,13 @@ class WorkflowRunner:
             raise ValueError("workflow catalog adapter is required")
         if actor_authorizer is None:
             raise ValueError("workflow actor authorizer is required")
+        if not available_roles:
+            raise ValueError("workflow worker roles are required")
         self.engine = engine
         self.sessions = build_session_factory(engine)
         self.settings = settings or WorkflowSettings.from_environment()
         self.runner_config = self.settings.load_runner()
         self.actor_authorizer = actor_authorizer
-        if not available_roles:
-            raise ValueError("workflow worker roles are required")
         self.available_roles = available_roles
         self.executor = executor or PlatformRoleJobExecutor(engine, self.settings)
         self.catalog = catalog

@@ -47,6 +47,24 @@ symlinks, malformed YAML, unknown roles or fields, duplicate slot/user identitie
 schema versions fail closed before job submission. Use the same explicit value for doctor, runner,
 and an authorized dedicated live verification.
 
+## Operator-Managed Workflow Configuration
+
+Review and run `scripts/workflow/install_runner_configuration.sh` as root when deploying the
+workflow runner. It materializes the reviewed workflow definition, human actor allowlist, runner
+timing, and legacy prompt fallback into these non-secret paths:
+
+```text
+/etc/eom/workflows/generic-item-development.yaml
+/etc/eom/human-actors.yaml
+/etc/eom/workflow-runner.yaml
+/etc/eom/workflow-prompts/{authoring,image,review,registration}.txt
+```
+
+The two created directories are `root:eom:0750`, and files are `root:eom:0640`. The installer does
+not alter `/etc/eom` itself, install dependencies, read secrets, or restart services. Runtime
+overrides are accepted only as absolute paths. Released Content Pack prompts remain canonical;
+the fixed prompt directory supports only the legacy fallback path.
+
 ## Privileged Path Reconciliation
 
 Review `scripts/workflow/bootstrap_runtime_paths.sh` before use. It requires UID 0, calls no
@@ -81,7 +99,7 @@ After the operator phase, return to a fresh `eom` shell:
 cd /home/eom/EOM
 scripts/workflow/verify_runtime_paths.sh
 EOM_WORKER_CONFIG=/etc/eom/worker-slots.yaml \
-  /srv/eom/conda/envs/eom-core/bin/eom-workflow-runner doctor
+  /srv/eom/conda/envs/eom-api/bin/eom-workflow-runner doctor
 ```
 
 Both commands must pass before creating an acceptance workflow or running `run-once`. Doctor uses
@@ -98,7 +116,7 @@ status 3 leaves the command unclaimed and the workflow unchanged. Only a success
 followed by a database claim.
 
 ```bash
-/srv/eom/conda/envs/eom-core/bin/eom-workflow-runner run-once
+/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner run-once
 ```
 
 Do not manually edit commands, leases, attempts, or workflow states. Correct the failed readiness

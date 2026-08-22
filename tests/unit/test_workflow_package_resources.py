@@ -251,3 +251,86 @@ print("installed_orchestrator_configuration=PASS")
         text=True,
     )
     assert result.stdout.strip() == "installed_orchestrator_configuration=PASS"
+
+
+def test_installed_workflow_runner_uses_external_operator_configuration(
+    installed_platform: Path, tmp_path: Path
+) -> None:
+    definition = tmp_path / "generic-item-development.yaml"
+    actors = tmp_path / "human-actors.yaml"
+    runner = tmp_path / "workflow-runner.yaml"
+    prompts = tmp_path / "workflow-prompts"
+    definition.write_bytes(
+        (REPOSITORY_ROOT / "config/workflows/generic-item-development.v1.2.yaml").read_bytes()
+    )
+    actors.write_bytes((REPOSITORY_ROOT / "config/human-actors.example.yaml").read_bytes())
+    runner.write_bytes((REPOSITORY_ROOT / "config/workflow-runner.example.yaml").read_bytes())
+    prompts.mkdir()
+    script = """
+from __future__ import annotations
+import importlib.util
+import os
+import sys
+from pathlib import Path
+
+installed_root = Path(sys.argv[1]).resolve()
+repository = sys.argv[2]
+definition, actors, runner, prompts = map(Path, sys.argv[3:])
+sys.path.insert(0, str(installed_root))
+os.environ["EOM_WORKFLOW_DEFINITION"] = str(definition)
+os.environ["EOM_HUMAN_ACTOR_CONFIG"] = str(actors)
+os.environ["EOM_WORKFLOW_RUNNER_CONFIG"] = str(runner)
+os.environ["EOM_WORKFLOW_PROMPT_ROOT"] = str(prompts)
+
+from eom_workflow import compile_definition_data
+from eom_workflow_runner.settings import (
+    DEFAULT_HUMAN_ACTOR_CONFIG,
+    DEFAULT_WORKFLOW_DEFINITION,
+    DEFAULT_WORKFLOW_PROMPT_ROOT,
+    DEFAULT_WORKFLOW_RUNNER_CONFIG,
+    WorkflowSettings,
+    load_workflow_yaml,
+)
+
+spec = importlib.util.find_spec("eom_workflow_runner")
+assert spec is not None and spec.origin is not None
+assert Path(spec.origin).resolve().is_relative_to(installed_root)
+assert repository not in spec.origin
+settings = WorkflowSettings.from_environment()
+assert settings.definition_path == definition
+assert settings.actor_config_path == actors
+assert settings.runner_config_path == runner
+assert settings.prompt_root == prompts
+assert settings.load_actors().role_for("reviewer_01") == "reviewer"
+assert settings.load_runner().command_lease_seconds == 900
+compiled = compile_definition_data(
+    load_workflow_yaml(settings.definition_path),
+    str(settings.definition_path),
+    {"authoring", "image", "review", "item_management"},
+)
+assert compiled.definition.definition_version == "1.2.0"
+assert DEFAULT_WORKFLOW_DEFINITION == Path("/etc/eom/workflows/generic-item-development.yaml")
+assert DEFAULT_HUMAN_ACTOR_CONFIG == Path("/etc/eom/human-actors.yaml")
+assert DEFAULT_WORKFLOW_RUNNER_CONFIG == Path("/etc/eom/workflow-runner.yaml")
+assert DEFAULT_WORKFLOW_PROMPT_ROOT == Path("/etc/eom/workflow-prompts")
+print("installed_workflow_runner_configuration=PASS")
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            script,
+            str(installed_platform),
+            str(REPOSITORY_ROOT),
+            str(definition),
+            str(actors),
+            str(runner),
+            str(prompts),
+        ],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.strip() == "installed_workflow_runner_configuration=PASS"
