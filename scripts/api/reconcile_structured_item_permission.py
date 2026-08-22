@@ -10,62 +10,123 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+from typing import Never
+from urllib.parse import unquote, urlsplit
 
 from eom_identity_service.models import PermissionRecord, RolePermissionRecord, RoleRecord
 from eom_identity_service.repository import seed_builtin_rbac
 from eom_operator_identity import ROLE_PERMISSIONS, PermissionKey, RoleKey
 from eom_orchestrator.database import build_session_factory
-from sqlalchemy import create_engine, select
+from sqlalchemy import URL, create_engine, select
 
 REPOSITORY = Path("/home/eom/EOM")
-SOURCE_ENV = Path("/etc/eom/secrets/api.env")
+POSTGRES_ENV = Path("/etc/eom/secrets/postgres.env")
+API_ENV = Path("/etc/eom/secrets/api.env")
 NEW_PERMISSION = PermissionKey.ITEM_STRUCTURED_CONTENT_IMPORT.value
+POSTGRES_KEYS = {
+    "EOM_APP_PASSWORD",
+    "EOM_APP_USER",
+    "POSTGRES_DB",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_USER",
+}
+API_KEYS = {
+    "EOM_API_DATABASE_URL",
+    "EOM_API_TOKEN_HASH_KEY",
+    "EOM_API_FINGERPRINT_KEY",
+}
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> Never:
     raise SystemExit(message)
 
 
-def _read_api_database_url() -> str:
-    root_uid = pwd.getpwnam("root").pw_uid
-    api_gid = grp.getgrnam("eom-api").gr_gid
-    descriptor = os.open(SOURCE_ENV, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+def _read_protected_values(
+    path: Path,
+    *,
+    group: str,
+    required_keys: set[str],
+) -> dict[str, str]:
+    expected = (
+        pwd.getpwnam("root").pw_uid,
+        grp.getgrnam(group).gr_gid,
+        0o640,
+    )
+    descriptor = os.open(
+        path,
+        os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0),
+    )
     try:
         metadata = os.fstat(descriptor)
         if not (
             stat.S_ISREG(metadata.st_mode)
-            and metadata.st_uid == root_uid
-            and metadata.st_gid == api_gid
-            and stat.S_IMODE(metadata.st_mode) == 0o640
+            and (metadata.st_uid, metadata.st_gid, stat.S_IMODE(metadata.st_mode)) == expected
+            and metadata.st_size <= 128 * 1024
         ):
-            fail("API runtime secret metadata is unsafe")
+            fail(f"protected database environment metadata is unsafe: {path.name}")
         chunks: list[bytes] = []
+        total_size = 0
         while chunk := os.read(descriptor, 64 * 1024):
+            total_size += len(chunk)
+            if total_size > 128 * 1024:
+                fail(f"protected database environment is too large: {path.name}")
             chunks.append(chunk)
     finally:
         os.close(descriptor)
     try:
         lines = b"".join(chunks).decode("utf-8").splitlines()
     except UnicodeError:
-        fail("API runtime secret encoding is invalid")
+        fail(f"protected database environment encoding is invalid: {path.name}")
     values: dict[str, str] = {}
     for line in lines:
         if not line or line.startswith("#"):
             continue
         if "=" not in line:
-            fail("API runtime secret syntax is invalid")
+            fail(f"protected database environment syntax is invalid: {path.name}")
         key, value = line.split("=", 1)
-        if key in values or not key or any(ord(character) < 32 for character in value):
-            fail("API runtime secret entry is invalid")
+        if key in values or not key or not value or any(ord(character) < 32 for character in value):
+            fail(f"protected database environment entry is invalid: {path.name}")
         values[key] = value
-    required = {
-        "EOM_API_DATABASE_URL",
-        "EOM_API_TOKEN_HASH_KEY",
-        "EOM_API_FINGERPRINT_KEY",
-    }
-    if set(values) != required:
-        fail("API runtime secret key set is invalid")
-    return values["EOM_API_DATABASE_URL"]
+    if set(values) != required_keys:
+        fail(f"protected database environment key set is invalid: {path.name}")
+    return values
+
+
+def _build_admin_database_url(admin: dict[str, str], api_database_url: str) -> URL:
+    parsed = urlsplit(api_database_url)
+    database = unquote(parsed.path.removeprefix("/"))
+    if (
+        parsed.scheme != "postgresql+psycopg"
+        or parsed.hostname != "127.0.0.1"
+        or parsed.port != 5432
+        or parsed.username != "eom_api_runtime"
+        or parsed.password is None
+        or not database
+        or admin["POSTGRES_DB"] != database
+    ):
+        fail("authoritative Application API database identity is inconsistent")
+    return URL.create(
+        "postgresql+psycopg",
+        username=admin["POSTGRES_USER"],
+        password=admin["POSTGRES_PASSWORD"],
+        host="127.0.0.1",
+        port=5432,
+        database=database,
+    )
+
+
+def _authoritative_database_url() -> URL:
+    admin = _read_protected_values(
+        POSTGRES_ENV,
+        group="eom",
+        required_keys=POSTGRES_KEYS,
+    )
+    api = _read_protected_values(
+        API_ENV,
+        group="eom-api",
+        required_keys=API_KEYS,
+    )
+    return _build_admin_database_url(admin, api["EOM_API_DATABASE_URL"])
 
 
 def verify_allowed_delta(
@@ -120,7 +181,7 @@ def main() -> None:
     ).stdout:
         fail("repository working tree is not clean")
 
-    engine = create_engine(_read_api_database_url(), pool_pre_ping=True)
+    engine = create_engine(_authoritative_database_url(), pool_pre_ping=True)
     sessions = build_session_factory(engine)
     try:
         with sessions.begin() as session:
