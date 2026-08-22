@@ -15,6 +15,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
+from referencing import Registry, Resource
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:ca0d360c209d26cce7e9283d42509204ccd8e50f519a85be871a2bbfc625a4bd",
         ),
+        "catalog-application-request": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v1.schema.json",
+            "resources/catalog-application/catalog-application-request-v1.schema.json",
+            "1.0",
+            "sha256:ab395b09afc99bbee7a25b0c15d9f8f63eb22b73b2a5e62586f0f8d80f8d3855",
+        ),
+        "catalog-application-response": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v1.schema.json",
+            "resources/catalog-application/catalog-application-response-v1.schema.json",
+            "1.0",
+            "sha256:ad549c7b25c1e620e7cf54fa46cb4891f322d69f65bd5c5104bf9e50f4582ff8",
+        ),
     }
 )
 
@@ -147,5 +160,21 @@ def catalog_schema_inventory() -> tuple[tuple[str, CatalogSchemaResource], ...]:
     return tuple(sorted(CATALOG_SCHEMA_RESOURCES.items()))
 
 
+@lru_cache(maxsize=1)
+def _catalog_schema_registry() -> Registry[Any]:
+    resources: list[tuple[str, Resource[Any]]] = []
+    for name in CATALOG_SCHEMA_RESOURCES:
+        schema = load_schema(name)
+        identifier = schema.get("$id")
+        if not isinstance(identifier, str):
+            raise _resource_error(name, "schema identifier is missing")
+        resources.append((identifier, Resource.from_contents(schema)))
+    return Registry().with_resources(resources)
+
+
 def validate_contract(name: str, value: dict[str, Any]) -> None:
-    Draft202012Validator(load_schema(name), format_checker=FormatChecker()).validate(value)
+    Draft202012Validator(
+        load_schema(name),
+        format_checker=FormatChecker(),
+        registry=_catalog_schema_registry(),
+    ).validate(value)

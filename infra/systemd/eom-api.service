@@ -1,7 +1,7 @@
 [Unit]
 Description=EOM Versioned Application API
-After=network-online.target docker.service
-Wants=network-online.target
+After=network-online.target docker.service eom-catalog-application-runner.service
+Wants=network-online.target eom-catalog-application-runner.service
 
 [Service]
 Type=simple
@@ -41,6 +41,7 @@ InaccessiblePaths=/mnt/nas
 InaccessiblePaths=/var/run/docker.sock
 InaccessiblePaths=/etc/eom/secrets/postgres.env
 InaccessiblePaths=/etc/eom/secrets/dev-slack.env
+InaccessiblePaths=/etc/eom/secrets/catalog-manager.env
 InaccessiblePaths=/etc/eom/secrets/observe.env
 
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

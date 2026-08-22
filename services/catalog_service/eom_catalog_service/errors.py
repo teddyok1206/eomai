@@ -1,16 +1,8 @@
-"""Catalog application errors with stable machine codes."""
+"""Catalog service exceptions backed by stable contract-layer codes."""
 
-from enum import StrEnum
+from eom_catalog_contracts import CatalogApplicationErrorCode
 
-
-class CatalogErrorCode(StrEnum):
-    CATALOG_ARTIFACT_COMMIT_FAILED = "CATALOG_ARTIFACT_COMMIT_FAILED"
-    CATALOG_CONTENT_PACK_STAGING_INVALID = "CATALOG_CONTENT_PACK_STAGING_INVALID"
-    CATALOG_CONCURRENCY_CONFLICT = "CATALOG_CONCURRENCY_CONFLICT"
-    CATALOG_QUERY_INVALID = "CATALOG_QUERY_INVALID"
-    CATALOG_CURSOR_INVALID = "CATALOG_CURSOR_INVALID"
-    CATALOG_EXPORT_FAILED = "CATALOG_EXPORT_FAILED"
-    CATALOG_REGISTRY_STAGING_INVALID = "CATALOG_REGISTRY_STAGING_INVALID"
+CatalogErrorCode = CatalogApplicationErrorCode
 
 
 class CatalogError(RuntimeError):

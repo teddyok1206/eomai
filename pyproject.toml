@@ -14,6 +14,8 @@ dependencies = [
   "pwdlib[argon2]>=0.3.1,<0.4",
   "pydantic>=2.11,<3",
   "PyYAML>=6.0,<7",
+  # Resolve pinned cross-schema Catalog protocol references without network access.
+  "referencing>=0.36,<1",
   "SQLAlchemy>=2.0,<3",
   "typer>=0.16,<1",
 ]
@@ -32,6 +34,7 @@ eomctl = "eomctl.cli:app"
 eom-dev-report = "eom_dev_reporter.cli:main"
 eom-workflow-runner = "eom_workflow_runner.cli:main"
 eom-hwpx-application-runner = "eom_hwpx_manager.runner:main"
+eom-catalog-application-runner = "eom_catalog_service.application_runner:main"
 
 [tool.setuptools.packages.find]
 where = [
@@ -61,6 +64,7 @@ eom_workflow = [
   "resources/roles/*.json",
 ]
 eom_catalog_contracts = [
+  "resources/catalog-application/*.json",
   "resources/content-intake/*.json",
   "resources/content-pack/*.json",
   "resources/item-registry/*.json",

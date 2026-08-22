@@ -43,6 +43,7 @@ InaccessiblePaths=/var/run/docker.sock
 InaccessiblePaths=/etc/eom/secrets/api.env
 InaccessiblePaths=/etc/eom/secrets/postgres.env
 InaccessiblePaths=/etc/eom/secrets/dev-slack.env
+InaccessiblePaths=/etc/eom/secrets/catalog-manager.env
 
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 IPAddressDeny=any

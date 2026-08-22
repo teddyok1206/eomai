@@ -144,7 +144,10 @@ def get_structured_content(
     request: Request,
     item_revision_id: str,
 ) -> SingleResponse[AssessmentItemContent]:
-    return one(request, request.app.state.services.registry.load_item_content(item_revision_id))
+    return one(
+        request,
+        request.app.state.services.catalog_application.load_item_content(item_revision_id),
+    )
 
 
 @router.get(

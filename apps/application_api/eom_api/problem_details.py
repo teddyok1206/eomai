@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from eom_api_contracts import ProblemDetails, ValidationIssue
+from eom_catalog_contracts import CatalogApplicationErrorCode
 from eom_content_intake import IntakeError
 from eom_content_pack import ContentPackError
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
@@ -18,6 +19,7 @@ from starlette.responses import JSONResponse
 
 from eom_api.errors import ApiError
 from eom_api.redaction import redact_text
+from eom_api.services.catalog_application_client import CatalogApplicationClientError
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 
@@ -163,6 +165,23 @@ def install_exception_handlers(app: FastAPI) -> None:
 
     for exception_type in (IntakeError, ContentPackError, RegistryError, WorkflowError):
         app.add_exception_handler(exception_type, domain_handler)
+
+    @app.exception_handler(CatalogApplicationClientError)
+    async def catalog_error_handler(
+        request: Request,
+        exc: CatalogApplicationClientError,
+    ) -> JSONResponse:
+        unavailable = exc.code in {
+            CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+        }
+        return problem_response(
+            request,
+            status=503 if unavailable else 409,
+            error_code=str(exc.code),
+            title="Catalog operation failed",
+            detail="The Catalog operation could not be completed at a validated boundary.",
+        )
 
     @app.exception_handler(HwpxManagerError)
     async def hwpx_error_handler(request: Request, exc: HwpxManagerError) -> JSONResponse:

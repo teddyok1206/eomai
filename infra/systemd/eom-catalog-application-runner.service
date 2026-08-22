@@ -1,5 +1,5 @@
 [Unit]
-Description=EOM HWPX Application Build Manager
+Description=EOM Catalog Application Manager
 After=network-online.target postgresql.service
 Wants=network-online.target
 
@@ -7,21 +7,21 @@ Wants=network-online.target
 Type=simple
 User=eom
 Group=eom-api
-SupplementaryGroups=eom-hwpx
-RuntimeDirectory=eom-hwpx-api
+RuntimeDirectory=eom-catalog-api
 RuntimeDirectoryMode=0750
-StateDirectory=eom-hwpx-api
+StateDirectory=eom-catalog-api
 StateDirectoryMode=0700
-WorkingDirectory=/var/lib/eom-hwpx-api
-Environment=HOME=/var/lib/eom-hwpx-api
+WorkingDirectory=/var/lib/eom-catalog-api
+Environment=HOME=/var/lib/eom-catalog-api
 Environment=TZ=UTC
-EnvironmentFile=/etc/eom/secrets/hwpx-manager.env
-ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-hwpx-application-runner serve
+EnvironmentFile=/etc/eom/secrets/catalog-manager.env
+ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-catalog-application-runner serve
 Restart=on-failure
 RestartSec=3
 
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true
 ProtectKernelTunables=true
@@ -32,32 +32,29 @@ LockPersonality=true
 RestrictRealtime=true
 CapabilityBoundingSet=
 
-ReadOnlyPaths=/etc/eom/secrets/hwpx-manager.env
+ReadOnlyPaths=/etc/eom/secrets/catalog-manager.env
 ReadOnlyPaths=/srv/eom/conda/envs/eom-api
-ReadOnlyPaths=/srv/eom/conda/envs/eom-hwpx
-ReadWritePaths=/srv/eom/hwpx-workspaces
-ReadWritePaths=/srv/eom/staging
+ReadWritePaths=/srv/eom/staging/catalog
 ReadWritePaths=/mnt/nas/eom/artifacts
-ReadWritePaths=/run/eom-hwpx-api
-ReadWritePaths=/var/lib/eom-hwpx-api
+ReadWritePaths=/run/eom-catalog-api
+ReadWritePaths=/var/lib/eom-catalog-api
 
-InaccessiblePaths=/var/lib/eom-hwpx
 InaccessiblePaths=/home/eom/EOM
 InaccessiblePaths=/home/eom/EOMIS
 InaccessiblePaths=/root/.codex
 InaccessiblePaths=/srv/eom/worker-homes
 InaccessiblePaths=/var/run/docker.sock
 InaccessiblePaths=/etc/eom/secrets/api.env
+InaccessiblePaths=/etc/eom/secrets/hwpx-manager.env
 InaccessiblePaths=/etc/eom/secrets/observe.env
 InaccessiblePaths=/etc/eom/secrets/web-gui.env
-InaccessiblePaths=/etc/eom/secrets/catalog-manager.env
 InaccessiblePaths=/etc/eom-api
 
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 IPAddressDeny=any
 IPAddressAllow=localhost
 UMask=0077
-MemoryMax=2G
+MemoryMax=1G
 TasksMax=128
 TimeoutStartSec=30
 TimeoutStopSec=30

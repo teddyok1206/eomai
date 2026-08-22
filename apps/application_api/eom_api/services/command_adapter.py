@@ -10,9 +10,13 @@ from eom_api_contracts.deliverables import CreateDeliverableRequest
 from eom_api_contracts.items import ItemRetirementRequest, StructuredItemContentImportRequest
 from eom_api_contracts.usage import CreateUsagePlanRequest, FulfillUsagePlanRequest
 from eom_api_contracts.workflows import WorkflowActionRequest, WorkflowStartRequest
-from eom_catalog_contracts import CreateDeliverable, CreateUsagePlan, FulfillUsagePlan
+from eom_catalog_contracts import (
+    CreateDeliverable,
+    CreateUsagePlan,
+    FulfillUsagePlan,
+    ReviewedItemContentImportCommand,
+)
 from eom_catalog_service.content_pack_service import ContentPackService
-from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.usage_service import UsageLedgerService
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
@@ -30,6 +34,7 @@ from eom_workflow_runner.repository import (
 from sqlalchemy import Engine, select
 
 from eom_api.errors import ApiError
+from eom_api.services.catalog_application_client import CatalogApplicationClient
 
 
 def new_api_command_id() -> str:
@@ -37,13 +42,18 @@ def new_api_command_id() -> str:
 
 
 class CommandAdapter:
-    def __init__(self, engine: Engine) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        *,
+        catalog_application: CatalogApplicationClient | None = None,
+    ) -> None:
         self.engine = engine
         self.sessions = build_session_factory(engine)
         self.catalog = WorkflowCatalogService(engine)
         self.content_packs = ContentPackService(engine)
         self.registry = RegistryService(engine)
-        self.item_content_imports = StructuredItemContentImportService(engine)
+        self.catalog_application = catalog_application or CatalogApplicationClient()
         self.usage = UsageLedgerService(engine)
 
     def start_workflow(
@@ -248,12 +258,14 @@ class CommandAdapter:
         *,
         expected_version: int,
     ) -> tuple[str, str, int]:
-        result = self.item_content_imports.import_reviewed(
-            base_revision_id,
-            request.content,
-            reviewed_by=actor.actor_id,
-            review_reason=request.review_reason,
-            expected_version=expected_version,
+        result = self.catalog_application.import_reviewed(
+            ReviewedItemContentImportCommand(
+                base_revision_id=base_revision_id,
+                expected_version=expected_version,
+                reviewed_by=actor.actor_id,
+                review_reason=request.review_reason,
+                content=request.content,
+            )
         )
         return new_api_command_id(), result.item_revision_id, result.resource_version
 

@@ -39,9 +39,18 @@ class FakeCommands:
         return "apicmd_" + "5" * 32, NEW_REVISION_ID, 1
 
 
+class FakeCatalogApplication:
+    def load_item_content(self, item_revision_id: str) -> object:
+        assert item_revision_id == REVISION_ID
+        from eom_catalog_contracts import AssessmentItemContent
+
+        return AssessmentItemContent.model_validate(item_content())
+
+
 def _client(*, admin: bool) -> tuple[TestClient, Any]:
     services = disconnected_services()
     services.commands = FakeCommands()  # type: ignore[assignment]
+    services.catalog_application = FakeCatalogApplication()  # type: ignore[assignment]
     services.idempotency = MemoryIdempotency()  # type: ignore[assignment]
     services.audit = FakeAudit()  # type: ignore[assignment]
     app = create_app(services)
@@ -126,3 +135,14 @@ def test_structured_content_import_is_admin_only_and_requires_review_declaration
         assert invalid.json()["error_code"] == "API_REQUEST_INVALID"
     finally:
         admin_services.engine.dispose()
+
+
+def test_structured_content_read_uses_catalog_application_boundary() -> None:
+    client, services = _client(admin=True)
+    try:
+        with client:
+            response = client.get(f"/api/v1/item-revisions/{REVISION_ID}/structured-content")
+        assert response.status_code == 200
+        assert response.json()["data"] == item_content()
+    finally:
+        services.engine.dispose()

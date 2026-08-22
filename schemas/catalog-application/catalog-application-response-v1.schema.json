@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-response-v1",
+  "title": "EOM Catalog Application Response V1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "result"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {"const": "IMPORT_REVIEWED_ITEM_CONTENT"},
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["item_id", "item_revision_id", "resource_version", "content_artifact_id", "content_artifact_revision_id", "content_sha256"],
+          "properties": {
+            "item_id": {"type": "string", "pattern": "^item_[a-z0-9]{8,59}$"},
+            "item_revision_id": {"type": "string", "pattern": "^itemrev_[a-z0-9]{8,55}$"},
+            "resource_version": {"type": "integer", "minimum": 1},
+            "content_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+            "content_artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+            "content_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "content"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {"const": "GET_ITEM_CONTENT"},
+        "content": {"$ref": "eom://schemas/item-registry/assessment-item-content-v1"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "error_code"],
+      "properties": {
+        "status": {"const": "ERROR"},
+        "operation": {"enum": ["IMPORT_REVIEWED_ITEM_CONTENT", "GET_ITEM_CONTENT"]},
+        "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}
+      }
+    }
+  ]
+}

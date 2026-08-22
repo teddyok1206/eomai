@@ -73,11 +73,20 @@ revision, template revision, and hashes in their request identity.
 
 The reviewed import adapter follows the same boundary. An ADMIN pins a current APPROVED Item
 Revision, submits schema-valid content, and explicitly records a review reason. The Catalog
-application service commits one canonical content Artifact Revision and asks the Registry to create
-a new immutable APPROVED Item Revision while preserving the base revision's Content Pack,
-workflow, metadata, provenance, and every non-content component pointer. Registry registration
-atomically supersedes the base revision. HTTP idempotency protects request replay; content-hash and
-registration identities deduplicate the artifact and revision boundaries.
+application manager commits one canonical content Artifact Revision and asks the Registry to create
+a new immutable APPROVED Item Revision while preserving the base revision's Content Pack, workflow,
+metadata, provenance, and every non-content component pointer. Registry registration atomically
+supersedes the base revision. HTTP idempotency protects request replay; content-hash and registration
+identities deduplicate the artifact and revision boundaries.
+
+The loopback Application API never receives NAS or Catalog staging access. It validates the public
+request, authenticates the reviewer, and sends the bounded small-value content snapshot over the
+private `catalog-application/1.0` Unix-socket protocol. The orchestrator-owned Catalog Application
+Manager is the only side of this boundary that materializes staging bytes and calls the canonical
+artifact commit adapter. The socket authenticates the fixed API UID with `SO_PEERCRED`; both request
+and response are validated against packaged JSON Schema 2020-12 resources and frozen Pydantic
+models. Binary media never crosses this command boundary and remains a pinned Artifact Revision
+member.
 
 The dominant operations are exact Item/Revision lookup, component-position replacement, and media
 member lookup. DB access uses primary and unique indexes. Components are collected once into a
@@ -95,6 +104,8 @@ revision, so they reuse canonical content without copying it.
 
 ```text
 workflow/catalog application -> assessment content contract
+Application API adapter       -> Catalog application protocol
+Catalog application manager   -> artifact/Registry adapters
 HWPX application adapter      -> assessment content contract + HWPX contract
 assessment content contract   -> no infrastructure
 ```

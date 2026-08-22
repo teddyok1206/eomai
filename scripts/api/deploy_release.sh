@@ -232,7 +232,10 @@ with zipfile.ZipFile(platform_wheel) as archive:
     }
     catalog_staging_runtime = {
         "eom_catalog_contracts/assessment_item.py",
+        "eom_catalog_contracts/application.py",
         "eom_catalog_contracts/validation.py",
+        "eom_catalog_service/application_runner.py",
+        "eom_catalog_service/application_server.py",
         "eom_catalog_service/item_content_import.py",
         "eom_catalog_service/settings.py",
         "eom_catalog_service/staging.py",
@@ -291,6 +294,10 @@ with zipfile.ZipFile(platform_wheel) as archive:
         entry_points
     ).decode():
         raise SystemExit("HWPX application runner console entry point missing")
+    if "eom-catalog-application-runner = eom_catalog_service.application_runner:main" not in archive.read(
+        entry_points
+    ).decode():
+        raise SystemExit("Catalog application runner console entry point missing")
     worker_exec_source = (
         Path(os.environ["REPOSITORY_ROOT"])
         / "services/orchestrator/eom_orchestrator/worker_exec.py"
@@ -307,6 +314,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
 
 catalog_prefix = "eom_catalog_contracts/resources/"
 catalog_resources = {
+    "catalog-application/catalog-application-request-v1.schema.json": "schemas/catalog-application/catalog-application-request-v1.schema.json",
+    "catalog-application/catalog-application-response-v1.schema.json": "schemas/catalog-application/catalog-application-response-v1.schema.json",
     "content-intake/intake-manifest-v1.schema.json": "schemas/content-intake/intake-manifest-v1.schema.json",
     "content-intake/mapping-proposal-v1.schema.json": "schemas/content-intake/mapping-proposal-v1.schema.json",
     "content-intake/uncertainties-v1.schema.json": "schemas/content-intake/uncertainties-v1.schema.json",
@@ -653,7 +662,12 @@ for root in sorted(runtime_package_roots):
         if stat.S_IMODE(metadata.st_mode) != expected_mode:
             raise SystemExit(f"runtime package mode mismatch: {path.name}")
 
-for name in ("eom-api", "eom-api-runtime-isolation", "eom-hwpx-application-runner"):
+for name in (
+    "eom-api",
+    "eom-api-runtime-isolation",
+    "eom-hwpx-application-runner",
+    "eom-catalog-application-runner",
+):
     entrypoint = Path(os.environ.get("API_PYTHON", "/srv/eom/conda/envs/eom-api/bin/python"))
     entrypoint = entrypoint.resolve().parent / name
     metadata = entrypoint.stat()
