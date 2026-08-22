@@ -9,6 +9,7 @@ import threading
 import time
 
 from eom_catalog_service.registry_service import RegistryService
+from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_engine
 from sqlalchemy import Engine
 
@@ -16,6 +17,11 @@ from eom_hwpx_manager.application_service import HwpxApplicationService
 from eom_hwpx_manager.download_server import HwpxDownloadServer
 from eom_hwpx_manager.errors import HwpxManagerError
 from eom_hwpx_manager.runtime_privileges import manager_runtime_privileges_ready
+
+# The standalone runner composes a narrower module graph than the Application API.
+# Register the identity-owned FK target explicitly so SQLAlchemy can flush state
+# transitions for HwpxApplicationBuildRecord without relying on incidental imports.
+_RUNTIME_MODEL_TABLES = (OperatorRecord.__table__,)
 
 
 def _runtime_privileges_ready(engine: Engine) -> bool:
