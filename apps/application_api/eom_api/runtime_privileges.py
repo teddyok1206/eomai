@@ -18,6 +18,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "api_tokens",
     "approval_requests",
     "artifact_revisions",
+    "artifacts",
     "content_intake_batches",
     "content_intake_events",
     "content_intake_source_files",
