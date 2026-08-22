@@ -187,7 +187,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
 
 
 def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> dict[str, Any]:
-    schema = copy.deepcopy(load_role_result_schema(schema_id))
+    schema = load_codex_result_schema(schema_id)
     properties = _mapping(schema, "properties")
     for key, value in (
         ("job_id", worker_input.job_id),
@@ -201,7 +201,83 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
         worker_input.artifact.logical_artifact_id
     )
     _mapping(artifact_properties, "revision_id")["const"] = worker_input.artifact.revision_id
+    validate_codex_structured_output_schema(schema)
     return schema
+
+
+def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
+    """Project the canonical result contract into Codex's strict JSON Schema subset."""
+
+    schema = copy.deepcopy(load_role_result_schema(schema_id))
+    schema.pop("$schema", None)
+    schema.pop("$id", None)
+    if schema_id == "authoring-result@2.0":
+        _project_knowledge_authoring_content(schema)
+    _normalize_codex_schema(schema)
+    validate_codex_structured_output_schema(schema)
+    return schema
+
+
+def validate_codex_structured_output_schema(schema: dict[str, Any]) -> None:
+    """Fail before worker submission when a result projection is not strict-output compatible."""
+
+    unsupported = {
+        "allOf",
+        "oneOf",
+        "not",
+        "dependentRequired",
+        "dependentSchemas",
+        "if",
+        "then",
+        "else",
+        "prefixItems",
+        "minLength",
+        "maxLength",
+        "uniqueItems",
+    }
+
+    def visit(value: object, path: tuple[str, ...]) -> None:
+        if not isinstance(value, dict):
+            return
+        found = unsupported.intersection(value)
+        if found:
+            raise WorkflowSchemaError(
+                f"Codex result schema uses unsupported keyword at {'.'.join(path) or '$'}: "
+                f"{sorted(found)[0]}"
+            )
+        if "properties" in value:
+            properties = _mapping(value, "properties")
+            if value.get("type") != "object" or value.get("additionalProperties") is not False:
+                raise WorkflowSchemaError(
+                    f"Codex result object is not closed at {'.'.join(path) or '$'}"
+                )
+            required = value.get("required")
+            if not isinstance(required, list) or set(required) != set(properties):
+                raise WorkflowSchemaError(
+                    f"Codex result object fields are not all required at {'.'.join(path) or '$'}"
+                )
+            for name, child in properties.items():
+                if not isinstance(child, dict) or not any(
+                    key in child for key in ("type", "$ref", "anyOf")
+                ):
+                    raise WorkflowSchemaError(
+                        f"Codex result property has no explicit type at "
+                        f"{'.'.join((*path, 'properties', name))}"
+                    )
+                visit(child, (*path, "properties", name))
+        if isinstance(value.get("items"), dict):
+            visit(value["items"], (*path, "items"))
+        if isinstance(value.get("anyOf"), list):
+            for index, child in enumerate(value["anyOf"]):
+                visit(child, (*path, "anyOf", str(index)))
+        definitions = value.get("$defs")
+        if isinstance(definitions, dict):
+            for name, child in definitions.items():
+                visit(child, (*path, "$defs", name))
+
+    if schema.get("type") != "object":
+        raise WorkflowSchemaError("Codex result schema root must be an object")
+    visit(schema, ())
 
 
 def result_schema_protocol(schema_id: str) -> WorkflowProtocolVersion:
@@ -273,6 +349,168 @@ def _inline_catalog_schema(schema: dict[str, Any]) -> dict[str, Any]:
         raise WorkflowSchemaError("bundled role result schema is not an object")
     Draft202012Validator.check_schema(bundled)
     return bundled
+
+
+def _project_knowledge_authoring_content(schema: dict[str, Any]) -> None:
+    properties = _mapping(schema, "properties")
+    output = _mapping(properties, "output")
+    content = _mapping(_mapping(output, "properties"), "content")
+    branches = content.get("allOf")
+    if not isinstance(branches, list) or len(branches) != 2 or not isinstance(branches[0], dict):
+        raise WorkflowSchemaError("knowledge authoring content contract is not projectable")
+    item = copy.deepcopy(branches[0])
+    item.pop("$schema", None)
+    item.pop("$id", None)
+    item.pop("title", None)
+    item_definitions = item.pop("$defs", None)
+    if not isinstance(item_definitions, dict):
+        raise WorkflowSchemaError("knowledge authoring item definitions are missing")
+
+    renamed_definitions = {
+        f"item_{name}": _rewrite_item_references(value) for name, value in item_definitions.items()
+    }
+    root_definitions = _mapping(schema, "$defs")
+    if set(root_definitions).intersection(renamed_definitions):
+        raise WorkflowSchemaError("knowledge authoring item definitions conflict")
+    root_definitions.update(renamed_definitions)
+    projected = _rewrite_item_references(item)
+    if not isinstance(projected, dict):
+        raise WorkflowSchemaError("knowledge authoring item projection is invalid")
+    content.clear()
+    content.update(projected)
+
+    content_properties = _mapping(content, "properties")
+    content_properties["locale"] = {"type": "string", "const": "ko-KR"}
+    body = _mapping(content_properties, "body")
+    body["minItems"] = 6
+    body["maxItems"] = 6
+    content_properties["interaction"] = {"$ref": "#/$defs/item_singleChoice"}
+
+    table = _mapping(root_definitions, "item_tableBlock")
+    table_properties = _mapping(table, "properties")
+    table_properties["purpose"] = {"type": "string", "const": "data"}
+    table["required"] = list(table_properties)
+    headers = _mapping(table_properties, "headers")
+    headers["minItems"] = 3
+    headers["maxItems"] = 3
+    rows = _mapping(table_properties, "rows")
+    rows["minItems"] = 1
+    rows["maxItems"] = 1
+    row = _mapping(rows, "items")
+    row["minItems"] = 3
+    row["maxItems"] = 3
+
+    image = _mapping(root_definitions, "item_imageBlock")
+    image_properties = _mapping(image, "properties")
+    image_properties["purpose"] = {"type": "string", "const": "stimulus"}
+    image_properties["width_px"] = {"type": "integer", "const": 800}
+    image_properties["height_px"] = {"type": "integer", "const": 500}
+    artifact_pointer = _mapping(root_definitions, "item_artifactPointer")
+    _mapping(artifact_pointer, "properties")["media_type"] = {
+        "type": "string",
+        "const": "image/png",
+    }
+
+    equation = _mapping(root_definitions, "item_equationBlock")
+    equation_properties = _mapping(equation, "properties")
+    equation_properties["purpose"] = {"type": "string", "const": "stimulus"}
+    equation_properties["notation"] = {
+        "type": "string",
+        "const": "hancom-equation-script",
+    }
+    equation_properties["source"] = {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9+\\-*/=() ._^]+$",
+    }
+
+    paragraph = _mapping(root_definitions, "item_paragraphBlock")
+    _mapping(paragraph, "properties")["purpose"] = {
+        "type": "string",
+        "enum": ["stem", "prompt"],
+    }
+    statements = _mapping(root_definitions, "item_statementSetBlock")
+    statement_items = _mapping(_mapping(statements, "properties"), "statements")
+    statement_items["minItems"] = 3
+    statement_items["maxItems"] = 3
+    statement = _mapping(root_definitions, "item_statement")
+    _mapping(statement, "properties")["label"] = {
+        "type": "string",
+        "enum": ["ㄱ", "ㄴ", "ㄷ"],
+    }
+
+    single_choice = _mapping(root_definitions, "item_singleChoice")
+    choices = _mapping(_mapping(single_choice, "properties"), "choices")
+    choices["minItems"] = 5
+    choices["maxItems"] = 5
+    score = _mapping(root_definitions, "item_score")
+    _mapping(score, "properties")["points"] = {"type": "integer", "enum": [2, 3]}
+
+
+def _rewrite_item_references(value: object) -> object:
+    if isinstance(value, dict):
+        rewritten: dict[str, Any] = {}
+        for key, item in value.items():
+            if key == "$ref" and isinstance(item, str) and item.startswith("#/$defs/"):
+                rewritten[key] = item.replace("#/$defs/", "#/$defs/item_", 1)
+            else:
+                rewritten[key] = _rewrite_item_references(item)
+        return rewritten
+    if isinstance(value, list):
+        return [_rewrite_item_references(item) for item in value]
+    return value
+
+
+def _normalize_codex_schema(value: object) -> None:
+    if not isinstance(value, dict):
+        return
+    value.pop("minLength", None)
+    value.pop("maxLength", None)
+    value.pop("uniqueItems", None)
+    if "oneOf" in value:
+        value["anyOf"] = value.pop("oneOf")
+    if "allOf" in value or "prefixItems" in value:
+        raise WorkflowSchemaError("Codex result projection retained unsupported composition")
+
+    if "type" not in value:
+        if "const" in value:
+            constant = value["const"]
+            if isinstance(constant, bool):
+                value["type"] = "boolean"
+            elif isinstance(constant, int):
+                value["type"] = "integer"
+            elif isinstance(constant, float):
+                value["type"] = "number"
+            elif isinstance(constant, str):
+                value["type"] = "string"
+        elif isinstance(value.get("enum"), list) and value["enum"]:
+            first = value["enum"][0]
+            if all(isinstance(item, str) for item in value["enum"]):
+                value["type"] = "string"
+            elif all(
+                isinstance(item, int) and not isinstance(item, bool) for item in value["enum"]
+            ):
+                value["type"] = "integer"
+            elif isinstance(first, bool) and all(isinstance(item, bool) for item in value["enum"]):
+                value["type"] = "boolean"
+
+    properties = value.get("properties")
+    if isinstance(properties, dict):
+        value["type"] = "object"
+        value["additionalProperties"] = False
+        value["required"] = list(properties)
+        for child in properties.values():
+            _normalize_codex_schema(child)
+    items = value.get("items")
+    if isinstance(items, dict):
+        _normalize_codex_schema(items)
+    alternatives = value.get("anyOf")
+    if isinstance(alternatives, list):
+        for child in alternatives:
+            _normalize_codex_schema(child)
+    definitions = value.get("$defs")
+    if isinstance(definitions, dict):
+        for child in definitions.values():
+            _normalize_codex_schema(child)
 
 
 def _resource_error(logical_name: str) -> str:

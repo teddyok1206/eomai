@@ -17,6 +17,7 @@ from eom_workflow import ItemBrief, compile_definition
 from eom_workflow.models import ArtifactSpec, RoleWorkerInput, WorkerRequest
 from eom_workflow.schemas import (
     constrained_result_schema,
+    load_codex_result_schema,
     load_knowledge_item_brief_schema,
     result_schema_protocol,
     role_schema_bundle_hash,
@@ -235,6 +236,36 @@ def test_authoring_v2_result_is_self_contained_and_typed() -> None:
     result["output"]["content"] = invalid  # type: ignore[index]
     with pytest.raises(ValueError):
         validate_role_result(result, "authoring", "authoring-result@2.0")
+
+
+def test_knowledge_authoring_codex_projection_preserves_template_bounds() -> None:
+    projected = load_codex_result_schema("authoring-result@2.0")
+    encoded = json.dumps(projected, ensure_ascii=False)
+    assert all(
+        keyword not in encoded
+        for keyword in (
+            '"allOf"',
+            '"oneOf"',
+            '"prefixItems"',
+            '"minLength"',
+            '"maxLength"',
+            '"uniqueItems"',
+        )
+    )
+    content = projected["properties"]["output"]["properties"]["content"]
+    assert content["properties"]["locale"] == {"type": "string", "const": "ko-KR"}
+    assert content["properties"]["body"]["minItems"] == 6
+    assert content["properties"]["body"]["maxItems"] == 6
+    definitions = projected["$defs"]
+    assert definitions["item_tableBlock"]["properties"]["purpose"]["const"] == "data"
+    assert definitions["item_imageBlock"]["properties"]["width_px"]["const"] == 800
+    assert definitions["item_imageBlock"]["properties"]["height_px"]["const"] == 500
+    assert definitions["item_equationBlock"]["properties"]["notation"]["const"] == (
+        "hancom-equation-script"
+    )
+    assert definitions["item_singleChoice"]["properties"]["choices"]["minItems"] == 5
+    assert definitions["item_singleChoice"]["properties"]["choices"]["maxItems"] == 5
+    assert definitions["item_score"]["properties"]["points"]["enum"] == [2, 3]
 
 
 def test_protocol_versions_preserve_legacy_hash_and_isolate_v2() -> None:

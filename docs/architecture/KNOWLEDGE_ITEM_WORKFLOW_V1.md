@@ -43,6 +43,13 @@ pointer sets. It never borrows a placeholder source identity merely to satisfy p
     content and produce no `ITEM_CONTENT`; directly importing a hand-written fixture would bypass
     authoring/review/orchestration. Neither exercises the requested pipeline.
 
+The canonical role-result schemas remain JSON Schema 2020-12 contracts and retain the full EOM
+validation vocabulary. Before invoking Codex, the orchestrator derives a closed, all-fields-required
+Structured Outputs projection using only the supported schema subset and pins execution IDs into that
+copy. The returned document is then validated against the canonical schema and typed model. This
+projection is an execution adapter, not a second protocol or a relaxation of Item validation; runtime
+readiness loads both forms so an incompatible projection fails before a worker job is claimed.
+
 ## Initial delivery-profile constraint
 
 The first profile deliberately targets the existing `eom-question-template-v1` contract: Korean

@@ -29,6 +29,7 @@ from eom_orchestrator.worker_systemd import (
 from eom_workflow import compile_definition_data
 from eom_workflow.schemas import (
     RESULT_SCHEMA_FILES,
+    load_codex_result_schema,
     load_definition_schema,
     load_role_input_schema,
     load_role_result_schema,
@@ -430,7 +431,8 @@ class WorkflowRuntimeReadiness:
                 load_role_input_schema(role)
             for schema_id in RESULT_SCHEMA_FILES:
                 load_role_result_schema(schema_id)
-            checks.append(_success("workflow_schemas", "9 loaded"))
+                load_codex_result_schema(schema_id)
+            checks.append(_success("workflow_schemas", "canonical and Codex projections loaded"))
         except Exception as exc:
             checks.append(
                 _failure("workflow_schemas", "WORKFLOW_SCHEMAS_INVALID", type(exc).__name__)

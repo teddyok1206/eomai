@@ -8,10 +8,12 @@ from eom_workflow.schemas import (
     RESULT_SCHEMA_FILES,
     WorkflowSchemaError,
     constrained_result_schema,
+    load_codex_result_schema,
     load_definition_schema,
     load_role_input_schema,
     load_role_result_schema,
     role_schema_bundle_hash,
+    validate_codex_structured_output_schema,
     validate_role_input,
     validate_role_result,
     validate_schema_message,
@@ -100,6 +102,27 @@ def test_all_workflow_schemas_are_valid_draft_2020_12() -> None:
         Draft202012Validator.check_schema(load_role_input_schema(role))
     for schema_id in RESULT_SCHEMA_FILES:
         Draft202012Validator.check_schema(load_role_result_schema(schema_id))
+
+
+def test_all_codex_result_projections_use_the_supported_strict_subset() -> None:
+    for schema_id in RESULT_SCHEMA_FILES:
+        projected = load_codex_result_schema(schema_id)
+        Draft202012Validator.check_schema(projected)
+        validate_codex_structured_output_schema(projected)
+        assert "$schema" not in projected
+        assert "$id" not in projected
+
+
+def test_codex_result_projection_rejects_a_property_without_an_explicit_type() -> None:
+    projected = load_codex_result_schema("authoring-result@1.0")
+    artifact = projected["$defs"]["artifact"]
+    artifact["properties"]["file_name"] = {"const": "result.json"}
+
+    with pytest.raises(
+        WorkflowSchemaError,
+        match=r"Codex result property has no explicit type at .*file_name",
+    ):
+        validate_codex_structured_output_schema(projected)
 
 
 @pytest.mark.parametrize(
