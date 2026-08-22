@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from eom_web_gui.contracts import ExplorerQuery, RequestDraftInput
+from eom_web_gui.contracts import ExplorerQuery, RequestDraftInput, WorkflowApproval
 from eom_web_gui.request_drafts import DEMO_REQUEST, normalize_request
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
@@ -40,6 +40,17 @@ def test_schema_rejects_unknown_request_field() -> None:
 def test_explorer_query_rejects_raw_sql_and_arbitrary_entity() -> None:
     with pytest.raises(ValueError):
         ExplorerQuery.model_validate({"entity": "raw_sql", "sql": "SELECT 1"})
+
+
+def test_workflow_approval_accepts_the_application_api_strong_etag_contract() -> None:
+    value = {
+        "etag": '"v4"',
+        "idempotency_key": "studio:test-approval-0001",
+        "reason": None,
+    }
+    assert WorkflowApproval.model_validate(value).etag == '"v4"'
+    with pytest.raises(ValueError):
+        WorkflowApproval.model_validate({**value, "etag": '"4"'})
 
 
 def test_scientific_studio_design_tokens_are_role_based() -> None:

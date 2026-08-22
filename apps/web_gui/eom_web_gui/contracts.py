@@ -76,7 +76,7 @@ class DraftSubmission(WebModel):
 
 
 class WorkflowApproval(WebModel):
-    etag: str = Field(pattern=r'^"[1-9][0-9]*"$')
+    etag: str = Field(pattern=r'^"v[1-9][0-9]*"$')
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
     reason: str | None = Field(default=None, max_length=2000)
 

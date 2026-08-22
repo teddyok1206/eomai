@@ -62,7 +62,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             client.post(
                 f"/studio/api/v1/workflows/{WORKFLOW_ID}/approvals",
                 json={
-                    "etag": '"4"',
+                    "etag": '"v4"',
                     "idempotency_key": "browser-e2e-approval-0001",
                     "reason": None,
                 },

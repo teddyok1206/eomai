@@ -117,7 +117,7 @@ def test_workflow_timeline_approval_etag_and_item_preview() -> None:
         headers = {"X-CSRF-Token": session["csrf_token"]}
         workflow = client.get(f"/studio/api/v1/workflows/{WORKFLOW_ID}")
         assert workflow.status_code == 200
-        assert workflow.json()["etag"] == '"4"'
+        assert workflow.json()["etag"] == '"v4"'
         assert {item["label"] for item in workflow.json()["timeline"]} >= {
             "Workflow 생성",
             "authoring 완료",
@@ -128,7 +128,7 @@ def test_workflow_timeline_approval_etag_and_item_preview() -> None:
         approval = client.post(
             f"/studio/api/v1/workflows/{WORKFLOW_ID}/approvals",
             json={
-                "etag": '"4"',
+                "etag": '"v4"',
                 "idempotency_key": "studio:test-approval-0001",
                 "reason": "검토 완료",
             },

@@ -114,7 +114,7 @@ class FakeGateway:
                 "created_at": NOW.isoformat(),
                 "updated_at": (NOW + timedelta(seconds=5)).isoformat(),
             },
-            "etag": '"4"',
+            "etag": '"v4"',
             "steps": [
                 {
                     "step_run_id": "steprun_test_authoring",
@@ -182,7 +182,7 @@ class FakeGateway:
     ) -> dict[str, Any]:
         del session, idempotency_key, reason
         assert workflow_id == WORKFLOW_ID
-        assert etag == '"4"'
+        assert etag == '"v4"'
         self.approval_calls += 1
         return {
             "command_id": "command_test_approval",
