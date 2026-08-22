@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,9 @@ from scripts.hwpx.python_runtime_layout import (
     PythonRuntimeLayoutError,
     inventory_layout,
     normalize_layout,
+    normalize_runtime_executables,
     verify_layout,
+    verify_runtime_executables,
 )
 
 
@@ -117,3 +120,120 @@ def test_special_file_fails_closed(tmp_path: Path) -> None:
     os.mkfifo(dependency / "unexpected.fifo")
     with pytest.raises(PythonRuntimeLayoutError, match="HWPX_RUNTIME_LAYOUT_SPECIAL_FILE"):
         inventory_layout(root, expected_uid=os.getuid(), expected_gid=os.getgid())
+
+
+def _node_fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+    boundary = tmp_path / "eom-hwpx"
+    binary_directory = boundary / "bin"
+    binary_directory.mkdir(parents=True)
+    node = binary_directory / "node"
+    node.write_text("#!/bin/sh\nprintf 'v20.17.0\\n'\n", encoding="utf-8")
+    node.chmod(0o700)
+    data = boundary / "node-runtime.json"
+    data.write_text('{"version":"20.17.0"}\n', encoding="utf-8")
+    data.chmod(0o600)
+    package_cache_node = tmp_path / "package-cache-node"
+    os.link(node, package_cache_node)
+    return boundary, node, data, package_cache_node
+
+
+def test_node_hardlink_is_privately_materialized_for_service_execution(
+    tmp_path: Path,
+) -> None:
+    boundary, node, data, package_cache_node = _node_fixture(tmp_path)
+    original = node.read_bytes()
+    with pytest.raises(
+        PythonRuntimeLayoutError,
+        match="HWPX_RUNTIME_EXECUTABLE_MODE_MISMATCH",
+    ):
+        verify_runtime_executables(
+            (node,),
+            boundary=boundary,
+            expected_uid=os.getuid(),
+            expected_gid=os.getgid(),
+        )
+
+    first = normalize_runtime_executables(
+        (node,),
+        boundary=boundary,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+    )
+    assert first.changes == 1
+    assert node.read_bytes() == original
+    assert stat.S_IMODE(node.stat().st_mode) == 0o755
+    assert node.stat().st_ino != package_cache_node.stat().st_ino
+    assert stat.S_IMODE(package_cache_node.stat().st_mode) == 0o700
+    assert stat.S_IMODE(data.stat().st_mode) == 0o600
+    assert (
+        subprocess.run(
+            [node, "--version"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        == "v20.17.0"
+    )
+    verify_runtime_executables(
+        (node,),
+        boundary=boundary,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+        service_uid=os.getuid() + 10_000,
+        service_gids=set(),
+    )
+
+    second = normalize_runtime_executables(
+        (node,),
+        boundary=boundary,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+    )
+    assert second.changes == 0
+
+
+def test_node_symlink_must_resolve_inside_runtime_boundary(tmp_path: Path) -> None:
+    boundary = tmp_path / "eom-hwpx"
+    binary_directory = boundary / "bin"
+    binary_directory.mkdir(parents=True)
+    target = binary_directory / "node-20"
+    target.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    target.chmod(0o700)
+    node = binary_directory / "node"
+    node.symlink_to(target.name)
+    normalize_runtime_executables(
+        (node,),
+        boundary=boundary,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+    )
+    assert node.is_symlink()
+    assert stat.S_IMODE(target.stat().st_mode) == 0o755
+
+    outside = tmp_path / "outside-node"
+    outside.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    outside.chmod(0o700)
+    node.unlink()
+    node.symlink_to(outside)
+    with pytest.raises(PythonRuntimeLayoutError, match="HWPX_RUNTIME_LAYOUT_SYMLINK_ESCAPE"):
+        normalize_runtime_executables(
+            (node,),
+            boundary=boundary,
+            expected_uid=os.getuid(),
+            expected_gid=os.getgid(),
+        )
+
+
+def test_node_special_file_fails_closed(tmp_path: Path) -> None:
+    boundary = tmp_path / "eom-hwpx"
+    binary_directory = boundary / "bin"
+    binary_directory.mkdir(parents=True)
+    node = binary_directory / "node"
+    os.mkfifo(node)
+    with pytest.raises(PythonRuntimeLayoutError, match="HWPX_RUNTIME_EXECUTABLE_UNSAFE"):
+        normalize_runtime_executables(
+            (node,),
+            boundary=boundary,
+            expected_uid=os.getuid(),
+            expected_gid=os.getgid(),
+        )

@@ -363,12 +363,15 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     assert "KORDOC_FAILED" in deployment
     assert "normalize_python_layout" in deployment
     assert "--normalize-python-layout" in deployment
+    assert "normalize_node_layout" in deployment
+    assert "--normalize-node-layout" in deployment
     assert (
         'PYTHON_LAYOUT_HELPER="$REPOSITORY_ROOT/scripts/hwpx/python_runtime_layout.py"'
         in deployment
     )
     assert '"$PYTHON" "$PYTHON_LAYOUT_HELPER" verify' in deployment
     assert '"$PYTHON" "$PYTHON_LAYOUT_HELPER" normalize' in deployment
+    assert '"$PYTHON" "$PYTHON_LAYOUT_HELPER" normalize-node' in deployment
     assert (
         "pip install"
         not in deployment.split('if [[ "$MODE" = "normalize-python-layout" ]]', 1)[1].split(
@@ -393,6 +396,10 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
         isinstance(node, ast.Constant) and node.value == "bin/eom-hwpx"
         for node in ast.walk(layout_tree)
     )
+    assert any(
+        isinstance(node, ast.Constant) and node.value == "bin/node"
+        for node in ast.walk(layout_tree)
+    )
     parser_arguments = [
         node
         for node in ast.walk(layout_tree)
@@ -411,7 +418,11 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     assert [element.value for element in choices.elts if isinstance(element, ast.Constant)] == [
         "verify",
         "normalize",
+        "verify-node",
+        "normalize-node",
     ]
+    assert "st_nlink" in layout_helper
+    assert "os.replace" in layout_helper
     assert "eom_hwpx_builder/kordoc_bridge.mjs" in deployment
     assert 'KORDOC_OFFLINE !== "1"' in bridge
     assert "process.argv.length === 2" in bridge

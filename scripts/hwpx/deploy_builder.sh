@@ -11,7 +11,7 @@ PYTHON_LAYOUT_HELPER="$REPOSITORY_ROOT/scripts/hwpx/python_runtime_layout.py"
 MODE="install"
 
 usage() {
-  printf 'Usage: %s [--build-only|--install|--verify|--normalize-python-layout|--dry-run]\n' "$0"
+  printf 'Usage: %s [--build-only|--install|--verify|--normalize-python-layout|--normalize-node-layout|--dry-run]\n' "$0"
 }
 
 if [[ $# -gt 1 ]]; then
@@ -24,6 +24,7 @@ if [[ $# -eq 1 ]]; then
     --install) MODE="install" ;;
     --verify) MODE="verify" ;;
     --normalize-python-layout) MODE="normalize-python-layout" ;;
+    --normalize-node-layout) MODE="normalize-node-layout" ;;
     --dry-run) MODE="dry-run" ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -56,6 +57,10 @@ verify_python_layout() {
 
 normalize_python_layout() {
   "$PYTHON" "$PYTHON_LAYOUT_HELPER" normalize
+}
+
+normalize_node_layout() {
+  "$PYTHON" "$PYTHON_LAYOUT_HELPER" normalize-node
 }
 
 verify_install() {
@@ -129,6 +134,12 @@ if [[ "$MODE" = "normalize-python-layout" ]]; then
   normalize_python_layout
   verify_install
   printf 'HWPX_PYTHON_RUNTIME_LAYOUT=REPAIRED_AND_VERIFIED\n'
+  exit 0
+fi
+if [[ "$MODE" = "normalize-node-layout" ]]; then
+  normalize_node_layout
+  verify_install
+  printf 'HWPX_NODE_RUNTIME_LAYOUT=REPAIRED_AND_VERIFIED\n'
   exit 0
 fi
 if [[ "$MODE" = "dry-run" ]]; then
