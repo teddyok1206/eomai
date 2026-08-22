@@ -256,8 +256,9 @@ class FakeWorkflowCatalog:
         self.prepared.append((step.step_key, step.attempt))
         suffix = {
             "authoring": "1",
-            "review": "2",
-            "registration": "3",
+            "image": "2",
+            "review": "3",
+            "registration": "4",
         }[step.step_key]
         return PreparedPrompt(
             text=f"PLACEHOLDER PROMPT {step.step_key}",
@@ -859,6 +860,7 @@ def test_generated_workflow_materializes_and_pins_image_before_review(
             assert generated["artifact_member"] == "generated-stimulus.png"
         assert len(catalog.materializations) == 1
         assert [role for _, _, role in executor.calls] == ["authoring", "image", "review"]
+        assert catalog.prepared == [("authoring", 1), ("image", 1), ("review", 1)]
 
         _enqueue_approval(
             sessions,
@@ -873,6 +875,12 @@ def test_generated_workflow_materializes_and_pins_image_before_review(
             assert workflow.state == WorkflowState.COMPLETED.value
             assert workflow.runtime_context["final_pointer_manifest"]["item_registration"]
         assert len(catalog.materializations) == 1
+        assert catalog.prepared == [
+            ("authoring", 1),
+            ("image", 1),
+            ("review", 1),
+            ("registration", 1),
+        ]
         assert catalog.registrations == [("registration", 1)]
     finally:
         outer.rollback()

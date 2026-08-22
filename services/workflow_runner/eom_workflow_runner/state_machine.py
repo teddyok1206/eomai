@@ -165,6 +165,10 @@ STAGE_TRANSITIONS: dict[WorkflowStage, frozenset[WorkflowStage]] = {
     WorkflowStage.CANCELLED: frozenset(),
 }
 
+DIRECT_AGENT_STAGE_ENTRIES: dict[tuple[WorkflowStage, str], WorkflowStage] = {
+    (WorkflowStage.AUTHORING, "image"): WorkflowStage.IMAGE_REQUIRED,
+}
+
 STEP_TRANSITIONS: dict[StepState, frozenset[StepState]] = {
     StepState.PENDING: frozenset({StepState.READY, StepState.CANCELLED}),
     StepState.READY: frozenset(
@@ -297,6 +301,15 @@ def transition_stage(
         {"prior_stage": current.value, "new_stage": target.value, **(payload or {})},
     )
     return workflow
+
+
+def direct_agent_entry_stage(
+    current: WorkflowStage,
+    worker_role: str,
+) -> WorkflowStage | None:
+    """Return the explicit stage entered when a definition skips a decision step."""
+
+    return DIRECT_AGENT_STAGE_ENTRIES.get((current, worker_role))
 
 
 def transition_step(step_run: WorkflowStepRunRecord, target: StepState) -> None:

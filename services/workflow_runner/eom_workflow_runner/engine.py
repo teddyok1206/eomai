@@ -71,6 +71,7 @@ from eom_workflow_runner.state_machine import (
     StepState,
     WorkflowStage,
     WorkflowState,
+    direct_agent_entry_stage,
     record_workflow_event,
     transition_command,
     transition_stage,
@@ -460,6 +461,22 @@ class WorkflowRunner:
             current = session.get(WorkflowInstanceRecord, workflow.workflow_id)
             if current is None:
                 raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "workflow disappeared")
+            entry_stage = direct_agent_entry_stage(
+                WorkflowStage(current.stage),
+                definition.worker_role,
+            )
+            if entry_stage is not None:
+                current = transition_stage(
+                    session,
+                    workflow.workflow_id,
+                    entry_stage,
+                    definition.key,
+                    "IMAGE_STAGE_ENTERED",
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    command_id=command_id,
+                    payload={"entry": "direct_agent"},
+                )
             step = self._latest_active_step(session, workflow.workflow_id, definition.key)
             if step is None:
                 step = create_step_run(

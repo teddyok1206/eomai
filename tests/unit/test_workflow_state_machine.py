@@ -7,17 +7,42 @@ from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowStepRunRecord
 from eom_workflow_runner.state_machine import (
     COMMAND_TRANSITIONS,
+    STAGE_TRANSITIONS,
     STEP_TRANSITIONS,
     WORKFLOW_TRANSITIONS,
     CommandState,
     StepState,
+    WorkflowStage,
     WorkflowState,
     WorkflowStateCategory,
     classify_workflow_state,
+    direct_agent_entry_stage,
     require_transition,
     transition_command,
     transition_step,
 )
+
+
+def test_direct_image_agent_enters_required_image_stage() -> None:
+    target = direct_agent_entry_stage(WorkflowStage.AUTHORING, "image")
+
+    assert target is WorkflowStage.IMAGE_REQUIRED
+    assert target in STAGE_TRANSITIONS[WorkflowStage.AUTHORING]
+
+
+@pytest.mark.parametrize(
+    ("stage", "worker_role"),
+    (
+        (WorkflowStage.IMAGE_REQUIRED, "image"),
+        (WorkflowStage.AUTHORING, "authoring"),
+        (WorkflowStage.REVIEWING, "review"),
+    ),
+)
+def test_existing_agent_stage_paths_are_not_reentered(
+    stage: WorkflowStage,
+    worker_role: str,
+) -> None:
+    assert direct_agent_entry_stage(stage, worker_role) is None
 
 
 def test_workflow_happy_path_transitions_are_explicit() -> None:
