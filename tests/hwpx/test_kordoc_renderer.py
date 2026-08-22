@@ -3,8 +3,11 @@ from __future__ import annotations
 import ast
 import copy
 import json
+import os
+import stat
 import subprocess
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
@@ -13,8 +16,13 @@ import pytest
 from eom_hwpx_builder.archive import canonicalize_package
 from eom_hwpx_builder.bindings import TEXT_MARKERS
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
+from eom_hwpx_builder.kordoc_handoff import (
+    HANDOFF_DIRECTORY_MODE,
+    HANDOFF_FILE_MODE,
+    finalize_success_handoff,
+)
 from eom_hwpx_builder.kordoc_markdown import inspect_kordoc_markdown
-from eom_hwpx_builder.kordoc_renderer import render_kordoc_workspace
+from eom_hwpx_builder.kordoc_renderer import failed_kordoc_result, render_kordoc_workspace
 from eom_hwpx_builder.kordoc_runtime import (
     KORDOC_PACKAGE_LOCK_SHA256,
     KordocBridgeReport,
@@ -176,10 +184,31 @@ class FakeKordocRuntime:
 def prepare_workspace(root: Path) -> Path:
     source = MARKDOWN.encode()
     (root / "input").mkdir(parents=True)
+    root.chmod(0o2770)
     (root / "input/document.md").write_bytes(source)
     request = root / "request.json"
     request.write_text(json.dumps(request_value(source), ensure_ascii=False), encoding="utf-8")
     return request
+
+
+def prepare_handoff_files(workspace: Path) -> tuple[Path, Path]:
+    workspace.mkdir(mode=0o2770)
+    workspace.chmod(0o2770)
+    output = workspace / "output"
+    output.mkdir(mode=0o700)
+    for name in (
+        "kordoc_document.hwpx",
+        "kordoc-validation.json",
+        "package-manifest.json",
+        "structural-validation.json",
+    ):
+        path = output / name
+        path.write_bytes(b"HANDOFF_FIXTURE")
+        path.chmod(0o600)
+    result = workspace / "result.json"
+    result.write_bytes(b"{}\n")
+    result.chmod(0o600)
+    return output, result
 
 
 def test_kordoc_contract_is_json_schema_2020_12_and_closed() -> None:
@@ -306,6 +335,122 @@ def test_kordoc_renderer_preserves_template_validator_and_is_deterministic(tmp_p
     )
     assert validate_structure(first_output).status == "FAIL"
     assert first_runtime.calls == second_runtime.calls == 1
+
+
+def test_kordoc_handoff_is_manager_read_only_under_restrictive_umask(tmp_path: Path) -> None:
+    request = prepare_workspace(tmp_path / "workspace")
+    previous_umask = os.umask(0o007)
+    try:
+        render_kordoc_workspace(
+            request,
+            request.parent / "result.json",
+            runtime=FakeKordocRuntime(timestamp=(2026, 8, 21, 1, 2, 4)),
+        )
+    finally:
+        os.umask(previous_umask)
+
+    output = request.parent / "output"
+    assert stat.S_IMODE(request.parent.stat().st_mode) == 0o2770
+    assert not stat.S_IMODE(request.parent.stat().st_mode) & 0o007
+    assert stat.S_IMODE(output.stat().st_mode) == HANDOFF_DIRECTORY_MODE
+    assert stat.S_IMODE(output.stat().st_mode) & 0o050 == 0o050
+    assert stat.S_IMODE(output.stat().st_mode) & 0o027 == 0
+    handoff_files = (
+        request.parent / "result.json",
+        output / "kordoc_document.hwpx",
+        output / "kordoc-validation.json",
+        output / "package-manifest.json",
+        output / "structural-validation.json",
+    )
+    for path in handoff_files:
+        mode = stat.S_IMODE(path.stat().st_mode)
+        assert mode == HANDOFF_FILE_MODE
+        assert mode & stat.S_IRGRP
+        assert not mode & stat.S_IWGRP
+        assert not mode & 0o007
+
+
+def test_kordoc_handoff_finalization_is_idempotent_and_leaves_private_files_private(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    output, result = prepare_handoff_files(workspace)
+    private = workspace / ".builder-private"
+    private.write_bytes(b"PRIVATE")
+    private.chmod(0o600)
+
+    finalize_success_handoff(workspace, result)
+    first = {
+        path: stat.S_IMODE(path.stat().st_mode)
+        for path in (output, result, *(output / name for name in os.listdir(output)))
+    }
+    finalize_success_handoff(workspace, result)
+    second = {path: stat.S_IMODE(path.stat().st_mode) for path in first}
+
+    assert first == second
+    assert stat.S_IMODE(private.stat().st_mode) == 0o600
+
+
+def test_kordoc_handoff_rejects_symlinked_output_file(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    output, result = prepare_handoff_files(workspace)
+    candidate = output / "kordoc_document.hwpx"
+    candidate.unlink()
+    outside = tmp_path / "outside.hwpx"
+    outside.write_bytes(b"OUTSIDE")
+    candidate.symlink_to(outside)
+
+    with pytest.raises(HwpxError) as caught:
+        finalize_success_handoff(workspace, result)
+    assert caught.value.code == HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED
+    assert stat.S_IMODE(outside.stat().st_mode) != HANDOFF_FILE_MODE
+
+
+def test_kordoc_handoff_rejects_symlinked_or_group_writable_directory(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    output, result = prepare_handoff_files(workspace)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    for child in output.iterdir():
+        child.unlink()
+    output.rmdir()
+    output.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(HwpxError):
+        finalize_success_handoff(workspace, result)
+
+    output.unlink()
+    output, result = prepare_handoff_files(tmp_path / "second-workspace")
+    output.chmod(0o2770)
+    with pytest.raises(HwpxError) as caught:
+        finalize_success_handoff(output.parent, result)
+    assert caught.value.code == HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED
+
+
+def test_kordoc_handoff_rejects_wrong_service_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "workspace"
+    _, result = prepare_handoff_files(workspace)
+    wrong_gid = os.getegid() + 1
+    monkeypatch.setattr("eom_hwpx_builder.kordoc_handoff.os.getegid", lambda: wrong_gid)
+
+    with pytest.raises(HwpxError) as caught:
+        finalize_success_handoff(workspace, result)
+    assert caught.value.code == HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED
+
+
+def test_failed_kordoc_result_is_manager_readable_but_not_group_writable(tmp_path: Path) -> None:
+    request = prepare_workspace(tmp_path / "workspace")
+    result_path = request.parent / "result.json"
+    result = failed_kordoc_result(
+        request,
+        result_path,
+        datetime.now(UTC),
+        HwpxError(HwpxErrorCode.HWPX_KORDOC_RENDER_FAILED, "synthetic failure"),
+    )
+
+    assert result is not None and result.status == "FAILED"
+    assert stat.S_IMODE(result_path.stat().st_mode) == HANDOFF_FILE_MODE
 
 
 def test_report_profile_separates_content_layout_and_total_tables(tmp_path: Path) -> None:

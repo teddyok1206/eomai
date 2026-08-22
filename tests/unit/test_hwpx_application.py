@@ -310,6 +310,8 @@ def test_application_adapter_has_no_transient_or_chown_fallback() -> None:
     assert "shell=True" not in source
     assert "ExecStart=/srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx render-kordoc" in unit
     assert "CapabilityBoundingSet=" in unit
+    assert "UMask=0007" in unit
+    assert "UMask=0077" not in unit
     assert f"-m {WORKSPACE_ROOT_MODE:o} /srv/eom/hwpx-workspaces" in bootstrap
 
 

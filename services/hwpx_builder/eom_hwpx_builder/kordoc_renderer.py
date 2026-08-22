@@ -13,13 +13,18 @@ from pydantic import ValidationError
 from eom_hwpx_builder import KORDOC_RENDERER_VERSION
 from eom_hwpx_builder.archive import canonicalize_package, read_package
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
+from eom_hwpx_builder.kordoc_handoff import (
+    finalize_failure_result,
+    finalize_success_handoff,
+    write_private_json,
+)
 from eom_hwpx_builder.kordoc_markdown import inspect_kordoc_markdown
 from eom_hwpx_builder.kordoc_runtime import (
     KORDOC_VERSION,
     KordocRenderRuntime,
     KordocRuntime,
 )
-from eom_hwpx_builder.util import sha256_file, write_json
+from eom_hwpx_builder.util import sha256_file
 from eom_hwpx_builder.validation import (
     KordocNativeStructureCounts,
     classify_kordoc_native_structure,
@@ -138,9 +143,11 @@ def render_kordoc_workspace(
         if bridge.parse_warning_count
         else ()
     )
-    write_json(output_dir / "structural-validation.json", structural.model_dump(mode="json"))
-    write_json(output_dir / "kordoc-validation.json", bridge.model_dump(mode="json"))
-    write_json(output_dir / "package-manifest.json", _manifest(output, request, counts))
+    write_private_json(
+        output_dir / "structural-validation.json", structural.model_dump(mode="json")
+    )
+    write_private_json(output_dir / "kordoc-validation.json", bridge.model_dump(mode="json"))
+    write_private_json(output_dir / "package-manifest.json", _manifest(output, request, counts))
     result = KordocBuildResult(
         build_id=request.build_id,
         source_artifact_id=request.source.artifact_id,
@@ -162,7 +169,8 @@ def render_kordoc_workspace(
         completed_at=datetime.now(UTC),
     )
     validate_contract("kordoc-build-result", result.model_dump(mode="json"))
-    write_json(result_path, result.model_dump(mode="json"))
+    write_private_json(result_path, result.model_dump(mode="json"))
+    finalize_success_handoff(workspace, result_path)
     raw_output.unlink()
     raw_report.unlink()
     return result
@@ -199,5 +207,7 @@ def failed_kordoc_result(
         completed_at=datetime.now(UTC),
     )
     validate_contract("kordoc-build-result", result.model_dump(mode="json"))
-    write_json(result_path, result.model_dump(mode="json"))
+    workspace = request_path.parent.resolve(strict=True)
+    write_private_json(result_path, result.model_dump(mode="json"))
+    finalize_failure_result(workspace, result_path)
     return result

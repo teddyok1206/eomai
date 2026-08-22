@@ -61,7 +61,10 @@ SQLAlchemy session, or the Web GUI. The GUI never imports or invokes Kordoc.
 
 The application runner stays non-root. A root-owned `2770` workspace root uses the private
 `eom-hwpx` group, granted to the runner only by the systemd unit. Staged inputs are group-readable,
-and the fixed builder unit writes group-readable outputs with `UMask=0007`. A start-only polkit
+and the fixed builder unit retains `UMask=0007`. After validation, the builder explicitly finalizes
+only the output handoff directory as `2750` and its Manager-consumed files as `0640`; private
+intermediate files are not widened. Creation modes alone are not treated as the handoff contract.
+A start-only polkit
 allowlist accepts only `eom-hwpx-kordoc@hwpxbuild_<32 hex>.service`; caller-controlled units,
 commands, paths, and renderer arguments are absent. The legacy template renderer adapter remains
 unchanged.
