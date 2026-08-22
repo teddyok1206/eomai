@@ -22,18 +22,19 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CANONICAL_SCHEMA_ROOT = REPOSITORY_ROOT / "schemas/workflow"
 RESOURCE_ROOT = files("eom_workflow").joinpath("resources")
 EXPECTED_RESOURCES = frozenset(
-    {
-        "workflow-definition.schema.json",
-        "knowledge-item-brief-v1.schema.json",
-        *(f"roles/{name}" for name in INPUT_SCHEMA_FILES.values()),
-        *(f"roles/{name}" for name in RESULT_SCHEMA_FILES.values()),
-    }
+    path.relative_to(CANONICAL_SCHEMA_ROOT).as_posix()
+    for path in CANONICAL_SCHEMA_ROOT.rglob("*.schema.json")
 )
 
 
 def test_workflow_schema_resources_match_canonical_sources() -> None:
     mapped_names = (*INPUT_SCHEMA_FILES.values(), *RESULT_SCHEMA_FILES.values())
     assert len(mapped_names) == len(set(mapped_names))
+    assert {
+        "workflow-definition.schema.json",
+        "knowledge-item-brief-v1.schema.json",
+        *(f"roles/{name}" for name in mapped_names),
+    } <= EXPECTED_RESOURCES
     actual = {
         f"roles/{resource.name}"
         for resource in RESOURCE_ROOT.joinpath("roles").iterdir()

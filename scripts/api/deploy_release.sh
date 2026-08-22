@@ -204,21 +204,10 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         raise SystemExit(f"expected 7 packaged API schemas including HWPX and Items, found {schemas}")
 
 workflow_prefix = "eom_workflow/resources/"
+canonical_workflow_root = Path(os.environ["REPOSITORY_ROOT"]) / "schemas/workflow"
 workflow_resources = {
-    "knowledge-item-brief-v1.schema.json",
-    "workflow-definition.schema.json",
-    "roles/authoring-input.schema.json",
-    "roles/authoring-result.schema.json",
-    "roles/authoring-result-v2.schema.json",
-    "roles/image-input.schema.json",
-    "roles/image-result.schema.json",
-    "roles/image-result-v2.schema.json",
-    "roles/registration-input.schema.json",
-    "roles/registration-result.schema.json",
-    "roles/registration-result-v2.schema.json",
-    "roles/review-input.schema.json",
-    "roles/review-result.schema.json",
-    "roles/review-result-v2.schema.json",
+    path.relative_to(canonical_workflow_root).as_posix()
+    for path in canonical_workflow_root.rglob("*.schema.json")
 }
 platform_wheel = by_prefix["eom_platform"]
 with zipfile.ZipFile(platform_wheel) as archive:
@@ -328,10 +317,9 @@ with zipfile.ZipFile(platform_wheel) as archive:
     )
     if archive.read("eom_orchestrator/worker_exec.py") != worker_exec_source.read_bytes():
         raise SystemExit("root-installed worker executable source drift")
-    canonical_root = Path(os.environ["REPOSITORY_ROOT"]) / "schemas/workflow"
     for logical_name in sorted(workflow_resources):
         member = workflow_prefix + logical_name
-        if archive.read(member) != (canonical_root / logical_name).read_bytes():
+        if archive.read(member) != (canonical_workflow_root / logical_name).read_bytes():
             raise SystemExit(f"workflow schema resource drift: {logical_name}")
         if member not in record:
             raise SystemExit(f"workflow schema resource missing from RECORD: {logical_name}")
