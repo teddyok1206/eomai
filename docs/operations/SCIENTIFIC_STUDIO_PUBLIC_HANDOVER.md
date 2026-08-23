@@ -9,8 +9,10 @@ historical port 8000 are never Caddy upstreams.
 
 Caddy's configuration API is a local control plane, not an application API.
 The reviewed Caddyfile binds it to `/run/caddy-admin/admin.sock`. The systemd
-drop-in creates `/run/caddy-admin` as `caddy:caddy:0700` and reloads through the
-same socket. This prevents renderer and worker identities from reaching the
+drop-in creates `/run/caddy-admin` as `caddy:caddy:0700`; Caddy creates the socket
+as `caddy:caddy:0200` under `UMask=0077`, which is the connect permission required by
+its owner without granting group or world access. Reloads use that same socket. This prevents
+renderer and worker identities from reaching the
 control plane through TCP loopback. Do not restore the default
 `localhost:2019` listener.
 

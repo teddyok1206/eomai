@@ -39,3 +39,5 @@ def test_installer_verifies_both_admin_access_boundaries() -> None:
     assert "--unix-socket /run/caddy-admin/admin.sock" in script
     assert "runuser -u eom-cdx-01 -g eom-cdx-01" in script
     assert "systemctl reload caddy.service" in script
+    assert "caddy:caddy:200" in script
+    assert "unlink /run/caddy-admin/admin.sock" in script

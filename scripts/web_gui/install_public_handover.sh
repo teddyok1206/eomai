@@ -29,6 +29,14 @@ rollback() {
     fi
     systemctl daemon-reload
     systemctl restart caddy.service
+    if [[ ${DROP_IN_WAS_PRESENT} -eq 0 ]]; then
+      if [[ -S /run/caddy-admin/admin.sock ]]; then
+        unlink /run/caddy-admin/admin.sock
+      fi
+      if [[ -d /run/caddy-admin && ! -L /run/caddy-admin ]]; then
+        rmdir /run/caddy-admin
+      fi
+    fi
   fi
   echo "CADDY_PUBLIC_HANDOVER=ROLLED_BACK" >&2
   exit "${status}"
@@ -65,7 +73,7 @@ test "$(systemctl is-active caddy.service)" = active
 test "$(systemctl is-enabled caddy.service)" = enabled
 test "$(stat -c '%U:%G:%a' /run/caddy-admin)" = caddy:caddy:700
 test -S /run/caddy-admin/admin.sock
-test "$(stat -c '%U:%G:%a' /run/caddy-admin/admin.sock)" = caddy:caddy:700
+test "$(stat -c '%U:%G:%a' /run/caddy-admin/admin.sock)" = caddy:caddy:200
 if /usr/bin/curl --silent --show-error --fail --max-time 2 http://127.0.0.1:2019/config/ \
   >/dev/null 2>&1; then
   echo "Caddy TCP admin endpoint is still reachable" >&2
