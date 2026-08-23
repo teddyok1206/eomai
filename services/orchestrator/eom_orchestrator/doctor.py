@@ -21,6 +21,8 @@ from eom_orchestrator.worker_systemd import (
     probe_worker_systemd_authorization,
 )
 
+EOM_API_RUNTIME_PREFIX = Path("/srv/eom/conda/envs/eom-api")
+
 
 @dataclass(frozen=True)
 class DoctorCheck:
@@ -42,6 +44,16 @@ def runtime_configuration_check(settings: Settings) -> DoctorCheck:
         "orchestrator_runtime_configuration",
         True,
         f"source={resolved.source.value}; version={resolved.registry.config.version}",
+    )
+
+
+def runtime_environment_check(prefix: Path | None = None) -> DoctorCheck:
+    """Verify that eomctl is running from its deployed application runtime."""
+    actual_prefix = (prefix or Path(sys.prefix)).resolve()
+    return DoctorCheck(
+        "eom_api_environment",
+        actual_prefix == EOM_API_RUNTIME_PREFIX,
+        str(actual_prefix),
     )
 
 
@@ -124,14 +136,7 @@ def run_doctor(engine: Engine, settings: Settings) -> list[DoctorCheck]:
             )
     except Exception as exc:
         checks.append(DoctorCheck("worker_slot_config", False, type(exc).__name__))
-    expected_prefix = Path("/srv/eom/conda/envs/eom-core")
-    checks.append(
-        DoctorCheck(
-            "eom_core_environment",
-            Path(sys.prefix).resolve() == expected_prefix,
-            str(Path(sys.prefix).resolve()),
-        )
-    )
+    checks.append(runtime_environment_check())
     checks.append(
         DoctorCheck(
             "staging_directory",

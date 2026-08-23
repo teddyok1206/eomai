@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from eom_orchestrator.doctor import runtime_configuration_check
+from eom_orchestrator.doctor import runtime_configuration_check, runtime_environment_check
 from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.live_preflight import run_live_worker_preflight
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
@@ -146,6 +146,15 @@ def test_runtime_configuration_doctor_reports_valid_missing_and_malformed(tmp_pa
     assert valid.passed
     assert not runtime_configuration_check(missing_settings).passed
     assert not runtime_configuration_check(malformed_settings).passed
+
+
+def test_runtime_environment_doctor_uses_the_canonical_api_environment() -> None:
+    canonical = runtime_environment_check(Path("/srv/eom/conda/envs/eom-api"))
+    retired = runtime_environment_check(Path("/srv/eom/conda/envs/eom-core"))
+
+    assert canonical.name == "eom_api_environment"
+    assert canonical.passed
+    assert not retired.passed
 
 
 def test_live_preflight_passes_without_job_or_codex_invocation(tmp_path: Path) -> None:
