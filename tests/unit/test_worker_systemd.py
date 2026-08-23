@@ -17,12 +17,19 @@ from eom_orchestrator.worker_exec import (
 )
 from eom_orchestrator.worker_registry import WorkerSlot
 from eom_orchestrator.worker_systemd import (
+    AUTH_REQUIRED_EXIT,
+    AUTH_TEMPLATE_SHA256,
     PROBE_TEMPLATE_SHA256,
+    WORKER_AUTH_EXECUTABLE_SHA256,
     WORKER_EXECUTABLE_SHA256,
     WORKER_TEMPLATE_SHA256,
     FixedUnitRun,
     FixedUnitStatus,
+    WorkerAuthSystemdObservation,
+    auth_unit_name,
+    inspect_worker_unit_activity,
     launch_worker_unit,
+    observe_worker_auth_systemd,
     parse_unit_status,
     probe_unit_name,
     probe_worker_systemd_authorization,
@@ -73,6 +80,7 @@ def test_fixed_unit_name_accepts_only_canonical_job_identity() -> None:
     assert probe_unit_name(_slot(), "probe_0123456789abcdef0123456789abcdef") == (
         "eom-worker-probe-01@probe_0123456789abcdef0123456789abcdef.service"
     )
+    assert auth_unit_name(_slot()) == "eom-worker-auth-01.service"
     for invalid in (
         "job_test",
         "../job_0123456789abcdef0123456789abcdef",
@@ -499,10 +507,14 @@ def test_canonical_unit_and_helper_hashes_match_runtime_contract() -> None:
     for slot_id in sorted(WORKER_TEMPLATE_SHA256):
         worker = ROOT / "infra/systemd" / f"eom-worker-{slot_id}@.service"
         probe = ROOT / "infra/systemd" / f"eom-worker-probe-{slot_id}@.service"
+        auth = ROOT / "infra/systemd" / f"eom-worker-auth-{slot_id}.service"
         assert hashlib.sha256(worker.read_bytes()).hexdigest() == WORKER_TEMPLATE_SHA256[slot_id]
         assert hashlib.sha256(probe.read_bytes()).hexdigest() == PROBE_TEMPLATE_SHA256[slot_id]
+        assert hashlib.sha256(auth.read_bytes()).hexdigest() == AUTH_TEMPLATE_SHA256[slot_id]
     executable = ROOT / "services/orchestrator/eom_orchestrator/worker_exec.py"
     assert hashlib.sha256(executable.read_bytes()).hexdigest() == WORKER_EXECUTABLE_SHA256
+    auth_executable = ROOT / "services/orchestrator/eom_orchestrator/worker_auth_exec.py"
+    assert hashlib.sha256(auth_executable.read_bytes()).hexdigest() == WORKER_AUTH_EXECUTABLE_SHA256
 
 
 def test_collect_mode_is_only_in_probe_unit_sections() -> None:
@@ -530,11 +542,13 @@ def test_all_worker_templates_verify_without_diagnostics(tmp_path: Path) -> None
     root = tmp_path / "root"
     unit_root = root / "etc/systemd/system"
     worker_exec = root / "usr/local/libexec/eom-worker-exec"
+    worker_auth_exec = root / "usr/local/libexec/eom-worker-auth-status"
     true_binary = root / "usr/bin/true"
     unit_root.mkdir(parents=True)
     worker_exec.parent.mkdir(parents=True)
     true_binary.parent.mkdir(parents=True)
     shutil.copy2("/usr/bin/true", worker_exec)
+    shutil.copy2("/usr/bin/true", worker_auth_exec)
     shutil.copy2("/usr/bin/true", true_binary)
 
     unit_paths: list[str] = []
@@ -543,6 +557,7 @@ def test_all_worker_templates_verify_without_diagnostics(tmp_path: Path) -> None
         for name in (
             f"eom-worker-{slot_id}@.service",
             f"eom-worker-probe-{slot_id}@.service",
+            f"eom-worker-auth-{slot_id}.service",
         ):
             shutil.copy2(ROOT / "infra/systemd" / name, unit_root / name)
             unit_paths.append(f"/etc/systemd/system/{name}")
@@ -601,6 +616,96 @@ def test_worker_templates_fix_identity_command_and_sandbox() -> None:
         assert all(setting in source for setting in required)
 
 
+def test_auth_templates_are_non_generating_identity_isolated_probes() -> None:
+    required = (
+        "Type=oneshot",
+        "NoNewPrivileges=true",
+        "PrivateNetwork=true",
+        "ProtectSystem=strict",
+        "ProtectHome=true",
+        "RestrictSUIDSGID=true",
+        "CapabilityBoundingSet=",
+        "AmbientCapabilities=",
+        "IPAddressDeny=any",
+        "InaccessiblePaths=/mnt/nas",
+        "InaccessiblePaths=/home/eom/EOM",
+        "InaccessiblePaths=/home/eom/EOMIS",
+        "InaccessiblePaths=/etc/eom",
+        "InaccessiblePaths=/srv/eom/workspaces",
+        "UMask=0077",
+        "MemoryMax=256M",
+        "TasksMax=32",
+    )
+    for index in range(1, 6):
+        slot_id = f"{index:02d}"
+        source = (ROOT / "infra/systemd" / f"eom-worker-auth-{slot_id}.service").read_text(
+            encoding="utf-8"
+        )
+        assert f"User=eom-cdx-{slot_id}" in source
+        assert f"Group=eom-cdx-{slot_id}" in source
+        assert f"ExecStart=/usr/local/libexec/eom-worker-auth-status --slot {slot_id}" in source
+        assert f"ReadOnlyPaths=/srv/eom/worker-homes/eom-cdx-{slot_id}" in source
+        assert "codex exec" not in source
+        assert all(setting in source for setting in required)
+
+
+@pytest.mark.parametrize(
+    ("run", "expected"),
+    (
+        (FixedUnitRun("eom-worker-auth-01.service", 0, b"", b"", _status(), 3), ("READY", None)),
+        (
+            FixedUnitRun(
+                "eom-worker-auth-01.service",
+                1,
+                b"credential-like output that must be discarded",
+                b"secret-like stderr",
+                _status(result="exit-code", main_status=AUTH_REQUIRED_EXIT),
+                3,
+            ),
+            ("AUTH_REQUIRED", "CODEX_LOGIN_REQUIRED"),
+        ),
+    ),
+)
+def test_auth_probe_returns_only_sanitized_classification(
+    run: FixedUnitRun,
+    expected: tuple[str, str | None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("eom_orchestrator.worker_systemd._start_unit", lambda *_a, **_k: run)
+
+    observed = observe_worker_auth_systemd(_slot())
+
+    assert isinstance(observed, WorkerAuthSystemdObservation)
+    assert (observed.state, observed.reason_code) == expected
+    assert not hasattr(observed, "command_stdout")
+    assert not hasattr(observed, "command_stderr")
+
+
+@pytest.mark.parametrize(
+    ("active_returncode", "status", "expected"),
+    (
+        (0, _status(active_state="active"), "RUNNING"),
+        (3, _status(), "ABSENT"),
+    ),
+)
+def test_exact_worker_activity_is_read_only_and_fail_closed(
+    active_returncode: int,
+    status: FixedUnitStatus,
+    expected: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._read_unit_active_returncode",
+        lambda _unit: active_returncode,
+    )
+    monkeypatch.setattr("eom_orchestrator.worker_systemd._read_unit_status", lambda _unit: status)
+
+    activity = inspect_worker_unit_activity(_slot(), JOB_ID)
+
+    assert activity.state == expected
+    assert activity.unit_name == worker_unit_name(_slot(), JOB_ID)
+
+
 def test_workflow_worker_runtime_contains_no_transient_launcher() -> None:
     for relative in (
         "services/orchestrator/eom_orchestrator/worker.py",
@@ -637,6 +742,13 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             "yes",
         ),
         (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            "eom-worker-auth-05.service",
+            "start",
+            "yes",
+        ),
+        (
             "eom-hwpx-manager",
             "org.freedesktop.systemd1.manage-units",
             "eom-hwpx-kordoc@hwpxbuild_0123456789abcdef0123456789abcdef.service",
@@ -654,6 +766,13 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             "eom",
             "org.freedesktop.systemd1.manage-units",
             "eom-worker-probe-05@probe_0123456789abcdef0123456789abcdef.service",
+            "start",
+            "yes",
+        ),
+        (
+            "eom",
+            "org.freedesktop.systemd1.manage-units",
+            "eom-worker-auth-05.service",
             "start",
             "yes",
         ),
@@ -690,6 +809,20 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             "org.freedesktop.systemd1.manage-units",
             "ssh.service",
             "start",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            "eom-worker-auth-06.service",
+            "start",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            "eom-worker-auth-01.service",
+            "restart",
             "no",
         ),
         (

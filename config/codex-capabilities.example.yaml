@@ -1,0 +1,8 @@
+version: 1
+expected_codex_cli_version: 0.147.0
+models:
+  - model: gpt-5.6-terra
+    reasoning_efforts:
+      - medium
+      - high
+      - xhigh

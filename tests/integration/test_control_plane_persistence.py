@@ -28,7 +28,19 @@ from eom_identifiers import (
     new_reference_bundle_revision_id,
     new_revision_id,
 )
+from eom_orchestrator.capability_observer import (
+    REQUIRED_EXEC_HELP_FLAGS,
+    ReviewedCapabilityPolicy,
+    record_reviewed_capability_snapshot,
+)
+from eom_orchestrator.capacity_controller import (
+    CodexCapacityController,
+    LeaseClaim,
+    set_auth_binding_operational_state,
+)
 from eom_orchestrator.control_models import (
+    CodexAuthBindingRecord,
+    CodexCapabilitySnapshotRecord,
     ExecutionBundleRevisionRecord,
     WorkerLeaseEventRecord,
     WorkerLeaseRecord,
@@ -65,6 +77,7 @@ from eom_orchestrator.models import (
 )
 from eom_orchestrator.protocol import protocol_schema_hash
 from eom_orchestrator.repository import ensure_protocol_version, upsert_worker_slot
+from eom_orchestrator.worker_systemd import WorkerUnitActivity
 from eom_workflow import ControlArtifactPointer
 from eom_workflow.control_plane import WorkerRole
 from eom_workflow.schemas import role_schema_bundle_hash
@@ -73,9 +86,9 @@ from eom_workflow_runner.models import (
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 pytestmark = pytest.mark.integration
 
@@ -258,15 +271,16 @@ def _bundle_documents(
 
 def _workflow(session: Session) -> WorkflowInstanceRecord:
     suffix = uuid4().hex
+    definition_key = f"generic-item-development-{suffix}"
     definition = WorkflowDefinitionRecord(
         definition_id="wfdef_" + suffix,
-        definition_key="generic-item-development",
+        definition_key=definition_key,
         definition_version="1.4.0",
         schema_version="1.0",
         canonical_definition={"fixture": True},
         definition_hash="sha256:" + uuid4().hex * 2,
         active=True,
-        source_path="config/workflows/generic-item-development.v1.4.yaml",
+        source_path=f"disposable/{definition_key}.v1.4.yaml",
     )
     session.add(definition)
     session.flush()
@@ -337,7 +351,11 @@ def _job(
     return job
 
 
-def _complete_control_plane(session: Session) -> tuple[str, str, str]:
+def _complete_control_plane(
+    session: Session,
+    *,
+    roles: tuple[WorkerRole, ...] = (WorkerRole.AUTHORING,),
+) -> tuple[str, str, str]:
     _seed_protocols_and_slots(session)
     instruction, instruction_artifact, reference, reference_artifact = _bundle_documents(session)
     instruction_record = record_bundle_revision(
@@ -381,11 +399,21 @@ def _complete_control_plane(session: Session) -> tuple[str, str, str]:
             "max_active_knowledge_analysis": 1,
             "pools": [
                 {
-                    "pool_key": "authoring",
-                    "roles": ["authoring"],
-                    "slot_keys": ["slot01"],
+                    "pool_key": role.value,
+                    "roles": [role.value],
+                    "slot_keys": [
+                        "slot"
+                        + {
+                            WorkerRole.AUTHORING: "01",
+                            WorkerRole.REVIEW: "02",
+                            WorkerRole.IMAGE: "03",
+                            WorkerRole.ITEM_MANAGEMENT: "04",
+                            WorkerRole.SUPPORT: "05",
+                        }[role]
+                    ],
                     "max_active": 1,
                 }
+                for role in roles
             ],
             "content_sha256": "sha256:" + "0" * 64,
             "created_at": NOW.isoformat().replace("+00:00", "Z"),
@@ -429,15 +457,16 @@ def _complete_control_plane(session: Session) -> tuple[str, str, str]:
             "description": "Disposable control-plane persistence fixture.",
             "role_policies": [
                 {
-                    "role": "authoring",
+                    "role": role.value,
                     "model_candidates": [{"model": "gpt-5.6-terra", "reasoning_effort": "high"}],
                     "instruction_bundle": instruction_pointer,
                     "reference_bundle": reference_pointer,
-                    "worker_pool_key": "authoring",
+                    "worker_pool_key": role.value,
                     "timeout_seconds": 1800,
                     "sandbox": "read-only",
                     "network": "disabled",
                 }
+                for role in roles
             ],
             "capacity_policy_revision_id": capacity_revision_id,
             "general_knowledge_policy": "ALLOW_WITH_PROVENANCE",
@@ -476,54 +505,71 @@ def _complete_control_plane(session: Session) -> tuple[str, str, str]:
         session,
         preset_key=preset_key,
         dependencies=dependencies,
-        steps=(ExecutionStepRequirement("authoring", WorkerRole.AUTHORING),),
+        steps=tuple(ExecutionStepRequirement(role.value, role) for role in roles),
         resolved_at=NOW,
     )
     replay = resolve_execution_plan(
         session,
         preset_key=preset_key,
         dependencies=dependencies,
-        steps=(ExecutionStepRequirement("authoring", WorkerRole.AUTHORING),),
+        steps=tuple(ExecutionStepRequirement(role.value, role) for role in roles),
         resolved_at=NOW + timedelta(days=1),
     )
     assert replay == first_plan
     assert first_plan.steps[0].model == "gpt-5.6-terra"
     assert first_plan.steps[0].reasoning_effort == "high"
 
-    binding_id = new_auth_binding_id()
-    health = {
-        "schema_version": "codex-auth-health-view/1.0",
-        "binding_id": binding_id,
-        "slot_key": "slot01",
-        "account_label": "phase2-slot01",
-        "state": "READY",
-        "reason_code": None,
-        "codex_cli_version": "0.147.0",
-        "observed_at": NOW.isoformat().replace("+00:00", "Z"),
-        "valid_until": (NOW + timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+    slot_by_role = {
+        WorkerRole.AUTHORING: "01",
+        WorkerRole.REVIEW: "02",
+        WorkerRole.IMAGE: "03",
+        WorkerRole.ITEM_MANAGEMENT: "04",
+        WorkerRole.SUPPORT: "05",
     }
-    record_auth_health(session, document=health)
-    capability = _self_hash(
-        {
-            "schema_version": "codex-capability-snapshot/1.0",
-            "capability_snapshot_id": new_capability_snapshot_id(),
-            "binding_id": binding_id,
-            "codex_cli_version": "0.147.0",
-            "source": "LOCAL_OBSERVATION",
-            "capabilities": [
-                {
-                    "model": "gpt-5.6-terra",
-                    "reasoning_efforts": ["high"],
-                    "state": "AVAILABLE",
-                }
-            ],
-            "observed_at": NOW.isoformat().replace("+00:00", "Z"),
-            "valid_until": (NOW + timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
-            "snapshot_sha256": "sha256:" + "0" * 64,
-        },
-        "snapshot_sha256",
-    )
-    record_capability_snapshot(session, document=capability)
+    for role in roles:
+        slot_id = slot_by_role[role]
+        existing_binding = session.scalar(
+            select(CodexAuthBindingRecord).where(CodexAuthBindingRecord.worker_slot_id == slot_id)
+        )
+        if existing_binding is None:
+            binding_id = new_auth_binding_id()
+            health = {
+                "schema_version": "codex-auth-health-view/1.0",
+                "binding_id": binding_id,
+                "slot_key": f"slot{slot_id}",
+                "account_label": f"phase2-slot{slot_id}",
+                "state": "READY",
+                "reason_code": None,
+                "codex_cli_version": "0.147.0",
+                "observed_at": NOW.isoformat().replace("+00:00", "Z"),
+                "valid_until": (NOW + timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+            }
+            record_auth_health(session, document=health)
+        else:
+            assert existing_binding.state == "READY"
+            assert existing_binding.codex_cli_version == "0.147.0"
+            binding_id = existing_binding.binding_id
+        capability = _self_hash(
+            {
+                "schema_version": "codex-capability-snapshot/1.0",
+                "capability_snapshot_id": new_capability_snapshot_id(),
+                "binding_id": binding_id,
+                "codex_cli_version": "0.147.0",
+                "source": "LOCAL_OBSERVATION",
+                "capabilities": [
+                    {
+                        "model": "gpt-5.6-terra",
+                        "reasoning_efforts": ["high"],
+                        "state": "AVAILABLE",
+                    }
+                ],
+                "observed_at": NOW.isoformat().replace("+00:00", "Z"),
+                "valid_until": (NOW + timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+                "snapshot_sha256": "sha256:" + "0" * 64,
+            },
+            "snapshot_sha256",
+        )
+        record_capability_snapshot(session, document=capability)
     session.flush()
     return first_plan.plan_id, workflow.workflow_id, instruction_record.bundle_revision_id
 
@@ -656,6 +702,364 @@ def test_concurrent_claims_create_only_one_held_lease(integration_engine: Engine
             )
         )
     assert len(held) == 1
+    with transaction(sessions) as session:
+        terminalize_worker_lease(
+            session,
+            lease_id=held[0].lease_id,
+            terminal_state="RELEASED",
+            reason_code="TEST_CLEANUP",
+            released_at=NOW + timedelta(minutes=2),
+        )
+
+
+def test_global_capacity_never_exceeds_three_active_leases(db_session: Session) -> None:
+    roles = (
+        WorkerRole.AUTHORING,
+        WorkerRole.REVIEW,
+        WorkerRole.ITEM_MANAGEMENT,
+        WorkerRole.SUPPORT,
+    )
+    plan_id, workflow_id, _ = _complete_control_plane(db_session, roles=roles)
+    jobs = {role: _job(db_session, workflow_id=workflow_id, role=role.value) for role in roles}
+    for offset, role in enumerate(roles[:3], start=1):
+        acquire_worker_lease(
+            db_session,
+            plan_id=plan_id,
+            step_key=role.value,
+            job_id=jobs[role].job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=offset),
+            ttl=timedelta(minutes=30),
+        )
+
+    with pytest.raises(ControlPlaneError) as captured:
+        acquire_worker_lease(
+            db_session,
+            plan_id=plan_id,
+            step_key=WorkerRole.SUPPORT.value,
+            job_id=jobs[WorkerRole.SUPPORT].job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=4),
+            ttl=timedelta(minutes=30),
+        )
+    assert captured.value.code == "CONTROL_CAPACITY_EXHAUSTED"
+    assert (
+        db_session.scalar(
+            select(func.count())
+            .select_from(WorkerLeaseRecord)
+            .where(WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING")))
+        )
+        == 3
+    )
+
+
+def test_knowledge_analysis_capacity_is_one_across_pools(db_session: Session) -> None:
+    roles = (WorkerRole.AUTHORING, WorkerRole.REVIEW)
+    plan_id, workflow_id, _ = _complete_control_plane(db_session, roles=roles)
+    authoring_job = _job(db_session, workflow_id=workflow_id, role="authoring")
+    review_job = _job(db_session, workflow_id=workflow_id, role="review")
+    acquire_worker_lease(
+        db_session,
+        plan_id=plan_id,
+        step_key="authoring",
+        job_id=authoring_job.job_id,
+        attempt=1,
+        workload_class="KNOWLEDGE_ANALYSIS",
+        acquired_at=NOW + timedelta(minutes=1),
+        ttl=timedelta(minutes=30),
+    )
+
+    with pytest.raises(ControlPlaneError) as captured:
+        acquire_worker_lease(
+            db_session,
+            plan_id=plan_id,
+            step_key="review",
+            job_id=review_job.job_id,
+            attempt=1,
+            workload_class="KNOWLEDGE_ANALYSIS",
+            acquired_at=NOW + timedelta(minutes=2),
+            ttl=timedelta(minutes=30),
+        )
+    assert captured.value.code == "CONTROL_KNOWLEDGE_CAPACITY_EXHAUSTED"
+
+
+def test_gpu_capacity_is_one_across_distinct_role_pools(db_session: Session) -> None:
+    roles = (WorkerRole.IMAGE, WorkerRole.ITEM_MANAGEMENT)
+    plan_id, workflow_id, _ = _complete_control_plane(db_session, roles=roles)
+    second_gpu_slot = db_session.get(WorkerSlotRecord, "04")
+    assert second_gpu_slot is not None
+    second_gpu_slot.gpu = True
+    db_session.flush()
+    image_job = _job(db_session, workflow_id=workflow_id, role="image")
+    management_job = _job(db_session, workflow_id=workflow_id, role="item_management")
+    acquire_worker_lease(
+        db_session,
+        plan_id=plan_id,
+        step_key="image",
+        job_id=image_job.job_id,
+        attempt=1,
+        workload_class="CODEX",
+        acquired_at=NOW + timedelta(minutes=1),
+        ttl=timedelta(minutes=30),
+    )
+
+    with pytest.raises(ControlPlaneError) as captured:
+        acquire_worker_lease(
+            db_session,
+            plan_id=plan_id,
+            step_key="item_management",
+            job_id=management_job.job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=2),
+            ttl=timedelta(minutes=30),
+        )
+    assert captured.value.code == "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE"
+
+
+def test_reviewed_capability_snapshot_and_drain_fail_closed(db_session: Session) -> None:
+    plan_id, workflow_id, _ = _complete_control_plane(db_session)
+    binding = db_session.scalar(
+        select(CodexAuthBindingRecord).where(CodexAuthBindingRecord.worker_slot_id == "01")
+    )
+    assert binding is not None
+    policy = ReviewedCapabilityPolicy.model_validate(
+        {
+            "version": 1,
+            "expected_codex_cli_version": "0.147.0",
+            "models": [
+                {
+                    "model": "gpt-5.6-terra",
+                    "reasoning_efforts": ["medium", "high", "xhigh"],
+                }
+            ],
+        }
+    )
+
+    snapshot = record_reviewed_capability_snapshot(
+        db_session,
+        binding_id=binding.binding_id,
+        policy=policy,
+        observed_at=NOW + timedelta(minutes=1),
+        ttl=timedelta(minutes=15),
+        cli_observation=("0.147.0", REQUIRED_EXEC_HELP_FLAGS),
+    )
+
+    assert snapshot.source == "OPERATOR_ASSERTED"
+    assert snapshot.snapshot_sha256.startswith("sha256:")
+    assert (
+        db_session.get(CodexCapabilitySnapshotRecord, snapshot.capability_snapshot_id) is snapshot
+    )
+
+    drained = set_auth_binding_operational_state(
+        db_session,
+        binding_id=binding.binding_id,
+        state="DRAINING",
+        reason_code="OPERATOR_DRAIN",
+        observed_at=NOW + timedelta(minutes=2),
+        ttl=timedelta(minutes=15),
+    )
+    assert drained.state == "DRAINING"
+    job = _job(db_session, workflow_id=workflow_id)
+    with pytest.raises(ControlPlaneError) as captured:
+        acquire_worker_lease(
+            db_session,
+            plan_id=plan_id,
+            step_key="authoring",
+            job_id=job.job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=3),
+            ttl=timedelta(minutes=10),
+        )
+    assert captured.value.code == "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE"
+
+
+def test_auth_failure_after_claim_holds_existing_lease_without_interrupt(
+    db_session: Session,
+) -> None:
+    plan_id, workflow_id, _ = _complete_control_plane(db_session)
+    job = _job(db_session, workflow_id=workflow_id)
+    lease = acquire_worker_lease(
+        db_session,
+        plan_id=plan_id,
+        step_key="authoring",
+        job_id=job.job_id,
+        attempt=1,
+        workload_class="CODEX",
+        acquired_at=NOW + timedelta(minutes=1),
+        ttl=timedelta(minutes=30),
+    )
+    binding = db_session.get(CodexAuthBindingRecord, lease.binding_id)
+    assert binding is not None
+    record_auth_health(
+        db_session,
+        document={
+            "schema_version": "codex-auth-health-view/1.0",
+            "binding_id": binding.binding_id,
+            "slot_key": "slot01",
+            "account_label": binding.account_label,
+            "state": "AUTH_REQUIRED",
+            "reason_code": "CODEX_LOGIN_REQUIRED",
+            "codex_cli_version": "0.147.0",
+            "observed_at": (NOW + timedelta(minutes=2)).isoformat().replace("+00:00", "Z"),
+            "valid_until": (NOW + timedelta(minutes=17)).isoformat().replace("+00:00", "Z"),
+        },
+    )
+
+    replay = acquire_worker_lease(
+        db_session,
+        plan_id=plan_id,
+        step_key="authoring",
+        job_id=job.job_id,
+        attempt=1,
+        workload_class="CODEX",
+        acquired_at=NOW + timedelta(minutes=3),
+        ttl=timedelta(minutes=30),
+    )
+
+    assert replay.lease_id == lease.lease_id
+    assert replay.state == "ACTIVE"
+    assert replay.released_at is None
+
+
+@pytest.mark.parametrize(
+    ("process_state", "expected_lease_state", "expected_reason"),
+    (
+        ("ABSENT", "EXPIRED", "PROCESS_ABSENT"),
+        ("RUNNING", "RECONCILING", "PROCESS_STILL_RUNNING"),
+        ("UNKNOWN", "RECONCILING", "PROCESS_STATE_UNKNOWN"),
+    ),
+)
+def test_capacity_controller_reconciles_exact_unit_before_slot_reuse(
+    db_session: Session,
+    process_state: str,
+    expected_lease_state: str,
+    expected_reason: str,
+) -> None:
+    plan_id, workflow_id, _ = _complete_control_plane(db_session)
+    job = _job(db_session, workflow_id=workflow_id)
+    job_id = job.job_id
+    sessions = sessionmaker(bind=db_session.connection(), expire_on_commit=False)
+    observed_units: list[tuple[str, str]] = []
+
+    def inspect(slot: Any, inspected_job_id: str) -> WorkerUnitActivity:
+        observed_units.append((slot.slot_id, inspected_job_id))
+        return WorkerUnitActivity(
+            process_state,
+            f"eom-worker-{slot.slot_id}@{inspected_job_id}.service",
+            None,
+        )
+
+    controller = CodexCapacityController(sessions, activity_inspector=inspect)
+    baseline = controller.metrics(observed_at=NOW + timedelta(minutes=1))
+    claimed = controller.claim(
+        LeaseClaim(
+            plan_id=plan_id,
+            step_key="authoring",
+            job_id=job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=1),
+            ttl=timedelta(seconds=30),
+        )
+    )
+
+    outcomes = controller.reconcile_expired(observed_at=NOW + timedelta(minutes=2))
+
+    assert observed_units == [("01", job_id)]
+    assert len(outcomes) == 1
+    assert outcomes[0].lease_id == claimed.lease_id
+    assert outcomes[0].lease_state == expected_lease_state
+    assert outcomes[0].reason_code == expected_reason
+    with sessions() as session:
+        persisted = session.get(WorkerLeaseRecord, claimed.lease_id)
+        assert persisted is not None and persisted.state == expected_lease_state
+        events = tuple(
+            session.scalars(
+                select(WorkerLeaseEventRecord)
+                .where(WorkerLeaseEventRecord.lease_id == claimed.lease_id)
+                .order_by(WorkerLeaseEventRecord.sequence)
+            )
+        )
+        assert tuple(event.new_state for event in events) == (
+            "ACTIVE",
+            "RECONCILING",
+        ) + (("EXPIRED",) if process_state == "ABSENT" else ())
+
+    metrics = controller.metrics(observed_at=NOW + timedelta(minutes=2))
+    assert metrics.queued_jobs == baseline.queued_jobs
+    assert metrics.failed_jobs == baseline.failed_jobs
+    assert metrics.active_leases == baseline.active_leases
+    assert metrics.reconciling_leases == baseline.reconciling_leases + (
+        0 if process_state == "ABSENT" else 1
+    )
+    assert metrics.released_leases == baseline.released_leases
+    assert metrics.expired_leases == baseline.expired_leases + (
+        1 if process_state == "ABSENT" else 0
+    )
+    assert metrics.held_gpu_leases == baseline.held_gpu_leases
+    assert metrics.held_knowledge_analysis_leases == baseline.held_knowledge_analysis_leases
+    assert metrics.oldest_queued_seconds is not None
+    assert (metrics.oldest_held_seconds is not None) == (process_state != "ABSENT")
+
+
+def test_reconciling_lease_is_reinspected_after_controller_restart(
+    db_session: Session,
+) -> None:
+    plan_id, workflow_id, _ = _complete_control_plane(db_session)
+    job = _job(db_session, workflow_id=workflow_id)
+    job_id = job.job_id
+    sessions = sessionmaker(bind=db_session.connection(), expire_on_commit=False)
+    states = iter(("RUNNING", "ABSENT"))
+
+    def inspect(slot: Any, inspected_job_id: str) -> WorkerUnitActivity:
+        state = next(states)
+        return WorkerUnitActivity(
+            state,
+            f"eom-worker-{slot.slot_id}@{inspected_job_id}.service",
+            None,
+        )
+
+    controller = CodexCapacityController(sessions, activity_inspector=inspect)
+    claimed = controller.claim(
+        LeaseClaim(
+            plan_id=plan_id,
+            step_key="authoring",
+            job_id=job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=1),
+            ttl=timedelta(seconds=30),
+        )
+    )
+
+    first = controller.reconcile_expired(observed_at=NOW + timedelta(minutes=2))
+    second = controller.reconcile_expired(observed_at=NOW + timedelta(minutes=3))
+
+    assert first[0].lease_state == "RECONCILING"
+    assert second[0].lease_state == "EXPIRED"
+    with sessions() as session:
+        lease = session.get(WorkerLeaseRecord, claimed.lease_id)
+        assert lease is not None and lease.state == "EXPIRED"
+
+
+def test_capacity_controller_does_not_allow_manual_ready_state(db_session: Session) -> None:
+    _complete_control_plane(db_session)
+    binding = db_session.scalar(select(CodexAuthBindingRecord))
+    assert binding is not None
+
+    with pytest.raises(ValueError, match="DRAINING or DISABLED"):
+        set_auth_binding_operational_state(
+            db_session,
+            binding_id=binding.binding_id,
+            state="READY",
+            reason_code="OPERATOR_READY",
+            observed_at=NOW + timedelta(minutes=1),
+            ttl=timedelta(minutes=15),
+        )
 
 
 def test_historical_protocol_rows_remain_byte_identical(db_session: Session) -> None:

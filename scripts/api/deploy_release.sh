@@ -213,10 +213,14 @@ platform_wheel = by_prefix["eom_platform"]
 with zipfile.ZipFile(platform_wheel) as archive:
     names = set(archive.namelist())
     worker_runtime = {
+        "eom_orchestrator/capability_observer.py",
+        "eom_orchestrator/capacity_controller.py",
         "eom_orchestrator/live_preflight.py",
         "eom_orchestrator/runtime_configuration.py",
         "eom_orchestrator/settings.py",
         "eom_orchestrator/worker.py",
+        "eom_orchestrator/worker_auth.py",
+        "eom_orchestrator/worker_auth_exec.py",
         "eom_orchestrator/worker_exec.py",
         "eom_orchestrator/worker_systemd.py",
     }
@@ -318,6 +322,12 @@ with zipfile.ZipFile(platform_wheel) as archive:
     )
     if archive.read("eom_orchestrator/worker_exec.py") != worker_exec_source.read_bytes():
         raise SystemExit("root-installed worker executable source drift")
+    worker_auth_exec_source = (
+        Path(os.environ["REPOSITORY_ROOT"])
+        / "services/orchestrator/eom_orchestrator/worker_auth_exec.py"
+    )
+    if archive.read("eom_orchestrator/worker_auth_exec.py") != worker_auth_exec_source.read_bytes():
+        raise SystemExit("root-installed worker authentication executable source drift")
     for logical_name in sorted(workflow_resources):
         member = workflow_prefix + logical_name
         if archive.read(member) != (canonical_workflow_root / logical_name).read_bytes():

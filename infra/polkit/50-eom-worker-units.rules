@@ -2,6 +2,7 @@
 polkit.addRule(function(action, subject) {
     var workerUnit = /^eom-worker-(01|02|03|04|05)@job_[0-9a-f]{32}\.service$/;
     var probeUnit = /^eom-worker-probe-(01|02|03|04|05)@probe_[0-9a-f]{32}\.service$/;
+    var authUnit = /^eom-worker-auth-(01|02|03|04|05)\.service$/;
     var kordocUnit = /^eom-hwpx-kordoc@hwpxbuild_[0-9a-f]{32}\.service$/;
     var questionTemplateUnit = /^eom-hwpx-builder@hwpxbuild_[0-9a-f]{32}\.service$/;
 
@@ -12,14 +13,15 @@ polkit.addRule(function(action, subject) {
     var unit = action.lookup("unit");
     var verb = action.lookup("verb");
     if (verb === "start" && subject.user === "eom-workflow-runner"
-        && (workerUnit.test(unit) || probeUnit.test(unit))) {
+        && (workerUnit.test(unit) || probeUnit.test(unit) || authUnit.test(unit))) {
         return polkit.Result.YES;
     }
     if (verb === "start" && subject.user === "eom-hwpx-manager"
         && (kordocUnit.test(unit) || questionTemplateUnit.test(unit))) {
         return polkit.Result.YES;
     }
-    if (verb === "start" && subject.user === "eom" && probeUnit.test(unit)) {
+    if (verb === "start" && subject.user === "eom"
+        && (probeUnit.test(unit) || authUnit.test(unit))) {
         return polkit.Result.YES;
     }
     if (["eom", "eom-workflow-runner", "eom-hwpx-manager"].indexOf(subject.user) !== -1) {

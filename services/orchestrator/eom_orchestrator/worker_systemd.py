@@ -18,6 +18,7 @@ from eom_orchestrator.worker_registry import WorkerSlot
 SYSTEMCTL = Path("/usr/bin/systemctl")
 SYSTEMD_UNIT_ROOT = Path("/etc/systemd/system")
 WORKER_EXECUTABLE = Path("/usr/local/libexec/eom-worker-exec")
+WORKER_AUTH_EXECUTABLE = Path("/usr/local/libexec/eom-worker-auth-status")
 SYSTEMCTL_ENV = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
 JOB_ID_PATTERN = re.compile(r"\Ajob_[0-9a-f]{32}\Z", re.ASCII)
 PROBE_ID_PATTERN = re.compile(r"\Aprobe_[0-9a-f]{32}\Z", re.ASCII)
@@ -49,7 +50,18 @@ PROBE_TEMPLATE_SHA256 = {
     "04": "83eccd46ee0b058ede1824b1f137b9f35803a9da5d91ae14ec1961651d34a69a",
     "05": "86c19aa495b44be6f38441b6fe63308e408cf12310d5d562207a128ef354768c",
 }
+AUTH_TEMPLATE_SHA256 = {
+    "01": "4ca00325bea635d32b192ae3cc6300fc887d13f861d38aeb2bbc2639945e1ae4",
+    "02": "312b0ce43e70bd005bac19f4659b0e1120b55bd2d8de338ac41a6a70b07226cd",
+    "03": "cf1686cb8bab136017148e9ede376362ff217bcc7a69a14c87fcde0c1fa90f5f",
+    "04": "a46f8d4c4b5f7b2bfdf1993e0cb7694bef348e85d56fcb858471d8ba8bbcf142",
+    "05": "98dbc3e1b1907912a71b8f2b7b2c7a7c224cd19b927084bfde2de5037ead29e3",
+}
 WORKER_EXECUTABLE_SHA256 = "c9bf3ee19f192f1b09cba84cac334fa74ed4ed4edc502b2a047bf5523789e259"
+WORKER_AUTH_EXECUTABLE_SHA256 = "a4d0cb8655507d69c85ba7f12b8674f4b0ffef123af68190c36b95b67ea18b42"
+AUTH_REQUIRED_EXIT = 20
+AUTH_PROBE_INVALID_EXIT = 21
+AUTH_PROBE_TIMEOUT_EXIT = 22
 
 
 @dataclass(frozen=True)
@@ -97,6 +109,20 @@ class WorkerSystemdReadiness:
     detail: str
 
 
+@dataclass(frozen=True)
+class WorkerAuthSystemdObservation:
+    state: str
+    reason_code: str | None
+    unit_name: str
+
+
+@dataclass(frozen=True)
+class WorkerUnitActivity:
+    state: str
+    unit_name: str
+    exit_code: int | None
+
+
 def validate_slot(slot: WorkerSlot) -> str:
     if slot.slot_id not in SLOT_IDS or slot.linux_user != f"eom-cdx-{slot.slot_id}":
         raise ValueError("worker slot does not match a fixed systemd identity")
@@ -120,6 +146,10 @@ def probe_unit_name(slot: WorkerSlot, probe_id: str | None = None) -> str:
     if PROBE_ID_PATTERN.fullmatch(actual_probe_id) is None:
         raise ValueError("invalid worker authorization probe identity")
     return f"eom-worker-probe-{slot_id}@{actual_probe_id}.service"
+
+
+def auth_unit_name(slot: WorkerSlot) -> str:
+    return f"eom-worker-auth-{validate_slot(slot)}.service"
 
 
 def systemctl_start_argv(unit_name: str) -> tuple[str, ...]:
@@ -304,11 +334,71 @@ def inspect_worker_systemd_contract(slot: WorkerSlot) -> WorkerSystemdReadiness:
             expected_mode=0o755,
             expected_sha256=WORKER_EXECUTABLE_SHA256,
         )
+        _validate_root_owned_artifact(
+            SYSTEMD_UNIT_ROOT / f"eom-worker-auth-{slot_id}.service",
+            expected_mode=0o644,
+            expected_sha256=AUTH_TEMPLATE_SHA256[slot_id],
+        )
+        _validate_root_owned_artifact(
+            WORKER_AUTH_EXECUTABLE,
+            expected_mode=0o755,
+            expected_sha256=WORKER_AUTH_EXECUTABLE_SHA256,
+        )
     except (KeyError, OSError, ValueError):
         return WorkerSystemdReadiness(
             False, "WORKER_SYSTEMD_TEMPLATE_INVALID", f"slot {slot.slot_id}"
         )
     return WorkerSystemdReadiness(True, "READY", f"slot {slot_id} contract v1")
+
+
+def observe_worker_auth_systemd(slot: WorkerSlot) -> WorkerAuthSystemdObservation:
+    """Run the fixed non-generating probe and return only its allowlisted classification."""
+
+    unit_name = auth_unit_name(slot)
+    try:
+        run = _start_unit(unit_name, timeout_seconds=60)
+        lingering = _unit_is_lingering(run.active_returncode)
+    except subprocess.TimeoutExpired:
+        return WorkerAuthSystemdObservation("DEGRADED", "AUTH_PROBE_TIMEOUT", unit_name)
+    except (OSError, ValueError):
+        return WorkerAuthSystemdObservation("DEGRADED", "AUTH_PROBE_UNAVAILABLE", unit_name)
+    if lingering or (run.status is not None and run.status.process_lingering):
+        return WorkerAuthSystemdObservation("DEGRADED", "AUTH_PROBE_LINGERING", unit_name)
+    status = run.status
+    if status is not None and status.need_daemon_reload:
+        return WorkerAuthSystemdObservation("DEGRADED", "AUTH_PROBE_STALE", unit_name)
+    if run.exit_code == 0 and (status is None or status.exit_code == 0):
+        return WorkerAuthSystemdObservation("READY", None, unit_name)
+    if status is None or not status.process_started:
+        return WorkerAuthSystemdObservation("DEGRADED", "AUTH_PROBE_START_DENIED", unit_name)
+    reason_by_exit = {
+        AUTH_REQUIRED_EXIT: ("AUTH_REQUIRED", "CODEX_LOGIN_REQUIRED"),
+        AUTH_PROBE_INVALID_EXIT: ("DEGRADED", "AUTH_PROBE_INVALID"),
+        AUTH_PROBE_TIMEOUT_EXIT: ("DEGRADED", "AUTH_PROBE_TIMEOUT"),
+    }
+    state, reason = reason_by_exit.get(status.exit_code, ("DEGRADED", "AUTH_PROBE_FAILED"))
+    return WorkerAuthSystemdObservation(state, reason, unit_name)
+
+
+def inspect_worker_unit_activity(slot: WorkerSlot, job_id: str) -> WorkerUnitActivity:
+    """Inspect one exact fixed worker instance without starting, stopping, or resetting it."""
+
+    unit_name = worker_unit_name(slot, job_id)
+    try:
+        active_returncode = _read_unit_active_returncode(unit_name)
+        active = _unit_is_lingering(active_returncode)
+        status = _read_unit_status(unit_name)
+    except (OSError, ValueError):
+        return WorkerUnitActivity("UNKNOWN", unit_name, None)
+    if status.need_daemon_reload:
+        return WorkerUnitActivity("UNKNOWN", unit_name, None)
+    if active or status.process_lingering:
+        return WorkerUnitActivity("RUNNING", unit_name, None)
+    return WorkerUnitActivity(
+        "ABSENT",
+        unit_name,
+        status.exit_code if status.process_started else None,
+    )
 
 
 def probe_worker_systemd_authorization(slot: WorkerSlot) -> WorkerSystemdReadiness:
