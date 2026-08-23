@@ -52,6 +52,7 @@ def test_identity_deployer_verifies_mount_and_polkit_boundaries() -> None:
     assert "a fixed child unit is active" in source
     assert "for _attempt in $(seq 1 50)" in source
     assert "POLKIT_CROSS_START=DENIED" in source
+    assert "--allow-user-interaction" not in source
     assert "pip install" not in source
     assert "conda install" not in source
 

@@ -174,18 +174,18 @@ WORKFLOW_PID=$(systemctl show --property=MainPID --value eom-workflow-runner.ser
 HWPX_PID=$(systemctl show --property=MainPID --value eom-hwpx-application-runner.service)
 pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${WORKFLOW_PID}" \
   --detail unit eom-worker-probe-01@probe_0123456789abcdef0123456789abcdef.service \
-  --detail verb start --allow-user-interaction=no
+  --detail verb start
 pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${HWPX_PID}" \
   --detail unit eom-hwpx-builder@hwpxbuild_0123456789abcdef0123456789abcdef.service \
-  --detail verb start --allow-user-interaction=no
+  --detail verb start
 if pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${WORKFLOW_PID}" \
   --detail unit eom-hwpx-builder@hwpxbuild_0123456789abcdef0123456789abcdef.service \
-  --detail verb start --allow-user-interaction=no; then
+  --detail verb start; then
   fail "workflow identity can start an HWPX unit"
 fi
 if pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${HWPX_PID}" \
   --detail unit eom-worker-01@job_0123456789abcdef0123456789abcdef.service \
-  --detail verb start --allow-user-interaction=no; then
+  --detail verb start; then
   fail "HWPX identity can start a workflow unit"
 fi
 
