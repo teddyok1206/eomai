@@ -161,6 +161,11 @@ bundle revisions made available to the worker. If finer-grained evidence is late
 bounded list of actually opened reference members can be derived from supported Codex events; it
 must not be guessed from the final answer.
 
+Curriculum hierarchy, science/source knowledge, prior Item Revisions, item block/statement/choice
+references, Graph Snapshot publication, retrieval policies, and the job-local Markdown directory
+contract are specified in
+[`EDUCATION_KNOWLEDGE_ITEM_GRAPHRAG.md`](EDUCATION_KNOWLEDGE_ITEM_GRAPHRAG.md).
+
 Workspace paths are temporary materialization locations, never identity. A historical workflow pins
 bundle revisions and hashes, not `/srv/...` paths.
 
