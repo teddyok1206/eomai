@@ -61,7 +61,7 @@
           "use",
           "source",
           "anchor_ids",
-          "relevance_score",
+          "relevance_milli",
           "answer_bearing"
         ],
         "properties": {
@@ -90,10 +90,10 @@
               "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
             }
           },
-          "relevance_score": {
-            "type": "number",
+          "relevance_milli": {
+            "type": "integer",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1000
           },
           "answer_bearing": {
             "type": "boolean"

@@ -89,7 +89,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["edge_id", "edge_type", "from_node_id", "to_node_id", "confidence", "anchor_ids"],
+        "required": ["edge_id", "edge_type", "from_node_id", "to_node_id", "confidence_milli", "anchor_ids"],
         "properties": {
           "edge_id": {
             "type": "string",
@@ -106,10 +106,10 @@
             "type": "string",
             "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"
           },
-          "confidence": {
-            "type": "number",
+          "confidence_milli": {
+            "type": "integer",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1000
           },
           "anchor_ids": {
             "type": "array",

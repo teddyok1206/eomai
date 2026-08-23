@@ -198,7 +198,7 @@ class ProposedKnowledgeEdge(FrozenModel):
     edge_type: KnowledgeEdgeType
     from_node_id: NodeId
     to_node_id: NodeId
-    confidence: float = Field(ge=0, le=1)
+    confidence_milli: int = Field(ge=0, le=1000)
     anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=32)
 
 
@@ -409,7 +409,7 @@ class EvidenceEntry(FrozenModel):
     use: Literal["GROUNDING", "REFERENCE_PATTERN", "AVOID_COPY"]
     source: KnowledgeSourceRevisionPointer
     anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=32)
-    relevance_score: float = Field(ge=0, le=1)
+    relevance_milli: int = Field(ge=0, le=1000)
     answer_bearing: bool
 
 

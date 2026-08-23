@@ -109,6 +109,10 @@ Frozen Pydantic models additionally require:
 - explicit curriculum scope for curriculum and item-structure queries;
 - unique Evidence Bundle sources per intended use and exact entry-derived counts.
 
+Confidence and relevance values use integer milli-units from 0 through 1000. EOM canonical JSON
+intentionally rejects floating-point values, so this representation remains deterministic across
+Python, PostgreSQL, JSON Schema validators, and artifact manifests.
+
 These are deterministic validation rules. Workers never expand the ontology, repair pointers,
 change capacity, publish graph state, or select credentials.
 

@@ -118,7 +118,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/knowledge/knowledge-analysis-result-v1.schema.json",
             "resources/knowledge/knowledge-analysis-result-v1.schema.json",
             "1.0",
-            "sha256:1c7d7a72d900a987eca7e9c9042b54d604d093a9516734b99f503d27272fe8d6",
+            "sha256:fc496fe1f9d8b663b33677e24cf0e2158b0f20bb815f69dfd9551a625820c3f3",
         ),
         "knowledge-graph-snapshot-manifest": CatalogSchemaResource(
             "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
@@ -136,7 +136,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/knowledge/evidence-bundle-manifest-v1.schema.json",
             "resources/knowledge/evidence-bundle-manifest-v1.schema.json",
             "1.0",
-            "sha256:1b21f9fa09e0761f1fc33fa92b86cf173ff8dfff50079a0843a191194c91433e",
+            "sha256:5a575aa08788eb5a4ec6961c214872b4e6ed103fa0c9db78edcf47b791d9539e",
         ),
     }
 )

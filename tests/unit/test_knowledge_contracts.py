@@ -12,6 +12,7 @@ from eom_catalog_contracts import (
     KnowledgeGraphSnapshotManifest,
     validate_contract,
 )
+from eom_identifiers import content_sha256
 from jsonschema import ValidationError
 from pydantic import ValidationError as PydanticValidationError
 
@@ -133,7 +134,7 @@ def _analysis_result() -> dict[str, object]:
                 "edge_type": "EXPLAINS",
                 "from_node_id": "knode_claim_density",
                 "to_node_id": "knode_concept_density",
-                "confidence": 0.95,
+                "confidence_milli": 950,
                 "anchor_ids": ["anchor_section_1"],
             }
         ],
@@ -242,7 +243,7 @@ def _evidence_manifest() -> dict[str, object]:
                 "use": "REFERENCE_PATTERN",
                 "source": source,
                 "anchor_ids": ["anchor_section_1"],
-                "relevance_score": 0.9,
+                "relevance_milli": 900,
                 "answer_bearing": True,
             }
         ],
@@ -384,3 +385,11 @@ def test_evidence_bundle_deduplicates_pointers_and_verifies_counts() -> None:
     duplicate_budget["item_revision_count"] = 2
     with pytest.raises(PydanticValidationError, match="duplicate an immutable source"):
         EvidenceBundleManifest.model_validate(duplicate)
+
+
+def test_knowledge_contracts_have_canonical_float_free_hashes() -> None:
+    result = KnowledgeAnalysisResult.model_validate(_analysis_result())
+    evidence = EvidenceBundleManifest.model_validate(_evidence_manifest())
+
+    assert content_sha256(result).startswith("sha256:")
+    assert content_sha256(evidence).startswith("sha256:")
