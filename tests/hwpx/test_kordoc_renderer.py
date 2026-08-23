@@ -827,3 +827,8 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     assert 'KordocRuntime().render(workspace, "report")' in runtime_smoke
     assert "TemporaryDirectory" in runtime_smoke
     assert "eom-kordoc-runtime-smoke-" in runtime_smoke
+    assert '"equations": 1' in runtime_smoke
+    assert '"content_tables": 1' in runtime_smoke
+    assert '"layout_tables": 1' in runtime_smoke
+    assert '"total_tables": 2' in runtime_smoke
+    assert "KORDOC_RUNTIME_SMOKE_CONTRACT_MISMATCH" in runtime_smoke

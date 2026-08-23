@@ -16,6 +16,14 @@ from eom_hwpx_builder.validation import (
 )
 
 FIXTURE = Path("/home/eom/EOM/tests/fixtures/hwpx/kordoc-runtime-smoke.md")
+EXPECTED_RESULT = {
+    "content_tables": 1,
+    "equations": 1,
+    "kordoc_version": "4.9.0",
+    "layout_tables": 1,
+    "status": "PASS",
+    "total_tables": 2,
+}
 
 
 def main() -> None:
@@ -44,19 +52,17 @@ def main() -> None:
             )
             if validation.status != "PASS":
                 raise SystemExit("KORDOC_RUNTIME_SMOKE_VALIDATION_FAILED")
-            print(
-                json.dumps(
-                    {
-                        "content_tables": counts.content_native_table_count,
-                        "equations": counts.native_equation_count,
-                        "kordoc_version": report.kordoc_version,
-                        "layout_tables": counts.layout_native_table_count,
-                        "status": "PASS",
-                        "total_tables": counts.total_native_table_count,
-                    },
-                    sort_keys=True,
-                )
-            )
+            result = {
+                "content_tables": counts.content_native_table_count,
+                "equations": counts.native_equation_count,
+                "kordoc_version": report.kordoc_version,
+                "layout_tables": counts.layout_native_table_count,
+                "status": "PASS",
+                "total_tables": counts.total_native_table_count,
+            }
+            if result != EXPECTED_RESULT:
+                raise SystemExit("KORDOC_RUNTIME_SMOKE_CONTRACT_MISMATCH")
+            print(json.dumps(result, sort_keys=True))
     finally:
         os.umask(previous_umask)
 
