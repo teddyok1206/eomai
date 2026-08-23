@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/codex-capability-snapshot/1.0",
+  "title": "EOM Codex Capability Snapshot V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "capability_snapshot_id",
+    "binding_id",
+    "codex_cli_version",
+    "source",
+    "capabilities",
+    "observed_at",
+    "valid_until",
+    "snapshot_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "codex-capability-snapshot/1.0"
+    },
+    "capability_snapshot_id": {
+      "type": "string",
+      "pattern": "^capsnap_[0-9a-f]{32}$"
+    },
+    "binding_id": {
+      "type": "string",
+      "pattern": "^authbinding_[0-9a-f]{32}$"
+    },
+    "codex_cli_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["LOCAL_OBSERVATION", "OPERATOR_ASSERTED"]
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model", "reasoning_efforts", "state"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          },
+          "reasoning_efforts": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": ["minimal", "low", "medium", "high", "xhigh"]
+            }
+          },
+          "state": {
+            "type": "string",
+            "enum": ["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]
+          }
+        }
+      }
+    },
+    "observed_at": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+    },
+    "valid_until": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+    },
+    "snapshot_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    }
+  }
+}

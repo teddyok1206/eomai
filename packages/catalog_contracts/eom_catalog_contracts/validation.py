@@ -102,6 +102,42 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:ad549c7b25c1e620e7cf54fa46cb4891f322d69f65bd5c5104bf9e50f4582ff8",
         ),
+        "knowledge-types": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-types-v1.schema.json",
+            "resources/knowledge/knowledge-types-v1.schema.json",
+            "1.0",
+            "sha256:d1d0e842b75a263470ef7403f3117a3c23f52f3c5f5f181477f0f2b422312456",
+        ),
+        "knowledge-analysis-request": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-request-v1.schema.json",
+            "resources/knowledge/knowledge-analysis-request-v1.schema.json",
+            "1.0",
+            "sha256:1e4b982fc6bd91448ce014e4b7160a5bfd5008b1985e7318e1e102e29b4ce233",
+        ),
+        "knowledge-analysis-result": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-result-v1.schema.json",
+            "resources/knowledge/knowledge-analysis-result-v1.schema.json",
+            "1.0",
+            "sha256:1c7d7a72d900a987eca7e9c9042b54d604d093a9516734b99f503d27272fe8d6",
+        ),
+        "knowledge-graph-snapshot-manifest": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
+            "resources/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
+            "1.0",
+            "sha256:daaf1dffca162018bead549399927e6429a7dac34775fb969c675207d9920f9a",
+        ),
+        "education-retrieval-request": CatalogSchemaResource(
+            "schemas/knowledge/education-retrieval-request-v1.schema.json",
+            "resources/knowledge/education-retrieval-request-v1.schema.json",
+            "1.0",
+            "sha256:92bb7b8aa224a00eb7c2eb6f95d4c94465d8ccc19e4be2de010fc0512a800043",
+        ),
+        "evidence-bundle-manifest": CatalogSchemaResource(
+            "schemas/knowledge/evidence-bundle-manifest-v1.schema.json",
+            "resources/knowledge/evidence-bundle-manifest-v1.schema.json",
+            "1.0",
+            "sha256:1b21f9fa09e0761f1fc33fa92b86cf173ff8dfff50079a0843a191194c91433e",
+        ),
     }
 )
 

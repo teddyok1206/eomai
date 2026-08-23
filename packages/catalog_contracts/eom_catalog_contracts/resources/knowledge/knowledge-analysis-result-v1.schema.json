@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-result/1.0",
+  "title": "EOM Knowledge Analysis Result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "analysis_request_id",
+    "source_revision_id",
+    "status",
+    "normalized_markdown",
+    "anchors",
+    "nodes",
+    "edges",
+    "claims",
+    "component_observations",
+    "unresolved_ambiguities",
+    "completed_at",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-analysis-result/1.0"
+    },
+    "analysis_request_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+    },
+    "source_revision_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*rev_[0-9a-f]{32}$"
+    },
+    "status": {
+      "const": "PROPOSED"
+    },
+    "normalized_markdown": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+    },
+    "anchors": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2000,
+      "items": {
+        "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sourceAnchor"
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["node_id", "node_type", "stable_key", "label", "anchor_ids"],
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "node_type": {
+            "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/nodeType"
+          },
+          "stable_key": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "anchor_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+            }
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["edge_id", "edge_type", "from_node_id", "to_node_id", "confidence", "anchor_ids"],
+        "properties": {
+          "edge_id": {
+            "type": "string",
+            "pattern": "^kedge_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "edge_type": {
+            "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/edgeType"
+          },
+          "from_node_id": {
+            "type": "string",
+            "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "to_node_id": {
+            "type": "string",
+            "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "anchor_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+            }
+          }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_id", "text", "anchor_ids"],
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "pattern": "^claim_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "anchor_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+            }
+          }
+        }
+      }
+    },
+    "component_observations": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["component_id", "kind", "anchor_id", "artifact_member"],
+        "properties": {
+          "component_id": {
+            "type": "string",
+            "pattern": "^component_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["PARAGRAPH", "TABLE", "FIGURE", "EQUATION"]
+          },
+          "anchor_id": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "artifact_member": {
+            "anyOf": [
+              {
+                "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "unresolved_ambiguities": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "description", "anchor_ids"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "anchor_ids": {
+            "type": "array",
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+            }
+          }
+        }
+      }
+    },
+    "completed_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"
+    },
+    "result_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+    }
+  }
+}

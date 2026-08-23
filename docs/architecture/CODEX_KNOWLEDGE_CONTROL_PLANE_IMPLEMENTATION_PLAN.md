@@ -1,11 +1,21 @@
 # Codex and Education Knowledge Control Plane Implementation Plan
 
-Status: Proposed execution roadmap; documentation only. This document does not authorize a
-database migration, service deployment, live Codex run, or production data import.
+Status: Active implementation roadmap. Each phase retains its own migration, deployment, live-run,
+and production-data authorization boundary.
 
 Plan baseline: `32e96263353f42e6bc857f6577604d83f8557680`
 
 Last reviewed: 2026-08-23 UTC
+
+## Implementation status
+
+| Phase | State | Evidence |
+| --- | --- | --- |
+| 0 — baseline and decisions | `COMPLETED` | [`CODEX_KNOWLEDGE_PHASE0_BASELINE.md`](CODEX_KNOWLEDGE_PHASE0_BASELINE.md), ADRs 0038/0039, V0 acceptance queries |
+| 1 — protocol-first contracts | `COMPLETED` | [`CODEX_KNOWLEDGE_PROTOCOL_COMPATIBILITY.md`](CODEX_KNOWLEDGE_PROTOCOL_COMPATIBILITY.md), 13 public contracts, two support schemas, frozen models, resource/package/negative tests |
+| 2–12 | `NOT_STARTED` | Must satisfy the preceding phase gate before state-changing work |
+
+Phase 1 added no migration, live worker execution, runtime deployment, or production-data write.
 
 ## 1. Outcome
 

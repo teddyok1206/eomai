@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/reference-bundle-manifest/1.0",
+  "title": "EOM Reference Bundle Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bundle_id",
+    "bundle_revision_id",
+    "revision_number",
+    "state",
+    "entries",
+    "content_sha256",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "reference-bundle-manifest/1.0"
+    },
+    "bundle_id": {
+      "type": "string",
+      "pattern": "^refbundle_[0-9a-f]{32}$"
+    },
+    "bundle_revision_id": {
+      "type": "string",
+      "pattern": "^refrev_[0-9a-f]{32}$"
+    },
+    "revision_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "state": {
+      "type": "string",
+      "enum": ["DRAFT", "RELEASED", "DEPRECATED"]
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reference_key",
+          "source_class",
+          "relative_path",
+          "source_logical_id",
+          "source_revision_id",
+          "rights_policy_revision_id",
+          "artifact"
+        ],
+        "properties": {
+          "reference_key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{1,127}$"
+          },
+          "source_class": {
+            "type": "string",
+            "enum": ["CURRICULUM", "TEXTBOOK", "APPROVED_ITEM", "PAST_EXAM", "INTERNAL_GUIDE"]
+          },
+          "relative_path": {
+            "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/safeRelativeMarkdownPath"
+          },
+          "source_logical_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*_[0-9a-f]{32}$"
+          },
+          "source_revision_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*rev_[0-9a-f]{32}$"
+          },
+          "rights_policy_revision_id": {
+            "type": "string",
+            "pattern": "^rightsrev_[0-9a-f]{32}$"
+          },
+          "artifact": {
+            "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/artifactPointer"
+          }
+        }
+      }
+    },
+    "content_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+    }
+  }
+}

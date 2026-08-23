@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/worker-lease-view/1.0",
+  "title": "EOM Worker Lease View V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "lease_id",
+    "capacity_policy_revision_id",
+    "pool_key",
+    "slot_key",
+    "binding_id",
+    "workflow_id",
+    "job_id",
+    "attempt",
+    "state",
+    "acquired_at",
+    "expires_at",
+    "released_at",
+    "release_reason"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "worker-lease-view/1.0"
+    },
+    "lease_id": {
+      "type": "string",
+      "pattern": "^workerlease_[0-9a-f]{32}$"
+    },
+    "capacity_policy_revision_id": {
+      "type": "string",
+      "pattern": "^capacityrev_[0-9a-f]{32}$"
+    },
+    "pool_key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+    },
+    "slot_key": {
+      "type": "string",
+      "pattern": "^slot[0-9]{2}$"
+    },
+    "binding_id": {
+      "type": "string",
+      "pattern": "^authbinding_[0-9a-f]{32}$"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[0-9a-f]{32}$"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "state": {
+      "type": "string",
+      "enum": ["ACTIVE", "RELEASED", "EXPIRED", "RECONCILING"]
+    },
+    "acquired_at": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+    },
+    "expires_at": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+    },
+    "released_at": {
+      "anyOf": [
+        {
+          "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "release_reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

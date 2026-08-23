@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/control-plane-types-v1",
+  "title": "EOM Workflow Control Plane Shared Types V1",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "safeRelativeMarkdownPath": {
+      "type": "string",
+      "pattern": "^(instructions|references)/[A-Za-z0-9._/-]+\\.md$",
+      "not": {
+        "pattern": "(?:^|/)\\.\\.?(/|$)"
+      },
+      "minLength": 5,
+      "maxLength": 512
+    },
+    "artifactPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "logical_name"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom(?:\\.assess(?:ment)?|://schemas/)[A-Za-z0-9._/@:-]{1,191}$",
+          "maxLength": 256
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$",
+          "maxLength": 128
+        },
+        "logical_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$"
+        }
+      }
+    },
+    "bundleRevisionPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bundle_id",
+        "bundle_revision_id",
+        "manifest_artifact",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "bundle_id": {
+          "type": "string",
+          "pattern": "^(?:instrbundle|refbundle)_[0-9a-f]{32}$"
+        },
+        "bundle_revision_id": {
+          "type": "string",
+          "pattern": "^(?:instrrev|refrev)_[0-9a-f]{32}$"
+        },
+        "manifest_artifact": {
+          "$ref": "#/$defs/artifactPointer"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "modelCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "reasoning_effort"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "reasoning_effort": {
+          "type": "string",
+          "enum": ["minimal", "low", "medium", "high", "xhigh"]
+        }
+      }
+    },
+    "role": {
+      "type": "string",
+      "enum": ["authoring", "image", "review", "item_management", "support"]
+    }
+  }
+}

@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-types-v1",
+  "title": "EOM Education Knowledge Shared Types V1",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "safeMemberPath": {
+      "type": "string",
+      "pattern": "^(source|normalized|projections|evidence)/[A-Za-z0-9._()가-힣/-]+$",
+      "not": {
+        "pattern": "(?:^|/)\\.\\.?(/|$)"
+      },
+      "minLength": 3,
+      "maxLength": 512
+    },
+    "artifactMemberPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "logical_name",
+        "member_path"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom(?:\\.assess(?:ment)?|://schemas/)[A-Za-z0-9._/@:-]{1,191}$",
+          "maxLength": 256
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$",
+          "maxLength": 128
+        },
+        "logical_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$"
+        },
+        "member_path": {
+          "$ref": "#/$defs/safeMemberPath"
+        }
+      }
+    },
+    "sourceRevisionPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_class",
+        "logical_id",
+        "revision_id",
+        "lifecycle_state",
+        "artifact_member"
+      ],
+      "properties": {
+        "source_class": {
+          "type": "string",
+          "enum": ["CURRICULUM", "TEXTBOOK", "APPROVED_ITEM", "PAST_EXAM", "INTERNAL_GUIDE"]
+        },
+        "logical_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*_[0-9a-f]{32}$"
+        },
+        "revision_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*rev_[0-9a-f]{32}$"
+        },
+        "lifecycle_state": {
+          "const": "APPROVED"
+        },
+        "artifact_member": {
+          "$ref": "#/$defs/artifactMemberPointer"
+        }
+      }
+    },
+    "graphSnapshotPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "graph_id",
+        "graph_snapshot_revision_id",
+        "manifest_artifact",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "graph_id": {
+          "type": "string",
+          "pattern": "^graph_[0-9a-f]{32}$"
+        },
+        "graph_snapshot_revision_id": {
+          "type": "string",
+          "pattern": "^graphrev_[0-9a-f]{32}$"
+        },
+        "manifest_artifact": {
+          "$ref": "#/$defs/artifactMemberPointer"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "sourceAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "anchor_id",
+        "source_revision_id",
+        "artifact_revision_id",
+        "member_path",
+        "anchor_kind",
+        "locator",
+        "excerpt_sha256"
+      ],
+      "properties": {
+        "anchor_id": {
+          "type": "string",
+          "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*rev_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "$ref": "#/$defs/safeMemberPath"
+        },
+        "anchor_kind": {
+          "type": "string",
+          "enum": ["PAGE", "SECTION", "PARAGRAPH", "TABLE", "FIGURE", "EQUATION", "ITEM_ELEMENT"]
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "excerpt_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "nodeType": {
+      "type": "string",
+      "enum": [
+        "CURRICULUM_FRAMEWORK_REVISION",
+        "CURRICULUM_UNIT",
+        "ACHIEVEMENT_STANDARD",
+        "CONCEPT",
+        "CLAIM",
+        "PROCESS",
+        "OBSERVABLE_PROPERTY",
+        "FORMULA",
+        "DATA_REPRESENTATION",
+        "DOCUMENT_REVISION",
+        "DOCUMENT_SECTION",
+        "FIGURE",
+        "TABLE",
+        "EQUATION",
+        "ITEM_REVISION",
+        "ITEM_ELEMENT",
+        "ASSESSMENT_PATTERN"
+      ]
+    },
+    "edgeType": {
+      "type": "string",
+      "enum": [
+        "CONTAINS_CURRICULUM_UNIT",
+        "PRECEDES_CURRICULUM_UNIT",
+        "DEFINES_ACHIEVEMENT_STANDARD",
+        "DEFINES",
+        "EXPLAINS",
+        "IS_A",
+        "PART_OF",
+        "CAUSES",
+        "AFFECTS",
+        "DEPENDS_ON",
+        "CONTRASTS_WITH",
+        "REQUIRES_PREREQUISITE",
+        "SUPPORTS_CLAIM",
+        "CONTRADICTS_CLAIM",
+        "ILLUSTRATES",
+        "TABULATES",
+        "EXPRESSES_AS_EQUATION",
+        "DERIVED_FROM",
+        "CITES_SOURCE",
+        "ALIGNS_WITH_CURRICULUM",
+        "HAS_ITEM_ELEMENT",
+        "ASSESSES_CONCEPT",
+        "REQUIRES_CONCEPT",
+        "USES_SOURCE_EVIDENCE",
+        "REPRESENTS_CONCEPT",
+        "SUPPORTS_STATEMENT",
+        "CONTRADICTS_STATEMENT",
+        "PART_OF_INTERACTION",
+        "USES_ASSESSMENT_PATTERN",
+        "SIMILAR_TO_ITEM"
+      ]
+    }
+  }
+}

@@ -7,6 +7,7 @@ from importlib.resources import files
 from pathlib import Path
 
 import pytest
+from eom_workflow.control_schemas import control_schema_inventory, load_control_schema
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
     RESULT_SCHEMA_FILES,
@@ -36,14 +37,9 @@ def test_workflow_schema_resources_match_canonical_sources() -> None:
         *(f"roles/{name}" for name in mapped_names),
     } <= EXPECTED_RESOURCES
     actual = {
-        f"roles/{resource.name}"
-        for resource in RESOURCE_ROOT.joinpath("roles").iterdir()
-        if resource.name.endswith(".schema.json")
+        path.relative_to(Path(str(RESOURCE_ROOT))).as_posix()
+        for path in Path(str(RESOURCE_ROOT)).rglob("*.schema.json")
     }
-    if RESOURCE_ROOT.joinpath("workflow-definition.schema.json").is_file():
-        actual.add("workflow-definition.schema.json")
-    if RESOURCE_ROOT.joinpath("knowledge-item-brief-v1.schema.json").is_file():
-        actual.add("knowledge-item-brief-v1.schema.json")
     assert actual == EXPECTED_RESOURCES
     for logical_name in sorted(EXPECTED_RESOURCES):
         assert (
@@ -59,6 +55,8 @@ def test_workflow_schemas_load_from_package_resources() -> None:
         assert load_role_input_schema(role)["$id"].endswith("-input.schema.json")
     for schema_id in RESULT_SCHEMA_FILES:
         assert "-result" in load_role_result_schema(schema_id)["$id"]
+    for name, _ in control_schema_inventory():
+        assert isinstance(load_control_schema(name), dict)
 
 
 def test_missing_workflow_schema_is_a_typed_resource_error(tmp_path: Path) -> None:
@@ -157,6 +155,7 @@ definition_path = Path(sys.argv[3])
 sys.path.insert(0, str(installed_root))
 
 from eom_workflow.compiler import compile_definition
+from eom_workflow.control_schemas import control_schema_inventory, load_control_schema
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
     RESULT_SCHEMA_FILES,
@@ -174,6 +173,8 @@ for role in INPUT_SCHEMA_FILES:
     load_role_input_schema(role)
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
+for name, _ in control_schema_inventory():
+    load_control_schema(name)
 compiled = compile_definition(
     definition_path,
     {"authoring", "image", "review", "item_management"},

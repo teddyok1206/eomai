@@ -61,6 +61,7 @@ eom_protocol = ["schemas/*.json"]
 eom_hwpx_contracts = ["schemas/*.json"]
 eom_workflow = [
   "resources/*.json",
+  "resources/control-plane/*.json",
   "resources/roles/*.json",
 ]
 eom_catalog_contracts = [
@@ -68,6 +69,7 @@ eom_catalog_contracts = [
   "resources/content-intake/*.json",
   "resources/content-pack/*.json",
   "resources/item-registry/*.json",
+  "resources/knowledge/*.json",
 ]
 
 [tool.pytest.ini_options]

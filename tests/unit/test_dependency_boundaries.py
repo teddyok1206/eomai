@@ -37,6 +37,7 @@ def test_domain_and_platform_packages_do_not_import_catalog_infrastructure() -> 
     for relative_root in (
         "packages/protocol",
         "packages/workflow",
+        "packages/catalog_contracts",
         "services/orchestrator",
     ):
         _assert_prefixes_absent(_imports(REPOSITORY_ROOT / relative_root), forbidden)
