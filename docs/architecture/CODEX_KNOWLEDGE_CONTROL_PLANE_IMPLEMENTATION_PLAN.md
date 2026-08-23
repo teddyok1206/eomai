@@ -16,8 +16,9 @@ Last reviewed: 2026-08-23 UTC
 | 2 — preset and bundle persistence | `SOURCE_COMPLETE` | [`CODEX_CONTROL_PLANE_PERSISTENCE_DESIGN.md`](CODEX_CONTROL_PLANE_PERSISTENCE_DESIGN.md), additive migration 0009, immutable revision/pointer/plan records, deterministic lease transactions, disposable PostgreSQL migration/concurrency proof |
 | 3 — execution resolution and materialization | `SOURCE_COMPLETE` | [`CODEX_EXECUTION_RESOLUTION_AND_MATERIALIZATION.md`](CODEX_EXECUTION_RESOLUTION_AND_MATERIALIZATION.md), deterministic released-preset resolver, authorized hash-checked Markdown materializer, job-local `AGENTS.md`, exact Codex model/effort invocation |
 | 4 — auth, capability, and capacity | `SOURCE_COMPLETE` | [`CODEX_AUTH_CAPABILITY_CAPACITY_CONTROLLER.md`](CODEX_AUTH_CAPABILITY_CAPACITY_CONTROLLER.md), exact-identity non-generating probe, reviewed CLI policy, deterministic admission/reconciliation, disposable PostgreSQL concurrency proof |
-| 5 — control-plane MVP and GUI | `SOURCE_COMPLETE` | [`CODEX_CONTROL_PLANE_MVP.md`](../operations/CODEX_CONTROL_PLANE_MVP.md), schema-first command/evaluation contracts, immutable preset lifecycle, guarded bootstrap, ADMIN/EDITOR surfaces, migration 0010 and disposable PostgreSQL proof |
-| 6–12 | `NOT_STARTED` | Must satisfy the preceding phase gate before state-changing work |
+| 5 — control-plane MVP and GUI | `DEPLOYED_OBSERVE_PENDING` | [`CODEX_CONTROL_PLANE_MVP.md`](../operations/CODEX_CONTROL_PLANE_MVP.md), migration 0010, released `standard-item` preset, installed runner/API/GUI; five non-generating account observations await fresh ADMIN authentication |
+| 6 — origin and product/usage decisions | `DESIGN_COMPLETE` | [`ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md`](ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md), [`PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md`](PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md), ADRs 0038/0039, eight required scenarios |
+| 7–12 | `NOT_STARTED` | Must satisfy each phase's separate protocol, migration, deployment, and live-run gate |
 
 Phase 1 added no migration, live worker execution, runtime deployment, or production-data write.
 Phase 2 source work adds an unapplied additive migration and source behavior only; it performed no
@@ -29,10 +30,10 @@ Phase 4 source work adds fixed authentication-probe units and deployable applica
 performed no credential read, live Codex execution, production migration, unit installation,
 service restart, or production-data write. The three-worker host/service resource benchmark and
 actual-identity health smoke remain controlled Phase 5 deployment gates.
-Phase 5 source work is migration- and deployment-ready after guarded disposable PostgreSQL,
-non-live application/GUI, static, schema, security, and release gates. Production rollout and the
-separately authorized live one-shot remain distinct evidence boundaries; source completion does
-not imply either occurred.
+Phase 5 source and deployment gates passed. The separately fresh-authenticated, non-generating
+five-account observation and any live one-shot remain distinct evidence boundaries. Phase 6 fixes
+domain ownership and exact field/lifecycle decisions only; it adds no schema resource, migration,
+production data, graph publication, or worker invocation.
 
 ## 1. Outcome
 
@@ -398,6 +399,16 @@ history. It never copies credentials or rewinds protocol rows.
 
 This phase completes the focused designs required by Graph Model V0 before adding database tables.
 
+Design evidence:
+
+- [`ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md`](ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md) fixes reviewed
+  Organization/Occurrence revision fields, alias resolution, `ItemOriginProfile`, rights and
+  derivation pointers, intake states, indexes, transactions, and failure rules.
+- [`PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md`](PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md) keeps
+  Deliverable as Product, adds separate Form/Assembly/Publication identities, assigns ordered
+  placement authority to Assembly, actual-use authority to Usage Record, and limits Distribution
+  Event to aggregate evidence.
+
 ### Required domain decisions
 
 - versioned Organization identities and aliases;
@@ -425,6 +436,9 @@ This phase completes the focused designs required by Graph Model V0 before addin
 One authoritative domain rule and ownership boundary exists for every canonical placement. Graph
 edges, Assembly manifests, and Usage Records cannot all claim independent authority for the same
 fact. Per-student data remains outside the general graph.
+
+Result: `DESIGN_COMPLETE`. Additive JSON Schema, frozen-model, migration, and runtime work remains
+subject to the later protocol/persistence gates and is not implied by this status.
 
 ## 12. Phase 7 — Knowledge Analysis Protocol and Intake Workflow
 

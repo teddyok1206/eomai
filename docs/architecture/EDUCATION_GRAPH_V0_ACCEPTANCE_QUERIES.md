@@ -1,7 +1,7 @@
 # Education Graph V0 Acceptance Queries and Legacy Mapping Scenarios
 
-Status: Accepted Phase 0 acceptance design; fixtures are synthetic and schema implementation is
-deferred to Phase 1.
+Status: Accepted Phase 0 acceptance design with Phase 6 ownership decisions. Fixtures remain
+synthetic; persistence and graph-query implementation are deferred to their roadmap phases.
 
 Last reviewed: 2026-08-23 UTC
 
@@ -12,6 +12,11 @@ an ontology. Each result must return canonical supporting pointers, not only pro
 scores.
 
 ## 2. Fixture Families
+
+The exact origin/occurrence fields and Product/Form/Assembly/Publication/Usage authority used by
+these fixtures are defined in
+[`ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md`](ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md) and
+[`PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md`](PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md).
 
 Future test fixtures use synthetic identifiers and small Markdown/JSON members. They represent:
 

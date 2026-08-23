@@ -986,33 +986,30 @@ changing their ownership boundary.
 execution presets, auth health, and bounded worker leases. This document supplies the knowledge
 corpus, graph snapshot, job-local Markdown, and Evidence Bundle boundary used by those presets.
 
-## 22. Open Decisions Before a Complete Graph Design
+## 22. Phase 6 Decisions and Remaining Measured Policies
 
-Graph Model V0 intentionally leaves the following decisions unresolved rather than presenting a
-false 100% ontology:
+Phase 6 resolves the previously open canonical ownership and field decisions:
 
-1. ADR 0038 selects logical Organization and Assessment Occurrence entities with immutable
-   revisions; their exact fields, aliases, lifecycle, and intake policy remain to be defined;
-2. the exact `ItemOriginProfile` JSON Schema, controlled values, rights model, and which fields are
-   mandatory for each intake class;
-3. ADR 0038 makes an external examination occurrence separate from an EOM Form/Deliverable while
-   allowing a typed link between them; the exact link contract remains open;
-4. ADR 0039 keeps existing Deliverable as Product and adds Form identities/revisions beneath Product
-   Revisions; exact edition/variant/region fields and compatibility migration remain open;
-5. ADR 0039 assigns ordered canonical placement to Assembly Revisions, rendered delivery to
-   Publication Revisions, and actual-use evidence to fulfilled Usage Records; exact schemas remain;
-6. how corrections, withdrawn questions, alternate forms, reused logical Items, and derived Items
-   appear in historical usage queries;
-7. the Distribution Event aggregate and whether cohort/channel-level history is sufficient before
-   any privacy-sensitive learner-record integration;
-8. the reviewed legacy Excel mapping, reconciliation, ambiguity, and operator approval workflow;
-9. which graph filters and summaries are safe for authoring, reviewers, administrators, and future
-   student-facing consumers;
-10. measured query workload and scale evidence needed before choosing PostgreSQL projection,
-    vector indexing, or a dedicated graph adapter.
+- [`ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md`](ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md) defines Organization
+  and Assessment Occurrence revisions, fail-closed alias intake, `ItemOriginProfile` controlled
+  dimensions, derivation/provenance/rights pointers, and correction behavior.
+- [`PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md`](PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md) keeps
+  Deliverable as Product; defines Form, Assembly, Publication, Usage V1, aggregate Distribution,
+  legacy mapping, compatibility, transaction, and idempotency boundaries.
+- [`EDUCATION_GRAPH_V0_ACCEPTANCE_QUERIES.md`](EDUCATION_GRAPH_V0_ACCEPTANCE_QUERIES.md) fixes the
+  first three representative queries and synthetic scenario families.
 
-The first three representative queries are now fixed by
-[`EDUCATION_GRAPH_V0_ACCEPTANCE_QUERIES.md`](EDUCATION_GRAPH_V0_ACCEPTANCE_QUERIES.md). The next
-design milestone must define exact schemas and use redacted representative scale/legacy samples.
-Until then, this document is a directionally complete integration map and an explicit set of
-invariants, not authorization for schema or runtime changes.
+The decisions deliberately do not claim that JSON Schema, tables, imports, graph publication, or
+query execution already exist. Those are additive implementation work in later phases.
+
+The remaining choices require runtime policy or measurements rather than more entity invention:
+
+1. graph projection fields visible to authoring, reviewer, administrator, and future student-safe
+   callers;
+2. small-cohort suppression and retention policy for aggregate Distribution Events;
+3. representative corpus/ledger scale and Q1–Q3 latency/query-plan thresholds;
+4. human-reviewed retrieval gold sets and acceptable provenance precision/recall;
+5. evidence required before adding vector indexes or a dedicated graph adapter.
+
+Until those measurements and later protocol/persistence gates pass, this document is an integration
+map and invariant set, not authorization for production schema or runtime changes.
