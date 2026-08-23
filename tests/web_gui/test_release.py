@@ -107,3 +107,12 @@ def test_installer_normalizes_metadata_for_the_service_identity() -> None:
     assert "web_gui_service_identity_metadata=PASS" in installer
     assert "chmod -R" not in installer
     assert "chown -R" not in installer
+
+
+def test_smoke_waits_for_bounded_service_readiness() -> None:
+    smoke = (ROOT / "scripts/web_gui/smoke_test.sh").read_text(encoding="utf-8")
+
+    assert "for attempt in {1..30}" in smoke
+    assert "sleep 0.5" in smoke
+    assert "within 15 seconds" in smoke
+    assert "while true" not in smoke
