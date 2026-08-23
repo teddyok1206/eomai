@@ -5,7 +5,7 @@ builder release. Application API V0 acceptance and its release tag do not depend
 
 ## Fixed runtime contract
 
-- Node.js: major version 20 from `/srv/eom/conda/envs/eom-hwpx`
+- Node.js: `22.23.2` from `/srv/eom/conda/envs/eom-hwpx`
 - Kordoc: `4.9.0`, installed from the committed npm lock with optional dependencies omitted
 - Runtime root: `/srv/eom/conda/envs/eom-hwpx/share/eom-kordoc`
 - Builder identity: `eom-hwpx` in the existing transient systemd sandbox
@@ -52,7 +52,7 @@ render a document and do not access NAS.
 /srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx doctor
 ```
 
-Expected capability fields are `status=READY`, `node_major=20`, `kordoc_version=4.9.0`, and
+Expected capability fields are `status=READY`, `node_major=22`, `kordoc_version=4.9.0`, and
 `offline_required=true`. Any missing or mismatched dependency fails closed.
 
 ## Input and output acceptance

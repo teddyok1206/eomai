@@ -18,9 +18,9 @@ from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 
 KORDOC_VERSION: Final[Literal["4.9.0"]] = "4.9.0"
 KORDOC_PACKAGE_LOCK_SHA256: Final = (
-    "a2f42396bf7297e548eab00109e6d25aa35c488dffc1c0eda1c7cb150ae297bd"
+    "5f6b0736309c5abcba72f47c914379577bed7f8a8f5ee43d31919641bb78d9f5"
 )
-MINIMUM_NODE_MAJOR = 20
+SUPPORTED_NODE_MAJOR: Final = 22
 MAX_BRIDGE_OUTPUT_BYTES = 64 * 1024
 
 
@@ -43,7 +43,7 @@ class KordocCapability(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     status: Literal["READY"]
-    node_major: int = Field(ge=MINIMUM_NODE_MAJOR)
+    node_major: Literal[22]
     kordoc_version: Literal["4.9.0"]
     offline_required: Literal[True]
 
@@ -177,7 +177,7 @@ class KordocRuntime:
                 HwpxErrorCode.HWPX_KORDOC_DEPENDENCY_MISMATCH,
                 "Kordoc capability response is invalid",
             ) from exc
-        if capability.node_major < MINIMUM_NODE_MAJOR:
+        if capability.node_major != SUPPORTED_NODE_MAJOR:
             raise HwpxError(
                 HwpxErrorCode.HWPX_KORDOC_DEPENDENCY_MISMATCH,
                 "Kordoc requires the pinned Node capability",

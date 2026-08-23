@@ -88,7 +88,7 @@ socket or claiming a build and fails closed if it differs.
 Build failures expose only stable codes and sanitized detail. Machine validation requires a valid
 HWPX ZIP, Kordoc validation success, deterministic output SHA-256, and exact native equation/table
 counts. When a request requires a native structure, zero is never accepted. Capability is `READY`
-only after the fixed installed builder reports Node 20+, Kordoc 4.9.0, offline mode, and manager
+only after the fixed installed builder reports Node 22, Kordoc 4.9.0, offline mode, and manager
 registration. The probe also verifies the root-owned fixed builder and runner units, their closed
 execution directives, and the active/enabled manager runner without starting a build. The builder
 checks the reviewed `package-lock.json` SHA-256 and installed Kordoc package identity before Node is

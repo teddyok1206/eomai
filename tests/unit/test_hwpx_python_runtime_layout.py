@@ -251,7 +251,7 @@ def _shared_library_fixture(
     cache_directory.mkdir()
     environment_libraries: list[Path] = []
     cache_libraries: list[Path] = []
-    for name in ("libnode.so.115", "libuv.so.1.0.0"):
+    for name in ("libnode.so.127", "libuv.so.1.0.0"):
         cache_library = cache_directory / name
         cache_library.write_bytes((name + "\n").encode())
         cache_library.chmod(0o700)
@@ -338,10 +338,10 @@ def test_shared_library_symlink_must_resolve_inside_runtime_boundary(tmp_path: P
     boundary = tmp_path / "eom-hwpx"
     library_directory = boundary / "lib"
     library_directory.mkdir(parents=True)
-    target = library_directory / "libnode.so.115.0"
+    target = library_directory / "libnode.so.127.0"
     target.write_bytes(b"node-library\n")
     target.chmod(0o700)
-    library = library_directory / "libnode.so.115"
+    library = library_directory / "libnode.so.127"
     library.symlink_to(target.name)
     normalize_runtime_libraries(
         (library,),
@@ -374,7 +374,7 @@ def test_shared_library_special_file_fails_closed(tmp_path: Path) -> None:
     boundary = tmp_path / "eom-hwpx"
     library_directory = boundary / "lib"
     library_directory.mkdir(parents=True)
-    library = library_directory / "libnode.so.115"
+    library = library_directory / "libnode.so.127"
     os.mkfifo(library)
     with pytest.raises(PythonRuntimeLayoutError, match="HWPX_RUNTIME_FILE_UNSAFE"):
         normalize_runtime_libraries(

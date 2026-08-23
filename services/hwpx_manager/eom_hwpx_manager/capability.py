@@ -128,7 +128,7 @@ class HwpxCapabilityService:
             or value.get("kordoc_version") != "4.9.0"
             or value.get("offline_required") is not True
             or not isinstance(value.get("node_major"), int)
-            or value["node_major"] < 20
+            or value["node_major"] != 22
         ):
             return self._result("DEGRADED", "HWPX_CAPABILITY_INTEGRITY_MISMATCH")
         if not self.manager_registered:

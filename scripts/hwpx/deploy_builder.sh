@@ -124,7 +124,7 @@ print("KORDOC_RUNTIME_LAYOUT=PASS")
 PY
   "$PYTHON" -m eom_hwpx_builder doctor >/dev/null
   test -x "$NODE"
-  test "$($NODE -p 'Number(process.versions.node.split(".")[0]) >= 20')" = true
+  test "$($NODE -p 'Number(process.versions.node.split(".")[0]) === 22')" = true
   test -f "$KORDOC_TARGET/node_modules/kordoc/LICENSE"
   test -f "$KORDOC_TARGET/node_modules/kordoc/NOTICE"
   test -d "$KORDOC_TARGET/node_modules/kordoc/THIRD_PARTY"
@@ -172,7 +172,7 @@ WHEEL_DIR="$BUILD_ROOT/wheels"
 mkdir -p "$WHEEL_DIR"
 test -x "$NODE"
 test -x "$NPM"
-test "$($NODE -p 'Number(process.versions.node.split(".")[0]) >= 20')" = true
+test "$($NODE -p 'Number(process.versions.node.split(".")[0]) === 22')" = true
 RUNTIME_BUILD="$BUILD_ROOT/kordoc-runtime"
 if [[ -d "$RUNTIME_BUILD" ]]; then
   find "$RUNTIME_BUILD" -depth -type f -delete

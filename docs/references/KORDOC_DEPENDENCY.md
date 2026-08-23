@@ -7,7 +7,7 @@ EOM uses Kordoc only in the isolated HWPX renderer profile `kordoc-markdown-v1`.
 - pinned version: `4.9.0`
 - npm integrity: `sha512-MPgHDYjuePA1p0yei0Sx8obWdbrGYc5tzMWposRVa9P9fWZ8yW0sNVh0YjffPbmZdi7xHoQJn60iTLVG+SI2Iw==`
 - license: MIT
-- required runtime: Node.js 20
+- qualified runtime: Node.js 22.23.2
 - install policy: `npm ci --omit=optional --ignore-scripts`
 - runtime policy: `KORDOC_OFFLINE=1`, private network, fixed workspace root
 
@@ -19,6 +19,7 @@ The installed npm distribution includes upstream `LICENSE`, `NOTICE`, and `THIRD
 Release verification requires those files. Optional OCR, PDF rasterization, and browser components
 are deliberately omitted because the EOM renderer accepts bounded Markdown and emits HWPX only.
 
-Kordoc's direct package metadata currently declares Node.js 18 support, but a pinned transitive
-dependency requires Node.js 20. EOM therefore enforces Node.js 20 rather than relying on the weaker
-top-level declaration.
+Kordoc's package metadata accepts older Node versions, but Node 20 is end-of-life. EOM qualifies
+and enforces the exact Node 22 LTS line used by the isolated Conda environment. The dependency is
+resolved as `conda-forge::nodejs=22.23.2` because the configured defaults channel does not publish a
+Node 22 build; no other environment package is moved to conda-forge by this decision.

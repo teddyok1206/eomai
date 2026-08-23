@@ -41,7 +41,7 @@ def test_capability_ready_requires_fixed_version_offline_and_manager(tmp_path: P
     binary = tmp_path / "eom-hwpx"
     binary.write_text(
         "#!/bin/sh\nprintf '%s\\n' "
-        '\'{"status":"READY","node_major":20,"kordoc_version":"4.9.0",'
+        '\'{"status":"READY","node_major":22,"kordoc_version":"4.9.0",'
         '"offline_required":true}\'\n',
         encoding="utf-8",
     )
@@ -75,6 +75,22 @@ def test_capability_mismatch_is_degraded_and_sanitized(tmp_path: Path) -> None:
     value = HwpxCapabilityService(HwpxSettings(builder_binary=binary)).inspect()
     assert value.state == "DEGRADED"
     assert "SECRET" not in value.detail_code
+
+
+def test_capability_rejects_end_of_life_node_20(tmp_path: Path) -> None:
+    binary = tmp_path / "eom-hwpx"
+    binary.write_text(
+        "#!/bin/sh\nprintf '%s\\n' "
+        '\'{"status":"READY","node_major":20,"kordoc_version":"4.9.0",'
+        '"offline_required":true}\'\n',
+        encoding="utf-8",
+    )
+    binary.chmod(0o755)
+
+    value = HwpxCapabilityService(HwpxSettings(builder_binary=binary)).inspect()
+
+    assert value.state == "DEGRADED"
+    assert value.detail_code == "HWPX_CAPABILITY_INTEGRITY_MISMATCH"
 
 
 def test_capability_rejects_symlink_and_oversized_response(tmp_path: Path) -> None:

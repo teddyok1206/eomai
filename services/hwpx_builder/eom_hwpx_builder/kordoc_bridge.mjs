@@ -25,7 +25,7 @@ function fail() {
 
 async function loadKordoc() {
   const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10)
-  if (!Number.isInteger(nodeMajor) || nodeMajor < 20) throw new Error("node capability mismatch")
+  if (!Number.isInteger(nodeMajor) || nodeMajor !== 22) throw new Error("node capability mismatch")
   const runtimeRoot = process.env.EOM_KORDOC_RUNTIME
   if (!runtimeRoot || !path.isAbsolute(runtimeRoot)) throw new Error("runtime unavailable")
   const root = await realpath(runtimeRoot)

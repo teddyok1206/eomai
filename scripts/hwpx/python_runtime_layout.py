@@ -21,16 +21,16 @@ REGULAR_FILE_MODE = 0o644
 CONSOLE_SCRIPT_MODE = 0o755
 SHARED_LIBRARY_MODE = 0o755
 NODE_RUNTIME_LIBRARY_NAMES: Final = (
-    "libnode.so.115",
+    "libnode.so.127",
     "libz.so.1",
     "libuv.so.1",
     "libcrypto.so.3",
     "libssl.so.3",
-    "libicui18n.so.73",
-    "libicuuc.so.73",
+    "libicui18n.so.78",
+    "libicuuc.so.78",
     "libstdc++.so.6",
     "libgcc_s.so.1",
-    "libicudata.so.73",
+    "libicudata.so.78",
 )
 
 

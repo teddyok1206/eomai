@@ -61,7 +61,7 @@ those contracts and existing orchestrator interfaces. The builder is an infrastr
 Kordoc runs under the existing `eom-hwpx` systemd sandbox with private networking, no NAS, no source
 checkout, no worker homes, no Docker socket, and only its workspace writable.
 
-The runtime pins Node.js 20 and `kordoc==4.9.0`. The npm lock is installed with optional OCR/PDF
+The runtime pins Node.js 22.23.2 and `kordoc==4.9.0`. The npm lock is installed with optional OCR/PDF
 dependencies omitted. `KORDOC_OFFLINE=1` and `KORDOC_ROOT=<workspace>` are mandatory. There is no
 `npx`, runtime package download, arbitrary command, or caller-selected executable/module/path.
 Kordoc is MIT licensed; its installed package retains `LICENSE`, `NOTICE`, and `THIRD_PARTY` files.

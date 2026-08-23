@@ -626,7 +626,7 @@ def test_runtime_uses_fixed_node_bridge_and_sanitized_environment(
         return subprocess.CompletedProcess(
             argv,
             0,
-            stdout=b'{"status":"READY","node_major":20,"kordoc_version":"4.9.0","offline_required":true}\n',
+            stdout=b'{"status":"READY","node_major":22,"kordoc_version":"4.9.0","offline_required":true}\n',
             stderr=b"",
         )
 
@@ -658,6 +658,41 @@ def test_runtime_fails_closed_without_node_and_does_not_expose_details(tmp_path:
         runtime.capabilities()
     assert caught.value.code == HwpxErrorCode.HWPX_KORDOC_RUNTIME_UNAVAILABLE
     assert "missing-node" not in str(caught.value)
+
+
+def test_runtime_rejects_end_of_life_node_20(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    node = tmp_path / "node"
+    node.write_text("fixed", encoding="utf-8")
+    node.chmod(0o700)
+    runtime_root = tmp_path / "runtime"
+    (runtime_root / "node_modules/kordoc").mkdir(parents=True)
+    (runtime_root / "package.json").write_text("{}", encoding="utf-8")
+    lock_source = (
+        Path(__file__).resolve().parents[2]
+        / "services/hwpx_builder/kordoc_runtime/package-lock.json"
+    )
+    (runtime_root / "package-lock.json").write_bytes(lock_source.read_bytes())
+    (runtime_root / "node_modules/kordoc/package.json").write_text(
+        '{"name":"kordoc","version":"4.9.0"}\n', encoding="utf-8"
+    )
+
+    monkeypatch.setattr(
+        "eom_hwpx_builder.kordoc_runtime.subprocess.run",
+        lambda argv, **kwargs: subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=b'{"status":"READY","node_major":20,"kordoc_version":"4.9.0","offline_required":true}\n',
+            stderr=b"",
+        ),
+    )
+
+    with pytest.raises(HwpxError) as caught:
+        KordocRuntime(
+            KordocRuntimeSettings(node_binary=node, runtime_root=runtime_root, home=tmp_path)
+        ).capabilities()
+    assert caught.value.code == HwpxErrorCode.HWPX_KORDOC_DEPENDENCY_MISMATCH
 
 
 def test_runtime_fails_closed_when_pinned_lock_integrity_changes(
@@ -705,7 +740,8 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     layout_tree = ast.parse(layout_helper)
     bridge = (root / "services/hwpx_builder/eom_hwpx_builder/kordoc_bridge.mjs").read_text()
     package_config = (root / "services/hwpx_builder/pyproject.toml").read_text()
-    assert "nodejs=20" in environment
+    runtime_smoke = (root / "scripts/hwpx/verify_kordoc_runtime.py").read_text()
+    assert "conda-forge::nodejs=22.23.2" in environment
     assert "ci --omit=optional --ignore-scripts" in deployment
     assert '"$NODE" "$NPM" ci' in deployment
     assert '\n"$NPM" ci' not in deployment
@@ -780,7 +816,7 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     assert "st_nlink" in layout_helper
     assert "os.replace" in layout_helper
     assert "NODE_RUNTIME_LIBRARY_NAMES" in layout_helper
-    assert '"libnode.so.115"' in layout_helper
+    assert '"libnode.so.127"' in layout_helper
     assert '"libuv.so.1"' in layout_helper
     assert "eom_hwpx_builder/kordoc_bridge.mjs" in deployment
     assert 'KORDOC_OFFLINE !== "1"' in bridge
@@ -788,3 +824,6 @@ def test_release_wiring_pins_node_kordoc_and_fixed_offline_bridge() -> None:
     assert "child_process" not in bridge
     assert "eval(" not in bridge
     assert "*.mjs" in package_config
+    assert 'KordocRuntime().render(workspace, "report")' in runtime_smoke
+    assert "TemporaryDirectory" in runtime_smoke
+    assert "eom-kordoc-runtime-smoke-" in runtime_smoke

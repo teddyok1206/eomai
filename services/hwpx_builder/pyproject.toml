@@ -9,8 +9,8 @@ description = "Isolated reference-template-first HWPX POC builder"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "eom-hwpx-contracts==0.1.0",
-  "lxml==6.0.0",
-  "Pillow==11.3.0",
+  "lxml==6.1.2",
+  "Pillow==12.3.0",
   "pydantic==2.11.7",
   "typer==0.16.0",
 ]
