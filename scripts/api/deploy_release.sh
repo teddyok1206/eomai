@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPOSITORY_ROOT="/home/eom/EOM"
-EXPECTED_BRANCHES=("feat/application-api-v0" "feat/hwpx-application-api-v0")
+EXPECTED_BRANCHES=("main" "feat/application-api-v0" "feat/hwpx-application-api-v0")
 API_PYTHON="/srv/eom/conda/envs/eom-api/bin/python"
 API_PIP="${API_PYTHON} -m pip"
 SERVICE="eom-api.service"

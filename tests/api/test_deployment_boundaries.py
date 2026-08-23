@@ -66,12 +66,26 @@ def test_systemd_manager_reads_secret_and_runtime_reads_service_config() -> None
 
 
 def test_deploy_release_uses_only_noninteractive_sudo() -> None:
-    commands = _shell_commands(_source("scripts/api/deploy_release.sh"))
+    source = _source("scripts/api/deploy_release.sh")
+    commands = _shell_commands(source)
     sudo_commands = [command for command in commands if re.search(r"(^|[;&|]\s*)sudo\s", command)]
 
     assert sudo_commands
     assert all(re.search(r"(^|[;&|]\s*)sudo\s+-n(?:\s|$)", command) for command in sudo_commands)
     assert not any("sudo -v" in command for command in commands)
+    assert 'EXPECTED_BRANCHES=("main"' in source
+
+
+def test_all_release_builders_accept_reviewed_main_commits() -> None:
+    for relative in (
+        "scripts/api/deploy_release.sh",
+        "scripts/web_gui/build_release.sh",
+        "scripts/observe/deploy_release.sh",
+    ):
+        source = _source(relative)
+        assert 'EXPECTED_BRANCHES=("main"' in source
+        assert "status --porcelain" in source
+        assert "rev-parse HEAD" in source
 
 
 def test_privileged_metadata_verifier_is_root_only_and_secret_safe() -> None:

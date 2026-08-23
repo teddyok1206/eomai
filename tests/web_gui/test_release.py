@@ -68,6 +68,7 @@ def test_release_scripts_have_fixed_targets_and_no_recursive_permission_changes(
             "scripts/web_gui/smoke_test.sh",
         )
     )
+    assert 'EXPECTED_BRANCHES=("main"' in scripts
     assert "feat/web-gui-v0" in scripts
     assert "/srv/eom/conda/envs/eom-web/bin/python" in scripts
     assert "127.0.0.1:8790" in scripts

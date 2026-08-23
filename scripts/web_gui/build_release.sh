@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPOSITORY_ROOT="/home/eom/EOM"
-EXPECTED_BRANCHES=("feat/web-gui-v0" "feat/hwpx-application-api-v0")
+EXPECTED_BRANCHES=("main" "feat/web-gui-v0" "feat/hwpx-application-api-v0")
 BUILD_PYTHON="/srv/eom/conda/envs/eom-api/bin/python"
 
 fail() {

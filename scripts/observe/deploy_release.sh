@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPOSITORY_ROOT="/home/eom/EOM"
-EXPECTED_BRANCH="feat/observability-console-v0"
+EXPECTED_BRANCHES=("main" "feat/observability-console-v0")
 OBSERVE_PYTHON="/srv/eom/conda/envs/eom-observe/bin/python"
 SERVICE="eom-observe.service"
 UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-observe.service"
@@ -47,8 +47,15 @@ fail() {
 
 [[ "$(git -C "${REPOSITORY_ROOT}" rev-parse --show-toplevel)" == "${REPOSITORY_ROOT}" ]] || \
   fail "repository root mismatch"
-[[ "$(git -C "${REPOSITORY_ROOT}" branch --show-current)" == "${EXPECTED_BRANCH}" ]] || \
-  fail "branch mismatch"
+CURRENT_BRANCH="$(git -C "${REPOSITORY_ROOT}" branch --show-current)"
+branch_allowed=false
+for candidate in "${EXPECTED_BRANCHES[@]}"; do
+  if [[ "${CURRENT_BRANCH}" == "${candidate}" ]]; then
+    branch_allowed=true
+    break
+  fi
+done
+[[ "${branch_allowed}" == true ]] || fail "branch mismatch"
 [[ -x "${OBSERVE_PYTHON}" ]] || fail "observer Python is unavailable"
 
 COMMIT="$(git -C "${REPOSITORY_ROOT}" rev-parse HEAD)"
