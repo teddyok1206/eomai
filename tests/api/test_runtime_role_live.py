@@ -6,6 +6,7 @@ from pathlib import Path
 import psycopg
 import pytest
 from eom_api.runtime_privileges import TABLE_PRIVILEGES
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from psycopg import sql
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
@@ -30,7 +31,7 @@ def test_disposable_runtime_role_allows_dml_and_denies_schema_changes() -> None:
         cursor.execute("SELECT current_user, version_num FROM app.alembic_version")
         current_user, revision = cursor.fetchone() or (None, None)
         assert str(current_user).startswith("eom_api_test_runtime_")
-        assert revision == "20260821_0008"
+        assert revision == CURRENT_MIGRATION_REVISION
         for privilege, tables in TABLE_PRIVILEGES:
             for table_name in tables:
                 cursor.execute(

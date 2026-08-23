@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -186,6 +187,12 @@ class HwpxApplicationBuildRecord(Base):
             "build_id",
         ),
         Index("ix_hwpx_application_builds_created", "created_at", "build_id"),
+        Index(
+            "ix_hwpx_application_builds_requested_fifo",
+            "created_at",
+            "build_id",
+            postgresql_where=text("state = 'REQUESTED'"),
+        ),
     )
 
     build_id: Mapped[str] = mapped_column(String(42), primary_key=True)

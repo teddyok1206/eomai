@@ -114,15 +114,19 @@ if [[ "${action}" == "migrate" ]]; then
   "${PYTHON}" -m alembic upgrade head
   "${PYTHON}" - <<'PY'
 from eom_orchestrator.database import build_engine
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 
 engine = build_engine()
 with engine.connect() as connection:
     assert connection.exec_driver_sql(
         "SELECT version_num FROM app.alembic_version"
-    ).scalar_one() == "20260821_0008"
+    ).scalar_one() == CURRENT_MIGRATION_REVISION
     functions = connection.exec_driver_sql(
         "SELECT to_regprocedure('app.reject_identity_key_change()'), "
-        "to_regprocedure('app.reject_api_audit_mutation()')"
+        "to_regprocedure('app.reject_api_audit_mutation()'), "
+        "to_regprocedure('app.reject_control_plane_immutable_mutation()'), "
+        "to_regprocedure('app.validate_control_plane_current_revision()'), "
+        "to_regprocedure('app.protect_worker_lease_identity()')"
     ).one()
     assert all(value is not None for value in functions)
     triggers = set(
@@ -130,16 +134,17 @@ with engine.connect() as connection:
             "SELECT trigger_name FROM information_schema.triggers "
             "WHERE trigger_schema = 'app' AND trigger_name IN ("
             "'roles_key_immutable','permissions_key_immutable',"
-            "'api_audit_events_append_only')"
+            "'api_audit_events_append_only','worker_leases_identity_immutable')"
         ).scalars()
     )
     assert triggers == {
         "roles_key_immutable",
         "permissions_key_immutable",
         "api_audit_events_append_only",
+        "worker_leases_identity_immutable",
     }
 engine.dispose()
-print("migration_head=20260821_0008 hwpx_application_api=PASS")
+print(f"migration_head={CURRENT_MIGRATION_REVISION} control_plane=PASS")
 PY
   printf 'Disposable API test database migration cycle passed.\n'
   printf 'Next privileged phase: scripts/api/testdb_prepare.sh --reconcile %s\n' \
@@ -165,5 +170,6 @@ export EOM_RUN_INTEGRATION=1
   tests/api/test_workflow_start_integration.py \
   tests/integration/test_workflow_engine.py \
   tests/integration/test_workflow_submission_idempotency.py \
+  tests/integration/test_control_plane_persistence.py \
   tests/api/test_workflow_approval_runtime_role.py
 printf 'Disposable Application API and workflow integration tests passed.\n'

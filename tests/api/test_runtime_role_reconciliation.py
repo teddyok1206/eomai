@@ -227,6 +227,7 @@ def test_disposable_database_runs_workflow_preclaim_integration() -> None:
     assert "tests/integration/test_workflow_engine.py" in source
     assert "tests/api/test_workflow_start_integration.py" in source
     assert "tests/integration/test_workflow_submission_idempotency.py" in source
+    assert "tests/integration/test_control_plane_persistence.py" in source
 
 
 def test_disposable_migration_verifies_head_and_migration_0006_objects() -> None:
@@ -237,6 +238,8 @@ def test_disposable_migration_verifies_head_and_migration_0006_objects() -> None
     assert "SELECT version_num FROM app.alembic_version" in source
     assert "app.reject_identity_key_change()" in source
     assert "app.reject_api_audit_mutation()" in source
+    assert "app.reject_control_plane_immutable_mutation()" in source
+    assert "app.protect_worker_lease_identity()" in source
     assert "api_audit_events_append_only" in source
 
 

@@ -39,6 +39,54 @@ def new_hwpx_validation_id() -> str:
     return f"hwpxval_{uuid4().hex}"
 
 
+def new_instruction_bundle_id() -> str:
+    return f"instrbundle_{uuid4().hex}"
+
+
+def new_instruction_bundle_revision_id() -> str:
+    return f"instrrev_{uuid4().hex}"
+
+
+def new_reference_bundle_id() -> str:
+    return f"refbundle_{uuid4().hex}"
+
+
+def new_reference_bundle_revision_id() -> str:
+    return f"refrev_{uuid4().hex}"
+
+
+def new_execution_preset_id() -> str:
+    return f"execpreset_{uuid4().hex}"
+
+
+def new_execution_preset_revision_id() -> str:
+    return f"execpresetrev_{uuid4().hex}"
+
+
+def new_capacity_policy_id() -> str:
+    return f"capacity_{uuid4().hex}"
+
+
+def new_capacity_policy_revision_id() -> str:
+    return f"capacityrev_{uuid4().hex}"
+
+
+def new_execution_plan_id() -> str:
+    return f"execplan_{uuid4().hex}"
+
+
+def new_auth_binding_id() -> str:
+    return f"authbinding_{uuid4().hex}"
+
+
+def new_capability_snapshot_id() -> str:
+    return f"capsnap_{uuid4().hex}"
+
+
+def new_worker_lease_id() -> str:
+    return f"workerlease_{uuid4().hex}"
+
+
 def _canonical_value(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         value = value.model_dump(mode="python")

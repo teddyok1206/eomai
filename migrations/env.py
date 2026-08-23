@@ -5,6 +5,7 @@ from logging.config import fileConfig
 import eom_catalog_service.models  # noqa: F401
 import eom_hwpx_manager.models  # noqa: F401
 import eom_identity_service.models  # noqa: F401
+import eom_orchestrator.control_models  # noqa: F401
 import eom_workflow_runner.models  # noqa: F401
 from alembic import context
 from eom_orchestrator.models import Base

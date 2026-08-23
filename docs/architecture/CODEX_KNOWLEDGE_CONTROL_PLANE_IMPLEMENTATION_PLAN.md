@@ -13,9 +13,13 @@ Last reviewed: 2026-08-23 UTC
 | --- | --- | --- |
 | 0 — baseline and decisions | `COMPLETED` | [`CODEX_KNOWLEDGE_PHASE0_BASELINE.md`](CODEX_KNOWLEDGE_PHASE0_BASELINE.md), ADRs 0038/0039, V0 acceptance queries |
 | 1 — protocol-first contracts | `COMPLETED` | [`CODEX_KNOWLEDGE_PROTOCOL_COMPATIBILITY.md`](CODEX_KNOWLEDGE_PROTOCOL_COMPATIBILITY.md), 13 public contracts, two support schemas, frozen models, resource/package/negative tests |
-| 2–12 | `NOT_STARTED` | Must satisfy the preceding phase gate before state-changing work |
+| 2 — preset and bundle persistence | `SOURCE_COMPLETE` | [`CODEX_CONTROL_PLANE_PERSISTENCE_DESIGN.md`](CODEX_CONTROL_PLANE_PERSISTENCE_DESIGN.md), additive migration 0009, immutable revision/pointer/plan records, deterministic lease transactions, disposable PostgreSQL migration/concurrency proof |
+| 3–12 | `NOT_STARTED` | Must satisfy the preceding phase gate before state-changing work |
 
 Phase 1 added no migration, live worker execution, runtime deployment, or production-data write.
+Phase 2 source work adds an unapplied additive migration and source behavior only; it performed no
+production migration, runtime deployment, live worker execution, or production-data write. It is
+marked complete only after the later controlled deployment and post-deployment evidence gates.
 
 ## 1. Outcome
 

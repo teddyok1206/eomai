@@ -314,7 +314,7 @@ def main() -> None:
             runtime_connection.exec_driver_sql(
                 "SELECT version_num FROM app.alembic_version"
             ).scalar_one()
-            != "20260821_0008"
+            != "20260823_0009"
         ):
             fail("HWPX_MANAGER_MIGRATION_MISMATCH")
     engine.dispose()

@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from pathlib import Path
+
+import eom_hwpx_manager.models  # noqa: F401
+import pytest
+from eom_identifiers import content_sha256
+from eom_orchestrator import control_models  # noqa: F401
+from eom_orchestrator.control_models import HELD_LEASE_PREDICATE
+from eom_orchestrator.control_service import (
+    ControlPlaneError,
+    ResolvedPlanDependencyEvidence,
+    compute_control_document_hash,
+)
+from eom_orchestrator.models import Base
+from sqlalchemy import LargeBinary
+
+
+def test_control_document_hash_omits_only_declared_digest() -> None:
+    document = {
+        "schema_version": "worker-capacity-policy/1.0",
+        "capacity_policy_id": "capacity_" + "1" * 32,
+        "content_sha256": "sha256:" + "0" * 64,
+        "created_at": datetime(2026, 8, 23, tzinfo=UTC),
+    }
+    expected = content_sha256(
+        {
+            "schema_version": document["schema_version"],
+            "capacity_policy_id": document["capacity_policy_id"],
+            "created_at": document["created_at"],
+        }
+    )
+    assert compute_control_document_hash(document, "content_sha256") == expected
+    with pytest.raises(ControlPlaneError) as exc_info:
+        compute_control_document_hash(document, "missing")
+    assert exc_info.value.code == "CONTROL_DOCUMENT_INVALID"
+
+
+def test_cross_component_plan_evidence_is_frozen_and_pointer_only() -> None:
+    evidence = ResolvedPlanDependencyEvidence(
+        workflow_id="workflow_" + "1" * 32,
+        workflow_definition_key="generic-item-development",
+        workflow_definition_version="1.4.0",
+        workflow_definition_sha256="sha256:" + "2" * 64,
+        workflow_role_schema_version="workflow-role/1.3.0",
+        content_pack_release_id="packrel_" + "3" * 32,
+        content_pack_sha256="sha256:" + "4" * 64,
+    )
+    assert evidence.graph_snapshot_revision_id is None
+    with pytest.raises(AttributeError):
+        evidence.workflow_id = "workflow_" + "5" * 32  # type: ignore[misc]
+
+
+def test_control_tables_have_no_binary_or_secret_storage_columns() -> None:
+    control_table_names = {
+        "execution_bundles",
+        "execution_bundle_revisions",
+        "worker_capacity_policies",
+        "worker_capacity_policy_revisions",
+        "worker_capacity_pools",
+        "worker_capacity_pool_roles",
+        "worker_capacity_pool_slots",
+        "execution_presets",
+        "execution_preset_revisions",
+        "execution_preset_role_policies",
+        "resolved_execution_plans",
+        "resolved_execution_plan_steps",
+        "codex_auth_bindings",
+        "codex_auth_health_events",
+        "codex_capability_snapshots",
+        "codex_capability_entries",
+        "worker_leases",
+        "worker_lease_events",
+    }
+    assert control_table_names.issubset(Base.metadata.tables)
+    forbidden = {"token", "secret", "credential", "password", "session", "auth_json", "nas_path"}
+    for table_name in control_table_names:
+        table = Base.metadata.tables[table_name]
+        assert all(not isinstance(column.type, LargeBinary) for column in table.columns)
+        assert not forbidden.intersection(column.name for column in table.columns)
+
+
+def test_lease_indexes_hold_capacity_while_reconciling() -> None:
+    assert str(HELD_LEASE_PREDICATE) == "state IN ('ACTIVE','RECONCILING')"
+    table = Base.metadata.tables["worker_leases"]
+    indexes = {str(index.name): index for index in table.indexes if index.name is not None}
+    assert indexes["uq_worker_lease_held_slot"].unique
+    assert indexes["uq_worker_lease_held_job"].unique
+    assert str(indexes["uq_worker_lease_held_slot"].dialect_options["postgresql"]["where"]) == (
+        "state IN ('ACTIVE','RECONCILING')"
+    )
+
+
+def test_control_plane_migration_is_additive_and_reversible() -> None:
+    source = Path("migrations/versions/20260823_0009_codex_control_plane.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'down_revision: str | Sequence[str] | None = "20260821_0008"' in source
+    assert "UPDATE workflow_instances" not in source
+    assert "DELETE FROM workflow_instances" not in source
+    assert "ALTER TABLE worker_slots" not in source
+    assert "reject_control_plane_immutable_mutation" in source
+    assert "validate_control_plane_current_revision" in source
+    for table_name in (
+        "execution_bundles",
+        "execution_bundle_revisions",
+        "worker_capacity_policy_revisions",
+        "execution_presets",
+        "resolved_execution_plans",
+        "codex_auth_bindings",
+        "codex_capability_snapshots",
+        "worker_leases",
+    ):
+        assert f'"{table_name}"' in source
+
+
+def test_existing_hwpx_partial_index_remains_in_composed_metadata() -> None:
+    table = Base.metadata.tables["hwpx_application_builds"]
+    indexes = {str(index.name): index for index in table.indexes if index.name is not None}
+    requested = indexes["ix_hwpx_application_builds_requested_fifo"]
+    assert not requested.unique
+    assert str(requested.dialect_options["postgresql"]["where"]) == "state = 'REQUESTED'"
