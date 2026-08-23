@@ -119,16 +119,26 @@ commands remain `PENDING` with zero attempts. Deploy it from a clean, committed 
 
 ```bash
 HEAD="$(git rev-parse HEAD)"
+sudo -n scripts/infra/harden_artifact_mount.sh "${HEAD}"
+sudo -n scripts/infra/deploy_service_identities.sh "${HEAD}"
 sudo -n scripts/workflow/deploy_runner_service.sh install "${HEAD}"
 sudo -n scripts/workflow/deploy_runner_service.sh verify "${HEAD}"
 systemctl is-active eom-workflow-runner.service
 systemctl is-enabled eom-workflow-runner.service
 ```
 
+The mount hardener edits only the pinned `/mnt/nas` CIFS entry, keeps the protected credential-file
+pointer opaque, validates a temporary fstab before atomic replacement, and records a root-only
+rollback copy. It stops only the three Artifact-committing managers for the remount and restores the
+prior fstab and services on failure. Never replace this with a recursive `chmod` or `chgrp`: the
+reviewed CIFS `nounix,forceuid,forcegid` contract ignores per-entry Unix metadata changes.
+
 The service runs as the locked `eom-workflow-runner` identity with the five worker handoff groups
-and the separate `eom-artifact-committers` group. It does not inherit the operator account's sudo,
-LXD, desktop, or device groups. The unit combines `NoNewPrivileges`, an empty capability set, a
-strict read-only system image, and inaccessible container-control paths. The service can
+and primary group `eom` for the hardened CIFS Artifact mount. It does not inherit the operator
+account's sudo, LXD, desktop, or device groups. The mount presents directories as `0750` and files
+as `0640`, with `nosuid,nodev,noexec`; workers never receive the `eom` group and all fixed worker
+units additionally make `/mnt/nas` inaccessible. The unit combines `NoNewPrivileges`, an empty
+capability set, a strict read-only system image, and inaccessible container-control paths. The service can
 write only the bounded staging, worker-workspace, NAS artifact, and private state roots. Git,
 EOMIS, other service secrets, container control sockets, and every worker's Codex home are
 inaccessible. `RestrictSUIDSGID` is intentionally disabled only on this producer boundary because

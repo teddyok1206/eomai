@@ -52,7 +52,7 @@ REQUIRED_RUNNER_DIRECTIVES = frozenset(
     {
         "User=eom-hwpx-manager",
         "Group=eom-api",
-        "SupplementaryGroups=eom eom-artifact-committers eom-hwpx",
+        "SupplementaryGroups=eom eom-hwpx",
         "RuntimeDirectory=eom-hwpx-api",
         "RuntimeDirectoryMode=0750",
         "StateDirectory=eom-hwpx-api",

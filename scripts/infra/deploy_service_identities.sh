@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPOSITORY=/home/eom/EOM
-ARTIFACT_GROUP=eom-artifact-committers
+ARTIFACT_MOUNT=/mnt/nas
 ARTIFACT_ROOT=/mnt/nas/eom/artifacts
 POLKIT_SOURCE=${REPOSITORY}/infra/polkit/50-eom-worker-units.rules
 POLKIT_TARGET=/etc/polkit-1/rules.d/50-eom-worker-units.rules
@@ -16,6 +16,30 @@ STOPPED=0
 fail() {
   echo "ERROR: $1" >&2
   exit 1
+}
+
+require_mount_option() {
+  local options=$1
+  local required=$2
+  tr ',' '\n' <<<"${options}" | grep -Fxq "${required}" || \
+    fail "Artifact mount option ${required} is missing"
+}
+
+verify_artifact_mount() {
+  local mount_source mount_type mount_options
+  mount_source=$(findmnt -T "${ARTIFACT_ROOT}" -n -t cifs -o SOURCE)
+  mount_type=$(findmnt -T "${ARTIFACT_ROOT}" -n -t cifs -o FSTYPE)
+  mount_options=$(findmnt -T "${ARTIFACT_ROOT}" -n -t cifs -o OPTIONS)
+  [[ ${mount_source} == //172.30.1.30/AI_Linux && ${mount_type} == cifs ]] || \
+    fail "Artifact mount identity mismatch"
+  for required in forceuid forcegid nounix nosuid nodev noexec "uid=$(id -u eom)" \
+    "gid=$(getent group eom | cut -d: -f3)" file_mode=0640 dir_mode=0750; do
+    require_mount_option "${mount_options}" "${required}"
+  done
+  [[ "$(stat -c '%U:%G:%a' "${ARTIFACT_MOUNT}")" == eom:eom:750 ]] || \
+    fail "Artifact mount metadata mismatch"
+  [[ "$(stat -c '%U:%G:%a' "${ARTIFACT_ROOT}")" == eom:eom:750 ]] || \
+    fail "Artifact root metadata mismatch"
 }
 
 ensure_identity() {
@@ -90,20 +114,13 @@ if systemctl list-units --no-legend --state=activating,active,deactivating \
   fail "a fixed child unit is active"
 fi
 [[ -d ${ARTIFACT_ROOT} && ! -L ${ARTIFACT_ROOT} ]] || fail "Artifact root is unsafe"
-[[ "$(stat -c '%U' "${ARTIFACT_ROOT}")" == eom ]] || fail "Artifact root owner mismatch"
-
-getent group "${ARTIFACT_GROUP}" >/dev/null || groupadd --system "${ARTIFACT_GROUP}"
+verify_artifact_mount
 ensure_identity eom-workflow-runner /var/lib/eom-workflow-runner eom \
-  "${ARTIFACT_GROUP},eom-cdx-01,eom-cdx-02,eom-cdx-03,eom-cdx-04,eom-cdx-05"
+  "eom-cdx-01,eom-cdx-02,eom-cdx-03,eom-cdx-04,eom-cdx-05"
 ensure_identity eom-catalog-manager /var/lib/eom-catalog-api eom-api \
-  "eom,${ARTIFACT_GROUP}"
+  "eom"
 ensure_identity eom-hwpx-manager /var/lib/eom-hwpx-api eom-api \
-  "eom,${ARTIFACT_GROUP},eom-hwpx"
-
-chgrp "${ARTIFACT_GROUP}" "${ARTIFACT_ROOT}"
-chmod 02770 "${ARTIFACT_ROOT}"
-[[ "$(stat -c '%U:%G:%a' "${ARTIFACT_ROOT}")" == \
-    "eom:${ARTIFACT_GROUP}:2770" ]] || fail "Artifact root contract mismatch"
+  "eom,eom-hwpx"
 
 install -o root -g root -m 0644 "${POLKIT_SOURCE}" "${POLKIT_TARGET}"
 install -o root -g root -m 0644 \
@@ -130,11 +147,11 @@ for service in "${SERVICES[@]}"; do
 done
 
 require_process_identity eom-workflow-runner.service eom-workflow-runner \
-  eom "${ARTIFACT_GROUP}" eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05
+  eom eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05
 require_process_identity eom-catalog-application-runner.service eom-catalog-manager \
-  eom-api eom "${ARTIFACT_GROUP}"
+  eom-api eom
 require_process_identity eom-hwpx-application-runner.service eom-hwpx-manager \
-  eom-api eom "${ARTIFACT_GROUP}" eom-hwpx
+  eom-api eom eom-hwpx
 
 CATALOG_SOCKET=/run/eom-catalog-api/manager.sock
 HWPX_SOCKET=/run/eom-hwpx-api/manager.sock

@@ -37,6 +37,15 @@ require_group_membership() {
     fail "${user} is not a member of ${group}"
 }
 
+reject_group_membership() {
+  local user="$1"
+  local group="$2"
+  if getent group "${group}" >/dev/null && \
+     id -nG "${user}" | tr ' ' '\n' | grep -Fxq "${group}"; then
+    fail "${user} has obsolete group ${group}"
+  fi
+}
+
 require_property() {
   local property="$1"
   local expected="$2"
@@ -65,7 +74,7 @@ preflight() {
   require_directory_metadata /etc/eom/workflow-prompts root:eom:750
   getent passwd "${SERVICE_USER}" >/dev/null || fail "workflow runner identity is unavailable"
   require_group_membership "${SERVICE_USER}" eom
-  require_group_membership "${SERVICE_USER}" eom-artifact-committers
+  reject_group_membership "${SERVICE_USER}" eom-artifact-committers
   for group in eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05; do
     require_group_membership "${SERVICE_USER}" "${group}"
   done
@@ -85,7 +94,7 @@ verify_unit() {
   require_property ProtectHome yes
   require_property IPAddressDeny "0.0.0.0/0 ::/0"
   [[ "$(systemctl show --property=SupplementaryGroups --value "${SERVICE}")" == \
-      "eom-artifact-committers eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05" ]] || \
+      "eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05" ]] || \
     fail "installed supplementary group contract mismatch"
   systemctl is-enabled --quiet "${SERVICE}" || fail "workflow runner is not enabled"
   systemctl is-active --quiet "${SERVICE}" || fail "workflow runner is not active"
@@ -94,7 +103,7 @@ verify_unit() {
   [[ "${main_pid}" =~ ^[1-9][0-9]*$ && -r "/proc/${main_pid}/status" ]] || \
     fail "workflow runner process is unavailable"
   local group group_id
-  for group in eom eom-artifact-committers eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05; do
+  for group in eom eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05; do
     group_id="$(getent group "${group}" | cut -d: -f3)"
     [[ "${group_id}" =~ ^[1-9][0-9]*$ ]] || fail "worker group identity is unavailable"
     grep -E "^Groups:.*[[:space:]]${group_id}([[:space:]]|$)" "/proc/${main_pid}/status" \
