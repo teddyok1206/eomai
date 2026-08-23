@@ -20,6 +20,7 @@ def serve() -> None:
         port=settings.server.port,
         workers=settings.server.workers,
         access_log=False,
+        timeout_graceful_shutdown=10,
     )
 
 

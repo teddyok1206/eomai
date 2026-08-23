@@ -67,24 +67,11 @@ class SessionSettings(StrictSettings):
     maximum_drafts_per_session: int = Field(default=20, ge=1, le=100)
 
 
-class HwpxSettings(StrictSettings):
-    renderer_key: str = "kordoc-4.9.0"
-    deployment_state: str = "PREPARED_NOT_DEPLOYED"
-
-    @field_validator("deployment_state")
-    @classmethod
-    def prepared_only(cls, value: str) -> str:
-        if value != "PREPARED_NOT_DEPLOYED":
-            raise ValueError("Web GUI V0 cannot declare an undeployed HWPX renderer ready")
-        return value
-
-
 class WebSettings(StrictSettings):
     schema_version: int = Field(default=1, ge=1, le=1)
     server: ServerSettings = ServerSettings()
     upstreams: UpstreamSettings = UpstreamSettings()
     sessions: SessionSettings = SessionSettings()
-    hwpx: HwpxSettings = HwpxSettings()
 
 
 class WebSecrets(StrictSettings):

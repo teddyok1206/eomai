@@ -15,6 +15,3 @@ sessions:
   ttl_seconds: 1800
   maximum_sessions: 256
   maximum_drafts_per_session: 20
-hwpx:
-  renderer_key: kordoc-4.9.0
-  deployment_state: PREPARED_NOT_DEPLOYED

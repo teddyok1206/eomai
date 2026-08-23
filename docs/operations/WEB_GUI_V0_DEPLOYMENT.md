@@ -21,6 +21,9 @@ proxy handover; it is not achieved by changing the bind to `0.0.0.0` or taking p
 - health: `/studio/api/v1/health/live` and `/studio/api/v1/health/ready`;
 - upstreams: loopback Application API and Observability only;
 - session storage: bounded in-process storage, so V0 runs exactly one worker.
+- HWPX capability: read live from Application API; it is not duplicated in GUI configuration.
+- graceful shutdown: Uvicorn cancels lingering requests after 10 seconds, before systemd's
+  15-second stop boundary. This bounds active SSE connections without weakening the service sandbox.
 
 The only Web GUI secret is the existing Observability access token made available as
 `EOM_WEB_OBSERVE_ACCESS_TOKEN`. Application API credentials are entered by the operator and API
@@ -36,7 +39,7 @@ icon CDN, or browser database driver dependency.
 ## Handover and rollback
 
 Deployment starts the new loopback service without touching port 8000. Verify login, CSP, API
-health, read-only Explorer behavior, and `PREPARED_NOT_DEPLOYED` HWPX state locally before adding a
-reviewed reverse-proxy route. Rollback removes that route first, stops/disables only
+health, read-only Explorer behavior, and the Application API-backed HWPX capability locally before
+adding a reviewed reverse-proxy route. Rollback removes that route first, stops/disables only
 `eom-web-gui.service`, and reinstalls the prior recorded wheel and unit. It never changes
 Application API, Observability, EOMIS, workers, checkpoints, or canonical workflow data.

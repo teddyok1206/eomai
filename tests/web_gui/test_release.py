@@ -34,7 +34,7 @@ def test_example_config_preserves_loopback_and_existing_ports() -> None:
         "allowed_hosts": ["127.0.0.1", "localhost"],
     }
     assert value["server"]["port"] not in {8000, 8765, 8780}
-    assert value["hwpx"]["deployment_state"] == "PREPARED_NOT_DEPLOYED"
+    assert "hwpx" not in value
 
 
 def test_systemd_unit_has_dedicated_identity_and_sandbox() -> None:
@@ -57,6 +57,24 @@ def test_systemd_unit_has_dedicated_identity_and_sandbox() -> None:
     for directive in required:
         assert directive in unit
     assert "0.0.0.0" not in unit
+    assert "TimeoutStopSec=15" in unit
+
+
+def test_uvicorn_shutdown_finishes_before_systemd_stop_timeout() -> None:
+    cli = (ROOT / "apps/web_gui/eom_web_gui/cli.py").read_text(encoding="utf-8")
+
+    assert "timeout_graceful_shutdown=10" in cli
+
+
+def test_runtime_config_migration_removes_only_the_stale_hwpx_copy() -> None:
+    script = (ROOT / "scripts/web_gui/migrate_runtime_config.sh").read_text(encoding="utf-8")
+
+    assert "cookie_secure" in script
+    assert 'value.pop("hwpx", None)' in script
+    assert "unknown HWPX configuration drift" in script
+    assert "HWPX capability must not be duplicated" in script
+    assert "chmod -R" not in script
+    assert "chown -R" not in script
 
 
 def test_release_scripts_have_fixed_targets_and_no_recursive_permission_changes() -> None:
