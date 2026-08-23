@@ -191,6 +191,7 @@ Textbook / Mock exam / Item bank
 - [Generated Item Authoring Contract v1.3](docs/architecture/GENERATED_ITEM_AUTHORING_CONTRACT_V1_3.md)
 - [Knowledge-backed Item Workflow V1](docs/architecture/KNOWLEDGE_ITEM_WORKFLOW_V1.md)
 - [Workflow Runtime Execution Boundary](docs/architecture/WORKFLOW_EXECUTION_BOUNDARY.md)
+- [Codex Session, Execution Preset, and Worker Capacity Design](docs/architecture/CODEX_SESSION_PRESETS_AND_CAPACITY.md)
 - [Item Registry V0](docs/architecture/ITEM_REGISTRY_V0.md)
 - [HWPX Application API V0](docs/architecture/HWPX_APPLICATION_API_V0.md)
 - [Web GUI V0](docs/architecture/WEB_GUI_V0.md)
