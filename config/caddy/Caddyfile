@@ -1,0 +1,19 @@
+{
+	# Local workloads include untrusted renderer processes.  Keep Caddy's
+	# configuration API off TCP loopback and behind a caddy-only directory.
+	admin unix//run/caddy-admin/admin.sock
+}
+
+eomai.duckdns.org {
+	header Strict-Transport-Security "max-age=31536000"
+
+	route {
+		@root path /
+		redir @root /studio/ 308
+
+		@studio path /studio /studio/*
+		reverse_proxy @studio 127.0.0.1:8790
+
+		respond 404
+	}
+}
