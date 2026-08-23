@@ -11,13 +11,15 @@ EOM needs to use heterogeneous educational data without copying entire corpora i
 prompt. The source set may include existing questions, curriculum documents, textbooks, HWPX,
 PDF, office documents, images, tables, diagrams, equations, and partially curated Markdown.
 
-The proposed boundary is a versioned Education Knowledge Graph with three connected typed views:
+The proposed boundary is a versioned Education Knowledge Graph with five connected typed views:
 
 1. a **Curriculum and Science Knowledge Graph**;
 2. an **Assessment Item and Item-Element Graph**;
-3. a **Provenance and Evidence Graph** connecting both to immutable source revisions.
+3. an **Item Origin and Provenance Graph**;
+4. a **Product, Form, Placement, and Usage Graph**; and
+5. a **Provenance and Evidence Graph** connecting all views to immutable source revisions.
 
-These are views over one versioned knowledge model, not three independently mutable sources of
+These are views over one versioned knowledge model, not five independently mutable sources of
 truth. The graph is a derived retrieval product. Canonical sources remain approved immutable
 Document, Item, and Artifact Revisions.
 
@@ -62,7 +64,8 @@ Responsibilities:
 - Codex workers read staged inputs and return structured results only.
 
 The graph does not become a shortcut around Item Registry, Content Packs, workflow approval, or
-artifact validation.
+artifact validation. It also does not replace the canonical Usage Ledger or ordered assessment
+assembly manifests.
 
 ## 3. Canonical and Derived Data
 
@@ -117,7 +120,12 @@ A textbook table is retained as a typed rectangular structure and may also recei
 projection. A figure remains a pinned binary artifact plus textual description and source anchor.
 An equation keeps its declared notation. Flattening all of these into prose is prohibited.
 
-## 4. One Graph Model, Three Connected Views
+## 4. Graph Model V0: Five Connected Views
+
+This is an extensible **Graph Model V0**, not a claim that the education ontology is 100% complete.
+V0 deliberately closes a small vocabulary needed by known queries. New node or edge types require
+an additive schema/version change, compatibility review, and snapshot rebuild; a worker may not
+invent them at runtime. Section 22 records the main decisions that remain open.
 
 ### 4.1 Curriculum hierarchy
 
@@ -221,7 +229,130 @@ Assessment edges include:
 The correct answer and solution remain in the Item Revision. Retrieval projections must obey role
 and permission rules so a future student-facing consumer cannot retrieve answer-bearing edges.
 
-### 4.4 Cross-graph connections
+### 4.4 Item kind, origin, and examination provenance
+
+“문항의 종류” must not become one overloaded enum. The following questions are independent and
+can have different answers for one Item Revision:
+
+| Dimension | Question answered | Illustrative controlled values/pointer |
+| --- | --- | --- |
+| content/interaction type | 어떻게 응답하는 문항인가? | existing `item_type_key`, such as EOM template multiple choice |
+| ownership/source domain | 어느 조직 영역의 문항인가? | `INTERNAL_EOM`, `EXTERNAL_INSTITUTION`, `EXTERNAL_INDIVIDUAL`, `LEGACY_UNKNOWN` |
+| creation method | 어떻게 만들어졌는가? | `HUMAN_AUTHORED`, `AI_ASSISTED`, `AI_GENERATED`, `IMPORTED`, `ADAPTED` |
+| examination occurrence | 실제 어떤 시험에 출제되었는가? | immutable `AssessmentOccurrenceRevision` pointer or none |
+| source organization | 누가 출제·발행했는가? | versioned organization pointer: 평가원, 교육청, 학교, 출판사, EOM 등 |
+| derivation | 어떤 원본을 바탕으로 변형했는가? | exact source/Item Revision `DERIVED_FROM` pointers |
+| rights policy | 어느 범위에서 검색·재사용 가능한가? | pinned rights/license/access-policy revision |
+
+This prevents misleading classifications. An EOM item can be human-authored or AI-assisted. A
+past examination item is identified by a real assessment occurrence, not merely a `past_exam=true`
+label. An institution-authored item may have an unknown creation method. An EOM adaptation of an
+institutional item retains both the new ownership domain and the pinned derivation lineage.
+
+Representative combinations are:
+
+| Human meaning | Source domain | Creation method | Exam occurrence |
+| --- | --- | --- | --- |
+| 사람이 낸 신규 문제 | `EXTERNAL_INDIVIDUAL` or reviewed internal author domain | `HUMAN_AUTHORED` | none |
+| 교육청·평가원 기출 | `EXTERNAL_INSTITUTION` | known method or explicit unknown | exact occurrence revision required |
+| EOM이 만든 문제 | `INTERNAL_EOM` | `HUMAN_AUTHORED`, `AI_ASSISTED`, or `AI_GENERATED` | none unless later published in a real occurrence |
+| EOM 변형 문항 | `INTERNAL_EOM` | `ADAPTED` | new item has none; derivation points to the historical source occurrence/item |
+
+The future immutable value contract may be named `ItemOriginProfile`, but its exact schema is not
+authorized here. It should reference the existing `ItemProvenanceRecord` and workflow/source
+evidence rather than replace them. Existing `item_type_key` continues to mean item/template or
+interaction type; it must not silently change to mean author, institution, or past-exam status.
+
+Conceptual nodes and edges are:
+
+```text
+ItemRevisionRef --HAS_ORIGIN_PROFILE--> ItemOriginProfileRef
+ItemRevisionRef --AUTHORED_OR_ISSUED_BY--> OrganizationRevisionRef
+ItemRevisionRef --OBSERVED_IN_EXAM--> AssessmentOccurrenceRevisionRef
+ItemRevisionRef --DERIVED_FROM--> ItemRevisionRef | SourceRevisionRef
+ItemOriginProfileRef --GOVERNED_BY--> RightsPolicyRevisionRef
+```
+
+An `AssessmentOccurrenceRevision` should identify at least the issuing organization revision,
+exam family, year/date, administration/session, subject, form where relevant, and immutable source
+evidence. Corrections create a new revision. Institution names are not free-text graph keys.
+
+### 4.5 Product, form, placement, and actual-usage graph
+
+Items are distinct from the products in which they are arranged and distributed. For example,
+“00모의고사” may contain forms 1 through 12, while Item A appears in form 1 question 12 and Item B
+appears in form 5 question 7. The same approved Item Revision can validly have many placements.
+
+The canonical hierarchy is conceptually:
+
+```text
+AssessmentProductRevision                  # 00모의고사의 특정 판/버전
+  -> ordered AssessmentFormRevision refs   # 1회 ... 12회
+      -> AssessmentAssemblyRevision
+          -> ordered ItemPlacement values
+              -> exact ItemRevisionPointer
+      -> Publication/DeliverableRevision
+          -> immutable UsageRecord entries
+      -> DistributionEvent refs (separate restricted domain)
+```
+
+The names above express responsibilities, not approved new table names. Before implementation EOM
+must decide whether `AssessmentProduct` and `AssessmentForm` become distinct logical entities or
+whether a product is a grouping over existing `Deliverable` entities. In both alternatives the
+following invariants are fixed:
+
+- product, form, assembly, publication, and item identities are separate;
+- every historical placement pins an exact Item Revision, never `Item.current_revision_id`;
+- a placement is an ordered immutable value containing at least section, question number/ordinal,
+  points, usage role, and the Item Revision pointer;
+- `(assembly_revision_id, section, position)` is unique and deterministically ordered;
+- the assembly manifest has a canonical serialization and SHA-256;
+- reordering, replacing, or rescoring an item creates a new Assembly Revision;
+- publishing creates or pins a Publication/Deliverable Revision; it does not mutate the Item;
+- the item payload and binary artifacts are referenced, not copied into product or graph rows.
+
+EOM already has an accepted separation between mutable `UsagePlan` intent and immutable
+`UsageRecord` evidence. A `UsageRecord` pins an Item Revision and a Deliverable Revision plus its
+section/sequence placement. That ledger remains the source of truth for actual published use. A
+future assembly layer should extend and fulfill that contract, not create a parallel “graph usage
+history” ledger.
+
+The graph publishes derived, pointer-backed edges such as:
+
+```text
+ProductRevisionRef --HAS_FORM--> FormRevisionRef
+FormRevisionRef --HAS_ASSEMBLY--> AssessmentAssemblyRevisionRef
+AssessmentAssemblyRevisionRef --PLACES_ITEM--> ItemRevisionRef
+UsageRecordRef --EVIDENCES_PLACEMENT--> ItemRevisionRef
+UsageRecordRef --IN_DELIVERABLE_REVISION--> DeliverableRevisionRef
+PublicationRevisionRef --PUBLISHES_FORM--> FormRevisionRef
+```
+
+`PLACES_ITEM` may project `section`, `position`, `points`, and `usage_role` for indexed graph
+queries, but the canonical values remain in the pinned assembly/Usage Record. A graph edge is
+rebuilt or rejected if it disagrees with those pointers.
+
+Four histories must remain distinct:
+
+1. **planned inclusion:** mutable `UsagePlan` or blueprint intent;
+2. **assembled placement:** immutable ordered Assembly Revision;
+3. **published use:** immutable Publication/Deliverable Revision plus fulfilled `UsageRecord`;
+4. **distribution or learning activity:** a separate event saying a release reached a cohort,
+   channel, or learner and, if needed, a separate protected learning-record domain.
+
+The general education graph must not contain student names, account identifiers, answers, scores,
+or attempts. It may reference an authorized aggregate Distribution Event or a protected record ID
+when a real query requires it. Per-student records require a separate privacy, retention, access,
+and deletion design.
+
+Legacy Excel usage sheets enter through Content Intake. The original workbook is retained as an
+immutable artifact. A reviewed mapping contract resolves product/form identities, question
+positions, exact Item Revisions where possible, and uncertainty. Only validated rows create
+canonical placement or Usage Records; graph edges are then projected from those records. Unknown
+or ambiguous legacy matches remain explicit review tasks and never silently resolve to the latest
+Item Revision.
+
+### 4.6 Cross-graph connections
 
 The main value comes from connecting item structure to curriculum and science evidence:
 
@@ -245,6 +376,10 @@ StatementRef --SUPPORTED_BY--> Claim
 Claim --CITES_SOURCE--> DocumentSectionRef
 Concept --ALIGNS_WITH_CURRICULUM--> MinorUnit
 ItemRevision --USES_ASSESSMENT_PATTERN--> AssessmentPattern
+ItemRevision --OBSERVED_IN_EXAM--> AssessmentOccurrenceRevision
+ProductRevision --HAS_FORM--> FormRevision
+FormRevision --PLACES_ITEM--> ItemRevision
+UsageRecord --EVIDENCES_PLACEMENT--> ItemRevision
 ```
 
 These connections enable retrieval that is simultaneously educational, structural, and grounded.
@@ -327,6 +462,30 @@ For a new item, the retrieval layer may return both positive evidence and a boun
 Final duplication checking is a separate validation gate. It does not rely on a Codex session
 remembering prior questions.
 
+### 5.6 Product composition and item usage history
+
+Example requests include:
+
+> Item A가 실제 어느 제품, 어느 회차, 몇 번 문항으로 발행되었는가?
+
+> 00모의고사 1~12회의 교육과정 소단원·난이도·자료 유형 분포는 어떠한가?
+
+> 동일 문항 또는 동일 파생 계보의 문항이 여러 제품에 중복 배치되었는가?
+
+The query starts from immutable Usage/Assembly records, then traverses the graph:
+
+```text
+Item logical ID or pinned Item Revision
+  -> immutable UsageRecord / ItemPlacement refs
+  -> exact Deliverable/Form/Assembly Revisions
+  -> Product Revision
+  -> curriculum, origin, element, and source-evidence neighborhoods
+```
+
+Results distinguish logical-item reuse from exact-revision reuse and derived/similar items. They
+also distinguish a plan from a published record. Graph results must return the canonical record
+pointers that support every claimed placement.
+
 ## 6. Typed Retrieval Request
 
 The future contract should express the query intent independently of storage or query language.
@@ -342,6 +501,16 @@ The future contract should express the query intent independently of storage or 
   },
   "required_item_elements": ["table", "statement_set"],
   "source_classes": ["curriculum", "textbook", "approved_item", "past_exam"],
+  "item_origin_filters": {
+    "source_domains": ["EXTERNAL_INSTITUTION", "INTERNAL_EOM"],
+    "creation_methods": ["HUMAN_AUTHORED", "AI_ASSISTED"],
+    "assessment_occurrence_revision_ids": []
+  },
+  "usage_scope": {
+    "product_revision_ids": [],
+    "form_revision_ids": [],
+    "published_only": true
+  },
   "retrieval_mode": "hybrid_local_multihop",
   "evidence_budget": {
     "max_documents": 8,
@@ -353,9 +522,10 @@ The future contract should express the query intent independently of storage or 
 }
 ```
 
-IDs and budgets above are illustrative contract shapes, not authorized production defaults. The
-request must reject unknown graph revisions, curriculum revisions, element kinds, retrieval modes,
-and unbounded limits.
+IDs, enum values, and budgets above are illustrative contract shapes, not authorized production
+defaults. Empty arrays mean the dimension was not requested; they do not mean “search every
+unauthorized source.” The request must reject unknown graph, curriculum, origin, occurrence,
+product/form revisions, element kinds, retrieval modes, and unbounded limits.
 
 ## 7. Preset and Job-Local Markdown Path
 
@@ -392,6 +562,8 @@ The job-local projection may look like:
       concept-evidence.md
       source-tables.md
       prior-item-patterns.md
+      item-origin-evidence.md
+      product-usage-history.md
     earth-science/
       corpus-manifest.json
       curriculum/
@@ -528,6 +700,21 @@ retrieval_policy_revisions
 evidence_bundle_revisions
 ```
 
+Canonical product and usage structures are deliberately outside the graph projection list:
+
+```text
+assessment_products / product_revisions        # exact names still open
+assessment_forms / form_revisions               # exact names still open
+assessment_assembly_revisions + placement manifest
+deliverables / deliverable_revisions            # already present
+usage_plans / usage_records                      # already present and authoritative
+distribution_events                             # future restricted boundary
+```
+
+The graph stores typed references to these records and snapshot-scoped adjacency, not another copy
+of the placement ledger. `ItemOriginProfile` likewise composes existing provenance, workflow,
+organization, occurrence, and rights pointers instead of embedding source files or full item JSON.
+
 Key structures and indexes:
 
 - primary/unique indexes for logical and revision identity;
@@ -538,6 +725,12 @@ Key structures and indexes:
 - a revision-scoped curriculum closure table with
   `(framework_revision_id, ancestor_unit_id, descendant_unit_id, depth)`;
 - unique item-element pointers by `(item_revision_id, element_kind, element_id)`;
+- indexes for origin filtering by snapshot, source domain, creation method, organization revision,
+  and assessment occurrence revision;
+- assembly uniqueness on `(assembly_revision_id, section, position)` and an index by pinned
+  `item_revision_id` for reverse usage lookup;
+- Usage Ledger indexes by item revision, Deliverable Revision, section/sequence, and recorded time;
+- graph adjacency indexes from product/form revisions to exact placement/Usage Record refs;
 - partial/current-pointer indexes only for future selection, never historical replay;
 - vector or lexical indexes as revisioned derived projections with an explicit rebuild policy.
 
@@ -625,6 +818,8 @@ source-tables.md
 source-figures.md
 prior-item-patterns.md
 negative-similarity-examples.md
+item-origin-evidence.md
+product-usage-history.md
 ```
 
 The bundle is temporary workflow input materialization backed by an immutable manifest/artifact
@@ -643,6 +838,8 @@ Every imported document and Markdown file is untrusted input. Required controls 
 - distinguish model-proposed, machine-validated, human-reviewed, and published lifecycle states;
 - require source coverage for every published claim/edge class that promises factual grounding;
 - separate answer-bearing item projections from student-safe retrieval projections;
+- exclude learner identity, answers, scores, and attempts from the general knowledge graph;
+- enforce rights and source-organization policy independently from item interaction type;
 - avoid persisting prompts, chain-of-thought, raw credentials, or unbounded Codex logs;
 - keep worker network/tool/sandbox policy fixed by the execution preset and platform boundary.
 
@@ -721,6 +918,9 @@ future graph database, embedding engine, or GraphRAG library is an adapter and r
 | add a dedicated graph DB immediately | adds an operational source-of-truth risk before scale/query evidence exists |
 | let the analyst mutate a live graph | bypasses validation, history, and atomic snapshot publication |
 | use a persistent analyst conversation as memory | hidden mutable state and cross-document contamination |
+| use one `item_kind` enum for EOM/기관/기출/AI/객관식 | conflates independent provenance, occurrence, creation, and interaction dimensions |
+| make graph edges the product placement ledger | loses ordered canonical history and weakens transactional uniqueness/audit |
+| import legacy Excel directly into graph | silently turns ambiguous rows into facts and bypasses revision/pointer validation |
 
 The chosen hybrid—canonical revisions, typed relational/graph projection, Markdown view, bounded
 retrieval, and fresh Codex runs—is more work than a folder-only prototype but is the smallest design
@@ -736,17 +936,28 @@ Before implementation:
 3. document corpus scale, licensing classes, and first three production retrieval queries;
 4. benchmark a lexical/vector baseline before selecting graph infrastructure;
 5. design a disposable-DB migration and rollback; and
-6. preserve existing Item Registry and workflow protocol versions additively.
+6. write a focused Product/Form/Assembly/Distribution design note that resolves the open entity
+   boundaries without replacing the existing Usage Ledger; and
+7. preserve existing Item Registry and workflow protocol versions additively.
 
 Required tests include:
 
 - major/middle/minor curriculum order, descendants, cycles, and revision pinning;
 - exact subtree retrieval of all table elements;
 - combined table plus statement-set membership without repeated Item JSON scans;
+- orthogonal item-origin dimensions, including EOM human/AI combinations and institutional past
+  examination occurrences without changing `item_type_key` semantics;
+- required organization/occurrence/source evidence, derivation lineage, and rights-policy pointers;
 - missing/stale/unapproved/hash-mismatched source and item pointers;
 - duplicate node/edge/element references and illegal endpoint types;
 - source anchor and claim coverage;
 - graph snapshot coexistence and immutable historical replay;
+- exact Item Revision placement, deterministic ordering, duplicate position rejection, and one Item
+  Revision appearing in multiple Form/Deliverable Revisions;
+- distinction between planned, assembled, published, and distributed use;
+- immutable historical product/form/assembly revisions after reorder or item replacement;
+- legacy Excel import provenance, unresolved-row quarantine, and idempotent replay;
+- no student PII, answers, scores, or attempts in the general graph projection;
 - incremental build idempotency and concurrent publication;
 - bounded context and deterministic Evidence Bundle manifests;
 - prompt injection, path traversal, symlink, unauthorized-source, and answer-leak prevention;
@@ -764,6 +975,43 @@ system; the assessment graph is a derived retrieval projection over approved Ite
 `ASSESSMENT_ITEM_CONTENT_V1` already provides stable block, statement, and choice IDs. The graph
 references these IDs and does not duplicate content payloads.
 
+`USAGE_LEDGER_V0` and ADR 0019 already separate mutable Usage Plans from immutable Usage Records.
+The product/usage graph projects those records and exact placements; it does not become a second
+ledger. `SINGLE_ITEM_PRODUCTION_CAPABILITY` already proposes Blueprint, Slot, Assembly Revision,
+and Publication Revision concepts for textbooks and mock examinations. This document connects
+those revision pointers to curriculum, provenance, item-element, and retrieval views without
+changing their ownership boundary.
+
 `CODEX_SESSION_PRESETS_AND_CAPACITY` defines fresh sessions, instruction/reference bundles,
 execution presets, auth health, and bounded worker leases. This document supplies the knowledge
 corpus, graph snapshot, job-local Markdown, and Evidence Bundle boundary used by those presets.
+
+## 22. Open Decisions Before a Complete Graph Design
+
+Graph Model V0 intentionally leaves the following decisions unresolved rather than presenting a
+false 100% ontology:
+
+1. the authoritative Organization/Institution logical and revision contract, including aliases
+   for 평가원, 교육청, schools, publishers, and EOM;
+2. the exact `ItemOriginProfile` JSON Schema, controlled values, rights model, and which fields are
+   mandatory for each intake class;
+3. whether an examination occurrence is a specialized Form/Deliverable Revision or a separate
+   logical entity linked to one;
+4. whether “00모의고사” is one Product containing 12 Form logical entities, or a grouping over 12
+   existing Deliverables, and how editions/variants/regions are represented;
+5. the exact boundary between Assessment Assembly, Publication Revision, Deliverable Revision, and
+   fulfilled Usage Records so no placement is duplicated as canonical state;
+6. how corrections, withdrawn questions, alternate forms, reused logical Items, and derived Items
+   appear in historical usage queries;
+7. the Distribution Event aggregate and whether cohort/channel-level history is sufficient before
+   any privacy-sensitive learner-record integration;
+8. the reviewed legacy Excel mapping, reconciliation, ambiguity, and operator approval workflow;
+9. which graph filters and summaries are safe for authoring, reviewers, administrators, and future
+   student-facing consumers;
+10. measured query workload and scale evidence needed before choosing PostgreSQL projection,
+    vector indexing, or a dedicated graph adapter.
+
+The next design milestone should choose three representative end-to-end queries and sample legacy
+spreadsheets, then produce the focused Product/Form/Placement/Distribution note required by
+Section 20. Until then, this document is a directionally complete integration map and an explicit
+set of invariants, not authorization for schema or runtime changes.
