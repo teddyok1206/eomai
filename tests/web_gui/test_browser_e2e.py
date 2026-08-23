@@ -20,6 +20,8 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "완성 문항",
             "Reviewer 승인",
             "HWPX Capability",
+            "기존 Build 불러오기",
+            "최근 HWPX Builds",
             "DB Explorer Lite",
             "Generic Demo Mode",
             "eom-cdx가 문항에 맞춰 생성하는 자료 그림",
@@ -101,3 +103,10 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "sessionStorage" not in javascript
     assert "innerHTML" not in javascript
     assert "textContent" in javascript
+    assert 'id="hwpx-existing-build-id"' in html
+    assert 'id="hwpx-recent-builds"' in html
+    assert "const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/" in javascript
+    assert 'url.searchParams.set("hwpx_build_id", buildId)' in javascript
+    assert 'window.history.replaceState(null, "",' in javascript
+    assert 'entity: "hwpx_builds"' in javascript
+    assert "state.hwpxBuildId = buildId" in javascript

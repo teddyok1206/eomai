@@ -190,6 +190,11 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
 .capability-grid { padding-left: 0; }
 .hwpx-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 14px; }
 .hwpx-build-panel .panel-body { display: grid; gap: 13px; padding: 18px; }
+.hwpx-build-panel label { display: grid; gap: 5px; color: #465166; font-size: 11px; font-weight: 700; }
+.hwpx-build-panel input, .hwpx-build-panel select { width: 100%; min-height: 38px; border: 1px solid #b9c2d0; border-radius: 5px; padding: 7px 9px; background: white; color: var(--eom-text); }
+.hwpx-recovery, .hwpx-recent { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 9px; }
+.hwpx-recovery { padding-bottom: 13px; border-bottom: 1px solid var(--eom-border); }
+.hwpx-recent { padding: 11px; border: 1px solid var(--eom-border); border-radius: 6px; background: #f8f9fb; }
 .structured-import-panel { margin-top: 18px; }
 .structured-import-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .structured-import-grid .wide { grid-column: 1 / -1; }
@@ -275,6 +280,7 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
   .document-canvas { min-height: 700px; padding: 27px 25px; }
   .capability-card { grid-template-columns: 1fr; padding: 25px; }
   .hwpx-layout { grid-template-columns: 1fr; }
+  .hwpx-recovery, .hwpx-recent { grid-template-columns: 1fr; }
   .explorer-filters { grid-template-columns: 1fr; }
   .metric-grid, .dashboard-grid { grid-template-columns: 1fr; }
 }

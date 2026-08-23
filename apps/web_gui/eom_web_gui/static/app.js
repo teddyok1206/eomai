@@ -1,4 +1,5 @@
 const API = "/studio/api/v1";
+const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/;
 const state = {
   csrf: "",
   operator: null,
@@ -12,6 +13,7 @@ const state = {
   hwpxCapability: null,
   hwpxBuildId: null,
   hwpxPollTimer: null,
+  hwpxRecentBuilds: [],
   acceptedIntakes: [],
   structuredSource: null,
 };
@@ -108,8 +110,12 @@ function loadGlobalId() {
     $("#item-id").value = value;
     showView("item");
     toast("고정 Item Revision ID도 입력하세요.");
+  } else if (HWPX_BUILD_PATTERN.test(value)) {
+    selectHwpxBuild(value);
+    showView("hwpx");
+    loadHwpxBuild();
   } else {
-    toast("지원되는 Workflow 또는 Item ID를 입력하세요.");
+    toast("지원되는 Workflow, Item 또는 HWPX Build ID를 입력하세요.");
   }
 }
 
@@ -602,6 +608,52 @@ async function loadHwpx() {
 function installHwpx() {
   $("#hwpx-build-submit").addEventListener("click", createHwpxBuild);
   $("#hwpx-build-refresh").addEventListener("click", loadHwpxBuild);
+  $("#hwpx-build-load").addEventListener("click", loadSelectedHwpxBuild);
+  $("#hwpx-existing-build-id").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") loadSelectedHwpxBuild();
+  });
+  $("#hwpx-recent-builds").addEventListener("change", loadRecentHwpxBuild);
+  $("#hwpx-recent-refresh").addEventListener("click", loadRecentHwpxBuilds);
+  $("#hwpx-revision-id").addEventListener("input", renderRecentHwpxBuilds);
+}
+
+function selectHwpxBuild(buildId) {
+  state.hwpxBuildId = buildId;
+  $("#hwpx-existing-build-id").value = buildId;
+  $("#hwpx-build-id").textContent = buildId;
+  $("#hwpx-build-refresh").disabled = false;
+  const url = new URL(window.location.href);
+  url.searchParams.set("hwpx_build_id", buildId);
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function resetHwpxBuildResult() {
+  window.clearTimeout(state.hwpxPollTimer);
+  setStatus($("#hwpx-job-badge"), "neutral", "■", "조회 중");
+  $("#hwpx-resource-state").textContent = "-";
+  $("#hwpx-artifact-revision").textContent = "-";
+  $("#hwpx-completed-at").textContent = "-";
+  const download = $("#hwpx-download-link");
+  download.hidden = true;
+  download.href = "#";
+  $("#hwpx-download").textContent = "NOT AVAILABLE";
+}
+
+function loadSelectedHwpxBuild() {
+  const buildId = $("#hwpx-existing-build-id").value.trim();
+  if (!HWPX_BUILD_PATTERN.test(buildId)) {
+    return showMessage($("#hwpx-build-message"), "정확한 hwpxbuild_ ID를 입력하세요.", "error");
+  }
+  selectHwpxBuild(buildId);
+  resetHwpxBuildResult();
+  return loadHwpxBuild();
+}
+
+function restoreHwpxBuild() {
+  const buildId = new URL(window.location.href).searchParams.get("hwpx_build_id");
+  if (!buildId || !HWPX_BUILD_PATTERN.test(buildId)) return false;
+  selectHwpxBuild(buildId);
+  return true;
 }
 
 async function createHwpxBuild() {
@@ -622,9 +674,7 @@ async function createHwpxBuild() {
         item_number: itemNumber,
       },
     });
-    state.hwpxBuildId = command.resource_id;
-    $("#hwpx-build-id").textContent = state.hwpxBuildId;
-    $("#hwpx-build-refresh").disabled = false;
+    selectHwpxBuild(command.resource_id);
     showMessage($("#hwpx-build-message"), "HWPX manager queue에 요청했습니다.", "success");
     await loadHwpxBuild();
   } catch (failure) {
@@ -644,6 +694,7 @@ async function loadHwpxBuild() {
     $("#hwpx-tables").textContent = value.native_table_count === null ? "대기" : String(value.native_table_count);
     $("#hwpx-artifact-revision").textContent = value.output_artifact_revision_id || "-";
     $("#hwpx-completed-at").textContent = value.completed_at || "-";
+    $("#hwpx-revision-id").value = value.item_revision_id;
     const download = $("#hwpx-download-link");
     download.hidden = !value.download_available;
     download.href = value.download_available ? `${API}/hwpx/builds/${encodeURIComponent(value.build_id)}/download` : "#";
@@ -652,10 +703,70 @@ async function loadHwpxBuild() {
     if (["REQUESTED", "RUNNING", "VALIDATING"].includes(value.state)) {
       state.hwpxPollTimer = window.setTimeout(loadHwpxBuild, 2000);
     }
-    if (value.failure_code) showMessage($("#hwpx-build-message"), `Build 실패: ${value.failure_code}`, "error");
+    if (value.download_available) {
+      showMessage($("#hwpx-build-message"), "검증된 HWPX를 다운로드할 수 있습니다.", "success");
+    } else if (value.failure_code) {
+      showMessage($("#hwpx-build-message"), `Build 실패: ${value.failure_code}`, "error");
+    } else {
+      showMessage($("#hwpx-build-message"), `Build 상태: ${value.state}`);
+    }
+    rememberRecentHwpxBuild(value);
   } catch (failure) {
+    resetHwpxBuildResult();
+    setStatus($("#hwpx-job-badge"), "danger", "!", "조회 실패");
     showMessage($("#hwpx-build-message"), `상태 조회 실패: ${failure.message}`, "error");
   }
+}
+
+function hasAdminRole() {
+  const roles = state.operator && Array.isArray(state.operator.roles) ? state.operator.roles : [];
+  return roles.includes("ADMIN");
+}
+
+async function loadRecentHwpxBuilds() {
+  if (!hasAdminRole()) return;
+  try {
+    const result = await api("/explorer/query", {
+      method: "POST",
+      mutation: true,
+      body: {schema_version: "1.0", entity: "hwpx_builds", sort: "created_desc", limit: 20},
+    });
+    state.hwpxRecentBuilds = result.rows;
+    renderRecentHwpxBuilds();
+  } catch (failure) {
+    const select = $("#hwpx-recent-builds");
+    select.replaceChildren(new Option(`목록 조회 실패: ${failure.message}`, ""));
+  }
+}
+
+function renderRecentHwpxBuilds() {
+  if (!hasAdminRole()) return;
+  const selectedRevision = $("#hwpx-revision-id").value.trim();
+  const rows = state.hwpxRecentBuilds.filter(
+    (row) => !selectedRevision || row.item_revision_id === selectedRevision,
+  );
+  const select = $("#hwpx-recent-builds");
+  select.replaceChildren(new Option(rows.length ? "최근 Build 선택" : "조건에 맞는 최근 Build 없음", ""));
+  for (const row of rows) {
+    const when = row.completed_at || row.created_at || "시각 미상";
+    select.append(new Option(`${row.state} · ${row.build_id} · ${when}`, row.build_id));
+  }
+}
+
+function rememberRecentHwpxBuild(value) {
+  if (!hasAdminRole()) return;
+  state.hwpxRecentBuilds = [
+    value,
+    ...state.hwpxRecentBuilds.filter((row) => row.build_id !== value.build_id),
+  ].slice(0, 20);
+  renderRecentHwpxBuilds();
+}
+
+function loadRecentHwpxBuild() {
+  const buildId = $("#hwpx-recent-builds").value;
+  if (!HWPX_BUILD_PATTERN.test(buildId)) return;
+  $("#hwpx-existing-build-id").value = buildId;
+  loadSelectedHwpxBuild();
 }
 
 function installExplorer() {
@@ -748,7 +859,10 @@ async function boot() {
   installExplorer();
   $("#logout").addEventListener("click", logout);
   await initializeSession();
-  await Promise.all([loadHealth(), loadHwpx()]);
+  const restoredHwpx = restoreHwpxBuild();
+  if (restoredHwpx) showView("hwpx");
+  await Promise.all([loadHealth(), loadHwpx(), loadRecentHwpxBuilds()]);
+  if (restoredHwpx) await loadHwpxBuild();
 }
 
 boot().catch(() => window.location.replace("/studio/login"));

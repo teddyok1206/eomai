@@ -22,10 +22,18 @@ Current Application API V1 exposes Item component pointers but not component byt
 therefore renders an A4 metadata-only state until a reviewed Application API preview endpoint is
 available. It does not read NAS or dereference an Artifact path itself.
 
-Kordoc is also isolated behind the future chain `Application API -> HWPX Manager -> Renderer
-Adapter`. Web GUI V0 has no Kordoc import, CLI, npm, workspace, or filesystem dependency. Until that
-Application API capability is deployed, the UI reports `PREPARED_NOT_DEPLOYED` and never creates a
-fake HWPX.
+Kordoc is isolated behind the deployed chain `Application API -> HWPX Manager -> Renderer Adapter`.
+Web GUI V0 has no Kordoc import, CLI, npm, workspace, or filesystem dependency. If that capability
+is unavailable, the UI reports the closed capability state and never creates a fake HWPX.
+
+The deployed HWPX delivery view can recover an existing build by its validated opaque Build ID.
+The selected ID is reflected in the page query string so a refresh re-resolves the same immutable
+resource through the authenticated BFF; browser local/session storage is not used. ADMIN operators
+may choose from a bounded 20-row recent-build projection supplied by the existing read-only DB
+Explorer boundary and optionally filter it by exact Item Revision ID. Other roles retain exact-ID
+lookup without gaining build-enumeration permission. A successful build exposes a download link
+only after the Application API reports `SUCCEEDED`, validation `PASS`, and a complete immutable
+output pointer.
 
 ## Request Draft protocol
 
@@ -53,6 +61,8 @@ rendered with `textContent`; the browser receives no artifact bytes or storage p
 - idempotent replay: dictionary keyed by `(draft ID, idempotency key)`, O(1) membership;
 - timeline: ordered immutable tuple, sorted once by timestamp, O(n log n) for at most 500 events;
 - DB Explorer: closed entity-to-route mapping, O(1) dispatch, with API cursor pagination;
+- HWPX recovery: O(1) exact Build ID lookup; ADMIN recent history is a bounded 20-row list whose
+  optional Revision filter is O(n) with `n <= 20`;
 - status semantics: closed lookup tables for label, icon, and tone rather than nested conditionals.
 
 The session store is deliberately process-local for V0 and requires one service worker. A durable
