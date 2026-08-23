@@ -33,8 +33,17 @@ from eom_dev_reporter.sender import (
 )
 from pydantic import ValidationError
 
+ROOT = Path(__file__).resolve().parents[2]
 SLACK_WEBHOOK_ORIGIN = "https://" + "hooks.slack.com"
 WEBHOOK = f"{SLACK_WEBHOOK_ORIGIN}/services/T000/B000/secret-value"
+
+
+def test_reporter_wrapper_uses_the_canonical_development_runtime() -> None:
+    source = (ROOT / "scripts/dev/report-progress").read_text(encoding="utf-8")
+
+    assert "/srv/eom/conda/envs/eom-api/bin/python" in source
+    assert 'PYTHONPATH="${REPOSITORY}/tools/dev_reporter"' in source
+    assert "eom-core" not in source
 
 
 def _report(**overrides: object) -> DevelopmentProgressReport:

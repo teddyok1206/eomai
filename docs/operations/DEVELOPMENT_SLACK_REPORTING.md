@@ -55,7 +55,7 @@ sudo chmod 0640 /etc/eom/secrets/dev-slack.env
 ## 7. Run Doctor
 
 ```bash
-/srv/eom/conda/envs/eom-core/bin/python -m eom_dev_reporter doctor
+scripts/dev/report-progress doctor
 ```
 
 Doctor reports file presence, permissions, enabled/configured flags, masked webhook status, Git
@@ -64,7 +64,7 @@ metadata access, and DNS resolution. It never prints the URL.
 ## 8. Dry Run
 
 ```bash
-/srv/eom/conda/envs/eom-core/bin/python -m eom_dev_reporter send \
+scripts/dev/report-progress send \
   --dry-run \
   --status TESTING \
   --phase reporter-validation \
@@ -84,7 +84,7 @@ acceptance step.
 ## 10. Send A Milestone
 
 ```bash
-/srv/eom/conda/envs/eom-core/bin/python -m eom_dev_reporter send \
+scripts/dev/report-progress send \
   --status IN_PROGRESS \
   --phase workflow-definition \
   --summary "Domain-neutral workflow definition implementation" \
