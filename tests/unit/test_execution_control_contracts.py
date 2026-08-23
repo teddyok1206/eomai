@@ -7,9 +7,11 @@ from importlib.resources import files
 from pathlib import Path
 
 import pytest
+from eom_identifiers import content_sha256
 from eom_workflow import (
     CodexAuthHealthView,
     CodexCapabilitySnapshot,
+    CodexInvocation,
     ExecutionPresetRevision,
     InstructionBundleManifest,
     ReferenceBundleManifest,
@@ -204,9 +206,24 @@ def _capacity_policy() -> dict[str, object]:
     }
 
 
+def _codex_invocation() -> dict[str, object]:
+    value: dict[str, object] = {
+        "schema_version": "codex-invocation/1.0",
+        "plan_id": "execplan_" + "4" * 32,
+        "step_key": "authoring",
+        "model": "gpt-5.6-terra",
+        "reasoning_effort": "high",
+        "invocation_sha256": ZERO_SHA,
+    }
+    value["invocation_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "invocation_sha256"}
+    )
+    return value
+
+
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 9
+    assert len(entries) == 10
     assert len({name for name, _ in entries}) == len(entries)
     for name, entry in entries:
         canonical = REPOSITORY_ROOT / entry.canonical_path
@@ -224,6 +241,7 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
         ("instruction-bundle-manifest", _instruction_manifest(), InstructionBundleManifest),
         ("reference-bundle-manifest", _reference_manifest(), ReferenceBundleManifest),
         ("resolved-execution-plan", _resolved_plan(), ResolvedExecutionPlan),
+        ("codex-invocation", _codex_invocation(), CodexInvocation),
         (
             "codex-auth-health-view",
             {
@@ -347,6 +365,13 @@ def test_plan_requires_snapshot_for_evidence_and_unique_steps() -> None:
     steps.append(deepcopy(steps[0]))
     with pytest.raises(PydanticValidationError, match="step keys must be unique"):
         ResolvedExecutionPlan.model_validate(duplicate)
+
+
+def test_codex_invocation_rejects_hash_drift_at_typed_boundary() -> None:
+    value = _codex_invocation()
+    value["model"] = "gpt-5.6-luna"
+    with pytest.raises(PydanticValidationError, match="hash does not match"):
+        CodexInvocation.model_validate(value)
 
 
 def test_capacity_contract_pins_host_limits_and_rejects_overcommit() -> None:

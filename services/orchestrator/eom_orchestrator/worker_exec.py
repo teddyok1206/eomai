@@ -9,6 +9,8 @@ does not trust an ``eom``-writable virtual environment or repository checkout.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import pwd
 import re
@@ -25,6 +27,11 @@ WORKSPACE_ERROR_EXIT = 78
 CODEX_BINARY = Path("/usr/local/bin/codex")
 PATH_VALUE = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 JOB_ID_PATTERN = re.compile(r"\Ajob_[0-9a-f]{32}\Z", re.ASCII)
+PLAN_ID_PATTERN = re.compile(r"\Aexecplan_[0-9a-f]{32}\Z", re.ASCII)
+STEP_KEY_PATTERN = re.compile(r"\A[a-z][a-z0-9_]{1,63}\Z", re.ASCII)
+MODEL_PATTERN = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z", re.ASCII)
+SHA256_PATTERN = re.compile(r"\Asha256:[0-9a-f]{64}\Z", re.ASCII)
+REASONING_EFFORTS = frozenset({"minimal", "low", "medium", "high", "xhigh"})
 SLOT_USERS = {
     "01": "eom-cdx-01",
     "02": "eom-cdx-02",
@@ -133,25 +140,84 @@ def finalize_result(path: Path, workspace: Path, *, group_id: int) -> None:
         os.close(descriptor)
 
 
-def codex_command(workspace: Path) -> tuple[str, ...]:
-    return (
+def _load_invocation(path: Path, *, workspace: Path, group_id: int) -> dict[str, str]:
+    with _open_input(path, workspace=workspace, group_id=group_id) as stream:
+        try:
+            raw = stream.read(MAX_INPUT_BYTES + 1)
+            if len(raw) > MAX_INPUT_BYTES:
+                raise ValueError("Codex invocation exceeds size limit")
+            document = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Codex invocation is malformed") from exc
+    required = {
+        "schema_version",
+        "plan_id",
+        "step_key",
+        "model",
+        "reasoning_effort",
+        "invocation_sha256",
+    }
+    if not isinstance(document, dict) or set(document) != required:
+        raise ValueError("Codex invocation shape is invalid")
+    if not all(isinstance(document[key], str) for key in required):
+        raise ValueError("Codex invocation values are invalid")
+    invocation = {key: document[key] for key in required}
+    if (
+        invocation["schema_version"] != "codex-invocation/1.0"
+        or PLAN_ID_PATTERN.fullmatch(invocation["plan_id"]) is None
+        or STEP_KEY_PATTERN.fullmatch(invocation["step_key"]) is None
+        or MODEL_PATTERN.fullmatch(invocation["model"]) is None
+        or invocation["reasoning_effort"] not in REASONING_EFFORTS
+        or SHA256_PATTERN.fullmatch(invocation["invocation_sha256"]) is None
+    ):
+        raise ValueError("Codex invocation contract is invalid")
+    hashed = {key: value for key, value in invocation.items() if key != "invocation_sha256"}
+    canonical = json.dumps(
+        hashed,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    if "sha256:" + hashlib.sha256(canonical).hexdigest() != invocation["invocation_sha256"]:
+        raise ValueError("Codex invocation hash differs")
+    return invocation
+
+
+def codex_command(workspace: Path, invocation: dict[str, str] | None = None) -> tuple[str, ...]:
+    command = [
         str(CODEX_BINARY),
         "exec",
-        "--sandbox",
-        "read-only",
-        "--ephemeral",
-        "--ignore-user-config",
-        "--skip-git-repo-check",
-        "--color",
-        "never",
-        "--cd",
-        str(workspace),
-        "--output-schema",
-        str(workspace / "worker-result.schema.json"),
-        "--output-last-message",
-        str(workspace / "result.json"),
-        "-",
+    ]
+    if invocation is not None:
+        command.extend(
+            (
+                "--strict-config",
+                "--model",
+                invocation["model"],
+                "--config",
+                f'model_reasoning_effort="{invocation["reasoning_effort"]}"',
+            )
+        )
+    command.extend(
+        (
+            "--sandbox",
+            "read-only",
+            "--ephemeral",
+            "--ignore-user-config",
+            "--skip-git-repo-check",
+            "--color",
+            "never",
+            "--cd",
+            str(workspace),
+            "--output-schema",
+            str(workspace / "worker-result.schema.json"),
+            "--output-last-message",
+            str(workspace / "result.json"),
+            "-",
+        )
     )
+    return tuple(command)
 
 
 def execute(slot_id: str, job_id: str) -> int:
@@ -183,9 +249,15 @@ def execute(slot_id: str, job_id: str) -> int:
         pass
     with _open_input(workspace / "worker-input.json", workspace=workspace, group_id=group_id):
         pass
+    invocation_path = workspace / "codex-invocation.json"
+    invocation: dict[str, str] | None = None
+    if invocation_path.exists() or invocation_path.is_symlink():
+        invocation = _load_invocation(invocation_path, workspace=workspace, group_id=group_id)
+        with _open_input(workspace / "AGENTS.md", workspace=workspace, group_id=group_id):
+            pass
     with _open_input(workspace / "prompt.txt", workspace=workspace, group_id=group_id) as prompt:
         completed = subprocess.run(
-            codex_command(workspace),
+            codex_command(workspace, invocation),
             stdin=prompt,
             capture_output=True,
             check=False,

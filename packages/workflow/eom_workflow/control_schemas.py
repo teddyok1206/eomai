@@ -59,6 +59,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:9540b950402bf28eaba6d7a489227c5d90dce20d125c9489203cbc4a6d0e9d6d",
         ),
+        "codex-invocation": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-invocation-v1.schema.json",
+            "resources/control-plane/codex-invocation-v1.schema.json",
+            "1.0",
+            "sha256:639f448062f265d4bfe82af6e02237891109827071f701b8825bc556a4b0b7eb",
+        ),
         "codex-auth-health-view": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-auth-health-view-v1.schema.json",
             "resources/control-plane/codex-auth-health-view-v1.schema.json",

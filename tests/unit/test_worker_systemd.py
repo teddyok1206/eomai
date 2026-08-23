@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 from eom_orchestrator.errors import PlatformError
-from eom_orchestrator.worker_exec import codex_command, expected_workspace, validate_job_id
+from eom_orchestrator.worker_exec import (
+    _load_invocation,
+    codex_command,
+    expected_workspace,
+    validate_job_id,
+)
 from eom_orchestrator.worker_registry import WorkerSlot
 from eom_orchestrator.worker_systemd import (
     PROBE_TEMPLATE_SHA256,
@@ -433,6 +440,59 @@ def test_worker_exec_uses_fixed_workspace_and_codex_contract() -> None:
     assert command[1] == "exec"
     assert "--ask-for-approval" not in command
     assert command[-1] == "-"
+
+
+def test_worker_exec_uses_exact_resolved_model_and_effort_without_resume(tmp_path: Path) -> None:
+    document = {
+        "schema_version": "codex-invocation/1.0",
+        "plan_id": "execplan_" + "1" * 32,
+        "step_key": "authoring",
+        "model": "gpt-5.6-terra",
+        "reasoning_effort": "high",
+    }
+    canonical = json.dumps(
+        document,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    document["invocation_sha256"] = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    path = tmp_path / "codex-invocation.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    path.chmod(0o640)
+
+    invocation = _load_invocation(path, workspace=tmp_path, group_id=os.getgid())
+    command = codex_command(tmp_path, invocation)
+
+    assert command[:4] == (
+        "/usr/local/bin/codex",
+        "exec",
+        "--strict-config",
+        "--model",
+    )
+    assert command[4] == "gpt-5.6-terra"
+    assert 'model_reasoning_effort="high"' in command
+    assert "--ephemeral" in command
+    assert "--ignore-user-config" in command
+    assert "resume" not in command
+
+
+def test_worker_exec_rejects_invocation_hash_drift(tmp_path: Path) -> None:
+    document = {
+        "schema_version": "codex-invocation/1.0",
+        "plan_id": "execplan_" + "1" * 32,
+        "step_key": "authoring",
+        "model": "gpt-5.6-terra",
+        "reasoning_effort": "high",
+        "invocation_sha256": "sha256:" + "0" * 64,
+    }
+    path = tmp_path / "codex-invocation.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    path.chmod(0o640)
+
+    with pytest.raises(ValueError, match="hash differs"):
+        _load_invocation(path, workspace=tmp_path, group_id=os.getgid())
 
 
 def test_canonical_unit_and_helper_hashes_match_runtime_contract() -> None:

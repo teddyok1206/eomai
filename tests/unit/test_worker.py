@@ -4,8 +4,14 @@ from pathlib import Path
 
 import pytest
 from eom_orchestrator.errors import PlatformError
+from eom_orchestrator.execution_materializer import MaterializedExecution
 from eom_orchestrator.settings import Settings
-from eom_orchestrator.worker import CodexWorkerAdapter, load_worker_result, worker_output_schema
+from eom_orchestrator.worker import (
+    CodexWorkerAdapter,
+    PreparedWorkerWorkspace,
+    load_worker_result,
+    worker_output_schema,
+)
 from eom_orchestrator.worker_registry import WorkerSlot
 from eom_orchestrator.worker_systemd import FixedUnitRun, FixedUnitStatus
 from eom_protocol import ArtifactSpec, ErrorCode, SmokePayload, WorkerInput
@@ -163,3 +169,40 @@ def test_collected_worker_success_with_malformed_result_is_result_failure(
         load_worker_result(run.result_path, workspace)
 
     assert captured.value.code is ErrorCode.WORKER_RESULT_INVALID
+
+
+def test_resolved_materialization_failure_never_starts_fixed_unit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / JOB_ID
+    workspace.mkdir()
+    prepared = PreparedWorkerWorkspace(
+        job_id=JOB_ID,
+        workspace=workspace,
+        schema_path=workspace / "worker-result.schema.json",
+        prompt_path=workspace / "prompt.txt",
+    )
+    adapter = CodexWorkerAdapter(Settings())
+    monkeypatch.setattr(adapter, "prepare_structured_workspace", lambda **_kwargs: prepared)
+    started = False
+
+    def start(**_kwargs: object) -> None:
+        nonlocal started
+        started = True
+
+    monkeypatch.setattr(adapter, "run_prepared", start)
+
+    def reject(_workspace: Path) -> MaterializedExecution:
+        raise PlatformError(ErrorCode.WORKER_EXEC_FAILED, "materialization rejected")
+
+    with pytest.raises(PlatformError, match="materialization rejected"):
+        adapter.run_resolved_structured(
+            job_id=JOB_ID,
+            input_document={},
+            output_schema={"type": "object"},
+            prompt_text="prompt",
+            slot=WorkerSlot(slot_id="01", linux_user="eom-cdx-01", role="authoring", enabled=True),
+            staging=tmp_path / "staging",
+            materialize=reject,
+        )
+    assert not started

@@ -192,6 +192,23 @@ def _validate_artifact_pointer(
     return revision
 
 
+def resolve_control_artifact_pointer(
+    session: Session,
+    pointer: ControlArtifactPointer,
+    *,
+    expected_schema_ref: str | None = None,
+    expected_media_type: str | None = None,
+) -> ArtifactRevisionRecord:
+    """Resolve one approved immutable member pointer for an infrastructure adapter."""
+
+    return _validate_artifact_pointer(
+        session,
+        pointer,
+        expected_schema_ref=expected_schema_ref,
+        expected_media_type=expected_media_type,
+    )
+
+
 def _logical_bundle(
     session: Session,
     *,

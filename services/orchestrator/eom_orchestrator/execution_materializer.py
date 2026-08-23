@@ -1,0 +1,488 @@
+"""Fail-closed immutable-bundle materialization into one worker workspace."""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import stat
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
+
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from eom_workflow import (
+    CodexInvocation,
+    InstructionBundleManifest,
+    ReferenceBundleManifest,
+    ResolvedExecutionPlan,
+    validate_control_contract,
+)
+from eom_workflow.control_plane import ControlArtifactPointer, ResolvedStepExecution
+from sqlalchemy.orm import Session
+
+from eom_orchestrator.control_models import (
+    ExecutionBundleRevisionRecord,
+    ResolvedExecutionPlanRecord,
+)
+from eom_orchestrator.control_service import (
+    ControlPlaneError,
+    compute_control_document_hash,
+    resolve_control_artifact_pointer,
+)
+
+MAX_MARKDOWN_MEMBER_BYTES = 2 * 1024 * 1024
+MAX_MATERIALIZED_BYTES = 32 * 1024 * 1024
+COPY_BUFFER_BYTES = 1024 * 1024
+WORKSPACE_MODE = 0o2770
+MATERIALIZED_DIRECTORY_MODE = 0o750
+MATERIALIZED_FILE_MODE = 0o640
+
+
+@dataclass(frozen=True)
+class MaterializedExecution:
+    """Sanitized evidence and local paths for one prepared fixed-worker invocation."""
+
+    plan_id: str
+    plan_sha256: str
+    step_key: str
+    model: str
+    reasoning_effort: str
+    instruction_bundle_revision_id: str
+    instruction_manifest_sha256: str
+    reference_bundle_revision_id: str | None
+    reference_manifest_sha256: str | None
+    agents_sha256: str
+    invocation_sha256: str
+    materialized_member_count: int
+    materialized_bytes: int
+    invocation_path: Path
+
+    def event_data(self) -> dict[str, str | int | None]:
+        """Return the bounded path-free projection safe for an append-only job event."""
+
+        return {
+            "plan_id": self.plan_id,
+            "plan_sha256": self.plan_sha256,
+            "step_key": self.step_key,
+            "model": self.model,
+            "reasoning_effort": self.reasoning_effort,
+            "instruction_bundle_revision_id": self.instruction_bundle_revision_id,
+            "instruction_manifest_sha256": self.instruction_manifest_sha256,
+            "reference_bundle_revision_id": self.reference_bundle_revision_id,
+            "reference_manifest_sha256": self.reference_manifest_sha256,
+            "agents_sha256": self.agents_sha256,
+            "invocation_sha256": self.invocation_sha256,
+            "materialized_member_count": self.materialized_member_count,
+            "materialized_bytes": self.materialized_bytes,
+        }
+
+
+def materialize_execution_step(
+    session: Session,
+    *,
+    plan_id: str,
+    step_key: str,
+    workspace: Path,
+    canonical_artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> MaterializedExecution:
+    """Materialize one exact plan step without resolving any mutable current pointer."""
+
+    _require_directory(workspace, group_id=worker_group_id, mode=WORKSPACE_MODE)
+    artifact_root = _canonical_root(canonical_artifact_root)
+    plan_record = session.get(ResolvedExecutionPlanRecord, plan_id)
+    if plan_record is None:
+        raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
+    plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
+    if plan.plan_sha256 != plan_record.plan_sha256:
+        raise ControlPlaneError("CONTROL_PLAN_HASH_MISMATCH", "resolved plan record is stale")
+    matching = [step for step in plan.steps if step.step_key == step_key]
+    if len(matching) != 1:
+        raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
+    step = matching[0]
+
+    instruction = _instruction_manifest(
+        session,
+        step,
+        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+    )
+    reference = _reference_manifest(
+        session,
+        step,
+        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+    )
+    instruction_docs: list[tuple[str, str, bytes]] = []
+    total_bytes = 0
+    member_count = 0
+    for component in sorted(
+        instruction.components,
+        key=lambda item: (0 if item.layer == "PLATFORM" else 1, item.relative_path),
+    ):
+        payload = _materialize_member(
+            session,
+            pointer=component.artifact,
+            relative_path=component.relative_path,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        )
+        total_bytes += len(payload)
+        member_count += 1
+        _require_total_size(total_bytes)
+        instruction_docs.append((component.layer, component.relative_path, payload))
+    layers = {layer for layer, _, _ in instruction_docs}
+    if layers != {"PLATFORM", "ROLE"}:
+        raise ControlPlaneError(
+            "CONTROL_INSTRUCTION_LAYERS_INVALID",
+            "instruction bundle requires platform and role components",
+        )
+
+    if reference is not None:
+        for entry in sorted(reference.entries, key=lambda item: item.relative_path):
+            payload = _materialize_member(
+                session,
+                pointer=entry.artifact,
+                relative_path=entry.relative_path,
+                workspace=workspace,
+                artifact_root=artifact_root,
+                worker_group_id=worker_group_id,
+                authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            )
+            total_bytes += len(payload)
+            member_count += 1
+            _require_total_size(total_bytes)
+
+    agents_bytes = _agents_document(instruction_docs)
+    total_bytes += len(agents_bytes)
+    _require_total_size(total_bytes)
+    agents_path = workspace / "AGENTS.md"
+    _write_exclusive(agents_path, agents_bytes, group_id=worker_group_id)
+
+    invocation_document: dict[str, object] = {
+        "schema_version": "codex-invocation/1.0",
+        "plan_id": plan.plan_id,
+        "step_key": step.step_key,
+        "model": step.model,
+        "reasoning_effort": step.reasoning_effort,
+        "invocation_sha256": "sha256:" + "0" * 64,
+    }
+    invocation_document["invocation_sha256"] = content_sha256(
+        {key: value for key, value in invocation_document.items() if key != "invocation_sha256"}
+    )
+    validate_control_contract("codex-invocation", invocation_document)
+    invocation = CodexInvocation.model_validate(invocation_document)
+    invocation_path = workspace / "codex-invocation.json"
+    invocation_bytes = canonical_json_bytes(invocation) + b"\n"
+    total_bytes += len(invocation_bytes)
+    _require_total_size(total_bytes)
+    _write_exclusive(
+        invocation_path,
+        invocation_bytes,
+        group_id=worker_group_id,
+    )
+    return MaterializedExecution(
+        plan_id=plan.plan_id,
+        plan_sha256=plan.plan_sha256,
+        step_key=step.step_key,
+        model=step.model,
+        reasoning_effort=str(step.reasoning_effort),
+        instruction_bundle_revision_id=step.instruction_bundle.bundle_revision_id,
+        instruction_manifest_sha256=step.instruction_bundle.manifest_sha256,
+        reference_bundle_revision_id=(
+            step.reference_bundle.bundle_revision_id if step.reference_bundle is not None else None
+        ),
+        reference_manifest_sha256=(
+            step.reference_bundle.manifest_sha256 if step.reference_bundle is not None else None
+        ),
+        agents_sha256=sha256_bytes(agents_bytes),
+        invocation_sha256=invocation.invocation_sha256,
+        materialized_member_count=member_count,
+        materialized_bytes=total_bytes,
+        invocation_path=invocation_path,
+    )
+
+
+def _instruction_manifest(
+    session: Session,
+    step: ResolvedStepExecution,
+    *,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> InstructionBundleManifest:
+    record = session.get(ExecutionBundleRevisionRecord, step.instruction_bundle.bundle_revision_id)
+    if (
+        record is None
+        or record.bundle_id != step.instruction_bundle.bundle_id
+        or record.bundle_kind != "INSTRUCTION"
+        or record.state != "RELEASED"
+        or record.manifest_sha256 != step.instruction_bundle.manifest_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_INSTRUCTION_POINTER_INVALID", "instruction bundle revision is stale"
+        )
+    if (
+        step.instruction_bundle.manifest_artifact.artifact_revision_id
+        not in authorized_artifact_revision_ids
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_PERMISSION_DENIED", "instruction manifest is not authorized"
+        )
+    resolve_control_artifact_pointer(session, step.instruction_bundle.manifest_artifact)
+    manifest = InstructionBundleManifest.model_validate(record.canonical_document)
+    if (
+        record.content_sha256 != manifest.content_sha256
+        or compute_control_document_hash(record.canonical_document, "content_sha256")
+        != manifest.content_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_INSTRUCTION_HASH_MISMATCH", "instruction bundle document hash differs"
+        )
+    return manifest
+
+
+def _reference_manifest(
+    session: Session,
+    step: ResolvedStepExecution,
+    *,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> ReferenceBundleManifest | None:
+    if step.reference_bundle is None:
+        return None
+    record = session.get(ExecutionBundleRevisionRecord, step.reference_bundle.bundle_revision_id)
+    if (
+        record is None
+        or record.bundle_id != step.reference_bundle.bundle_id
+        or record.bundle_kind != "REFERENCE"
+        or record.state != "RELEASED"
+        or record.manifest_sha256 != step.reference_bundle.manifest_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_REFERENCE_POINTER_INVALID", "reference bundle revision is stale"
+        )
+    if (
+        step.reference_bundle.manifest_artifact.artifact_revision_id
+        not in authorized_artifact_revision_ids
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_PERMISSION_DENIED", "reference manifest is not authorized"
+        )
+    resolve_control_artifact_pointer(session, step.reference_bundle.manifest_artifact)
+    manifest = ReferenceBundleManifest.model_validate(record.canonical_document)
+    if (
+        record.content_sha256 != manifest.content_sha256
+        or compute_control_document_hash(record.canonical_document, "content_sha256")
+        != manifest.content_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_REFERENCE_HASH_MISMATCH", "reference bundle document hash differs"
+        )
+    return manifest
+
+
+def _materialize_member(
+    session: Session,
+    *,
+    pointer: ControlArtifactPointer,
+    relative_path: str,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> bytes:
+    if pointer.artifact_revision_id not in authorized_artifact_revision_ids:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_PERMISSION_DENIED", "artifact revision is not authorized"
+        )
+    if pointer.media_type != "text/markdown" or not relative_path.endswith(".md"):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_MEDIA_MISMATCH", "materialized member is not Markdown"
+        )
+    relative = PurePosixPath(relative_path)
+    if relative.is_absolute() or ".." in relative.parts or "." in relative.parts:
+        raise ControlPlaneError("CONTROL_POINTER_UNSAFE", "materialized path is unsafe")
+    revision = resolve_control_artifact_pointer(
+        session, pointer, expected_media_type="text/markdown"
+    )
+    expected_revision_root = artifact_root / pointer.artifact_id / pointer.artifact_revision_id
+    stored_root = Path(revision.nas_path)
+    if stored_root != expected_revision_root:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_STORAGE_MISMATCH", "artifact storage location is not canonical"
+        )
+    source = stored_root / PurePosixPath(pointer.logical_name)
+    entry = _manifest_entry(revision.manifest, pointer.logical_name)
+    expected_bytes = entry.get("bytes")
+    if not isinstance(expected_bytes, int) or not 0 < expected_bytes <= MAX_MARKDOWN_MEMBER_BYTES:
+        raise ControlPlaneError("CONTROL_POINTER_SIZE_INVALID", "Markdown member size is invalid")
+    payload = _read_verified_source(
+        source,
+        canonical_root=artifact_root,
+        expected_sha256=pointer.sha256,
+        expected_bytes=expected_bytes,
+    )
+    try:
+        payload.decode("utf-8")
+    except UnicodeError as exc:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_ENCODING_INVALID", "Markdown member is not UTF-8"
+        ) from exc
+    destination = workspace.joinpath(*relative.parts)
+    _ensure_parent(destination.parent, workspace=workspace, group_id=worker_group_id)
+    _write_exclusive(destination, payload, group_id=worker_group_id)
+    return payload
+
+
+def _manifest_entry(manifest: dict[str, object], logical_name: str) -> dict[str, object]:
+    files = manifest.get("files")
+    matches = (
+        [item for item in files if isinstance(item, dict) and item.get("file_name") == logical_name]
+        if isinstance(files, list)
+        else []
+    )
+    if len(matches) != 1:
+        raise ControlPlaneError("CONTROL_POINTER_MANIFEST_MISMATCH", "artifact member is missing")
+    return matches[0]
+
+
+def _canonical_root(path: Path) -> Path:
+    try:
+        metadata = path.lstat()
+        if (
+            path.is_symlink()
+            or not stat.S_ISDIR(metadata.st_mode)
+            or not path.is_absolute()
+            or path.resolve(strict=True) != path
+        ):
+            raise ValueError("artifact root is unsafe")
+    except (OSError, ValueError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_ARTIFACT_ROOT_UNAVAILABLE", "canonical artifact root is unavailable"
+        ) from exc
+    return path
+
+
+def _read_verified_source(
+    path: Path,
+    *,
+    canonical_root: Path,
+    expected_sha256: str,
+    expected_bytes: int,
+) -> bytes:
+    try:
+        relative = path.relative_to(canonical_root)
+        current = canonical_root
+        for component in relative.parts[:-1]:
+            current = current / component
+            metadata = current.lstat()
+            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+                raise ValueError("artifact parent is unsafe")
+        descriptor = os.open(
+            path, os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        )
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size != expected_bytes:
+                raise ValueError("artifact member metadata differs")
+            digest = hashlib.sha256()
+            chunks: list[bytes] = []
+            while chunk := os.read(descriptor, COPY_BUFFER_BYTES):
+                digest.update(chunk)
+                chunks.append(chunk)
+            payload = b"".join(chunks)
+        finally:
+            os.close(descriptor)
+    except (OSError, ValueError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_FILE_INVALID", "artifact member is unsafe or unreadable"
+        ) from exc
+    if "sha256:" + digest.hexdigest() != expected_sha256:
+        raise ControlPlaneError("CONTROL_POINTER_HASH_MISMATCH", "artifact member hash differs")
+    return payload
+
+
+def _ensure_parent(path: Path, *, workspace: Path, group_id: int) -> None:
+    try:
+        relative = path.relative_to(workspace)
+    except ValueError as exc:
+        raise ControlPlaneError("CONTROL_POINTER_UNSAFE", "materialized parent escaped") from exc
+    current = workspace
+    for component in relative.parts:
+        current = current / component
+        if current.exists() or current.is_symlink():
+            _require_directory(current, group_id=group_id, mode=MATERIALIZED_DIRECTORY_MODE)
+            continue
+        current.mkdir(mode=MATERIALIZED_DIRECTORY_MODE)
+        os.chown(current, -1, group_id)
+        current.chmod(MATERIALIZED_DIRECTORY_MODE)
+        _require_directory(current, group_id=group_id, mode=MATERIALIZED_DIRECTORY_MODE)
+
+
+def _require_directory(path: Path, *, group_id: int, mode: int) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise ControlPlaneError(
+            "CONTROL_WORKSPACE_INVALID", "workspace directory is unavailable"
+        ) from exc
+    if (
+        path.is_symlink()
+        or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_gid != group_id
+        or stat.S_IMODE(metadata.st_mode) != mode
+    ):
+        raise ControlPlaneError("CONTROL_WORKSPACE_INVALID", "workspace directory is unsafe")
+
+
+def _write_exclusive(path: Path, payload: bytes, *, group_id: int) -> None:
+    flags = (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    try:
+        descriptor = os.open(path, flags, MATERIALIZED_FILE_MODE)
+        try:
+            offset = 0
+            while offset < len(payload):
+                offset += os.write(descriptor, payload[offset:])
+            os.fchown(descriptor, -1, group_id)
+            os.fchmod(descriptor, MATERIALIZED_FILE_MODE)
+            metadata = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_gid != group_id
+                or stat.S_IMODE(metadata.st_mode) != MATERIALIZED_FILE_MODE
+                or metadata.st_size != len(payload)
+            ):
+                raise ValueError("materialized file metadata differs")
+        finally:
+            os.close(descriptor)
+    except (OSError, ValueError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_MATERIALIZATION_FAILED", "job-local materialization failed"
+        ) from exc
+
+
+def _agents_document(instruction_docs: list[tuple[str, str, bytes]]) -> bytes:
+    sections = [
+        b"# EOM Job Instructions\n\n",
+        b"This file is a deterministic job-local view of pinned instruction revisions.\n",
+    ]
+    for layer, relative_path, payload in instruction_docs:
+        sections.extend(
+            (
+                f"\n## {layer}: {relative_path}\n\n".encode(),
+                payload.rstrip(b"\n"),
+                b"\n",
+            )
+        )
+    return b"".join(sections)
+
+
+def _require_total_size(value: int) -> None:
+    if value > MAX_MATERIALIZED_BYTES:
+        raise ControlPlaneError(
+            "CONTROL_MATERIALIZATION_TOO_LARGE", "job-local materialization exceeds size limit"
+        )

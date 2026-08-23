@@ -18,7 +18,6 @@ from eom_identifiers import (
     new_capability_snapshot_id,
     new_capacity_policy_id,
     new_capacity_policy_revision_id,
-    new_execution_plan_id,
     new_execution_preset_id,
     new_execution_preset_revision_id,
     new_instruction_bundle_id,
@@ -48,11 +47,14 @@ from eom_orchestrator.control_service import (
     record_capability_snapshot,
     record_capacity_policy_revision,
     record_execution_preset_revision,
-    record_resolved_execution_plan,
     terminalize_worker_lease,
     worker_lease_view,
 )
 from eom_orchestrator.database import build_session_factory, transaction
+from eom_orchestrator.execution_resolver import (
+    ExecutionStepRequirement,
+    resolve_execution_plan,
+)
 from eom_orchestrator.models import (
     ArtifactRecord,
     ArtifactRevisionRecord,
@@ -64,6 +66,7 @@ from eom_orchestrator.models import (
 from eom_orchestrator.protocol import protocol_schema_hash
 from eom_orchestrator.repository import ensure_protocol_version, upsert_worker_slot
 from eom_workflow import ControlArtifactPointer
+from eom_workflow.control_plane import WorkerRole
 from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.models import (
     WorkflowDefinitionRecord,
@@ -444,9 +447,10 @@ def _complete_control_plane(session: Session) -> tuple[str, str, str]:
         },
         "content_sha256",
     )
-    preset_record = record_execution_preset_revision(
+    preset_key = f"standard-{uuid4().hex}"
+    record_execution_preset_revision(
         session,
-        preset_key=f"standard-{uuid4().hex}",
+        preset_key=preset_key,
         document=preset,
         created_by="phase2-test",
     )
@@ -459,44 +463,6 @@ def _complete_control_plane(session: Session) -> tuple[str, str, str]:
     workflow = _workflow(session)
     content_pack_release_id = "packrel_" + uuid4().hex
     content_pack_hash = "sha256:" + uuid4().hex * 2
-    plan_id = new_execution_plan_id()
-    plan = _self_hash(
-        {
-            "schema_version": "resolved-execution-plan/1.0",
-            "plan_id": plan_id,
-            "workflow_id": workflow.workflow_id,
-            "preset_id": preset_id,
-            "preset_revision_id": preset_revision_id,
-            "preset_sha256": preset_record.content_sha256,
-            "workflow_definition_key": workflow.definition_key,
-            "workflow_definition_version": workflow.definition_version,
-            "workflow_definition_sha256": workflow.definition_hash,
-            "content_pack_release_id": content_pack_release_id,
-            "content_pack_sha256": content_pack_hash,
-            "capacity_policy_revision_id": capacity_revision_id,
-            "graph_snapshot_revision_id": None,
-            "evidence_bundle_revision_id": None,
-            "steps": [
-                {
-                    "step_key": "authoring",
-                    "role": "authoring",
-                    "model": "gpt-5.6-terra",
-                    "reasoning_effort": "high",
-                    "instruction_bundle": instruction_pointer,
-                    "reference_bundle": reference_pointer,
-                    "worker_pool_key": "authoring",
-                    "timeout_seconds": 1800,
-                    "sandbox": "read-only",
-                    "network": "disabled",
-                    "general_knowledge_mode": "ALLOWED_WITH_PROVENANCE",
-                }
-            ],
-            "resolver_version": "1.0.0",
-            "resolved_at": NOW.isoformat().replace("+00:00", "Z"),
-            "plan_sha256": "sha256:" + "0" * 64,
-        },
-        "plan_sha256",
-    )
     dependencies = ResolvedPlanDependencyEvidence(
         workflow_id=workflow.workflow_id,
         workflow_definition_key=workflow.definition_key,
@@ -506,9 +472,23 @@ def _complete_control_plane(session: Session) -> tuple[str, str, str]:
         content_pack_release_id=content_pack_release_id,
         content_pack_sha256=content_pack_hash,
     )
-    first_plan = record_resolved_execution_plan(session, document=plan, dependencies=dependencies)
-    replay = record_resolved_execution_plan(session, document=plan, dependencies=dependencies)
-    assert replay.plan_id == first_plan.plan_id
+    first_plan = resolve_execution_plan(
+        session,
+        preset_key=preset_key,
+        dependencies=dependencies,
+        steps=(ExecutionStepRequirement("authoring", WorkerRole.AUTHORING),),
+        resolved_at=NOW,
+    )
+    replay = resolve_execution_plan(
+        session,
+        preset_key=preset_key,
+        dependencies=dependencies,
+        steps=(ExecutionStepRequirement("authoring", WorkerRole.AUTHORING),),
+        resolved_at=NOW + timedelta(days=1),
+    )
+    assert replay == first_plan
+    assert first_plan.steps[0].model == "gpt-5.6-terra"
+    assert first_plan.steps[0].reasoning_effort == "high"
 
     binding_id = new_auth_binding_id()
     health = {
@@ -545,7 +525,7 @@ def _complete_control_plane(session: Session) -> tuple[str, str, str]:
     )
     record_capability_snapshot(session, document=capability)
     session.flush()
-    return plan_id, workflow.workflow_id, instruction_record.bundle_revision_id
+    return first_plan.plan_id, workflow.workflow_id, instruction_record.bundle_revision_id
 
 
 def test_control_plane_records_are_idempotent_immutable_and_capacity_bounded(

@@ -7,6 +7,7 @@ from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
+from eom_identifiers import content_sha256
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
@@ -271,6 +272,24 @@ class ResolvedExecutionPlan(FrozenModel):
             raise ValueError("resolved step keys must be unique")
         if self.evidence_bundle_revision_id is not None and self.graph_snapshot_revision_id is None:
             raise ValueError("an Evidence Bundle requires its pinned Graph Snapshot")
+        return self
+
+
+class CodexInvocation(FrozenModel):
+    """Bounded job-local CLI selection derived from one resolved plan step."""
+
+    schema_version: Literal["codex-invocation/1.0"] = "codex-invocation/1.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    step_key: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
+    model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    reasoning_effort: ReasoningEffort
+    invocation_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_invocation_hash(self) -> CodexInvocation:
+        body = self.model_dump(mode="json", exclude={"invocation_sha256"})
+        if content_sha256(body) != self.invocation_sha256:
+            raise ValueError("Codex invocation hash does not match its canonical content")
         return self
 
 

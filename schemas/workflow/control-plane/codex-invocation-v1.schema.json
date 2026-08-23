@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/codex-invocation/1.0",
+  "title": "EOM Job-Local Codex Invocation V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "step_key",
+    "model",
+    "reasoning_effort",
+    "invocation_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "codex-invocation/1.0"
+    },
+    "plan_id": {
+      "type": "string",
+      "pattern": "^execplan_[0-9a-f]{32}$"
+    },
+    "step_key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,63}$"
+    },
+    "model": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "reasoning_effort": {
+      "type": "string",
+      "enum": ["minimal", "low", "medium", "high", "xhigh"]
+    },
+    "invocation_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

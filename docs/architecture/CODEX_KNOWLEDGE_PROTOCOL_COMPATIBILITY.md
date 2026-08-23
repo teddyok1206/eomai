@@ -19,12 +19,17 @@ Neither package imports persistence, systemd, Codex CLI, NAS, HTTP, or service i
 
 ## 2. Immutable schema inventory
 
+Phase 3 adds the bounded job-local Codex Invocation contract. It is an immutable adapter-boundary
+contract derived from a Resolved Execution Plan step; it does not add a user-selectable execution
+surface or reinterpret any Phase 1 resource.
+
 | Contract | Schema ID | Package owner |
 | --- | --- | --- |
 | Execution Preset Revision | `eom://schemas/workflow/execution-preset-revision/1.0` | `eom_workflow` |
 | Instruction Bundle Manifest | `eom://schemas/workflow/instruction-bundle-manifest/1.0` | `eom_workflow` |
 | Reference Bundle Manifest | `eom://schemas/workflow/reference-bundle-manifest/1.0` | `eom_workflow` |
 | Resolved Execution Plan | `eom://schemas/workflow/resolved-execution-plan/1.0` | `eom_workflow` |
+| Job-local Codex Invocation | `eom://schemas/workflow/codex-invocation/1.0` | `eom_workflow` |
 | Codex Auth Health View | `eom://schemas/workflow/codex-auth-health-view/1.0` | `eom_workflow` |
 | Codex Capability Snapshot | `eom://schemas/workflow/codex-capability-snapshot/1.0` | `eom_workflow` |
 | Worker Capacity Policy | `eom://schemas/workflow/worker-capacity-policy/1.0` | `eom_workflow` |

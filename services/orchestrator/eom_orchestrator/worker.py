@@ -7,9 +7,10 @@ import json
 import os
 import pwd
 import stat
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from eom_protocol import ErrorCode, WorkerInput
 from eom_protocol.validation import load_schema
@@ -24,6 +25,9 @@ from eom_orchestrator.worker_systemd import (
     validate_job_id,
     worker_unit_name,
 )
+
+if TYPE_CHECKING:
+    from eom_orchestrator.execution_materializer import MaterializedExecution
 
 MAX_RESULT_BYTES = 1024 * 1024
 
@@ -42,6 +46,24 @@ class WorkerRun:
     stdout_path: Path
     stderr_path: Path
     unit_name: str
+
+
+@dataclass(frozen=True)
+class PreparedWorkerWorkspace:
+    """One private workspace prepared for bounded pre-launch materialization."""
+
+    job_id: str
+    workspace: Path
+    schema_path: Path
+    prompt_path: Path
+
+
+@dataclass(frozen=True)
+class ResolvedWorkerRun:
+    """Fixed worker result paired with its immutable materialization evidence."""
+
+    run: WorkerRun
+    materialization: MaterializedExecution
 
 
 class CodexWorkerAdapter:
@@ -163,6 +185,26 @@ class CodexWorkerAdapter:
         slot: WorkerSlot,
         staging: Path,
     ) -> WorkerRun:
+        prepared = self.prepare_structured_workspace(
+            job_id=job_id,
+            input_document=input_document,
+            output_schema=output_schema,
+            prompt_text=prompt_text,
+            slot=slot,
+        )
+        return self.run_prepared(prepared=prepared, slot=slot, staging=staging)
+
+    def prepare_structured_workspace(
+        self,
+        *,
+        job_id: str,
+        input_document: dict[str, Any],
+        output_schema: dict[str, Any],
+        prompt_text: str,
+        slot: WorkerSlot,
+    ) -> PreparedWorkerWorkspace:
+        """Prepare base inputs before a resolved-plan materializer adds pinned Markdown."""
+
         workspace, schema_path, prompt_path = self._prepare_workspace_document(
             job_id=job_id,
             input_document=input_document,
@@ -170,14 +212,54 @@ class CodexWorkerAdapter:
             prompt_text=prompt_text,
             slot=slot,
         )
-        return self._execute(
+        return PreparedWorkerWorkspace(
             job_id=job_id,
             workspace=workspace,
             schema_path=schema_path,
             prompt_path=prompt_path,
+        )
+
+    def run_prepared(
+        self,
+        *,
+        prepared: PreparedWorkerWorkspace,
+        slot: WorkerSlot,
+        staging: Path,
+    ) -> WorkerRun:
+        """Start the fixed unit only after all application-side materialization succeeds."""
+
+        return self._execute(
+            job_id=prepared.job_id,
+            workspace=prepared.workspace,
+            schema_path=prepared.schema_path,
+            prompt_path=prepared.prompt_path,
             slot=slot,
             staging=staging,
         )
+
+    def run_resolved_structured(
+        self,
+        *,
+        job_id: str,
+        input_document: dict[str, Any],
+        output_schema: dict[str, Any],
+        prompt_text: str,
+        slot: WorkerSlot,
+        staging: Path,
+        materialize: Callable[[Path], MaterializedExecution],
+    ) -> ResolvedWorkerRun:
+        """Materialize a resolved plan before starting the fixed worker unit."""
+
+        prepared = self.prepare_structured_workspace(
+            job_id=job_id,
+            input_document=input_document,
+            output_schema=output_schema,
+            prompt_text=prompt_text,
+            slot=slot,
+        )
+        materialization = materialize(prepared.workspace)
+        run = self.run_prepared(prepared=prepared, slot=slot, staging=staging)
+        return ResolvedWorkerRun(run=run, materialization=materialization)
 
     def _execute(
         self,
