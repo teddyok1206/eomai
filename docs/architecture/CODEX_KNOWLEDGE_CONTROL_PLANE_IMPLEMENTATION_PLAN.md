@@ -69,20 +69,21 @@ The following are implementation invariants, not open product choices:
 
 ## 3. Explicitly Open Decisions
 
-These decisions must be resolved by a focused ADR or design note before their corresponding schema
-is implemented:
+Phase 0 resolved the logical boundaries through ADRs 0038 and 0039. The following schema and policy
+details still require evidence before their corresponding implementation:
 
-- authoritative Organization and Assessment Occurrence revision contracts;
-- the exact `ItemOriginProfile` controlled vocabulary and rights requirements;
-- Product versus Form versus existing Deliverable ownership;
-- Assembly Revision, Publication Revision, Deliverable Revision, and Usage Record boundaries;
-- the privacy boundary for aggregate distribution versus per-student learning records;
+- exact Organization/Assessment Occurrence fields, aliases, lifecycle, and import policy within the
+  revision boundaries selected by ADR 0038;
+- the exact `ItemOriginProfile` controlled vocabulary and rights requirements under ADR 0038;
+- physical schema and compatibility migration for the Product/Form/Assembly/Publication ownership
+  selected by ADR 0039;
+- aggregate Distribution Event fields and the separate protected per-student learning-record design;
 - the reviewed mapping for legacy usage spreadsheets;
 - initial approved model/effort combinations, based on installed-CLI capability and eval evidence;
-- the first three production graph queries, their scale, and retrieval quality thresholds.
+- representative scale and retrieval quality thresholds for the three accepted V0 queries.
 
-Open decisions do not block the Codex control-plane MVP. They do block origin/product/usage graph
-schemas that would otherwise guess at canonical identity.
+These details do not block the Codex control-plane MVP. They block only their own schema/runtime
+work where proceeding would invent unsupported values or privacy policy.
 
 ## 4. Dependency Map and Delivery Milestones
 

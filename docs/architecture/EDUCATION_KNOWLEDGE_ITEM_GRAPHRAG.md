@@ -991,16 +991,16 @@ corpus, graph snapshot, job-local Markdown, and Evidence Bundle boundary used by
 Graph Model V0 intentionally leaves the following decisions unresolved rather than presenting a
 false 100% ontology:
 
-1. the authoritative Organization/Institution logical and revision contract, including aliases
-   for 평가원, 교육청, schools, publishers, and EOM;
+1. ADR 0038 selects logical Organization and Assessment Occurrence entities with immutable
+   revisions; their exact fields, aliases, lifecycle, and intake policy remain to be defined;
 2. the exact `ItemOriginProfile` JSON Schema, controlled values, rights model, and which fields are
    mandatory for each intake class;
-3. whether an examination occurrence is a specialized Form/Deliverable Revision or a separate
-   logical entity linked to one;
-4. whether “00모의고사” is one Product containing 12 Form logical entities, or a grouping over 12
-   existing Deliverables, and how editions/variants/regions are represented;
-5. the exact boundary between Assessment Assembly, Publication Revision, Deliverable Revision, and
-   fulfilled Usage Records so no placement is duplicated as canonical state;
+3. ADR 0038 makes an external examination occurrence separate from an EOM Form/Deliverable while
+   allowing a typed link between them; the exact link contract remains open;
+4. ADR 0039 keeps existing Deliverable as Product and adds Form identities/revisions beneath Product
+   Revisions; exact edition/variant/region fields and compatibility migration remain open;
+5. ADR 0039 assigns ordered canonical placement to Assembly Revisions, rendered delivery to
+   Publication Revisions, and actual-use evidence to fulfilled Usage Records; exact schemas remain;
 6. how corrections, withdrawn questions, alternate forms, reused logical Items, and derived Items
    appear in historical usage queries;
 7. the Distribution Event aggregate and whether cohort/channel-level history is sufficient before
@@ -1011,7 +1011,8 @@ false 100% ontology:
 10. measured query workload and scale evidence needed before choosing PostgreSQL projection,
     vector indexing, or a dedicated graph adapter.
 
-The next design milestone should choose three representative end-to-end queries and sample legacy
-spreadsheets, then produce the focused Product/Form/Placement/Distribution note required by
-Section 20. Until then, this document is a directionally complete integration map and an explicit
-set of invariants, not authorization for schema or runtime changes.
+The first three representative queries are now fixed by
+[`EDUCATION_GRAPH_V0_ACCEPTANCE_QUERIES.md`](EDUCATION_GRAPH_V0_ACCEPTANCE_QUERIES.md). The next
+design milestone must define exact schemas and use redacted representative scale/legacy samples.
+Until then, this document is a directionally complete integration map and an explicit set of
+invariants, not authorization for schema or runtime changes.
