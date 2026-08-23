@@ -185,6 +185,57 @@ async def test_gateway_lists_only_accepted_content_intakes() -> None:
 
 
 @pytest.mark.anyio
+async def test_gateway_accepts_complete_application_hwpx_build_view() -> None:
+    build_id = "hwpxbuild_" + "1" * 32
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == f"/api/v1/hwpx-builds/{build_id}"
+        return httpx.Response(
+            200,
+            json=_single(
+                {
+                    "build_id": build_id,
+                    "item_id": "item_" + "2" * 32,
+                    "item_revision_id": "itemrev_" + "3" * 32,
+                    "source_artifact_revision_id": "rev_" + "4" * 32,
+                    "source_sha256": "sha256:" + "5" * 64,
+                    "renderer": "eom-template",
+                    "renderer_version": "1.0.0",
+                    "state": "SUCCEEDED",
+                    "validation_state": "PASS",
+                    "native_equation_count": 1,
+                    "native_table_count": 1,
+                    "output_artifact_id": "artifact_" + "6" * 32,
+                    "output_artifact_revision_id": "rev_" + "7" * 32,
+                    "output_sha256": "sha256:" + "8" * 64,
+                    "download_available": True,
+                    "failure_code": None,
+                    "failure_detail_sanitized": None,
+                    "created_by_operator_id": "operator_" + "9" * 32,
+                    "created_at": NOW.isoformat(),
+                    "started_at": NOW.isoformat(),
+                    "completed_at": (NOW + timedelta(seconds=2)).isoformat(),
+                    "resource_version": 3,
+                }
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    value = await gateway.hwpx_build(_session(), build_id)
+    assert value.state == "SUCCEEDED"
+    assert value.download_available is True
+    assert value.output_artifact_revision_id == "rev_" + "7" * 32
+    assert value.resource_version == 3
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_item_preview_fails_on_revision_pointer_mismatch() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.startswith("/api/v1/items/"):

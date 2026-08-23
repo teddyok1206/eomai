@@ -227,6 +227,8 @@ class HwpxBuildView(WebModel):
     build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
     item_id: str
     item_revision_id: str
+    source_artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
+    source_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
     renderer: Literal["kordoc", "eom-template"]
     renderer_version: Literal["4.9.0", "1.0.0"]
     state: Literal["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]
@@ -239,6 +241,8 @@ class HwpxBuildView(WebModel):
     download_available: bool
     failure_code: str | None = None
     failure_detail_sanitized: str | None = None
+    created_by_operator_id: str = Field(pattern=r"^operator_[a-f0-9]{32}$")
     created_at: UtcDatetime
     started_at: UtcDatetime | None = None
     completed_at: UtcDatetime | None = None
+    resource_version: int = Field(ge=1)

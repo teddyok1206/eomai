@@ -380,6 +380,8 @@ class FakeGateway:
             build_id=build_id,
             item_id=ITEM_ID,
             item_revision_id=REVISION_ID,
+            source_artifact_revision_id="rev_" + "a" * 32,
+            source_sha256="sha256:" + "a" * 64,
             renderer="eom-template",
             renderer_version="1.0.0",
             state="SUCCEEDED",
@@ -390,8 +392,10 @@ class FakeGateway:
             output_artifact_revision_id="rev_" + "c" * 32,
             output_sha256="sha256:" + "d" * 64,
             download_available=True,
+            created_by_operator_id="operator_" + "e" * 32,
             created_at=NOW,
             completed_at=NOW + timedelta(seconds=2),
+            resource_version=3,
         )
 
     async def hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload:
