@@ -1,212 +1,205 @@
-# EOM
+# EOM Scientific Studio
 
-EOM is the new independent platform repository for producing Korean integrated science assessment items with local AI workers.
+> 스키마 우선(schema-first)으로 문항을 생성·검토·등록하고, 재현 가능한 HWPX로 전달하는
+> AI 기반 평가 문항 제작 플랫폼
 
-This repository is separate from `/home/eom/EOMIS`. Do not import, copy, or modify EOMIS files as part of this system. EOMIS remains a legacy project and an operational reference only.
+EOM은 자연어 문항 요청을 곧바로 파일로 출력하는 단일 프롬프트 도구가 아닙니다. 요청을
+버전이 고정된 Workflow와 Content Pack으로 실행하고, 격리된 역할별 worker의 결과를
+검증하며, 사람의 승인을 거쳐 불변 Item Revision으로 등록한 뒤 HWPX 같은 전달 형식으로
+투영합니다.
 
-## Paths
-
-- Source repository: `/home/eom/EOM`
-- Runtime data: `/srv/eom`
-- System configuration: `/etc/eom`
-- Short-term logs: `/var/log/eom`
-- NAS artifact root: `/mnt/nas/eom`
-- Reserved API bind: `127.0.0.1:8765`
-- Read-only observability bind: `127.0.0.1:8780`
-
-## Current Phase
-
-Platform Skeleton V0 remains available as one executable job slice:
+핵심 목표는 하나의 문항을 여러 번 복사하는 것이 아니라 다음 관계를 보존하는 것입니다.
 
 ```text
-eomctl job submit
-  -> PostgreSQL job and deterministic events
-  -> eom-cdx-01 one-shot codex exec
-  -> schema-validated result.json
-  -> canonical SHA-256 and artifact manifest
-  -> local staging and immutable NAS revision
-  -> PostgreSQL artifact history
+logical Item
+  -> immutable Item Revision
+    -> typed component pointers
+      -> immutable Artifact Revisions
+        -> SHA-256 content hashes
 ```
 
-Workflow Engine V0 adds a domain-neutral, versioned multi-role path:
+이 구조 덕분에 같은 승인 문항을 문항은행, 모의고사, 교재, 웹 미리보기, HWPX가 서로 다른
+형식으로 사용하더라도 정본(canonical source)은 하나로 유지됩니다.
+
+## 현재 가능한 일
+
+- Scientific Studio에서 구조화된 새 문항 요청 생성
+- Authoring → Stimulus → Review → Human Approval → Registration Workflow 실행
+- Source Intake가 없는 샘플에서도 worker의 일반 과학 지식을 사용하는 문항 생성
+- 표, 수식, 선택지, 해설, `ㄱ/ㄴ/ㄷ` 진술과 workflow 시점의 PNG 자극 자료 생성
+- 승인된 결과를 `assessment-item-content/1.0` Item Revision으로 등록
+- 승인된 EOM 문항 템플릿과 Kordoc 4.9.0을 이용한 HWPX 생성 및 보안 다운로드
+- Workflow, Item, Revision, Artifact, HWPX build의 운영 상태와 이력 조회
+- HTTPS BFF, RBAC, CSRF, HttpOnly/Secure cookie, private Unix socket 경계
+
+현재 기본 생성선은 다음 불변 버전을 사용합니다.
+
+| 경계 | 현재 기본 계약 |
+| --- | --- |
+| Workflow | `generic-item-development@1.4.0` |
+| Role protocol | `workflow-role/1.3.0` |
+| Role results | `authoring/image/review/registration-result@4.0` |
+| Content Pack | `generated-knowledge-item@1.1.0` |
+| Canonical item content | `assessment-item-content/1.0` |
+| HWPX delivery profile | `eom-question-template-v1` |
+
+이 버전들은 저장된 실행을 다시 해석하지 않도록 제자리에서 변경하지 않습니다. 계약 변경은
+새 Schema, Protocol, Workflow, Content Pack 버전으로 추가합니다.
+
+## 한 문항이 만들어지는 과정
+
+```mermaid
+flowchart LR
+  R[Request Draft] --> P[Pinned Workflow<br/>+ Content Pack]
+  P --> A[Authoring]
+  A --> I[Stimulus]
+  I --> V[Review]
+  V --> H{Human approval}
+  H -->|rework| A
+  H -->|approve| G[Registration]
+  G --> IR[Approved<br/>Item Revision]
+  IR --> X[HWPX delivery]
+  X --> D[Secure download]
+```
+
+1. 요청은 작은 typed brief로 정규화됩니다.
+2. 실행 시점의 Workflow 정의, Content Pack release, Schema와 입력 포인터가 고정됩니다.
+3. 역할별 worker는 Orchestrator를 통해서만 실행되고 서로 직접 통신하지 않습니다.
+4. worker는 로컬 staged input만 읽고 로컬 structured result만 제출합니다.
+5. Orchestrator가 JSON Schema 2020-12와 typed model로 결과를 검증한 뒤 Artifact를 커밋합니다.
+6. 사람의 승인 후 Catalog가 하나의 승인된 Item Revision을 등록합니다.
+7. HWPX adapter는 그 Revision과 템플릿 Revision을 고정해 새 Artifact Revision을 만듭니다.
+
+## 시스템 구조
+
+```mermaid
+flowchart TB
+  Browser[Browser] -->|HTTPS /studio/| Caddy[Caddy]
+  Caddy --> Studio[Scientific Studio BFF]
+  Studio -->|loopback HTTP| API[Application API]
+  Studio -. read-only .-> Observe[Observability]
+
+  API --> DB[(PostgreSQL metadata)]
+  DB --> WR[Workflow Runner]
+  WR --> Catalog[Catalog application]
+  WR --> Orch[Orchestrator]
+  Orch --> W1[Authoring worker]
+  Orch --> W2[Stimulus worker]
+  Orch --> W3[Review worker]
+  Orch --> W4[Registration worker]
+  W1 & W2 & W3 & W4 -->|local result only| Orch
+  Orch -->|validated commit| Store[(Immutable artifact store)]
+  Catalog --> Registry[Item Registry]
+  Registry --> DB
+
+  DB --> HM[HWPX Manager]
+  HM --> HB[Isolated HWPX builder]
+  HB -->|validated handoff| HM
+  HM --> Store
+  API -->|private Unix socket download| HM
+```
+
+브라우저가 접근하는 공개 경계는 Caddy와 Scientific Studio뿐입니다. Application API,
+Observability, Scientific Studio upstream, PostgreSQL은 loopback 또는 private socket 경계에
+남습니다. worker와 HWPX builder는 DB·NAS·다른 worker에 직접 접근하지 않습니다.
+
+## 설계 원칙
+
+- **Protocol first:** worker 동작보다 JSON Schema 2020-12 계약을 먼저 정의합니다.
+- **Pinned provenance:** 논리 ID, Revision ID, Artifact ID, Artifact Revision ID, Hash를
+  구분하고 실행 이력은 특정 Revision을 고정합니다.
+- **Fail closed:** 누락, stale pointer, schema/media mismatch, hash mismatch를 암묵적으로
+  최신값으로 대체하지 않습니다.
+- **One canonical artifact:** DB에는 관계와 작은 metadata만 저장하고 HWPX·PNG 같은 binary는
+  Artifact Revision으로 관리합니다.
+- **Orchestrated isolation:** worker 간 직접 통신과 DB/NAS 쓰기를 금지하고 Orchestrator만
+  검증된 결과를 커밋합니다.
+- **Explicit state machines:** Workflow, approval, job, HWPX build 상태를 명시적 전이표와
+  append-only event로 관리합니다.
+- **Idempotent boundaries:** HTTP command, Workflow step, registration, build는 각 경계의 입력
+  identity와 hash로 replay를 판별합니다.
+- **Human authority:** 자동 평가는 검토 증거이며 최종 승인 권한을 대체하지 않습니다.
+
+## 저장소 구조
+
+| 경로 | 책임 |
+| --- | --- |
+| `schemas/` | 외부·worker·service protocol의 canonical JSON Schema |
+| `packages/` | domain contracts, identifiers, workflow, registry, API DTO |
+| `services/` | Orchestrator, Workflow runner, Catalog, HWPX manager/builder |
+| `apps/` | Application API, Scientific Studio, observability, `eomctl` |
+| `config/workflows/` | 불변 Workflow 정의 |
+| `content/packs/` | 버전이 고정된 Content Pack과 profile |
+| `migrations/` | PostgreSQL schema revision |
+| `infra/` | Conda, systemd, polkit 등 reviewed runtime source |
+| `scripts/` | 설치, 검증, release, 격리 테스트 DB 도구 |
+| `docs/architecture/` | 경계와 durable design decision |
+| `docs/operations/` | 설치·검증·복구 runbook |
+
+## 개발 시작
+
+```bash
+git clone git@github.com:teddyok1206/eomai.git
+cd eomai
+git status --short --branch
+```
+
+EOM은 여러 격리 runtime을 사용하는 운영형 저장소입니다. ambient Python이나 system Python에
+의존하지 말고 `infra/conda/`의 환경 정의와 해당 runbook을 사용하십시오. 배포 호스트의
+일반적인 정적 gate는 다음과 같습니다.
+
+```bash
+/srv/eom/conda/envs/eom-api/bin/python -m ruff format --check --no-cache .
+/srv/eom/conda/envs/eom-api/bin/python -m ruff check --no-cache .
+/srv/eom/conda/envs/eom-api/bin/python -m mypy --cache-dir=/tmp/eom-mypy-cache
+scripts/infra/check_repository_boundaries.sh
+git diff --check
+```
+
+PostgreSQL integration test는 배포 DB가 아니라
+[`API_INTEGRATION_TEST_DATABASE.md`](docs/operations/API_INTEGRATION_TEST_DATABASE.md)의 disposable
+test DB 절차로만 실행합니다. live Codex, privileged, HWPX reference test는 opt-in marker로
+분리되어 있으며 기본 test run이 사용량이나 운영 상태를 소비하지 않습니다.
+
+## “1문제 만들기”를 상위 제품에서 재사용하기
+
+다음 단계의 유력한 출발점은 현재 파이프라인을 복제하는 별도 framework가 아니라
+**Single Item Production Capability**라는 application-level 경계로 감싸는 것입니다. 다만 이
+문서는 process manager, projection/facade, composite workflow, 향후 별도 coordinator를 확정하지
+않고 선택 조건과 전환 경로를 함께 비교합니다. 공통적으로 capability의 주 출력은 HWPX 파일보다
+승인된 `ItemRevisionPointer`에 가깝습니다. 단일 HWPX는 선택적 delivery로 둘 수 있고,
+교재·모의고사는 여러 Item Revision을 순서대로 고정한 Assembly manifest를 만든 뒤 collection
+renderer를 실행할 수 있습니다.
 
 ```text
-request -> authoring -> image decision -> review -> human CLI gate
-        -> approval or immutable rework attempts -> registration -> completed
+Textbook / Mock exam / Item bank
+  -> Single Item Production Capability (N회, bounded concurrency)
+    -> existing Workflow + Registry
+    -> approved Item Revision pointers
+  -> ordered Assessment Assembly Revision
+  -> publication profile / HWPX / PDF / Web
 ```
 
-All role results are strict placeholder JSON. There is no real domain content, generated image,
-production HWPX, main GUI, or external LLM API. Slack is not a workflow feature;
-`eom_dev_reporter` is a separate, best-effort developer milestone sender using only an Incoming
-Webhook.
+대안별 계약, 상태 소유권, idempotency, queue/index 설계, 품질 gate, 운영 SLO, 선택 기준과 최신
+연구 근거는
+[`SINGLE_ITEM_PRODUCTION_CAPABILITY.md`](docs/architecture/SINGLE_ITEM_PRODUCTION_CAPABILITY.md)에
+정리되어 있습니다.
 
-Observability Console V0 is a separate, replaceable read-only process at `/observe/`. It projects
-existing PostgreSQL audit data through a versioned `/observe/api/v1/` contract and a shared SSE
-poller. It cannot enqueue commands, mutate database rows, access NAS, inspect worker homes, or run
-Codex. Stopping `eom-observe.service` has no effect on the platform or workflow runtime.
+## 핵심 문서
 
-HWPX POC V0 is a separate reference-template-first pipeline. It validates bounded ZIP/XML input,
-compiles template-hash-bound marker and object bindings, replaces placeholder text, a fixed table,
-one PNG, and one observed equation source, then performs structural and semantic round-trip
-validation. The isolated `eom-hwpx` builder is file-only; eom-core owns DB and artifact commit.
-Synthetic fixtures are not Hancom compatibility evidence, and completion requires a manual Windows
-Hancom open/edit/save gate.
+- [Assessment Item Content V1](docs/architecture/ASSESSMENT_ITEM_CONTENT_V1.md)
+- [Generated Item Authoring Contract v1.3](docs/architecture/GENERATED_ITEM_AUTHORING_CONTRACT_V1_3.md)
+- [Knowledge-backed Item Workflow V1](docs/architecture/KNOWLEDGE_ITEM_WORKFLOW_V1.md)
+- [Workflow Runtime Execution Boundary](docs/architecture/WORKFLOW_EXECUTION_BOUNDARY.md)
+- [Item Registry V0](docs/architecture/ITEM_REGISTRY_V0.md)
+- [HWPX Application API V0](docs/architecture/HWPX_APPLICATION_API_V0.md)
+- [Web GUI V0](docs/architecture/WEB_GUI_V0.md)
+- [Application API V0](docs/architecture/APPLICATION_API_V0.md)
+- [Scientific Studio public handover](docs/operations/SCIENTIFIC_STUDIO_PUBLIC_HANDOVER.md)
+- [Repository agent rules](AGENTS.md)
 
-Manual Content Intake V0 adds an artifact-backed boundary for files received from content leads.
-Raw files, manual external analysis, and canonical Content Pack source are separate; deterministic
-validation and a human decision are required before import. Content leads do not need Git, and the
-server does not call ChatGPT or any external LLM API.
+## 보안 주의
 
-Content Pack V0 compiles accepted placeholder policy into a deterministic `.eompack`, commits one
-canonical bundle artifact revision, and records immutable releases plus environment activation.
-Prompt profiles use scalar dot-path substitution only; executable expressions are rejected.
-
-Item Registry V0 treats an Item as a logical identity and every approved change as a new immutable
-revision. Component payloads remain canonical artifact revisions referenced by typed pointers and
-hashes. Deliverables keep planned placement separate from immutable actual usage records.
-
-`generic-item-development@1.1.0` binds these layers together. Workflow creation resolves one active
-Content Pack release, freezes its hashes and profile snapshots, commits each rendered prompt as an
-artifact, and registers the approved result as a new Item or a revision of a specifically named base.
-Workers still receive only the small workflow role request and upstream artifact pointers.
-
-## Operating Commands
-
-Use an approved operations account for Docker administration. The normal doctor never invokes
-sudo; restricted Docker visibility is a warning when application PostgreSQL connectivity passes.
-Run its explicit `--privileged` mode as root only when container and worker impersonation detail is
-required:
-
-```bash
-docker compose --env-file /etc/eom/secrets/postgres.env -f /home/eom/EOM/infra/compose/compose.yml ps
-/home/eom/EOM/scripts/infra/doctor.sh
-/home/eom/EOM/scripts/infra/doctor.sh --privileged
-/home/eom/EOM/scripts/infra/check_worker_isolation.sh
-```
-
-Use explicit Conda prefixes:
-
-```bash
-/srv/eom/conda/envs/eom-core/bin/python --version
-/srv/eom/conda/envs/eom-hwpx/bin/python --version
-/srv/eom/conda/envs/eom-image/bin/python --version
-```
-
-Install this repository and its development checks only into `eom-core`:
-
-```bash
-/srv/eom/conda/envs/eom-core/bin/python -m pip install -e '.[dev]'
-```
-
-Apply the migration and run the control CLI:
-
-```bash
-/srv/eom/conda/envs/eom-core/bin/alembic upgrade head
-/srv/eom/conda/envs/eom-core/bin/eomctl system doctor
-/srv/eom/conda/envs/eom-core/bin/eomctl worker list
-/srv/eom/conda/envs/eom-core/bin/eomctl job submit --message EOM_PLATFORM_SMOKE_TEST
-/srv/eom/conda/envs/eom-core/bin/eomctl job inspect <JOB_ID>
-/srv/eom/conda/envs/eom-core/bin/eomctl job events <JOB_ID>
-```
-
-Validate, import, and run the placeholder workflow:
-
-```bash
-/srv/eom/conda/envs/eom-core/bin/eomctl workflow definition validate config/workflows/generic-item-development.v1.yaml
-/srv/eom/conda/envs/eom-core/bin/eomctl workflow definition import config/workflows/generic-item-development.v1.yaml
-/srv/eom/conda/envs/eom-core/bin/eomctl workflow start --definition generic-item-development --version 1.0.0 --request-name PLACEHOLDER_REQUEST --image-mode skip --idempotency-key <KEY>
-/srv/eom/conda/envs/eom-core/bin/eomctl workflow approve <WORKFLOW_ID> --actor-id reviewer_01
-/srv/eom/conda/envs/eom-core/bin/eomctl workflow inspect <WORKFLOW_ID>
-/srv/eom/conda/envs/eom-core/bin/eomctl workflow events <WORKFLOW_ID>
-/srv/eom/conda/envs/eom-core/bin/eomctl workflow steps <WORKFLOW_ID>
-```
-
-The runner also exposes `run-once`, `serve`, and `reconcile` modes through
-`/srv/eom/conda/envs/eom-core/bin/eom-workflow-runner`. CLI approval, rework, cancellation, and
-reconciliation enqueue commands; only the deterministic engine changes workflow state.
-
-Observability operations use their own Python 3.12 prefix and CLI:
-
-```bash
-/srv/eom/conda/envs/eom-observe/bin/eom-observe doctor
-/srv/eom/conda/envs/eom-observe/bin/eom-observe snapshot
-systemctl status eom-observe.service
-```
-
-Access remains loopback-only. Forward local port 8780 and open `http://127.0.0.1:8780/observe/`.
-The one-time initial token file is `/home/eom/.eom-observe-initial-token`; its value is never logged
-or stored in Git.
-
-HWPX toolkit operations use their own Python 3.12 prefix. Until an approved reference is imported,
-doctor reports `REFERENCE_TEMPLATE=PENDING_MANUAL_ACTION`:
-
-```bash
-/srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx doctor
-/srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx inspect-package --input <HWPX> --output <REPORT>
-/srv/eom/conda/envs/eom-core/bin/eomctl hwpx doctor
-/home/eom/EOM/scripts/hwpx/deploy_builder.sh --verify
-```
-
-Manual Intake and Content Pack commands run in `eom-core`:
-
-```bash
-/srv/eom/conda/envs/eom-core/bin/eomctl content intake doctor
-/srv/eom/conda/envs/eom-core/bin/eomctl content pack validate \
-  content/packs/generic-placeholder/0.1.0
-/srv/eom/conda/envs/eom-core/bin/eomctl content pack doctor
-/srv/eom/conda/envs/eom-core/bin/eomctl content pack resolve \
-  --pack-key generic-placeholder --environment development
-```
-
-Run a pack-pinned Item workflow and inspect the resulting registry pointers:
-
-```bash
-/srv/eom/conda/envs/eom-core/bin/eomctl workflow definition validate \
-  config/workflows/generic-item-development.v1.1.yaml
-/srv/eom/conda/envs/eom-core/bin/eomctl workflow start \
-  --definition generic-item-development --version 1.1.0 \
-  --request-name PLACEHOLDER_REQUEST --image-mode skip \
-  --idempotency-key <KEY> --pack-key generic-placeholder \
-  --environment development --source-intake-batch <INTAKE_BATCH_ID> \
-  --registry-mode CREATE_ITEM
-/srv/eom/conda/envs/eom-core/bin/eomctl workflow approve <WORKFLOW_ID> \
-  --actor-id reviewer_01
-/srv/eom/conda/envs/eom-core/bin/eomctl item inspect <ITEM_ID>
-/srv/eom/conda/envs/eom-core/bin/eomctl item usage-history <ITEM_ID>
-```
-
-`job submit` needs permission to create a transient systemd unit because that unit changes to the
-isolated worker Linux user and makes `/mnt/nas` and the Docker socket inaccessible. Database
-credentials are loaded from `EOM_DATABASE_URL` or `/etc/eom/secrets/postgres.env`; they are never
-printed or logged.
-
-## Security Boundary
-
-Workers run as separate Linux users and use separate HOME directories. Workers do not receive sudo, Docker group access, or direct NAS write access. Generated HWPX, PNG, AI, PDF, backups, worker homes, workspaces, staging files, and secrets are not stored in Git.
-
-Use UTC for system timestamps. Use Asia/Seoul only for user-facing display.
-
-## Documentation
-
-- Architecture decisions: `docs/adr/`
-- Platform skeleton architecture: `docs/architecture/PLATFORM_SKELETON_V0.md`
-- Live smoke test: `docs/operations/PLATFORM_SMOKE_TEST.md`
-- Workflow engine architecture: `docs/architecture/WORKFLOW_ENGINE_V0.md`
-- Workflow live smoke test: `docs/operations/WORKFLOW_ENGINE_SMOKE_TEST.md`
-- Development Slack reporting: `docs/operations/DEVELOPMENT_SLACK_REPORTING.md`
-- Observability architecture: `docs/architecture/OBSERVABILITY_CONSOLE_V0.md`
-- Observability setup: `docs/operations/OBSERVABILITY_CONSOLE_SETUP.md`
-- Observability access: `docs/operations/OBSERVABILITY_CONSOLE_ACCESS.md`
-- Internal environment reports: `docs/internal/`
-- HWPX POC architecture: `docs/architecture/HWPX_POC_V0.md`
-- HWPX reference creation: `docs/operations/HWPX_REFERENCE_TEMPLATE_CREATION.md`
-- HWPX format references: `docs/references/HWPX_FORMAT_REFERENCES.md`
-- Manual Intake architecture: `docs/architecture/MANUAL_CONTENT_INTAKE_V0.md`
-- Content Pack architecture: `docs/architecture/CONTENT_PACK_V0.md`
-- Content Pack authoring: `docs/operations/CONTENT_PACK_AUTHORING.md`
-- Content Pack release: `docs/operations/CONTENT_PACK_RELEASE.md`
-- Item Registry runbook: `docs/operations/ITEM_REGISTRY_RUNBOOK.md`
-- Usage Ledger runbook: `docs/operations/USAGE_LEDGER_RUNBOOK.md`
-- Catalog smoke test: `docs/operations/CATALOG_SMOKE_TEST.md`
-- Operations and rollback: `docs/operations/`
-- Compose operations: `infra/compose/README.md`
+Secret, token, credential, `.env`, Codex auth, SSH key, DB URL을 Git에 넣지 마십시오. 외부 파일은
+모두 untrusted input으로 취급하고, binary와 장기 log는 manifest가 있는 Artifact storage에
+보관합니다. 저장소의 `AGENTS.md`는 사람과 자동화 모두에게 적용되는 필수 개발 규칙입니다.
