@@ -50,6 +50,7 @@ def test_identity_deployer_verifies_mount_and_polkit_boundaries() -> None:
     assert 'chgrp "${ARTIFACT_GROUP}"' not in source
     assert "sudo docker lxd adm" in source
     assert "a fixed child unit is active" in source
+    assert "for _attempt in $(seq 1 50)" in source
     assert "POLKIT_CROSS_START=DENIED" in source
     assert "pip install" not in source
     assert "conda install" not in source

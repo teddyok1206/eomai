@@ -68,13 +68,19 @@ require_process_identity() {
   local service=$1
   local expected_user=$2
   shift 2
-  local pid uid group group_id
-  pid=$(systemctl show --property=MainPID --value "${service}")
-  [[ ${pid} =~ ^[1-9][0-9]*$ && -r /proc/${pid}/status ]] || \
-    fail "${service} process unavailable"
+  local pid uid group group_id ready=0
   uid=$(id -u "${expected_user}")
-  grep -Eq "^Uid:[[:space:]]+${uid}[[:space:]]+${uid}[[:space:]]+${uid}[[:space:]]+${uid}$" \
-    "/proc/${pid}/status" || fail "${service} UID mismatch"
+  for _attempt in $(seq 1 50); do
+    pid=$(systemctl show --property=MainPID --value "${service}")
+    if [[ ${pid} =~ ^[1-9][0-9]*$ && -r /proc/${pid}/status ]] && \
+       grep -Eq "^Uid:[[:space:]]+${uid}[[:space:]]+${uid}[[:space:]]+${uid}[[:space:]]+${uid}$" \
+         "/proc/${pid}/status"; then
+      ready=1
+      break
+    fi
+    sleep 0.1
+  done
+  [[ ${ready} -eq 1 ]] || fail "${service} UID mismatch"
   for group in "$@"; do
     group_id=$(getent group "${group}" | cut -d: -f3)
     grep -Eq "^Groups:.*[[:space:]]${group_id}([[:space:]]|$)" "/proc/${pid}/status" || \
