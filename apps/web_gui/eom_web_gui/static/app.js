@@ -16,6 +16,8 @@ const state = {
   hwpxRecentBuilds: [],
   acceptedIntakes: [],
   structuredSource: null,
+  codexAccounts: [],
+  executionPresets: [],
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -85,6 +87,7 @@ function showView(name) {
   $$(".nav-item").forEach((element) => element.classList.toggle("active", element.dataset.viewTarget === name));
   $(".sidebar").classList.remove("open");
   if (name === "hwpx") loadHwpx();
+  if (name === "control" && hasAdminRole()) loadControlPlane();
   if (name === "dashboard" && state.health) renderDashboard(state.health);
   window.scrollTo({top: 0, behavior: "smooth"});
 }
@@ -723,6 +726,193 @@ function hasAdminRole() {
   return roles.includes("ADMIN");
 }
 
+function installControlPlane() {
+  $("#control-refresh").addEventListener("click", loadControlPlane);
+  $("#preset-draft-submit").addEventListener("click", createPresetDraft);
+}
+
+async function loadControlPlane() {
+  if (!hasAdminRole()) return;
+  try {
+    const [accounts, presets] = await Promise.all([
+      api("/admin/codex-accounts"),
+      api("/admin/execution-presets"),
+    ]);
+    state.codexAccounts = accounts;
+    state.executionPresets = presets;
+    renderCodexAccounts(accounts);
+    renderExecutionPresets(presets);
+    showMessage($("#codex-account-message"), `${accounts.length}개 fixed binding · credential 비노출`, "success");
+    showMessage($("#execution-preset-message"), `${presets.length}개 logical preset · immutable revision`, "success");
+  } catch (failure) {
+    showMessage($("#codex-account-message"), `Control Plane 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+function controlCard(title, stateValue) {
+  const card = document.createElement("article");
+  card.className = "control-card";
+  const header = document.createElement("header");
+  const heading = document.createElement("h3");
+  heading.textContent = title;
+  const badge = document.createElement("span");
+  const [tone, icon] = statusStyle(stateValue);
+  setStatus(badge, tone, icon, stateValue);
+  header.append(heading, badge);
+  const details = document.createElement("dl");
+  card.append(header, details);
+  return {card, details};
+}
+
+function addControlDetail(list, label, value) {
+  const term = document.createElement("dt");
+  const description = document.createElement("dd");
+  term.textContent = label;
+  description.textContent = value === null || value === undefined ? "-" : String(value);
+  list.append(term, description);
+}
+
+function actionButton(label, action, quiet = false) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `button ${quiet ? "quiet" : "secondary"}`;
+  button.textContent = label;
+  button.addEventListener("click", action);
+  return button;
+}
+
+function renderCodexAccounts(accounts) {
+  const root = $("#codex-account-list");
+  root.replaceChildren();
+  if (!accounts.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "등록된 sanitized binding이 없습니다.";
+    root.append(empty);
+    return;
+  }
+  for (const account of accounts) {
+    const {card, details} = controlCard(`${account.slot_key} · ${account.account_label}`, account.state);
+    const capabilities = (account.capabilities || []).map((value) => `${value.model}/${value.reasoning_effort}`).join(", ") || "관측 없음";
+    addControlDetail(details, "Binding", account.binding_id);
+    addControlDetail(details, "CLI", account.codex_cli_version);
+    addControlDetail(details, "Capabilities", capabilities);
+    addControlDetail(details, "Active leases", account.active_lease_count);
+    addControlDetail(details, "Last success", account.last_successful_job_id);
+    addControlDetail(details, "Observed", account.observed_at);
+    const actions = document.createElement("div");
+    actions.className = "form-actions";
+    actions.append(
+      actionButton("상태 관측", () => sendAccountCommand(account, "OBSERVE")),
+      actionButton("Enable", () => sendAccountCommand(account, "ENABLE")),
+      actionButton("Drain", () => sendAccountCommand(account, "DRAIN"), true),
+      actionButton("Disable", () => sendAccountCommand(account, "DISABLE"), true),
+    );
+    card.append(actions);
+    root.append(card);
+  }
+}
+
+async function sendAccountCommand(account, commandType) {
+  const reason = commandType === "DRAIN" ? "OPERATOR_REQUESTED_DRAIN" : commandType === "DISABLE" ? "OPERATOR_REQUESTED_DISABLE" : null;
+  try {
+    const result = await api(`/admin/codex-accounts/${encodeURIComponent(account.binding_id)}/commands`, {
+      method: "POST",
+      mutation: true,
+      body: {
+        command_type: commandType,
+        resource_version: account.resource_version,
+        idempotency_key: `studio:codex-account:${account.binding_id}:${commandType}:${crypto.randomUUID()}`,
+        reason_code: reason,
+      },
+    });
+    showMessage($("#codex-account-message"), `${result.command_id} 접수 · credential 전송 없음`, "success");
+    await pollControlCommand(result.command_id);
+  } catch (failure) {
+    showMessage($("#codex-account-message"), `계정 command 실패: ${failure.message}`, "error");
+  }
+}
+
+async function pollControlCommand(commandId) {
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    const value = await api(`/admin/codex-control-commands/${encodeURIComponent(commandId)}`);
+    if (["SUCCEEDED", "FAILED"].includes(value.state)) {
+      showMessage($("#codex-account-message"), `${value.command_type}: ${value.state}${value.error_code ? ` · ${value.error_code}` : ""}`, value.state === "SUCCEEDED" ? "success" : "error");
+      await loadControlPlane();
+      return;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 1000));
+  }
+  showMessage($("#codex-account-message"), "command가 계속 처리 중입니다. 새로고침으로 확인하세요.");
+}
+
+function renderExecutionPresets(presets) {
+  const root = $("#execution-preset-list");
+  root.replaceChildren();
+  if (!presets.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "등록된 Execution Preset이 없습니다.";
+    root.append(empty);
+    return;
+  }
+  for (const preset of presets) {
+    const revisions = Array.isArray(preset.revisions) ? [...preset.revisions].sort((left, right) => right.revision_number - left.revision_number) : [];
+    const latest = revisions[0];
+    const current = revisions.find((revision) => revision.preset_revision_id === preset.current_revision_id);
+    const {card, details} = controlCard(preset.preset_key, preset.state);
+    addControlDetail(details, "Preset", preset.preset_id);
+    addControlDetail(details, "Current", preset.current_revision_id);
+    addControlDetail(details, "Revision count", revisions.length);
+    addControlDetail(details, "Policy SHA", current ? current.content_sha256 : null);
+    addControlDetail(details, "Models", current ? current.role_policies.map((policy) => `${policy.role}:${policy.model_candidates.map((candidate) => `${candidate.model}/${candidate.reasoning_effort}`).join("|")}`).join(", ") : null);
+    addControlDetail(details, "Evaluation", current && current.evaluations.length ? current.evaluations.map((value) => `${value.scope}:${value.outcome}`).join(", ") : "없음");
+    const actions = document.createElement("div");
+    actions.className = "form-actions";
+    if (latest && latest.state === "DRAFT") actions.append(actionButton("DRAFT Release", () => mutatePreset("release", latest.preset_revision_id, latest.revision_number)));
+    if (current && preset.state === "ACTIVE") actions.append(actionButton("Deprecate", () => mutatePreset("deprecate", preset.preset_id, current.revision_number), true));
+    card.append(actions);
+    root.append(card);
+  }
+}
+
+async function mutatePreset(operation, identifier, resourceVersion) {
+  const path = operation === "release"
+    ? `/admin/execution-preset-revisions/${encodeURIComponent(identifier)}/releases`
+    : `/admin/execution-presets/${encodeURIComponent(identifier)}/deprecations`;
+  try {
+    const result = await api(path, {
+      method: "POST",
+      mutation: true,
+      body: {resource_version: resourceVersion, idempotency_key: `studio:preset:${operation}:${identifier}:${crypto.randomUUID()}`},
+    });
+    showMessage($("#execution-preset-message"), `${operation}: ${result.resource_id}`, "success");
+    await loadControlPlane();
+  } catch (failure) {
+    showMessage($("#execution-preset-message"), `${operation} 실패: ${failure.message}`, "error");
+  }
+}
+
+async function createPresetDraft() {
+  let value;
+  try {
+    value = JSON.parse($("#preset-draft-json").value);
+  } catch (_) {
+    return showMessage($("#preset-draft-message"), "Preset Draft JSON이 올바르지 않습니다.", "error");
+  }
+  try {
+    const result = await api("/admin/execution-presets", {
+      method: "POST",
+      mutation: true,
+      body: {...value, idempotency_key: `studio:preset:draft:${crypto.randomUUID()}`},
+    });
+    showMessage($("#preset-draft-message"), `DRAFT ${result.resource_id} 생성`, "success");
+    await loadControlPlane();
+  } catch (failure) {
+    showMessage($("#preset-draft-message"), `DRAFT 생성 실패: ${failure.message}`, "error");
+  }
+}
+
 async function loadRecentHwpxBuilds() {
   if (!hasAdminRole()) return;
   try {
@@ -856,6 +1046,7 @@ async function boot() {
   installItemPreview();
   installStructuredImport();
   installHwpx();
+  installControlPlane();
   installExplorer();
   $("#logout").addEventListener("click", logout);
   await initializeSession();

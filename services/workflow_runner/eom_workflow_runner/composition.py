@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import uuid4
 
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
-from eom_orchestrator.database import build_engine
+from eom_orchestrator.control_command_processor import CodexControlCommandProcessor
+from eom_orchestrator.database import build_engine, build_session_factory
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
@@ -67,6 +69,12 @@ def build_workflow_runtime(
         catalog_configured=True,
         actor_authorizer=actor_authorizer,
     )
+    runner_id = f"runner-{uuid4().hex}"
+    control_processor = CodexControlCommandProcessor(
+        build_session_factory(actual_engine),
+        capability_policy_path=actual_platform_settings.codex_capability_policy,
+        runner_id=runner_id,
+    )
     runner = WorkflowRunner(
         actual_engine,
         actual_workflow_settings,
@@ -75,6 +83,9 @@ def build_workflow_runtime(
         actor_authorizer=actor_authorizer,
         readiness=readiness,
         available_roles=available_roles,
+        control_processor=control_processor,
+        capacity_reconciler=orchestrator.capacity,
+        runner_id=runner_id,
     )
     return WorkflowRuntime(
         engine=actual_engine,

@@ -263,6 +263,57 @@ def test_db_explorer_rejects_non_admin_in_backend() -> None:
         assert response.json()["error_code"] == "ADMIN_ROLE_REQUIRED"
 
 
+def test_codex_control_plane_is_admin_only_and_never_accepts_credentials() -> None:
+    client, gateway = make_client()
+    with client:
+        session = login(client)
+        accounts = client.get("/studio/api/v1/admin/codex-accounts")
+        assert accounts.status_code == 200
+        account = accounts.json()[0]
+        assert account["state"] == "READY"
+        assert not {"token", "password", "credential_path", "auth_json"}.intersection(account)
+        response = client.post(
+            f"/studio/api/v1/admin/codex-accounts/{account['binding_id']}/commands",
+            headers={"X-CSRF-Token": session["csrf_token"]},
+            json={
+                "command_type": "OBSERVE",
+                "resource_version": account["resource_version"],
+                "idempotency_key": "studio:codex-observe:0001",
+                "reason_code": None,
+            },
+        )
+        assert response.status_code == 202
+        assert gateway.control_command_calls == 1
+        command = client.get(
+            f"/studio/api/v1/admin/codex-control-commands/{response.json()['command_id']}"
+        )
+        assert command.status_code == 200
+        assert command.json()["state"] == "SUCCEEDED"
+        presets = client.get("/studio/api/v1/admin/execution-presets")
+        assert presets.status_code == 200
+        assert presets.json()[0]["preset_key"] == "standard-item"
+
+
+def test_codex_control_plane_rejects_non_admin_and_credential_fields() -> None:
+    client, _ = make_client(gateway=FakeGateway(roles=["EDITOR"]))
+    with client:
+        session = login(client)
+        assert client.get("/studio/api/v1/admin/codex-accounts").status_code == 403
+        response = client.post(
+            "/studio/api/v1/admin/codex-accounts/authbinding_" + "1" * 32 + "/commands",
+            headers={"X-CSRF-Token": session["csrf_token"]},
+            json={
+                "command_type": "OBSERVE",
+                "resource_version": 1,
+                "idempotency_key": "studio:codex-observe:0002",
+                "reason_code": None,
+                "token": "MUST_NOT_ENTER_CONTRACT",
+            },
+        )
+        assert response.status_code == 422
+        assert "MUST_NOT_ENTER_CONTRACT" not in response.text
+
+
 def test_mutations_require_csrf() -> None:
     client, _ = make_client()
     with client:

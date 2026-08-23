@@ -70,6 +70,7 @@ preflight() {
   require_file_metadata /etc/eom/worker-slots.yaml root:eom:640
   require_file_metadata /etc/eom/human-actors.yaml root:eom:640
   require_file_metadata /etc/eom/workflow-runner.yaml root:eom:640
+  require_file_metadata /etc/eom/codex-capabilities.yaml root:root:644
   require_directory_metadata /etc/eom/workflows root:eom:750
   require_directory_metadata /etc/eom/workflow-prompts root:eom:750
   getent passwd "${SERVICE_USER}" >/dev/null || fail "workflow runner identity is unavailable"

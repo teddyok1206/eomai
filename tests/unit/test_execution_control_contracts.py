@@ -11,7 +11,10 @@ from eom_identifiers import content_sha256
 from eom_workflow import (
     CodexAuthHealthView,
     CodexCapabilitySnapshot,
+    CodexControlCommand,
+    CodexControlCommandResult,
     CodexInvocation,
+    ExecutionPresetEvaluationReport,
     ExecutionPresetRevision,
     InstructionBundleManifest,
     ReferenceBundleManifest,
@@ -223,7 +226,7 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 10
+    assert len(entries) == 13
     assert len({name for name, _ in entries}) == len(entries)
     for name, entry in entries:
         canonical = REPOSITORY_ROOT / entry.canonical_path
@@ -277,6 +280,54 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
                 "snapshot_sha256": "sha256:" + "7" * 64,
             },
             CodexCapabilitySnapshot,
+        ),
+        (
+            "codex-control-command",
+            {
+                "schema_version": "codex-control-command/1.0",
+                "command_id": "codexcmd_" + "8" * 32,
+                "command_type": "DRAIN",
+                "binding_id": "authbinding_" + "7" * 32,
+                "expected_resource_version": 1,
+                "requested_by_operator_id": "operator_" + "9" * 32,
+                "requested_at": NOW.isoformat().replace("+00:00", "Z"),
+                "reason_code": "ADMIN_REQUESTED_DRAIN",
+                "request_sha256": "sha256:" + "8" * 64,
+            },
+            CodexControlCommand,
+        ),
+        (
+            "codex-control-command-result",
+            {
+                "schema_version": "codex-control-command-result/1.0",
+                "command_id": "codexcmd_" + "8" * 32,
+                "command_type": "OBSERVE",
+                "binding_id": "authbinding_" + "7" * 32,
+                "outcome": "SUCCEEDED",
+                "result_resource_version": 2,
+                "binding_state": "READY",
+                "reason_code": None,
+                "processed_at": NOW.isoformat().replace("+00:00", "Z"),
+                "result_sha256": "sha256:" + "6" * 64,
+            },
+            CodexControlCommandResult,
+        ),
+        (
+            "execution-preset-evaluation-report",
+            {
+                "schema_version": "execution-preset-evaluation-report/1.0",
+                "evaluated_preset_revision_id": "execpresetrev_" + "1" * 32,
+                "evaluated_policy_sha256": "sha256:" + "1" * 64,
+                "scope": "NON_LIVE",
+                "outcome": "PASS",
+                "summary_code": "FAKE_ADAPTER_ACCEPTANCE",
+                "cases_total": 8,
+                "cases_passed": 8,
+                "quality_score_permille": 900,
+                "completed_at": NOW.isoformat().replace("+00:00", "Z"),
+                "report_sha256": "sha256:" + "9" * 64,
+            },
+            ExecutionPresetEvaluationReport,
         ),
         ("worker-capacity-policy", _capacity_policy(), WorkerCapacityPolicy),
         (
@@ -420,6 +471,49 @@ def test_health_and_lease_windows_fail_closed() -> None:
     }
     with pytest.raises(PydanticValidationError, match="terminal lease state"):
         WorkerLeaseView.model_validate(active)
+
+
+def test_control_command_requires_only_operational_reason_codes() -> None:
+    base = {
+        "schema_version": "codex-control-command/1.0",
+        "command_id": "codexcmd_" + "8" * 32,
+        "command_type": "ENABLE",
+        "binding_id": "authbinding_" + "7" * 32,
+        "expected_resource_version": 1,
+        "requested_by_operator_id": "operator_" + "9" * 32,
+        "requested_at": NOW,
+        "reason_code": "UNSAFE_REASON",
+        "request_sha256": "sha256:" + "8" * 64,
+    }
+    with pytest.raises(PydanticValidationError, match="forbid one"):
+        CodexControlCommand.model_validate(base)
+
+    base["command_type"] = "DISABLE"
+    base["reason_code"] = None
+    with pytest.raises(PydanticValidationError, match="require a reason"):
+        CodexControlCommand.model_validate(base)
+
+
+def test_evaluation_report_fails_closed_on_incoherent_claims() -> None:
+    report = {
+        "schema_version": "execution-preset-evaluation-report/1.0",
+        "evaluated_preset_revision_id": "execpresetrev_" + "1" * 32,
+        "evaluated_policy_sha256": "sha256:" + "1" * 64,
+        "scope": "LIVE_ONE_SHOT",
+        "outcome": "PASS",
+        "summary_code": "FAKE_ADAPTER_ACCEPTANCE",
+        "cases_total": 2,
+        "cases_passed": 1,
+        "quality_score_permille": 900,
+        "completed_at": NOW,
+        "report_sha256": "sha256:" + "9" * 64,
+    }
+    with pytest.raises(PydanticValidationError, match="every evaluation case"):
+        ExecutionPresetEvaluationReport.model_validate(report)
+
+    report["cases_passed"] = 2
+    with pytest.raises(PydanticValidationError, match="live acceptance summary"):
+        ExecutionPresetEvaluationReport.model_validate(report)
 
 
 def test_historical_role_protocol_hashes_remain_unchanged() -> None:

@@ -18,6 +18,7 @@ from eom_api.rate_limit import BoundedRateLimiter
 from eom_api.services.audit_service import AuditService
 from eom_api.services.catalog_application_client import CatalogApplicationClient
 from eom_api.services.command_adapter import CommandAdapter
+from eom_api.services.control_plane_adapter import ControlPlaneAdapter
 from eom_api.services.hwpx_download_client import HwpxDownloadClient
 from eom_api.services.idempotency_service import IdempotencyService
 from eom_api.services.query_adapter import QueryAdapter
@@ -54,6 +55,7 @@ class AppServices:
         self.registry = RegistryService(engine)
         self.catalog_application = CatalogApplicationClient()
         self.commands = CommandAdapter(engine, catalog_application=self.catalog_application)
+        self.control_plane = ControlPlaneAdapter(engine)
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)
         self.hwpx = HwpxApplicationService(engine, registry=self.registry)

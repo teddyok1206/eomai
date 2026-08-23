@@ -84,6 +84,46 @@ def test_file_set_artifact_commits_and_verifies_every_file(tmp_path: Path) -> No
         commit_file_set_artifact(staged, nas_root)
 
 
+def test_file_set_artifact_records_exact_typed_member_metadata(tmp_path: Path) -> None:
+    source = tmp_path / "guidance.md"
+    source.write_text("# Reviewed guidance\n", encoding="utf-8")
+    staged = stage_file_set_artifact(
+        files={"guidance.md": source},
+        primary_file="guidance.md",
+        job_id=JOB_ID,
+        logical_artifact_id=ARTIFACT_ID,
+        revision_id=REVISION_ID,
+        artifact_type="control_markdown",
+        staging=tmp_path / "typed-staged",
+        file_metadata={
+            "guidance.md": {
+                "schema_ref": "eom://schemas/workflow/instruction-member/1.0",
+                "media_type": "text/markdown",
+            }
+        },
+    )
+    assert staged.manifest["files"] == [
+        {
+            "file_name": "guidance.md",
+            "sha256": staged.primary_hash,
+            "bytes": staged.primary_bytes,
+            "schema_ref": "eom://schemas/workflow/instruction-member/1.0",
+            "media_type": "text/markdown",
+        }
+    ]
+    with pytest.raises(PlatformError, match="metadata"):
+        stage_file_set_artifact(
+            files={"guidance.md": source},
+            primary_file="guidance.md",
+            job_id=JOB_ID,
+            logical_artifact_id=ARTIFACT_ID,
+            revision_id=REVISION_ID,
+            artifact_type="control_markdown",
+            staging=tmp_path / "mismatched-metadata",
+            file_metadata={},
+        )
+
+
 def test_file_set_artifact_rejects_traversal_and_symlink(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.write_bytes(b"content")

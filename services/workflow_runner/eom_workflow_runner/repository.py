@@ -241,6 +241,7 @@ def enqueue_command(
     actor_id: str,
     source: str,
     idempotency_key: str,
+    available_at: datetime | None = None,
 ) -> tuple[WorkflowCommandRecord, bool]:
     request_hash = content_sha256(
         {
@@ -278,6 +279,7 @@ def enqueue_command(
         request_hash=request_hash,
         state=CommandState.PENDING.value,
         attempts=0,
+        available_at=available_at or datetime.now(UTC),
     )
     session.add(command)
     session.flush()
@@ -329,7 +331,10 @@ def claimable_command_exists(session: Session, *, workflow_id: str | None = None
 
 def _claimable_command_filter(now: datetime) -> ColumnElement[bool]:
     return or_(
-        WorkflowCommandRecord.state == CommandState.PENDING.value,
+        (
+            (WorkflowCommandRecord.state == CommandState.PENDING.value)
+            & (WorkflowCommandRecord.available_at <= now)
+        ),
         (
             WorkflowCommandRecord.state.in_(
                 [CommandState.LEASED.value, CommandState.PROCESSING.value]

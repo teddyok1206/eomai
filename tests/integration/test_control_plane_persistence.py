@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from threading import Barrier
 from typing import Any
 from uuid import uuid4
@@ -28,6 +30,7 @@ from eom_identifiers import (
     new_reference_bundle_revision_id,
     new_revision_id,
 )
+from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.capability_observer import (
     REQUIRED_EXEC_HELP_FLAGS,
     ReviewedCapabilityPolicy,
@@ -38,10 +41,24 @@ from eom_orchestrator.capacity_controller import (
     LeaseClaim,
     set_auth_binding_operational_state,
 )
+from eom_orchestrator.control_bootstrap import (
+    StandardBootstrapResult,
+    bootstrap_standard_control_plane,
+)
+from eom_orchestrator.control_commands import (
+    build_codex_control_command,
+    claim_next_codex_control_command,
+    enqueue_codex_control_command,
+    terminalize_codex_control_command,
+)
 from eom_orchestrator.control_models import (
     CodexAuthBindingRecord,
     CodexCapabilitySnapshotRecord,
+    CodexControlCommandRecord,
     ExecutionBundleRevisionRecord,
+    ExecutionPresetEvaluationRecord,
+    ExecutionPresetRecord,
+    ExecutionPresetRevisionRecord,
     WorkerLeaseEventRecord,
     WorkerLeaseRecord,
 )
@@ -63,6 +80,10 @@ from eom_orchestrator.control_service import (
     worker_lease_view,
 )
 from eom_orchestrator.database import build_session_factory, transaction
+from eom_orchestrator.execution_materializer import (
+    authorized_execution_artifact_revisions,
+    materialize_execution_step,
+)
 from eom_orchestrator.execution_resolver import (
     ExecutionStepRequirement,
     resolve_execution_plan,
@@ -75,8 +96,16 @@ from eom_orchestrator.models import (
     ProtocolVersionRecord,
     WorkerSlotRecord,
 )
+from eom_orchestrator.preset_lifecycle import (
+    create_execution_preset_draft,
+    deprecate_execution_preset,
+    execution_preset_policy_sha256,
+    record_execution_preset_evaluation,
+    release_execution_preset,
+)
 from eom_orchestrator.protocol import protocol_schema_hash
 from eom_orchestrator.repository import ensure_protocol_version, upsert_worker_slot
+from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_systemd import WorkerUnitActivity
 from eom_workflow import ControlArtifactPointer
 from eom_workflow.control_plane import WorkerRole
@@ -85,6 +114,12 @@ from eom_workflow_runner.models import (
     WorkflowDefinitionRecord,
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
+)
+from eom_workflow_runner.repository import (
+    CommandType,
+    claim_next_command,
+    claimable_command_exists,
+    enqueue_command,
 )
 from sqlalchemy import Engine, func, select
 from sqlalchemy.exc import DBAPIError
@@ -100,7 +135,11 @@ def _self_hash(document: dict[str, Any], field: str) -> dict[str, Any]:
     return document
 
 
-def _seed_protocols_and_slots(session: Session) -> None:
+def _seed_protocols_and_slots(
+    session: Session,
+    *,
+    additional_slots: dict[WorkerRole, str] | None = None,
+) -> None:
     ensure_protocol_version(session, "1.0.1", protocol_schema_hash())
     ensure_protocol_version(
         session, "workflow-role/1.3.0", role_schema_bundle_hash("workflow-role/1.3.0")
@@ -114,6 +153,15 @@ def _seed_protocols_and_slots(session: Session) -> None:
             role=role,
             enabled=True,
             gpu=role == "image",
+        )
+    for role, slot_id in (additional_slots or {}).items():
+        upsert_worker_slot(
+            session,
+            slot_id=slot_id,
+            linux_user=f"eom-cdx-{slot_id}",
+            role=role.value,
+            enabled=True,
+            gpu=role is WorkerRole.IMAGE,
         )
     session.flush()
 
@@ -355,8 +403,17 @@ def _complete_control_plane(
     session: Session,
     *,
     roles: tuple[WorkerRole, ...] = (WorkerRole.AUTHORING,),
+    slot_id_by_role: dict[WorkerRole, str] | None = None,
 ) -> tuple[str, str, str]:
-    _seed_protocols_and_slots(session)
+    resolved_slot_ids = {
+        WorkerRole.AUTHORING: "01",
+        WorkerRole.REVIEW: "02",
+        WorkerRole.IMAGE: "03",
+        WorkerRole.ITEM_MANAGEMENT: "04",
+        WorkerRole.SUPPORT: "05",
+        **(slot_id_by_role or {}),
+    }
+    _seed_protocols_and_slots(session, additional_slots=slot_id_by_role)
     instruction, instruction_artifact, reference, reference_artifact = _bundle_documents(session)
     instruction_record = record_bundle_revision(
         session,
@@ -401,16 +458,7 @@ def _complete_control_plane(
                 {
                     "pool_key": role.value,
                     "roles": [role.value],
-                    "slot_keys": [
-                        "slot"
-                        + {
-                            WorkerRole.AUTHORING: "01",
-                            WorkerRole.REVIEW: "02",
-                            WorkerRole.IMAGE: "03",
-                            WorkerRole.ITEM_MANAGEMENT: "04",
-                            WorkerRole.SUPPORT: "05",
-                        }[role]
-                    ],
+                    "slot_keys": ["slot" + resolved_slot_ids[role]],
                     "max_active": 1,
                 }
                 for role in roles
@@ -519,15 +567,8 @@ def _complete_control_plane(
     assert first_plan.steps[0].model == "gpt-5.6-terra"
     assert first_plan.steps[0].reasoning_effort == "high"
 
-    slot_by_role = {
-        WorkerRole.AUTHORING: "01",
-        WorkerRole.REVIEW: "02",
-        WorkerRole.IMAGE: "03",
-        WorkerRole.ITEM_MANAGEMENT: "04",
-        WorkerRole.SUPPORT: "05",
-    }
     for role in roles:
-        slot_id = slot_by_role[role]
+        slot_id = resolved_slot_ids[role]
         existing_binding = session.scalar(
             select(CodexAuthBindingRecord).where(CodexAuthBindingRecord.worker_slot_id == slot_id)
         )
@@ -665,7 +706,12 @@ def test_control_plane_records_are_idempotent_immutable_and_capacity_bounded(
 def test_concurrent_claims_create_only_one_held_lease(integration_engine: Engine) -> None:
     sessions = build_session_factory(integration_engine)
     with transaction(sessions) as session:
-        plan_id, workflow_id, _ = _complete_control_plane(session)
+        # This test commits across independent connections. Use a disposable slot identity so
+        # its durable fixture cannot collide with the fixed slot01 bootstrap contract below.
+        plan_id, workflow_id, _ = _complete_control_plane(
+            session,
+            slot_id_by_role={WorkerRole.AUTHORING: "11"},
+        )
         job = _job(session, workflow_id=workflow_id)
         job_ids = (job.job_id, job.job_id)
     barrier = Barrier(2)
@@ -1006,6 +1052,53 @@ def test_capacity_controller_reconciles_exact_unit_before_slot_reuse(
     assert (metrics.oldest_held_seconds is not None) == (process_state != "ABSENT")
 
 
+def test_uncertain_worker_terminal_state_reconciles_before_slot_reuse(
+    db_session: Session,
+) -> None:
+    plan_id, workflow_id, _ = _complete_control_plane(db_session)
+    job = _job(db_session, workflow_id=workflow_id)
+    sessions = sessionmaker(bind=db_session.connection(), expire_on_commit=False)
+    controller = CodexCapacityController(
+        sessions,
+        activity_inspector=lambda slot, job_id: WorkerUnitActivity(
+            "ABSENT", f"eom-worker-{slot.slot_id}@{job_id}.service", None
+        ),
+    )
+    claimed = controller.claim(
+        LeaseClaim(
+            plan_id=plan_id,
+            step_key="authoring",
+            job_id=job.job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=1),
+            ttl=timedelta(minutes=30),
+        )
+    )
+
+    held = controller.defer_uncertain_process(
+        lease_id=claimed.lease_id,
+        observed_at=NOW + timedelta(minutes=2),
+    )
+    outcomes = controller.reconcile_expired(observed_at=NOW + timedelta(minutes=2))
+
+    assert held.state == "RECONCILING"
+    assert outcomes[0].lease_state == "EXPIRED"
+    with sessions() as session:
+        events = tuple(
+            session.scalars(
+                select(WorkerLeaseEventRecord)
+                .where(WorkerLeaseEventRecord.lease_id == claimed.lease_id)
+                .order_by(WorkerLeaseEventRecord.sequence)
+            )
+        )
+        assert [event.reason_code for event in events] == [
+            None,
+            "PROCESS_TERMINAL_UNCONFIRMED",
+            "PROCESS_ABSENT",
+        ]
+
+
 def test_reconciling_lease_is_reinspected_after_controller_restart(
     db_session: Session,
 ) -> None:
@@ -1060,6 +1153,361 @@ def test_capacity_controller_does_not_allow_manual_ready_state(db_session: Sessi
             observed_at=NOW + timedelta(minutes=1),
             ttl=timedelta(minutes=15),
         )
+
+
+def test_preset_lifecycle_requires_exact_pass_evidence_and_preserves_history(
+    db_session: Session,
+) -> None:
+    _complete_control_plane(db_session)
+    template = db_session.scalar(
+        select(ExecutionPresetRevisionRecord).where(
+            ExecutionPresetRevisionRecord.state == "RELEASED"
+        )
+    )
+    assert template is not None
+    draft = create_execution_preset_draft(
+        db_session,
+        preset_key=f"phase5-draft-{uuid4().hex[:12]}",
+        display_name="Phase 5 standard",
+        description="Disposable immutable preset lifecycle fixture.",
+        role_policies=list(template.canonical_document["role_policies"]),
+        capacity_policy_revision_id=template.capacity_policy_revision_id,
+        general_knowledge_policy=template.general_knowledge_policy,
+        compatible_workflow_protocols=list(template.compatible_workflow_protocols),
+        created_by="phase5-test",
+        created_at=NOW + timedelta(minutes=20),
+    )
+    policy_sha256 = execution_preset_policy_sha256(draft.canonical_document)
+
+    static_pointer = _artifact_pointer(
+        db_session,
+        schema_ref="eom://schemas/workflow/execution-preset-evaluation-report/1.0",
+        media_type="application/json",
+        logical_name="static-evaluation.json",
+    )
+    static_report = _self_hash(
+        {
+            "schema_version": "execution-preset-evaluation-report/1.0",
+            "evaluated_preset_revision_id": draft.preset_revision_id,
+            "evaluated_policy_sha256": policy_sha256,
+            "scope": "STATIC",
+            "outcome": "PASS",
+            "summary_code": "CONTRACT_VALIDATION",
+            "cases_total": 12,
+            "cases_passed": 12,
+            "quality_score_permille": None,
+            "completed_at": (NOW + timedelta(minutes=21)).isoformat().replace("+00:00", "Z"),
+            "report_sha256": "sha256:" + "0" * 64,
+        },
+        "report_sha256",
+    )
+    static_evaluation = record_execution_preset_evaluation(
+        db_session,
+        document=static_report,
+        report_artifact=static_pointer,
+        created_by="phase5-test",
+    )
+    assert static_evaluation.scope == "STATIC"
+    with pytest.raises(ControlPlaneError) as missing_evidence:
+        release_execution_preset(
+            db_session,
+            draft_revision_id=draft.preset_revision_id,
+            released_by="phase5-test",
+            released_at=NOW + timedelta(minutes=22),
+        )
+    assert missing_evidence.value.code == "CONTROL_PRESET_EVALUATION_REQUIRED"
+
+    non_live_pointer = _artifact_pointer(
+        db_session,
+        schema_ref="eom://schemas/workflow/execution-preset-evaluation-report/1.0",
+        media_type="application/json",
+        logical_name="non-live-evaluation.json",
+    )
+    non_live_report = _self_hash(
+        {
+            "schema_version": "execution-preset-evaluation-report/1.0",
+            "evaluated_preset_revision_id": draft.preset_revision_id,
+            "evaluated_policy_sha256": policy_sha256,
+            "scope": "NON_LIVE",
+            "outcome": "PASS",
+            "summary_code": "FAKE_ADAPTER_ACCEPTANCE",
+            "cases_total": 28,
+            "cases_passed": 28,
+            "quality_score_permille": 1000,
+            "completed_at": (NOW + timedelta(minutes=23)).isoformat().replace("+00:00", "Z"),
+            "report_sha256": "sha256:" + "0" * 64,
+        },
+        "report_sha256",
+    )
+    evidence = record_execution_preset_evaluation(
+        db_session,
+        document=non_live_report,
+        report_artifact=non_live_pointer,
+        created_by="phase5-test",
+    )
+    released = release_execution_preset(
+        db_session,
+        draft_revision_id=draft.preset_revision_id,
+        released_by="phase5-test",
+        released_at=NOW + timedelta(minutes=24),
+    )
+    logical = db_session.get(ExecutionPresetRecord, draft.preset_id)
+    assert logical is not None
+    assert evidence.evaluated_preset_revision_id == draft.preset_revision_id
+    assert released.state == "RELEASED"
+    assert released.preset_revision_id != draft.preset_revision_id
+    assert execution_preset_policy_sha256(released.canonical_document) == policy_sha256
+    assert logical.current_revision_id == released.preset_revision_id
+
+    deprecated = deprecate_execution_preset(
+        db_session,
+        preset_id=logical.preset_id,
+        deprecated_by="phase5-test",
+        deprecated_at=NOW + timedelta(minutes=25),
+    )
+    assert deprecated.state == "DEPRECATED"
+    assert logical.state == "RETIRED"
+    assert logical.current_revision_id == released.preset_revision_id
+    assert db_session.get(ExecutionPresetEvaluationRecord, evidence.evaluation_id) is evidence
+    with pytest.raises(DBAPIError, match="immutable"), db_session.begin_nested():
+        released.description = "forbidden mutation"
+        db_session.flush()
+
+
+def test_control_command_is_idempotent_leased_sanitized_and_terminal(
+    db_session: Session,
+) -> None:
+    _complete_control_plane(db_session)
+    binding = db_session.scalar(select(CodexAuthBindingRecord))
+    assert binding is not None
+    operator = OperatorRecord(
+        operator_id="operator_" + uuid4().hex,
+        username=f"phase5-{uuid4().hex[:12]}",
+        normalized_username=f"phase5-{uuid4().hex}",
+        display_name="Phase 5 test operator",
+        status="ACTIVE",
+        must_change_password=False,
+        role_version=1,
+        created_by="phase5-test",
+    )
+    db_session.add(operator)
+    db_session.flush()
+    document = build_codex_control_command(
+        command_type="OBSERVE",
+        binding_id=binding.binding_id,
+        expected_resource_version=binding.resource_version,
+        requested_by_operator_id=operator.operator_id,
+        requested_at=NOW + timedelta(minutes=30),
+        reason_code=None,
+    )
+    key = f"phase5-control:{uuid4().hex}"
+    command = enqueue_codex_control_command(
+        db_session,
+        document=document,
+        idempotency_key=key,
+    )
+    replay = enqueue_codex_control_command(
+        db_session,
+        document=document,
+        idempotency_key=key,
+    )
+    assert replay.command_id == command.command_id
+    conflict_document = build_codex_control_command(
+        command_type="OBSERVE",
+        binding_id=binding.binding_id,
+        expected_resource_version=binding.resource_version,
+        requested_by_operator_id=operator.operator_id,
+        requested_at=NOW + timedelta(minutes=31),
+        reason_code=None,
+    )
+    with pytest.raises(ControlPlaneError) as conflict:
+        enqueue_codex_control_command(
+            db_session,
+            document=conflict_document,
+            idempotency_key=key,
+        )
+    assert conflict.value.code == "CONTROL_IDEMPOTENCY_CONFLICT"
+
+    claimed = claim_next_codex_control_command(
+        db_session,
+        lease_owner="phase5-runner",
+        claimed_at=NOW + timedelta(minutes=32),
+        lease_ttl=timedelta(minutes=1),
+    )
+    assert claimed is not None
+    assert claimed.command_id == command.command_id
+    assert claimed.attempts == 1
+    assert db_session.get(CodexControlCommandRecord, command.command_id) is claimed
+    assert claimed.state == "PROCESSING"
+    terminal = terminalize_codex_control_command(
+        db_session,
+        command_id=command.command_id,
+        lease_owner="phase5-runner",
+        outcome="SUCCEEDED",
+        result_resource_version=binding.resource_version,
+        binding_state=binding.state,
+        reason_code=None,
+        processed_at=NOW + timedelta(minutes=33),
+    )
+    assert terminal.state == "SUCCEEDED"
+    assert terminal.result_document is not None
+    serialized = str({"request": terminal.canonical_document, "result": terminal.result_document})
+    assert all(
+        forbidden not in serialized.casefold()
+        for forbidden in ("token", "secret", "password", "credential", "auth.json")
+    )
+    assert (
+        terminalize_codex_control_command(
+            db_session,
+            command_id=command.command_id,
+            lease_owner="another-runner",
+            outcome="FAILED",
+            result_resource_version=None,
+            binding_state=None,
+            reason_code="SHOULD_NOT_REWRITE_TERMINAL",
+            processed_at=NOW + timedelta(minutes=34),
+        ).result_document
+        == terminal.result_document
+    )
+    assert db_session.get(CodexControlCommandRecord, command.command_id) is terminal
+
+
+def test_workflow_command_availability_delays_capacity_retry_claim(
+    db_session: Session,
+) -> None:
+    workflow = _workflow(db_session)
+    available_at = datetime.now(UTC) + timedelta(minutes=5)
+    command, created = enqueue_command(
+        db_session,
+        workflow_id=workflow.workflow_id,
+        command_type=CommandType.ADVANCE_WORKFLOW,
+        payload={"reason": "CAPACITY_AVAILABLE_RETRY", "job_id": "job_" + uuid4().hex},
+        actor_type="system",
+        actor_id="phase5-runner",
+        source="capacity_controller",
+        idempotency_key=f"phase5-capacity-retry:{uuid4().hex}",
+        available_at=available_at,
+    )
+    assert created
+    assert command.available_at == available_at
+    assert not claimable_command_exists(db_session, workflow_id=workflow.workflow_id)
+    assert (
+        claim_next_command(
+            db_session,
+            runner_id="phase5-runner",
+            lease_seconds=30,
+            workflow_id=workflow.workflow_id,
+        )
+        is None
+    )
+    command.available_at = datetime.now(UTC) - timedelta(seconds=1)
+    db_session.flush()
+    claimed = claim_next_command(
+        db_session,
+        runner_id="phase5-runner",
+        lease_seconds=30,
+        workflow_id=workflow.workflow_id,
+    )
+    assert claimed is not None
+    assert claimed.command_id == command.command_id
+
+
+def test_control_command_claim_index_covers_expired_lease_scan(db_session: Session) -> None:
+    indexes = {
+        row.name: tuple(column.name for column in row.expressions)
+        for row in CodexControlCommandRecord.__table__.indexes
+    }
+
+    assert indexes["ix_codex_control_command_claim"] == (
+        "state",
+        "lease_expires_at",
+        "requested_at",
+        "command_id",
+    )
+
+
+def test_standard_bootstrap_is_idempotent_and_materializes_only_pinned_markdown(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    staging_root = tmp_path / "staging"
+    nas_root = tmp_path / "nas"
+    staging_root.mkdir()
+    nas_root.mkdir()
+    settings = Settings(
+        worker_config=Path("config/worker-slots.example.yaml").resolve(),
+        staging_root=staging_root,
+        workspace_root=tmp_path / "worker-workspaces",
+        worker_home_root=tmp_path / "worker-homes",
+        nas_artifact_root=nas_root.resolve(),
+        codex_binary=Path("/usr/local/bin/codex"),
+        codex_capability_policy=Path("config/codex-capabilities.example.yaml").resolve(),
+        worker_timeout_seconds=600,
+    )
+
+    def bootstrap() -> StandardBootstrapResult:
+        return bootstrap_standard_control_plane(
+            integration_engine,
+            config_directory=Path("config/control-plane/standard-item-v1").resolve(),
+            source_commit="a" * 40,
+            actor_id="phase5-integration",
+            evaluation_cases_total=1,
+            settings=settings,
+        )
+
+    first = bootstrap_standard_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/standard-item-v1").resolve(),
+        source_commit="a" * 40,
+        actor_id="phase5-integration",
+        evaluation_cases_total=1,
+        settings=settings,
+    )
+    replay = bootstrap()
+    assert replay == first
+    assert len(first.instruction_bundle_revision_ids) == 4
+    assert len(first.auth_binding_ids) == 5
+
+    sessions = build_session_factory(integration_engine)
+    with transaction(sessions) as session:
+        workflow = _workflow(session)
+        plan = resolve_execution_plan(
+            session,
+            preset_key="standard-item",
+            dependencies=ResolvedPlanDependencyEvidence(
+                workflow_id=workflow.workflow_id,
+                workflow_definition_key=workflow.definition_key,
+                workflow_definition_version=workflow.definition_version,
+                workflow_definition_sha256=workflow.definition_hash,
+                workflow_role_schema_version=workflow.role_schema_version,
+                content_pack_release_id="packrel_" + uuid4().hex,
+                content_pack_sha256="sha256:" + uuid4().hex * 2,
+            ),
+            steps=(ExecutionStepRequirement("authoring", WorkerRole.AUTHORING),),
+            resolved_at=NOW + timedelta(hours=1),
+        )
+        allowed = authorized_execution_artifact_revisions(
+            session, plan_id=plan.plan_id, step_key="authoring"
+        )
+        workspace = tmp_path / "materialized-workspace"
+        workspace.mkdir(mode=0o2770)
+        workspace.chmod(0o2770)
+        materialized = materialize_execution_step(
+            session,
+            plan_id=plan.plan_id,
+            step_key="authoring",
+            workspace=workspace,
+            canonical_artifact_root=nas_root.resolve(),
+            worker_group_id=os.getgid(),
+            authorized_artifact_revision_ids=allowed,
+        )
+    assert materialized.materialized_member_count == 3
+    assert materialized.model == "gpt-5.6-terra"
+    assert materialized.reasoning_effort == "high"
+    assert (workspace / "AGENTS.md").is_file()
+    assert (workspace / "instructions/platform.md").is_file()
+    assert (workspace / "instructions/authoring.md").is_file()
+    assert (workspace / "references/general-knowledge-provenance.md").is_file()
 
 
 def test_historical_protocol_rows_remain_byte_identical(db_session: Session) -> None:

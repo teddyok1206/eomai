@@ -18,7 +18,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from eom_web_gui.contracts import (
+    CodexAccountAdminCommand,
     DraftSubmission,
+    ExecutionPresetDraftSubmission,
+    ExecutionPresetLifecycleCommand,
     ExplorerQuery,
     HwpxBuildRequest,
     RequestDraftInput,
@@ -336,6 +339,56 @@ def create_app(
             media_type=value.content_type,
             headers={"Content-Disposition": value.content_disposition},
         )
+
+    @app.get(f"{API_PREFIX}/admin/codex-accounts")
+    async def codex_accounts(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> tuple[dict[str, Any], ...]:
+        return await actual.codex_accounts(session)
+
+    @app.post(f"{API_PREFIX}/admin/codex-accounts/{{binding_id}}/commands", status_code=202)
+    async def codex_account_command(
+        binding_id: str,
+        value: CodexAccountAdminCommand,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.codex_account_command(session, binding_id, value)
+
+    @app.get(f"{API_PREFIX}/admin/codex-control-commands/{{command_id}}")
+    async def codex_control_command(
+        command_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return await actual.codex_control_command(session, command_id)
+
+    @app.get(f"{API_PREFIX}/admin/execution-presets")
+    async def execution_presets(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> tuple[dict[str, Any], ...]:
+        return await actual.execution_presets(session)
+
+    @app.post(f"{API_PREFIX}/admin/execution-presets", status_code=201)
+    async def create_execution_preset_draft(
+        value: ExecutionPresetDraftSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.create_execution_preset_draft(session, value)
+
+    @app.post(f"{API_PREFIX}/admin/execution-preset-revisions/{{draft_revision_id}}/releases")
+    async def release_execution_preset(
+        draft_revision_id: str,
+        value: ExecutionPresetLifecycleCommand,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.release_execution_preset(session, draft_revision_id, value)
+
+    @app.post(f"{API_PREFIX}/admin/execution-presets/{{preset_id}}/deprecations")
+    async def deprecate_execution_preset(
+        preset_id: str,
+        value: ExecutionPresetLifecycleCommand,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.deprecate_execution_preset(session, preset_id, value)
 
     @app.post(f"{API_PREFIX}/explorer/query")
     async def explorer(

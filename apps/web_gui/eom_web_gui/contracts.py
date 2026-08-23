@@ -85,6 +85,68 @@ class DraftSubmission(WebModel):
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 
+class CodexAccountAdminCommand(WebModel):
+    command_type: Literal["OBSERVE", "ENABLE", "DRAIN", "DISABLE"]
+    resource_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+    reason_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+
+    @model_validator(mode="after")
+    def coherent_reason(self) -> CodexAccountAdminCommand:
+        requires_reason = self.command_type in {"DRAIN", "DISABLE"}
+        if requires_reason != (self.reason_code is not None):
+            raise ValueError("drain/disable require a reason and observe/enable forbid one")
+        return self
+
+
+class ControlArtifactPointerDraft(WebModel):
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    schema_ref: str = Field(min_length=1, max_length=256)
+    media_type: str = Field(min_length=1, max_length=128)
+    logical_name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$")
+
+
+class BundleRevisionPointerDraft(WebModel):
+    bundle_id: str = Field(pattern=r"^(?:instrbundle|refbundle)_[0-9a-f]{32}$")
+    bundle_revision_id: str = Field(pattern=r"^(?:instrrev|refrev)_[0-9a-f]{32}$")
+    manifest_artifact: ControlArtifactPointerDraft
+    manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class PresetModelCandidateDraft(WebModel):
+    model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"]
+
+
+class PresetRolePolicyDraft(WebModel):
+    role: Literal["authoring", "image", "review", "item_management", "support"]
+    model_candidates: tuple[PresetModelCandidateDraft, ...] = Field(min_length=1, max_length=4)
+    instruction_bundle: BundleRevisionPointerDraft
+    reference_bundle: BundleRevisionPointerDraft | None
+    worker_pool_key: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")
+    timeout_seconds: int = Field(ge=30, le=7200)
+    sandbox: Literal["read-only"] = "read-only"
+    network: Literal["disabled"] = "disabled"
+
+
+class ExecutionPresetDraftSubmission(WebModel):
+    preset_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    display_name: str = Field(min_length=1, max_length=128)
+    description: str = Field(min_length=1, max_length=1000)
+    role_policies: tuple[PresetRolePolicyDraft, ...] = Field(min_length=1, max_length=5)
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    general_knowledge_policy: Literal["DENY", "ALLOW_WITH_PROVENANCE"]
+    compatible_workflow_protocols: tuple[str, ...] = Field(min_length=1, max_length=16)
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
+class ExecutionPresetLifecycleCommand(WebModel):
+    resource_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
 class WorkflowApproval(WebModel):
     etag: str = Field(pattern=r'^"v[1-9][0-9]*"$')
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")

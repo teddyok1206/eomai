@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import grp
 import logging
-from datetime import UTC, datetime
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -34,8 +36,16 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from eom_orchestrator.artifacts import commit_artifact, stage_artifact, stage_structured_artifact
+from eom_orchestrator.capacity_controller import CodexCapacityController, LeaseClaim
+from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
+from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.errors import PlatformError
+from eom_orchestrator.execution_materializer import (
+    MaterializedExecution,
+    authorized_execution_artifact_revisions,
+    materialize_execution_step,
+)
 from eom_orchestrator.logging import log_event
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.protocol import protocol_schema_hash
@@ -67,6 +77,7 @@ class Orchestrator:
         self.sessions = build_session_factory(engine)
         self.registry = resolve_worker_configuration(self.settings).registry
         self.worker_adapter = worker_adapter or CodexWorkerAdapter(self.settings)
+        self.capacity = CodexCapacityController(self.sessions)
 
     def submit(self, message: str, idempotency_key: str | None = None) -> JobRecord:
         request = JobRequest(
@@ -194,6 +205,7 @@ class Orchestrator:
         *,
         workflow_id: str,
         step_run_id: str,
+        step_key: str,
         attempt: int,
         role: str,
         request: WorkerRequest,
@@ -202,6 +214,7 @@ class Orchestrator:
         idempotency_key: str,
         prompt_path: Path | None = None,
         prompt_text: str | None = None,
+        before_execute: Callable[[str], None] | None = None,
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
@@ -215,52 +228,106 @@ class Orchestrator:
                 or stored.get("attempt") != attempt
             ):
                 raise ValueError("workflow role idempotency key conflicts with stored job")
-            return existing
-
-        job_id = new_job_id()
-        artifact = WorkflowArtifactSpec(
-            logical_artifact_id=new_logical_artifact_id(), revision_id=new_revision_id()
-        )
-        protocol_version = result_schema_protocol(result_schema)
-        worker_input = RoleWorkerInput(
-            protocol_version=protocol_version,
-            job_id=job_id,
-            workflow_id=workflow_id,
-            step_run_id=step_run_id,
-            attempt=attempt,
-            role=role,  # type: ignore[arg-type]
-            request=request,
-            upstream_artifacts=upstream_artifacts,
-            artifact=artifact,
-        )
-        input_document = worker_input.model_dump(mode="json")
-        validate_role_input(input_document, role, protocol_version)
+            if existing.status != JobState.QUEUED.value:
+                return existing
+            job_id = existing.job_id
+            worker_input = RoleWorkerInput.model_validate(existing.request)
+            input_document = worker_input.model_dump(mode="json")
+            artifact = worker_input.artifact
+            protocol_version = worker_input.protocol_version
+        else:
+            job_id = new_job_id()
+            artifact = WorkflowArtifactSpec(
+                logical_artifact_id=new_logical_artifact_id(), revision_id=new_revision_id()
+            )
+            protocol_version = result_schema_protocol(result_schema)
+            worker_input = RoleWorkerInput(
+                protocol_version=protocol_version,
+                job_id=job_id,
+                workflow_id=workflow_id,
+                step_run_id=step_run_id,
+                attempt=attempt,
+                role=role,  # type: ignore[arg-type]
+                request=request,
+                upstream_artifacts=upstream_artifacts,
+                artifact=artifact,
+            )
+            input_document = worker_input.model_dump(mode="json")
+            validate_role_input(input_document, role, protocol_version)
         if prompt_text is None:
             assert prompt_path is not None
             prompt_text = prompt_path.read_text(encoding="utf-8")
-        with transaction(self.sessions) as session:
-            self._sync_registry(session)
-            ensure_protocol_version(
-                session, protocol_version, role_schema_bundle_hash(protocol_version)
-            )
-            job, created = submit_structured_job(
-                session,
-                job_id=job_id,
-                protocol_version=protocol_version,
-                idempotency_key=idempotency_key,
-                task_type=f"workflow_{role}",
-                request=input_document,
-                logical_artifact_id=artifact.logical_artifact_id,
-                revision_id=artifact.revision_id,
-            )
-        if not created:
-            return self.get_job(job.job_id)
-
-        slot: WorkerSlot | None = None
-        try:
+        if existing is None:
+            with transaction(self.sessions) as session:
+                self._sync_registry(session)
+                ensure_protocol_version(
+                    session, protocol_version, role_schema_bundle_hash(protocol_version)
+                )
+                job, created = submit_structured_job(
+                    session,
+                    job_id=job_id,
+                    protocol_version=protocol_version,
+                    idempotency_key=idempotency_key,
+                    task_type=f"workflow_{role}",
+                    request=input_document,
+                    logical_artifact_id=artifact.logical_artifact_id,
+                    revision_id=artifact.revision_id,
+                )
+            if not created:
+                return self.get_job(job.job_id)
             self._transition(job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
             self._transition(job_id, JobState.QUEUED, "JOB_QUEUED")
-            slot = self.registry.select(role)
+
+        if before_execute is not None:
+            before_execute(job_id)
+
+        slot: WorkerSlot | None = None
+        lease_id: str | None = None
+        worker_start_attempted = False
+        worker_terminal_confirmed = False
+        try:
+            with self.sessions() as session:
+                plan_record = session.scalar(
+                    select(ResolvedExecutionPlanRecord).where(
+                        ResolvedExecutionPlanRecord.workflow_id == workflow_id
+                    )
+                )
+                if plan_record is not None:
+                    plan_document = plan_record.canonical_document
+                    plan_id = plan_record.plan_id
+                else:
+                    plan_document = None
+                    plan_id = None
+            if plan_document is not None:
+                matching_steps = [
+                    item
+                    for item in plan_document.get("steps", [])
+                    if isinstance(item, dict)
+                    and item.get("role") == role
+                    and item.get("step_key") == step_key
+                ]
+                if len(matching_steps) != 1 or plan_id is None:
+                    raise ControlPlaneError(
+                        "CONTROL_PLAN_STEP_MISSING", "workflow execution plan step is missing"
+                    )
+                plan_step = matching_steps[0]
+                lease = self.capacity.claim(
+                    LeaseClaim(
+                        plan_id=plan_id,
+                        step_key=str(plan_step["step_key"]),
+                        job_id=job_id,
+                        attempt=attempt,
+                        workload_class="CODEX",
+                        acquired_at=datetime.now(UTC),
+                        ttl=timedelta(seconds=int(plan_step["timeout_seconds"])),
+                    )
+                )
+                lease_id = lease.lease_id
+                slot = self._slot_by_key(lease.slot_key)
+            else:
+                plan_step = None
+                plan_id = None
+                slot = self.registry.select(role)
             with transaction(self.sessions) as session:
                 claimed = session.get(JobRecord, job_id)
                 if claimed is None:
@@ -273,17 +340,58 @@ class Orchestrator:
                     "WORKER_CLAIMED",
                     data={"worker_slot": slot.slot_id, "linux_user": slot.linux_user},
                 )
-            self._transition(job_id, JobState.RUNNING, "WORKER_STARTED")
             staging = self.settings.staging_root / job_id
             staging.mkdir(mode=0o750, parents=False, exist_ok=False)
-            run = self.worker_adapter.run_structured(
-                job_id=job_id,
-                input_document=input_document,
-                output_schema=constrained_result_schema(result_schema, worker_input),
-                prompt_text=prompt_text,
-                slot=slot,
-                staging=staging,
-            )
+            if plan_step is None or plan_id is None:
+                self._transition(job_id, JobState.RUNNING, "WORKER_STARTED")
+                run = self.worker_adapter.run_structured(
+                    job_id=job_id,
+                    input_document=input_document,
+                    output_schema=constrained_result_schema(result_schema, worker_input),
+                    prompt_text=prompt_text,
+                    slot=slot,
+                    staging=staging,
+                )
+            else:
+                private_group = grp.getgrnam(slot.linux_user)
+
+                def materialize(workspace: Path) -> MaterializedExecution:
+                    with self.sessions() as materialization_session:
+                        authorized = authorized_execution_artifact_revisions(
+                            materialization_session,
+                            plan_id=plan_id,
+                            step_key=str(plan_step["step_key"]),
+                        )
+                        evidence = materialize_execution_step(
+                            materialization_session,
+                            plan_id=plan_id,
+                            step_key=str(plan_step["step_key"]),
+                            workspace=workspace,
+                            canonical_artifact_root=self.settings.nas_artifact_root,
+                            worker_group_id=private_group.gr_gid,
+                            authorized_artifact_revision_ids=authorized,
+                        )
+                    event_data: dict[str, object] = dict(evidence.event_data())
+                    self._transition(
+                        job_id,
+                        JobState.RUNNING,
+                        "RESOLVED_WORKER_STARTED",
+                        data=event_data,
+                    )
+                    return evidence
+
+                worker_start_attempted = True
+                resolved_run = self.worker_adapter.run_resolved_structured(
+                    job_id=job_id,
+                    input_document=input_document,
+                    output_schema=constrained_result_schema(result_schema, worker_input),
+                    prompt_text=prompt_text,
+                    slot=slot,
+                    staging=staging,
+                    materialize=materialize,
+                )
+                worker_terminal_confirmed = True
+                run = resolved_run.run
             with transaction(self.sessions) as session:
                 running = session.get(JobRecord, job_id)
                 if running is None:
@@ -347,6 +455,12 @@ class Orchestrator:
                 )
         except WorkflowSchemaError as exc:
             self._fail(job_id, ErrorCode.WORKER_RESULT_INVALID, str(exc), slot)
+        except ControlPlaneError as exc:
+            if exc.code not in {
+                "CONTROL_CAPACITY_EXHAUSTED",
+                "CONTROL_KNOWLEDGE_CAPACITY_EXHAUSTED",
+            }:
+                self._fail(job_id, ErrorCode.WORKER_UNAVAILABLE, exc.code, slot)
         except PlatformError as exc:
             self._fail(job_id, exc.code, str(exc), slot)
         except OSError:
@@ -354,6 +468,28 @@ class Orchestrator:
         except SQLAlchemyError as exc:
             self._fail(job_id, ErrorCode.DATABASE_ERROR, "database operation failed", slot)
             raise PlatformError(ErrorCode.DATABASE_ERROR, "database operation failed") from exc
+        finally:
+            if lease_id is not None:
+                try:
+                    observed_at = datetime.now(UTC)
+                    if not worker_start_attempted or worker_terminal_confirmed:
+                        final_job = self.get_job(job_id)
+                        self.capacity.release(
+                            lease_id=lease_id,
+                            reason_code=(
+                                "WORKER_ATTEMPT_SUCCEEDED"
+                                if final_job.status == JobState.SUCCEEDED.value
+                                else "WORKER_ATTEMPT_TERMINATED"
+                            ),
+                            released_at=observed_at,
+                        )
+                    else:
+                        self.capacity.defer_uncertain_process(
+                            lease_id=lease_id,
+                            observed_at=observed_at,
+                        )
+                except (ControlPlaneError, SQLAlchemyError, KeyError):
+                    LOGGER.exception("failed to release worker capacity lease")
         return self.get_job(job_id)
 
     def _job_by_idempotency_key(self, idempotency_key: str) -> JobRecord | None:
@@ -376,9 +512,22 @@ class Orchestrator:
                 gpu=slot.gpu,
             )
 
-    def _transition(self, job_id: str, target: JobState, event: str) -> None:
+    def _transition(
+        self,
+        job_id: str,
+        target: JobState,
+        event: str,
+        data: dict[str, object] | None = None,
+    ) -> None:
         with transaction(self.sessions) as session:
-            transition_job(session, job_id, target, event)
+            transition_job(session, job_id, target, event, data=data)
+
+    def _slot_by_key(self, slot_key: str) -> WorkerSlot:
+        slot_id = slot_key.removeprefix("slot")
+        matches = [slot for slot in self.registry.config.slots if slot.slot_id == slot_id]
+        if len(matches) != 1 or not matches[0].enabled:
+            raise ControlPlaneError("CONTROL_LEASE_SLOT_MISSING", "leased worker slot is missing")
+        return matches[0]
 
     def _fail(self, job_id: str, code: ErrorCode, message: str, slot: WorkerSlot | None) -> None:
         try:

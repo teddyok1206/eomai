@@ -58,3 +58,14 @@ def test_admin_only_operations_are_explicit() -> None:
     assert "system_doctor" in admin_operations
     assert "workflow_reconcile" in admin_operations
     assert "item_structured_content_import" in admin_operations
+    assert {
+        "codex_account_list",
+        "codex_account_get",
+        "codex_account_command",
+        "codex_control_command_get",
+        "execution_preset_list",
+        "execution_preset_get",
+        "execution_preset_draft_create",
+        "execution_preset_release",
+        "execution_preset_deprecate",
+    }.issubset(admin_operations)

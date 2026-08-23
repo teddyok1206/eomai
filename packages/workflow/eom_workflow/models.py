@@ -183,6 +183,7 @@ class WorkflowRequest(FrozenModel):
     registry_intent: RegistryIntent | None = None
     item_brief: ItemBrief | None = None
     stimulus_asset: StimulusAssetSelection | None = None
+    execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
 
     @model_validator(mode="after")
     def validate_catalog_request(self) -> WorkflowRequest:
@@ -193,6 +194,8 @@ class WorkflowRequest(FrozenModel):
             raise ValueError("catalog workflow request fields must be supplied together")
         if self.source_intake is not None and self.content_pack is None:
             raise ValueError("source Intake pointers require a Content Pack")
+        if self.execution_preset_key is not None and self.content_pack is None:
+            raise ValueError("execution preset requires a pinned Content Pack workflow")
         if self.request_name == "KNOWLEDGE_ITEM_REQUEST":
             if (
                 self.content_pack is None

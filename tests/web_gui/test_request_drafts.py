@@ -42,9 +42,10 @@ def test_request_text_is_not_raw_workflow_prompt() -> None:
     assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
     assert payload["definition_version"] == "1.4.0"
     assert payload["pack_key"] == "generated-knowledge-item"
+    assert payload["execution_preset_key"] == "standard-item"
     assert payload["source_intake_batch_ids"] == []
     assert DEMO_REQUEST not in str(payload)
-    assert "model" not in payload and "reasoning" not in payload
+    assert "model" not in payload and "reasoning" not in payload and "slot" not in payload
 
 
 def test_quality_profile_is_closed_policy_mapping() -> None:

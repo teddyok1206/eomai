@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/codex-control-command/1.0",
+  "title": "EOM Codex Control Command V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "command_id",
+    "command_type",
+    "binding_id",
+    "expected_resource_version",
+    "requested_by_operator_id",
+    "requested_at",
+    "reason_code",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "codex-control-command/1.0"},
+    "command_id": {"type": "string", "pattern": "^codexcmd_[0-9a-f]{32}$"},
+    "command_type": {
+      "enum": ["OBSERVE", "ENABLE", "DRAIN", "DISABLE"]
+    },
+    "binding_id": {"type": "string", "pattern": "^authbinding_[0-9a-f]{32}$"},
+    "expected_resource_version": {"type": "integer", "minimum": 1},
+    "requested_by_operator_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "requested_at": {"type": "string", "format": "date-time"},
+    "reason_code": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+    },
+    "request_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

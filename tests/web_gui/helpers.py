@@ -113,6 +113,8 @@ class FakeGateway:
         self.hwpx_state = hwpx_state
         self.hwpx_build_calls = 0
         self.structured_import_calls = 0
+        self.control_command_calls = 0
+        self.preset_mutation_calls = 0
 
     async def health(self) -> dict[str, str]:
         return {
@@ -180,6 +182,7 @@ class FakeGateway:
         assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
         assert payload["definition_version"] == "1.4.0"
         assert payload["pack_key"] == "generated-knowledge-item"
+        assert payload["execution_preset_key"] == "standard-item"
         assert payload["stimulus_asset_key"] is None
         assert payload["source_intake_batch_ids"] == []
         self.start_calls += 1
@@ -406,6 +409,109 @@ class FakeGateway:
             "application/vnd.hancom.hwpx",
             'attachment; filename="eom-test.hwpx"',
         )
+
+    async def codex_accounts(self, session: WebSession) -> tuple[dict[str, Any], ...]:
+        del session
+        return (
+            {
+                "binding_id": "authbinding_" + "1" * 32,
+                "slot_key": "slot01",
+                "account_label": "account-01",
+                "state": "READY",
+                "reason_code": None,
+                "codex_cli_version": "1.2.3",
+                "observed_at": NOW.isoformat(),
+                "valid_until": (NOW + timedelta(hours=1)).isoformat(),
+                "resource_version": 2,
+                "capabilities": [
+                    {"model": "gpt-5.4", "reasoning_effort": "high", "state": "READY"}
+                ],
+                "active_lease_count": 0,
+                "last_successful_job_id": "job_" + "2" * 32,
+            },
+        )
+
+    async def codex_account_command(
+        self,
+        session: WebSession,
+        binding_id: str,
+        *,
+        command_type: str,
+        reason_code: str | None,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        del session, idempotency_key
+        assert binding_id == "authbinding_" + "1" * 32
+        assert command_type == "OBSERVE" and reason_code is None and resource_version == 2
+        self.control_command_calls += 1
+        return {
+            "command_id": "codexcmd_" + "3" * 32,
+            "resource_type": "codex_control_command",
+            "resource_id": "codexcmd_" + "3" * 32,
+            "status": "ACCEPTED",
+            "resource_version": 2,
+        }
+
+    async def codex_control_command(self, session: WebSession, command_id: str) -> dict[str, Any]:
+        del session
+        assert command_id == "codexcmd_" + "3" * 32
+        return {
+            "command_id": command_id,
+            "command_type": "OBSERVE",
+            "binding_id": "authbinding_" + "1" * 32,
+            "state": "SUCCEEDED",
+            "attempts": 1,
+            "result_resource_version": 3,
+            "error_code": None,
+            "requested_at": NOW.isoformat(),
+            "processed_at": NOW.isoformat(),
+        }
+
+    async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]:
+        del session
+        return (
+            {
+                "preset_id": "execpreset_" + "4" * 32,
+                "preset_key": "standard-item",
+                "current_revision_id": "execpresetrev_" + "5" * 32,
+                "state": "ACTIVE",
+                "created_at": NOW.isoformat(),
+                "updated_at": NOW.isoformat(),
+                "revisions": [],
+            },
+        )
+
+    async def create_execution_preset_draft(
+        self, session: WebSession, payload: dict[str, Any], idempotency_key: str
+    ) -> dict[str, Any]:
+        del session, payload, idempotency_key
+        self.preset_mutation_calls += 1
+        return {"resource_id": "execpresetrev_" + "6" * 32, "status": "COMPLETED"}
+
+    async def release_execution_preset(
+        self,
+        session: WebSession,
+        draft_revision_id: str,
+        *,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        del session, resource_version, idempotency_key
+        self.preset_mutation_calls += 1
+        return {"resource_id": draft_revision_id, "status": "COMPLETED"}
+
+    async def deprecate_execution_preset(
+        self,
+        session: WebSession,
+        preset_id: str,
+        *,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        del session, resource_version, idempotency_key
+        self.preset_mutation_calls += 1
+        return {"resource_id": preset_id, "status": "COMPLETED"}
 
     async def close(self) -> None:
         self.closed = True

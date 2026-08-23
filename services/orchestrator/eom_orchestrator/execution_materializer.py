@@ -16,7 +16,11 @@ from eom_workflow import (
     ResolvedExecutionPlan,
     validate_control_contract,
 )
-from eom_workflow.control_plane import ControlArtifactPointer, ResolvedStepExecution
+from eom_workflow.control_plane import (
+    BundleRevisionPointer,
+    ControlArtifactPointer,
+    ResolvedStepExecution,
+)
 from sqlalchemy.orm import Session
 
 from eom_orchestrator.control_models import (
@@ -201,6 +205,60 @@ def materialize_execution_step(
         materialized_bytes=total_bytes,
         invocation_path=invocation_path,
     )
+
+
+def authorized_execution_artifact_revisions(
+    session: Session, *, plan_id: str, step_key: str
+) -> frozenset[str]:
+    """Derive the exact materialization allowlist from one immutable plan and its manifests."""
+
+    plan_record = session.get(ResolvedExecutionPlanRecord, plan_id)
+    if plan_record is None:
+        raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
+    plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
+    if (
+        plan.plan_sha256 != plan_record.plan_sha256
+        or compute_control_document_hash(plan_record.canonical_document, "plan_sha256")
+        != plan.plan_sha256
+    ):
+        raise ControlPlaneError("CONTROL_PLAN_HASH_MISMATCH", "resolved plan record is stale")
+    matches = [step for step in plan.steps if step.step_key == step_key]
+    if len(matches) != 1:
+        raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
+    step = matches[0]
+    revision_ids: set[str] = set()
+    bundles: list[tuple[BundleRevisionPointer, str]] = [(step.instruction_bundle, "INSTRUCTION")]
+    if step.reference_bundle is not None:
+        bundles.append((step.reference_bundle, "REFERENCE"))
+    for pointer, expected_kind in bundles:
+        record = session.get(ExecutionBundleRevisionRecord, pointer.bundle_revision_id)
+        if (
+            record is None
+            or record.bundle_id != pointer.bundle_id
+            or record.bundle_kind != expected_kind
+            or record.state != "RELEASED"
+            or record.manifest_sha256 != pointer.manifest_sha256
+            or record.manifest_artifact_revision_id
+            != pointer.manifest_artifact.artifact_revision_id
+        ):
+            raise ControlPlaneError(
+                "CONTROL_BUNDLE_POINTER_INVALID", "resolved bundle pointer is stale"
+            )
+        revision_ids.add(pointer.manifest_artifact.artifact_revision_id)
+        if expected_kind == "INSTRUCTION":
+            instruction_manifest = InstructionBundleManifest.model_validate(
+                record.canonical_document
+            )
+            revision_ids.update(
+                component.artifact.artifact_revision_id
+                for component in instruction_manifest.components
+            )
+        else:
+            reference_manifest = ReferenceBundleManifest.model_validate(record.canonical_document)
+            revision_ids.update(
+                entry.artifact.artifact_revision_id for entry in reference_manifest.entries
+            )
+    return frozenset(revision_ids)
 
 
 def _instruction_manifest(

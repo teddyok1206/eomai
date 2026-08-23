@@ -8,8 +8,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 from eom_web_gui.contracts import (
+    CodexAccountAdminCommand,
     ContentIntakeOption,
     ContentIntakeSourcePointer,
+    ExecutionPresetDraftSubmission,
+    ExecutionPresetLifecycleCommand,
     ExplorerQuery,
     ExplorerResult,
     HwpxBuildRequest,
@@ -141,10 +144,73 @@ class WebServices:
         return await self.gateway.import_structured_item(session, value)
 
     async def explore(self, session: WebSession, query: ExplorerQuery) -> ExplorerResult:
-        roles = session.operator.get("roles", ())
-        if not isinstance(roles, (list, tuple)) or "ADMIN" not in roles:
-            raise GatewayError(status=403, code="ADMIN_ROLE_REQUIRED")
+        _require_admin(session)
         return await self.gateway.explorer(session, query)
+
+    async def codex_accounts(self, session: WebSession) -> tuple[dict[str, Any], ...]:
+        _require_admin(session)
+        return await self.gateway.codex_accounts(session)
+
+    async def codex_account_command(
+        self,
+        session: WebSession,
+        binding_id: str,
+        value: CodexAccountAdminCommand,
+    ) -> dict[str, Any]:
+        _require_admin(session)
+        return await self.gateway.codex_account_command(
+            session,
+            binding_id,
+            command_type=value.command_type,
+            reason_code=value.reason_code,
+            resource_version=value.resource_version,
+            idempotency_key=value.idempotency_key,
+        )
+
+    async def codex_control_command(self, session: WebSession, command_id: str) -> dict[str, Any]:
+        _require_admin(session)
+        return await self.gateway.codex_control_command(session, command_id)
+
+    async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]:
+        _require_admin(session)
+        return await self.gateway.execution_presets(session)
+
+    async def create_execution_preset_draft(
+        self, session: WebSession, value: ExecutionPresetDraftSubmission
+    ) -> dict[str, Any]:
+        _require_admin(session)
+        payload = value.model_dump(mode="json", exclude={"idempotency_key"})
+        return await self.gateway.create_execution_preset_draft(
+            session, payload, value.idempotency_key
+        )
+
+    async def release_execution_preset(
+        self,
+        session: WebSession,
+        draft_revision_id: str,
+        value: ExecutionPresetLifecycleCommand,
+    ) -> dict[str, Any]:
+        _require_admin(session)
+        return await self.gateway.release_execution_preset(
+            session,
+            draft_revision_id,
+            resource_version=value.resource_version,
+            idempotency_key=value.idempotency_key,
+        )
+
+    async def deprecate_execution_preset(
+        self,
+        session: WebSession,
+        preset_id: str,
+        value: ExecutionPresetLifecycleCommand,
+    ) -> dict[str, Any]:
+        _require_admin(session)
+        return await self.gateway.deprecate_execution_preset(
+            session,
+            preset_id,
+            resource_version=value.resource_version,
+            idempotency_key=value.idempotency_key,
+        )
 
     async def hwpx_capability(self, session: WebSession) -> HwpxCapability:
         return await self.gateway.hwpx_capability(session)
@@ -173,3 +239,9 @@ def build_services(settings: WebSettings, gateway: ApplicationGateway) -> WebSer
 def validate_download_request(build_id: str) -> None:
     if re.fullmatch(r"hwpxbuild_[a-f0-9]{32}", build_id) is None:
         raise GatewayError(status=422, code="HWPX_BUILD_ID_INVALID")
+
+
+def _require_admin(session: WebSession) -> None:
+    roles = session.operator.get("roles", ())
+    if not isinstance(roles, (list, tuple)) or "ADMIN" not in roles:
+        raise GatewayError(status=403, code="ADMIN_ROLE_REQUIRED")

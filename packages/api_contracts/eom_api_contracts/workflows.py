@@ -40,11 +40,14 @@ class WorkflowStartRequest(ApiModel):
     base_revision_id: str | None = Field(default=None, max_length=128)
     item_brief: KnowledgeItemBriefRequest | None = None
     stimulus_asset_key: Literal["eom-question-template-reference-v1"] | None = None
+    execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
 
     @model_validator(mode="after")
     def validate_content_pack_pointer(self) -> WorkflowStartRequest:
         if self.pack_key is None and self.source_intake_batch_ids:
             raise ValueError("source intake batches require a content pack")
+        if self.execution_preset_key is not None and self.pack_key is None:
+            raise ValueError("execution preset requires a content pack workflow")
         if (
             self.pack_key is not None
             and not self.source_intake_batch_ids

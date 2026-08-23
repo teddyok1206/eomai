@@ -210,6 +210,13 @@ class WorkflowCommandRecord(Base):
             "'REQUEST_REWORK','CANCEL_WORKFLOW','RETRY_STEP','RECONCILE_WORKFLOW')",
             name="ck_workflow_commands_type",
         ),
+        Index(
+            "ix_workflow_commands_claimable",
+            "state",
+            "available_at",
+            "created_at",
+            "command_id",
+        ),
     )
 
     command_id: Mapped[str] = mapped_column(String(38), primary_key=True)
@@ -228,6 +235,9 @@ class WorkflowCommandRecord(Base):
     lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
     lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

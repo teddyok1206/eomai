@@ -194,6 +194,7 @@ Textbook / Mock exam / Item bank
 - [Codex Session, Execution Preset, and Worker Capacity Design](docs/architecture/CODEX_SESSION_PRESETS_AND_CAPACITY.md)
 - [Education Knowledge and Assessment Item GraphRAG Design](docs/architecture/EDUCATION_KNOWLEDGE_ITEM_GRAPHRAG.md)
 - [Codex and Education Knowledge Control Plane Implementation Plan](docs/architecture/CODEX_KNOWLEDGE_CONTROL_PLANE_IMPLEMENTATION_PLAN.md)
+- [Codex Control-Plane MVP Operations](docs/operations/CODEX_CONTROL_PLANE_MVP.md)
 - [Codex and Education Knowledge Phase 0 Baseline](docs/architecture/CODEX_KNOWLEDGE_PHASE0_BASELINE.md)
 - [Education Graph V0 Acceptance Queries](docs/architecture/EDUCATION_GRAPH_V0_ACCEPTANCE_QUERIES.md)
 - [Item Registry V0](docs/architecture/ITEM_REGISTRY_V0.md)

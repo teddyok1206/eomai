@@ -16,6 +16,7 @@ from eom_web_gui.contracts import (
 )
 
 DEMO_REQUEST = "물리학에서 2차원 포물선 운동에 관한 계산 문항을 출제해줘."
+STANDARD_EXECUTION_PRESET_KEY = "standard-item"
 QUALITY_POLICY = {
     "fast": {"label": "빠름", "policy_key": "economy"},
     "balanced": {"label": "균형", "policy_key": "balanced"},
@@ -84,6 +85,7 @@ def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
         "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
         "image_mode": "required",
         "pack_key": "generated-knowledge-item",
+        "execution_preset_key": STANDARD_EXECUTION_PRESET_KEY,
         "environment": "development",
         "source_intake_batch_ids": [],
         "registry_mode": "CREATE_ITEM",

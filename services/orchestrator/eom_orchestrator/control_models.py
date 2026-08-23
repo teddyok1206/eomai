@@ -352,6 +352,71 @@ class ExecutionPresetRolePolicyRecord(Base):
     network: Mapped[str] = mapped_column(String(16), nullable=False)
 
 
+class ExecutionPresetEvaluationRecord(Base):
+    __tablename__ = "execution_preset_evaluations"
+    __table_args__ = (
+        CheckConstraint(
+            "scope IN ('STATIC','NON_LIVE','LIVE_ONE_SHOT')",
+            name="ck_execution_preset_evaluation_scope",
+        ),
+        CheckConstraint(
+            "outcome IN ('PASS','FAIL')", name="ck_execution_preset_evaluation_outcome"
+        ),
+        CheckConstraint(
+            "evaluated_policy_sha256 ~ '^sha256:[0-9a-f]{64}$' "
+            "AND report_document_sha256 ~ '^sha256:[0-9a-f]{64}$' "
+            "AND report_content_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_execution_preset_evaluation_hashes",
+        ),
+        CheckConstraint(
+            "cases_total BETWEEN 1 AND 10000 AND cases_passed BETWEEN 0 AND cases_total",
+            name="ck_execution_preset_evaluation_cases",
+        ),
+        CheckConstraint(
+            "quality_score_permille IS NULL OR quality_score_permille BETWEEN 0 AND 1000",
+            name="ck_execution_preset_evaluation_quality",
+        ),
+        UniqueConstraint(
+            "report_artifact_revision_id", name="uq_execution_preset_evaluation_report_revision"
+        ),
+        Index(
+            "ix_execution_preset_evaluation_policy",
+            "preset_id",
+            "evaluated_policy_sha256",
+            "completed_at",
+        ),
+    )
+
+    evaluation_id: Mapped[str] = mapped_column(String(43), primary_key=True)
+    preset_id: Mapped[str] = mapped_column(
+        ForeignKey("execution_presets.preset_id", ondelete="RESTRICT"), nullable=False
+    )
+    evaluated_preset_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("execution_preset_revisions.preset_revision_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    evaluated_policy_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    scope: Mapped[str] = mapped_column(String(24), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    summary_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    cases_total: Mapped[int] = mapped_column(Integer, nullable=False)
+    cases_passed: Mapped[int] = mapped_column(Integer, nullable=False)
+    quality_score_permille: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    report_artifact_id: Mapped[str] = mapped_column(
+        ForeignKey("artifacts.logical_artifact_id", ondelete="RESTRICT"), nullable=False
+    )
+    report_artifact_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_revisions.revision_id", ondelete="RESTRICT"), nullable=False
+    )
+    report_document_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    report_content_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class ResolvedExecutionPlanRecord(Base):
     __tablename__ = "resolved_execution_plans"
     __table_args__ = (
@@ -532,6 +597,77 @@ class CodexCapabilityEntryRecord(Base):
     model: Mapped[str] = mapped_column(String(128), primary_key=True)
     reasoning_effort: Mapped[str] = mapped_column(String(16), primary_key=True)
     state: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
+class CodexControlCommandRecord(Base):
+    __tablename__ = "codex_control_commands"
+    __table_args__ = (
+        CheckConstraint(
+            "command_type IN ('OBSERVE','ENABLE','DRAIN','DISABLE')",
+            name="ck_codex_control_command_type",
+        ),
+        CheckConstraint(
+            "state IN ('PENDING','PROCESSING','SUCCEEDED','FAILED')",
+            name="ck_codex_control_command_state",
+        ),
+        CheckConstraint("attempts BETWEEN 0 AND 3", name="ck_codex_control_command_attempts"),
+        CheckConstraint(
+            "expected_resource_version >= 1",
+            name="ck_codex_control_command_expected_version",
+        ),
+        CheckConstraint(
+            "request_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_codex_control_command_hash",
+        ),
+        CheckConstraint(
+            "(state = 'PENDING' AND attempts = 0 AND lease_owner IS NULL "
+            "AND lease_expires_at IS NULL AND result_resource_version IS NULL "
+            "AND result_document IS NULL AND error_code IS NULL AND processed_at IS NULL) OR "
+            "(state = 'PROCESSING' AND attempts BETWEEN 1 AND 3 AND lease_owner IS NOT NULL "
+            "AND lease_expires_at IS NOT NULL AND result_resource_version IS NULL "
+            "AND result_document IS NULL AND error_code IS NULL AND processed_at IS NULL) OR "
+            "(state = 'SUCCEEDED' AND attempts BETWEEN 1 AND 3 AND lease_owner IS NULL "
+            "AND lease_expires_at IS NULL AND result_resource_version IS NOT NULL "
+            "AND result_document IS NOT NULL AND error_code IS NULL AND processed_at IS NOT NULL) "
+            "OR (state = 'FAILED' AND attempts BETWEEN 1 AND 3 AND lease_owner IS NULL "
+            "AND lease_expires_at IS NULL AND error_code IS NOT NULL AND processed_at IS NOT NULL)",
+            name="ck_codex_control_command_lifecycle",
+        ),
+        UniqueConstraint("idempotency_key", name="uq_codex_control_command_idempotency"),
+        Index(
+            "ix_codex_control_command_claim",
+            "state",
+            "lease_expires_at",
+            "requested_at",
+            "command_id",
+        ),
+    )
+
+    command_id: Mapped[str] = mapped_column(String(41), primary_key=True)
+    command_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    binding_id: Mapped[str] = mapped_column(
+        ForeignKey("codex_auth_bindings.binding_id", ondelete="RESTRICT"), nullable=False
+    )
+    expected_resource_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    requested_by_operator_id: Mapped[str] = mapped_column(
+        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(96), nullable=False)
+    request_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    canonical_document: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    result_resource_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    result_document: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class WorkerLeaseRecord(Base):

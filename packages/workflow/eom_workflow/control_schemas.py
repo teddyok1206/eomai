@@ -71,6 +71,18 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:406330f2e44da43f9f559183c2204a2c7ba50796531bfc7886f9c1d1dfaf613c",
         ),
+        "codex-control-command": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-control-command-v1.schema.json",
+            "resources/control-plane/codex-control-command-v1.schema.json",
+            "1.0",
+            "sha256:76f21384e8c15169d1a8329a717e4bc9b4a73d37004816c22511b27b5a8ce32e",
+        ),
+        "codex-control-command-result": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-control-command-result-v1.schema.json",
+            "resources/control-plane/codex-control-command-result-v1.schema.json",
+            "1.0",
+            "sha256:d6576027af477c9cfc9c96a578810d31731b3bc8196a430cfc8fccdf28ef76ee",
+        ),
         "codex-capability-snapshot": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-capability-snapshot-v1.schema.json",
             "resources/control-plane/codex-capability-snapshot-v1.schema.json",
@@ -88,6 +100,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/worker-lease-view-v1.schema.json",
             "1.0",
             "sha256:b7a85bd9833b6ce29b238dc1f68a4fd63efa11ed1917f470d58cbbdaa82975f7",
+        ),
+        "execution-preset-evaluation-report": ControlSchemaResource(
+            "schemas/workflow/control-plane/execution-preset-evaluation-report-v1.schema.json",
+            "resources/control-plane/execution-preset-evaluation-report-v1.schema.json",
+            "1.0",
+            "sha256:0f02de7729ab8c87ea4152144c60fe3167920811f90f7678f50655ac66eca8d3",
         ),
     }
 )

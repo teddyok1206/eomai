@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import eom_hwpx_manager.models  # noqa: F401
+import eom_workflow_runner.models  # noqa: F401
 import pytest
 from eom_identifiers import content_sha256
 from eom_orchestrator import control_models  # noqa: F401
@@ -13,6 +14,7 @@ from eom_orchestrator.control_service import (
     ResolvedPlanDependencyEvidence,
     compute_control_document_hash,
 )
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.models import Base
 from sqlalchemy import LargeBinary
 
@@ -64,12 +66,14 @@ def test_control_tables_have_no_binary_or_secret_storage_columns() -> None:
         "execution_presets",
         "execution_preset_revisions",
         "execution_preset_role_policies",
+        "execution_preset_evaluations",
         "resolved_execution_plans",
         "resolved_execution_plan_steps",
         "codex_auth_bindings",
         "codex_auth_health_events",
         "codex_capability_snapshots",
         "codex_capability_entries",
+        "codex_control_commands",
         "worker_leases",
         "worker_lease_events",
     }
@@ -115,9 +119,44 @@ def test_control_plane_migration_is_additive_and_reversible() -> None:
         assert f'"{table_name}"' in source
 
 
+def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
+    source = Path("migrations/versions/20260823_0010_codex_control_plane_mvp.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
+    assert CURRENT_MIGRATION_REVISION == "20260823_0010"
+    assert "execution_preset_evaluations" in source
+    assert "codex_control_commands" in source
+    assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
+    assert "execution_preset_evaluations_immutable" in source
+    assert '"available_at"' in source
+    assert '"ix_workflow_commands_claimable"' in source
+    assert "UPDATE workflow_instances" not in source
+    assert "DELETE FROM workflow_instances" not in source
+    for permission in (
+        "codex_account:read",
+        "codex_account:manage",
+        "execution_preset:read",
+        "execution_preset:manage",
+    ):
+        assert permission in source
+
+
 def test_existing_hwpx_partial_index_remains_in_composed_metadata() -> None:
     table = Base.metadata.tables["hwpx_application_builds"]
     indexes = {str(index.name): index for index in table.indexes if index.name is not None}
     requested = indexes["ix_hwpx_application_builds_requested_fifo"]
     assert not requested.unique
     assert str(requested.dialect_options["postgresql"]["where"]) == "state = 'REQUESTED'"
+
+
+def test_workflow_command_claim_index_includes_delayed_availability() -> None:
+    table = Base.metadata.tables["workflow_commands"]
+    indexes = {str(index.name): index for index in table.indexes if index.name is not None}
+    claimable = indexes["ix_workflow_commands_claimable"]
+    assert tuple(column.name for column in claimable.columns) == (
+        "state",
+        "available_at",
+        "created_at",
+        "command_id",
+    )

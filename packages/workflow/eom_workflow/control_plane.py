@@ -315,6 +315,87 @@ class CodexAuthHealthView(FrozenModel):
         return self
 
 
+class CodexControlCommand(FrozenModel):
+    """Credential-free command consumed only by the orchestrator-owned runner."""
+
+    schema_version: Literal["codex-control-command/1.0"] = "codex-control-command/1.0"
+    command_id: str = Field(pattern=r"^codexcmd_[0-9a-f]{32}$")
+    command_type: Literal["OBSERVE", "ENABLE", "DRAIN", "DISABLE"]
+    binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
+    expected_resource_version: int = Field(ge=1)
+    requested_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    requested_at: UtcDatetime
+    reason_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def bounded_reason(self) -> CodexControlCommand:
+        operational = self.command_type in {"DRAIN", "DISABLE"}
+        if operational != (self.reason_code is not None):
+            raise ValueError("drain/disable require a reason and observe/enable forbid one")
+        return self
+
+
+class CodexControlCommandResult(FrozenModel):
+    """Sanitized terminal result; never contains authentication output or credentials."""
+
+    schema_version: Literal["codex-control-command-result/1.0"] = "codex-control-command-result/1.0"
+    command_id: str = Field(pattern=r"^codexcmd_[0-9a-f]{32}$")
+    command_type: Literal["OBSERVE", "ENABLE", "DRAIN", "DISABLE"]
+    binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
+    outcome: Literal["SUCCEEDED", "FAILED"]
+    result_resource_version: int | None = Field(default=None, ge=1)
+    binding_state: (
+        Literal["READY", "STALE", "AUTH_REQUIRED", "DEGRADED", "DRAINING", "DISABLED"] | None
+    )
+    reason_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    processed_at: UtcDatetime
+    result_sha256: Sha256
+
+    @model_validator(mode="after")
+    def coherent_result(self) -> CodexControlCommandResult:
+        success = self.outcome == "SUCCEEDED"
+        if success and (self.result_resource_version is None or self.binding_state is None):
+            raise ValueError("successful control command requires resulting binding state")
+        if success != (self.reason_code is None):
+            raise ValueError("failed control command requires a reason and success forbids one")
+        if not success and (
+            self.result_resource_version is not None or self.binding_state is not None
+        ):
+            raise ValueError("failed control command cannot claim a resulting binding state")
+        return self
+
+
+class ExecutionPresetEvaluationReport(FrozenModel):
+    """Bounded report metadata; detailed evidence remains an Artifact Revision."""
+
+    schema_version: Literal["execution-preset-evaluation-report/1.0"] = (
+        "execution-preset-evaluation-report/1.0"
+    )
+    evaluated_preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    evaluated_policy_sha256: Sha256
+    scope: Literal["STATIC", "NON_LIVE", "LIVE_ONE_SHOT"]
+    outcome: Literal["PASS", "FAIL"]
+    summary_code: Literal["CONTRACT_VALIDATION", "FAKE_ADAPTER_ACCEPTANCE", "LIVE_ITEM_ACCEPTANCE"]
+    cases_total: int = Field(ge=1, le=10000)
+    cases_passed: int = Field(ge=0, le=10000)
+    quality_score_permille: int | None = Field(default=None, ge=0, le=1000)
+    completed_at: UtcDatetime
+    report_sha256: Sha256
+
+    @model_validator(mode="after")
+    def coherent_evaluation(self) -> ExecutionPresetEvaluationReport:
+        if self.cases_passed > self.cases_total:
+            raise ValueError("passed evaluation cases cannot exceed total cases")
+        if (self.outcome == "PASS") != (self.cases_passed == self.cases_total):
+            raise ValueError("PASS requires every evaluation case to pass")
+        if self.scope == "STATIC" and self.quality_score_permille is not None:
+            raise ValueError("static contract validation cannot claim a quality score")
+        if self.scope == "LIVE_ONE_SHOT" and self.summary_code != "LIVE_ITEM_ACCEPTANCE":
+            raise ValueError("live evaluation requires the live acceptance summary")
+        return self
+
+
 class ModelCapability(FrozenModel):
     model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
     reasoning_efforts: tuple[ReasoningEffort, ...] = Field(min_length=1, max_length=5)

@@ -5,6 +5,8 @@ REPOSITORY_ROOT="/home/eom/EOM"
 CONFIG_ROOT="/etc/eom"
 WORKFLOW_ROOT="${CONFIG_ROOT}/workflows"
 PROMPT_ROOT="${CONFIG_ROOT}/workflow-prompts"
+CAPABILITY_POLICY_SOURCE="${REPOSITORY_ROOT}/config/codex-capabilities.example.yaml"
+CAPABILITY_POLICY_TARGET="${CONFIG_ROOT}/codex-capabilities.yaml"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -28,6 +30,8 @@ declare -A FILES=(
 for source in "${!FILES[@]}"; do
   [[ -f "${source}" && ! -L "${source}" ]] || fail "unsafe configuration source"
 done
+[[ -f "${CAPABILITY_POLICY_SOURCE}" && ! -L "${CAPABILITY_POLICY_SOURCE}" ]] || \
+  fail "unsafe capability policy source"
 
 [[ -d "${CONFIG_ROOT}" && ! -L "${CONFIG_ROOT}" ]] || fail "operator config root is unavailable"
 install -d -o root -g eom -m 0750 "${WORKFLOW_ROOT}" "${PROMPT_ROOT}"
@@ -38,6 +42,14 @@ for source in "${!FILES[@]}"; do
   [[ "$(stat -c '%U:%G:%a' "${target}")" == "root:eom:640" ]] || \
     fail "installed configuration metadata mismatch"
 done
+
+# This reviewed allowlist contains no secret. Root ownership prevents the
+# locked runner from changing the model/effort contract it observes.
+install -o root -g root -m 0644 "${CAPABILITY_POLICY_SOURCE}" "${CAPABILITY_POLICY_TARGET}"
+cmp -s "${CAPABILITY_POLICY_SOURCE}" "${CAPABILITY_POLICY_TARGET}" || \
+  fail "installed capability policy content mismatch"
+[[ "$(stat -c '%U:%G:%a' "${CAPABILITY_POLICY_TARGET}")" == "root:root:644" ]] || \
+  fail "installed capability policy metadata mismatch"
 
 for directory in "${WORKFLOW_ROOT}" "${PROMPT_ROOT}"; do
   [[ ! -L "${directory}" && "$(stat -c '%U:%G:%a' "${directory}")" == "root:eom:750" ]] || \

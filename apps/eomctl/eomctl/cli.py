@@ -31,6 +31,7 @@ from eomctl.catalog import (
     registry_app,
     usage_app,
 )
+from eomctl.control_plane import control_plane_app
 from eomctl.hwpx import hwpx_app
 from eomctl.operator import operator_app
 from eomctl.workflow import workflow_app
@@ -50,6 +51,7 @@ app.add_typer(deliverable_app, name="deliverable")
 app.add_typer(usage_app, name="usage")
 app.add_typer(registry_app, name="registry")
 app.add_typer(operator_app, name="operator")
+app.add_typer(control_plane_app, name="control-plane")
 
 
 def _emit(data: object) -> None:

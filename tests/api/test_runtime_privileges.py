@@ -32,6 +32,20 @@ def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
     assert "artifacts" in READ_TABLES
     assert "artifacts" not in INSERT_TABLES
     assert "artifacts" not in UPDATE_TABLES
+    assert "codex_control_commands" in READ_TABLES
+    assert "codex_control_commands" in INSERT_TABLES
+    assert "codex_control_commands" not in UPDATE_TABLES
+    assert "codex_auth_bindings" in READ_TABLES
+    assert "codex_auth_bindings" not in INSERT_TABLES
+    assert "codex_auth_bindings" not in UPDATE_TABLES
+    assert "execution_presets" in READ_TABLES
+    assert "execution_presets" in INSERT_TABLES
+    assert "execution_presets" in UPDATE_TABLES
+    assert "execution_preset_revisions" in INSERT_TABLES
+    assert "execution_preset_role_policies" in INSERT_TABLES
+    assert "resolved_execution_plans" in READ_TABLES
+    assert "resolved_execution_plans" in INSERT_TABLES
+    assert "resolved_execution_plans" not in UPDATE_TABLES
     assert {privilege for privilege, _tables in TABLE_PRIVILEGES} == {
         "SELECT",
         "INSERT",

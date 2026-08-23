@@ -11,7 +11,9 @@ from eom_identifiers import (
     new_capability_snapshot_id,
     new_capacity_policy_id,
     new_capacity_policy_revision_id,
+    new_codex_control_command_id,
     new_execution_plan_id,
+    new_execution_preset_evaluation_id,
     new_execution_preset_id,
     new_execution_preset_revision_id,
     new_hwpx_build_id,
@@ -49,6 +51,8 @@ def test_ids_have_distinct_namespaces() -> None:
     assert re.fullmatch(r"authbinding_[0-9a-f]{32}", new_auth_binding_id())
     assert re.fullmatch(r"capsnap_[0-9a-f]{32}", new_capability_snapshot_id())
     assert re.fullmatch(r"workerlease_[0-9a-f]{32}", new_worker_lease_id())
+    assert re.fullmatch(r"codexcmd_[0-9a-f]{32}", new_codex_control_command_id())
+    assert re.fullmatch(r"preseteval_[0-9a-f]{32}", new_execution_preset_evaluation_id())
 
 
 def test_canonical_serialization_and_hash_are_stable() -> None:

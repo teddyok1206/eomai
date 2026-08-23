@@ -205,6 +205,19 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
 .checkbox-row { display: flex; flex-wrap: wrap; gap: 12px; }
 .checkbox-row label { display: flex; align-items: center; gap: 7px; }
 
+.control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.control-list { display: grid; gap: 9px; padding: 14px; }
+.control-card { padding: 13px; border: 1px solid var(--eom-border); border-radius: 6px; background: #fafbfd; }
+.control-card header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.control-card h3 { margin: 0; font-size: 13px; }
+.control-card p { margin: 5px 0; color: var(--eom-text-muted); font-size: 10px; overflow-wrap: anywhere; }
+.control-card dl { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 5px 9px; margin: 10px 0; font-size: 10px; }
+.control-card dt { color: var(--eom-text-muted); }
+.control-card dd { margin: 0; overflow-wrap: anywhere; }
+.control-card .form-actions { margin-top: 10px; flex-wrap: wrap; }
+.admin-preset-panel { margin-top: 15px; }
+.admin-preset-panel textarea { width: 100%; resize: vertical; border: 1px solid #b9c2d0; border-radius: 5px; padding: 10px; font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+
 .explorer-panel { overflow: hidden; }
 .explorer-filters { display: grid; grid-template-columns: 1.1fr 1.5fr 1fr 1fr 90px auto; align-items: end; gap: 10px; padding: 14px; background: #f8f9fb; border-bottom: 1px solid var(--eom-border); }
 .table-toolbar { min-height: 45px; display: flex; justify-content: space-between; align-items: center; padding: 7px 13px; color: var(--eom-text-muted); font-size: 10px; }
@@ -245,6 +258,7 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
   .three-column-workspace > .inspector { position: static; grid-column: 1 / -1; display: grid; grid-template-columns: 220px 1fr 1fr; }
   .three-column-workspace > .inspector .panel-heading { border-right: 1px solid var(--eom-border); border-bottom: 0; }
   .request-layout { grid-template-columns: 1fr; }
+  .control-grid { grid-template-columns: 1fr; }
   .explorer-filters { grid-template-columns: repeat(3, 1fr); }
 }
 

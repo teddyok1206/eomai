@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/execution-preset-evaluation-report/1.0",
+  "title": "EOM Execution Preset Evaluation Report V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evaluated_preset_revision_id",
+    "evaluated_policy_sha256",
+    "scope",
+    "outcome",
+    "summary_code",
+    "cases_total",
+    "cases_passed",
+    "quality_score_permille",
+    "completed_at",
+    "report_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "execution-preset-evaluation-report/1.0"},
+    "evaluated_preset_revision_id": {
+      "type": "string",
+      "pattern": "^execpresetrev_[0-9a-f]{32}$"
+    },
+    "evaluated_policy_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "scope": {"enum": ["STATIC", "NON_LIVE", "LIVE_ONE_SHOT"]},
+    "outcome": {"enum": ["PASS", "FAIL"]},
+    "summary_code": {
+      "enum": [
+        "CONTRACT_VALIDATION",
+        "FAKE_ADAPTER_ACCEPTANCE",
+        "LIVE_ITEM_ACCEPTANCE"
+      ]
+    },
+    "cases_total": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "cases_passed": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "quality_score_permille": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "completed_at": {"type": "string", "format": "date-time"},
+    "report_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

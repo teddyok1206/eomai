@@ -21,6 +21,7 @@ Environment=EOM_WORKFLOW_DEFINITION=/etc/eom/workflows/generic-item-development.
 Environment=EOM_HUMAN_ACTOR_CONFIG=/etc/eom/human-actors.yaml
 Environment=EOM_WORKFLOW_RUNNER_CONFIG=/etc/eom/workflow-runner.yaml
 Environment=EOM_WORKFLOW_PROMPT_ROOT=/etc/eom/workflow-prompts
+Environment=EOM_CODEX_CAPABILITY_POLICY=/etc/eom/codex-capabilities.yaml
 ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner serve
 Restart=on-failure
 RestartSec=3
@@ -49,6 +50,7 @@ ReadOnlyPaths=/etc/eom/secrets/postgres.env
 ReadOnlyPaths=/etc/eom/worker-slots.yaml
 ReadOnlyPaths=/etc/eom/human-actors.yaml
 ReadOnlyPaths=/etc/eom/workflow-runner.yaml
+ReadOnlyPaths=/etc/eom/codex-capabilities.yaml
 ReadOnlyPaths=/etc/eom/workflows
 ReadOnlyPaths=/etc/eom/workflow-prompts
 ReadOnlyPaths=/srv/eom/conda/envs/eom-api

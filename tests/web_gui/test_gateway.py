@@ -171,6 +171,54 @@ async def test_gateway_refreshes_once_and_preserves_idempotency_key() -> None:
 
 
 @pytest.mark.anyio
+async def test_gateway_control_plane_preserves_etag_idempotency_and_no_credentials() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/api/v1/codex-accounts":
+            return httpx.Response(200, json=_list([]))
+        if request.url.path.endswith("/commands"):
+            assert request.headers["if-match"] == '"v7"'
+            assert request.headers["idempotency-key"] == "stable-control-key-0001"
+            body = request.read().decode()
+            assert "credential" not in body and "token" not in body
+            return httpx.Response(
+                202,
+                json=_single(
+                    {
+                        "command_id": "codexcmd_" + "1" * 32,
+                        "resource_id": "codexcmd_" + "1" * 32,
+                        "resource_type": "codex_control_command",
+                        "status": "ACCEPTED",
+                        "resource_version": 7,
+                    }
+                ),
+            )
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    assert await gateway.codex_accounts(_session()) == ()
+    result = await gateway.codex_account_command(
+        _session(),
+        "authbinding_" + "2" * 32,
+        command_type="OBSERVE",
+        reason_code=None,
+        resource_version=7,
+        idempotency_key="stable-control-key-0001",
+    )
+    assert result["status"] == "ACCEPTED"
+    assert len(requests) == 2
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_gateway_lists_only_accepted_content_intakes() -> None:
     intake_id = "intake_" + "1" * 32
 

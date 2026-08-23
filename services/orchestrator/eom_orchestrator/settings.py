@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import quote_plus
 
 DEFAULT_WORKER_CONFIG = Path("/etc/eom/worker-slots.yaml")
+DEFAULT_CODEX_CAPABILITY_POLICY = Path("/etc/eom/codex-capabilities.yaml")
 
 
 class SettingsError(RuntimeError):
@@ -67,6 +68,7 @@ class Settings:
     worker_home_root: Path = Path("/srv/eom/worker-homes")
     nas_artifact_root: Path = Path("/mnt/nas/eom/artifacts")
     codex_binary: Path = Path("/usr/local/bin/codex")
+    codex_capability_policy: Path = DEFAULT_CODEX_CAPABILITY_POLICY
     worker_timeout_seconds: int = 600
     worker_config_source: WorkerConfigSource = WorkerConfigSource.OPERATOR_DEFAULT
 
@@ -78,6 +80,11 @@ class Settings:
         )
         if not worker_config.is_absolute():
             raise SettingsError("EOM_WORKER_CONFIG must be an absolute path")
+        capability_policy = Path(
+            os.environ.get("EOM_CODEX_CAPABILITY_POLICY", str(DEFAULT_CODEX_CAPABILITY_POLICY))
+        )
+        if not capability_policy.is_absolute():
+            raise SettingsError("EOM_CODEX_CAPABILITY_POLICY must be an absolute path")
         return cls(
             worker_config=worker_config,
             staging_root=Path(os.environ.get("EOM_STAGING_ROOT", "/srv/eom/staging")),
@@ -87,6 +94,7 @@ class Settings:
                 os.environ.get("EOM_NAS_ARTIFACT_ROOT", "/mnt/nas/eom/artifacts")
             ),
             codex_binary=Path(os.environ.get("EOM_CODEX_BINARY", "/usr/local/bin/codex")),
+            codex_capability_policy=capability_policy,
             worker_timeout_seconds=int(os.environ.get("EOM_WORKER_TIMEOUT_SECONDS", "600")),
             worker_config_source=(
                 WorkerConfigSource.ENVIRONMENT

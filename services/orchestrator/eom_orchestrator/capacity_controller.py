@@ -19,6 +19,7 @@ from eom_orchestrator.control_service import (
     ControlPlaneError,
     acquire_worker_lease,
     begin_expired_lease_reconciliation,
+    begin_worker_lease_reconciliation,
     record_auth_health,
     terminalize_worker_lease,
     worker_lease_view,
@@ -108,6 +109,18 @@ class CodexCapacityController:
                 terminal_state="RELEASED",
                 reason_code=reason_code,
                 released_at=released_at,
+            )
+            return worker_lease_view(lease)
+
+    def defer_uncertain_process(self, *, lease_id: str, observed_at: datetime) -> WorkerLeaseView:
+        """Retain a lease when worker terminal state could not be proven."""
+
+        with transaction(self.sessions) as session:
+            lease = begin_worker_lease_reconciliation(
+                session,
+                lease_id=lease_id,
+                observed_at=observed_at,
+                reason_code="PROCESS_TERMINAL_UNCONFIRMED",
             )
             return worker_lease_view(lease)
 

@@ -21,8 +21,14 @@ from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.usage_service import UsageLedgerService
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_operator_identity import ActorContext
+from eom_orchestrator.control_service import ResolvedPlanDependencyEvidence
 from eom_orchestrator.database import build_session_factory, transaction
-from eom_workflow import WorkflowRequest
+from eom_orchestrator.execution_resolver import (
+    ExecutionStepRequirement,
+    resolve_execution_plan,
+)
+from eom_workflow import AgentStep, WorkflowRequest, compile_definition_data
+from eom_workflow.control_plane import WorkerRole
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowDefinitionRecord
 from eom_workflow_runner.repository import (
@@ -66,6 +72,7 @@ class CommandAdapter:
         request_data: dict[str, Any] = {
             "request_name": request.request_name,
             "image_mode": request.image_mode,
+            "execution_preset_key": request.execution_preset_key,
         }
         if request.pack_key is not None:
             knowledge_request = request.request_name == "KNOWLEDGE_ITEM_REQUEST"
@@ -164,6 +171,49 @@ class CommandAdapter:
             )
             command: WorkflowCommandRecord | None
             if created:
+                if workflow_request.execution_preset_key is not None:
+                    if runtime_context is None:
+                        raise ApiError(
+                            409,
+                            "CONTROL_PLAN_CONTEXT_MISSING",
+                            "Execution plan context missing",
+                            "The preset-backed request has no pinned Content Pack context.",
+                        )
+                    compiled = compile_definition_data(
+                        definition.canonical_definition,
+                        definition.source_path,
+                        {"authoring", "image", "review", "item_management"},
+                    )
+                    requirements = tuple(
+                        ExecutionStepRequirement(
+                            step_key=step.key, role=WorkerRole(step.worker_role)
+                        )
+                        for step in compiled.definition.steps
+                        if isinstance(step, AgentStep)
+                    )
+                    pack = runtime_context["content_pack"]
+                    plan = resolve_execution_plan(
+                        session,
+                        preset_key=workflow_request.execution_preset_key,
+                        dependencies=ResolvedPlanDependencyEvidence(
+                            workflow_id=workflow.workflow_id,
+                            workflow_definition_key=definition.definition_key,
+                            workflow_definition_version=definition.definition_version,
+                            workflow_definition_sha256=definition.definition_hash,
+                            workflow_role_schema_version=workflow.role_schema_version,
+                            content_pack_release_id=str(pack["release_id"]),
+                            content_pack_sha256=str(pack["release_sha256"]),
+                        ),
+                        steps=requirements,
+                    )
+                    context = dict(workflow.runtime_context)
+                    context["execution_plan"] = {
+                        "plan_id": plan.plan_id,
+                        "plan_sha256": plan.plan_sha256,
+                        "preset_id": plan.preset_id,
+                        "preset_revision_id": plan.preset_revision_id,
+                    }
+                    workflow.runtime_context = context
                 command, _ = enqueue_command(
                     session,
                     workflow_id=workflow.workflow_id,

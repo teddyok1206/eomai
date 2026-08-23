@@ -24,6 +24,7 @@ def test_workflow_runner_service_fixes_identity_command_and_group_contract() -> 
     assert "SupplementaryGroups=eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05" in source
     assert "ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner serve" in source
     assert "EOM_POSTGRES_ENV=/etc/eom/secrets/postgres.env" in source
+    assert "EOM_CODEX_CAPABILITY_POLICY=/etc/eom/codex-capabilities.yaml" in source
     assert "UMask=0007" in source
 
 
@@ -77,6 +78,7 @@ def test_workflow_runner_service_reads_only_its_required_operator_contracts() ->
     assert "/etc/eom/worker-slots.yaml" in read_only
     assert "/etc/eom/human-actors.yaml" in read_only
     assert "/etc/eom/workflow-runner.yaml" in read_only
+    assert "/etc/eom/codex-capabilities.yaml" in read_only
     assert "/etc/eom/workflows" in read_only
     assert "/etc/eom/workflow-prompts" in read_only
     assert "EnvironmentFile=/etc/eom/secrets/api.env" not in source

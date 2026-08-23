@@ -98,6 +98,47 @@ class ApplicationGateway(Protocol):
 
     async def hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload: ...
 
+    async def codex_accounts(self, session: WebSession) -> tuple[dict[str, Any], ...]: ...
+
+    async def codex_account_command(
+        self,
+        session: WebSession,
+        binding_id: str,
+        *,
+        command_type: str,
+        reason_code: str | None,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]: ...
+
+    async def codex_control_command(
+        self, session: WebSession, command_id: str
+    ) -> dict[str, Any]: ...
+
+    async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]: ...
+
+    async def create_execution_preset_draft(
+        self, session: WebSession, payload: dict[str, Any], idempotency_key: str
+    ) -> dict[str, Any]: ...
+
+    async def release_execution_preset(
+        self,
+        session: WebSession,
+        draft_revision_id: str,
+        *,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]: ...
+
+    async def deprecate_execution_preset(
+        self,
+        session: WebSession,
+        preset_id: str,
+        *,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]: ...
+
     async def close(self) -> None: ...
 
 
@@ -300,6 +341,98 @@ class HttpApplicationGateway:
             "/api/v1/workflows",
             json=payload,
             headers={"Idempotency-Key": idempotency_key},
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def codex_accounts(self, session: WebSession) -> tuple[dict[str, Any], ...]:
+        response = await self._authorized(session, "GET", "/api/v1/codex-accounts")
+        return tuple(sanitize_mapping(item) for item in self._list_data(response))
+
+    async def codex_account_command(
+        self,
+        session: WebSession,
+        binding_id: str,
+        *,
+        command_type: str,
+        reason_code: str | None,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        _require_id(binding_id, "authbinding_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/codex-accounts/{binding_id}/commands",
+            json={"command_type": command_type, "reason_code": reason_code},
+            headers={
+                "If-Match": f'"v{resource_version}"',
+                "Idempotency-Key": idempotency_key,
+            },
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def codex_control_command(self, session: WebSession, command_id: str) -> dict[str, Any]:
+        _require_id(command_id, "codexcmd_")
+        response = await self._authorized(
+            session, "GET", f"/api/v1/codex-control-commands/{command_id}"
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]:
+        response = await self._authorized(session, "GET", "/api/v1/execution-presets")
+        return tuple(sanitize_mapping(item) for item in self._list_data(response))
+
+    async def create_execution_preset_draft(
+        self, session: WebSession, payload: dict[str, Any], idempotency_key: str
+    ) -> dict[str, Any]:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/execution-presets",
+            json=payload,
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def release_execution_preset(
+        self,
+        session: WebSession,
+        draft_revision_id: str,
+        *,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        _require_id(draft_revision_id, "execpresetrev_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/execution-preset-revisions/{draft_revision_id}/releases",
+            json={},
+            headers={
+                "If-Match": f'"v{resource_version}"',
+                "Idempotency-Key": idempotency_key,
+            },
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def deprecate_execution_preset(
+        self,
+        session: WebSession,
+        preset_id: str,
+        *,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        _require_id(preset_id, "execpreset_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/execution-presets/{preset_id}/deprecations",
+            json={},
+            headers={
+                "If-Match": f'"v{resource_version}"',
+                "Idempotency-Key": idempotency_key,
+            },
         )
         return sanitize_mapping(self._data(response))
 

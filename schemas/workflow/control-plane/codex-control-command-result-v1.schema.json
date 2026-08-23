@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/codex-control-command-result/1.0",
+  "title": "Codex Control Command Result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "command_id",
+    "command_type",
+    "binding_id",
+    "outcome",
+    "result_resource_version",
+    "binding_state",
+    "reason_code",
+    "processed_at",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "codex-control-command-result/1.0"},
+    "command_id": {"type": "string", "pattern": "^codexcmd_[0-9a-f]{32}$"},
+    "command_type": {"enum": ["OBSERVE", "ENABLE", "DRAIN", "DISABLE"]},
+    "binding_id": {"type": "string", "pattern": "^authbinding_[0-9a-f]{32}$"},
+    "outcome": {"enum": ["SUCCEEDED", "FAILED"]},
+    "result_resource_version": {
+      "oneOf": [
+        {"type": "integer", "minimum": 1},
+        {"type": "null"}
+      ]
+    },
+    "binding_state": {
+      "oneOf": [
+        {"enum": ["READY", "STALE", "AUTH_REQUIRED", "DEGRADED", "DRAINING", "DISABLED"]},
+        {"type": "null"}
+      ]
+    },
+    "reason_code": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$"},
+        {"type": "null"}
+      ]
+    },
+    "processed_at": {"type": "string", "format": "date-time"},
+    "result_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

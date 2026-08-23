@@ -64,6 +64,10 @@ class PermissionKey(StrEnum):
     EVENT_READ = "event:read"
     HWPX_READ = "hwpx:read"
     HWPX_BUILD_CREATE = "hwpx:build_create"
+    CODEX_ACCOUNT_READ = "codex_account:read"
+    CODEX_ACCOUNT_MANAGE = "codex_account:manage"
+    EXECUTION_PRESET_READ = "execution_preset:read"
+    EXECUTION_PRESET_MANAGE = "execution_preset:manage"
 
 
 VIEWER_PERMISSIONS = frozenset(

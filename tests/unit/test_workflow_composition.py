@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -75,6 +76,46 @@ def test_production_composition_supplies_catalog_adapter(tmp_path: Path) -> None
         {"authoring", "review", "image", "item_management", "support"}
     )
     assert runtime.runner.executor.orchestrator.settings == _platform_settings(tmp_path)
+    assert runtime.runner.capacity_reconciler is runtime.runner.executor.orchestrator.capacity
+    engine.dispose()
+
+
+def test_serve_reconciles_capacity_before_polling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = create_engine("sqlite://")
+    observed: list[str] = []
+
+    class Reconciler:
+        def reconcile_expired(self, *, observed_at: datetime) -> tuple[object, ...]:
+            del observed_at
+            observed.append("capacity")
+            return ()
+
+    runner = WorkflowRunner(
+        engine,
+        _workflow_settings(tmp_path),
+        catalog=cast(WorkflowCatalogPort, object()),
+        actor_authorizer=cast(WorkflowActorAuthorizer, object()),
+        readiness=cast(WorkflowExecutionReadiness, object()),
+        available_roles=frozenset({"authoring"}),
+        capacity_reconciler=Reconciler(),
+    )
+
+    def no_work() -> None:
+        observed.append("workflow")
+
+    monkeypatch.setattr(runner, "run_once", no_work)
+
+    def stop(_seconds: float) -> None:
+        observed.append("sleep")
+        raise RuntimeError("stop-loop")
+
+    monkeypatch.setattr("eom_workflow_runner.engine.time.sleep", stop)
+    with pytest.raises(RuntimeError, match="stop-loop"):
+        runner.serve()
+
+    assert observed == ["capacity", "workflow", "sleep"]
     engine.dispose()
 
 

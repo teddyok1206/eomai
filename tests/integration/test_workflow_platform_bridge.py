@@ -135,6 +135,7 @@ def test_workflow_role_uses_existing_platform_job_and_artifact_path(
     connection, outer = resources
     try:
         key = f"workflow-bridge-{role}"
+        pre_execution_jobs: list[str] = []
         upstream: tuple[ArtifactPointer, ...] = ()
         if role != "authoring":
             upstream = (
@@ -150,9 +151,17 @@ def test_workflow_role_uses_existing_platform_job_and_artifact_path(
             )
 
         def submit() -> JobRecord:
+            def bind_before_execution(job_id: str) -> None:
+                queued = session.get(JobRecord, job_id)
+                assert queued is not None
+                session.refresh(queued)
+                assert queued.status == "QUEUED"
+                pre_execution_jobs.append(job_id)
+
             return orchestrator.submit_workflow_role(
                 workflow_id="workflow_0123456789abcdef0123456789abcdef",
                 step_run_id="steprun_0123456789abcdef0123456789abcdef",
+                step_key=role,
                 attempt=1,
                 role=role,
                 request=WorkflowRequest(
@@ -167,6 +176,7 @@ def test_workflow_role_uses_existing_platform_job_and_artifact_path(
                     + ("registration" if role == "item_management" else role)
                     + ".txt"
                 ),
+                before_execute=bind_before_execution,
             )
 
         job = submit()
@@ -174,6 +184,7 @@ def test_workflow_role_uses_existing_platform_job_and_artifact_path(
         assert job.status == "SUCCEEDED"
         assert duplicate.job_id == job.job_id
         assert job.worker_slot_id == expected_slot
+        assert pre_execution_jobs == [job.job_id]
         assert adapter.calls == [role]
         revision = session.get(ArtifactRevisionRecord, job.revision_id)
         assert revision is not None

@@ -59,6 +59,7 @@ from eom_workflow_runner.repository import (
     claimable_command_exists,
     create_approval_request,
     create_step_run,
+    enqueue_command,
     link_superseded_attempts,
     list_step_runs,
 )
@@ -110,6 +111,14 @@ class RoleJobExecutor(Protocol):
     ) -> RoleExecutionResult: ...
 
 
+class ControlCommandProcessor(Protocol):
+    def process_once(self) -> str | None: ...
+
+
+class CapacityReconciler(Protocol):
+    def reconcile_expired(self, *, observed_at: datetime) -> tuple[object, ...]: ...
+
+
 class PlatformRoleJobExecutor:
     def __init__(
         self,
@@ -142,9 +151,32 @@ class PlatformRoleJobExecutor:
             if prompt_text is not None
             else self.workflow_settings.prompt_root / f"{prompt_name}.txt"
         )
+
+        def bind_platform_job(job_id: str) -> None:
+            with transaction(self.sessions) as session:
+                current = session.execute(
+                    select(WorkflowStepRunRecord)
+                    .where(WorkflowStepRunRecord.step_run_id == step.step_run_id)
+                    .with_for_update()
+                ).scalar_one()
+                if (
+                    current.workflow_id != workflow.workflow_id
+                    or current.step_key != step.step_key
+                    or current.attempt != step.attempt
+                    or current.worker_role != step.worker_role
+                    or current.state != StepState.RUNNING.value
+                    or current.platform_job_id not in {None, job_id}
+                ):
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                        "platform job does not match the running workflow step",
+                    )
+                current.platform_job_id = job_id
+
         job = self.orchestrator.submit_workflow_role(
             workflow_id=workflow.workflow_id,
             step_run_id=step.step_run_id,
+            step_key=step.step_key,
             attempt=step.attempt,
             role=step.worker_role,
             request=request,
@@ -153,6 +185,7 @@ class PlatformRoleJobExecutor:
             idempotency_key=idempotency_key,
             prompt_path=prompt_path,
             prompt_text=prompt_text,
+            before_execute=bind_platform_job,
         )
         content_hash: str | None = None
         if job.status == "SUCCEEDED":
@@ -186,6 +219,8 @@ class WorkflowRunner:
         actor_authorizer: WorkflowActorAuthorizer,
         readiness: WorkflowExecutionReadiness,
         available_roles: frozenset[str],
+        control_processor: ControlCommandProcessor | None = None,
+        capacity_reconciler: CapacityReconciler | None = None,
         runner_id: str | None = None,
     ) -> None:
         if catalog is None:
@@ -204,6 +239,8 @@ class WorkflowRunner:
         self.catalog = catalog
         self.readiness = readiness
         self.runner_id = runner_id or f"runner-{uuid4().hex}"
+        self.control_processor = control_processor
+        self.capacity_reconciler = capacity_reconciler
 
     def run_once(self, workflow_id: str | None = None) -> WorkflowCommandRecord | None:
         with self.sessions() as session:
@@ -292,11 +329,18 @@ class WorkflowRunner:
 
     def serve(self) -> None:
         while True:
+            if self.capacity_reconciler is not None:
+                self.capacity_reconciler.reconcile_expired(observed_at=datetime.now(UTC))
             try:
                 result = self.run_once()
             except WorkflowRuntimeNotReady:
                 result = None
-            if result is None:
+            control_result = (
+                self.control_processor.process_once()
+                if self.control_processor is not None
+                else None
+            )
+            if result is None and control_result is None:
                 time.sleep(self.runner_config.poll_interval_seconds)
 
     def reconcile(self, workflow_id: str) -> None:
@@ -641,6 +685,51 @@ class WorkflowRunner:
                 WorkflowErrorCode.WORKFLOW_STEP_FAILED,
                 "platform role execution failed",
             ) from exc
+        if execution.status == "QUEUED":
+            with transaction(self.sessions) as session:
+                queued_step = session.execute(
+                    select(WorkflowStepRunRecord)
+                    .where(WorkflowStepRunRecord.step_run_id == step_run_id)
+                    .with_for_update()
+                ).scalar_one()
+                if (
+                    queued_step.state != StepState.RUNNING.value
+                    or queued_step.platform_job_id != execution.job_id
+                ):
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                        "queued platform job does not match the running workflow step",
+                    )
+                retry_source = command_id or f"direct-v{workflow.lock_version}"
+                retry, _ = enqueue_command(
+                    session,
+                    workflow_id=workflow.workflow_id,
+                    command_type=CommandType.ADVANCE_WORKFLOW,
+                    payload={"reason": "CAPACITY_AVAILABLE_RETRY", "job_id": execution.job_id},
+                    actor_type="system",
+                    actor_id=self.runner_id,
+                    source="capacity_controller",
+                    idempotency_key=(f"capacity-retry:{retry_source}:{execution.job_id}"),
+                    available_at=datetime.now(UTC)
+                    + timedelta(seconds=max(1, self.runner_config.poll_interval_seconds)),
+                )
+                record_workflow_event(
+                    session,
+                    workflow.workflow_id,
+                    "STEP_CAPACITY_QUEUED",
+                    actor_type="system",
+                    actor_id=self.runner_id,
+                    command_id=command_id,
+                    step_key=definition.key,
+                    payload={
+                        "step_run_id": step_run_id,
+                        "attempt": attempt,
+                        "job_id": execution.job_id,
+                        "retry_command_id": retry.command_id,
+                    },
+                )
+            return
+
         execution_failed = execution.status != "SUCCEEDED" or execution.content_hash is None
         with transaction(self.sessions) as session:
             step = session.execute(

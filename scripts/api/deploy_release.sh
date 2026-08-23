@@ -170,6 +170,8 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/cli.py",
         "eom_api/runtime_isolation_pidfd.py",
         "eom_api/runtime_isolation_verifier.py",
+        "eom_api/routers/control_plane.py",
+        "eom_api/services/control_plane_adapter.py",
         "eom_api/openapi/eom-api-v1.openapi.json",
         "eom_api/openapi/eom-api-v1.sha256",
     }
@@ -229,6 +231,27 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_workflow_runner/actor_authorization_adapters.py",
         "eom_workflow_runner/settings.py",
     }
+    control_plane_runtime = {
+        "eom_orchestrator/capability_observer.py",
+        "eom_orchestrator/capacity_controller.py",
+        "eom_orchestrator/control_artifacts.py",
+        "eom_orchestrator/control_bootstrap.py",
+        "eom_orchestrator/control_command_processor.py",
+        "eom_orchestrator/control_commands.py",
+        "eom_orchestrator/control_models.py",
+        "eom_orchestrator/control_service.py",
+        "eom_orchestrator/execution_materializer.py",
+        "eom_orchestrator/execution_resolver.py",
+        "eom_orchestrator/preset_lifecycle.py",
+        "eom_workflow/control_plane.py",
+        "eom_workflow/control_schemas.py",
+        "eom_workflow_runner/composition.py",
+        "eom_workflow_runner/engine.py",
+        "eom_workflow_runner/models.py",
+        "eom_workflow_runner/repository.py",
+        "eomctl/cli.py",
+        "eomctl/control_plane.py",
+    }
     catalog_staging_runtime = {
         "eom_catalog_contracts/assessment_item.py",
         "eom_catalog_contracts/application.py",
@@ -256,7 +279,11 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_manager/runtime_privileges.py",
     }
     if missing := (
-        worker_runtime | actor_runtime | catalog_staging_runtime | hwpx_application_runtime
+        worker_runtime
+        | actor_runtime
+        | control_plane_runtime
+        | catalog_staging_runtime
+        | hwpx_application_runtime
     ) - names:
         raise SystemExit(f"platform runtime missing from wheel: {sorted(missing)}")
     settings_source = archive.read("eom_orchestrator/settings.py")
@@ -301,6 +328,9 @@ with zipfile.ZipFile(platform_wheel) as archive:
     for member in sorted(actor_runtime):
         if member not in record:
             raise SystemExit(f"workflow actor runtime missing from RECORD: {member}")
+    for member in sorted(control_plane_runtime):
+        if member not in record:
+            raise SystemExit(f"Codex control-plane runtime missing from RECORD: {member}")
     for member in sorted(catalog_staging_runtime):
         if member not in record:
             raise SystemExit(f"Catalog staging runtime missing from RECORD: {member}")

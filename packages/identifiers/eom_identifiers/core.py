@@ -87,6 +87,14 @@ def new_worker_lease_id() -> str:
     return f"workerlease_{uuid4().hex}"
 
 
+def new_codex_control_command_id() -> str:
+    return f"codexcmd_{uuid4().hex}"
+
+
+def new_execution_preset_evaluation_id() -> str:
+    return f"preseteval_{uuid4().hex}"
+
+
 def _canonical_value(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         value = value.model_dump(mode="python")

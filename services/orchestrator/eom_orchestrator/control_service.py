@@ -1241,6 +1241,23 @@ def _append_lease_event(
 def begin_expired_lease_reconciliation(
     session: Session, *, lease_id: str, observed_at: datetime
 ) -> WorkerLeaseRecord:
+    return begin_worker_lease_reconciliation(
+        session,
+        lease_id=lease_id,
+        observed_at=observed_at,
+        reason_code="LEASE_TTL_EXPIRED",
+    )
+
+
+def begin_worker_lease_reconciliation(
+    session: Session,
+    *,
+    lease_id: str,
+    observed_at: datetime,
+    reason_code: Literal["LEASE_TTL_EXPIRED", "PROCESS_TERMINAL_UNCONFIRMED"],
+) -> WorkerLeaseRecord:
+    """Hold capacity until exact fixed-unit absence is established."""
+
     lease = session.execute(
         select(WorkerLeaseRecord).where(WorkerLeaseRecord.lease_id == lease_id).with_for_update()
     ).scalar_one_or_none()
@@ -1248,17 +1265,21 @@ def begin_expired_lease_reconciliation(
         raise ControlPlaneError("CONTROL_LEASE_MISSING", "worker lease is missing")
     if lease.state == "RECONCILING":
         return lease
-    if lease.state != "ACTIVE" or observed_at < lease.expires_at:
+    if lease.state != "ACTIVE" or (
+        reason_code == "LEASE_TTL_EXPIRED" and observed_at < lease.expires_at
+    ):
         raise ControlPlaneError(
-            "CONTROL_LEASE_STATE_INVALID", "only an expired active lease can reconcile"
+            "CONTROL_LEASE_STATE_INVALID", "only an eligible active lease can reconcile"
         )
+    if observed_at < lease.acquired_at:
+        raise ControlPlaneError("CONTROL_TIME_INVALID", "lease reconciliation predates acquisition")
     lease.state = "RECONCILING"
     _append_lease_event(
         session,
         lease=lease,
         event_type="LEASE_RECONCILIATION_STARTED",
         prior_state="ACTIVE",
-        reason_code="LEASE_TTL_EXPIRED",
+        reason_code=reason_code,
     )
     session.flush()
     return lease

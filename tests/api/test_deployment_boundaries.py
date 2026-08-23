@@ -88,6 +88,16 @@ def test_all_release_builders_accept_reviewed_main_commits() -> None:
         assert "rev-parse HEAD" in source
 
 
+def test_openapi_export_uses_repository_source_not_installed_runtime() -> None:
+    source = _source("scripts/api/export_openapi.sh")
+
+    assert "apps/application_api" in source
+    assert 'export PYTHONPATH="${python_path}"' in source
+    assert source.index('export PYTHONPATH="${python_path}"') < source.index(
+        '"${PYTHON}" -m eom_api openapi export'
+    )
+
+
 def test_api_release_verifies_knowledge_contract_resources() -> None:
     source = _source("scripts/api/deploy_release.sh")
 

@@ -155,9 +155,22 @@ def stage_file_set_artifact(
     staging: Path,
     created_at: datetime | None = None,
     manifest_version: str = "hwpx-file-set/1.0",
+    file_metadata: dict[str, dict[str, str]] | None = None,
 ) -> StagedFileSet:
     if primary_file not in files or not files:
         raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "primary artifact file is missing")
+    if file_metadata is not None and (
+        set(file_metadata) != set(files)
+        or any(
+            set(metadata) != {"schema_ref", "media_type"}
+            or not all(isinstance(value, str) and value for value in metadata.values())
+            for metadata in file_metadata.values()
+        )
+    ):
+        raise PlatformError(
+            ErrorCode.ARTIFACT_COMMIT_FAILED,
+            "artifact member metadata does not match staged files",
+        )
     staging.mkdir(mode=0o750, parents=True, exist_ok=True)
     staged_files: list[StagedFile] = []
     for relative_path, source in sorted(files.items()):
@@ -204,6 +217,7 @@ def stage_file_set_artifact(
                 "file_name": item.relative_path,
                 "sha256": item.sha256,
                 "bytes": item.size,
+                **((file_metadata or {}).get(item.relative_path, {})),
             }
             for item in staged_files
         ],

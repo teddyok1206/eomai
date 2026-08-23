@@ -66,6 +66,7 @@ def test_runtime_scripts_have_valid_shell_syntax() -> None:
     for relative in (
         "scripts/workflow/bootstrap_runtime_paths.sh",
         "scripts/workflow/deploy_runner_service.sh",
+        "scripts/workflow/install_runner_configuration.sh",
         "scripts/workflow/verify_runtime_paths.sh",
         "scripts/workflow/verify_systemd_worker_authorization.sh",
     ):
@@ -73,3 +74,13 @@ def test_runtime_scripts_have_valid_shell_syntax() -> None:
             ["bash", "-n", str(ROOT / relative)], capture_output=True, check=False, text=True
         )
         assert result.returncode == 0, result.stderr
+
+
+def test_runner_configuration_installs_root_owned_capability_policy() -> None:
+    source = (ROOT / "scripts/workflow/install_runner_configuration.sh").read_text(encoding="utf-8")
+
+    assert "config/codex-capabilities.example.yaml" in source
+    assert "/codex-capabilities.yaml" in source
+    assert "install -o root -g root -m 0644" in source
+    assert "root:root:644" in source
+    assert "sudo" not in source
