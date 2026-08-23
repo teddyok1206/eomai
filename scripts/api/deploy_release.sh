@@ -228,6 +228,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
     catalog_staging_runtime = {
         "eom_catalog_contracts/assessment_item.py",
         "eom_catalog_contracts/application.py",
+        "eom_catalog_contracts/knowledge.py",
         "eom_catalog_contracts/validation.py",
         "eom_catalog_service/application_runner.py",
         "eom_catalog_service/application_server.py",
@@ -338,6 +339,12 @@ catalog_resources = {
     "content-pack/prompt-envelope-v1.schema.json": "schemas/content-pack/prompt-envelope-v1.schema.json",
     "item-registry/assessment-item-content-v1.schema.json": "schemas/item-registry/assessment-item-content-v1.schema.json",
     "item-registry/item-revision-manifest-v1.schema.json": "schemas/item-registry/item-revision-manifest-v1.schema.json",
+    "knowledge/knowledge-types-v1.schema.json": "schemas/knowledge/knowledge-types-v1.schema.json",
+    "knowledge/knowledge-analysis-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-request-v1.schema.json",
+    "knowledge/knowledge-analysis-result-v1.schema.json": "schemas/knowledge/knowledge-analysis-result-v1.schema.json",
+    "knowledge/knowledge-graph-snapshot-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
+    "knowledge/education-retrieval-request-v1.schema.json": "schemas/knowledge/education-retrieval-request-v1.schema.json",
+    "knowledge/evidence-bundle-manifest-v1.schema.json": "schemas/knowledge/evidence-bundle-manifest-v1.schema.json",
 }
 with zipfile.ZipFile(platform_wheel) as archive:
     names = set(archive.namelist())

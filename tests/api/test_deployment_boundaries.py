@@ -88,6 +88,21 @@ def test_all_release_builders_accept_reviewed_main_commits() -> None:
         assert "rev-parse HEAD" in source
 
 
+def test_api_release_verifies_knowledge_contract_resources() -> None:
+    source = _source("scripts/api/deploy_release.sh")
+
+    for required in (
+        "eom_catalog_contracts/knowledge.py",
+        "knowledge/knowledge-types-v1.schema.json",
+        "knowledge/knowledge-analysis-request-v1.schema.json",
+        "knowledge/knowledge-analysis-result-v1.schema.json",
+        "knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
+        "knowledge/education-retrieval-request-v1.schema.json",
+        "knowledge/evidence-bundle-manifest-v1.schema.json",
+    ):
+        assert required in source
+
+
 def test_privileged_metadata_verifier_is_root_only_and_secret_safe() -> None:
     source = _source("scripts/api/verify_deployment_metadata.sh")
 
