@@ -111,9 +111,35 @@ opt-in; their exact commands are kept in the generated acceptance runbook.
 
 ## Execution
 
-`run-once` returns 2 when no command exists and 3 when work exists but runtime readiness fails. A
-status 3 leaves the command unclaimed and the workflow unchanged. Only a successful preflight is
-followed by a database claim.
+Production API submissions enqueue typed commands and return without executing workers. The
+reviewed long-running service is therefore part of the production execution boundary; without it,
+commands remain `PENDING` with zero attempts. Deploy it from a clean, committed tree:
+
+```bash
+HEAD="$(git rev-parse HEAD)"
+sudo -n scripts/workflow/deploy_runner_service.sh install "${HEAD}"
+sudo -n scripts/workflow/deploy_runner_service.sh verify "${HEAD}"
+systemctl is-active eom-workflow-runner.service
+systemctl is-enabled eom-workflow-runner.service
+```
+
+The service runs as `eom` and explicitly requires all five worker supplementary groups. The host
+account's other group memberships cannot be removed by systemd's `SupplementaryGroups` directive,
+so the unit combines `NoNewPrivileges`, an empty capability set, a strict read-only system image,
+and inaccessible container-control paths to keep them unusable for privilege gain. The service can
+write only the bounded staging, worker-workspace, NAS artifact, and private state roots. Git,
+EOMIS, other service secrets, container control sockets, and every worker's Codex home are
+inaccessible. `RestrictSUIDSGID` is intentionally disabled only on this producer boundary because
+the runner must create the reviewed `02770` per-job directories; the fixed worker units retain
+`RestrictSUIDSGID=true`.
+
+The deployer refuses to replace a different active unit, so an update cannot silently interrupt an
+in-flight worker. It records the source commit and installed unit hash in the separate root-only
+`/var/lib/eom-workflow-runner-deployments` directory.
+
+`run-once` remains a diagnostic/operator tool. It returns 2 when no command exists and 3 when work
+exists but runtime readiness fails. A status 3 leaves the command unclaimed and the workflow
+unchanged. Only a successful preflight is followed by a database claim.
 
 ```bash
 /srv/eom/conda/envs/eom-api/bin/eom-workflow-runner run-once
