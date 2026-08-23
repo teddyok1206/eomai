@@ -98,7 +98,7 @@ trap 'rm -f -- "${HEADERS}"' EXIT
   --resolve eomai.duckdns.org:443:127.0.0.1 \
   --dump-header "${HEADERS}" --output /dev/null \
   https://eomai.duckdns.org/studio/login
-grep -Eiq '^strict-transport-security: max-age=31536000\r?$' "${HEADERS}"
+tr -d '\r' <"${HEADERS}" | grep -Fxiq 'strict-transport-security: max-age=31536000'
 test "$(systemctl is-active eom-web-gui.service)" = active
 
 MUTATION_STARTED=0

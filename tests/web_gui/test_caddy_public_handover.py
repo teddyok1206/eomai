@@ -41,3 +41,5 @@ def test_installer_verifies_both_admin_access_boundaries() -> None:
     assert "systemctl reload caddy.service" in script
     assert "caddy:caddy:200" in script
     assert "unlink /run/caddy-admin/admin.sock" in script
+    assert "tr -d '\\r'" in script
+    assert "grep -Fxiq 'strict-transport-security: max-age=31536000'" in script
