@@ -19,9 +19,12 @@ def _directives(source: str, name: str) -> set[str]:
 def test_workflow_runner_service_fixes_identity_command_and_group_contract() -> None:
     source = UNIT.read_text(encoding="utf-8")
 
-    assert "User=eom" in source
+    assert "User=eom-workflow-runner" in source
     assert "Group=eom" in source
-    assert "SupplementaryGroups=eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05" in source
+    assert (
+        "SupplementaryGroups=eom-artifact-committers eom-cdx-01 eom-cdx-02 "
+        "eom-cdx-03 eom-cdx-04 eom-cdx-05" in source
+    )
     assert "ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner serve" in source
     assert "EOM_POSTGRES_ENV=/etc/eom/secrets/postgres.env" in source
     assert "UMask=0007" in source

@@ -1,6 +1,7 @@
 # Workflow Runtime Troubleshooting
 
-Run `eom-workflow-runner doctor` as the same `eom` process that will run commands. Output contains
+Run `eom-workflow-runner doctor` through the installed service identity when diagnosing production.
+Output contains
 only sanitized check names, codes, and metadata summaries.
 
 | Code | Meaning | Action |
@@ -23,7 +24,7 @@ only sanitized check names, codes, and metadata summaries.
 | `CODEX_BINARY_UNAVAILABLE` | configured binary is missing/non-executable | repair the installed Codex runtime |
 | `SYSTEMCTL_UNAVAILABLE` | fixed-unit launcher client is unavailable | repair host systemd installation |
 | `WORKER_SYSTEMD_TEMPLATE_INVALID` | root-owned helper/template is missing, stale, linked, writable, or hash-mismatched | reinstall the exact final-HEAD worker artifacts and run `daemon-reload` |
-| `WORKER_SYSTEMD_AUTHORIZATION_DENIED` | `eom` could not start and complete a fixed harmless slot probe | verify installed systemd/polkit unit+verb capability and the reviewed start-only rule; never add a broad allow |
+| `WORKER_SYSTEMD_AUTHORIZATION_DENIED` | `eom-workflow-runner` could not start and complete a fixed harmless slot probe | verify installed systemd/polkit unit+verb capability and the reviewed start-only rule; never add a broad allow |
 | `WORKFLOW_SCHEMAS_INVALID` | installed runtime resources are incomplete | rebuild/redeploy the self-contained wheel |
 | `WORKFLOW_DEFINITION_INVALID` | configured definition cannot compile | repair the pinned definition/config |
 

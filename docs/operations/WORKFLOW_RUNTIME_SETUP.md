@@ -29,8 +29,10 @@ services/orchestrator/eom_orchestrator/worker_exec.py
 
 The unit and helper hashes are part of the installed Python release contract. Unit files and the
 helper must be regular root:root files with modes `0644` and `0755`; `eom` must not be able to
-modify them. The polkit rule applies only to user `eom`, fully anchored EOM worker/probe instances,
-and the `start` verb. It explicitly denies all other `manage-units` requests by `eom`. If the
+modify them. The polkit rule grants `eom-workflow-runner` only fully anchored worker/probe starts,
+grants `eom-hwpx-manager` only fully anchored HWPX builder starts, and lets the interactive `eom`
+operator start only the harmless worker probe. It explicitly denies cross-manager starts, restarts,
+and arbitrary units. If the
 installed systemd/polkit mechanism does not expose both `unit` and `verb` for `StartUnit()`, do not
 install that rule and do not substitute a broad allow rule. Use the separately reviewed narrow
 broker fallback.
@@ -123,10 +125,10 @@ systemctl is-active eom-workflow-runner.service
 systemctl is-enabled eom-workflow-runner.service
 ```
 
-The service runs as `eom` and explicitly requires all five worker supplementary groups. The host
-account's other group memberships cannot be removed by systemd's `SupplementaryGroups` directive,
-so the unit combines `NoNewPrivileges`, an empty capability set, a strict read-only system image,
-and inaccessible container-control paths to keep them unusable for privilege gain. The service can
+The service runs as the locked `eom-workflow-runner` identity with the five worker handoff groups
+and the separate `eom-artifact-committers` group. It does not inherit the operator account's sudo,
+LXD, desktop, or device groups. The unit combines `NoNewPrivileges`, an empty capability set, a
+strict read-only system image, and inaccessible container-control paths. The service can
 write only the bounded staging, worker-workspace, NAS artifact, and private state roots. Git,
 EOMIS, other service secrets, container control sockets, and every worker's Codex home are
 inaccessible. `RestrictSUIDSGID` is intentionally disabled only on this producer boundary because

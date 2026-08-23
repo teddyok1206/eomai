@@ -7,6 +7,7 @@ UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/${SERVICE}"
 UNIT_TARGET="/etc/systemd/system/${SERVICE}"
 RUNNER="/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner"
 RELEASE_ROOT="/var/lib/eom-workflow-runner-deployments"
+SERVICE_USER="eom-workflow-runner"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -30,9 +31,10 @@ require_directory_metadata() {
 }
 
 require_group_membership() {
-  local group="$1"
-  id -nG eom | tr ' ' '\n' | grep -Fxq "${group}" || \
-    fail "eom is not a member of ${group}"
+  local user="$1"
+  local group="$2"
+  id -nG "${user}" | tr ' ' '\n' | grep -Fxq "${group}" || \
+    fail "${user} is not a member of ${group}"
 }
 
 require_property() {
@@ -61,8 +63,11 @@ preflight() {
   require_file_metadata /etc/eom/workflow-runner.yaml root:eom:640
   require_directory_metadata /etc/eom/workflows root:eom:750
   require_directory_metadata /etc/eom/workflow-prompts root:eom:750
+  getent passwd "${SERVICE_USER}" >/dev/null || fail "workflow runner identity is unavailable"
+  require_group_membership "${SERVICE_USER}" eom
+  require_group_membership "${SERVICE_USER}" eom-artifact-committers
   for group in eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05; do
-    require_group_membership "${group}"
+    require_group_membership "${SERVICE_USER}" "${group}"
   done
   systemd-analyze verify "${UNIT_SOURCE}"
 }
@@ -71,7 +76,7 @@ verify_unit() {
   [[ -f "${UNIT_TARGET}" && ! -L "${UNIT_TARGET}" ]] || fail "installed unit is unsafe"
   require_file_metadata "${UNIT_TARGET}" root:root:644
   cmp --silent "${UNIT_SOURCE}" "${UNIT_TARGET}" || fail "installed unit content drift"
-  require_property User eom
+  require_property User "${SERVICE_USER}"
   require_property Group eom
   require_property UMask 0007
   require_property RestrictSUIDSGID no
@@ -80,7 +85,7 @@ verify_unit() {
   require_property ProtectHome yes
   require_property IPAddressDeny "0.0.0.0/0 ::/0"
   [[ "$(systemctl show --property=SupplementaryGroups --value "${SERVICE}")" == \
-      "eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05" ]] || \
+      "eom-artifact-committers eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05" ]] || \
     fail "installed supplementary group contract mismatch"
   systemctl is-enabled --quiet "${SERVICE}" || fail "workflow runner is not enabled"
   systemctl is-active --quiet "${SERVICE}" || fail "workflow runner is not active"
@@ -89,7 +94,7 @@ verify_unit() {
   [[ "${main_pid}" =~ ^[1-9][0-9]*$ && -r "/proc/${main_pid}/status" ]] || \
     fail "workflow runner process is unavailable"
   local group group_id
-  for group in eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05; do
+  for group in eom eom-artifact-committers eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05; do
     group_id="$(getent group "${group}" | cut -d: -f3)"
     [[ "${group_id}" =~ ^[1-9][0-9]*$ ]] || fail "worker group identity is unavailable"
     grep -E "^Groups:.*[[:space:]]${group_id}([[:space:]]|$)" "/proc/${main_pid}/status" \

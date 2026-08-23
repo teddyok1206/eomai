@@ -59,14 +59,14 @@ Catalog application service, while the Kordoc service and filesystem/systemd ada
 renderer port. Contracts and domain state do not import FastAPI, subprocess, filesystem,
 SQLAlchemy session, or the Web GUI. The GUI never imports or invokes Kordoc.
 
-The application runner stays non-root. A root-owned `2770` workspace root uses the private
-`eom-hwpx` group, granted to the runner only by the systemd unit. Staged inputs are group-readable,
+The application runner stays non-root as `eom-hwpx-manager`. A root-owned `2770` workspace root uses
+the private `eom-hwpx` group, granted to the runner only by the systemd unit. Staged inputs are group-readable,
 and the fixed builder unit retains `UMask=0007` and `RestrictSUIDSGID=true`. After validation, the
 builder explicitly finalizes only the output handoff directory as `0750` and its Manager-consumed
 files as `0640`; private intermediate files are not widened. The builder's fixed primary group is
 `eom-hwpx`, so child group identity is verified directly and the handoff does not depend on setgid.
 Creation modes alone are not treated as the handoff contract.
-A start-only polkit allowlist accepts only the closed
+A start-only polkit allowlist grants that identity only the closed
 `eom-hwpx-kordoc@hwpxbuild_<32 hex>.service` and
 `eom-hwpx-builder@hwpxbuild_<32 hex>.service` forms. Caller-controlled units, commands, paths,
 and renderer arguments are absent. The latter is the approved question-template delivery adapter;

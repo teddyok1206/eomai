@@ -50,9 +50,15 @@ def test_catalog_manager_unit_owns_nas_commit_boundary_without_api_secret() -> N
     api_unit = (REPOSITORY_ROOT / "infra/systemd/eom-api.service").read_text(encoding="utf-8")
 
     assert "EnvironmentFile=/etc/eom/secrets/catalog-manager.env" in catalog_unit
+    assert "User=eom-catalog-manager" in catalog_unit
+    assert "SupplementaryGroups=eom eom-artifact-committers" in catalog_unit
     assert "ReadWritePaths=/srv/eom/staging/catalog" in catalog_unit
     assert "ReadWritePaths=/mnt/nas/eom/artifacts" in catalog_unit
     assert "InaccessiblePaths=/etc/eom/secrets/api.env" in catalog_unit
     assert "EnvironmentFile=/etc/eom/secrets/catalog-manager.env" not in api_unit
     assert "ReadWritePaths=/srv/eom/staging/catalog" not in api_unit
     assert "ReadWritePaths=/mnt/nas" not in api_unit
+    client = (
+        REPOSITORY_ROOT / "apps/application_api/eom_api/services/catalog_application_client.py"
+    ).read_text(encoding="utf-8")
+    assert 'pwd.getpwnam("eom-catalog-manager")' in client

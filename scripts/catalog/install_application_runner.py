@@ -136,6 +136,7 @@ def main() -> None:
     root_gid = grp.getgrnam("root").gr_gid
     eom_gid = grp.getgrnam("eom").gr_gid
     api_gid = grp.getgrnam("eom-api").gr_gid
+    pwd.getpwnam("eom-catalog-manager")
     secrets_parent = TARGET_ENV.parent
     parent_metadata = secrets_parent.lstat()
     if not (

@@ -46,7 +46,7 @@ class CatalogApplicationClient:
         expected_gid: int | None = None,
     ) -> None:
         self.socket_path = socket_path
-        self.expected_uid = pwd.getpwnam("eom").pw_uid if expected_uid is None else expected_uid
+        self.expected_uid = expected_uid
         self.expected_gid = grp.getgrnam("eom-api").gr_gid if expected_gid is None else expected_gid
 
     def import_reviewed(
@@ -121,7 +121,12 @@ class CatalogApplicationClient:
     def _validate_socket(self) -> None:
         try:
             metadata = self.socket_path.lstat()
-        except OSError as exc:
+            expected_uid = (
+                pwd.getpwnam("eom-catalog-manager").pw_uid
+                if self.expected_uid is None
+                else self.expected_uid
+            )
+        except (KeyError, OSError) as exc:
             raise CatalogApplicationClientError(
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
                 "Catalog application socket is unavailable",
@@ -129,7 +134,7 @@ class CatalogApplicationClient:
         if (
             not stat.S_ISSOCK(metadata.st_mode)
             or self.socket_path.is_symlink()
-            or metadata.st_uid != self.expected_uid
+            or metadata.st_uid != expected_uid
             or metadata.st_gid != self.expected_gid
             or stat.S_IMODE(metadata.st_mode) != CATALOG_APPLICATION_SOCKET_MODE
         ):

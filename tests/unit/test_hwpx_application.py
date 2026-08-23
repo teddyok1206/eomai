@@ -410,6 +410,8 @@ def test_question_template_adapter_uses_only_its_fixed_unit(
 
 def test_application_runner_separates_manager_state_from_builder_home() -> None:
     unit = Path("infra/systemd/eom-hwpx-application-runner.service").read_text(encoding="utf-8")
+    assert "User=eom-hwpx-manager" in unit
+    assert "SupplementaryGroups=eom eom-artifact-committers eom-hwpx" in unit
     assert "StateDirectory=eom-hwpx-api" in unit
     assert "StateDirectoryMode=0700" in unit
     assert "WorkingDirectory=/var/lib/eom-hwpx-api" in unit

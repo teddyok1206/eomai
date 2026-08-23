@@ -5,9 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=eom
+User=eom-hwpx-manager
 Group=eom-api
-SupplementaryGroups=eom-hwpx
+SupplementaryGroups=eom eom-artifact-committers eom-hwpx
 RuntimeDirectory=eom-hwpx-api
 RuntimeDirectoryMode=0750
 StateDirectory=eom-hwpx-api
@@ -47,6 +47,10 @@ InaccessiblePaths=/home/eom/EOMIS
 InaccessiblePaths=/root/.codex
 InaccessiblePaths=/srv/eom/worker-homes
 InaccessiblePaths=/var/run/docker.sock
+InaccessiblePaths=-/var/lib/lxd
+InaccessiblePaths=-/var/snap/lxd
+InaccessiblePaths=-/run/lxd
+InaccessiblePaths=-/run/snapd.socket
 InaccessiblePaths=/etc/eom/secrets/api.env
 InaccessiblePaths=/etc/eom/secrets/observe.env
 InaccessiblePaths=/etc/eom/secrets/web-gui.env

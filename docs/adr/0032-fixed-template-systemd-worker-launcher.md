@@ -31,10 +31,11 @@ The launcher reads the service `Result`, `ExecMainCode`, and `ExecMainStatus` af
 the existing workspace `result.json` remains the authoritative worker result protocol.
 
 On the installed systemd 255 and polkit 124, the systemd `StartUnit()` authorization mechanism
-provides the `unit` and `verb` action details. The deployment rule therefore allows user `eom`
-only the `start` verb for fully anchored EOM worker and probe instance names. It explicitly denies
-all other `manage-units` requests by `eom`, including transient units, restart, and arbitrary
-services. It does not use authorization caching or execute a helper from polkit. If an operator
+provides the `unit` and `verb` action details. The deployment rule therefore allows
+`eom-workflow-runner` only worker/probe starts, `eom-hwpx-manager` only HWPX builder starts, and the
+interactive `eom` operator only a harmless probe. It explicitly denies all other `manage-units`
+requests by those identities, including transient units, restart, cross-manager starts, and
+arbitrary services. It does not use authorization caching or execute a helper from polkit. If an operator
 cannot demonstrate these details on the installed server, the rule must not be installed; a
 separately reviewed root-owned narrow broker is the only fallback.
 

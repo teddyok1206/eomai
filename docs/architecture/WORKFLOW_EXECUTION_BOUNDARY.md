@@ -111,8 +111,9 @@ root-owned Codex executable before invoking the fixed Codex CLI.
 | implicit capability/address policy | empty capabilities, kernel/control-group/SUID/personality/realtime/device/host/clock guards, fixed address families | strengthened without blocking Codex network access |
 
 The installed systemd 255/polkit 124 mechanism exposes `unit` and `verb` for `StartUnit()`. The
-root-owned rule grants `eom` only `verb=start` for fully anchored worker and harmless probe
-instances, explicitly denying its other `manage-units` requests. It grants no transient-unit,
+root-owned rule grants `eom-workflow-runner` only `verb=start` for fully anchored worker and harmless
+probe instances; the interactive `eom` operator may start only a harmless probe. It explicitly
+denies cross-manager and other `manage-units` requests. It grants no transient-unit,
 restart, stop, unit-file, daemon-reload, or arbitrary service permission. If the installed server
 cannot demonstrate these action details, deployment stops and requires a separately reviewed
 narrow broker; a broad rule is never a fallback.

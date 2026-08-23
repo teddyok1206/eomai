@@ -50,9 +50,9 @@ REQUIRED_QUESTION_TEMPLATE_BUILDER_DIRECTIVES = frozenset(
 )
 REQUIRED_RUNNER_DIRECTIVES = frozenset(
     {
-        "User=eom",
+        "User=eom-hwpx-manager",
         "Group=eom-api",
-        "SupplementaryGroups=eom-hwpx",
+        "SupplementaryGroups=eom eom-artifact-committers eom-hwpx",
         "RuntimeDirectory=eom-hwpx-api",
         "RuntimeDirectoryMode=0750",
         "StateDirectory=eom-hwpx-api",
@@ -198,7 +198,7 @@ def fixed_builder_isolation_preflight() -> tuple[bool, str]:
     try:
         socket_metadata = MANAGER_SOCKET_PATH.lstat()
         api_gid = grp.getgrnam("eom-api").gr_gid
-        manager_uid = pwd.getpwnam("eom").pw_uid
+        manager_uid = pwd.getpwnam("eom-hwpx-manager").pw_uid
     except (KeyError, OSError):
         return False, "HWPX_MANAGER_RUNTIME_UNAVAILABLE"
     if (

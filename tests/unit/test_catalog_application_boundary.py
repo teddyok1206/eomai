@@ -135,8 +135,9 @@ def test_catalog_socket_rejects_wrong_peer_and_unsafe_socket_metadata(tmp_path: 
 
 def test_catalog_application_systemd_boundary_keeps_api_away_from_nas() -> None:
     unit = Path("infra/systemd/eom-catalog-application-runner.service").read_text(encoding="utf-8")
-    assert "User=eom" in unit
+    assert "User=eom-catalog-manager" in unit
     assert "Group=eom-api" in unit
+    assert "SupplementaryGroups=eom eom-artifact-committers" in unit
     assert "ReadWritePaths=/srv/eom/staging/catalog" in unit
     assert "ReadWritePaths=/mnt/nas/eom/artifacts" in unit
     assert "InaccessiblePaths=/etc/eom/secrets/api.env" in unit

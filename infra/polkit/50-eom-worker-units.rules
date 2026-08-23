@@ -5,26 +5,25 @@ polkit.addRule(function(action, subject) {
     var kordocUnit = /^eom-hwpx-kordoc@hwpxbuild_[0-9a-f]{32}\.service$/;
     var questionTemplateUnit = /^eom-hwpx-builder@hwpxbuild_[0-9a-f]{32}\.service$/;
 
-    if (
-        action.id !== "org.freedesktop.systemd1.manage-units"
-        || subject.user !== "eom"
-    ) {
+    if (action.id !== "org.freedesktop.systemd1.manage-units") {
         return polkit.Result.NOT_HANDLED;
     }
 
     var unit = action.lookup("unit");
     var verb = action.lookup("verb");
-    if (
-        verb === "start"
-        && (
-            workerUnit.test(unit)
-            || probeUnit.test(unit)
-            || kordocUnit.test(unit)
-            || questionTemplateUnit.test(unit)
-        )
-    ) {
+    if (verb === "start" && subject.user === "eom-workflow-runner"
+        && (workerUnit.test(unit) || probeUnit.test(unit))) {
         return polkit.Result.YES;
     }
-
-    return polkit.Result.NO;
+    if (verb === "start" && subject.user === "eom-hwpx-manager"
+        && (kordocUnit.test(unit) || questionTemplateUnit.test(unit))) {
+        return polkit.Result.YES;
+    }
+    if (verb === "start" && subject.user === "eom" && probeUnit.test(unit)) {
+        return polkit.Result.YES;
+    }
+    if (["eom", "eom-workflow-runner", "eom-hwpx-manager"].indexOf(subject.user) !== -1) {
+        return polkit.Result.NO;
+    }
+    return polkit.Result.NOT_HANDLED;
 });
