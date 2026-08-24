@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from eom_catalog_contracts import (
+    ASSESSMENT_ITEM_CONTENT_FILE_NAME,
+    ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+    ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
     AssessmentItemContent,
     ImageBlock,
     MediaArtifactPointer,
@@ -658,22 +661,28 @@ class WorkflowCatalogService:
         if staged_hash != expected_hash:
             raise ValueError("knowledge item content changed during staging")
         artifact = self.artifacts.commit_file_set(
-            files={"assessment-item-content.json": staged},
-            primary_file="assessment-item-content.json",
+            files={ASSESSMENT_ITEM_CONTENT_FILE_NAME: staged},
+            primary_file=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             artifact_type="assessment-item-content",
             idempotency_key=f"workflow-item-content:{workflow.workflow_id}:{expected_hash}",
             request={"workflow_id": workflow.workflow_id, "schema_version": "1.0"},
             result={"content_sha256": expected_hash},
+            file_metadata={
+                ASSESSMENT_ITEM_CONTENT_FILE_NAME: {
+                    "schema_ref": ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+                    "media_type": ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+                }
+            },
         )
         return ComponentPointer(
             component_type="ITEM_CONTENT",
             ordinal=0,
-            schema_ref="eom.assessment.item-content/1.0",
-            media_type="application/json",
+            schema_ref=ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+            media_type=ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
             artifact_id=artifact.artifact_id,
             artifact_revision_id=artifact.revision_id,
             sha256=artifact.content_hash,
-            logical_name="assessment-item-content.json",
+            logical_name=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             metadata={
                 "authoring_artifact_revision_id": authoring.revision_id,
                 "knowledge_source_mode": "general_model_knowledge",
@@ -754,22 +763,28 @@ class WorkflowCatalogService:
         if staged_hash != expected_hash:
             raise ValueError("generated item content changed during staging")
         artifact = self.artifacts.commit_file_set(
-            files={"assessment-item-content.json": staged},
-            primary_file="assessment-item-content.json",
+            files={ASSESSMENT_ITEM_CONTENT_FILE_NAME: staged},
+            primary_file=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             artifact_type="assessment-item-content",
             idempotency_key=f"workflow-item-content:{workflow.workflow_id}:{expected_hash}",
             request={"workflow_id": workflow.workflow_id, "schema_version": "1.0"},
             result={"content_sha256": expected_hash},
+            file_metadata={
+                ASSESSMENT_ITEM_CONTENT_FILE_NAME: {
+                    "schema_ref": ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+                    "media_type": ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+                }
+            },
         )
         return ComponentPointer(
             component_type="ITEM_CONTENT",
             ordinal=0,
-            schema_ref="eom.assessment.item-content/1.0",
-            media_type="application/json",
+            schema_ref=ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+            media_type=ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
             artifact_id=artifact.artifact_id,
             artifact_revision_id=artifact.revision_id,
             sha256=artifact.content_hash,
-            logical_name="assessment-item-content.json",
+            logical_name=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             metadata={
                 "authoring_artifact_revision_id": authoring.revision_id,
                 "image_artifact_revision_id": pointer.artifact_revision_id,

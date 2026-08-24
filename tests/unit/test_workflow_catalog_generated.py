@@ -318,6 +318,12 @@ def test_generated_item_pins_verified_media_revision_in_canonical_content(tmp_pa
         }
     ]
     content_commit = artifacts.commits[1]
+    assert content_commit["file_metadata"] == {
+        "assessment-item-content.json": {
+            "media_type": "application/json",
+            "schema_ref": "eom.assessment.item-content/1.0",
+        }
+    }
     content = json.loads(
         Path(content_commit["files"]["assessment-item-content.json"]).read_text(encoding="utf-8")
     )

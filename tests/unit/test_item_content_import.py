@@ -161,6 +161,12 @@ def test_reviewed_import_preserves_base_pointers_and_replaces_only_item_content(
 
     assert result.item_revision_id == "itemrev_" + "6" * 32
     assert len(artifacts.calls) == 1
+    assert artifacts.calls[0]["file_metadata"] == {
+        "assessment-item-content.json": {
+            "media_type": "application/json",
+            "schema_ref": "eom.assessment.item-content/1.0",
+        }
+    }
     request = registry.request
     assert request is not None
     assert request.base_revision_id == base_revision_id  # type: ignore[attr-defined]

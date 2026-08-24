@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import PurePosixPath
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import Field, field_validator, model_validator
 
@@ -13,6 +13,10 @@ from eom_catalog_contracts.models import FrozenModel, Sha256, _safe_text
 ChoiceId = Annotated[str, Field(pattern=r"^choice_[a-z0-9][a-z0-9_]{0,31}$")]
 StatementId = Annotated[str, Field(pattern=r"^statement_[a-z][a-z0-9_]{0,31}$")]
 BoundedAnswer = Annotated[str, Field(min_length=1, max_length=20_000)]
+
+ASSESSMENT_ITEM_CONTENT_FILE_NAME: Final = "assessment-item-content.json"
+ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE: Final = "application/json"
+ASSESSMENT_ITEM_CONTENT_SCHEMA_REF: Final = "eom.assessment.item-content/1.0"
 
 
 class MediaArtifactPointer(FrozenModel):

@@ -21,6 +21,9 @@ from eom_catalog_contracts.application import (
     ReviewKnowledgeAnalysisCommand,
 )
 from eom_catalog_contracts.assessment_item import (
+    ASSESSMENT_ITEM_CONTENT_FILE_NAME,
+    ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+    ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
     AssessmentItemContent,
     Choice,
     ConstructedResponseInteraction,
@@ -139,6 +142,9 @@ from eom_catalog_contracts.validation import (
 )
 
 __all__ = [
+    "ASSESSMENT_ITEM_CONTENT_FILE_NAME",
+    "ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE",
+    "ASSESSMENT_ITEM_CONTENT_SCHEMA_REF",
     "CATALOG_APPLICATION_MAX_MESSAGE_BYTES",
     "CATALOG_APPLICATION_RUNTIME_DIRECTORY_MODE",
     "CATALOG_APPLICATION_SOCKET_MODE",

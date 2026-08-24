@@ -5,7 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from eom_catalog_contracts import AssessmentItemContent, validate_contract
+from eom_catalog_contracts import (
+    ASSESSMENT_ITEM_CONTENT_FILE_NAME,
+    ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+    ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+    AssessmentItemContent,
+    validate_contract,
+)
 from eom_identifiers import content_sha256
 from eom_item_registry import (
     ComponentPointer,
@@ -175,28 +181,34 @@ class StructuredItemContentImportService:
                 "canonical content hash changed during staging",
             )
         artifact = self.artifacts.commit_file_set(
-            files={"assessment-item-content.json": staged},
-            primary_file="assessment-item-content.json",
+            files={ASSESSMENT_ITEM_CONTENT_FILE_NAME: staged},
+            primary_file=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             artifact_type="assessment-item-content",
             idempotency_key=f"reviewed-item-content-artifact:{content_hash}",
             request={
-                "schema_ref": "eom.assessment.item-content/1.0",
+                "schema_ref": ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
                 "content_sha256": content_hash,
             },
             result={
-                "schema_ref": "eom.assessment.item-content/1.0",
+                "schema_ref": ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
                 "content_sha256": content_hash,
+            },
+            file_metadata={
+                ASSESSMENT_ITEM_CONTENT_FILE_NAME: {
+                    "schema_ref": ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+                    "media_type": ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+                }
             },
         )
         content_pointer = ComponentPointer(
             component_type="ITEM_CONTENT",
             ordinal=0,
-            schema_ref="eom.assessment.item-content/1.0",
-            media_type="application/json",
+            schema_ref=ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+            media_type=ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
             artifact_id=artifact.artifact_id,
             artifact_revision_id=artifact.revision_id,
             sha256=artifact.content_hash,
-            logical_name="assessment-item-content.json",
+            logical_name=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             required=True,
             metadata={
                 "import_protocol": "reviewed-structured-item-content/1.0",

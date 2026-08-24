@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 
 from eom_catalog_contracts import (
+    ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+    ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
     ApprovedItemKnowledgeSourceV2,
     ContentIntakeKnowledgeSourceV2,
     KnowledgeAnalysisSourceArtifactMemberV2,
@@ -137,10 +139,10 @@ def resolve_approved_item_source(
     component = components[0]
     if (
         not component.required
-        or component.media_type != "application/json"
+        or component.media_type != ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE
         or component.schema_ref
         not in {
-            "eom.assessment.item-content/1.0",
+            ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
             "eom://schemas/item-registry/assessment-item-content-v1",
         }
     ):
