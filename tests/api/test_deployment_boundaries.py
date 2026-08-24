@@ -140,7 +140,6 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "legacy-usage/product-usage-graph-projection-v1.schema.json",
     ):
         assert required in source
-
     for required in (
         "eom_api/routers/knowledge_analysis.py",
         "eom_api/services/catalog_application_client.py",
@@ -153,6 +152,21 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "eom_catalog_service/runtime_privileges.py",
     ):
         assert required in source
+
+
+def test_release_migration_wrapper_pins_source_and_database_owner() -> None:
+    source = _source("scripts/api/migrate_release.sh")
+
+    assert "env -u EOM_DATABASE_URL" in source
+    assert 'EOM_POSTGRES_ENV="${POSTGRES_ENV}"' in source
+    assert "PYTHONDONTWRITEBYTECODE=1" in source
+    assert "PYTHONSAFEPATH=1" in source
+    assert "working tree must be clean" in source
+    assert "source commit mismatch" in source
+    assert "database_user != schema_owner" in source
+    assert '"app" not in search_path' in source
+    assert "run_reviewed_python -m alembic upgrade head" in source
+    assert "CURRENT_MIGRATION_REVISION" in source
 
 
 def test_privileged_metadata_verifier_is_root_only_and_secret_safe() -> None:
@@ -270,6 +284,7 @@ def test_release_install_normalizes_restrictive_operator_umask() -> None:
     [
         "scripts/api/bootstrap_service_user.sh",
         "scripts/api/deploy_release.sh",
+        "scripts/api/migrate_release.sh",
         "scripts/api/verify_deployment_metadata.sh",
         "scripts/api/verify_runtime_isolation.sh",
     ],

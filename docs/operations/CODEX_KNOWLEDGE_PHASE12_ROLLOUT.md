@@ -93,9 +93,13 @@ Before the production migration:
 5. confirm services and canonical counts are unchanged; and
 6. stop if the restore proof fails.
 
-Apply Alembic only with the migration owner. API, Catalog, worker, and GUI runtime roles never own
-DDL. After migration, reconcile the Application API and Catalog runtime roles from the reviewed
-source matrices. Catalog receives only the precise legacy usage table privileges:
+Apply Alembic only through `scripts/api/migrate_release.sh --upgrade <EXPECTED_COMMIT>`. The
+wrapper pins a clean reviewed commit, supplies the complete source package roots needed before the
+new wheel is installed, removes any ambient database URL, uses the fixed protected PostgreSQL
+configuration, and proves the connected database identity owns the `app` schema. API, Catalog,
+worker, and GUI runtime roles never own DDL. After migration, reconcile the Application API and
+Catalog runtime roles from the reviewed source matrices. Catalog receives only the precise legacy
+usage table privileges:
 
 - read and insert on immutable Form/Assembly/Publication/Usage/import rows;
 - update only on logical current-revision headers and the import state header;
@@ -111,7 +115,7 @@ only when the reviewed migration downgrade test remains applicable.
 Use repository-owned installers only:
 
 1. build and inspect the current API/platform/contracts release;
-2. apply migration and exact runtime-role reconciliation;
+2. apply migration with the commit-pinned wrapper and reconcile exact runtime roles;
 3. install the reviewed API release and verify installed imports/provenance;
 4. restart only `eom-api.service` through the installer;
 5. restart `eom-catalog-application-runner.service` because it imports Catalog models/services;
