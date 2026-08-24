@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/evidence-bundle-publication-result/1.0",
+  "title": "EOM Evidence Bundle Publication Result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_bundle_id",
+    "evidence_bundle_revision_id",
+    "revision_number",
+    "state",
+    "retrieval_request_id",
+    "retrieval_request_sha256",
+    "graph_snapshot",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "manifest_artifact",
+    "manifest_sha256",
+    "budget",
+    "published_at",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "evidence-bundle-publication-result/1.0"},
+    "evidence_bundle_id": {"type": "string", "pattern": "^evidence_[0-9a-f]{32}$"},
+    "evidence_bundle_revision_id": {"type": "string", "pattern": "^evidencerev_[0-9a-f]{32}$"},
+    "revision_number": {"type": "integer", "minimum": 1},
+    "state": {"const": "PUBLISHED"},
+    "retrieval_request_id": {"type": "string", "pattern": "^retrieval_[0-9a-f]{32}$"},
+    "retrieval_request_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "graph_snapshot": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"},
+    "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+    "access_policy_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "manifest_artifact": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"},
+    "manifest_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_count", "item_revision_count", "graph_node_count", "claim_count", "estimated_context_tokens"],
+      "properties": {
+        "document_count": {"type": "integer", "minimum": 0, "maximum": 32},
+        "item_revision_count": {"type": "integer", "minimum": 0, "maximum": 64},
+        "graph_node_count": {"type": "integer", "minimum": 0, "maximum": 256},
+        "claim_count": {"type": "integer", "minimum": 0, "maximum": 128},
+        "estimated_context_tokens": {"type": "integer", "minimum": 0, "maximum": 32000}
+      }
+    },
+    "published_at": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"},
+    "result_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"}
+  }
+}

@@ -114,6 +114,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:209edc85877d14d1b4b8ae99ac6b33b479761e9ed0cb89890b2ec6baf3f70c7f",
         ),
+        "catalog-application-request-v3": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v3.schema.json",
+            "resources/catalog-application/catalog-application-request-v3.schema.json",
+            "3.0",
+            "sha256:f94dcef9b685d830cfe4518ef1f7937e2e1cc14877cdea1c2b3a18064f049494",
+        ),
+        "catalog-application-response-v3": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v3.schema.json",
+            "resources/catalog-application/catalog-application-response-v3.schema.json",
+            "3.0",
+            "sha256:197bdc748aeeee9835e37ce49f6ca350f4c261af12f664e5d7b2ed5749dc40ea",
+        ),
         "knowledge-types": CatalogSchemaResource(
             "schemas/knowledge/knowledge-types-v1.schema.json",
             "resources/knowledge/knowledge-types-v1.schema.json",
@@ -210,17 +222,41 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:2fe24ad351ca7dcd10a9ba7909bf0fe0fe6fb2bf7715ca3dac02d1697cf60d09",
         ),
+        "education-retrieval-access-policy": CatalogSchemaResource(
+            "schemas/knowledge/education-retrieval-access-policy-v1.schema.json",
+            "resources/knowledge/education-retrieval-access-policy-v1.schema.json",
+            "1.0",
+            "sha256:83e7fd1dc6cc78e74f3b35556a1eaf3039745e9d52fce04e46ad254490219afe",
+        ),
         "education-retrieval-request": CatalogSchemaResource(
             "schemas/knowledge/education-retrieval-request-v1.schema.json",
             "resources/knowledge/education-retrieval-request-v1.schema.json",
             "1.0",
             "sha256:92bb7b8aa224a00eb7c2eb6f95d4c94465d8ccc19e4be2de010fc0512a800043",
         ),
+        "education-retrieval-request-v2": CatalogSchemaResource(
+            "schemas/knowledge/education-retrieval-request-v2.schema.json",
+            "resources/knowledge/education-retrieval-request-v2.schema.json",
+            "2.0",
+            "sha256:d73d33141c3df357dc8508630931092d5b4d2f948cc1cd212766d5650caa9062",
+        ),
         "evidence-bundle-manifest": CatalogSchemaResource(
             "schemas/knowledge/evidence-bundle-manifest-v1.schema.json",
             "resources/knowledge/evidence-bundle-manifest-v1.schema.json",
             "1.0",
             "sha256:5a575aa08788eb5a4ec6961c214872b4e6ed103fa0c9db78edcf47b791d9539e",
+        ),
+        "evidence-bundle-manifest-v2": CatalogSchemaResource(
+            "schemas/knowledge/evidence-bundle-manifest-v2.schema.json",
+            "resources/knowledge/evidence-bundle-manifest-v2.schema.json",
+            "2.0",
+            "sha256:a908f3dffd665292e5b171d799e8e1e95faa0ed5a4df3cfdc426c8f4f4bfcdaa",
+        ),
+        "evidence-bundle-publication-result": CatalogSchemaResource(
+            "schemas/knowledge/evidence-bundle-publication-result-v1.schema.json",
+            "resources/knowledge/evidence-bundle-publication-result-v1.schema.json",
+            "1.0",
+            "sha256:2f511f842bea023a3c430e0e40d12e02861c1d39b9cfb7de2691ace32415c654",
         ),
     }
 )

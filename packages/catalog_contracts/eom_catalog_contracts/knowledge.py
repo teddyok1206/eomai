@@ -1241,3 +1241,243 @@ class EvidenceBundleManifest(FrozenModel):
         ):
             raise ValueError("Evidence Bundle counts do not match selected entries")
         return self
+
+
+class EducationRetrievalAccessPolicy(FrozenModel):
+    """Immutable policy bounding one family of graph retrieval requests."""
+
+    schema_version: Literal["education-retrieval-access-policy/1.0"] = (
+        "education-retrieval-access-policy/1.0"
+    )
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    state: Literal["RELEASED"] = "RELEASED"
+    allowed_query_kinds: tuple[
+        Literal["CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE", "ITEM_PREPARATION"],
+        ...,
+    ] = Field(min_length=1, max_length=3)
+    allowed_requester_roles: tuple[Literal["ADMIN", "EDITOR", "REVIEWER", "WORKER"], ...] = Field(
+        min_length=1, max_length=4
+    )
+    allowed_source_classes: tuple[KnowledgeSourceClass, ...] = Field(min_length=1, max_length=5)
+    answer_bearing_roles: tuple[Literal["ADMIN", "EDITOR", "REVIEWER"], ...] = Field(max_length=3)
+    maximum_budget: EvidenceBudget
+    created_at: UtcDatetime
+    content_sha256: Sha256
+
+    @model_validator(mode="after")
+    def policy_is_sorted_closed_and_hashed(self) -> EducationRetrievalAccessPolicy:
+        for values, label in (
+            (self.allowed_query_kinds, "query kinds"),
+            (self.allowed_requester_roles, "requester roles"),
+            (self.allowed_source_classes, "source classes"),
+            (self.answer_bearing_roles, "answer-bearing roles"),
+        ):
+            if tuple(sorted(values)) != values or len(values) != len(set(values)):
+                raise ValueError(f"retrieval policy {label} must be sorted and unique")
+        if not set(self.answer_bearing_roles).issubset(self.allowed_requester_roles):
+            raise ValueError("answer-bearing roles must be allowed requester roles")
+        body = self.model_dump(mode="json", exclude={"content_sha256"})
+        if content_sha256(body) != self.content_sha256:
+            raise ValueError("retrieval access policy hash does not match canonical content")
+        return self
+
+
+PermissionKeyValue = Annotated[
+    str,
+    Field(pattern=r"^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$", min_length=3, max_length=128),
+]
+
+
+class EducationRetrievalRequestV2(FrozenModel):
+    """Resolved request pinning snapshot, policy, caller, permissions, and budgets."""
+
+    schema_version: Literal["education-retrieval-request/2.0"] = "education-retrieval-request/2.0"
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    query_kind: Literal["CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE", "ITEM_PREPARATION"]
+    curriculum_scope: CurriculumRetrievalScope | None
+    topic_keys: tuple[Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$")], ...] = Field(
+        max_length=20
+    )
+    target_item_revision_id: str | None = Field(default=None, pattern=r"^itemrev_[0-9a-f]{32}$")
+    required_item_elements: tuple[
+        Literal["paragraph", "table", "image", "equation", "statement_set", "choice"], ...
+    ] = Field(max_length=8)
+    source_classes: tuple[KnowledgeSourceClass, ...] = Field(min_length=1, max_length=5)
+    retrieval_mode: Literal["HYBRID_LOCAL_MULTIHOP"] = "HYBRID_LOCAL_MULTIHOP"
+    evidence_budget: EvidenceBudget
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: Sha256
+    requester_role: Literal["ADMIN", "EDITOR", "REVIEWER", "WORKER"]
+    requester_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    requester_permission_keys: tuple[PermissionKeyValue, ...] = Field(min_length=1, max_length=128)
+    requester_permissions_sha256: Sha256
+    requested_at: UtcDatetime
+    request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def resolved_request_is_closed_and_hashed(self) -> EducationRetrievalRequestV2:
+        for values, label in (
+            (self.topic_keys, "topic keys"),
+            (self.required_item_elements, "required item elements"),
+            (self.source_classes, "source classes"),
+            (self.requester_permission_keys, "permission keys"),
+        ):
+            if tuple(sorted(values)) != values or len(values) != len(set(values)):
+                raise ValueError(f"retrieval {label} must be sorted and unique")
+        if self.query_kind in {"CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE"} and (
+            self.curriculum_scope is None
+        ):
+            raise ValueError("curriculum retrieval requires a pinned curriculum scope")
+        if self.curriculum_scope is None and not self.topic_keys:
+            raise ValueError("retrieval requires a curriculum scope or controlled topic keys")
+        if self.query_kind == "APPROVED_ITEM_STRUCTURE" and not self.required_item_elements:
+            raise ValueError("item structure retrieval requires item element filters")
+        permissions_hash = content_sha256({"permission_keys": list(self.requester_permission_keys)})
+        if permissions_hash != self.requester_permissions_sha256:
+            raise ValueError("requester permission-set hash does not match canonical content")
+        body = self.model_dump(mode="json", exclude={"request_sha256"})
+        if content_sha256(body) != self.request_sha256:
+            raise ValueError("education retrieval request hash does not match canonical content")
+        return self
+
+
+class EvidenceEntryV2(FrozenModel):
+    evidence_id: str = Field(pattern=r"^evidenceitem_[0-9a-f]{32}$")
+    evidence_kind: Literal["DOCUMENT", "ITEM_REVISION", "CLAIM", "TABLE", "FIGURE", "EQUATION"]
+    use: Literal["GROUNDING", "REFERENCE_PATTERN", "AVOID_COPY"]
+    source: KnowledgeAnalysisSourceV2
+    graph_node_ids: tuple[NodeId, ...] = Field(min_length=1, max_length=16)
+    anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=32)
+    relevance_milli: int = Field(ge=0, le=1000)
+    answer_bearing: bool
+
+    @model_validator(mode="after")
+    def graph_and_anchor_pointers_are_sorted(self) -> EvidenceEntryV2:
+        for values, label in (
+            (self.graph_node_ids, "graph node IDs"),
+            (self.anchor_ids, "anchor IDs"),
+        ):
+            if tuple(sorted(values)) != values or len(values) != len(set(values)):
+                raise ValueError(f"Evidence Bundle {label} must be sorted and unique")
+        if self.answer_bearing and self.use != "AVOID_COPY":
+            raise ValueError("answer-bearing evidence must be marked AVOID_COPY")
+        return self
+
+
+class EvidenceBundleMaterialsV2(FrozenModel):
+    context_markdown: KnowledgeArtifactMemberPointer
+
+    @model_validator(mode="after")
+    def exact_context_member(self) -> EvidenceBundleMaterialsV2:
+        value = self.context_markdown
+        if (
+            value.member_path != "evidence/context.md"
+            or value.media_type != "text/markdown"
+            or value.schema_ref != "eom://schemas/knowledge/evidence-bundle-context/1.0"
+        ):
+            raise ValueError("Evidence Bundle context pointer is incompatible")
+        return self
+
+
+class EvidenceBundleManifestV2(FrozenModel):
+    schema_version: Literal["evidence-bundle-manifest/2.0"] = "evidence-bundle-manifest/2.0"
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    revision_number: int = Field(ge=1)
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    retrieval_request_sha256: Sha256
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: Sha256
+    requester_permissions_sha256: Sha256
+    materials: EvidenceBundleMaterialsV2
+    entries: tuple[EvidenceEntryV2, ...] = Field(min_length=1, max_length=128)
+    budget: EvidenceBundleBudget
+    manifest_sha256: Sha256
+    created_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def manifest_is_deduplicated_bounded_and_hashed(self) -> EvidenceBundleManifestV2:
+        expected_order = tuple(
+            sorted(self.entries, key=lambda item: (-item.relevance_milli, item.evidence_id))
+        )
+        if expected_order != self.entries:
+            raise ValueError("Evidence Bundle entries must use deterministic ranking order")
+        identities = [entry.evidence_id for entry in self.entries]
+        immutable_sources = [
+            (
+                entry.source.source_kind,
+                (
+                    entry.source.source_file_id
+                    if isinstance(entry.source, ContentIntakeKnowledgeSourceV2)
+                    else entry.source.item_revision_id
+                ),
+                entry.source.artifact_member.artifact_revision_id,
+                entry.source.artifact_member.member_path,
+                entry.use,
+            )
+            for entry in self.entries
+        ]
+        if len(identities) != len(set(identities)):
+            raise ValueError("Evidence Bundle entry IDs must be unique")
+        if len(immutable_sources) != len(set(immutable_sources)):
+            raise ValueError("Evidence Bundle cannot duplicate an immutable source for one use")
+        documents = {
+            entry.source.source_file_id
+            for entry in self.entries
+            if isinstance(entry.source, ContentIntakeKnowledgeSourceV2)
+        }
+        items = {
+            entry.source.item_revision_id
+            for entry in self.entries
+            if isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
+        }
+        graph_nodes = {node_id for entry in self.entries for node_id in entry.graph_node_ids}
+        claims = sum(entry.evidence_kind == "CLAIM" for entry in self.entries)
+        if (len(documents), len(items), len(graph_nodes), claims) != (
+            self.budget.document_count,
+            self.budget.item_revision_count,
+            self.budget.graph_node_count,
+            self.budget.claim_count,
+        ):
+            raise ValueError("Evidence Bundle counts do not match selected entries")
+        body = self.model_dump(mode="json", exclude={"manifest_sha256"})
+        if content_sha256(body) != self.manifest_sha256:
+            raise ValueError("Evidence Bundle manifest hash does not match canonical content")
+        return self
+
+
+class EvidenceBundlePublicationResult(FrozenModel):
+    schema_version: Literal["evidence-bundle-publication-result/1.0"] = (
+        "evidence-bundle-publication-result/1.0"
+    )
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    revision_number: int = Field(ge=1)
+    state: Literal["PUBLISHED"] = "PUBLISHED"
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    retrieval_request_sha256: Sha256
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: Sha256
+    manifest_artifact: KnowledgeArtifactMemberPointer
+    manifest_sha256: Sha256
+    budget: EvidenceBundleBudget
+    published_at: UtcDatetime
+    result_sha256: Sha256
+
+    @model_validator(mode="after")
+    def result_is_pointer_only_and_hashed(self) -> EvidenceBundlePublicationResult:
+        if (
+            self.manifest_artifact.member_path != "evidence/manifest.json"
+            or self.manifest_artifact.media_type != "application/json"
+            or self.manifest_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-manifest/2.0"
+            or self.manifest_artifact.sha256 != self.manifest_sha256
+        ):
+            raise ValueError("Evidence Bundle manifest Artifact pointer is incompatible")
+        body = self.model_dump(mode="json", exclude={"result_sha256"})
+        if content_sha256(body) != self.result_sha256:
+            raise ValueError("Evidence Bundle publication result hash does not match content")
+        return self

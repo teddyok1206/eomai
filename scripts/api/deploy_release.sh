@@ -377,6 +377,8 @@ catalog_resources = {
     "catalog-application/catalog-application-response-v1.schema.json": "schemas/catalog-application/catalog-application-response-v1.schema.json",
     "catalog-application/catalog-application-request-v2.schema.json": "schemas/catalog-application/catalog-application-request-v2.schema.json",
     "catalog-application/catalog-application-response-v2.schema.json": "schemas/catalog-application/catalog-application-response-v2.schema.json",
+    "catalog-application/catalog-application-request-v3.schema.json": "schemas/catalog-application/catalog-application-request-v3.schema.json",
+    "catalog-application/catalog-application-response-v3.schema.json": "schemas/catalog-application/catalog-application-response-v3.schema.json",
     "content-intake/intake-manifest-v1.schema.json": "schemas/content-intake/intake-manifest-v1.schema.json",
     "content-intake/mapping-proposal-v1.schema.json": "schemas/content-intake/mapping-proposal-v1.schema.json",
     "content-intake/uncertainties-v1.schema.json": "schemas/content-intake/uncertainties-v1.schema.json",
@@ -403,8 +405,12 @@ catalog_resources = {
     "knowledge/knowledge-graph-snapshot-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
     "knowledge/knowledge-graph-snapshot-manifest-v2.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
     "knowledge/knowledge-graph-structure-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v1.schema.json",
+    "knowledge/education-retrieval-access-policy-v1.schema.json": "schemas/knowledge/education-retrieval-access-policy-v1.schema.json",
     "knowledge/education-retrieval-request-v1.schema.json": "schemas/knowledge/education-retrieval-request-v1.schema.json",
+    "knowledge/education-retrieval-request-v2.schema.json": "schemas/knowledge/education-retrieval-request-v2.schema.json",
     "knowledge/evidence-bundle-manifest-v1.schema.json": "schemas/knowledge/evidence-bundle-manifest-v1.schema.json",
+    "knowledge/evidence-bundle-manifest-v2.schema.json": "schemas/knowledge/evidence-bundle-manifest-v2.schema.json",
+    "knowledge/evidence-bundle-publication-result-v1.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v1.schema.json",
 }
 with zipfile.ZipFile(platform_wheel) as archive:
     names = set(archive.namelist())

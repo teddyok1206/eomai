@@ -36,6 +36,27 @@ PHASE8_SCHEMA_SHA256 = {
     ),
 }
 
+PHASE9_SCHEMA_SHA256 = {
+    "catalog-application-request-v3": (
+        "sha256:f94dcef9b685d830cfe4518ef1f7937e2e1cc14877cdea1c2b3a18064f049494"
+    ),
+    "catalog-application-response-v3": (
+        "sha256:197bdc748aeeee9835e37ce49f6ca350f4c261af12f664e5d7b2ed5749dc40ea"
+    ),
+    "education-retrieval-access-policy": (
+        "sha256:83e7fd1dc6cc78e74f3b35556a1eaf3039745e9d52fce04e46ad254490219afe"
+    ),
+    "education-retrieval-request-v2": (
+        "sha256:d73d33141c3df357dc8508630931092d5b4d2f948cc1cd212766d5650caa9062"
+    ),
+    "evidence-bundle-manifest-v2": (
+        "sha256:a908f3dffd665292e5b171d799e8e1e95faa0ed5a4df3cfdc426c8f4f4bfcdaa"
+    ),
+    "evidence-bundle-publication-result": (
+        "sha256:2f511f842bea023a3c430e0e40d12e02861c1d39b9cfb7de2691ace32415c654"
+    ),
+}
+
 
 def _prompt_envelope() -> dict[str, object]:
     return {
@@ -57,7 +78,7 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 32
+    assert len(entries) == 38
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     for name, entry in entries:
@@ -72,6 +93,11 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
 def test_phase8_graph_contract_bytes_are_pinned_before_publication() -> None:
     inventory = dict(catalog_schema_inventory())
     assert {name: inventory[name].sha256 for name in PHASE8_SCHEMA_SHA256} == PHASE8_SCHEMA_SHA256
+
+
+def test_phase9_retrieval_contract_bytes_are_pinned_before_publication() -> None:
+    inventory = dict(catalog_schema_inventory())
+    assert {name: inventory[name].sha256 for name in PHASE9_SCHEMA_SHA256} == PHASE9_SCHEMA_SHA256
 
 
 def test_prompt_envelope_validates_and_invalid_fixture_is_rejected() -> None:

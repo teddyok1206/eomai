@@ -5,9 +5,17 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Literal
 
+from eom_identifiers import content_sha256
 from pydantic import Field, RootModel, field_validator, model_validator
 
 from eom_catalog_contracts.assessment_item import AssessmentItemContent
+from eom_catalog_contracts.knowledge import (
+    CurriculumRetrievalScope,
+    EvidenceBudget,
+    EvidenceBundlePublicationResult,
+    KnowledgeSourceClass,
+    PermissionKeyValue,
+)
 from eom_catalog_contracts.models import ActorId, FrozenModel
 
 ItemRevisionId = Annotated[str, Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")]
@@ -109,12 +117,58 @@ class ReviewKnowledgeAnalysisCommand(FrozenModel):
         return value
 
 
+class CreateEvidenceBundleCommand(FrozenModel):
+    operation: Literal["CREATE_EVIDENCE_BUNDLE"] = "CREATE_EVIDENCE_BUNDLE"
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    query_kind: Literal["CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE", "ITEM_PREPARATION"]
+    curriculum_scope: CurriculumRetrievalScope | None
+    topic_keys: tuple[Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$")], ...] = Field(
+        max_length=20
+    )
+    target_item_revision_id: str | None = Field(default=None, pattern=r"^itemrev_[0-9a-f]{32}$")
+    required_item_elements: tuple[
+        Literal["paragraph", "table", "image", "equation", "statement_set", "choice"], ...
+    ] = Field(max_length=8)
+    source_classes: tuple[KnowledgeSourceClass, ...] = Field(min_length=1, max_length=5)
+    evidence_budget: EvidenceBudget
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    requester_role: Literal["ADMIN", "EDITOR", "REVIEWER", "WORKER"]
+    requester_permission_keys: tuple[PermissionKeyValue, ...] = Field(min_length=1, max_length=128)
+    requested_by: ActorId
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[\x21-\x7e]+$")
+    submission_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def command_is_closed_and_hashed(self) -> CreateEvidenceBundleCommand:
+        for values, label in (
+            (self.topic_keys, "topic keys"),
+            (self.required_item_elements, "required item elements"),
+            (self.source_classes, "source classes"),
+            (self.requester_permission_keys, "permission keys"),
+        ):
+            if tuple(sorted(values)) != values or len(values) != len(set(values)):
+                raise ValueError(f"evidence command {label} must be sorted and unique")
+        if self.query_kind in {"CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE"} and (
+            self.curriculum_scope is None
+        ):
+            raise ValueError("curriculum evidence command requires a pinned scope")
+        if self.curriculum_scope is None and not self.topic_keys:
+            raise ValueError("evidence command requires curriculum scope or topic keys")
+        if self.query_kind == "APPROVED_ITEM_STRUCTURE" and not self.required_item_elements:
+            raise ValueError("item structure evidence requires element filters")
+        body = self.model_dump(mode="json", exclude={"idempotency_key", "submission_sha256"})
+        if content_sha256(body) != self.submission_sha256:
+            raise ValueError("evidence command hash does not match canonical input")
+        return self
+
+
 CatalogApplicationRequestValue = Annotated[
     ReviewedItemContentImportCommand
     | ItemContentQuery
     | CreateKnowledgeAnalysisCommand
     | ReconcileKnowledgeAnalysisCommand
-    | ReviewKnowledgeAnalysisCommand,
+    | ReviewKnowledgeAnalysisCommand
+    | CreateEvidenceBundleCommand,
     Field(discriminator="operation"),
 ]
 
@@ -162,9 +216,11 @@ class CatalogApplicationResponse(FrozenModel):
         "CREATE_KNOWLEDGE_ANALYSIS",
         "RECONCILE_KNOWLEDGE_ANALYSIS",
         "REVIEW_KNOWLEDGE_ANALYSIS",
+        "CREATE_EVIDENCE_BUNDLE",
     ]
     result: ReviewedItemContentImportResult | None = None
     analysis: KnowledgeAnalysisApplicationResult | None = None
+    evidence: EvidenceBundlePublicationResult | None = None
     content: AssessmentItemContent | None = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
 
@@ -172,7 +228,13 @@ class CatalogApplicationResponse(FrozenModel):
     def exact_variant(self) -> CatalogApplicationResponse:
         present = sum(
             value is not None
-            for value in (self.result, self.analysis, self.content, self.error_code)
+            for value in (
+                self.result,
+                self.analysis,
+                self.evidence,
+                self.content,
+                self.error_code,
+            )
         )
         if present != 1:
             raise ValueError("catalog application response must contain exactly one payload")
@@ -196,4 +258,6 @@ class CatalogApplicationResponse(FrozenModel):
             and self.analysis is None
         ):
             raise ValueError("knowledge analysis response requires analysis result")
+        if self.operation == "CREATE_EVIDENCE_BUNDLE" and self.evidence is None:
+            raise ValueError("evidence creation response requires publication result")
         return self

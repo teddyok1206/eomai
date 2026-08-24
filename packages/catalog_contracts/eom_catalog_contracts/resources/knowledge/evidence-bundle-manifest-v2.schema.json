@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+  "title": "EOM Evidence Bundle Manifest V2",
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "evidence_kind", "use", "source", "graph_node_ids", "anchor_ids", "relevance_milli", "answer_bearing"],
+      "properties": {
+        "evidence_id": {"type": "string", "pattern": "^evidenceitem_[0-9a-f]{32}$"},
+        "evidence_kind": {"enum": ["DOCUMENT", "ITEM_REVISION", "CLAIM", "TABLE", "FIGURE", "EQUATION"]},
+        "use": {"enum": ["GROUNDING", "REFERENCE_PATTERN", "AVOID_COPY"]},
+        "source": {"$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/analysisSource"},
+        "graph_node_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"}
+        },
+        "anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"}
+        },
+        "relevance_milli": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "answer_bearing": {"type": "boolean"}
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_count", "item_revision_count", "graph_node_count", "claim_count", "estimated_context_tokens"],
+      "properties": {
+        "document_count": {"type": "integer", "minimum": 0, "maximum": 32},
+        "item_revision_count": {"type": "integer", "minimum": 0, "maximum": 64},
+        "graph_node_count": {"type": "integer", "minimum": 0, "maximum": 256},
+        "claim_count": {"type": "integer", "minimum": 0, "maximum": 128},
+        "estimated_context_tokens": {"type": "integer", "minimum": 0, "maximum": 32000}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_bundle_id",
+    "evidence_bundle_revision_id",
+    "revision_number",
+    "retrieval_request_id",
+    "retrieval_request_sha256",
+    "graph_snapshot",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "requester_permissions_sha256",
+    "materials",
+    "entries",
+    "budget",
+    "manifest_sha256",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "evidence-bundle-manifest/2.0"},
+    "evidence_bundle_id": {"type": "string", "pattern": "^evidence_[0-9a-f]{32}$"},
+    "evidence_bundle_revision_id": {"type": "string", "pattern": "^evidencerev_[0-9a-f]{32}$"},
+    "revision_number": {"type": "integer", "minimum": 1},
+    "retrieval_request_id": {"type": "string", "pattern": "^retrieval_[0-9a-f]{32}$"},
+    "retrieval_request_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "graph_snapshot": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"},
+    "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+    "access_policy_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "requester_permissions_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "materials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["context_markdown"],
+      "properties": {
+        "context_markdown": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"}
+      }
+    },
+    "entries": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"$ref": "#/$defs/entry"}},
+    "budget": {"$ref": "#/$defs/budget"},
+    "manifest_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "created_at": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"}
+  }
+}

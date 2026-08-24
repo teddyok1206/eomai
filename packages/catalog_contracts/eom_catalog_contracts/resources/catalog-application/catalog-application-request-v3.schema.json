@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-request-v3",
+  "title": "EOM Catalog Application Request V3",
+  "$defs": {
+    "actorId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 128,
+      "pattern": "^[!-~]+$"
+    },
+    "analysisRunId": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+    "analysisSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_kind", "source_class", "intake_batch_id", "source_file_id"],
+          "properties": {
+            "source_kind": {"const": "CONTENT_INTAKE_FILE"},
+            "source_class": {
+              "enum": ["CURRICULUM", "TEXTBOOK", "PAST_EXAM", "INTERNAL_GUIDE"]
+            },
+            "intake_batch_id": {"type": "string", "pattern": "^intake_[0-9a-f]{32}$"},
+            "source_file_id": {"type": "string", "pattern": "^sourcefile_[0-9a-f]{32}$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_kind", "source_class", "item_revision_id"],
+          "properties": {
+            "source_kind": {"const": "APPROVED_ITEM_REVISION"},
+            "source_class": {"enum": ["APPROVED_ITEM", "PAST_EXAM"]},
+            "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"}
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "base_revision_id", "expected_version", "reviewed_by", "review_reason", "content"],
+      "properties": {
+        "operation": {"const": "IMPORT_REVIEWED_ITEM_CONTENT"},
+        "base_revision_id": {"type": "string", "pattern": "^itemrev_[a-z0-9]{8,55}$"},
+        "expected_version": {"type": "integer", "minimum": 1},
+        "reviewed_by": {"$ref": "#/$defs/actorId"},
+        "review_reason": {"type": "string", "minLength": 10, "maxLength": 2000},
+        "content": {"$ref": "eom://schemas/item-registry/assessment-item-content-v1"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "item_revision_id"],
+      "properties": {
+        "operation": {"const": "GET_ITEM_CONTENT"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[a-z0-9]{8,55}$"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "source", "preset_key", "general_knowledge_mode", "risk_policy_revision_id", "predecessor_analysis_run_id", "requested_by", "idempotency_key"],
+      "properties": {
+        "operation": {"const": "CREATE_KNOWLEDGE_ANALYSIS"},
+        "source": {"$ref": "#/$defs/analysisSource"},
+        "preset_key": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+        "general_knowledge_mode": {"enum": ["DISABLED", "AUXILIARY_UNATTRIBUTED"]},
+        "risk_policy_revision_id": {
+          "type": "string",
+          "pattern": "^analysisriskrev_[0-9a-f]{32}$"
+        },
+        "predecessor_analysis_run_id": {
+          "anyOf": [
+            {"$ref": "#/$defs/analysisRunId"},
+            {"type": "null"}
+          ]
+        },
+        "requested_by": {"$ref": "#/$defs/actorId"},
+        "idempotency_key": {"$ref": "#/$defs/idempotencyKey"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "analysis_run_id", "requested_by"],
+      "properties": {
+        "operation": {"const": "RECONCILE_KNOWLEDGE_ANALYSIS"},
+        "analysis_run_id": {"$ref": "#/$defs/analysisRunId"},
+        "requested_by": {"$ref": "#/$defs/actorId"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "analysis_run_id", "expected_version", "decision", "notes", "decided_by", "idempotency_key"],
+      "properties": {
+        "operation": {"const": "REVIEW_KNOWLEDGE_ANALYSIS"},
+        "analysis_run_id": {"$ref": "#/$defs/analysisRunId"},
+        "expected_version": {"type": "integer", "minimum": 1},
+        "decision": {"enum": ["APPROVE", "REJECT"]},
+        "notes": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "decided_by": {"$ref": "#/$defs/actorId"},
+        "idempotency_key": {"$ref": "#/$defs/idempotencyKey"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "graph_snapshot_revision_id",
+        "query_kind",
+        "curriculum_scope",
+        "topic_keys",
+        "target_item_revision_id",
+        "required_item_elements",
+        "source_classes",
+        "evidence_budget",
+        "access_policy_revision_id",
+        "requester_role",
+        "requester_permission_keys",
+        "requested_by",
+        "idempotency_key",
+        "submission_sha256"
+      ],
+      "properties": {
+        "operation": {"const": "CREATE_EVIDENCE_BUNDLE"},
+        "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+        "query_kind": {"enum": ["CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE", "ITEM_PREPARATION"]},
+        "curriculum_scope": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["framework_revision_id", "root_unit_id", "include_descendants"],
+              "properties": {
+                "framework_revision_id": {"type": "string", "pattern": "^curriculumrev_[0-9a-f]{32}$"},
+                "root_unit_id": {"type": "string", "pattern": "^currunit_[0-9a-f]{32}$"},
+                "include_descendants": {"type": "boolean"}
+              }
+            },
+            {"type": "null"}
+          ]
+        },
+        "topic_keys": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"}
+        },
+        "target_item_revision_id": {
+          "anyOf": [
+            {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+            {"type": "null"}
+          ]
+        },
+        "required_item_elements": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"enum": ["paragraph", "table", "image", "equation", "statement_set", "choice"]}
+        },
+        "source_classes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {"enum": ["CURRICULUM", "TEXTBOOK", "APPROVED_ITEM", "PAST_EXAM", "INTERNAL_GUIDE"]}
+        },
+        "evidence_budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_documents", "max_item_revisions", "max_graph_nodes", "max_claims", "max_context_tokens"],
+          "properties": {
+            "max_documents": {"type": "integer", "minimum": 1, "maximum": 32},
+            "max_item_revisions": {"type": "integer", "minimum": 0, "maximum": 64},
+            "max_graph_nodes": {"type": "integer", "minimum": 1, "maximum": 256},
+            "max_claims": {"type": "integer", "minimum": 1, "maximum": 128},
+            "max_context_tokens": {"type": "integer", "minimum": 1000, "maximum": 32000}
+          }
+        },
+        "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+        "requester_role": {"enum": ["ADMIN", "EDITOR", "REVIEWER", "WORKER"]},
+        "requester_permission_keys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$", "maxLength": 128}
+        },
+        "requested_by": {"$ref": "#/$defs/actorId"},
+        "idempotency_key": {"$ref": "#/$defs/idempotencyKey"},
+        "submission_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    }
+  ]
+}
