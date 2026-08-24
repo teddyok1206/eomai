@@ -1,0 +1,93 @@
+{
+  "schema_version": "legacy-source-inventory-policy/1.0",
+  "policy_revision_id": "legacyinventorypolicyrev_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "scanner_version": "1.0.0",
+  "limits": {
+    "max_observations": 5000,
+    "max_candidate_bytes": 4294967296,
+    "max_file_bytes": 536870912,
+    "max_depth": 16,
+    "max_path_length": 500,
+    "signature_scan_bytes": 65536
+  },
+  "classification_rules": [
+    {
+      "rule_id": "legacyinventoryrule_11111111111111111111111111111111",
+      "root_alias": "EOMIS_LEGACY_SOURCE",
+      "relative_prefix": "assessment/derived",
+      "preliminary_class": "DERIVED_MIGRATION_EVIDENCE",
+      "source_family": "DERIVED_EVIDENCE",
+      "allowed_suffixes": [".json", ".md", ".png"]
+    },
+    {
+      "rule_id": "legacyinventoryrule_22222222222222222222222222222222",
+      "root_alias": "EOMIS_LEGACY_SOURCE",
+      "relative_prefix": "assessment/originals",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [".hwp", ".hwpx", ".pdf"]
+    },
+    {
+      "rule_id": "legacyinventoryrule_33333333333333333333333333333333",
+      "root_alias": "EOMIS_LEGACY_SOURCE",
+      "relative_prefix": "knowledge/curriculum/originals",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "CURRICULUM",
+      "allowed_suffixes": [".pdf"]
+    },
+    {
+      "rule_id": "legacyinventoryrule_44444444444444444444444444444444",
+      "root_alias": "EOMIS_LEGACY_SOURCE",
+      "relative_prefix": "knowledge/derived",
+      "preliminary_class": "DERIVED_MIGRATION_EVIDENCE",
+      "source_family": "DERIVED_EVIDENCE",
+      "allowed_suffixes": [".json", ".md", ".png"]
+    },
+    {
+      "rule_id": "legacyinventoryrule_55555555555555555555555555555555",
+      "root_alias": "EOMIS_LEGACY_SOURCE",
+      "relative_prefix": "knowledge/textbooks/originals",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "TEXTBOOK",
+      "allowed_suffixes": [".pdf"]
+    },
+    {
+      "rule_id": "legacyinventoryrule_66666666666666666666666666666666",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "derived",
+      "preliminary_class": "DERIVED_MIGRATION_EVIDENCE",
+      "source_family": "DERIVED_EVIDENCE",
+      "allowed_suffixes": [".json", ".md", ".png"]
+    },
+    {
+      "rule_id": "legacyinventoryrule_77777777777777777777777777777777",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "uploads/originals",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "REFERENCE_BOOK",
+      "allowed_suffixes": [".pdf"]
+    }
+  ],
+  "exclusion_rules": [
+    {"match_kind": "BASENAME", "value": ".env", "reason": "SECRET_OR_CREDENTIAL"},
+    {"match_kind": "BASENAME", "value": "credentials.json", "reason": "SECRET_OR_CREDENTIAL"},
+    {"match_kind": "PATH_SEGMENT", "value": ".cache", "reason": "CACHE_TEMP_OR_LOCK"},
+    {"match_kind": "PATH_SEGMENT", "value": ".git", "reason": "VERSION_CONTROL_METADATA"},
+    {"match_kind": "PATH_SEGMENT", "value": "__pycache__", "reason": "CACHE_TEMP_OR_LOCK"},
+    {"match_kind": "SUFFIX", "value": ".bak", "reason": "CACHE_TEMP_OR_LOCK"},
+    {"match_kind": "SUFFIX", "value": ".ckpt", "reason": "MODEL_OR_CHECKPOINT"},
+    {"match_kind": "SUFFIX", "value": ".db", "reason": "RUNTIME_DATABASE_OR_INDEX"},
+    {"match_kind": "SUFFIX", "value": ".index", "reason": "RUNTIME_DATABASE_OR_INDEX"},
+    {"match_kind": "SUFFIX", "value": ".key", "reason": "SECRET_OR_CREDENTIAL"},
+    {"match_kind": "SUFFIX", "value": ".lock", "reason": "CACHE_TEMP_OR_LOCK"},
+    {"match_kind": "SUFFIX", "value": ".pem", "reason": "SECRET_OR_CREDENTIAL"},
+    {"match_kind": "SUFFIX", "value": ".pt", "reason": "MODEL_OR_CHECKPOINT"},
+    {"match_kind": "SUFFIX", "value": ".pth", "reason": "MODEL_OR_CHECKPOINT"},
+    {"match_kind": "SUFFIX", "value": ".safetensors", "reason": "MODEL_OR_CHECKPOINT"},
+    {"match_kind": "SUFFIX", "value": ".sqlite", "reason": "RUNTIME_DATABASE_OR_INDEX"},
+    {"match_kind": "SUFFIX", "value": ".sqlite-shm", "reason": "RUNTIME_DATABASE_OR_INDEX"},
+    {"match_kind": "SUFFIX", "value": ".sqlite-wal", "reason": "RUNTIME_DATABASE_OR_INDEX"},
+    {"match_kind": "SUFFIX", "value": ".tmp", "reason": "CACHE_TEMP_OR_LOCK"}
+  ],
+  "policy_sha256": "sha256:956acee0036faac465a2ee75e258f3a789a9bbda8b696214b078cde5b81cf9aa"
+}

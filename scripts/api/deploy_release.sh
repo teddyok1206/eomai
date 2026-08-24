@@ -253,6 +253,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_workflow_runner/repository.py",
         "eomctl/cli.py",
         "eomctl/control_plane.py",
+        "eomctl/knowledge.py",
     }
     catalog_staging_runtime = {
         "eom_catalog_contracts/assessment_item.py",
@@ -272,6 +273,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/legacy_usage_models.py",
         "eom_catalog_service/legacy_usage_service.py",
         "eom_catalog_service/legacy_xlsx.py",
+        "eom_catalog_service/legacy_knowledge_intake_service.py",
+        "eom_catalog_service/legacy_source_inventory.py",
         "eom_catalog_service/settings.py",
         "eom_catalog_service/staging.py",
         "eom_catalog_service/registry_service.py",
@@ -421,6 +424,8 @@ catalog_resources = {
     "knowledge/educational-retrieval-requirement-v1.schema.json": "schemas/knowledge/educational-retrieval-requirement-v1.schema.json",
     "knowledge/evidence-bundle-publication-result-v2.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v2.schema.json",
     "legacy-knowledge/legacy-source-inventory-v1.schema.json": "schemas/legacy-knowledge/legacy-source-inventory-v1.schema.json",
+    "legacy-knowledge/legacy-source-inventory-policy-v1.schema.json": "schemas/legacy-knowledge/legacy-source-inventory-policy-v1.schema.json",
+    "legacy-knowledge/legacy-source-inventory-v2.schema.json": "schemas/legacy-knowledge/legacy-source-inventory-v2.schema.json",
     "legacy-knowledge/legacy-source-relation-manifest-v1.schema.json": "schemas/legacy-knowledge/legacy-source-relation-manifest-v1.schema.json",
     "legacy-knowledge/legacy-source-rights-review-v1.schema.json": "schemas/legacy-knowledge/legacy-source-rights-review-v1.schema.json",
     "legacy-knowledge/legacy-source-selection-v1.schema.json": "schemas/legacy-knowledge/legacy-source-selection-v1.schema.json",

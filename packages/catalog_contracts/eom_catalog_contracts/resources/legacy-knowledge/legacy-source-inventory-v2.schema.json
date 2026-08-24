@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-knowledge/legacy-source-inventory/2.0",
+  "title": "EOM Legacy Source Inventory V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "inventory_id", "observed_at", "scanner_version",
+    "scanner_policy_revision_id", "scanner_policy_sha256", "root_alias",
+    "root_configuration_sha256", "entries", "summary", "source_set_sha256",
+    "inventory_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-source-inventory/2.0"},
+    "inventory_id": {"type": "string", "pattern": "^legacyinventory_[0-9a-f]{32}$"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "scanner_version": {"const": "1.0.0"},
+    "scanner_policy_revision_id": {"type": "string", "pattern": "^legacyinventorypolicyrev_[0-9a-f]{32}$"},
+    "scanner_policy_sha256": {"$ref": "#/$defs/sha256"},
+    "root_alias": {"enum": ["EOMIS_LEGACY_SOURCE", "EOM_AI_SERVER_LEGACY_SOURCE"]},
+    "root_configuration_sha256": {"$ref": "#/$defs/sha256"},
+    "entries": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {"$ref": "#/$defs/entry"}
+    },
+    "summary": {"$ref": "#/$defs/summary"},
+    "source_set_sha256": {"$ref": "#/$defs/sha256"},
+    "inventory_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "mediaType": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"},
+    "classSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_count", "byte_count"],
+      "properties": {
+        "file_count": {"type": "integer", "minimum": 0, "maximum": 5000},
+        "byte_count": {"type": "integer", "minimum": 0, "maximum": 1152921504606846976}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "original_source_candidates", "derived_migration_evidence",
+        "excluded_runtime_state", "total_file_count", "total_byte_count"
+      ],
+      "properties": {
+        "original_source_candidates": {"$ref": "#/$defs/classSummary"},
+        "derived_migration_evidence": {"$ref": "#/$defs/classSummary"},
+        "excluded_runtime_state": {"$ref": "#/$defs/classSummary"},
+        "total_file_count": {"type": "integer", "minimum": 0, "maximum": 5000},
+        "total_byte_count": {"type": "integer", "minimum": 0, "maximum": 1152921504606846976}
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_key", "relative_path", "file_observation", "size_bytes", "media_type",
+        "content_sha256", "preliminary_class", "source_family", "canonicality",
+        "rights_state", "relation_group_key", "exclusion_reasons"
+      ],
+      "properties": {
+        "entry_key": {"type": "string", "pattern": "^legacyentry_[0-9a-f]{32}$"},
+        "relative_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "file_observation": {"enum": ["REGULAR", "SYMLINK", "HARDLINK", "SPECIAL", "UNREADABLE"]},
+        "size_bytes": {"type": "integer", "minimum": 0, "maximum": 1125899906842624},
+        "media_type": {"anyOf": [{"$ref": "#/$defs/mediaType"}, {"type": "null"}]},
+        "content_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "preliminary_class": {"enum": ["ORIGINAL_SOURCE_CANDIDATE", "DERIVED_MIGRATION_EVIDENCE", "EXCLUDED_RUNTIME_STATE"]},
+        "source_family": {"enum": ["CURRICULUM", "TEXTBOOK", "REFERENCE_BOOK", "GUIDANCE", "ITEM", "USAGE_WORKBOOK", "DERIVED_EVIDENCE", "EXCLUDED"]},
+        "canonicality": {"enum": ["ORIGINAL", "DERIVED", "UNKNOWN"]},
+        "rights_state": {"enum": ["UNREVIEWED", "CLEARED_INTERNAL", "CLEARED_LICENSED", "RESTRICTED", "REJECTED"]},
+        "relation_group_key": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+            {"type": "null"}
+          ]
+        },
+        "exclusion_reasons": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "SECRET_OR_CREDENTIAL", "VERSION_CONTROL_METADATA", "RUNTIME_DATABASE_OR_INDEX",
+              "MODEL_OR_CHECKPOINT", "CACHE_TEMP_OR_LOCK", "GENERATED_OUTPUT", "UNSUPPORTED_MEDIA",
+              "UNSAFE_PATH", "SYMLINK", "HARDLINK", "SPECIAL_FILE", "UNREADABLE",
+              "SIZE_LIMIT", "RIGHTS_REJECTED", "OUTSIDE_ALLOWLIST"
+            ]
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"preliminary_class": {"const": "ORIGINAL_SOURCE_CANDIDATE"}}},
+          "then": {
+            "properties": {
+              "file_observation": {"const": "REGULAR"},
+              "content_sha256": {"$ref": "#/$defs/sha256"},
+              "media_type": {"$ref": "#/$defs/mediaType"},
+              "canonicality": {"const": "ORIGINAL"},
+              "source_family": {"enum": ["CURRICULUM", "TEXTBOOK", "REFERENCE_BOOK", "GUIDANCE", "ITEM", "USAGE_WORKBOOK"]},
+              "exclusion_reasons": {"maxItems": 0}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"preliminary_class": {"const": "DERIVED_MIGRATION_EVIDENCE"}}},
+          "then": {
+            "properties": {
+              "file_observation": {"const": "REGULAR"},
+              "content_sha256": {"$ref": "#/$defs/sha256"},
+              "media_type": {"$ref": "#/$defs/mediaType"},
+              "canonicality": {"const": "DERIVED"},
+              "source_family": {"const": "DERIVED_EVIDENCE"},
+              "rights_state": {"enum": ["UNREVIEWED", "RESTRICTED", "REJECTED"]},
+              "exclusion_reasons": {"maxItems": 0}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "preliminary_class": {"const": "ORIGINAL_SOURCE_CANDIDATE"},
+              "source_family": {"enum": ["TEXTBOOK", "REFERENCE_BOOK"]}
+            },
+            "required": ["preliminary_class", "source_family"]
+          },
+          "then": {"properties": {"media_type": {"const": "application/pdf"}}}
+        },
+        {
+          "if": {"properties": {"preliminary_class": {"const": "EXCLUDED_RUNTIME_STATE"}}},
+          "then": {
+            "properties": {
+              "canonicality": {"enum": ["DERIVED", "UNKNOWN"]},
+              "source_family": {"const": "EXCLUDED"},
+              "rights_state": {"enum": ["UNREVIEWED", "RESTRICTED", "REJECTED"]},
+              "exclusion_reasons": {"minItems": 1}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

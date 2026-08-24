@@ -72,6 +72,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:7fdce3b0bfeab4248c546d3eb6404fc9ddc8a5f340b31d48d3e4f3ac70954411",
         ),
+        "legacy-source-inventory-policy": CatalogSchemaResource(
+            "schemas/legacy-knowledge/legacy-source-inventory-policy-v1.schema.json",
+            "resources/legacy-knowledge/legacy-source-inventory-policy-v1.schema.json",
+            "1.0",
+            "sha256:a48a917eeeb5460404c58f8ca12bdf6bcf0b70a15cbec88fa7398442bd79c742",
+        ),
+        "legacy-source-inventory-v2": CatalogSchemaResource(
+            "schemas/legacy-knowledge/legacy-source-inventory-v2.schema.json",
+            "resources/legacy-knowledge/legacy-source-inventory-v2.schema.json",
+            "2.0",
+            "sha256:ecb02a261d523e640cda1d11118b988c1d5038e020429e959856eb08c65979e7",
+        ),
         "legacy-source-relation-manifest": CatalogSchemaResource(
             "schemas/legacy-knowledge/legacy-source-relation-manifest-v1.schema.json",
             "resources/legacy-knowledge/legacy-source-relation-manifest-v1.schema.json",

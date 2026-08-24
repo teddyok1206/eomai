@@ -129,6 +129,8 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "knowledge/educational-retrieval-requirement-v1.schema.json",
         "knowledge/evidence-bundle-publication-result-v2.schema.json",
         "legacy-knowledge/legacy-source-inventory-v1.schema.json",
+        "legacy-knowledge/legacy-source-inventory-policy-v1.schema.json",
+        "legacy-knowledge/legacy-source-inventory-v2.schema.json",
         "legacy-knowledge/legacy-source-relation-manifest-v1.schema.json",
         "legacy-knowledge/legacy-source-rights-review-v1.schema.json",
         "legacy-knowledge/legacy-source-selection-v1.schema.json",
@@ -154,6 +156,9 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "eom_catalog_service/knowledge_analysis_sources.py",
         "eom_catalog_service/legacy_usage_models.py",
         "eom_catalog_service/legacy_usage_service.py",
+        "eom_catalog_service/legacy_knowledge_intake_service.py",
+        "eom_catalog_service/legacy_source_inventory.py",
+        "eomctl/knowledge.py",
         "eom_catalog_service/legacy_xlsx.py",
         "eom_catalog_service/runtime_privileges.py",
     ):

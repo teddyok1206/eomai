@@ -1,6 +1,8 @@
 # EOMIS Legacy Knowledge Integration Plan
 
-Status: `PLANNED`; read-only inventory and architecture mapping are complete. No EOMIS file,
+Status: `PHASE_2_SOURCE_COMPLETE`; read-only baseline mapping, additive contracts, and the synthetic
+scanner/dry-run implementation are complete. The separately reviewed real-root dry run remains
+pending. No EOMIS file,
 production database row, Artifact, Graph Snapshot, worker prompt, or runtime service was changed by
 this plan.
 
@@ -321,6 +323,13 @@ One immutable scan snapshot. Required fields:
 - total file/byte counts by preliminary class;
 - excluded counts by closed reason code;
 - inventory content hash.
+
+`legacy-source-inventory/1.0` is retained byte-for-byte for historical compatibility. Phase 2 adds
+`legacy-source-inventory/2.0` because V1 included `observed_at` in its self-hash and therefore could
+not satisfy repeated-observation idempotency. V2 adds an explicit stable `source_set_sha256`,
+derives the inventory identity from it, and excludes observation time from the stable domain hash.
+The eventual Artifact manifest hash still protects the complete serialized bytes, including the
+UTC observation time.
 
 Each entry contains:
 
@@ -861,6 +870,10 @@ Exit gate: schema/model parity, canonical serialization, invalid path/class/hash
 and historical hash pins pass.
 
 ### Phase 2 — read-only inventory adapter
+
+Source status: complete against synthetic untrusted fixtures. The checked-in policy is an example
+only; it does not assert real host prefixes. No real legacy root has been scanned and no inventory
+Artifact has been committed.
 
 Work:
 

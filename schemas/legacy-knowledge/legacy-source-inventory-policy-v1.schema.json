@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-knowledge/legacy-source-inventory-policy/1.0",
+  "title": "EOM Legacy Source Inventory Policy V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "policy_revision_id", "scanner_version", "limits",
+    "classification_rules", "exclusion_rules", "policy_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-source-inventory-policy/1.0"},
+    "policy_revision_id": {"type": "string", "pattern": "^legacyinventorypolicyrev_[0-9a-f]{32}$"},
+    "scanner_version": {"const": "1.0.0"},
+    "limits": {"$ref": "#/$defs/limits"},
+    "classification_rules": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/classificationRule"}
+    },
+    "exclusion_rules": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/exclusionRule"}
+    },
+    "policy_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "rootAlias": {"enum": ["EOMIS_LEGACY_SOURCE", "EOM_AI_SERVER_LEGACY_SOURCE"]},
+    "relativePrefix": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "suffix": {
+      "type": "string",
+      "pattern": "^\\.[a-z0-9][a-z0-9.-]{0,15}$"
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_observations", "max_candidate_bytes", "max_file_bytes", "max_depth",
+        "max_path_length", "signature_scan_bytes"
+      ],
+      "properties": {
+        "max_observations": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "max_candidate_bytes": {"type": "integer", "minimum": 1, "maximum": 4294967296},
+        "max_file_bytes": {"type": "integer", "minimum": 1, "maximum": 536870912},
+        "max_depth": {"type": "integer", "minimum": 1, "maximum": 16},
+        "max_path_length": {"type": "integer", "minimum": 32, "maximum": 500},
+        "signature_scan_bytes": {"type": "integer", "minimum": 1024, "maximum": 1048576}
+      }
+    },
+    "classificationRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_id", "root_alias", "relative_prefix", "preliminary_class",
+        "source_family", "allowed_suffixes"
+      ],
+      "properties": {
+        "rule_id": {"type": "string", "pattern": "^legacyinventoryrule_[0-9a-f]{32}$"},
+        "root_alias": {"$ref": "#/$defs/rootAlias"},
+        "relative_prefix": {"$ref": "#/$defs/relativePrefix"},
+        "preliminary_class": {
+          "enum": ["ORIGINAL_SOURCE_CANDIDATE", "DERIVED_MIGRATION_EVIDENCE"]
+        },
+        "source_family": {
+          "enum": [
+            "CURRICULUM", "TEXTBOOK", "REFERENCE_BOOK", "GUIDANCE", "ITEM",
+            "USAGE_WORKBOOK", "DERIVED_EVIDENCE"
+          ]
+        },
+        "allowed_suffixes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/suffix"}
+        }
+      }
+    },
+    "exclusionRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["match_kind", "value", "reason"],
+      "properties": {
+        "match_kind": {"enum": ["PATH_SEGMENT", "BASENAME", "SUFFIX"]},
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^/\\\\\\u0000-\\u001f\\u007f]+$"
+        },
+        "reason": {
+          "enum": [
+            "SECRET_OR_CREDENTIAL", "VERSION_CONTROL_METADATA",
+            "RUNTIME_DATABASE_OR_INDEX", "MODEL_OR_CHECKPOINT", "CACHE_TEMP_OR_LOCK",
+            "GENERATED_OUTPUT", "UNSUPPORTED_MEDIA"
+          ]
+        }
+      }
+    }
+  }
+}

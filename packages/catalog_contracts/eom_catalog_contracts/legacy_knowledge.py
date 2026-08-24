@@ -79,6 +79,14 @@ class LegacyKnowledgeContractErrorCode(StrEnum):
     LEGACY_KNOWLEDGE_RIGHTS_INVALID = "LEGACY_KNOWLEDGE_RIGHTS_INVALID"
     LEGACY_KNOWLEDGE_RELATION_INVALID = "LEGACY_KNOWLEDGE_RELATION_INVALID"
     LEGACY_KNOWLEDGE_PAGE_RANGE_INVALID = "LEGACY_KNOWLEDGE_PAGE_RANGE_INVALID"
+    LEGACY_KNOWLEDGE_CONFIGURATION_INVALID = "LEGACY_KNOWLEDGE_CONFIGURATION_INVALID"
+    LEGACY_KNOWLEDGE_POLICY_INVALID = "LEGACY_KNOWLEDGE_POLICY_INVALID"
+    LEGACY_KNOWLEDGE_ROOT_INVALID = "LEGACY_KNOWLEDGE_ROOT_INVALID"
+    LEGACY_KNOWLEDGE_CAPACITY_EXCEEDED = "LEGACY_KNOWLEDGE_CAPACITY_EXCEEDED"
+    LEGACY_KNOWLEDGE_ROOT_CHANGED = "LEGACY_KNOWLEDGE_ROOT_CHANGED"
+    LEGACY_KNOWLEDGE_FILE_CHANGED = "LEGACY_KNOWLEDGE_FILE_CHANGED"
+    LEGACY_KNOWLEDGE_MEDIA_INVALID = "LEGACY_KNOWLEDGE_MEDIA_INVALID"
+    LEGACY_KNOWLEDGE_OUTPUT_INVALID = "LEGACY_KNOWLEDGE_OUTPUT_INVALID"
 
 
 class LegacyRootAlias(StrEnum):
@@ -141,6 +149,140 @@ class LegacyExclusionReason(StrEnum):
     SIZE_LIMIT = "SIZE_LIMIT"
     RIGHTS_REJECTED = "RIGHTS_REJECTED"
     OUTSIDE_ALLOWLIST = "OUTSIDE_ALLOWLIST"
+
+
+class LegacyInventoryLimits(FrozenModel):
+    max_observations: int = Field(ge=1, le=5000)
+    max_candidate_bytes: int = Field(ge=1, le=4 * 1024 * 1024 * 1024)
+    max_file_bytes: int = Field(ge=1, le=512 * 1024 * 1024)
+    max_depth: int = Field(ge=1, le=16)
+    max_path_length: int = Field(ge=32, le=500)
+    signature_scan_bytes: int = Field(ge=1024, le=1024 * 1024)
+
+
+class LegacyInventoryClassificationRule(FrozenModel):
+    rule_id: str = Field(pattern=r"^legacyinventoryrule_[0-9a-f]{32}$")
+    root_alias: LegacyRootAlias
+    relative_prefix: SafeRelativePath
+    preliminary_class: Literal["ORIGINAL_SOURCE_CANDIDATE", "DERIVED_MIGRATION_EVIDENCE"]
+    source_family: Literal[
+        "CURRICULUM",
+        "TEXTBOOK",
+        "REFERENCE_BOOK",
+        "GUIDANCE",
+        "ITEM",
+        "USAGE_WORKBOOK",
+        "DERIVED_EVIDENCE",
+    ]
+    allowed_suffixes: tuple[str, ...] = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def coherent_rule(self) -> LegacyInventoryClassificationRule:
+        suffixes = tuple(self.allowed_suffixes)
+        if (
+            len(suffixes) != len(set(suffixes))
+            or suffixes != tuple(sorted(suffixes))
+            or any(
+                not suffix.startswith(".")
+                or suffix != suffix.casefold()
+                or len(suffix) > 16
+                or not suffix[1:].replace(".", "").replace("-", "").isalnum()
+                for suffix in suffixes
+            )
+        ):
+            raise ValueError("legacy inventory rule suffixes must be unique, sorted, and safe")
+        if self.preliminary_class == "ORIGINAL_SOURCE_CANDIDATE":
+            if self.source_family == "DERIVED_EVIDENCE":
+                raise ValueError("original inventory rule cannot use derived source family")
+            if self.source_family in {"TEXTBOOK", "REFERENCE_BOOK"} and suffixes != (".pdf",):
+                raise ValueError("textbook and reference-book rules must select only PDF originals")
+        elif self.source_family != "DERIVED_EVIDENCE":
+            raise ValueError("derived inventory rule must use derived source family")
+        return self
+
+
+class LegacyInventoryExclusionRule(FrozenModel):
+    match_kind: Literal["PATH_SEGMENT", "BASENAME", "SUFFIX"]
+    value: str = Field(min_length=1, max_length=128)
+    reason: Literal[
+        "SECRET_OR_CREDENTIAL",
+        "VERSION_CONTROL_METADATA",
+        "RUNTIME_DATABASE_OR_INDEX",
+        "MODEL_OR_CHECKPOINT",
+        "CACHE_TEMP_OR_LOCK",
+        "GENERATED_OUTPUT",
+        "UNSUPPORTED_MEDIA",
+    ]
+
+    @model_validator(mode="after")
+    def safe_match(self) -> LegacyInventoryExclusionRule:
+        if (
+            self.value != unicodedata.normalize("NFC", self.value)
+            or self.value != self.value.casefold()
+            or "/" in self.value
+            or "\\" in self.value
+            or any(ord(character) < 32 or ord(character) == 127 for character in self.value)
+        ):
+            raise ValueError("legacy exclusion value must be normalized and path-segment local")
+        if self.match_kind == "SUFFIX" and not self.value.startswith("."):
+            raise ValueError("legacy suffix exclusion must start with a dot")
+        return self
+
+
+class LegacySourceInventoryPolicy(FrozenModel):
+    schema_version: Literal["legacy-source-inventory-policy/1.0"]
+    policy_revision_id: str = Field(pattern=r"^legacyinventorypolicyrev_[0-9a-f]{32}$")
+    scanner_version: Literal["1.0.0"]
+    limits: LegacyInventoryLimits
+    classification_rules: tuple[LegacyInventoryClassificationRule, ...] = Field(
+        min_length=1, max_length=64
+    )
+    exclusion_rules: tuple[LegacyInventoryExclusionRule, ...] = Field(min_length=1, max_length=128)
+    policy_sha256: Sha256
+
+    @model_validator(mode="after")
+    def deterministic_policy(self) -> LegacySourceInventoryPolicy:
+        rules = tuple(self.classification_rules)
+        rule_order = tuple(
+            (rule.root_alias, rule.relative_prefix.casefold(), rule.rule_id) for rule in rules
+        )
+        if len({rule.rule_id for rule in rules}) != len(rules) or rule_order != tuple(
+            sorted(rule_order)
+        ):
+            raise ValueError("legacy classification rules must be unique and sorted")
+        for index, rule in enumerate(rules):
+            rule_parts = PurePosixPath(rule.relative_prefix).parts
+            for other in rules[index + 1 :]:
+                if rule.root_alias != other.root_alias or not (
+                    set(rule.allowed_suffixes) & set(other.allowed_suffixes)
+                ):
+                    continue
+                other_parts = PurePosixPath(other.relative_prefix).parts
+                shared_depth = min(len(rule_parts), len(other_parts))
+                if rule_parts[:shared_depth] == other_parts[:shared_depth]:
+                    raise ValueError("legacy classification rules overlap ambiguously")
+        exclusions = tuple(self.exclusion_rules)
+        exclusion_order = tuple((rule.match_kind, rule.value, rule.reason) for rule in exclusions)
+        if len(exclusion_order) != len(set(exclusion_order)) or exclusion_order != tuple(
+            sorted(exclusion_order)
+        ):
+            raise ValueError("legacy exclusion rules must be unique and sorted")
+        mandatory_exclusions = {
+            ("PATH_SEGMENT", ".git", "VERSION_CONTROL_METADATA"),
+            ("BASENAME", ".env", "SECRET_OR_CREDENTIAL"),
+            ("SUFFIX", ".key", "SECRET_OR_CREDENTIAL"),
+            ("SUFFIX", ".pem", "SECRET_OR_CREDENTIAL"),
+            ("SUFFIX", ".sqlite", "RUNTIME_DATABASE_OR_INDEX"),
+            ("SUFFIX", ".sqlite-shm", "RUNTIME_DATABASE_OR_INDEX"),
+            ("SUFFIX", ".sqlite-wal", "RUNTIME_DATABASE_OR_INDEX"),
+            ("SUFFIX", ".safetensors", "MODEL_OR_CHECKPOINT"),
+            ("SUFFIX", ".ckpt", "MODEL_OR_CHECKPOINT"),
+            ("SUFFIX", ".lock", "CACHE_TEMP_OR_LOCK"),
+        }
+        if not mandatory_exclusions.issubset(set(exclusion_order)):
+            raise ValueError("legacy inventory policy omits a mandatory safety exclusion")
+        _require_self_hash(self, "policy_sha256")
+        return self
 
 
 class LegacyArtifactMemberPointer(FrozenModel):
@@ -366,6 +508,80 @@ class LegacySourceInventory(FrozenModel):
         ) or self.summary.total_byte_count != sum(entry.size_bytes for entry in self.entries):
             raise ValueError("legacy inventory total summary does not match entries")
         _require_self_hash(self, "inventory_sha256")
+        return self
+
+
+class LegacySourceInventoryV2(FrozenModel):
+    schema_version: Literal["legacy-source-inventory/2.0"]
+    inventory_id: str = Field(pattern=r"^legacyinventory_[0-9a-f]{32}$")
+    observed_at: UtcDatetime
+    scanner_version: Literal["1.0.0"]
+    scanner_policy_revision_id: str = Field(pattern=r"^legacyinventorypolicyrev_[0-9a-f]{32}$")
+    scanner_policy_sha256: Sha256
+    root_alias: LegacyRootAlias
+    root_configuration_sha256: Sha256
+    entries: tuple[LegacySourceInventoryEntry, ...] = Field(max_length=5000)
+    summary: LegacySourceInventorySummary
+    source_set_sha256: Sha256
+    inventory_sha256: Sha256
+
+    @model_validator(mode="after")
+    def deterministic_inventory(self) -> LegacySourceInventoryV2:
+        entry_keys = tuple(entry.entry_key for entry in self.entries)
+        paths = tuple(entry.relative_path for entry in self.entries)
+        collision_keys = tuple(path.casefold() for path in paths)
+        if len(entry_keys) != len(set(entry_keys)) or len(collision_keys) != len(
+            set(collision_keys)
+        ):
+            raise ValueError("legacy inventory contains duplicate entry keys or path collisions")
+        if paths != tuple(sorted(paths, key=lambda value: (value.casefold(), value))):
+            raise ValueError("legacy inventory entries must use deterministic path order")
+        class_fields = {
+            LegacySourcePreliminaryClass.ORIGINAL_SOURCE_CANDIDATE: (
+                self.summary.original_source_candidates
+            ),
+            LegacySourcePreliminaryClass.DERIVED_MIGRATION_EVIDENCE: (
+                self.summary.derived_migration_evidence
+            ),
+            LegacySourcePreliminaryClass.EXCLUDED_RUNTIME_STATE: (
+                self.summary.excluded_runtime_state
+            ),
+        }
+        for classification, expected in class_fields.items():
+            matching = tuple(
+                entry for entry in self.entries if entry.preliminary_class == classification
+            )
+            if expected.file_count != len(matching) or expected.byte_count != sum(
+                entry.size_bytes for entry in matching
+            ):
+                raise ValueError("legacy inventory class summary does not match entries")
+        if self.summary.total_file_count != len(
+            self.entries
+        ) or self.summary.total_byte_count != sum(entry.size_bytes for entry in self.entries):
+            raise ValueError("legacy inventory total summary does not match entries")
+
+        source_set_payload = {
+            "schema_version": "legacy-source-set/1.0",
+            "scanner_version": self.scanner_version,
+            "scanner_policy_revision_id": self.scanner_policy_revision_id,
+            "scanner_policy_sha256": self.scanner_policy_sha256,
+            "root_alias": self.root_alias,
+            "root_configuration_sha256": self.root_configuration_sha256,
+            "entries": [entry.model_dump(mode="json") for entry in self.entries],
+            "summary": self.summary.model_dump(mode="json"),
+        }
+        expected_source_set = canonical_content_sha256(source_set_payload)
+        if self.source_set_sha256 != expected_source_set:
+            raise ValueError("source_set_sha256 does not match canonical source-set content")
+        expected_inventory_id = (
+            "legacyinventory_" + expected_source_set.removeprefix("sha256:")[:32]
+        )
+        if self.inventory_id != expected_inventory_id:
+            raise ValueError("inventory_id does not match the source-set identity")
+        identity_payload = self.model_dump(mode="json", exclude={"observed_at", "inventory_sha256"})
+        expected_inventory_hash = canonical_content_sha256(identity_payload)
+        if self.inventory_sha256 != expected_inventory_hash:
+            raise ValueError("inventory_sha256 does not match canonical inventory identity")
         return self
 
 

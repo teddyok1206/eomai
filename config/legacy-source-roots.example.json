@@ -1,0 +1,16 @@
+{
+  "schema_version": "legacy-source-root-configuration/1.0",
+  "configuration_revision_id": "legacyrootconfigrev_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "roots": [
+    {
+      "root_alias": "EOMIS_LEGACY_SOURCE",
+      "configuration_identity": "legacyroot_cccccccccccccccccccccccccccccccc",
+      "absolute_path": "/absolute/reviewed/eomis-root"
+    },
+    {
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "configuration_identity": "legacyroot_dddddddddddddddddddddddddddddddd",
+      "absolute_path": "/absolute/reviewed/old-server-root"
+    }
+  ]
+}
