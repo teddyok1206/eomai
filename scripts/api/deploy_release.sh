@@ -397,7 +397,12 @@ catalog_resources = {
     "knowledge/knowledge-analysis-risk-policy-v1.schema.json": "schemas/knowledge/knowledge-analysis-risk-policy-v1.schema.json",
     "knowledge/knowledge-analysis-review-decision-v1.schema.json": "schemas/knowledge/knowledge-analysis-review-decision-v1.schema.json",
     "knowledge/knowledge-analysis-result-v2.schema.json": "schemas/knowledge/knowledge-analysis-result-v2.schema.json",
+    "knowledge/knowledge-graph-projection-v1.schema.json": "schemas/knowledge/knowledge-graph-projection-v1.schema.json",
+    "knowledge/knowledge-graph-publication-result-v1.schema.json": "schemas/knowledge/knowledge-graph-publication-result-v1.schema.json",
+    "knowledge/knowledge-graph-publication-v1.schema.json": "schemas/knowledge/knowledge-graph-publication-v1.schema.json",
     "knowledge/knowledge-graph-snapshot-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
+    "knowledge/knowledge-graph-snapshot-manifest-v2.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
+    "knowledge/knowledge-graph-structure-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v1.schema.json",
     "knowledge/education-retrieval-request-v1.schema.json": "schemas/knowledge/education-retrieval-request-v1.schema.json",
     "knowledge/evidence-bundle-manifest-v1.schema.json": "schemas/knowledge/evidence-bundle-manifest-v1.schema.json",
 }
