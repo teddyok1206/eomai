@@ -15,7 +15,12 @@ StateDirectoryMode=0700
 WorkingDirectory=/var/lib/eom-catalog-api
 Environment=HOME=/var/lib/eom-catalog-api
 Environment=TZ=UTC
+Environment=EOM_CATALOG_STAGING_ROOT=/var/lib/eom-catalog-api/staging
 EnvironmentFile=/etc/eom/secrets/catalog-manager.env
+ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-catalog-api/staging
+ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-catalog-api/staging/content-packs
+ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-catalog-api/staging/registry
+ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-catalog-api/staging/workflow-prompts
 ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-catalog-application-runner serve
 Restart=on-failure
 RestartSec=3
@@ -35,13 +40,13 @@ CapabilityBoundingSet=
 
 ReadOnlyPaths=/etc/eom/secrets/catalog-manager.env
 ReadOnlyPaths=/srv/eom/conda/envs/eom-api
-ReadWritePaths=/srv/eom/staging/catalog
 ReadWritePaths=/mnt/nas/eom/artifacts
 ReadWritePaths=/run/eom-catalog-api
 ReadWritePaths=/var/lib/eom-catalog-api
 
 InaccessiblePaths=/home/eom/EOM
 InaccessiblePaths=/home/eom/EOMIS
+InaccessiblePaths=/srv/eom/staging/catalog
 InaccessiblePaths=/root/.codex
 InaccessiblePaths=/srv/eom/worker-homes
 InaccessiblePaths=/var/run/docker.sock

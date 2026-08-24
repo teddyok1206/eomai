@@ -112,7 +112,13 @@ def test_catalog_manager_unit_owns_nas_commit_boundary_without_api_secret() -> N
     assert "EnvironmentFile=/etc/eom/secrets/catalog-manager.env" in catalog_unit
     assert "User=eom-catalog-manager" in catalog_unit
     assert "SupplementaryGroups=eom" in catalog_unit
-    assert "ReadWritePaths=/srv/eom/staging/catalog" in catalog_unit
+    assert "Environment=EOM_CATALOG_STAGING_ROOT=/var/lib/eom-catalog-api/staging" in catalog_unit
+    assert "ExecStartPre=/usr/bin/install -d -m 0750 " in catalog_unit
+    assert "/var/lib/eom-catalog-api/staging/content-packs" in catalog_unit
+    assert "/var/lib/eom-catalog-api/staging/registry" in catalog_unit
+    assert "/var/lib/eom-catalog-api/staging/workflow-prompts" in catalog_unit
+    assert "ReadWritePaths=/srv/eom/staging/catalog" not in catalog_unit
+    assert "InaccessiblePaths=/srv/eom/staging/catalog" in catalog_unit
     assert "ReadWritePaths=/mnt/nas/eom/artifacts" in catalog_unit
     assert "InaccessiblePaths=/etc/eom/secrets/api.env" in catalog_unit
     assert "EnvironmentFile=/etc/eom/secrets/catalog-manager.env" not in api_unit
