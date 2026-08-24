@@ -299,6 +299,29 @@ def test_knowledge_analysis_support_protocol_is_schema_first_and_typed() -> None
     assert parsed_result.role == "support"
 
 
+def test_knowledge_analysis_codex_projection_rejects_empty_normalized_markdown() -> None:
+    projected = load_codex_result_schema("knowledge-analysis-proposal-result@1.0")
+    result = _knowledge_analysis_result()
+    result["output"]["proposal"]["normalized_markdown"] = ""  # type: ignore[index]
+
+    errors = sorted(
+        Draft202012Validator(projected).iter_errors(result),
+        key=lambda error: list(error.absolute_path),
+    )
+
+    assert len(errors) == 1
+    assert list(errors[0].absolute_path) == ["output", "proposal", "normalized_markdown"]
+    assert errors[0].validator == "pattern"
+
+
+def test_knowledge_analysis_codex_projection_preserves_multiline_markdown() -> None:
+    projected = load_codex_result_schema("knowledge-analysis-proposal-result@1.0")
+    result = _knowledge_analysis_result()
+    result["output"]["proposal"]["normalized_markdown"] = "# Source\n\nEvidence.\n"  # type: ignore[index]
+
+    assert list(Draft202012Validator(projected).iter_errors(result)) == []
+
+
 def test_knowledge_analysis_support_protocol_fails_closed_on_dangling_anchor() -> None:
     result = _knowledge_analysis_result()
     result["output"]["proposal"]["nodes"][0]["anchor_ids"] = ["anchor_missing"]  # type: ignore[index]

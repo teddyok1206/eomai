@@ -307,10 +307,37 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     if schema_id == "authoring-result@2.0":
         _project_knowledge_authoring_content(schema)
     if schema_id == "knowledge-analysis-proposal-result@1.0":
-        _strip_knowledge_analysis_codex_guards(schema)
+        _project_knowledge_analysis_codex_contract(schema)
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
     return schema
+
+
+def _project_knowledge_analysis_codex_contract(schema: dict[str, Any]) -> None:
+    """Retain essential text presence while projecting unsupported canonical guards."""
+
+    _strip_knowledge_analysis_codex_guards(schema)
+    properties = _mapping(schema, "properties")
+    definitions = _mapping(schema, "$defs")
+    if _mapping(properties, "output") != {"$ref": "#/$defs/output"}:
+        raise WorkflowSchemaError("knowledge analysis output reference is not projectable")
+    output = _mapping(definitions, "output")
+    proposal_reference = _mapping(_mapping(output, "properties"), "proposal")
+    if proposal_reference != {"$ref": "#/$defs/KnowledgeAnalysisWorkerProposal"}:
+        raise WorkflowSchemaError("knowledge analysis proposal reference is not projectable")
+    proposal = _mapping(definitions, "KnowledgeAnalysisWorkerProposal")
+    normalized_markdown = _mapping(_mapping(proposal, "properties"), "normalized_markdown")
+    if (
+        normalized_markdown.get("type") != "string"
+        or normalized_markdown.get("minLength") != 1
+        or "pattern" in normalized_markdown
+    ):
+        raise WorkflowSchemaError(
+            "knowledge analysis normalized Markdown contract is not projectable"
+        )
+    # Codex strict output does not accept minLength. This equivalent lower-bound pattern prevents
+    # an empty proposal from passing worker-side validation only to fail the canonical boundary.
+    normalized_markdown["pattern"] = r"[\s\S]+"
 
 
 def _strip_knowledge_analysis_codex_guards(value: object) -> None:
