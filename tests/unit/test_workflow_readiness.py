@@ -67,9 +67,12 @@ def _runtime(
         os.chown(home, -1, worker_group)
         home.chmod(0o700)
 
+    orchestrator_staging = tmp_path / "staging"
+    orchestrator_staging.mkdir(mode=0o700)
+    orchestrator_staging.chmod(0o700)
     platform = Settings(
         worker_config=ROOT / "config/worker-slots.example.yaml",
-        staging_root=tmp_path / "staging",
+        staging_root=orchestrator_staging,
         workspace_root=workspaces,
         worker_home_root=homes,
         nas_artifact_root=tmp_path / "artifacts",
@@ -150,6 +153,43 @@ def test_execution_readiness_detects_missing_catalog_adapter(
     readiness.catalog_configured = False
 
     assert "CATALOG_ADAPTER_MISSING" in _codes(readiness)
+
+
+@pytest.mark.parametrize("mode", [0o500, 0o750])
+def test_execution_readiness_rejects_nonprivate_orchestrator_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: int
+) -> None:
+    readiness, _, _ = _runtime(tmp_path, monkeypatch)
+    readiness.platform_settings.staging_root.chmod(mode)
+
+    assert "ORCHESTRATOR_STAGING_INVALID" in _codes(readiness)
+
+
+def test_execution_readiness_rejects_orchestrator_staging_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, _, _ = _runtime(tmp_path, monkeypatch)
+    staging = readiness.platform_settings.staging_root
+    staging.rmdir()
+    staging.symlink_to(tmp_path / "catalog", target_is_directory=True)
+
+    assert "ORCHESTRATOR_STAGING_INVALID" in _codes(readiness)
+
+
+def test_execution_readiness_detects_orchestrator_staging_probe_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    readiness, _, _ = _runtime(tmp_path, monkeypatch)
+    original_probe = readiness_module._probe_directory
+
+    def fail_orchestrator_probe(path: Path, *, group_id: int | None, file_mode: int) -> None:
+        if path == readiness.platform_settings.staging_root:
+            raise OSError("probe denied")
+        original_probe(path, group_id=group_id, file_mode=file_mode)
+
+    monkeypatch.setattr(readiness_module, "_probe_directory", fail_orchestrator_probe)
+
+    assert "ORCHESTRATOR_STAGING_INVALID" in _codes(readiness)
 
 
 def test_execution_readiness_detects_missing_catalog_contract_resource(

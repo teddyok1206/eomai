@@ -126,8 +126,14 @@ systemctl is-active --quiet "${SERVICE}" || fail "workflow runner is not active"
 systemctl is-enabled --quiet "${SERVICE}" || fail "workflow runner is not enabled"
 RUNNER_ENVIRONMENT=$(systemctl show --property=Environment --value "${SERVICE}")
 [[ " ${RUNNER_ENVIRONMENT} " == \
+  *" EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging "* ]] || \
+  fail "workflow runner orchestrator staging environment mismatch"
+[[ " ${RUNNER_ENVIRONMENT} " == \
   *" EOM_CATALOG_STAGING_ROOT=/var/lib/eom-workflow-runner/catalog-staging "* ]] || \
   fail "workflow runner Catalog staging environment mismatch"
+[[ "$(stat -c '%U:%G:%a' /var/lib/eom-workflow-runner/orchestrator-staging)" == \
+  eom-workflow-runner:eom:700 ]] || \
+  fail "workflow runner orchestrator staging metadata mismatch"
 for path in \
   /var/lib/eom-workflow-runner/catalog-staging \
   /var/lib/eom-workflow-runner/catalog-staging/content-packs \
@@ -152,6 +158,7 @@ runuser -u eom-workflow-runner -g eom \
     EOM_WORKFLOW_RUNNER_CONFIG=/etc/eom/workflow-runner.yaml \
     EOM_WORKFLOW_PROMPT_ROOT=/etc/eom/workflow-prompts \
     EOM_CODEX_CAPABILITY_POLICY=/etc/eom/codex-capabilities.yaml \
+    EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging \
     EOM_CATALOG_STAGING_ROOT=/var/lib/eom-workflow-runner/catalog-staging \
     "${PYTHON}" -I /srv/eom/conda/envs/eom-api/bin/eom-workflow-runner doctor \
     >"${DOCTOR_OUTPUT}"

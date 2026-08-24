@@ -85,6 +85,8 @@ def test_worker_runtime_doctor_receives_each_slot_group_explicitly() -> None:
     for slot in range(1, 6):
         assert f"-G eom-cdx-{slot:02d}" in source
     assert "eom-cdx-01,eom-cdx-02" not in source
+    assert "EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging" in source
+    assert "eom-workflow-runner:eom:700" in source
 
 
 def test_runner_configuration_installs_root_owned_capability_policy() -> None:

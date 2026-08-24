@@ -25,6 +25,10 @@ def test_workflow_runner_service_fixes_identity_command_and_group_contract() -> 
     assert "ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner serve" in source
     assert "EOM_POSTGRES_ENV=/etc/eom/secrets/postgres.env" in source
     assert "EOM_CODEX_CAPABILITY_POLICY=/etc/eom/codex-capabilities.yaml" in source
+    assert "EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging" in source
+    assert (
+        "ExecStartPre=/usr/bin/install -d -m 0700 /var/lib/eom-workflow-runner/orchestrator-staging"
+    ) in source
     assert "UMask=0007" in source
 
 
@@ -54,7 +58,6 @@ def test_workflow_runner_service_is_narrow_but_can_materialize_worker_handoffs()
     assert "RestrictSUIDSGID=false" in source
     assert "RestrictSUIDSGID=true" not in source
     assert _directives(source, "ReadWritePaths") == {
-        "/srv/eom/staging",
         "/srv/eom/workspaces",
         "/mnt/nas/eom/artifacts",
         "/var/lib/eom-workflow-runner",
@@ -62,6 +65,7 @@ def test_workflow_runner_service_is_narrow_but_can_materialize_worker_handoffs()
     inaccessible = _directives(source, "InaccessiblePaths")
     assert "/home/eom/EOM" in inaccessible
     assert "/home/eom/EOMIS" in inaccessible
+    assert "/srv/eom/staging" in inaccessible
     assert "/var/run/docker.sock" in inaccessible
     assert "/etc/eom/secrets/api.env" in inaccessible
     assert all(
@@ -96,6 +100,8 @@ def test_workflow_runner_deployer_is_commit_pinned_and_noninteractive() -> None:
     assert 'systemctl enable "${SERVICE}"' in source
     assert 'systemctl start "${SERVICE}"' in source
     assert "systemctl restart" not in source
+    assert "/var/lib/eom-workflow-runner/orchestrator-staging" in source
+    assert "eom-workflow-runner:eom:700" in source
     assert "sudo" not in source
     assert "pip install" not in source
     assert "conda install" not in source

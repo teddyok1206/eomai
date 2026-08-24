@@ -407,7 +407,7 @@ def test_workflow_runner_uses_its_own_catalog_staging_identity() -> None:
     assert f"{private_root}/content-packs" in unit
     assert f"{private_root}/registry" in unit
     assert f"{private_root}/workflow-prompts" in unit
-    assert "InaccessiblePaths=/srv/eom/staging/catalog" in unit
+    assert "InaccessiblePaths=/srv/eom/staging" in unit
     assert 'runner_user="eom-workflow-runner"' in composition
 
 

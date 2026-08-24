@@ -121,6 +121,7 @@ class WorkflowRuntimeReadiness:
                 "configured" if self.catalog_configured else "mandatory adapter unavailable",
             )
         )
+        checks.append(self._orchestrator_staging())
         checks.append(self._catalog_staging())
         checks.extend(self._catalog_fixed_staging_roots())
         actor_authorization = self.actor_authorizer.readiness()
@@ -162,6 +163,30 @@ class WorkflowRuntimeReadiness:
 
         checks.extend(self._runtime_packages(registry))
         return RuntimeReadinessReport(tuple(checks))
+
+    def _orchestrator_staging(self) -> RuntimeReadinessCheck:
+        path = self.platform_settings.staging_root
+        try:
+            runner = pwd.getpwnam(self.runner_user)
+            if not _directory_matches(
+                path,
+                owner_id=runner.pw_uid,
+                group_id=runner.pw_gid,
+                mode=0o700,
+            ):
+                return _failure(
+                    "orchestrator_staging",
+                    "ORCHESTRATOR_STAGING_INVALID",
+                    "ownership, mode, type, or access does not match the runner-private root",
+                )
+            _probe_directory(path, group_id=None, file_mode=0o600)
+            return _success("orchestrator_staging", "runner-private writable probe passed")
+        except (KeyError, OSError) as exc:
+            return _failure(
+                "orchestrator_staging",
+                "ORCHESTRATOR_STAGING_INVALID",
+                type(exc).__name__,
+            )
 
     def _worker_role_mapping(self, registry: WorkerRegistry) -> RuntimeReadinessCheck:
         required_roles = ("authoring", "review", "image", "item_management")

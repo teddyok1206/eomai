@@ -80,6 +80,7 @@ generated acceptance runbook.
 Expected state:
 
 ```text
+/var/lib/eom-workflow-runner/orchestrator-staging  eom-workflow-runner:eom  0700
 /srv/eom/staging/catalog             eom:eom                 0750
 /srv/eom/staging/catalog/content-packs  eom:eom              0750
 /srv/eom/staging/catalog/registry    eom:eom                 0750
@@ -151,12 +152,13 @@ The deployer refuses to replace a different active unit, so an update cannot sil
 in-flight worker. It records the source commit and installed unit hash in the separate root-only
 `/var/lib/eom-workflow-runner-deployments` directory.
 
-`run-once` remains a diagnostic/operator tool. It returns 2 when no command exists and 3 when work
-exists but runtime readiness fails. A status 3 leaves the command unclaimed and the workflow
-unchanged. Only a successful preflight is followed by a database claim.
+`run-once` remains an internal diagnostic entry point, but it must not be invoked from an ambient
+interactive shell because production readiness depends on the service identity and fixed private
+staging environment. The long-running service owns command execution. Use the commit-pinned
+runtime verifier for a non-work-claiming production diagnosis.
 
 ```bash
-/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner run-once
+sudo -n scripts/workflow/deploy_worker_runtime.sh verify "$(git rev-parse HEAD)"
 ```
 
 Do not manually edit commands, leases, attempts, or workflow states. Correct the failed readiness

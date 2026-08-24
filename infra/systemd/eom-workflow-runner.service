@@ -22,7 +22,9 @@ Environment=EOM_HUMAN_ACTOR_CONFIG=/etc/eom/human-actors.yaml
 Environment=EOM_WORKFLOW_RUNNER_CONFIG=/etc/eom/workflow-runner.yaml
 Environment=EOM_WORKFLOW_PROMPT_ROOT=/etc/eom/workflow-prompts
 Environment=EOM_CODEX_CAPABILITY_POLICY=/etc/eom/codex-capabilities.yaml
+Environment=EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging
 Environment=EOM_CATALOG_STAGING_ROOT=/var/lib/eom-workflow-runner/catalog-staging
+ExecStartPre=/usr/bin/install -d -m 0700 /var/lib/eom-workflow-runner/orchestrator-staging
 ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-workflow-runner/catalog-staging
 ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-workflow-runner/catalog-staging/content-packs
 ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-workflow-runner/catalog-staging/registry
@@ -60,14 +62,13 @@ ReadOnlyPaths=/etc/eom/workflows
 ReadOnlyPaths=/etc/eom/workflow-prompts
 ReadOnlyPaths=/srv/eom/conda/envs/eom-api
 ReadOnlyPaths=/srv/eom/worker-homes
-ReadWritePaths=/srv/eom/staging
 ReadWritePaths=/srv/eom/workspaces
 ReadWritePaths=/mnt/nas/eom/artifacts
 ReadWritePaths=/var/lib/eom-workflow-runner
 
 InaccessiblePaths=/home/eom/EOM
 InaccessiblePaths=/home/eom/EOMIS
-InaccessiblePaths=/srv/eom/staging/catalog
+InaccessiblePaths=/srv/eom/staging
 InaccessiblePaths=/root/.codex
 InaccessiblePaths=/var/run/docker.sock
 InaccessiblePaths=-/var/lib/lxd

@@ -6,6 +6,7 @@ only sanitized check names, codes, and metadata summaries.
 
 | Code | Meaning | Action |
 | --- | --- | --- |
+| `ORCHESTRATOR_STAGING_INVALID` | runner-private orchestration staging is missing, linked, wrongly owned/mode, or unwritable | redeploy the reviewed workflow runner unit; do not grant write on `/srv/eom/staging` |
 | `CATALOG_ADAPTER_MISSING` | production graph is incomplete | redeploy the complete release |
 | `CATALOG_STAGING_INVALID` | owner, group, mode, or access differs | run reviewed runtime path bootstrap |
 | `CATALOG_STAGING_UNWRITABLE` | bounded probe failed | inspect parent mount and permissions |

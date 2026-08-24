@@ -97,6 +97,14 @@ verify_unit() {
   [[ "$(systemctl show --property=SupplementaryGroups --value "${SERVICE}")" == \
       "eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05" ]] || \
     fail "installed supplementary group contract mismatch"
+  local runtime_environment
+  runtime_environment="$(systemctl show --property=Environment --value "${SERVICE}")"
+  [[ " ${runtime_environment} " == \
+    *" EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging "* ]] || \
+    fail "installed orchestrator staging environment mismatch"
+  require_directory_metadata \
+    /var/lib/eom-workflow-runner/orchestrator-staging \
+    eom-workflow-runner:eom:700
   systemctl is-enabled --quiet "${SERVICE}" || fail "workflow runner is not enabled"
   systemctl is-active --quiet "${SERVICE}" || fail "workflow runner is not active"
   local main_pid

@@ -3,7 +3,7 @@
 ## Responsibility
 
 The Application API persists typed workflow commands. It does not stage prompts, create worker
-workspaces, invoke Codex, or commit artifacts. An unprivileged `eom` workflow runner owns that
+workspaces, invoke Codex, or commit artifacts. An unprivileged `eom-workflow-runner` service owns that
 execution boundary and composes the workflow repository, Catalog adapter, orchestrator, worker
 registry, and immutable workflow definition.
 
@@ -11,10 +11,11 @@ registry, and immutable workflow definition.
 flowchart TD
   API[Application API] -->|typed command| DB[(PostgreSQL)]
   DB -->|read-only pending inspection| READY[Execution readiness]
-  READY -->|ready, then claim| RUNNER[eom workflow runner]
+  READY -->|ready, then claim| RUNNER[eom-workflow-runner service]
   RUNNER --> CATALOG[Catalog application adapter]
   CATALOG --> STAGE[/srv/eom/staging/catalog fixed roots]
   RUNNER --> ORCH[Orchestrator]
+  ORCH --> OSTAGE[runner-private job staging]
   ORCH --> WG[worker private-group workspace]
   WG --> UNIT[fixed systemd template for slot N]
   UNIT --> EXEC[root-owned eom-worker-exec]
@@ -33,6 +34,13 @@ Catalog prompts, Content Pack builds, and registration manifests are temporary m
 PostgreSQL metadata, immutable artifact revisions, and their hashes remain canonical.
 `/srv/eom/staging/catalog` and each declared fixed child are owned by `eom:eom` with mode `0750`;
 the API service does not write these paths.
+
+Orchestrator result/log staging is separate from the operator-owned Catalog tree. The long-running
+runner uses `/var/lib/eom-workflow-runner/orchestrator-staging`, owned by
+`eom-workflow-runner:eom` with mode `0700`. Job IDs provide exclusive operation-local children.
+Workers and operator tools do not consume this path, and `/srv/eom/staging` is inaccessible from
+the runner sandbox. Readiness verifies exact metadata and a bounded create/read/delete probe before
+claiming a command.
 
 The typed Catalog inventory and privileged bootstrap jointly define the fixed roots:
 
