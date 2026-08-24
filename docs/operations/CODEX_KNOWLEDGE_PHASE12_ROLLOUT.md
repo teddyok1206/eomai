@@ -1,6 +1,6 @@
 # Codex Knowledge Control Plane Phase 12 Rollout
 
-Status: runtime hardening deployed; measured content rollout awaiting reviewed inputs
+Status: runtime hardening deployed; minimal non-production content acceptance authorized
 
 Date: 2026-08-24 UTC
 
@@ -21,6 +21,13 @@ Analysis result, published Graph Snapshot, Evidence Bundle revision, or legacy u
 only active execution presets remain the independently released `standard-item` and
 `knowledge-analysis` presets. The content-specific rollout therefore stopped at the reviewed-input
 gate instead of creating synthetic production data.
+
+A later operator decision authorizes one narrowly scoped, explicitly non-production acceptance data
+set so the deployed Analysis → Graph → Evidence path can be exercised while real curriculum and
+textbook data is prepared. Its namespace, provenance, one-shot behavior, exclusions, retirement,
+and cleanup contract is defined in
+[`NON_PRODUCTION_KNOWLEDGE_ACCEPTANCE.md`](NON_PRODUCTION_KNOWLEDGE_ACCEPTANCE.md). It reuses one
+approved Item Revision as a pinned source and does not invent canonical curriculum or Usage data.
 
 ## Responsibility and boundary
 
