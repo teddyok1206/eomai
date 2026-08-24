@@ -23,7 +23,6 @@ from eom_workflow import (
     KnowledgeAnalysisWorkerRequest,
     TerminalStep,
     WorkerRequest,
-    WorkflowRequest,
     compile_definition_data,
     evaluate_decision,
 )
@@ -63,6 +62,7 @@ from eom_workflow_runner.repository import (
     enqueue_command,
     link_superseded_attempts,
     list_step_runs,
+    load_persisted_workflow_request,
 )
 from eom_workflow_runner.settings import WorkflowSettings
 from eom_workflow_runner.state_machine import (
@@ -588,7 +588,7 @@ class WorkflowRunner:
             workflow.workflow_id, definition.key, attempt, workflow.definition_hash
         )
         self._renew_command_lease(command_id)
-        full_request = WorkflowRequest.model_validate(workflow.initial_request)
+        full_request = load_persisted_workflow_request(workflow.initial_request)
         registration: RegistrationOutcome | None = None
         generated_stimulus: GeneratedStimulusPointer | None = None
         result_pointer: ArtifactPointer | None = None

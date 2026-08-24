@@ -79,6 +79,14 @@ def test_runtime_scripts_have_valid_shell_syntax() -> None:
         assert result.returncode == 0, result.stderr
 
 
+def test_worker_runtime_doctor_receives_each_slot_group_explicitly() -> None:
+    source = (ROOT / "scripts/workflow/deploy_worker_runtime.sh").read_text(encoding="utf-8")
+
+    for slot in range(1, 6):
+        assert f"-G eom-cdx-{slot:02d}" in source
+    assert "eom-cdx-01,eom-cdx-02" not in source
+
+
 def test_runner_configuration_installs_root_owned_capability_policy() -> None:
     source = (ROOT / "scripts/workflow/install_runner_configuration.sh").read_text(encoding="utf-8")
 

@@ -142,7 +142,7 @@ runuser -u eom -g eom -- "${REPOSITORY}/scripts/workflow/verify_systemd_worker_a
 DOCTOR_OUTPUT=$(mktemp /tmp/eom-workflow-runtime-doctor.XXXXXX)
 chmod 0600 "${DOCTOR_OUTPUT}"
 runuser -u eom-workflow-runner -g eom \
-  -G eom-cdx-01,eom-cdx-02,eom-cdx-03,eom-cdx-04,eom-cdx-05 -- \
+  -G eom-cdx-01 -G eom-cdx-02 -G eom-cdx-03 -G eom-cdx-04 -G eom-cdx-05 -- \
   env -i HOME=/var/lib/eom-workflow-runner USER=eom-workflow-runner \
     LOGNAME=eom-workflow-runner TZ=UTC PATH=/srv/eom/conda/envs/eom-api/bin:/usr/bin:/bin \
     EOM_POSTGRES_ENV=/etc/eom/secrets/postgres.env \

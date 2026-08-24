@@ -98,6 +98,30 @@ def workflow_business_fingerprint(
     )
 
 
+def workflow_request_storage_document(request: WorkflowRequest) -> dict[str, Any]:
+    """Serialize a request without dropping schema-required nullable analysis pointers."""
+    document = request.model_dump(mode="json", exclude_none=True)
+    if request.analysis_request is not None:
+        document["analysis_request"] = request.analysis_request.model_dump(mode="json")
+    return document
+
+
+def load_persisted_workflow_request(document: dict[str, Any]) -> WorkflowRequest:
+    """Load persisted requests, repairing only the verified legacy null-omission defect."""
+    normalized = dict(document)
+    analysis = normalized.get("analysis_request")
+    if (
+        normalized.get("request_name") == "KNOWLEDGE_ANALYSIS_REQUEST"
+        and isinstance(analysis, dict)
+        and analysis.get("schema_version") == "knowledge-analysis-request/2.0"
+    ):
+        normalized_analysis = dict(analysis)
+        normalized_analysis.setdefault("predecessor_analysis_run_id", None)
+        normalized_analysis.setdefault("prior_graph_snapshot", None)
+        normalized["analysis_request"] = normalized_analysis
+    return WorkflowRequest.model_validate(normalized)
+
+
 def _matching_submission(
     session: Session, *, idempotency_key: str, request_hash: str
 ) -> WorkflowInstanceRecord | None:
@@ -157,7 +181,7 @@ def create_workflow_instance(
     actor_id: str,
     runtime_context: dict[str, Any] | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
-    request_data = request.model_dump(mode="json", exclude_none=True)
+    request_data = workflow_request_storage_document(request)
     request_hash = workflow_business_fingerprint(definition, request)
     existing = _matching_submission(
         session, idempotency_key=idempotency_key, request_hash=request_hash
