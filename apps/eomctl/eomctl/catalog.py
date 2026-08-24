@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from pathlib import Path
-from typing import Annotated, Literal, cast
+from typing import Annotated, Literal, Never, cast
 
 import typer
 from eom_catalog_contracts import (
+    CommitLegacyUsageImportCommand,
     CreateDeliverable,
+    CreateLegacyUsageImportCommand,
     CreateUsagePlan,
     FulfillUsagePlan,
+    LegacyUsageMappingContractRevision,
+    ReviewLegacyUsageRowCommand,
     load_schema,
 )
 from eom_catalog_service.content_pack_files import build_pack, compile_pack, inspect_bundle
@@ -21,6 +26,7 @@ from eom_catalog_service.knowledge_stimulus import (
     KNOWLEDGE_STIMULUS_ASSET_KEY,
     KnowledgeStimulusService,
 )
+from eom_catalog_service.legacy_usage_service import LegacyUsageError, LegacyUsageService
 from eom_catalog_service.registry_export import ExportFormat, ExportKind, RegistryExporter
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.settings import CatalogSettings
@@ -38,6 +44,9 @@ deliverable_app = typer.Typer(no_args_is_help=True)
 usage_app = typer.Typer(no_args_is_help=True)
 usage_plan_app = typer.Typer(no_args_is_help=True)
 usage_record_app = typer.Typer(no_args_is_help=True)
+legacy_usage_app = typer.Typer(no_args_is_help=True)
+legacy_usage_mapping_app = typer.Typer(no_args_is_help=True)
+legacy_usage_import_app = typer.Typer(no_args_is_help=True)
 registry_app = typer.Typer(no_args_is_help=True)
 registry_export_app = typer.Typer(no_args_is_help=True)
 content_app.add_typer(intake_app, name="intake")
@@ -46,6 +55,9 @@ content_app.add_typer(stimulus_app, name="stimulus")
 item_app.add_typer(item_revision_app, name="revision")
 usage_app.add_typer(usage_plan_app, name="plan")
 usage_app.add_typer(usage_record_app, name="record")
+usage_app.add_typer(legacy_usage_app, name="legacy")
+legacy_usage_app.add_typer(legacy_usage_mapping_app, name="mapping")
+legacy_usage_app.add_typer(legacy_usage_import_app, name="import")
 registry_app.add_typer(registry_export_app, name="export")
 
 
@@ -71,6 +83,191 @@ def _registry_service() -> tuple[RegistryService, Engine]:
 def _usage_service() -> tuple[UsageLedgerService, Engine]:
     engine = build_engine()
     return UsageLedgerService(engine), engine
+
+
+def _legacy_usage_service() -> tuple[LegacyUsageService, Engine]:
+    engine = build_engine()
+    return LegacyUsageService(engine), engine
+
+
+def _legacy_failure(exc: LegacyUsageError) -> Never:
+    _emit({"status": "FAILED", "error_code": exc.code})
+    raise typer.Exit(1)
+
+
+@legacy_usage_mapping_app.command("release")
+def legacy_usage_mapping_release(
+    mapping_key: Annotated[str, typer.Option("--mapping-key")],
+    contract_file: Annotated[Path, typer.Option("--contract-file", exists=True, dir_okay=False)],
+) -> None:
+    """Release one exact immutable workbook mapping contract."""
+
+    try:
+        mapping = LegacyUsageMappingContractRevision.model_validate(load_strict_json(contract_file))
+    except ValueError as exc:
+        raise typer.BadParameter("mapping contract JSON is invalid") from exc
+    service, engine = _legacy_usage_service()
+    try:
+        try:
+            record = service.release_mapping(mapping_key, mapping)
+        except LegacyUsageError as exc:
+            _legacy_failure(exc)
+        _emit(
+            {
+                "mapping_contract_revision_id": record.mapping_contract_revision_id,
+                "mapping_contract_id": record.mapping_contract_id,
+                "revision_number": record.revision_number,
+                "state": record.state,
+                "contract_sha256": record.contract_sha256,
+            }
+        )
+    finally:
+        engine.dispose()
+
+
+@legacy_usage_import_app.command("create")
+def legacy_usage_import_create(
+    command_file: Annotated[Path, typer.Option("--command-file", exists=True, dir_okay=False)],
+) -> None:
+    """Parse one pinned workbook and create review-only proposals."""
+
+    try:
+        command = CreateLegacyUsageImportCommand.model_validate(load_strict_json(command_file))
+    except ValueError as exc:
+        raise typer.BadParameter("legacy import command JSON is invalid") from exc
+    service, engine = _legacy_usage_service()
+    try:
+        try:
+            batch = service.create_import(command)
+        except LegacyUsageError as exc:
+            _legacy_failure(exc)
+        _emit(batch.manifest.model_dump(mode="json"))
+    finally:
+        engine.dispose()
+
+
+@legacy_usage_import_app.command("inspect")
+def legacy_usage_import_inspect(legacy_usage_import_id: str) -> None:
+    """Show bounded counts and immutable hashes for one import."""
+
+    service, engine = _legacy_usage_service()
+    try:
+        try:
+            inspection = service.inspect_import(legacy_usage_import_id)
+        except LegacyUsageError as exc:
+            _legacy_failure(exc)
+        value = asdict(inspection)
+        value["manifest"] = inspection.manifest.model_dump(mode="json")
+        _emit(value)
+    finally:
+        engine.dispose()
+
+
+@legacy_usage_import_app.command("proposals")
+def legacy_usage_import_proposals(
+    legacy_usage_import_id: str,
+    limit: int = typer.Option(100, min=1, max=500),
+    after_row_number: int = typer.Option(0, min=0),
+) -> None:
+    """Page schema-valid proposals without returning workbook bytes."""
+
+    service, engine = _legacy_usage_service()
+    try:
+        try:
+            page = service.list_proposals(
+                legacy_usage_import_id,
+                limit=limit,
+                after_row_number=after_row_number,
+            )
+        except LegacyUsageError as exc:
+            _legacy_failure(exc)
+        _emit(
+            {
+                "rows": [row.model_dump(mode="json") for row in page.rows],
+                "next_after_row_number": page.next_after_row_number,
+            }
+        )
+    finally:
+        engine.dispose()
+
+
+@legacy_usage_app.command("review")
+def legacy_usage_review(
+    legacy_usage_row_id: str,
+    decision: Annotated[Literal["APPROVE", "REJECT"], typer.Option("--decision")],
+    actor_id: Annotated[str, typer.Option("--actor-id")],
+    idempotency_key: Annotated[str, typer.Option("--idempotency-key")],
+) -> None:
+    """Append one immutable human decision for an exact proposal row."""
+
+    command = ReviewLegacyUsageRowCommand(
+        legacy_usage_row_id=legacy_usage_row_id,
+        decision=decision,
+        actor_id=actor_id,
+        idempotency_key=idempotency_key,
+    )
+    service, engine = _legacy_usage_service()
+    try:
+        try:
+            record = service.review_row(command)
+        except LegacyUsageError as exc:
+            _legacy_failure(exc)
+        _emit(
+            {
+                "legacy_usage_review_id": record.legacy_usage_review_id,
+                "legacy_usage_row_id": record.legacy_usage_row_id,
+                "decision": record.decision,
+                "decision_sha256": record.decision_sha256,
+                "reviewed_at": record.reviewed_at,
+                "reviewed_by": record.reviewed_by,
+            }
+        )
+    finally:
+        engine.dispose()
+
+
+@legacy_usage_import_app.command("commit")
+def legacy_usage_import_commit(
+    legacy_usage_import_id: str,
+    actor_id: Annotated[str, typer.Option("--actor-id")],
+    idempotency_key: Annotated[str, typer.Option("--idempotency-key")],
+) -> None:
+    """Atomically commit only explicitly reviewed exact rows."""
+
+    command = CommitLegacyUsageImportCommand(
+        legacy_usage_import_id=legacy_usage_import_id,
+        actor_id=actor_id,
+        idempotency_key=idempotency_key,
+    )
+    service, engine = _legacy_usage_service()
+    try:
+        try:
+            result = service.commit_import(command)
+        except LegacyUsageError as exc:
+            _legacy_failure(exc)
+        value = asdict(result)
+        value["projection"] = result.projection.model_dump(mode="json")
+        _emit(value)
+    finally:
+        engine.dispose()
+
+
+@legacy_usage_app.command("item-history")
+def legacy_usage_item_history(
+    item_revision_id: str,
+    limit: int = typer.Option(100, min=1, max=500),
+) -> None:
+    """Show where one exact immutable Item Revision was used."""
+
+    service, engine = _legacy_usage_service()
+    try:
+        try:
+            values = service.item_usage_history_v1(item_revision_id, limit=limit)
+        except LegacyUsageError as exc:
+            _legacy_failure(exc)
+        _emit([asdict(value) for value in values])
+    finally:
+        engine.dispose()
 
 
 @stimulus_app.command("provision")

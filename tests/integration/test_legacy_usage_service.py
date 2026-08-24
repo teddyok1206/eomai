@@ -437,6 +437,20 @@ def test_legacy_usage_import_review_commit_and_reverse_projection(
     assert committed[0].commit_sha256 == committed[1].commit_sha256
     assert committed[0].usage_record_count == 1
     assert committed[0].projection == committed[1].projection
+    inspection = service.inspect_import(results[0].manifest.legacy_usage_import_id)
+    assert inspection.manifest.state == "COMMITTED"
+    assert inspection.reviewed_count == inspection.approved_count == 1
+    assert inspection.rejected_review_count == 0
+    assert inspection.commit_sha256 == committed[0].commit_sha256
+    assert inspection.projection_sha256 == committed[0].projection.projection_sha256
+    page = service.list_proposals(results[0].manifest.legacy_usage_import_id, limit=1)
+    assert page.rows == (row,)
+    assert page.next_after_row_number is None
+    assert row.resolved is not None
+    history = service.item_usage_history_v1(row.resolved.item_revision_id)
+    assert len(history) == 1
+    assert history[0].item_revision_id == row.resolved.item_revision_id
+    assert history[0].position == 12
     sessions = build_session_factory(integration_engine)
     with sessions() as session:
         import_record = session.get(

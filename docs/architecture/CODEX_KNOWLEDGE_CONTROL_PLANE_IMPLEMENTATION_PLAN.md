@@ -5,7 +5,7 @@ and production-data authorization boundary.
 
 Plan baseline: `32e96263353f42e6bc857f6577604d83f8557680`
 
-Last reviewed: 2026-08-23 UTC
+Last reviewed: 2026-08-24 UTC
 
 ## Implementation status
 
@@ -22,7 +22,8 @@ Last reviewed: 2026-08-23 UTC
 | 8 — graph snapshot publication | `SOURCE_COMPLETE` | [`EDUCATION_GRAPH_SNAPSHOT_PERSISTENCE_V1.md`](EDUCATION_GRAPH_SNAPSHOT_PERSISTENCE_V1.md), additive migration 0013, immutable publication/projection and indexed traversal tests |
 | 9 — retrieval and Evidence Bundle | `SOURCE_COMPLETE` | [`EDUCATION_RETRIEVAL_EVIDENCE_BUNDLE_V2.md`](EDUCATION_RETRIEVAL_EVIDENCE_BUNDLE_V2.md), additive migration 0014, closed retrieval, deterministic publication, and disposable-DB proof |
 | 10 — knowledge-backed item production | `SOURCE_COMPLETE` | [`KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md`](KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md), immutable preset V2/plan V3 protocols, pre-claim Evidence Bundle resolution, least-needed materialization, opt-in GUI and pointer-only provenance |
-| 11–12 | `NOT_STARTED` | Must satisfy each phase's separate protocol, migration, deployment, and live-run gate |
+| 11 — legacy Product and Usage intake | `SOURCE_COMPLETE` | [`LEGACY_PRODUCT_USAGE_INTAKE_V1.md`](LEGACY_PRODUCT_USAGE_INTAKE_V1.md), additive migration 0015, guarded XLSX proposal/review/commit service, Product/Form/Assembly/Publication/Usage projection, disposable PostgreSQL proof |
+| 12 — hardening and measured rollout | `IN_PROGRESS` | [`CODEX_KNOWLEDGE_PHASE12_ROLLOUT.md`](../operations/CODEX_KNOWLEDGE_PHASE12_ROLLOUT.md), exact runtime-grant and release-boundary hardening in progress; content-specific graph/live/workbook gates remain separate |
 
 Phase 1 added no migration, live worker execution, runtime deployment, or production-data write.
 Phase 2 source work adds an unapplied additive migration and source behavior only; it performed no
@@ -48,6 +49,11 @@ passed in their focused commits. They did not publish a production graph or run 
 source work preserves source-free V1 execution, introduces a separate `knowledge-grounded-item` V2
 preset boundary, and keeps graph publication, preset activation, live worker execution, and
 production mutation behind Phase 12 rollout authorization.
+Phase 11 source work preserves workbook bytes as immutable Content Intake artifacts, adds additive
+migration 0015 and versioned mapping/import/proposal/projection contracts, and commits canonical
+Product/Form/Assembly/Publication/Usage rows only after exact-pointer review. Its source, static,
+security, release, migration-cycle, concurrency, immutability, and disposable PostgreSQL gates
+passed. No production workbook was imported and no graph snapshot was published.
 
 ## 1. Outcome
 

@@ -147,6 +147,9 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "eom_catalog_service/knowledge_analysis_risk.py",
         "eom_catalog_service/knowledge_analysis_service.py",
         "eom_catalog_service/knowledge_analysis_sources.py",
+        "eom_catalog_service/legacy_usage_models.py",
+        "eom_catalog_service/legacy_usage_service.py",
+        "eom_catalog_service/legacy_xlsx.py",
         "eom_catalog_service/runtime_privileges.py",
     ):
         assert required in source

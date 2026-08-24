@@ -104,6 +104,45 @@ class LegacyUsageCommitResult:
 
 
 @dataclass(frozen=True)
+class LegacyUsageImportInspection:
+    manifest: LegacyUsageImportManifest
+    reviewed_count: int
+    approved_count: int
+    rejected_review_count: int
+    commit_sha256: str | None
+    projection_sha256: str | None
+
+
+@dataclass(frozen=True)
+class LegacyUsageProposalPage:
+    rows: tuple[LegacyUsageRowProposal, ...]
+    next_after_row_number: int | None
+
+
+@dataclass(frozen=True)
+class LegacyUsageRecordSummary:
+    usage_record_id: str
+    item_id: str
+    item_revision_id: str
+    deliverable_id: str
+    deliverable_revision_id: str
+    assessment_form_id: str
+    assessment_form_revision_id: str
+    assessment_assembly_revision_id: str
+    placement_id: str
+    publication_revision_id: str
+    section_key: str
+    section_ordinal: int
+    position: int
+    points_milli: int
+    usage_role: str
+    source_kind: str
+    source_hash: str
+    detail_sha256: str
+    recorded_at: datetime
+
+
+@dataclass(frozen=True)
 class _ResolvedSource:
     path: Path
     source: ContentIntakeSourceFileRecord
@@ -456,6 +495,125 @@ class LegacyUsageService:
                 publication_revision_count=len({row.publication_revision_id for row in usage_rows}),
                 usage_record_count=len(usage_rows),
                 projection=projection,
+            )
+
+    def inspect_import(self, legacy_usage_import_id: str) -> LegacyUsageImportInspection:
+        """Return one bounded pointer/count projection without workbook or Item content."""
+
+        with self.sessions() as session:
+            record = session.get(LegacyUsageImportRecord, legacy_usage_import_id)
+            if record is None:
+                raise LegacyUsageError(
+                    "LEGACY_USAGE_IMPORT_NOT_FOUND", "legacy usage import does not exist"
+                )
+            decisions: dict[str, int] = {
+                str(decision): int(count)
+                for decision, count in session.execute(
+                    select(
+                        LegacyUsageRowReviewRecord.decision,
+                        func.count(LegacyUsageRowReviewRecord.legacy_usage_review_id),
+                    )
+                    .join(LegacyUsageRowProposalRecord)
+                    .where(
+                        LegacyUsageRowProposalRecord.legacy_usage_import_id
+                        == legacy_usage_import_id
+                    )
+                    .group_by(LegacyUsageRowReviewRecord.decision)
+                )
+            }
+            projection_sha256 = session.scalar(
+                select(ProductUsageProjectionRecord.projection_sha256).where(
+                    ProductUsageProjectionRecord.legacy_usage_import_id == legacy_usage_import_id
+                )
+            )
+            return LegacyUsageImportInspection(
+                manifest=self._manifest(record),
+                reviewed_count=sum(decisions.values()),
+                approved_count=int(decisions.get("APPROVE", 0)),
+                rejected_review_count=int(decisions.get("REJECT", 0)),
+                commit_sha256=record.commit_sha256,
+                projection_sha256=projection_sha256,
+            )
+
+    def list_proposals(
+        self,
+        legacy_usage_import_id: str,
+        *,
+        limit: int = 100,
+        after_row_number: int = 0,
+    ) -> LegacyUsageProposalPage:
+        """Page proposals by the indexed immutable workbook row number."""
+
+        if not 1 <= limit <= 500 or after_row_number < 0:
+            raise LegacyUsageError("LEGACY_USAGE_QUERY_INVALID", "proposal page bounds are invalid")
+        with self.sessions() as session:
+            if session.get(LegacyUsageImportRecord, legacy_usage_import_id) is None:
+                raise LegacyUsageError(
+                    "LEGACY_USAGE_IMPORT_NOT_FOUND", "legacy usage import does not exist"
+                )
+            records = list(
+                session.scalars(
+                    select(LegacyUsageRowProposalRecord)
+                    .where(
+                        LegacyUsageRowProposalRecord.legacy_usage_import_id
+                        == legacy_usage_import_id,
+                        LegacyUsageRowProposalRecord.source_row_number > after_row_number,
+                    )
+                    .order_by(LegacyUsageRowProposalRecord.source_row_number)
+                    .limit(limit + 1)
+                )
+            )
+            more = len(records) > limit
+            records = records[:limit]
+            rows = tuple(
+                LegacyUsageRowProposal.model_validate(record.canonical_document)
+                for record in records
+            )
+            return LegacyUsageProposalPage(
+                rows=rows,
+                next_after_row_number=(records[-1].source_row_number if more and records else None),
+            )
+
+    def item_usage_history_v1(
+        self, item_revision_id: str, *, limit: int = 100
+    ) -> tuple[LegacyUsageRecordSummary, ...]:
+        """Resolve reverse usage only for the exact pinned Item Revision."""
+
+        if re.fullmatch(r"itemrev_[0-9a-f]{32}", item_revision_id) is None or not 1 <= limit <= 500:
+            raise LegacyUsageError("LEGACY_USAGE_QUERY_INVALID", "reverse usage query is invalid")
+        with self.sessions() as session:
+            rows = session.scalars(
+                select(UsageRecordV1Record)
+                .where(UsageRecordV1Record.item_revision_id == item_revision_id)
+                .order_by(
+                    UsageRecordV1Record.recorded_at.desc(),
+                    UsageRecordV1Record.usage_record_id.desc(),
+                )
+                .limit(limit)
+            )
+            return tuple(
+                LegacyUsageRecordSummary(
+                    usage_record_id=row.usage_record_id,
+                    item_id=row.item_id,
+                    item_revision_id=row.item_revision_id,
+                    deliverable_id=row.deliverable_id,
+                    deliverable_revision_id=row.deliverable_revision_id,
+                    assessment_form_id=row.assessment_form_id,
+                    assessment_form_revision_id=row.assessment_form_revision_id,
+                    assessment_assembly_revision_id=row.assessment_assembly_revision_id,
+                    placement_id=row.placement_id,
+                    publication_revision_id=row.publication_revision_id,
+                    section_key=row.section_key,
+                    section_ordinal=row.section_ordinal,
+                    position=row.position,
+                    points_milli=row.points_milli,
+                    usage_role=row.usage_role,
+                    source_kind=row.source_kind,
+                    source_hash=row.source_hash,
+                    detail_sha256=row.detail_sha256,
+                    recorded_at=row.recorded_at,
+                )
+                for row in rows
             )
 
     @staticmethod

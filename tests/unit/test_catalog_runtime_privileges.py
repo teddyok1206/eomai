@@ -60,6 +60,31 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     assert "evidence_bundles" in UPDATE_TABLES
     assert "evidence_bundle_revisions" not in UPDATE_TABLES
     assert "knowledge_graph_snapshots" not in UPDATE_TABLES
+    immutable_legacy_tables = {
+        "assessment_assembly_revisions",
+        "assessment_form_revisions",
+        "assessment_item_placements",
+        "legacy_usage_mapping_contract_revisions",
+        "legacy_usage_row_proposals",
+        "legacy_usage_row_reviews",
+        "product_usage_projections",
+        "publication_revisions",
+        "usage_records_v1",
+    }
+    mutable_legacy_headers = {
+        "assessment_assemblies",
+        "assessment_forms",
+        "legacy_usage_imports",
+        "legacy_usage_mapping_contracts",
+        "publications",
+    }
+    assert immutable_legacy_tables | mutable_legacy_headers <= set(READ_TABLES)
+    assert immutable_legacy_tables | mutable_legacy_headers <= set(INSERT_TABLES)
+    assert immutable_legacy_tables.isdisjoint(UPDATE_TABLES)
+    assert mutable_legacy_headers <= set(UPDATE_TABLES)
+    assert {"deliverables", "deliverable_revisions"} <= set(READ_TABLES)
+    assert {"deliverables", "deliverable_revisions"}.isdisjoint(INSERT_TABLES)
+    assert {"deliverables", "deliverable_revisions"}.isdisjoint(UPDATE_TABLES)
     assert "api_sessions" not in READ_TABLES
     assert "api_tokens" not in READ_TABLES
     assert "operator_credentials" not in READ_TABLES
