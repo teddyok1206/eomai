@@ -25,6 +25,7 @@ from eom_workflow.models import (
     GeneratedReviewRoleResultV4,
     ImageRoleResult,
     KnowledgeAnalysisProposalRoleResult,
+    KnowledgeAnalysisWorkerRequest,
     KnowledgeAuthoringRoleResult,
     KnowledgeImageRoleResult,
     KnowledgeRegistrationRoleResult,
@@ -294,6 +295,21 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
         worker_input.artifact.logical_artifact_id
     )
     _mapping(artifact_properties, "revision_id")["const"] = worker_input.artifact.revision_id
+    if schema_id == "knowledge-analysis-proposal-result@1.0":
+        if not isinstance(worker_input.request, KnowledgeAnalysisWorkerRequest):
+            raise WorkflowSchemaError("knowledge analysis result requires its typed worker request")
+        output = _mapping(_mapping(schema, "properties"), "output")
+        if output.get("$ref") != "#/$defs/output":
+            raise WorkflowSchemaError("knowledge analysis output reference is not projectable")
+        output_definition = _mapping(_mapping(schema, "$defs"), "output")
+        proposal_ref = _mapping(_mapping(output_definition, "properties"), "proposal")
+        if proposal_ref.get("$ref") != "#/$defs/KnowledgeAnalysisWorkerProposal":
+            raise WorkflowSchemaError("knowledge analysis proposal reference is not projectable")
+        proposal_definition = _mapping(_mapping(schema, "$defs"), "KnowledgeAnalysisWorkerProposal")
+        proposal_properties = _mapping(proposal_definition, "properties")
+        _mapping(proposal_properties, "analysis_request_id")["const"] = (
+            worker_input.request.analysis_request.analysis_request_id
+        )
     validate_codex_structured_output_schema(schema)
     return schema
 

@@ -6,7 +6,13 @@ from pathlib import Path
 import pytest
 from eom_identifiers import content_sha256
 from eom_workflow.compiler import compile_definition
-from eom_workflow.models import ArtifactPointer, ArtifactSpec, RoleWorkerInput, WorkflowRequest
+from eom_workflow.models import (
+    ArtifactPointer,
+    ArtifactSpec,
+    KnowledgeAnalysisWorkerRequest,
+    RoleWorkerInput,
+    WorkflowRequest,
+)
 from eom_workflow.schemas import (
     RESULT_SCHEMA_FILES,
     WorkflowSchemaError,
@@ -154,6 +160,34 @@ def test_constrained_result_schema_fixes_all_execution_identifiers() -> None:
     assert properties["job_id"]["const"] == JOB_ID
     assert properties["workflow_id"]["const"] == WORKFLOW_ID
     assert properties["step_run_id"]["const"] == STEP_RUN_ID
+
+
+def test_constrained_knowledge_analysis_schema_fixes_request_identity() -> None:
+    request = KnowledgeAnalysisWorkerRequest.model_validate(
+        {"analysis_request": _knowledge_analysis_request()}
+    )
+    worker_input = RoleWorkerInput(
+        job_id=JOB_ID,
+        workflow_id=WORKFLOW_ID,
+        step_run_id=STEP_RUN_ID,
+        attempt=1,
+        role="support",
+        request=request,
+        upstream_artifacts=(),
+        artifact=ArtifactSpec(logical_artifact_id=ARTIFACT_ID, revision_id=REVISION_ID),
+    )
+    schema = constrained_result_schema("knowledge-analysis-proposal-result@1.0", worker_input)
+    proposal = schema["$defs"]["KnowledgeAnalysisWorkerProposal"]
+    assert proposal["properties"]["analysis_request_id"]["const"] == (
+        "knowledgeanalysis_" + "1" * 32
+    )
+    result = _knowledge_analysis_result()
+    result["output"]["proposal"]["analysis_request_id"] = "knowledgeanalysis_" + "2" * 32  # type: ignore[index]
+    errors = list(Draft202012Validator(schema).iter_errors(result))
+    assert any(
+        list(error.absolute_path) == ["output", "proposal", "analysis_request_id"]
+        for error in errors
+    )
 
 
 def test_role_schema_bundle_hash_is_canonical() -> None:
