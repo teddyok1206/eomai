@@ -71,6 +71,8 @@ def test_request_draft_workflow_submission_and_replay() -> None:
                 "image_required": True,
                 "quality_profile": "deep",
                 "source_intake_batch_id": INTAKE_ID,
+                "knowledge_grounding": False,
+                "curriculum_root_key": None,
             },
             headers=headers,
         )
@@ -109,6 +111,52 @@ def test_request_draft_submission_allows_source_free_general_knowledge() -> None
         assert response.status_code == 202
         assert response.json()["mode"] == "KNOWLEDGE_ITEM"
         assert gateway.start_calls == 1
+        assert gateway.last_start_payload is not None
+        assert "educational_retrieval" not in gateway.last_start_payload
+
+
+def test_request_draft_submission_can_opt_in_to_bounded_graph_grounding() -> None:
+    client, gateway = make_client()
+    with client:
+        session = login(client)
+        headers = {"X-CSRF-Token": session["csrf_token"]}
+        draft = client.post(
+            "/studio/api/v1/request-drafts",
+            json={"original_request_text": "통합과학 판 경계 자료 해석 문항을 생성해 주세요."},
+            headers=headers,
+        ).json()
+        updated = client.put(
+            f"/studio/api/v1/request-drafts/{draft['request_draft_id']}",
+            json={
+                "subject": "통합과학",
+                "topic": "판 경계",
+                "item_format": "multiple_choice",
+                "task_type": "data_interpretation",
+                "difficulty": "hard",
+                "choice_count": 5,
+                "equation_required": True,
+                "image_required": True,
+                "quality_profile": "deep",
+                "source_intake_batch_id": None,
+                "knowledge_grounding": True,
+                "curriculum_root_key": "earth.plate-boundary",
+            },
+            headers=headers,
+        )
+        assert updated.status_code == 200
+        response = client.post(
+            f"/studio/api/v1/request-drafts/{draft['request_draft_id']}/submissions",
+            json={"idempotency_key": "studio:graph-grounding-0001"},
+            headers=headers,
+        )
+        assert response.status_code == 202
+        assert gateway.last_start_payload is not None
+        requirement = gateway.last_start_payload["educational_retrieval"]
+        assert isinstance(requirement, dict)
+        assert requirement["corpus_key"] == "science-core"
+        assert requirement["curriculum_root_key"] == "earth.plate-boundary"
+        assert "graph_snapshot_revision_id" not in requirement
+        assert gateway.last_start_payload["execution_preset_key"] == "knowledge-grounded-item"
 
 
 def test_workflow_timeline_approval_etag_and_item_preview() -> None:

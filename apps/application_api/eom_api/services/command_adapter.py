@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from typing import Any
+from typing import Any, Literal
 
 from eom_api_contracts.content_packs import ActivateContentPackRequest
 from eom_api_contracts.deliverables import CreateDeliverableRequest
@@ -12,6 +12,7 @@ from eom_api_contracts.usage import CreateUsagePlanRequest, FulfillUsagePlanRequ
 from eom_api_contracts.workflows import WorkflowActionRequest, WorkflowStartRequest
 from eom_catalog_contracts import (
     CreateDeliverable,
+    CreateItemProductionEvidenceCommand,
     CreateUsagePlan,
     FulfillUsagePlan,
     ReviewedItemContentImportCommand,
@@ -20,15 +21,26 @@ from eom_catalog_service.content_pack_service import ContentPackService
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.usage_service import UsageLedgerService
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
+from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext
 from eom_orchestrator.control_service import ResolvedPlanDependencyEvidence
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.execution_resolver import (
     ExecutionStepRequirement,
+    current_knowledge_backed_preset,
     resolve_execution_plan,
+    resolve_knowledge_backed_execution_plan,
+    validate_educational_retrieval_policy,
 )
-from eom_workflow import AgentStep, WorkflowRequest, compile_definition_data
+from eom_workflow import (
+    AgentStep,
+    ResolvedExecutionPlan,
+    ResolvedExecutionPlanV3,
+    WorkflowRequest,
+    compile_definition_data,
+)
 from eom_workflow.control_plane import WorkerRole
+from eom_workflow.schemas import result_schema_protocol
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowDefinitionRecord
 from eom_workflow_runner.repository import (
@@ -73,6 +85,11 @@ class CommandAdapter:
             "request_name": request.request_name,
             "image_mode": request.image_mode,
             "execution_preset_key": request.execution_preset_key,
+            "educational_retrieval": (
+                request.educational_retrieval.model_dump(mode="json")
+                if request.educational_retrieval is not None
+                else None
+            ),
         }
         if request.pack_key is not None:
             knowledge_request = request.request_name == "KNOWLEDGE_ITEM_REQUEST"
@@ -136,6 +153,87 @@ class CommandAdapter:
                 assert request.stimulus_asset_key is not None
                 request_data["stimulus_asset"] = {"asset_key": request.stimulus_asset_key}
         workflow_request = WorkflowRequest.model_validate(request_data)
+        knowledge_preset = None
+        knowledge_evidence = None
+        preflight_definition_hash: str | None = None
+        if workflow_request.educational_retrieval is not None:
+            with self.sessions() as preflight_session:
+                preflight_definition = preflight_session.scalar(
+                    select(WorkflowDefinitionRecord).where(
+                        WorkflowDefinitionRecord.definition_key == request.definition_key,
+                        WorkflowDefinitionRecord.definition_version == request.definition_version,
+                        WorkflowDefinitionRecord.active.is_(True),
+                    )
+                )
+                if preflight_definition is None:
+                    raise ApiError(
+                        404,
+                        "WORKFLOW_DEFINITION_NOT_FOUND",
+                        "Workflow definition not found",
+                        "The requested active workflow definition does not exist.",
+                    )
+                assert workflow_request.execution_preset_key is not None
+                compiled_preflight = compile_definition_data(
+                    preflight_definition.canonical_definition,
+                    preflight_definition.source_path,
+                    {"authoring", "image", "review", "item_management"},
+                )
+                role_protocols = {
+                    result_schema_protocol(step.result_schema)
+                    for step in compiled_preflight.definition.steps
+                    if isinstance(step, AgentStep)
+                }
+                if len(role_protocols) != 1:
+                    raise ApiError(
+                        409,
+                        "WORKFLOW_DEFINITION_INVALID",
+                        "Workflow definition invalid",
+                        "The workflow definition has inconsistent role protocols.",
+                    )
+                knowledge_preset = current_knowledge_backed_preset(
+                    preflight_session,
+                    preset_key=workflow_request.execution_preset_key,
+                    workflow_role_schema_version=str(next(iter(role_protocols))),
+                )
+                validate_educational_retrieval_policy(
+                    knowledge_preset, workflow_request.educational_retrieval
+                )
+                preflight_definition_hash = preflight_definition.definition_hash
+            requester_role = self._knowledge_requester_role(actor)
+            requester_permission_keys = tuple(
+                sorted(permission.value for permission in actor.permissions)
+            )
+            command_value = {
+                "operation": "CREATE_ITEM_PRODUCTION_EVIDENCE",
+                "requirement": workflow_request.educational_retrieval.model_dump(mode="json"),
+                "evidence_budget": knowledge_preset.retrieval_policy.maximum_budget.model_dump(
+                    mode="json"
+                ),
+                "access_policy_revision_id": (
+                    knowledge_preset.retrieval_policy.access_policy_revision_id
+                ),
+                "access_policy_sha256": knowledge_preset.retrieval_policy.access_policy_sha256,
+                "requester_role": requester_role,
+                "requester_permission_keys": list(requester_permission_keys),
+                "requested_by": actor.actor_id,
+            }
+            evidence_command = CreateItemProductionEvidenceCommand(
+                operation="CREATE_ITEM_PRODUCTION_EVIDENCE",
+                requirement=workflow_request.educational_retrieval,
+                evidence_budget=knowledge_preset.retrieval_policy.maximum_budget,
+                access_policy_revision_id=(
+                    knowledge_preset.retrieval_policy.access_policy_revision_id
+                ),
+                access_policy_sha256=knowledge_preset.retrieval_policy.access_policy_sha256,
+                requester_role=requester_role,
+                requester_permission_keys=requester_permission_keys,
+                requested_by=actor.actor_id,
+                idempotency_key=idempotency_key,
+                submission_sha256=content_sha256(command_value),
+            )
+            knowledge_evidence = self.catalog_application.create_item_production_evidence(
+                evidence_command
+            )
         with transaction(self.sessions) as session:
             definition = session.scalar(
                 select(WorkflowDefinitionRecord).where(
@@ -150,6 +248,16 @@ class CommandAdapter:
                     "WORKFLOW_DEFINITION_NOT_FOUND",
                     "Workflow definition not found",
                     "The requested active workflow definition does not exist.",
+                )
+            if (
+                preflight_definition_hash is not None
+                and definition.definition_hash != preflight_definition_hash
+            ):
+                raise ApiError(
+                    409,
+                    "WORKFLOW_DEFINITION_CHANGED",
+                    "Workflow definition changed",
+                    "The workflow definition changed during evidence resolution.",
                 )
             runtime_context = (
                 self.catalog.bind_request(
@@ -192,20 +300,44 @@ class CommandAdapter:
                         if isinstance(step, AgentStep)
                     )
                     pack = runtime_context["content_pack"]
-                    plan = resolve_execution_plan(
-                        session,
-                        preset_key=workflow_request.execution_preset_key,
-                        dependencies=ResolvedPlanDependencyEvidence(
-                            workflow_id=workflow.workflow_id,
-                            workflow_definition_key=definition.definition_key,
-                            workflow_definition_version=definition.definition_version,
-                            workflow_definition_sha256=definition.definition_hash,
-                            workflow_role_schema_version=workflow.role_schema_version,
-                            content_pack_release_id=str(pack["release_id"]),
-                            content_pack_sha256=str(pack["release_sha256"]),
+                    dependencies = ResolvedPlanDependencyEvidence(
+                        workflow_id=workflow.workflow_id,
+                        workflow_definition_key=definition.definition_key,
+                        workflow_definition_version=definition.definition_version,
+                        workflow_definition_sha256=definition.definition_hash,
+                        workflow_role_schema_version=workflow.role_schema_version,
+                        content_pack_release_id=str(pack["release_id"]),
+                        content_pack_sha256=str(pack["release_sha256"]),
+                        graph_snapshot_revision_id=(
+                            knowledge_evidence.graph_snapshot.graph_snapshot_revision_id
+                            if knowledge_evidence is not None
+                            else None
                         ),
-                        steps=requirements,
+                        evidence_bundle_revision_id=(
+                            knowledge_evidence.evidence_bundle_revision_id
+                            if knowledge_evidence is not None
+                            else None
+                        ),
                     )
+                    plan: ResolvedExecutionPlan | ResolvedExecutionPlanV3
+                    if knowledge_evidence is not None:
+                        assert knowledge_preset is not None
+                        assert workflow_request.educational_retrieval is not None
+                        plan = resolve_knowledge_backed_execution_plan(
+                            session,
+                            preset_revision_id=knowledge_preset.preset_revision_id,
+                            requirement=workflow_request.educational_retrieval,
+                            evidence=knowledge_evidence,
+                            dependencies=dependencies,
+                            steps=requirements,
+                        )
+                    else:
+                        plan = resolve_execution_plan(
+                            session,
+                            preset_key=workflow_request.execution_preset_key,
+                            dependencies=dependencies,
+                            steps=requirements,
+                        )
                     context = dict(workflow.runtime_context)
                     context["execution_plan"] = {
                         "plan_id": plan.plan_id,
@@ -245,6 +377,32 @@ class CommandAdapter:
             assert command is not None
             command_id = command.command_id
             return command_id, workflow.workflow_id, workflow.lock_version
+
+    @staticmethod
+    def _knowledge_requester_role(
+        actor: ActorContext,
+    ) -> Literal["ADMIN", "EDITOR", "REVIEWER"]:
+        from eom_operator_identity import PermissionKey
+
+        if PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE not in actor.permissions:
+            raise ApiError(
+                403,
+                "KNOWLEDGE_RETRIEVAL_FORBIDDEN",
+                "Knowledge retrieval forbidden",
+                "The operator is not allowed to create graph-backed evidence.",
+            )
+        if actor.permissions == frozenset(PermissionKey):
+            return "ADMIN"
+        if PermissionKey.HWPX_BUILD_CREATE in actor.permissions:
+            return "EDITOR"
+        if PermissionKey.WORKFLOW_APPROVE in actor.permissions:
+            return "REVIEWER"
+        raise ApiError(
+            403,
+            "KNOWLEDGE_RETRIEVAL_ROLE_FORBIDDEN",
+            "Knowledge retrieval role forbidden",
+            "The operator role is not approved for graph-backed item production.",
+        )
 
     def workflow_action(
         self,

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
+from eom_catalog_contracts import EvidenceBudget, KnowledgeSourceClass
 from pydantic import Field, model_validator
 
 from eom_api_contracts.common import ApiModel, OpaqueId, Sha256, UtcDatetime
@@ -39,9 +40,37 @@ class PresetRolePolicyInput(ApiModel):
     timeout_seconds: int = Field(ge=30, le=7200)
     sandbox: Literal["read-only"] = "read-only"
     network: Literal["disabled"] = "disabled"
+    evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None = None
+
+
+class PresetRetrievalPolicyInput(ApiModel):
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: Sha256
+    allowed_corpus_keys: tuple[Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")], ...] = (
+        Field(min_length=1, max_length=16)
+    )
+    allowed_query_kinds: tuple[
+        Literal["CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE", "ITEM_PREPARATION"], ...
+    ] = Field(min_length=1, max_length=3)
+    allowed_source_classes: tuple[KnowledgeSourceClass, ...] = Field(min_length=1, max_length=5)
+    maximum_budget: EvidenceBudget
+
+    @model_validator(mode="after")
+    def deterministic_policy(self) -> PresetRetrievalPolicyInput:
+        for values in (
+            self.allowed_corpus_keys,
+            self.allowed_query_kinds,
+            self.allowed_source_classes,
+        ):
+            if tuple(sorted(values)) != values or len(values) != len(set(values)):
+                raise ValueError("retrieval policy collections must be sorted and unique")
+        return self
 
 
 class CreateExecutionPresetDraftRequest(ApiModel):
+    schema_version: Literal["execution-preset-revision/1.0", "execution-preset-revision/2.0"] = (
+        "execution-preset-revision/1.0"
+    )
     preset_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=1000)
@@ -49,6 +78,19 @@ class CreateExecutionPresetDraftRequest(ApiModel):
     capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
     general_knowledge_policy: Literal["DENY", "ALLOW_WITH_PROVENANCE"]
     compatible_workflow_protocols: tuple[str, ...] = Field(min_length=1, max_length=16)
+    retrieval_policy: PresetRetrievalPolicyInput | None = None
+
+    @model_validator(mode="after")
+    def exact_schema_family(self) -> CreateExecutionPresetDraftRequest:
+        is_v2 = self.schema_version == "execution-preset-revision/2.0"
+        if is_v2 != (self.retrieval_policy is not None):
+            raise ValueError("V2 preset drafts require exactly one retrieval policy")
+        evidence_values = [policy.evidence_access for policy in self.role_policies]
+        if is_v2 and any(value is None for value in evidence_values):
+            raise ValueError("V2 preset roles require explicit evidence access")
+        if not is_v2 and any(value is not None for value in evidence_values):
+            raise ValueError("V1 preset roles cannot declare evidence access")
+        return self
 
 
 class CodexAccountCommandRequest(ApiModel):
@@ -113,6 +155,7 @@ class ExecutionPresetEvaluationView(ApiModel):
 
 
 class ExecutionPresetRevisionView(ApiModel):
+    schema_version: str
     preset_revision_id: OpaqueId
     preset_id: OpaqueId
     revision_number: int = Field(ge=1)
@@ -125,6 +168,7 @@ class ExecutionPresetRevisionView(ApiModel):
     content_sha256: Sha256
     created_at: UtcDatetime
     role_policies: tuple[PresetRolePolicyInput, ...]
+    retrieval_policy: PresetRetrievalPolicyInput | None = None
     evaluations: tuple[ExecutionPresetEvaluationView, ...]
 
 

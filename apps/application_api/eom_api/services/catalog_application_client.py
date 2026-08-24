@@ -19,8 +19,10 @@ from eom_catalog_contracts import (
     CatalogApplicationRequest,
     CatalogApplicationResponse,
     CreateEvidenceBundleCommand,
+    CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisCommand,
     EvidenceBundlePublicationResult,
+    EvidenceBundlePublicationResultV2,
     ItemContentQuery,
     KnowledgeAnalysisApplicationResult,
     ReconcileKnowledgeAnalysisCommand,
@@ -103,6 +105,17 @@ class CatalogApplicationClient:
             )
         return response.evidence
 
+    def create_item_production_evidence(
+        self, command: CreateItemProductionEvidenceCommand
+    ) -> EvidenceBundlePublicationResultV2:
+        response = self._request(command)
+        if response.operation != command.operation or response.item_production_evidence is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog item production Evidence Bundle response is invalid",
+            )
+        return response.item_production_evidence
+
     def _analysis_request(
         self,
         command: CreateKnowledgeAnalysisCommand
@@ -124,10 +137,21 @@ class CatalogApplicationClient:
         | CreateKnowledgeAnalysisCommand
         | ReconcileKnowledgeAnalysisCommand
         | ReviewKnowledgeAnalysisCommand
-        | CreateEvidenceBundleCommand,
+        | CreateEvidenceBundleCommand
+        | CreateItemProductionEvidenceCommand,
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
-        validate_contract("catalog-application-request-v3", payload)
+        request_schema = (
+            "catalog-application-request-v4"
+            if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
+            else "catalog-application-request-v3"
+        )
+        response_schema = (
+            "catalog-application-response-v4"
+            if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
+            else "catalog-application-response-v3"
+        )
+        validate_contract(request_schema, payload)
         self._validate_socket()
         connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
@@ -147,7 +171,7 @@ class CatalogApplicationClient:
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError
-            validate_contract("catalog-application-response-v3", value)
+            validate_contract(response_schema, value)
             response = CatalogApplicationResponse.model_validate(value)
         except CatalogApplicationClientError:
             raise

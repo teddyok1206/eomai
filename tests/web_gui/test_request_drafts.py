@@ -30,6 +30,8 @@ def test_demo_request_normalization_is_deterministic_and_structured() -> None:
     assert first.equation_required is True
     assert first.image_required is True
     assert first.choice_count == 5
+    assert first.knowledge_grounding is False
+    assert first.curriculum_root_key is None
     assert first.original_request_sha256 == second.original_request_sha256
 
 
@@ -72,6 +74,8 @@ def test_draft_update_preserves_identity_and_source_hash() -> None:
             image_required=True,
             quality_profile="deep",
             source_intake_batch_id=INTAKE_ID,
+            knowledge_grounding=False,
+            curriculum_root_key=None,
         ),
         now=NOW,
     )
@@ -88,6 +92,49 @@ def test_workflow_payload_allows_source_free_general_knowledge() -> None:
     payload = workflow_start_payload(draft)
     assert payload["source_intake_batch_ids"] == []
     assert payload["stimulus_asset_key"] is None
+    assert "educational_retrieval" not in payload
+
+
+def test_workflow_payload_exposes_only_bounded_educational_requirement() -> None:
+    draft = normalize_request(
+        RequestDraftInput(original_request_text=DEMO_REQUEST), now=NOW, token="6" * 32
+    ).model_copy(
+        update={"knowledge_grounding": True, "curriculum_root_key": "earth.plate-boundary"}
+    )
+    payload = workflow_start_payload(draft)
+    assert payload["educational_retrieval"] == {
+        "schema_version": "educational-retrieval-requirement/1.0",
+        "corpus_key": "science-core",
+        "query_kind": "ITEM_PREPARATION",
+        "curriculum_root_key": "earth.plate-boundary",
+        "topic_keys": [],
+        "required_item_elements": ["equation", "image", "statement_set", "table"],
+        "source_classes": ["APPROVED_ITEM", "TEXTBOOK"],
+    }
+    assert payload["execution_preset_key"] == "knowledge-grounded-item"
+    serialized = str(payload)
+    assert "graph_snapshot_revision_id" not in serialized
+    assert "access_policy_revision_id" not in serialized
+    assert "storage" not in serialized and "path" not in serialized
+
+
+def test_draft_grounding_requires_one_stable_curriculum_key() -> None:
+    base = {
+        "subject": "물리학",
+        "topic": "운동",
+        "task_type": "calculation",
+        "difficulty": "medium",
+        "choice_count": 5,
+        "equation_required": True,
+        "image_required": True,
+        "quality_profile": "balanced",
+    }
+    with pytest.raises(ValidationError, match="stable curriculum root key"):
+        RequestDraftUpdate.model_validate(base | {"knowledge_grounding": True})
+    with pytest.raises(ValidationError, match="stable curriculum root key"):
+        RequestDraftUpdate.model_validate(
+            base | {"knowledge_grounding": False, "curriculum_root_key": "earth.motion"}
+        )
 
 
 def test_draft_validation_rejects_unbounded_choice_count() -> None:

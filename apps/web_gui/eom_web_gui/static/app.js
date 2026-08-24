@@ -156,6 +156,11 @@ function installRequestDraft() {
   $("#draft-analyze").addEventListener("click", analyzeDraft);
   $("#draft-save").addEventListener("click", saveDraft);
   $("#draft-submit").addEventListener("click", submitDraft);
+  $("#draft-form").elements.knowledge_grounding.addEventListener("change", (event) => {
+    const input = $("#draft-form").elements.curriculum_root_key;
+    input.disabled = !event.target.checked;
+    if (!event.target.checked) input.value = "";
+  });
 }
 
 async function analyzeDraft() {
@@ -187,6 +192,9 @@ function fillDraft(draft) {
   form.elements.image_required.checked = draft.image_required;
   form.elements.quality_profile.value = draft.quality_profile;
   form.elements.source_intake_batch_id.value = draft.source_intake_batch_id || "";
+  form.elements.knowledge_grounding.checked = draft.knowledge_grounding;
+  form.elements.curriculum_root_key.value = draft.curriculum_root_key || "";
+  form.elements.curriculum_root_key.disabled = !draft.knowledge_grounding;
   $("#draft-id").textContent = draft.request_draft_id;
   $("#draft-sha").textContent = draft.original_request_sha256;
 }
@@ -204,6 +212,10 @@ function draftUpdateBody() {
     image_required: form.elements.image_required.checked,
     quality_profile: form.elements.quality_profile.value,
     source_intake_batch_id: form.elements.source_intake_batch_id.value || null,
+    knowledge_grounding: form.elements.knowledge_grounding.checked,
+    curriculum_root_key: form.elements.knowledge_grounding.checked
+      ? form.elements.curriculum_root_key.value.trim()
+      : null,
   };
 }
 
@@ -268,16 +280,27 @@ async function loadWorkflow() {
 
 function renderWorkflow(bundle) {
   const workflow = bundle.workflow || {};
+  const provenance = workflow.knowledge_provenance || null;
   const style = statusStyle(workflow.state);
   setStatus($("#workflow-state"), style[0], style[1], workflow.state || "UNKNOWN");
-  renderDefinitionList($("#workflow-inspector"), {
+  const summary = {
     Workflow: workflow.workflow_id,
     상태: workflow.state,
     "현재 단계": workflow.current_step_key,
     ETag: bundle.etag,
     "Definition": `${workflow.definition_key || "-"}@${workflow.definition_version || "-"}`,
     "Updated UTC": workflow.updated_at,
-  });
+  };
+  if (provenance) {
+    Object.assign(summary, {
+      "Evidence Bundle": provenance.evidence_bundle_revision_id,
+      "Graph Snapshot": provenance.graph_snapshot_revision_id,
+      "교육과정 키": provenance.curriculum_root_key,
+      "근거 Source": (provenance.source_classes || []).join(", "),
+      "Execution Plan SHA": provenance.plan_sha256,
+    });
+  }
+  renderDefinitionList($("#workflow-inspector"), summary);
   renderStages(workflow, bundle.steps || []);
   renderTimeline(bundle.timeline || []);
   renderOperationalLog(bundle);

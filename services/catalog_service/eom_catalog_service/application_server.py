@@ -22,6 +22,7 @@ from eom_catalog_contracts import (
     CatalogApplicationRequest,
     CatalogApplicationResponse,
     CreateEvidenceBundleCommand,
+    CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisCommand,
     ItemContentQuery,
     ReconcileKnowledgeAnalysisCommand,
@@ -84,9 +85,17 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 "RECONCILE_KNOWLEDGE_ANALYSIS",
                 "REVIEW_KNOWLEDGE_ANALYSIS",
                 "CREATE_EVIDENCE_BUNDLE",
+                "CREATE_ITEM_PRODUCTION_EVIDENCE",
             }:
                 operation = raw_operation
-            validate_contract("catalog-application-request-v3", value)
+            validate_contract(
+                (
+                    "catalog-application-request-v4"
+                    if operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
+                    else "catalog-application-request-v3"
+                ),
+                value,
+            )
             request = CatalogApplicationRequest.model_validate(value).root
         except (
             UnicodeError,
@@ -151,6 +160,14 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     status="OK",
                     operation=request.operation,
                     evidence=self.server.knowledge_retrieval.create(request),
+                )
+            elif isinstance(request, CreateItemProductionEvidenceCommand):
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    item_production_evidence=(
+                        self.server.knowledge_retrieval.create_item_production(request)
+                    ),
                 )
             else:  # pragma: no cover - discriminated contract makes this unreachable
                 raise TypeError("unsupported catalog application request")
@@ -243,7 +260,14 @@ class CatalogApplicationServer(_ThreadingUnixServer):
     @staticmethod
     def write_response(stream: Any, response: CatalogApplicationResponse) -> None:
         payload = response.model_dump(mode="json", exclude_none=True)
-        validate_contract("catalog-application-response-v3", payload)
+        validate_contract(
+            (
+                "catalog-application-response-v4"
+                if response.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
+                else "catalog-application-response-v3"
+            ),
+            payload,
+        )
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         raw = encoded.encode("utf-8")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:

@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal
 
 from eom_catalog_contracts import (
     AssessmentItemContent,
+    EducationalRetrievalRequirement,
     EquationBlock,
     ItemScore,
     ItemSolution,
@@ -192,6 +193,7 @@ class WorkflowRequest(FrozenModel):
     item_brief: ItemBrief | None = None
     stimulus_asset: StimulusAssetSelection | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    educational_retrieval: EducationalRetrievalRequirement | None = None
     analysis_request: KnowledgeAnalysisRequestV2 | None = None
 
     @model_validator(mode="after")
@@ -205,6 +207,13 @@ class WorkflowRequest(FrozenModel):
             raise ValueError("source Intake pointers require a Content Pack")
         if self.execution_preset_key is not None and self.content_pack is None:
             raise ValueError("execution preset requires a pinned Content Pack workflow")
+        if self.educational_retrieval is not None and (
+            self.request_name != "GENERATED_KNOWLEDGE_ITEM_REQUEST"
+            or self.execution_preset_key is None
+        ):
+            raise ValueError(
+                "educational retrieval requires a generated item request and execution preset"
+            )
         if self.request_name == "KNOWLEDGE_ITEM_REQUEST":
             if (
                 self.content_pack is None

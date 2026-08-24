@@ -68,10 +68,20 @@ class RequestDraftUpdate(WebModel):
     image_required: Literal[True] = True
     quality_profile: QualityProfile
     source_intake_batch_id: str | None = Field(default=None, pattern=r"^intake_[0-9a-f]{32}$")
+    knowledge_grounding: bool = False
+    curriculum_root_key: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$")
+
+    @model_validator(mode="after")
+    def exact_knowledge_grounding_scope(self) -> RequestDraftUpdate:
+        if self.knowledge_grounding != (self.curriculum_root_key is not None):
+            raise ValueError(
+                "knowledge grounding and a stable curriculum root key must be selected together"
+            )
+        return self
 
 
 class RequestDraft(RequestDraftUpdate):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["2.0"] = "2.0"
     request_draft_id: str = Field(pattern=r"^requestdraft_[0-9a-f]{32}$")
     status: Literal["DRAFT"] = "DRAFT"
     language: Literal["ko"] = "ko"

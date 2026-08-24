@@ -6,13 +6,17 @@ from pathlib import Path
 import pytest
 from eom_api_contracts.auth import LoginRequest
 from eom_api_contracts.common import ArtifactPointer
+from eom_api_contracts.control_plane import CreateExecutionPresetDraftRequest
 from eom_api_contracts.knowledge_analysis import (
     CreateKnowledgeAnalysisRequest,
     KnowledgeAnalysisReviewRequest,
 )
 from eom_api_contracts.knowledge_retrieval import CreateEvidenceBundleRequest
 from eom_api_contracts.operators import CreateOperatorRequest
-from eom_api_contracts.workflows import WorkflowStartRequest
+from eom_api_contracts.workflows import (
+    WorkflowKnowledgeProvenanceView,
+    WorkflowStartRequest,
+)
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
@@ -139,6 +143,52 @@ def test_generated_item_workflow_requires_image_role_without_a_prebuilt_stimulus
         )
 
 
+def test_generated_item_accepts_bounded_educational_intent_not_graph_controls() -> None:
+    request = {
+        "definition_key": "generic-item-development",
+        "definition_version": "1.4.0",
+        "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+        "image_mode": "required",
+        "pack_key": "generated-knowledge-item",
+        "execution_preset_key": "knowledge-grounded-item",
+        "item_brief": {
+            "subject": "통합과학",
+            "topic": "판 경계와 지진 자료",
+            "task_type": "data_interpretation",
+            "difficulty": "hard",
+            "choice_count": 5,
+            "equation_required": True,
+            "image_required": True,
+            "quality_profile": "deep",
+            "original_request_sha256": "0" * 64,
+        },
+        "educational_retrieval": {
+            "schema_version": "educational-retrieval-requirement/1.0",
+            "corpus_key": "science-core",
+            "query_kind": "ITEM_PREPARATION",
+            "curriculum_root_key": "earth.plate-boundary",
+            "topic_keys": ["earth.plate-boundary"],
+            "required_item_elements": ["statement_set", "table"],
+            "source_classes": ["APPROVED_ITEM", "TEXTBOOK"],
+        },
+    }
+    parsed = WorkflowStartRequest.model_validate(request)
+    assert parsed.educational_retrieval is not None
+    assert parsed.educational_retrieval.corpus_key == "science-core"
+    with pytest.raises(ValidationError, match="execution preset"):
+        WorkflowStartRequest.model_validate(request | {"execution_preset_key": None})
+    with pytest.raises(ValidationError):
+        WorkflowStartRequest.model_validate(
+            request
+            | {
+                "educational_retrieval": {
+                    **request["educational_retrieval"],
+                    "graph_snapshot_revision_id": "graphrev_" + "1" * 32,
+                }
+            }
+        )
+
+
 def test_artifact_pointer_can_pin_one_safe_member_without_exposing_storage_path() -> None:
     pointer = ArtifactPointer(
         artifact_id="artifact_" + "1" * 32,
@@ -152,6 +202,102 @@ def test_artifact_pointer_can_pin_one_safe_member_without_exposing_storage_path(
     assert pointer.artifact_member == "source/diagram.png"
     with pytest.raises(ValidationError, match="artifact member"):
         ArtifactPointer.model_validate(pointer.model_dump() | {"artifact_member": "../diagram.png"})
+
+
+def test_workflow_knowledge_provenance_is_pointer_only_and_closed() -> None:
+    value = {
+        "schema_version": "workflow-knowledge-provenance/1.0",
+        "plan_id": "execplan_" + "1" * 32,
+        "plan_sha256": "sha256:" + "1" * 64,
+        "preset_revision_id": "execpresetrev_" + "2" * 32,
+        "corpus_key": "science-core",
+        "query_kind": "ITEM_PREPARATION",
+        "curriculum_root_key": "earth.plate-boundary",
+        "required_item_elements": ["equation", "image", "statement_set", "table"],
+        "source_classes": ["APPROVED_ITEM", "TEXTBOOK"],
+        "graph_snapshot_revision_id": "graphrev_" + "3" * 32,
+        "evidence_bundle_revision_id": "evidencerev_" + "4" * 32,
+        "retrieval_request_id": "retrieval_" + "5" * 32,
+        "retrieval_request_sha256": "sha256:" + "5" * 64,
+        "access_policy_revision_id": "accessrev_" + "6" * 32,
+        "access_policy_sha256": "sha256:" + "6" * 64,
+        "evidence_manifest_sha256": "sha256:" + "7" * 64,
+        "resolved_at": "2026-08-24T04:00:00Z",
+    }
+    projection = WorkflowKnowledgeProvenanceView.model_validate(value)
+    assert projection.evidence_bundle_revision_id == "evidencerev_" + "4" * 32
+    with pytest.raises(ValidationError):
+        WorkflowKnowledgeProvenanceView.model_validate(
+            value | {"context_path": "/srv/eom/private/context.md"}
+        )
+
+
+def test_execution_preset_draft_contract_keeps_v1_and_v2_families_exact() -> None:
+    role = {
+        "role": "authoring",
+        "model_candidates": [{"model": "gpt-5.6-terra", "reasoning_effort": "high"}],
+        "instruction_bundle": {
+            "bundle_id": "instrbundle_" + "1" * 32,
+            "bundle_revision_id": "instrrev_" + "1" * 32,
+            "manifest_artifact": {
+                "artifact_id": "artifact_" + "1" * 32,
+                "artifact_revision_id": "rev_" + "1" * 32,
+                "sha256": "sha256:" + "1" * 64,
+                "schema_ref": "eom://schemas/workflow/instruction-bundle-manifest/1.0",
+                "media_type": "application/json",
+                "logical_name": "manifest.json",
+            },
+            "manifest_sha256": "sha256:" + "1" * 64,
+        },
+        "reference_bundle": None,
+        "worker_pool_key": "authoring",
+        "timeout_seconds": 1800,
+        "sandbox": "read-only",
+        "network": "disabled",
+    }
+    base = {
+        "preset_key": "standard-item",
+        "display_name": "Standard item",
+        "description": "Reviewed fresh-session item policy.",
+        "role_policies": [role],
+        "capacity_policy_revision_id": "capacityrev_" + "2" * 32,
+        "general_knowledge_policy": "DENY",
+        "compatible_workflow_protocols": ["workflow-role/1.3.0"],
+    }
+    legacy = CreateExecutionPresetDraftRequest.model_validate(base)
+    assert legacy.schema_version == "execution-preset-revision/1.0"
+    with pytest.raises(ValidationError, match="cannot declare evidence access"):
+        CreateExecutionPresetDraftRequest.model_validate(
+            base | {"role_policies": [role | {"evidence_access": "EVIDENCE_CONTEXT"}]}
+        )
+    retrieval_policy = {
+        "access_policy_revision_id": "accessrev_" + "3" * 32,
+        "access_policy_sha256": "sha256:" + "3" * 64,
+        "allowed_corpus_keys": ["science-core"],
+        "allowed_query_kinds": ["ITEM_PREPARATION"],
+        "allowed_source_classes": ["APPROVED_ITEM", "TEXTBOOK"],
+        "maximum_budget": {
+            "max_documents": 4,
+            "max_item_revisions": 4,
+            "max_graph_nodes": 32,
+            "max_claims": 16,
+            "max_context_tokens": 8000,
+        },
+    }
+    grounded = CreateExecutionPresetDraftRequest.model_validate(
+        base
+        | {
+            "schema_version": "execution-preset-revision/2.0",
+            "role_policies": [role | {"evidence_access": "EVIDENCE_CONTEXT"}],
+            "retrieval_policy": retrieval_policy,
+        }
+    )
+    assert grounded.retrieval_policy is not None
+    with pytest.raises(ValidationError):
+        CreateExecutionPresetDraftRequest.model_validate(
+            grounded.model_dump(mode="json")
+            | {"retrieval_policy": retrieval_policy | {"allowed_corpus_keys": ["/srv/eom/private"]}}
+        )
 
 
 def test_knowledge_analysis_request_is_discriminated_and_retry_is_explicit() -> None:

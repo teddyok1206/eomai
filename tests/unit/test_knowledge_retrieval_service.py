@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import pytest
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     ContentIntakeKnowledgeSourceV2,
+    CreateItemProductionEvidenceCommand,
     EducationRetrievalRequestV2,
 )
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
+    KnowledgeRetrievalServiceError,
     _Candidate,
 )
 from eom_identifiers import content_sha256
@@ -137,3 +142,108 @@ def test_ranked_context_is_bounded_pointer_oriented_and_marks_answers_avoid_copy
     assert "nas://" not in markdown
     assert "/mnt/" not in markdown
     assert len(markdown.encode("utf-8")) < 64 * 1024
+
+
+class _SequenceSession:
+    def __init__(self, scalar_values: list[object | None]) -> None:
+        self.scalar_values = iter(scalar_values)
+
+    def __enter__(self) -> _SequenceSession:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def scalar(self, _statement: object) -> object | None:
+        return next(self.scalar_values)
+
+    def get(self, _model: type[object], _identity: str) -> None:
+        return None
+
+
+def _item_production_command() -> CreateItemProductionEvidenceCommand:
+    value = {
+        "operation": "CREATE_ITEM_PRODUCTION_EVIDENCE",
+        "requirement": {
+            "schema_version": "educational-retrieval-requirement/1.0",
+            "corpus_key": "science-core",
+            "query_kind": "ITEM_PREPARATION",
+            "curriculum_root_key": None,
+            "topic_keys": ["earth.plate-boundary"],
+            "required_item_elements": ["statement_set", "table"],
+            "source_classes": ["APPROVED_ITEM", "TEXTBOOK"],
+        },
+        "evidence_budget": {
+            "max_documents": 2,
+            "max_item_revisions": 2,
+            "max_graph_nodes": 8,
+            "max_claims": 2,
+            "max_context_tokens": 2000,
+        },
+        "access_policy_revision_id": "accessrev_" + "5" * 32,
+        "access_policy_sha256": "sha256:" + "5" * 64,
+        "requester_role": "ADMIN",
+        "requester_permission_keys": ["knowledge_graph:read", "knowledge_graph:retrieve"],
+        "requested_by": "operator_" + "6" * 32,
+        "idempotency_key": "knowledge-backed-item-miss",
+        "submission_sha256": "sha256:" + "0" * 64,
+    }
+    value["submission_sha256"] = content_sha256(
+        {
+            key: item
+            for key, item in value.items()
+            if key not in {"idempotency_key", "submission_sha256"}
+        }
+    )
+    return CreateItemProductionEvidenceCommand.model_validate(value)
+
+
+def test_item_production_graph_miss_fails_before_artifact_or_retrieval_creation() -> None:
+    service = object.__new__(KnowledgeRetrievalApplicationService)
+    service.sessions = lambda: _SequenceSession([None, None])  # type: ignore[method-assign]
+    created = False
+
+    def create(_command: object) -> object:
+        nonlocal created
+        created = True
+        raise AssertionError("graph miss must not create an Evidence Bundle")
+
+    service.create = create  # type: ignore[method-assign]
+    with pytest.raises(KnowledgeRetrievalServiceError) as captured:
+        service.create_item_production(_item_production_command())
+    assert captured.value.code == "KNOWLEDGE_RETRIEVAL_CORPUS_UNAVAILABLE"
+    assert not created
+
+
+def test_item_production_private_idempotency_rejects_different_input() -> None:
+    command = _item_production_command()
+    base = _request().model_dump(mode="json")
+    base["required_item_elements"] = list(command.requirement.required_item_elements)
+    base["evidence_budget"] = command.evidence_budget.model_dump(mode="json")
+    base["request_sha256"] = content_sha256(
+        {key: item for key, item in base.items() if key != "request_sha256"}
+    )
+    request = EducationRetrievalRequestV2.model_validate(base)
+    record = SimpleNamespace(canonical_request=request.model_dump(mode="json"))
+
+    class ReplaySession:
+        def scalar(self, _statement: object) -> object:
+            return SimpleNamespace(graph_id=request.graph_snapshot.graph_id)
+
+    KnowledgeRetrievalApplicationService._validate_item_production_replay(
+        ReplaySession(),  # type: ignore[arg-type]
+        command,
+        record,  # type: ignore[arg-type]
+    )
+    changed = command.model_copy(
+        update={
+            "requirement": command.requirement.model_copy(update={"topic_keys": ("earth.volcano",)})
+        }
+    )
+    with pytest.raises(KnowledgeRetrievalServiceError) as captured:
+        KnowledgeRetrievalApplicationService._validate_item_production_replay(
+            ReplaySession(),  # type: ignore[arg-type]
+            changed,
+            record,  # type: ignore[arg-type]
+        )
+    assert captured.value.code == "KNOWLEDGE_RETRIEVAL_IDEMPOTENCY_CONFLICT"

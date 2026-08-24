@@ -1142,6 +1142,39 @@ class EvidenceBudget(FrozenModel):
     max_context_tokens: int = Field(ge=1000, le=32000)
 
 
+class EducationalRetrievalRequirement(FrozenModel):
+    """Educational intent accepted from a caller; no graph or policy revision controls."""
+
+    schema_version: Literal["educational-retrieval-requirement/1.0"] = (
+        "educational-retrieval-requirement/1.0"
+    )
+    corpus_key: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")
+    query_kind: Literal["CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE", "ITEM_PREPARATION"]
+    curriculum_root_key: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$")
+    topic_keys: tuple[Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$")], ...] = Field(
+        max_length=20
+    )
+    required_item_elements: tuple[
+        Literal["paragraph", "table", "image", "equation", "statement_set", "choice"], ...
+    ] = Field(min_length=1, max_length=8)
+    source_classes: tuple[KnowledgeSourceClass, ...] = Field(min_length=1, max_length=5)
+
+    @model_validator(mode="after")
+    def stable_sorted_educational_scope(self) -> EducationalRetrievalRequirement:
+        for values, label in (
+            (self.topic_keys, "topic keys"),
+            (self.required_item_elements, "required item elements"),
+            (self.source_classes, "source classes"),
+        ):
+            if tuple(sorted(values)) != values or len(values) != len(set(values)):
+                raise ValueError(f"educational retrieval {label} must be sorted and unique")
+        if self.curriculum_root_key is None and not self.topic_keys:
+            raise ValueError("educational retrieval requires curriculum or topic scope")
+        if self.query_kind == "APPROVED_ITEM_STRUCTURE" and not self.required_item_elements:
+            raise ValueError("item structure retrieval requires item element filters")
+        return self
+
+
 class EducationRetrievalRequest(FrozenModel):
     schema_version: Literal["education-retrieval-request/1.0"] = "education-retrieval-request/1.0"
     retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
@@ -1479,4 +1512,46 @@ class EvidenceBundlePublicationResult(FrozenModel):
         body = self.model_dump(mode="json", exclude={"result_sha256"})
         if content_sha256(body) != self.result_sha256:
             raise ValueError("Evidence Bundle publication result hash does not match content")
+        return self
+
+
+class EvidenceBundlePublicationResultV2(FrozenModel):
+    """Execution-ready result exposing both immutable manifest and context pointers."""
+
+    schema_version: Literal["evidence-bundle-publication-result/2.0"] = (
+        "evidence-bundle-publication-result/2.0"
+    )
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    revision_number: int = Field(ge=1)
+    state: Literal["PUBLISHED"] = "PUBLISHED"
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    retrieval_request_sha256: Sha256
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: Sha256
+    requester_permissions_sha256: Sha256
+    manifest_artifact: KnowledgeArtifactMemberPointer
+    manifest_sha256: Sha256
+    context_artifact: KnowledgeArtifactMemberPointer
+    budget: EvidenceBundleBudget
+    published_at: UtcDatetime
+    result_sha256: Sha256
+
+    @model_validator(mode="after")
+    def execution_materials_are_exact_and_hashed(self) -> EvidenceBundlePublicationResultV2:
+        if (
+            self.manifest_artifact.member_path != "evidence/manifest.json"
+            or self.manifest_artifact.media_type != "application/json"
+            or self.manifest_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-manifest/2.0"
+            or self.context_artifact.member_path != "evidence/context.md"
+            or self.context_artifact.media_type != "text/markdown"
+            or self.context_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-context/1.0"
+        ):
+            raise ValueError("Evidence Bundle execution material pointer is incompatible")
+        body = self.model_dump(mode="json", exclude={"result_sha256"})
+        if content_sha256(body) != self.result_sha256:
+            raise ValueError("Evidence Bundle publication V2 result hash does not match content")
         return self

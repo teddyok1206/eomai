@@ -17,6 +17,8 @@ from eom_web_gui.contracts import (
 
 DEMO_REQUEST = "물리학에서 2차원 포물선 운동에 관한 계산 문항을 출제해줘."
 STANDARD_EXECUTION_PRESET_KEY = "standard-item"
+KNOWLEDGE_EXECUTION_PRESET_KEY = "knowledge-grounded-item"
+KNOWLEDGE_CORPUS_KEY = "science-core"
 QUALITY_POLICY = {
     "fast": {"label": "빠름", "policy_key": "economy"},
     "balanced": {"label": "균형", "policy_key": "balanced"},
@@ -79,13 +81,17 @@ def quality_policy(profile: str) -> dict[str, str]:
 
 def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
     """Map a reviewed draft to the source-optional knowledge-item workflow contract."""
-    return {
+    payload: dict[str, object] = {
         "definition_key": "generic-item-development",
         "definition_version": "1.4.0",
         "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
         "image_mode": "required",
         "pack_key": "generated-knowledge-item",
-        "execution_preset_key": STANDARD_EXECUTION_PRESET_KEY,
+        "execution_preset_key": (
+            KNOWLEDGE_EXECUTION_PRESET_KEY
+            if draft.knowledge_grounding
+            else STANDARD_EXECUTION_PRESET_KEY
+        ),
         "environment": "development",
         "source_intake_batch_ids": [],
         "registry_mode": "CREATE_ITEM",
@@ -104,6 +110,18 @@ def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
         },
         "stimulus_asset_key": None,
     }
+    if draft.knowledge_grounding:
+        assert draft.curriculum_root_key is not None
+        payload["educational_retrieval"] = {
+            "schema_version": "educational-retrieval-requirement/1.0",
+            "corpus_key": KNOWLEDGE_CORPUS_KEY,
+            "query_kind": "ITEM_PREPARATION",
+            "curriculum_root_key": draft.curriculum_root_key,
+            "topic_keys": [],
+            "required_item_elements": ["equation", "image", "statement_set", "table"],
+            "source_classes": ["APPROVED_ITEM", "TEXTBOOK"],
+        }
+    return payload
 
 
 def _topic_from_request(text: str) -> str:

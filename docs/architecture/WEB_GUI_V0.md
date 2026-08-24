@@ -37,10 +37,12 @@ output pointer.
 
 ## Request Draft protocol
 
-`schemas/web-gui/request-draft-v1.schema.json` is the canonical Request Draft wire contract. The
-original request is normalized into a small immutable typed value and reviewed before submission.
-The browser cannot choose a model name or raw reasoning value. The three user-facing quality
-profiles resolve through a closed mapping owned by the BFF.
+`schemas/web-gui/request-draft-v1.schema.json` remains the immutable historical Request Draft wire
+contract. New drafts use `request-draft-v2.schema.json`, which adds only an explicit knowledge
+grounding opt-in and one stable curriculum root key. The two values must be selected together. The
+browser cannot choose graph snapshots, traversal, paths, policies, budgets, model names, raw
+reasoning values, or worker slots. The three user-facing quality profiles and the grounding choice
+resolve through closed mappings owned by the BFF.
 
 The accepted Application API currently supports `PLACEHOLDER_REQUEST`. V0 labels this path
 `Generic Demo Mode` and maps a reviewed draft to the existing `generic-item-development` workflow.

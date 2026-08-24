@@ -19,7 +19,10 @@ Last reviewed: 2026-08-23 UTC
 | 5 — control-plane MVP and GUI | `DEPLOYED_OBSERVE_PENDING` | [`CODEX_CONTROL_PLANE_MVP.md`](../operations/CODEX_CONTROL_PLANE_MVP.md), migration 0010, released `standard-item` preset, installed runner/API/GUI; five non-generating account observations await fresh ADMIN authentication |
 | 6 — origin and product/usage decisions | `DESIGN_COMPLETE` | [`ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md`](ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md), [`PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md`](PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md), ADRs 0038/0039, eight required scenarios |
 | 7 — knowledge-analysis protocol | `SOURCE_COMPLETE` | [`KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md`](KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md) implements and verifies additive V2 contracts, source resolution, support-slot workflow, pointer-only proposal/acceptance artifacts, review, lifecycle, indexing, migrations 0011/0012, and failure boundaries |
-| 8–12 | `NOT_STARTED` | Must satisfy each phase's separate protocol, migration, deployment, and live-run gate |
+| 8 — graph snapshot publication | `SOURCE_COMPLETE` | [`EDUCATION_GRAPH_SNAPSHOT_PERSISTENCE_V1.md`](EDUCATION_GRAPH_SNAPSHOT_PERSISTENCE_V1.md), additive migration 0013, immutable publication/projection and indexed traversal tests |
+| 9 — retrieval and Evidence Bundle | `SOURCE_COMPLETE` | [`EDUCATION_RETRIEVAL_EVIDENCE_BUNDLE_V2.md`](EDUCATION_RETRIEVAL_EVIDENCE_BUNDLE_V2.md), additive migration 0014, closed retrieval, deterministic publication, and disposable-DB proof |
+| 10 — knowledge-backed item production | `SOURCE_COMPLETE` | [`KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md`](KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md), immutable preset V2/plan V3 protocols, pre-claim Evidence Bundle resolution, least-needed materialization, opt-in GUI and pointer-only provenance |
+| 11–12 | `NOT_STARTED` | Must satisfy each phase's separate protocol, migration, deployment, and live-run gate |
 
 Phase 1 added no migration, live worker execution, runtime deployment, or production-data write.
 Phase 2 source work adds an unapplied additive migration and source behavior only; it performed no
@@ -40,6 +43,11 @@ slot05/support, and separates ephemeral worker proposals from accepted pointer-o
 source, static, security, package-boundary, and disposable PostgreSQL migration/integration gates
 passed. No production migration, runtime deployment, live Codex invocation, or graph publication
 was performed; those remain separately reviewed gates before Phase 8.
+Phase 8 and Phase 9 source, schema, migration, security, package, and disposable PostgreSQL gates
+passed in their focused commits. They did not publish a production graph or run Codex. Phase 10
+source work preserves source-free V1 execution, introduces a separate `knowledge-grounded-item` V2
+preset boundary, and keeps graph publication, preset activation, live worker execution, and
+production mutation behind Phase 12 rollout authorization.
 
 ## 1. Outcome
 

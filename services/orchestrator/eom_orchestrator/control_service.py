@@ -13,9 +13,11 @@ from eom_workflow import (
     CodexCapabilitySnapshot,
     ControlArtifactPointer,
     ExecutionPresetRevision,
+    ExecutionPresetRevisionV2,
     InstructionBundleManifest,
     ReferenceBundleManifest,
     ResolvedExecutionPlan,
+    ResolvedExecutionPlanV3,
     WorkerCapacityPolicy,
     WorkerLeaseView,
     validate_control_contract,
@@ -99,7 +101,9 @@ def _validated_document(
         | ReferenceBundleManifest
         | WorkerCapacityPolicy
         | ExecutionPresetRevision
+        | ExecutionPresetRevisionV2
         | ResolvedExecutionPlan
+        | ResolvedExecutionPlanV3
         | CodexAuthHealthView
         | CodexCapabilitySnapshot
     ],
@@ -108,7 +112,9 @@ def _validated_document(
     | ReferenceBundleManifest
     | WorkerCapacityPolicy
     | ExecutionPresetRevision
+    | ExecutionPresetRevisionV2
     | ResolvedExecutionPlan
+    | ResolvedExecutionPlanV3
     | CodexAuthHealthView
     | CodexCapabilitySnapshot,
     dict[str, Any],
@@ -539,10 +545,21 @@ def record_execution_preset_revision(
     document: dict[str, Any],
     created_by: str,
 ) -> ExecutionPresetRevisionRecord:
-    model, normalized = _validated_document(
-        "execution-preset-revision", document, ExecutionPresetRevision
-    )
-    if not isinstance(model, ExecutionPresetRevision):
+    schema_version = document.get("schema_version")
+    if schema_version == "execution-preset-revision/1.0":
+        schema_name = "execution-preset-revision"
+        model_type: type[ExecutionPresetRevision | ExecutionPresetRevisionV2] = (
+            ExecutionPresetRevision
+        )
+    elif schema_version == "execution-preset-revision/2.0":
+        schema_name = "execution-preset-revision-v2"
+        model_type = ExecutionPresetRevisionV2
+    else:
+        raise ControlPlaneError(
+            "CONTROL_DOCUMENT_INVALID", "execution preset schema version is unsupported"
+        )
+    model, normalized = _validated_document(schema_name, document, model_type)
+    if not isinstance(model, (ExecutionPresetRevision, ExecutionPresetRevisionV2)):
         raise AssertionError("validated preset model has the wrong type")
     _require_declared_hash(normalized, "content_sha256")
     capacity = session.get(WorkerCapacityPolicyRevisionRecord, model.capacity_policy_revision_id)
@@ -786,6 +803,142 @@ def record_resolved_execution_plan(
         preset_revision_id=model.preset_revision_id,
         capacity_policy_revision_id=model.capacity_policy_revision_id,
         graph_snapshot_revision_id=model.graph_snapshot_revision_id,
+        evidence_bundle_revision_id=model.evidence_bundle_revision_id,
+        plan_sha256=model.plan_sha256,
+        resolver_version=model.resolver_version,
+        canonical_document=normalized,
+        resolved_at=model.resolved_at,
+    )
+    session.add(record)
+    session.flush()
+    for step in model.steps:
+        session.add(
+            ResolvedExecutionPlanStepRecord(
+                plan_id=model.plan_id,
+                step_key=step.step_key,
+                role=step.role,
+                model=step.model,
+                reasoning_effort=step.reasoning_effort,
+                instruction_bundle_revision_id=step.instruction_bundle.bundle_revision_id,
+                reference_bundle_revision_id=(
+                    step.reference_bundle.bundle_revision_id
+                    if step.reference_bundle is not None
+                    else None
+                ),
+                worker_pool_key=step.worker_pool_key,
+                timeout_seconds=step.timeout_seconds,
+                sandbox=step.sandbox,
+                network=step.network,
+                general_knowledge_mode=step.general_knowledge_mode,
+            )
+        )
+    session.flush()
+    return record
+
+
+def record_knowledge_backed_execution_plan(
+    session: Session,
+    *,
+    document: dict[str, Any],
+    dependencies: ResolvedPlanDependencyEvidence,
+) -> ResolvedExecutionPlanRecord:
+    """Persist one V3 plan after validating exact preset and bundle policy pointers."""
+
+    model, normalized = _validated_document(
+        "resolved-execution-plan-v3", document, ResolvedExecutionPlanV3
+    )
+    if not isinstance(model, ResolvedExecutionPlanV3):
+        raise AssertionError("validated knowledge-backed plan has the wrong type")
+    _require_declared_hash(normalized, "plan_sha256")
+    if (
+        dependencies.workflow_id != model.workflow_id
+        or dependencies.workflow_definition_key != model.workflow_definition_key
+        or dependencies.workflow_definition_version != model.workflow_definition_version
+        or dependencies.workflow_definition_sha256 != model.workflow_definition_sha256
+        or dependencies.content_pack_release_id != model.content_pack_release_id
+        or dependencies.content_pack_sha256 != model.content_pack_sha256
+        or dependencies.graph_snapshot_revision_id
+        != model.graph_snapshot.graph_snapshot_revision_id
+        or dependencies.evidence_bundle_revision_id != model.evidence_bundle_revision_id
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PLAN_DEPENDENCY_MISMATCH", "knowledge-backed plan dependencies changed"
+        )
+    preset_record = session.get(ExecutionPresetRevisionRecord, model.preset_revision_id)
+    if (
+        preset_record is None
+        or preset_record.preset_id != model.preset_id
+        or preset_record.state != "RELEASED"
+        or preset_record.content_sha256 != model.preset_sha256
+        or preset_record.capacity_policy_revision_id != model.capacity_policy_revision_id
+        or dependencies.workflow_role_schema_version
+        not in preset_record.compatible_workflow_protocols
+    ):
+        raise ControlPlaneError("CONTROL_PRESET_POINTER_INVALID", "resolved preset is stale")
+    try:
+        preset = ExecutionPresetRevisionV2.model_validate(preset_record.canonical_document)
+    except PydanticValidationError as exc:
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID", "knowledge-backed plan requires a V2 preset"
+        ) from exc
+    if (
+        preset.retrieval_policy.access_policy_revision_id != model.access_policy_revision_id
+        or preset.retrieval_policy.access_policy_sha256 != model.access_policy_sha256
+        or model.retrieval_requirement.corpus_key not in preset.retrieval_policy.allowed_corpus_keys
+        or model.retrieval_requirement.query_kind not in preset.retrieval_policy.allowed_query_kinds
+        or not set(model.retrieval_requirement.source_classes).issubset(
+            preset.retrieval_policy.allowed_source_classes
+        )
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PLAN_POLICY_MISMATCH", "retrieval evidence differs from preset policy"
+        )
+    policies = {policy.role: policy for policy in preset.role_policies}
+    for step in model.steps:
+        policy = policies.get(step.role)
+        if (
+            policy is None
+            or {"model": step.model, "reasoning_effort": step.reasoning_effort}
+            not in [candidate.model_dump(mode="json") for candidate in policy.model_candidates]
+            or policy.instruction_bundle != step.instruction_bundle
+            or policy.reference_bundle != step.reference_bundle
+            or policy.worker_pool_key != step.worker_pool_key
+            or policy.timeout_seconds != step.timeout_seconds
+            or policy.sandbox != step.sandbox
+            or policy.network != step.network
+            or policy.evidence_access != step.evidence_access
+            or (
+                preset.general_knowledge_policy == "DENY"
+                and step.general_knowledge_mode != "DENIED"
+            )
+        ):
+            raise ControlPlaneError(
+                "CONTROL_PLAN_POLICY_MISMATCH", "resolved plan step differs from V2 preset"
+            )
+        _validate_bundle_pointer(session, step.instruction_bundle, expected_kind="INSTRUCTION")
+        if step.reference_bundle is not None:
+            _validate_bundle_pointer(session, step.reference_bundle, expected_kind="REFERENCE")
+
+    existing = session.scalar(
+        select(ResolvedExecutionPlanRecord).where(
+            ResolvedExecutionPlanRecord.workflow_id == model.workflow_id
+        )
+    )
+    if existing is not None:
+        if existing.plan_sha256 != model.plan_sha256 or existing.canonical_document != normalized:
+            raise ControlPlaneError(
+                "CONTROL_PLAN_CONFLICT", "workflow already has a different execution plan"
+            )
+        return existing
+    if session.get(ResolvedExecutionPlanRecord, model.plan_id) is not None:
+        raise ControlPlaneError("CONTROL_PLAN_CONFLICT", "execution plan ID is already used")
+    record = ResolvedExecutionPlanRecord(
+        plan_id=model.plan_id,
+        workflow_id=model.workflow_id,
+        preset_id=model.preset_id,
+        preset_revision_id=model.preset_revision_id,
+        capacity_policy_revision_id=model.capacity_policy_revision_id,
+        graph_snapshot_revision_id=model.graph_snapshot.graph_snapshot_revision_id,
         evidence_bundle_revision_id=model.evidence_bundle_revision_id,
         plan_sha256=model.plan_sha256,
         resolver_version=model.resolver_version,

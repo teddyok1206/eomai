@@ -275,8 +275,11 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 14
+    assert len(entries) == 16
     assert len({name for name, _ in entries}) == len(entries)
+    assert {"execution-preset-revision-v2", "resolved-execution-plan-v3"}.issubset(
+        {name for name, _ in entries}
+    )
     for name, entry in entries:
         canonical = REPOSITORY_ROOT / entry.canonical_path
         packaged = RESOURCE_ROOT.joinpath(entry.resource_path.removeprefix("resources/"))

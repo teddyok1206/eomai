@@ -11,8 +11,10 @@ from pydantic import Field, RootModel, field_validator, model_validator
 from eom_catalog_contracts.assessment_item import AssessmentItemContent
 from eom_catalog_contracts.knowledge import (
     CurriculumRetrievalScope,
+    EducationalRetrievalRequirement,
     EvidenceBudget,
     EvidenceBundlePublicationResult,
+    EvidenceBundlePublicationResultV2,
     KnowledgeSourceClass,
     PermissionKeyValue,
 )
@@ -162,13 +164,40 @@ class CreateEvidenceBundleCommand(FrozenModel):
         return self
 
 
+class CreateItemProductionEvidenceCommand(FrozenModel):
+    """Private preset-resolved request; Catalog alone selects the current graph snapshot."""
+
+    operation: Literal["CREATE_ITEM_PRODUCTION_EVIDENCE"] = "CREATE_ITEM_PRODUCTION_EVIDENCE"
+    requirement: EducationalRetrievalRequirement
+    evidence_budget: EvidenceBudget
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    requester_role: Literal["ADMIN", "EDITOR", "REVIEWER"]
+    requester_permission_keys: tuple[PermissionKeyValue, ...] = Field(min_length=1, max_length=128)
+    requested_by: ActorId
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[\x21-\x7e]+$")
+    submission_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def preset_bounded_command_is_sorted_and_hashed(self) -> CreateItemProductionEvidenceCommand:
+        if tuple(sorted(self.requester_permission_keys)) != self.requester_permission_keys or len(
+            self.requester_permission_keys
+        ) != len(set(self.requester_permission_keys)):
+            raise ValueError("item evidence permission keys must be sorted and unique")
+        body = self.model_dump(mode="json", exclude={"idempotency_key", "submission_sha256"})
+        if content_sha256(body) != self.submission_sha256:
+            raise ValueError("item evidence command hash does not match canonical input")
+        return self
+
+
 CatalogApplicationRequestValue = Annotated[
     ReviewedItemContentImportCommand
     | ItemContentQuery
     | CreateKnowledgeAnalysisCommand
     | ReconcileKnowledgeAnalysisCommand
     | ReviewKnowledgeAnalysisCommand
-    | CreateEvidenceBundleCommand,
+    | CreateEvidenceBundleCommand
+    | CreateItemProductionEvidenceCommand,
     Field(discriminator="operation"),
 ]
 
@@ -217,10 +246,12 @@ class CatalogApplicationResponse(FrozenModel):
         "RECONCILE_KNOWLEDGE_ANALYSIS",
         "REVIEW_KNOWLEDGE_ANALYSIS",
         "CREATE_EVIDENCE_BUNDLE",
+        "CREATE_ITEM_PRODUCTION_EVIDENCE",
     ]
     result: ReviewedItemContentImportResult | None = None
     analysis: KnowledgeAnalysisApplicationResult | None = None
     evidence: EvidenceBundlePublicationResult | None = None
+    item_production_evidence: EvidenceBundlePublicationResultV2 | None = None
     content: AssessmentItemContent | None = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
 
@@ -232,6 +263,7 @@ class CatalogApplicationResponse(FrozenModel):
                 self.result,
                 self.analysis,
                 self.evidence,
+                self.item_production_evidence,
                 self.content,
                 self.error_code,
             )
@@ -260,4 +292,9 @@ class CatalogApplicationResponse(FrozenModel):
             raise ValueError("knowledge analysis response requires analysis result")
         if self.operation == "CREATE_EVIDENCE_BUNDLE" and self.evidence is None:
             raise ValueError("evidence creation response requires publication result")
+        if (
+            self.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
+            and self.item_production_evidence is None
+        ):
+            raise ValueError("item production evidence response requires publication result")
         return self

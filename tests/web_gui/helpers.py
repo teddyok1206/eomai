@@ -115,6 +115,7 @@ class FakeGateway:
         self.structured_import_calls = 0
         self.control_command_calls = 0
         self.preset_mutation_calls = 0
+        self.last_start_payload: dict[str, object] | None = None
 
     async def health(self) -> dict[str, str]:
         return {
@@ -182,9 +183,13 @@ class FakeGateway:
         assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
         assert payload["definition_version"] == "1.4.0"
         assert payload["pack_key"] == "generated-knowledge-item"
-        assert payload["execution_preset_key"] == "standard-item"
+        expected_preset = (
+            "knowledge-grounded-item" if "educational_retrieval" in payload else "standard-item"
+        )
+        assert payload["execution_preset_key"] == expected_preset
         assert payload["stimulus_asset_key"] is None
         assert payload["source_intake_batch_ids"] == []
+        self.last_start_payload = payload
         self.start_calls += 1
         return {
             "command_id": "command_test_workflow_start",

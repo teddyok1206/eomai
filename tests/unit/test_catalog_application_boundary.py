@@ -16,8 +16,10 @@ from eom_catalog_contracts import (
     CatalogApplicationRequest,
     CatalogApplicationResponse,
     CreateEvidenceBundleCommand,
+    CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisCommand,
     EvidenceBundlePublicationResult,
+    EvidenceBundlePublicationResultV2,
     KnowledgeAnalysisApplicationResult,
     ReviewedItemContentImportCommand,
     validate_contract,
@@ -110,6 +112,35 @@ class FakeKnowledgeRetrieval:
         )
         return EvidenceBundlePublicationResult.model_validate(value)
 
+    def create_item_production(
+        self, command: CreateItemProductionEvidenceCommand
+    ) -> EvidenceBundlePublicationResultV2:
+        legacy_command = _retrieval_command()
+        base = self.create(legacy_command)
+        value = {
+            **base.model_dump(mode="json", exclude={"schema_version", "result_sha256"}),
+            "schema_version": "evidence-bundle-publication-result/2.0",
+            "access_policy_revision_id": command.access_policy_revision_id,
+            "access_policy_sha256": command.access_policy_sha256,
+            "requester_permissions_sha256": content_sha256(
+                {"permission_keys": list(command.requester_permission_keys)}
+            ),
+            "context_artifact": {
+                "artifact_id": "artifact_" + "e" * 32,
+                "artifact_revision_id": "rev_" + "e" * 32,
+                "sha256": "sha256:" + "e" * 64,
+                "schema_ref": "eom://schemas/knowledge/evidence-bundle-context/1.0",
+                "media_type": "text/markdown",
+                "logical_name": "context.md",
+                "member_path": "evidence/context.md",
+            },
+            "result_sha256": "sha256:" + "0" * 64,
+        }
+        value["result_sha256"] = content_sha256(
+            {key: item for key, item in value.items() if key != "result_sha256"}
+        )
+        return EvidenceBundlePublicationResultV2.model_validate(value)
+
 
 def _retrieval_command() -> CreateEvidenceBundleCommand:
     value = {
@@ -143,6 +174,43 @@ def _retrieval_command() -> CreateEvidenceBundleCommand:
         }
     )
     return CreateEvidenceBundleCommand.model_validate(value)
+
+
+def _item_evidence_command() -> CreateItemProductionEvidenceCommand:
+    value = {
+        "operation": "CREATE_ITEM_PRODUCTION_EVIDENCE",
+        "requirement": {
+            "schema_version": "educational-retrieval-requirement/1.0",
+            "corpus_key": "science-core",
+            "query_kind": "ITEM_PREPARATION",
+            "curriculum_root_key": "earth.plate-boundary",
+            "topic_keys": ["earth.plate-boundary"],
+            "required_item_elements": ["statement_set", "table"],
+            "source_classes": ["APPROVED_ITEM", "TEXTBOOK"],
+        },
+        "evidence_budget": {
+            "max_documents": 2,
+            "max_item_revisions": 2,
+            "max_graph_nodes": 8,
+            "max_claims": 2,
+            "max_context_tokens": 2000,
+        },
+        "access_policy_revision_id": "accessrev_" + "f" * 32,
+        "access_policy_sha256": "sha256:" + "f" * 64,
+        "requester_role": "ADMIN",
+        "requester_permission_keys": ["knowledge_graph:read", "knowledge_graph:retrieve"],
+        "requested_by": "operator_" + "1" * 32,
+        "idempotency_key": "item-production-evidence-round-trip",
+        "submission_sha256": "sha256:" + "0" * 64,
+    }
+    value["submission_sha256"] = content_sha256(
+        {
+            key: item
+            for key, item in value.items()
+            if key not in {"idempotency_key", "submission_sha256"}
+        }
+    )
+    return CreateItemProductionEvidenceCommand.model_validate(value)
 
 
 def _server(tmp_path: Path, *, allowed_uid: int | None = None) -> CatalogApplicationServer:
@@ -217,6 +285,15 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
         evidence=FakeKnowledgeRetrieval().create(retrieval_command),
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-application-response-v3", retrieval_response)
+    item_command = _item_evidence_command()
+    item_request = CatalogApplicationRequest(root=item_command).model_dump(mode="json")
+    validate_contract("catalog-application-request-v4", item_request)
+    item_response = CatalogApplicationResponse(
+        status="OK",
+        operation="CREATE_ITEM_PRODUCTION_EVIDENCE",
+        item_production_evidence=FakeKnowledgeRetrieval().create_item_production(item_command),
+    ).model_dump(mode="json", exclude_none=True)
+    validate_contract("catalog-application-response-v4", item_response)
 
 
 def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
@@ -258,6 +335,8 @@ def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
         evidence = client.create_evidence_bundle(_retrieval_command())
         assert evidence.evidence_bundle_revision_id == "evidencerev_" + "2" * 32
         assert evidence.graph_snapshot.graph_snapshot_revision_id == "graphrev_" + "e" * 32
+        item_evidence = client.create_item_production_evidence(_item_evidence_command())
+        assert item_evidence.context_artifact.member_path == "evidence/context.md"
     finally:
         server.shutdown()
         server.server_close()

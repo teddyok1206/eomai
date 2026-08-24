@@ -78,9 +78,15 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 38
+    assert len(entries) == 42
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
+    assert {
+        "educational-retrieval-requirement",
+        "evidence-bundle-publication-result-v2",
+        "catalog-application-request-v4",
+        "catalog-application-response-v4",
+    }.issubset({name for name, _ in entries})
     for name, entry in entries:
         canonical = REPOSITORY_ROOT / entry.canonical_path
         resource = RESOURCE_ROOT.joinpath(entry.resource_path.removeprefix("resources/"))

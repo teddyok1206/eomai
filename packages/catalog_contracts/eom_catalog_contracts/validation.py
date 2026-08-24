@@ -126,6 +126,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "3.0",
             "sha256:197bdc748aeeee9835e37ce49f6ca350f4c261af12f664e5d7b2ed5749dc40ea",
         ),
+        "catalog-application-request-v4": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v4.schema.json",
+            "resources/catalog-application/catalog-application-request-v4.schema.json",
+            "4.0",
+            "sha256:a8296f2cb3bc9a03365087d282d14c989248635fa72832bce387a3e719274c76",
+        ),
+        "catalog-application-response-v4": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v4.schema.json",
+            "resources/catalog-application/catalog-application-response-v4.schema.json",
+            "4.0",
+            "sha256:41d5d126c0759538861f493010567fef87e4468c925c0892592567bebf5a9c30",
+        ),
         "knowledge-types": CatalogSchemaResource(
             "schemas/knowledge/knowledge-types-v1.schema.json",
             "resources/knowledge/knowledge-types-v1.schema.json",
@@ -228,6 +240,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:83e7fd1dc6cc78e74f3b35556a1eaf3039745e9d52fce04e46ad254490219afe",
         ),
+        "educational-retrieval-requirement": CatalogSchemaResource(
+            "schemas/knowledge/educational-retrieval-requirement-v1.schema.json",
+            "resources/knowledge/educational-retrieval-requirement-v1.schema.json",
+            "1.0",
+            "sha256:378cb7997cdb2167156fe95bb30ab8f23e3924a6a5a4b3b2c7fc1bbaa8cb2ba3",
+        ),
         "education-retrieval-request": CatalogSchemaResource(
             "schemas/knowledge/education-retrieval-request-v1.schema.json",
             "resources/knowledge/education-retrieval-request-v1.schema.json",
@@ -257,6 +275,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/evidence-bundle-publication-result-v1.schema.json",
             "1.0",
             "sha256:2f511f842bea023a3c430e0e40d12e02861c1d39b9cfb7de2691ace32415c654",
+        ),
+        "evidence-bundle-publication-result-v2": CatalogSchemaResource(
+            "schemas/knowledge/evidence-bundle-publication-result-v2.schema.json",
+            "resources/knowledge/evidence-bundle-publication-result-v2.schema.json",
+            "2.0",
+            "sha256:af55e991a17dbc56f43f75d3c6fb245efea64e0668149e96cad69b59f6305770",
         ),
     }
 )

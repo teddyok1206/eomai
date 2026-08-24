@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import stat
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from eom_catalog_contracts import EvidenceBundleManifestV2, KnowledgeArtifactMemberPointer
+from eom_catalog_contracts import validate_contract as validate_catalog_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_workflow import (
     CodexInvocation,
@@ -15,6 +18,8 @@ from eom_workflow import (
     ReferenceBundleManifest,
     ResolvedExecutionPlan,
     ResolvedExecutionPlanV2,
+    ResolvedExecutionPlanV3,
+    ResolvedStepExecutionV3,
     validate_control_contract,
 )
 from eom_workflow.control_plane import (
@@ -64,6 +69,9 @@ class MaterializedExecution:
     invocation_path: Path
     source_artifact_revision_id: str | None = None
     source_sha256: str | None = None
+    evidence_bundle_revision_id: str | None = None
+    evidence_manifest_sha256: str | None = None
+    evidence_context_sha256: str | None = None
 
     def event_data(self) -> dict[str, str | int | None]:
         """Return the bounded path-free projection safe for an append-only job event."""
@@ -84,6 +92,9 @@ class MaterializedExecution:
             "materialized_bytes": self.materialized_bytes,
             "source_artifact_revision_id": self.source_artifact_revision_id,
             "source_sha256": self.source_sha256,
+            "evidence_bundle_revision_id": self.evidence_bundle_revision_id,
+            "evidence_manifest_sha256": self.evidence_manifest_sha256,
+            "evidence_context_sha256": self.evidence_context_sha256,
         }
 
 
@@ -107,9 +118,11 @@ def materialize_execution_step(
     is_analysis = plan_record.canonical_document.get("schema_version") == (
         "resolved-execution-plan/2.0"
     )
-    plan: ResolvedExecutionPlan | ResolvedExecutionPlanV2
+    plan: ResolvedExecutionPlan | ResolvedExecutionPlanV2 | ResolvedExecutionPlanV3
     if is_analysis:
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
+        plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -173,6 +186,9 @@ def materialize_execution_step(
 
     source_artifact_revision_id: str | None = None
     source_sha256: str | None = None
+    evidence_bundle_revision_id: str | None = None
+    evidence_manifest_sha256: str | None = None
+    evidence_context_sha256: str | None = None
     if isinstance(plan, ResolvedExecutionPlanV2):
         payload = _materialize_analysis_source(
             session,
@@ -187,6 +203,23 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.source_artifact_revision_id
         source_sha256 = plan.source_sha256
+    elif isinstance(plan, ResolvedExecutionPlanV3):
+        assert isinstance(step, ResolvedStepExecutionV3)
+        if step.evidence_access == "EVIDENCE_CONTEXT":
+            payload = _materialize_evidence_context(
+                session,
+                plan=plan,
+                workspace=workspace,
+                artifact_root=artifact_root,
+                worker_group_id=worker_group_id,
+                authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            )
+            total_bytes += len(payload)
+            member_count += 1
+            _require_total_size(total_bytes, analysis=False)
+            evidence_bundle_revision_id = plan.evidence_bundle_revision_id
+            evidence_manifest_sha256 = plan.evidence_manifest_sha256
+            evidence_context_sha256 = plan.evidence_context_artifact.sha256
 
     agents_bytes = _agents_document(instruction_docs)
     total_bytes += len(agents_bytes)
@@ -237,6 +270,9 @@ def materialize_execution_step(
         invocation_path=invocation_path,
         source_artifact_revision_id=source_artifact_revision_id,
         source_sha256=source_sha256,
+        evidence_bundle_revision_id=evidence_bundle_revision_id,
+        evidence_manifest_sha256=evidence_manifest_sha256,
+        evidence_context_sha256=evidence_context_sha256,
     )
 
 
@@ -249,9 +285,11 @@ def authorized_execution_artifact_revisions(
     if plan_record is None:
         raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
     if plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/2.0":
-        plan: ResolvedExecutionPlan | ResolvedExecutionPlanV2 = (
+        plan: ResolvedExecutionPlan | ResolvedExecutionPlanV2 | ResolvedExecutionPlanV3 = (
             ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
         )
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
+        plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -267,6 +305,15 @@ def authorized_execution_artifact_revisions(
     revision_ids: set[str] = set()
     if isinstance(plan, ResolvedExecutionPlanV2):
         revision_ids.add(plan.source_artifact_revision_id)
+    elif isinstance(plan, ResolvedExecutionPlanV3):
+        assert isinstance(step, ResolvedStepExecutionV3)
+        if step.evidence_access == "EVIDENCE_CONTEXT":
+            revision_ids.update(
+                {
+                    plan.evidence_manifest_artifact.artifact_revision_id,
+                    plan.evidence_context_artifact.artifact_revision_id,
+                }
+            )
     bundles: list[tuple[BundleRevisionPointer, str]] = [(step.instruction_bundle, "INSTRUCTION")]
     if step.reference_bundle is not None:
         bundles.append((step.reference_bundle, "REFERENCE"))
@@ -502,6 +549,117 @@ def _materialize_analysis_source(
     _ensure_parent(destination.parent, workspace=workspace, group_id=worker_group_id)
     _write_exclusive(destination, payload, group_id=worker_group_id)
     return payload
+
+
+def _materialize_evidence_context(
+    session: Session,
+    *,
+    plan: ResolvedExecutionPlanV3,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> bytes:
+    """Validate the immutable manifest, then stage only its bounded context Markdown."""
+
+    for pointer in (plan.evidence_manifest_artifact, plan.evidence_context_artifact):
+        if pointer.artifact_revision_id not in authorized_artifact_revision_ids:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_PERMISSION_DENIED", "Evidence Bundle material is not authorized"
+            )
+    manifest_payload = _knowledge_member_payload(
+        session,
+        pointer=plan.evidence_manifest_artifact,
+        artifact_root=artifact_root,
+        maximum_bytes=2 * 1024 * 1024,
+    )
+    try:
+        manifest_value = json.loads(manifest_payload.decode("utf-8"))
+        if not isinstance(manifest_value, dict):
+            raise ValueError("manifest root is not an object")
+        validate_catalog_contract("evidence-bundle-manifest-v2", manifest_value)
+        manifest = EvidenceBundleManifestV2.model_validate(manifest_value)
+    except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_EVIDENCE_MANIFEST_INVALID", "Evidence Bundle manifest is invalid"
+        ) from exc
+    if (
+        manifest.evidence_bundle_id != plan.evidence_bundle_id
+        or manifest.evidence_bundle_revision_id != plan.evidence_bundle_revision_id
+        or manifest.retrieval_request_id != plan.retrieval_request_id
+        or manifest.retrieval_request_sha256 != plan.retrieval_request_sha256
+        or manifest.graph_snapshot != plan.graph_snapshot
+        or manifest.access_policy_revision_id != plan.access_policy_revision_id
+        or manifest.access_policy_sha256 != plan.access_policy_sha256
+        or manifest.requester_permissions_sha256 != plan.requester_permissions_sha256
+        or manifest.materials.context_markdown != plan.evidence_context_artifact
+        or manifest.manifest_sha256 != plan.evidence_manifest_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_EVIDENCE_POINTER_MISMATCH", "Evidence Bundle manifest differs from plan"
+        )
+    payload = _knowledge_member_payload(
+        session,
+        pointer=plan.evidence_context_artifact,
+        artifact_root=artifact_root,
+        maximum_bytes=MAX_MARKDOWN_MEMBER_BYTES,
+    )
+    try:
+        payload.decode("utf-8")
+    except UnicodeError as exc:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_ENCODING_INVALID", "Evidence context is not UTF-8"
+        ) from exc
+    destination = workspace / "references" / "evidence" / "context.md"
+    _ensure_parent(destination.parent, workspace=workspace, group_id=worker_group_id)
+    _write_exclusive(destination, payload, group_id=worker_group_id)
+    return payload
+
+
+def _knowledge_member_payload(
+    session: Session,
+    *,
+    pointer: KnowledgeArtifactMemberPointer,
+    artifact_root: Path,
+    maximum_bytes: int,
+) -> bytes:
+    logical = session.get(ArtifactRecord, pointer.artifact_id)
+    revision = session.get(ArtifactRevisionRecord, pointer.artifact_revision_id)
+    if (
+        logical is None
+        or revision is None
+        or not logical.approved
+        or not revision.approved
+        or revision.logical_artifact_id != pointer.artifact_id
+        or revision.content_hash != pointer.sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_REVISION_INVALID", "Evidence Artifact pointer is stale"
+        )
+    stored_root = Path(revision.nas_path)
+    expected_root = artifact_root / pointer.artifact_id / pointer.artifact_revision_id
+    if stored_root != expected_root:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_STORAGE_MISMATCH", "Evidence Artifact storage is not canonical"
+        )
+    entry = _manifest_entry(revision.manifest, pointer.member_path)
+    expected_bytes = entry.get("bytes")
+    if (
+        entry.get("sha256") != pointer.sha256
+        or entry.get("media_type") != pointer.media_type
+        or entry.get("schema_ref") != pointer.schema_ref
+        or not isinstance(expected_bytes, int)
+        or not 0 < expected_bytes <= maximum_bytes
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_MANIFEST_MISMATCH", "Evidence member manifest differs"
+        )
+    return _read_verified_source(
+        stored_root / PurePosixPath(pointer.member_path),
+        canonical_root=artifact_root,
+        expected_sha256=pointer.sha256,
+        expected_bytes=expected_bytes,
+    )
 
 
 def _canonical_root(path: Path) -> Path:

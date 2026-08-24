@@ -13,11 +13,14 @@ from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     ContentIntakeKnowledgeSourceV2,
     CreateEvidenceBundleCommand,
+    CreateItemProductionEvidenceCommand,
+    CurriculumRetrievalScope,
     EducationRetrievalAccessPolicy,
     EducationRetrievalRequestV2,
     EvidenceBundleManifestV2,
     EvidenceBundleMaterialsV2,
     EvidenceBundlePublicationResult,
+    EvidenceBundlePublicationResultV2,
     EvidenceEntryV2,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisSourceV2,
@@ -50,6 +53,7 @@ from eom_catalog_service.knowledge_graph_models import (
     EvidenceBundleRecord,
     EvidenceBundleRevisionRecord,
     ItemElementReferenceRecord,
+    KnowledgeCorpusRecord,
     KnowledgeEdgeRecord,
     KnowledgeGraphSnapshotRecord,
     KnowledgeNodeRecord,
@@ -113,6 +117,198 @@ class KnowledgeRetrievalApplicationService:
         self.settings = settings or CatalogSettings.from_environment()
         self.sessions = build_session_factory(engine)
         self.artifacts = CatalogArtifactService(engine, self.settings)
+
+    def create_item_production(
+        self, command: CreateItemProductionEvidenceCommand
+    ) -> EvidenceBundlePublicationResultV2:
+        """Resolve a stable educational intent without accepting a raw snapshot control."""
+
+        internal_key = "item-evidence:" + content_sha256(
+            {"idempotency_key": command.idempotency_key}
+        ).removeprefix("sha256:")
+        with self.sessions() as session:
+            existing = session.scalar(
+                select(EducationRetrievalRequestRecord).where(
+                    EducationRetrievalRequestRecord.idempotency_key == internal_key
+                )
+            )
+            if existing is not None:
+                self._validate_item_production_replay(session, command, existing)
+                revision = session.scalar(
+                    select(EvidenceBundleRevisionRecord).where(
+                        EvidenceBundleRevisionRecord.retrieval_request_id
+                        == existing.retrieval_request_id
+                    )
+                )
+                if revision is None:
+                    raise KnowledgeRetrievalServiceError(
+                        "KNOWLEDGE_RETRIEVAL_PUBLICATION_INCOMPLETE",
+                        "item production retrieval has no published Evidence Bundle",
+                    )
+                return self._result_v2(session, existing, revision)
+            corpus = session.scalar(
+                select(KnowledgeCorpusRecord).where(
+                    KnowledgeCorpusRecord.corpus_key == command.requirement.corpus_key
+                )
+            )
+            snapshot = (
+                session.get(KnowledgeGraphSnapshotRecord, corpus.current_graph_snapshot_revision_id)
+                if corpus is not None and corpus.current_graph_snapshot_revision_id is not None
+                else None
+            )
+            if (
+                corpus is None
+                or corpus.lifecycle_state != "ACTIVE"
+                or snapshot is None
+                or snapshot.state != "PUBLISHED"
+                or snapshot.graph_id != corpus.graph_id
+            ):
+                raise KnowledgeRetrievalServiceError(
+                    "KNOWLEDGE_RETRIEVAL_CORPUS_UNAVAILABLE",
+                    "requested knowledge corpus has no published current snapshot",
+                )
+            policy_row = session.get(
+                EducationRetrievalAccessPolicyRevisionRecord,
+                command.access_policy_revision_id,
+            )
+            if (
+                policy_row is None
+                or policy_row.state != "RELEASED"
+                or policy_row.content_sha256 != command.access_policy_sha256
+            ):
+                raise KnowledgeRetrievalServiceError(
+                    "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
+                    "preset-selected retrieval policy pointer is stale",
+                )
+            curriculum_scope: CurriculumRetrievalScope | None = None
+            if command.requirement.curriculum_root_key is not None:
+                root_node = session.scalar(
+                    select(KnowledgeNodeRecord).where(
+                        KnowledgeNodeRecord.graph_snapshot_revision_id
+                        == snapshot.graph_snapshot_revision_id,
+                        KnowledgeNodeRecord.stable_key == command.requirement.curriculum_root_key,
+                    )
+                )
+                root_unit = (
+                    session.scalar(
+                        select(CurriculumUnitRecord).where(
+                            CurriculumUnitRecord.graph_snapshot_revision_id
+                            == snapshot.graph_snapshot_revision_id,
+                            CurriculumUnitRecord.node_id == root_node.node_id,
+                        )
+                    )
+                    if root_node is not None
+                    else None
+                )
+                if root_unit is None:
+                    raise KnowledgeRetrievalServiceError(
+                        "KNOWLEDGE_RETRIEVAL_CURRICULUM_SCOPE_INVALID",
+                        "curriculum root key is absent from the pinned snapshot",
+                    )
+                curriculum_scope = CurriculumRetrievalScope(
+                    framework_revision_id=root_unit.framework_revision_id,
+                    root_unit_id=root_unit.curriculum_unit_id,
+                    include_descendants=True,
+                )
+            graph_snapshot_revision_id = snapshot.graph_snapshot_revision_id
+
+        inner_value: dict[str, Any] = {
+            "operation": "CREATE_EVIDENCE_BUNDLE",
+            "graph_snapshot_revision_id": graph_snapshot_revision_id,
+            "query_kind": command.requirement.query_kind,
+            "curriculum_scope": (
+                curriculum_scope.model_dump(mode="json") if curriculum_scope is not None else None
+            ),
+            "topic_keys": list(command.requirement.topic_keys),
+            "target_item_revision_id": None,
+            "required_item_elements": list(command.requirement.required_item_elements),
+            "source_classes": list(command.requirement.source_classes),
+            "evidence_budget": command.evidence_budget.model_dump(mode="json"),
+            "access_policy_revision_id": command.access_policy_revision_id,
+            "requester_role": command.requester_role,
+            "requester_permission_keys": list(command.requester_permission_keys),
+            "requested_by": command.requested_by,
+            "idempotency_key": internal_key,
+            "submission_sha256": "sha256:" + "0" * 64,
+        }
+        inner_value["submission_sha256"] = content_sha256(
+            {
+                key: value
+                for key, value in inner_value.items()
+                if key not in {"idempotency_key", "submission_sha256"}
+            }
+        )
+        published = self.create(CreateEvidenceBundleCommand.model_validate(inner_value))
+        with self.sessions() as session:
+            request = session.get(EducationRetrievalRequestRecord, published.retrieval_request_id)
+            revision = session.get(
+                EvidenceBundleRevisionRecord, published.evidence_bundle_revision_id
+            )
+            if request is None or revision is None:
+                raise KnowledgeRetrievalServiceError(
+                    "KNOWLEDGE_RETRIEVAL_PUBLICATION_INCOMPLETE",
+                    "published item production Evidence Bundle cannot be reloaded",
+                )
+            return self._result_v2(session, request, revision)
+
+    @staticmethod
+    def _validate_item_production_replay(
+        session: Session,
+        command: CreateItemProductionEvidenceCommand,
+        record: EducationRetrievalRequestRecord,
+    ) -> None:
+        """Reject same-key replay unless it resolves to the original educational intent."""
+
+        try:
+            request = EducationRetrievalRequestV2.model_validate(record.canonical_request)
+        except (ValueError, ValidationError) as exc:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_RESULT_INVALID",
+                "persisted item production retrieval request is invalid",
+            ) from exc
+        corpus = session.scalar(
+            select(KnowledgeCorpusRecord).where(
+                KnowledgeCorpusRecord.corpus_key == command.requirement.corpus_key
+            )
+        )
+        curriculum_key: str | None = None
+        if request.curriculum_scope is not None:
+            curriculum_key = session.scalar(
+                select(KnowledgeNodeRecord.stable_key)
+                .join(
+                    CurriculumUnitRecord,
+                    CurriculumUnitRecord.node_id == KnowledgeNodeRecord.node_id,
+                )
+                .where(
+                    KnowledgeNodeRecord.graph_snapshot_revision_id
+                    == request.graph_snapshot.graph_snapshot_revision_id,
+                    CurriculumUnitRecord.graph_snapshot_revision_id
+                    == request.graph_snapshot.graph_snapshot_revision_id,
+                    CurriculumUnitRecord.framework_revision_id
+                    == request.curriculum_scope.framework_revision_id,
+                    CurriculumUnitRecord.curriculum_unit_id
+                    == request.curriculum_scope.root_unit_id,
+                )
+            )
+        if (
+            corpus is None
+            or corpus.graph_id != request.graph_snapshot.graph_id
+            or curriculum_key != command.requirement.curriculum_root_key
+            or request.query_kind != command.requirement.query_kind
+            or request.topic_keys != command.requirement.topic_keys
+            or request.required_item_elements != command.requirement.required_item_elements
+            or request.source_classes != command.requirement.source_classes
+            or request.evidence_budget != command.evidence_budget
+            or request.access_policy_revision_id != command.access_policy_revision_id
+            or request.access_policy_sha256 != command.access_policy_sha256
+            or request.requester_role != command.requester_role
+            or request.requester_operator_id != command.requested_by
+            or request.requester_permission_keys != command.requester_permission_keys
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_IDEMPOTENCY_CONFLICT",
+                "item production evidence key has different immutable input",
+            )
 
     def create(self, command: CreateEvidenceBundleCommand) -> EvidenceBundlePublicationResult:
         existing = self._existing(command)
@@ -1071,3 +1267,44 @@ class KnowledgeRetrievalApplicationService:
         )
         validate_contract("evidence-bundle-publication-result", value)
         return EvidenceBundlePublicationResult.model_validate(value)
+
+    def _result_v2(
+        self,
+        session: Session,
+        request: EducationRetrievalRequestRecord,
+        revision: EvidenceBundleRevisionRecord,
+    ) -> EvidenceBundlePublicationResultV2:
+        base = self._result(session, request, revision)
+        context_revision = session.get(
+            ArtifactRevisionRecord, revision.context_artifact_revision_id
+        )
+        if (
+            context_revision is None
+            or not context_revision.approved
+            or context_revision.logical_artifact_id != revision.context_artifact_id
+            or context_revision.content_hash != revision.context_sha256
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_PUBLICATION_INVALID",
+                "Evidence Bundle context pointer does not resolve",
+            )
+        value: dict[str, Any] = {
+            **base.model_dump(mode="json", exclude={"schema_version", "result_sha256"}),
+            "schema_version": "evidence-bundle-publication-result/2.0",
+            "requester_permissions_sha256": revision.requester_permissions_sha256,
+            "context_artifact": KnowledgeArtifactMemberPointer(
+                artifact_id=revision.context_artifact_id,
+                artifact_revision_id=revision.context_artifact_revision_id,
+                sha256=revision.context_sha256,
+                schema_ref="eom://schemas/knowledge/evidence-bundle-context/1.0",
+                media_type="text/markdown",
+                logical_name="context.md",
+                member_path="evidence/context.md",
+            ).model_dump(mode="json"),
+            "result_sha256": "sha256:" + "0" * 64,
+        }
+        value["result_sha256"] = content_sha256(
+            {key: item for key, item in value.items() if key != "result_sha256"}
+        )
+        validate_contract("evidence-bundle-publication-result-v2", value)
+        return EvidenceBundlePublicationResultV2.model_validate(value)

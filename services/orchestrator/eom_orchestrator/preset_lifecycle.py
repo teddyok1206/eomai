@@ -15,6 +15,7 @@ from eom_workflow import (
     ControlArtifactPointer,
     ExecutionPresetEvaluationReport,
     ExecutionPresetRevision,
+    ExecutionPresetRevisionV2,
     validate_control_contract,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -39,16 +40,17 @@ EVALUATION_MEDIA_TYPE = "application/json"
 
 
 def execution_preset_policy_sha256(
-    document: dict[str, Any] | ExecutionPresetRevision,
+    document: dict[str, Any] | ExecutionPresetRevision | ExecutionPresetRevisionV2,
 ) -> str:
     """Hash only executable policy, independent of revision lifecycle metadata."""
 
     try:
-        preset = (
-            document
-            if isinstance(document, ExecutionPresetRevision)
-            else ExecutionPresetRevision.model_validate(document)
-        )
+        if isinstance(document, (ExecutionPresetRevision, ExecutionPresetRevisionV2)):
+            preset = document
+        elif document.get("schema_version") == "execution-preset-revision/2.0":
+            preset = ExecutionPresetRevisionV2.model_validate(document)
+        else:
+            preset = ExecutionPresetRevision.model_validate(document)
     except PydanticValidationError as exc:
         raise ControlPlaneError(
             "CONTROL_PRESET_DOCUMENT_INVALID", "preset policy document is invalid"
@@ -60,6 +62,8 @@ def execution_preset_policy_sha256(
         "general_knowledge_policy": normalized["general_knowledge_policy"],
         "role_policies": normalized["role_policies"],
     }
+    if isinstance(preset, ExecutionPresetRevisionV2):
+        policy["retrieval_policy"] = normalized["retrieval_policy"]
     return content_sha256(policy)
 
 
@@ -103,6 +107,60 @@ def create_execution_preset_draft(
         "capacity_policy_revision_id": capacity_policy_revision_id,
         "general_knowledge_policy": general_knowledge_policy,
         "compatible_workflow_protocols": compatible_workflow_protocols,
+        "content_sha256": "sha256:" + "0" * 64,
+        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+    }
+    document["content_sha256"] = compute_control_document_hash(document, "content_sha256")
+    return record_execution_preset_revision(
+        session,
+        preset_key=preset_key,
+        document=document,
+        created_by=created_by,
+    )
+
+
+def create_execution_preset_draft_v2(
+    session: Session,
+    *,
+    preset_key: str,
+    display_name: str,
+    description: str,
+    role_policies: list[dict[str, Any]],
+    capacity_policy_revision_id: str,
+    general_knowledge_policy: str,
+    compatible_workflow_protocols: list[str],
+    retrieval_policy: dict[str, Any],
+    created_by: str,
+    created_at: datetime,
+) -> ExecutionPresetRevisionRecord:
+    """Create a V2 DRAFT without modifying historical V1 preset documents."""
+
+    logical = session.execute(
+        select(ExecutionPresetRecord)
+        .where(ExecutionPresetRecord.preset_key == preset_key)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if logical is not None and logical.state != "ACTIVE":
+        raise ControlPlaneError("CONTROL_PRESET_RETIRED", "execution preset is retired")
+    preset_id = logical.preset_id if logical is not None else new_execution_preset_id()
+    highest = session.scalar(
+        select(func.coalesce(func.max(ExecutionPresetRevisionRecord.revision_number), 0)).where(
+            ExecutionPresetRevisionRecord.preset_id == preset_id
+        )
+    )
+    document: dict[str, Any] = {
+        "schema_version": "execution-preset-revision/2.0",
+        "preset_id": preset_id,
+        "preset_revision_id": new_execution_preset_revision_id(),
+        "revision_number": int(highest or 0) + 1,
+        "state": "DRAFT",
+        "display_name": display_name,
+        "description": description,
+        "role_policies": role_policies,
+        "capacity_policy_revision_id": capacity_policy_revision_id,
+        "general_knowledge_policy": general_knowledge_policy,
+        "compatible_workflow_protocols": compatible_workflow_protocols,
+        "retrieval_policy": retrieval_policy,
         "content_sha256": "sha256:" + "0" * 64,
         "created_at": created_at.isoformat().replace("+00:00", "Z"),
     }

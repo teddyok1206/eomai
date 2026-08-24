@@ -38,7 +38,11 @@ from eom_api_contracts.knowledge_retrieval import (
     EvidenceBundleView,
 )
 from eom_api_contracts.usage import UsagePlanView, UsageRecordView
-from eom_api_contracts.workflows import WorkflowStepView, WorkflowView
+from eom_api_contracts.workflows import (
+    WorkflowKnowledgeProvenanceView,
+    WorkflowStepView,
+    WorkflowView,
+)
 from eom_catalog_service.knowledge_graph_models import (
     EducationRetrievalRequestRecord,
     EvidenceBundleRecord,
@@ -65,12 +69,14 @@ from eom_catalog_service.models import (
 )
 from eom_hwpx_manager.models import HwpxApplicationBuildRecord
 from eom_identity_service.models import OperatorEventRecord
+from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import (
     KnowledgeAnalysisEventRecord,
     KnowledgeAnalysisRunRecord,
 )
 from eom_orchestrator.models import ArtifactRevisionRecord
+from eom_workflow import ResolvedExecutionPlanV3
 from eom_workflow_runner.models import (
     WorkflowEventRecord,
     WorkflowInstanceRecord,
@@ -377,26 +383,57 @@ class QueryAdapter:
         self, *, limit: int, cursor: str | None, state: str | None = None
     ) -> PageResult[WorkflowView]:
         with self.sessions() as session:
-            statement = select(WorkflowInstanceRecord)
+            statement = select(WorkflowInstanceRecord, ResolvedExecutionPlanRecord).outerjoin(
+                ResolvedExecutionPlanRecord,
+                ResolvedExecutionPlanRecord.workflow_id == WorkflowInstanceRecord.workflow_id,
+            )
             if state:
                 statement = statement.where(WorkflowInstanceRecord.state == state)
-            rows, next_cursor, more = self._page(
-                session,
-                statement,
-                WorkflowInstanceRecord.created_at,
-                WorkflowInstanceRecord.workflow_id,
-                "workflow",
-                limit,
-                cursor,
+            if cursor:
+                timestamp, resource_id = self.cursors.decode(cursor, "workflow")
+                statement = statement.where(
+                    or_(
+                        WorkflowInstanceRecord.created_at < timestamp,
+                        and_(
+                            WorkflowInstanceRecord.created_at == timestamp,
+                            WorkflowInstanceRecord.workflow_id < resource_id,
+                        ),
+                    )
+                )
+            rows = list(
+                session.execute(
+                    statement.order_by(
+                        WorkflowInstanceRecord.created_at.desc(),
+                        WorkflowInstanceRecord.workflow_id.desc(),
+                    ).limit(limit + 1)
+                )
             )
-            return PageResult(tuple(self._workflow(row) for row in rows), next_cursor, more)
+            more = len(rows) > limit
+            rows = rows[:limit]
+            next_cursor = (
+                self.cursors.encode("workflow", rows[-1][0].created_at, rows[-1][0].workflow_id)
+                if more and rows
+                else None
+            )
+            return PageResult(
+                tuple(self._workflow(workflow, plan) for workflow, plan in rows),
+                next_cursor,
+                more,
+            )
 
     def workflow(self, workflow_id: str) -> WorkflowView:
         with self.sessions() as session:
-            row = session.get(WorkflowInstanceRecord, workflow_id)
+            row = session.execute(
+                select(WorkflowInstanceRecord, ResolvedExecutionPlanRecord)
+                .outerjoin(
+                    ResolvedExecutionPlanRecord,
+                    ResolvedExecutionPlanRecord.workflow_id == WorkflowInstanceRecord.workflow_id,
+                )
+                .where(WorkflowInstanceRecord.workflow_id == workflow_id)
+            ).one_or_none()
             if row is None:
                 self._not_found("WORKFLOW_NOT_FOUND")
-            return self._workflow(row)
+            return self._workflow(row[0], row[1])
 
     def workflow_steps(self, workflow_id: str) -> tuple[WorkflowStepView, ...]:
         with self.sessions() as session:
@@ -770,8 +807,12 @@ class QueryAdapter:
             resource_version=row.lock_version,
         )
 
-    @staticmethod
-    def _workflow(row: WorkflowInstanceRecord) -> WorkflowView:
+    @classmethod
+    def _workflow(
+        cls,
+        row: WorkflowInstanceRecord,
+        plan: ResolvedExecutionPlanRecord | None = None,
+    ) -> WorkflowView:
         return WorkflowView(
             workflow_id=row.workflow_id,
             definition_key=row.definition_key,
@@ -785,6 +826,63 @@ class QueryAdapter:
             updated_at=row.updated_at,
             completed_at=row.completed_at,
             failure_code=row.failure_code,
+            knowledge_provenance=cls._knowledge_provenance(row, plan),
+        )
+
+    @staticmethod
+    def _knowledge_provenance(
+        workflow: WorkflowInstanceRecord,
+        record: ResolvedExecutionPlanRecord | None,
+    ) -> WorkflowKnowledgeProvenanceView | None:
+        if record is None or record.canonical_document.get("schema_version") != (
+            "resolved-execution-plan/3.0"
+        ):
+            return None
+        try:
+            plan = ResolvedExecutionPlanV3.model_validate(record.canonical_document)
+        except ValueError as exc:
+            raise ApiError(
+                500,
+                "WORKFLOW_KNOWLEDGE_PROVENANCE_INVALID",
+                "Workflow provenance invalid",
+                "The pinned knowledge execution plan failed contract validation.",
+            ) from exc
+        if (
+            plan.plan_id != record.plan_id
+            or plan.workflow_id != workflow.workflow_id
+            or plan.workflow_id != record.workflow_id
+            or plan.preset_id != record.preset_id
+            or plan.preset_revision_id != record.preset_revision_id
+            or plan.capacity_policy_revision_id != record.capacity_policy_revision_id
+            or plan.graph_snapshot.graph_snapshot_revision_id != record.graph_snapshot_revision_id
+            or plan.evidence_bundle_revision_id != record.evidence_bundle_revision_id
+            or plan.plan_sha256 != record.plan_sha256
+            or plan.resolved_at != record.resolved_at
+        ):
+            raise ApiError(
+                500,
+                "WORKFLOW_KNOWLEDGE_PROVENANCE_INVALID",
+                "Workflow provenance invalid",
+                "The workflow and pinned knowledge execution plan do not agree.",
+            )
+        requirement = plan.retrieval_requirement
+        return WorkflowKnowledgeProvenanceView(
+            plan_id=plan.plan_id,
+            plan_sha256=plan.plan_sha256,
+            preset_revision_id=plan.preset_revision_id,
+            corpus_key=requirement.corpus_key,
+            query_kind=requirement.query_kind,
+            curriculum_root_key=requirement.curriculum_root_key,
+            required_item_elements=requirement.required_item_elements,
+            source_classes=requirement.source_classes,
+            graph_snapshot_revision_id=plan.graph_snapshot.graph_snapshot_revision_id,
+            evidence_bundle_revision_id=plan.evidence_bundle_revision_id,
+            retrieval_request_id=plan.retrieval_request_id,
+            retrieval_request_sha256=plan.retrieval_request_sha256,
+            access_policy_revision_id=plan.access_policy_revision_id,
+            access_policy_sha256=plan.access_policy_sha256,
+            evidence_manifest_sha256=plan.evidence_manifest_sha256,
+            resolved_at=plan.resolved_at,
         )
 
     @staticmethod

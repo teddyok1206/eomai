@@ -41,6 +41,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:80db05c8001285e4a74b5d9554e60f0f3f95fb386350f3f0d2f1d42b7f43ca9b",
         ),
+        "execution-preset-revision-v2": ControlSchemaResource(
+            "schemas/workflow/control-plane/execution-preset-revision-v2.schema.json",
+            "resources/control-plane/execution-preset-revision-v2.schema.json",
+            "2.0",
+            "sha256:a05ed05270b170fb1e1207c6c4709df81f7ac436a2142489a40d140fdf6d72ea",
+        ),
         "instruction-bundle-manifest": ControlSchemaResource(
             "schemas/workflow/control-plane/instruction-bundle-manifest-v1.schema.json",
             "resources/control-plane/instruction-bundle-manifest-v1.schema.json",
@@ -64,6 +70,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/resolved-execution-plan-v2.schema.json",
             "2.0",
             "sha256:70a000d38ef80ecf78765744673655b9e261b51ed17dfa6ec189ef277245364e",
+        ),
+        "resolved-execution-plan-v3": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v3.schema.json",
+            "resources/control-plane/resolved-execution-plan-v3.schema.json",
+            "3.0",
+            "sha256:6cd0700e97c595cb52f9fea40df3f530f11e333a69d167a0b4fc9d2e45767d9b",
         ),
         "codex-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-invocation-v1.schema.json",

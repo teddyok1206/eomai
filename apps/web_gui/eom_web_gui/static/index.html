@@ -85,7 +85,7 @@
           </section>
 
           <section class="view" data-view="request" aria-labelledby="request-title">
-            <div class="page-heading"><div><p class="eyebrow">REQUEST DRAFT</p><h1 id="request-title">새 문항 요청</h1><p>자연어를 검토 가능한 Brief로 정규화하고 일반 과학 지식으로 실제 문항을 제작합니다.</p></div><span class="status-badge tone-primary"><span class="status-icon">◆</span> EOM Template Mode</span></div>
+            <div class="page-heading"><div><p class="eyebrow">REQUEST DRAFT</p><h1 id="request-title">새 문항 요청</h1><p>자연어를 검토 가능한 Brief로 정규화하고, 필요하면 승인된 교육 근거를 고정해 실제 문항을 제작합니다.</p></div><span class="status-badge tone-primary"><span class="status-icon">◆</span> EOM Template Mode</span></div>
             <div class="request-layout">
               <section class="panel request-composer">
                 <div class="panel-heading"><div><p class="eyebrow">NATURAL LANGUAGE</p><h2>어떤 문항을 만들까요?</h2></div></div>
@@ -105,7 +105,8 @@
                   <label>난이도<select name="difficulty"><option value="easy">하</option><option value="medium" selected>중</option><option value="hard">상</option></select></label>
                   <label>선택지 수<input name="choice_count" type="number" value="5" readonly></label>
                   <input name="source_intake_batch_id" type="hidden" value="">
-                  <p class="wide">이 생성 경로는 Source Intake 없이 구조화 Brief와 worker의 일반 과학 지식을 사용합니다.</p>
+                  <p class="wide">기본 경로는 Source Intake 없이 구조화 Brief와 worker의 일반 과학 지식을 사용합니다.</p>
+                  <fieldset class="wide admin-only"><legend>승인된 교육 지식 근거 · ADMIN</legend><label class="check"><input name="knowledge_grounding" type="checkbox"> Education Graph의 검증된 Evidence Bundle을 사용</label><label>교육과정 안정 키<input name="curriculum_root_key" maxlength="192" placeholder="earth.plate-boundary" disabled><small>Graph 경로나 Revision을 입력하지 않습니다. 관리된 교육과정 키만 허용됩니다.</small></label><p>선택 시 현재 공개된 science-core snapshot과 승인 정책을 서버가 고정하며, 근거가 없거나 오래된 pointer면 worker 실행 전에 실패합니다.</p></fieldset>
                   <fieldset class="wide"><legend>EOM 템플릿 필수 요소</legend><label class="check"><input name="equation_required" type="checkbox" checked disabled> 수식</label><label class="check"><input name="image_required" type="checkbox" checked disabled> eom-cdx가 문항에 맞춰 생성하는 자료 그림</label></fieldset>
                   <label class="wide">검증된 실행 프리셋<select name="quality_profile"><option value="balanced" selected>standard-item · 표준 문항 제작</option></select><small>모델·추론 깊이·worker 계정은 검증된 immutable 프리셋이 결정합니다.</small></label>
                   <div class="wide draft-meta"><span>Draft ID</span><code id="draft-id">-</code><span>Request SHA</span><code id="draft-sha">-</code></div>

@@ -37,6 +37,7 @@ from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.preset_lifecycle import (
     create_execution_preset_draft,
+    create_execution_preset_draft_v2,
     deprecate_execution_preset,
     release_execution_preset,
 )
@@ -270,18 +271,36 @@ class ControlPlaneAdapter:
     ) -> ExecutionPresetRevisionView:
         try:
             with transaction(self.sessions) as session:
-                row = create_execution_preset_draft(
-                    session,
-                    preset_key=body.preset_key,
-                    display_name=body.display_name,
-                    description=body.description,
-                    role_policies=[item.model_dump(mode="json") for item in body.role_policies],
-                    capacity_policy_revision_id=body.capacity_policy_revision_id,
-                    general_knowledge_policy=body.general_knowledge_policy,
-                    compatible_workflow_protocols=list(body.compatible_workflow_protocols),
-                    created_by=actor.actor_id,
-                    created_at=datetime.now(UTC),
-                )
+                role_policies = [
+                    item.model_dump(mode="json", exclude_none=True) for item in body.role_policies
+                ]
+                if body.retrieval_policy is not None:
+                    row = create_execution_preset_draft_v2(
+                        session,
+                        preset_key=body.preset_key,
+                        display_name=body.display_name,
+                        description=body.description,
+                        role_policies=role_policies,
+                        capacity_policy_revision_id=body.capacity_policy_revision_id,
+                        general_knowledge_policy=body.general_knowledge_policy,
+                        compatible_workflow_protocols=list(body.compatible_workflow_protocols),
+                        retrieval_policy=body.retrieval_policy.model_dump(mode="json"),
+                        created_by=actor.actor_id,
+                        created_at=datetime.now(UTC),
+                    )
+                else:
+                    row = create_execution_preset_draft(
+                        session,
+                        preset_key=body.preset_key,
+                        display_name=body.display_name,
+                        description=body.description,
+                        role_policies=role_policies,
+                        capacity_policy_revision_id=body.capacity_policy_revision_id,
+                        general_knowledge_policy=body.general_knowledge_policy,
+                        compatible_workflow_protocols=list(body.compatible_workflow_protocols),
+                        created_by=actor.actor_id,
+                        created_at=datetime.now(UTC),
+                    )
                 return self._preset_revision(row, ())
         except ControlPlaneError as exc:
             self._map_error(exc)
@@ -387,6 +406,7 @@ class ControlPlaneAdapter:
         | list[ExecutionPresetEvaluationRecord],
     ) -> ExecutionPresetRevisionView:
         return ExecutionPresetRevisionView(
+            schema_version=row.schema_version,
             preset_revision_id=row.preset_revision_id,
             preset_id=row.preset_id,
             revision_number=row.revision_number,
@@ -402,6 +422,7 @@ class ControlPlaneAdapter:
                 PresetRolePolicyInput.model_validate(item)
                 for item in row.canonical_document["role_policies"]
             ),
+            retrieval_policy=row.canonical_document.get("retrieval_policy"),
             evaluations=tuple(
                 ExecutionPresetEvaluationView(
                     evaluation_id=item.evaluation_id,

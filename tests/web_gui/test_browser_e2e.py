@@ -51,6 +51,8 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
                 "image_required": draft["image_required"],
                 "quality_profile": draft["quality_profile"],
                 "source_intake_batch_id": INTAKE_ID,
+                "knowledge_grounding": False,
+                "curriculum_root_key": None,
             },
             headers=csrf,
         ).json()

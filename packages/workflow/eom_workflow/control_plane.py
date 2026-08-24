@@ -7,6 +7,13 @@ from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
+from eom_catalog_contracts import (
+    EducationalRetrievalRequirement,
+    EvidenceBudget,
+    KnowledgeArtifactMemberPointer,
+    KnowledgeGraphSnapshotPointer,
+    KnowledgeSourceClass,
+)
 from eom_identifiers import content_sha256
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -159,6 +166,71 @@ class ExecutionPresetRevision(FrozenModel):
             raise ValueError("preset role policies must be unique")
         if len(self.compatible_workflow_protocols) != len(set(self.compatible_workflow_protocols)):
             raise ValueError("compatible workflow protocols must be unique")
+        return self
+
+
+class RoleExecutionPolicyV2(RoleExecutionPolicy):
+    evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"]
+
+
+class ExecutionPresetRetrievalPolicy(FrozenModel):
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: Sha256
+    allowed_corpus_keys: tuple[Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")], ...] = (
+        Field(min_length=1, max_length=16)
+    )
+    allowed_query_kinds: tuple[
+        Literal["CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE", "ITEM_PREPARATION"], ...
+    ] = Field(min_length=1, max_length=3)
+    allowed_source_classes: tuple[KnowledgeSourceClass, ...] = Field(min_length=1, max_length=5)
+    maximum_budget: EvidenceBudget
+
+    @model_validator(mode="after")
+    def deterministic_closed_policy(self) -> ExecutionPresetRetrievalPolicy:
+        for values, label in (
+            (self.allowed_corpus_keys, "corpus keys"),
+            (self.allowed_query_kinds, "query kinds"),
+            (self.allowed_source_classes, "source classes"),
+        ):
+            if tuple(sorted(values)) != values or len(values) != len(set(values)):
+                raise ValueError(f"preset retrieval {label} must be sorted and unique")
+        return self
+
+
+class ExecutionPresetRevisionV2(FrozenModel):
+    """Additive preset contract selecting graph policy and least-needed role evidence."""
+
+    schema_version: Literal["execution-preset-revision/2.0"] = "execution-preset-revision/2.0"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    revision_number: int = Field(ge=1)
+    state: RevisionState
+    display_name: str = Field(min_length=1, max_length=128)
+    description: str = Field(min_length=1, max_length=1000)
+    role_policies: tuple[RoleExecutionPolicyV2, ...] = Field(min_length=1, max_length=5)
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    general_knowledge_policy: Literal["DENY", "ALLOW_WITH_PROVENANCE"]
+    compatible_workflow_protocols: tuple[
+        Annotated[str, Field(pattern=r"^workflow-role/[0-9]+\.[0-9]+\.[0-9]+$")], ...
+    ] = Field(min_length=1, max_length=16)
+    retrieval_policy: ExecutionPresetRetrievalPolicy
+    content_sha256: Sha256
+    created_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def unique_roles_protocols_and_private_registration(self) -> ExecutionPresetRevisionV2:
+        roles = [policy.role for policy in self.role_policies]
+        if len(roles) != len(set(roles)):
+            raise ValueError("preset role policies must be unique")
+        if len(self.compatible_workflow_protocols) != len(set(self.compatible_workflow_protocols)):
+            raise ValueError("compatible workflow protocols must be unique")
+        if not any(policy.evidence_access == "EVIDENCE_CONTEXT" for policy in self.role_policies):
+            raise ValueError("knowledge-backed preset must expose evidence to at least one role")
+        item_management = [
+            policy for policy in self.role_policies if policy.role == "item_management"
+        ]
+        if item_management and item_management[0].evidence_access != "NONE":
+            raise ValueError("item management must not receive Evidence Bundle context")
         return self
 
 
@@ -330,6 +402,75 @@ class ResolvedExecutionPlanV2(FrozenModel):
         body = self.model_dump(mode="json", exclude={"plan_sha256"})
         if content_sha256(body) != self.plan_sha256:
             raise ValueError("knowledge analysis plan hash does not match canonical content")
+        return self
+
+
+class ResolvedStepExecutionV3(ResolvedStepExecution):
+    evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"]
+
+
+class ResolvedExecutionPlanV3(FrozenModel):
+    """One fresh item workflow pinned to an immutable bounded Evidence Bundle."""
+
+    schema_version: Literal["resolved-execution-plan/3.0"] = "resolved-execution-plan/3.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["KNOWLEDGE_BACKED_ITEM"] = "KNOWLEDGE_BACKED_ITEM"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    workflow_definition_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    workflow_definition_sha256: Sha256
+    content_pack_release_id: str = Field(pattern=r"^packrel_[0-9a-f]{32}$")
+    content_pack_sha256: Sha256
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    retrieval_requirement: EducationalRetrievalRequirement
+    retrieval_requirement_sha256: Sha256
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    retrieval_request_sha256: Sha256
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: Sha256
+    requester_permissions_sha256: Sha256
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    evidence_manifest_artifact: KnowledgeArtifactMemberPointer
+    evidence_manifest_sha256: Sha256
+    evidence_context_artifact: KnowledgeArtifactMemberPointer
+    steps: tuple[ResolvedStepExecutionV3, ...] = Field(min_length=1, max_length=64)
+    resolver_version: str = Field(pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_evidence_and_plan_hashes(self) -> ResolvedExecutionPlanV3:
+        keys = [step.step_key for step in self.steps]
+        if len(keys) != len(set(keys)):
+            raise ValueError("resolved step keys must be unique")
+        if content_sha256(self.retrieval_requirement.model_dump(mode="json")) != (
+            self.retrieval_requirement_sha256
+        ):
+            raise ValueError("educational retrieval requirement hash differs")
+        if (
+            self.evidence_manifest_artifact.member_path != "evidence/manifest.json"
+            or self.evidence_manifest_artifact.media_type != "application/json"
+            or self.evidence_manifest_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-manifest/2.0"
+            or self.evidence_context_artifact.member_path != "evidence/context.md"
+            or self.evidence_context_artifact.media_type != "text/markdown"
+            or self.evidence_context_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-context/1.0"
+        ):
+            raise ValueError("Evidence Bundle material pointers are incompatible")
+        item_management = [step for step in self.steps if step.role == "item_management"]
+        if item_management and item_management[0].evidence_access != "NONE":
+            raise ValueError("item management must not receive Evidence Bundle context")
+        body = self.model_dump(mode="json", exclude={"plan_sha256"})
+        if content_sha256(body) != self.plan_sha256:
+            raise ValueError("knowledge-backed execution plan hash differs")
         return self
 
 
