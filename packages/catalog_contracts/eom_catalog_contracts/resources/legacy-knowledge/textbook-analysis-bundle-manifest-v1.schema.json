@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0",
+  "title": "EOM Textbook Analysis Bundle Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bundle_id",
+    "bundle_state",
+    "source",
+    "canonical_source",
+    "document",
+    "scope",
+    "extractor",
+    "index_member",
+    "pages",
+    "curriculum_mappings",
+    "generated_at",
+    "generated_by",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "textbook-analysis-bundle-manifest/1.0"},
+    "bundle_id": {"type": "string", "pattern": "^textbookbundle_[0-9a-f]{32}$"},
+    "bundle_state": {"enum": ["PRE_CANONICAL_REVIEW_ONLY", "CANONICAL"]},
+    "source": {"$ref": "#/$defs/sourceObservation"},
+    "canonical_source": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/pdfArtifactPointer"}
+      ]
+    },
+    "document": {"$ref": "#/$defs/documentIdentity"},
+    "scope": {"$ref": "#/$defs/pageScope"},
+    "extractor": {"$ref": "#/$defs/extractor"},
+    "index_member": {"$ref": "#/$defs/indexMember"},
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/page"}
+    },
+    "curriculum_mappings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": {"$ref": "#/$defs/curriculumMapping"}
+    },
+    "generated_at": {"type": "string", "format": "date-time"},
+    "generated_by": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"bundle_state": {"const": "PRE_CANONICAL_REVIEW_ONLY"}}},
+      "then": {
+        "properties": {
+          "canonical_source": {"type": "null"},
+          "curriculum_mappings": {
+            "items": {"properties": {"review_state": {"const": "PROPOSED"}}}
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"bundle_state": {"const": "CANONICAL"}}},
+      "then": {"properties": {"canonical_source": {"$ref": "#/$defs/pdfArtifactPointer"}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_type", "sha256", "size_bytes", "page_count"],
+      "properties": {
+        "media_type": {"const": "application/pdf"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 1125899906842624},
+        "page_count": {"type": "integer", "minimum": 1, "maximum": 100000}
+      }
+    },
+    "pdfArtifactPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pointer_type",
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "pointer_type": {"const": "ARTIFACT_MEMBER"},
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+/[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {"const": "application/pdf"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "documentIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["publisher_key", "publisher_label", "title", "curriculum_volume", "language"],
+      "properties": {
+        "publisher_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"},
+        "publisher_label": {"type": "string", "minLength": 1, "maxLength": 100},
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "curriculum_volume": {"enum": ["I", "II"]},
+        "language": {"const": "ko-KR"}
+      }
+    },
+    "pageScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first_physical_page", "last_physical_page"],
+      "properties": {
+        "first_physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "last_physical_page": {"type": "integer", "minimum": 1, "maximum": 100000}
+      }
+    },
+    "extractor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementation", "version", "implementation_sha256", "options_sha256"],
+      "properties": {
+        "implementation": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+        },
+        "version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "implementation_sha256": {"$ref": "#/$defs/sha256"},
+        "options_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "indexMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["member_path", "media_type", "member_sha256"],
+      "properties": {
+        "member_path": {"const": "index.md"},
+        "media_type": {"const": "text/markdown; charset=utf-8"},
+        "member_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "physical_page",
+        "printed_page",
+        "anchor_id",
+        "member_path",
+        "media_type",
+        "extraction_state",
+        "character_count",
+        "replacement_character_count",
+        "text_sha256",
+        "member_sha256"
+      ],
+      "properties": {
+        "physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "printed_page": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "integer", "minimum": 1, "maximum": 100000}
+          ]
+        },
+        "anchor_id": {"type": "string", "pattern": "^textbookanchor_[0-9a-f]{32}$"},
+        "member_path": {
+          "type": "string",
+          "pattern": "^pages/page-[0-9]{6}\\.md$",
+          "maxLength": 64
+        },
+        "media_type": {"const": "text/markdown; charset=utf-8"},
+        "extraction_state": {"enum": ["TEXT", "TEXT_WITH_WARNINGS", "EMPTY"]},
+        "character_count": {"type": "integer", "minimum": 0, "maximum": 2000000},
+        "replacement_character_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000000
+        },
+        "text_sha256": {"$ref": "#/$defs/sha256"},
+        "member_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "curriculumMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mapping_id",
+        "eom_unit_key",
+        "eom_unit_label",
+        "first_physical_page",
+        "last_physical_page",
+        "evidence_anchor_ids",
+        "mapping_kind",
+        "confidence_milli",
+        "review_state"
+      ],
+      "properties": {
+        "mapping_id": {"type": "string", "pattern": "^textbookmapping_[0-9a-f]{32}$"},
+        "eom_unit_key": {
+          "type": "string",
+          "pattern": "^(1-\\([1-4]\\)|2-\\([1-6]\\)|3-\\([1-7]\\)|4-\\([1-7]\\)|5-\\([1-7]\\)|6-\\([1-4]\\))$"
+        },
+        "eom_unit_label": {"type": "string", "minLength": 1, "maxLength": 100},
+        "first_physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "last_physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "evidence_anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10000,
+          "items": {"type": "string", "pattern": "^textbookanchor_[0-9a-f]{32}$"}
+        },
+        "mapping_kind": {"enum": ["PRIMARY", "RELATED"]},
+        "confidence_milli": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "review_state": {"enum": ["PROPOSED", "CONFIRMED"]}
+      }
+    }
+  }
+}

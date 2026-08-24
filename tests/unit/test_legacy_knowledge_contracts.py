@@ -13,6 +13,7 @@ from eom_catalog_contracts import (
     LegacySourceRightsReview,
     LegacySourceSelection,
     PdfPageRangeMaterializationManifest,
+    TextbookAnalysisBundleManifest,
     catalog_schema_inventory,
     validate_contract,
 )
@@ -283,6 +284,78 @@ def _pdf_manifest() -> dict[str, object]:
     return _self_hash(value, "manifest_sha256")
 
 
+def _textbook_bundle() -> dict[str, object]:
+    pages = []
+    anchors = []
+    for physical_page in range(16, 20):
+        suffix = f"{physical_page:032x}"
+        anchor_id = "textbookanchor_" + suffix
+        anchors.append(anchor_id)
+        pages.append(
+            {
+                "physical_page": physical_page,
+                "printed_page": physical_page - 2,
+                "anchor_id": anchor_id,
+                "member_path": f"pages/page-{physical_page:06d}.md",
+                "media_type": "text/markdown; charset=utf-8",
+                "extraction_state": "TEXT",
+                "character_count": 100 + physical_page,
+                "replacement_character_count": 0,
+                "text_sha256": SHA_B,
+                "member_sha256": SHA_C,
+            }
+        )
+    value: dict[str, object] = {
+        "schema_version": "textbook-analysis-bundle-manifest/1.0",
+        "bundle_id": "textbookbundle_" + "b" * 32,
+        "bundle_state": "PRE_CANONICAL_REVIEW_ONLY",
+        "source": {
+            "media_type": "application/pdf",
+            "sha256": SHA_A,
+            "size_bytes": 288_650_546,
+            "page_count": 184,
+        },
+        "canonical_source": None,
+        "document": {
+            "publisher_key": "miraen",
+            "publisher_label": "미래엔",
+            "title": "통합과학1",
+            "curriculum_volume": "I",
+            "language": "ko-KR",
+        },
+        "scope": {"first_physical_page": 16, "last_physical_page": 19},
+        "extractor": {
+            "implementation": "pdftotext",
+            "version": "26.02.0",
+            "implementation_sha256": SHA_B,
+            "options_sha256": SHA_A,
+        },
+        "index_member": {
+            "member_path": "index.md",
+            "media_type": "text/markdown; charset=utf-8",
+            "member_sha256": SHA_B,
+        },
+        "pages": pages,
+        "curriculum_mappings": [
+            {
+                "mapping_id": "textbookmapping_" + "c" * 32,
+                "eom_unit_key": "1-(1)",
+                "eom_unit_label": "시간과 공간",
+                "first_physical_page": 16,
+                "last_physical_page": 19,
+                "evidence_anchor_ids": anchors,
+                "mapping_kind": "PRIMARY",
+                "confidence_milli": 1000,
+                "review_state": "PROPOSED",
+            }
+        ],
+        "generated_at": NOW,
+        "generated_by": "codex-data-analysis-pilot",
+        "manifest_sha256": SHA_C,
+    }
+    return _self_hash(value, "manifest_sha256")
+
+
 def test_legacy_knowledge_schemas_are_canonical_packaged_and_valid() -> None:
     inventory = dict(catalog_schema_inventory())
     for key in (
@@ -496,6 +569,110 @@ def test_pdf_page_ranges_require_complete_bounded_nonoverlapping_coverage() -> N
     too_large = _self_hash(too_large, "manifest_sha256")
     with pytest.raises(ValidationError):
         validate_contract("pdf-page-range-materialization-manifest", too_large)
+
+
+def test_textbook_analysis_bundle_is_schema_valid_typed_and_content_addressed() -> None:
+    value = _textbook_bundle()
+    validate_contract("textbook-analysis-bundle-manifest", value)
+    parsed = TextbookAnalysisBundleManifest.model_validate(value)
+    assert parsed.bundle_state == "PRE_CANONICAL_REVIEW_ONLY"
+    assert parsed.canonical_source is None
+    assert tuple(page.physical_page for page in parsed.pages) == (16, 17, 18, 19)
+    assert parsed.curriculum_mappings[0].eom_unit_key == "1-(1)"
+    assert parsed.manifest_sha256 == content_sha256(
+        parsed.model_dump(mode="json", exclude={"manifest_sha256"})
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (("pages", 0, "member_path", "pages/page-000999.md"), "physical page"),
+        (
+            ("curriculum_mappings", 0, "last_physical_page", 18),
+            "anchors do not match",
+        ),
+        (("curriculum_mappings", 0, "eom_unit_key", "7-(1)"), "String should match pattern"),
+    ],
+)
+def test_textbook_analysis_bundle_fails_closed_on_page_and_mapping_drift(
+    mutation: tuple[str, int, str, object], message: str
+) -> None:
+    value = _textbook_bundle()
+    collection_name, index, field, replacement = mutation
+    collection = value[collection_name]
+    assert isinstance(collection, list) and isinstance(collection[index], dict)
+    collection[index][field] = replacement
+    value = _self_hash(value, "manifest_sha256")
+    with pytest.raises(PydanticValidationError, match=message):
+        TextbookAnalysisBundleManifest.model_validate(value)
+
+
+def test_textbook_analysis_bundle_requires_ordered_complete_scope() -> None:
+    value = _textbook_bundle()
+    pages = value["pages"]
+    assert isinstance(pages, list)
+    pages[1], pages[2] = pages[2], pages[1]
+    value = _self_hash(value, "manifest_sha256")
+    with pytest.raises(PydanticValidationError, match="ordered scope exactly"):
+        TextbookAnalysisBundleManifest.model_validate(value)
+
+
+def test_textbook_analysis_bundle_exposes_text_replacement_warnings() -> None:
+    value = _textbook_bundle()
+    pages = value["pages"]
+    assert isinstance(pages, list) and isinstance(pages[0], dict)
+    pages[0]["replacement_character_count"] = 1
+    value = _self_hash(value, "manifest_sha256")
+    with pytest.raises(PydanticValidationError, match="require warning state"):
+        TextbookAnalysisBundleManifest.model_validate(value)
+
+    pages = value["pages"]
+    assert isinstance(pages, list) and isinstance(pages[0], dict)
+    pages[0]["extraction_state"] = "TEXT_WITH_WARNINGS"
+    value = _self_hash(value, "manifest_sha256")
+    assert TextbookAnalysisBundleManifest.model_validate(value).pages[0].extraction_state == (
+        "TEXT_WITH_WARNINGS"
+    )
+
+
+def test_textbook_analysis_bundle_separates_precanonical_and_canonical_source_identity() -> None:
+    pre_canonical = _textbook_bundle()
+    pre_canonical["canonical_source"] = _artifact_pointer(
+        "d",
+        member_path="source/textbook.pdf",
+        schema_ref="eom://schemas/legacy-knowledge/original-pdf/1.0",
+        media_type="application/pdf",
+        sha256=SHA_A,
+    )
+    pre_canonical = _self_hash(pre_canonical, "manifest_sha256")
+    with pytest.raises(PydanticValidationError, match="cannot claim"):
+        TextbookAnalysisBundleManifest.model_validate(pre_canonical)
+
+    confirmed = _textbook_bundle()
+    mappings = confirmed["curriculum_mappings"]
+    assert isinstance(mappings, list) and isinstance(mappings[0], dict)
+    mappings[0]["review_state"] = "CONFIRMED"
+    confirmed = _self_hash(confirmed, "manifest_sha256")
+    with pytest.raises(PydanticValidationError, match="must remain proposed"):
+        TextbookAnalysisBundleManifest.model_validate(confirmed)
+
+    canonical = _textbook_bundle()
+    canonical["bundle_state"] = "CANONICAL"
+    canonical["canonical_source"] = _artifact_pointer(
+        "d",
+        member_path="source/textbook.pdf",
+        schema_ref="eom://schemas/legacy-knowledge/original-pdf/1.0",
+        media_type="application/pdf",
+        sha256=SHA_B,
+    )
+    canonical = _self_hash(canonical, "manifest_sha256")
+    with pytest.raises(PydanticValidationError, match="does not match"):
+        TextbookAnalysisBundleManifest.model_validate(canonical)
+
+    stale = _textbook_bundle() | {"manifest_sha256": SHA_A}
+    with pytest.raises(PydanticValidationError, match="manifest_sha256"):
+        TextbookAnalysisBundleManifest.model_validate(stale)
 
 
 def test_stable_legacy_knowledge_error_codes_are_closed() -> None:

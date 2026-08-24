@@ -32,6 +32,7 @@ dev = [
 [project.scripts]
 eomctl = "eomctl.cli:app"
 eom-dev-report = "eom_dev_reporter.cli:main"
+eom-textbook-analysis = "eom_textbook_analysis.cli:main"
 eom-workflow-runner = "eom_workflow_runner.cli:main"
 eom-hwpx-application-runner = "eom_hwpx_manager.runner:main"
 eom-catalog-application-runner = "eom_catalog_service.application_runner:main"
@@ -43,6 +44,7 @@ where = [
   "services/orchestrator",
   "apps/eomctl",
   "tools/dev_reporter",
+  "tools/textbook_analysis",
   "packages/workflow",
   "services/workflow_runner",
   "packages/hwpx_contracts",
@@ -123,6 +125,7 @@ mypy_path = [
   "services/catalog_service",
   "apps/eomctl",
   "tools/dev_reporter",
+  "tools/textbook_analysis",
 ]
 packages = [
   "eom_protocol",
@@ -132,6 +135,7 @@ packages = [
   "eom_orchestrator",
   "eomctl",
   "eom_dev_reporter",
+  "eom_textbook_analysis",
   "eom_hwpx_contracts",
   "eom_hwpx_manager",
   "eom_content_intake",

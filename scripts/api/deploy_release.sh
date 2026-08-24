@@ -432,6 +432,7 @@ catalog_resources = {
     "legacy-knowledge/legacy-source-selection-v1.schema.json": "schemas/legacy-knowledge/legacy-source-selection-v1.schema.json",
     "legacy-knowledge/legacy-source-selection-v2.schema.json": "schemas/legacy-knowledge/legacy-source-selection-v2.schema.json",
     "legacy-knowledge/pdf-page-range-materialization-manifest-v1.schema.json": "schemas/legacy-knowledge/pdf-page-range-materialization-manifest-v1.schema.json",
+    "legacy-knowledge/textbook-analysis-bundle-manifest-v1.schema.json": "schemas/legacy-knowledge/textbook-analysis-bundle-manifest-v1.schema.json",
     "legacy-usage/assessment-assembly-manifest-v1.schema.json": "schemas/legacy-usage/assessment-assembly-manifest-v1.schema.json",
     "legacy-usage/legacy-usage-import-manifest-v1.schema.json": "schemas/legacy-usage/legacy-usage-import-manifest-v1.schema.json",
     "legacy-usage/legacy-usage-mapping-contract-v1.schema.json": "schemas/legacy-usage/legacy-usage-mapping-contract-v1.schema.json",

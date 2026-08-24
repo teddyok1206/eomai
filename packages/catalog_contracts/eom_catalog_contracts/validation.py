@@ -120,6 +120,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:08bf76c009dadebce705bf667cee8364a23b378ee57427aa754fdb968876d6aa",
         ),
+        "textbook-analysis-bundle-manifest": CatalogSchemaResource(
+            "schemas/legacy-knowledge/textbook-analysis-bundle-manifest-v1.schema.json",
+            "resources/legacy-knowledge/textbook-analysis-bundle-manifest-v1.schema.json",
+            "1.0",
+            "sha256:9c53d4f99b37d229899f367351bb50433d1bb67a4eb79c9a0c50706cabad0133",
+        ),
         "product-usage-graph-projection": CatalogSchemaResource(
             "schemas/legacy-usage/product-usage-graph-projection-v1.schema.json",
             "resources/legacy-usage/product-usage-graph-projection-v1.schema.json",

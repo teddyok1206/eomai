@@ -827,3 +827,188 @@ class PdfPageRangeMaterializationManifest(FrozenModel):
             raise ValueError("PDF materialization ranges must cover every source page")
         _require_self_hash(self, "manifest_sha256")
         return self
+
+
+class TextbookSourceObservation(FrozenModel):
+    media_type: Literal["application/pdf"] = "application/pdf"
+    sha256: Sha256
+    size_bytes: int = Field(ge=1, le=1 << 50)
+    page_count: int = Field(ge=1, le=100000)
+
+
+class TextbookDocumentIdentity(FrozenModel):
+    publisher_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,63}$")
+    publisher_label: str = Field(min_length=1, max_length=100)
+    title: str = Field(min_length=1, max_length=200)
+    curriculum_volume: Literal["I", "II"]
+    language: Literal["ko-KR"] = "ko-KR"
+
+
+class TextbookPageScope(FrozenModel):
+    first_physical_page: int = Field(ge=1, le=100000)
+    last_physical_page: int = Field(ge=1, le=100000)
+
+    @model_validator(mode="after")
+    def ordered_scope(self) -> TextbookPageScope:
+        if self.last_physical_page < self.first_physical_page:
+            raise ValueError("textbook analysis page scope is reversed")
+        return self
+
+
+class TextbookExtractorDescriptor(FrozenModel):
+    implementation: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+    version: str = Field(min_length=1, max_length=64)
+    implementation_sha256: Sha256
+    options_sha256: Sha256
+
+
+class TextbookBundleIndexMember(FrozenModel):
+    member_path: Literal["index.md"] = "index.md"
+    media_type: Literal["text/markdown; charset=utf-8"] = "text/markdown; charset=utf-8"
+    member_sha256: Sha256
+
+
+class TextbookPageAnalysis(FrozenModel):
+    physical_page: int = Field(ge=1, le=100000)
+    printed_page: int | None = Field(default=None, ge=1, le=100000)
+    anchor_id: str = Field(pattern=r"^textbookanchor_[0-9a-f]{32}$")
+    member_path: str = Field(pattern=r"^pages/page-[0-9]{6}\.md$", max_length=64)
+    media_type: Literal["text/markdown; charset=utf-8"] = "text/markdown; charset=utf-8"
+    extraction_state: Literal["TEXT", "TEXT_WITH_WARNINGS", "EMPTY"]
+    character_count: int = Field(ge=0, le=2000000)
+    replacement_character_count: int = Field(ge=0, le=2000000)
+    text_sha256: Sha256
+    member_sha256: Sha256
+
+    @model_validator(mode="after")
+    def coherent_extraction(self) -> TextbookPageAnalysis:
+        expected_path = f"pages/page-{self.physical_page:06d}.md"
+        if self.member_path != expected_path:
+            raise ValueError("textbook page member path must match its physical page")
+        if (self.extraction_state == "EMPTY") != (self.character_count == 0):
+            raise ValueError("textbook page extraction state and character count disagree")
+        if self.replacement_character_count > self.character_count:
+            raise ValueError("textbook replacement count exceeds character count")
+        if self.replacement_character_count:
+            if self.extraction_state != "TEXT_WITH_WARNINGS":
+                raise ValueError("textbook replacement characters require warning state")
+        elif self.character_count and self.extraction_state != "TEXT":
+            raise ValueError("textbook clean extracted text must use text state")
+        return self
+
+
+class TextbookCurriculumMapping(FrozenModel):
+    mapping_id: str = Field(pattern=r"^textbookmapping_[0-9a-f]{32}$")
+    eom_unit_key: str = Field(
+        pattern=(
+            r"^(1-\([1-4]\)|2-\([1-6]\)|3-\([1-7]\)|"
+            r"4-\([1-7]\)|5-\([1-7]\)|6-\([1-4]\))$"
+        )
+    )
+    eom_unit_label: str = Field(min_length=1, max_length=100)
+    first_physical_page: int = Field(ge=1, le=100000)
+    last_physical_page: int = Field(ge=1, le=100000)
+    evidence_anchor_ids: tuple[str, ...] = Field(min_length=1, max_length=10000)
+    mapping_kind: Literal["PRIMARY", "RELATED"]
+    confidence_milli: int = Field(ge=0, le=1000)
+    review_state: Literal["PROPOSED", "CONFIRMED"]
+
+    @model_validator(mode="after")
+    def coherent_mapping(self) -> TextbookCurriculumMapping:
+        if self.last_physical_page < self.first_physical_page:
+            raise ValueError("textbook curriculum mapping page range is reversed")
+        if len(self.evidence_anchor_ids) != len(set(self.evidence_anchor_ids)):
+            raise ValueError("textbook curriculum mapping anchors must be unique")
+        return self
+
+
+class TextbookAnalysisBundleManifest(FrozenModel):
+    schema_version: Literal["textbook-analysis-bundle-manifest/1.0"] = (
+        "textbook-analysis-bundle-manifest/1.0"
+    )
+    bundle_id: str = Field(pattern=r"^textbookbundle_[0-9a-f]{32}$")
+    bundle_state: Literal["PRE_CANONICAL_REVIEW_ONLY", "CANONICAL"]
+    source: TextbookSourceObservation
+    canonical_source: LegacyArtifactMemberPointer | None
+    document: TextbookDocumentIdentity
+    scope: TextbookPageScope
+    extractor: TextbookExtractorDescriptor
+    index_member: TextbookBundleIndexMember
+    pages: tuple[TextbookPageAnalysis, ...] = Field(min_length=1, max_length=10000)
+    curriculum_mappings: tuple[TextbookCurriculumMapping, ...] = Field(
+        min_length=1, max_length=1000
+    )
+    generated_at: UtcDatetime
+    generated_by: ActorId
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def coherent_bundle(self) -> TextbookAnalysisBundleManifest:
+        if self.bundle_state == "PRE_CANONICAL_REVIEW_ONLY":
+            if self.canonical_source is not None:
+                raise ValueError("pre-canonical textbook bundle cannot claim an Artifact pointer")
+            if any(mapping.review_state != "PROPOSED" for mapping in self.curriculum_mappings):
+                raise ValueError("pre-canonical textbook mappings must remain proposed")
+        elif self.canonical_source is None:
+            raise ValueError("canonical textbook bundle requires an Artifact pointer")
+        elif (
+            self.canonical_source.media_type != "application/pdf"
+            or self.canonical_source.sha256 != self.source.sha256
+        ):
+            raise ValueError("canonical textbook source pointer does not match source observation")
+
+        if self.scope.last_physical_page > self.source.page_count:
+            raise ValueError("textbook analysis page scope exceeds source page count")
+        expected_pages = tuple(
+            range(self.scope.first_physical_page, self.scope.last_physical_page + 1)
+        )
+        physical_pages = tuple(page.physical_page for page in self.pages)
+        if physical_pages != expected_pages:
+            raise ValueError("textbook analysis pages must cover the ordered scope exactly")
+        anchor_by_page = {page.physical_page: page.anchor_id for page in self.pages}
+        if len(anchor_by_page) != len(self.pages) or len(
+            {page.anchor_id for page in self.pages}
+        ) != len(self.pages):
+            raise ValueError("textbook page identities must be unique")
+
+        mapping_ids = tuple(mapping.mapping_id for mapping in self.curriculum_mappings)
+        if len(mapping_ids) != len(set(mapping_ids)):
+            raise ValueError("textbook curriculum mapping IDs must be unique")
+        mapping_order = tuple(
+            (
+                mapping.first_physical_page,
+                mapping.last_physical_page,
+                mapping.eom_unit_key,
+                mapping.mapping_kind,
+                mapping.mapping_id,
+            )
+            for mapping in self.curriculum_mappings
+        )
+        if mapping_order != tuple(sorted(mapping_order)):
+            raise ValueError("textbook curriculum mappings must be deterministically ordered")
+        mapping_keys: set[tuple[str, int, int, str]] = set()
+        for mapping in self.curriculum_mappings:
+            if (
+                mapping.first_physical_page < self.scope.first_physical_page
+                or mapping.last_physical_page > self.scope.last_physical_page
+            ):
+                raise ValueError("textbook curriculum mapping falls outside analysis scope")
+            expected_anchors = tuple(
+                anchor_by_page[page_number]
+                for page_number in range(
+                    mapping.first_physical_page, mapping.last_physical_page + 1
+                )
+            )
+            if mapping.evidence_anchor_ids != expected_anchors:
+                raise ValueError("textbook curriculum mapping anchors do not match its page range")
+            mapping_key = (
+                mapping.eom_unit_key,
+                mapping.first_physical_page,
+                mapping.last_physical_page,
+                mapping.mapping_kind,
+            )
+            if mapping_key in mapping_keys:
+                raise ValueError("textbook curriculum mappings must be unique")
+            mapping_keys.add(mapping_key)
+        _require_self_hash(self, "manifest_sha256")
+        return self
