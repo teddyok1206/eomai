@@ -124,7 +124,7 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260823_0011"
+    assert CURRENT_MIGRATION_REVISION == "20260824_0012"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -138,6 +138,22 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         "codex_account:manage",
         "execution_preset:read",
         "execution_preset:manage",
+    ):
+        assert permission in source
+
+
+def test_knowledge_analysis_rbac_migration_is_additive_and_exact() -> None:
+    source = Path("migrations/versions/20260824_0012_knowledge_analysis_rbac.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'down_revision: str | Sequence[str] | None = "20260823_0011"' in source
+    assert "ALTER TABLE" not in source
+    assert "DROP TABLE" not in source
+    assert '_stable_id("role_", "ADMIN")' in source
+    for permission in (
+        "knowledge_analysis:read",
+        "knowledge_analysis:create",
+        "knowledge_analysis:review",
     ):
         assert permission in source
 

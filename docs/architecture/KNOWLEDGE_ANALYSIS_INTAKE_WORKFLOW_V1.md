@@ -623,3 +623,28 @@ carry an accepted-result pointer.
 workflow bootstrap, non-generating slot05 observation, and any one-shot live analysis remain later
 operator-controlled steps. Phase 8 has not started and is the first phase allowed to publish an
 immutable graph snapshot.
+
+## 19. Deployment RBAC Closure
+
+The first production deployment of migration `20260823_0011` established that the schema migration
+did not seed the three additive `knowledge_analysis:*` permissions required by the already frozen
+`PermissionKey` and `ROLE_PERMISSIONS` contracts. Migration `20260823_0011` is immutable after
+publication and production application; it is not edited in place.
+
+The canonical permission inventory remains `eom_operator_identity.PermissionKey`, and the canonical
+role mapping remains `ROLE_PERMISSIONS`. Additive migration `20260824_0012` materializes only the
+missing permission identities and their ADMIN mappings using the same deterministic ID derivation as
+the original RBAC migrations. PostgreSQL remains the canonical persistence boundary; no permission
+document or large payload is introduced.
+
+The dominant access patterns are exact permission-key lookup, ADMIN membership lookup, and
+readiness cardinality comparison. Existing unique B-tree constraints on `permission_key` and the
+`(role_id, permission_id)` primary key provide `O(log n)` lookup and set membership. The migration
+runs in one transaction, fails on an unexpected pre-existing identity, and is idempotent through the
+Alembic revision boundary. Downgrade removes only the three new ADMIN mappings and permissions.
+
+The Application API runtime role receives no new write authority from this data migration. Its
+separate table-grant reconciliation remains authoritative. Calling a general identity service from
+deployment was rejected because it would hide a production mutation behind a read command; editing
+`0011` was rejected because it would reinterpret an applied migration; and weakening readiness was
+rejected because missing RBAC rows are a real authorization defect.
