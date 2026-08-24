@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-usage/legacy-usage-mapping-contract/1.0",
+  "title": "Legacy Usage Mapping Contract V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "mapping_contract_id", "mapping_contract_revision_id",
+    "revision_number", "state", "workbook_media_type", "worksheet_name", "header_row",
+    "first_data_row", "maximum_rows", "columns", "normalization_policy", "contract_sha256",
+    "released_at", "released_by"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-usage-mapping-contract/1.0"},
+    "mapping_contract_id": {"type": "string", "pattern": "^legacymap_[0-9a-f]{32}$"},
+    "mapping_contract_revision_id": {"type": "string", "pattern": "^legacymaprev_[0-9a-f]{32}$"},
+    "revision_number": {"type": "integer", "minimum": 1},
+    "state": {"const": "RELEASED"},
+    "workbook_media_type": {"const": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+    "worksheet_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "header_row": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "first_data_row": {"type": "integer", "minimum": 2, "maximum": 1001},
+    "maximum_rows": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "columns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_row_key", "deliverable_id", "deliverable_revision_id", "assessment_form_id",
+        "assessment_form_revision_id", "assessment_form_revision_number",
+        "assessment_form_key", "assessment_form_ordinal",
+        "assessment_form_label", "item_id", "item_revision_id", "item_manifest_sha256",
+        "section_key", "section_ordinal", "position", "display_number", "points_milli",
+        "usage_role", "publication_id", "publication_revision_id",
+        "publication_revision_number", "publication_key",
+        "publication_date"
+      ],
+      "properties": {
+        "source_row_key": {"$ref": "#/$defs/column"},
+        "deliverable_id": {"$ref": "#/$defs/column"},
+        "deliverable_revision_id": {"$ref": "#/$defs/column"},
+        "assessment_form_id": {"$ref": "#/$defs/column"},
+        "assessment_form_revision_id": {"$ref": "#/$defs/column"},
+        "assessment_form_revision_number": {"$ref": "#/$defs/column"},
+        "assessment_form_key": {"$ref": "#/$defs/column"},
+        "assessment_form_ordinal": {"$ref": "#/$defs/column"},
+        "assessment_form_label": {"$ref": "#/$defs/column"},
+        "item_id": {"$ref": "#/$defs/column"},
+        "item_revision_id": {"$ref": "#/$defs/column"},
+        "item_manifest_sha256": {"$ref": "#/$defs/column"},
+        "section_key": {"$ref": "#/$defs/column"},
+        "section_ordinal": {"$ref": "#/$defs/column"},
+        "position": {"$ref": "#/$defs/column"},
+        "display_number": {"$ref": "#/$defs/column"},
+        "points_milli": {"$ref": "#/$defs/column"},
+        "usage_role": {"$ref": "#/$defs/column"},
+        "publication_id": {"$ref": "#/$defs/column"},
+        "publication_revision_id": {"$ref": "#/$defs/column"},
+        "publication_revision_number": {"$ref": "#/$defs/column"},
+        "publication_key": {"$ref": "#/$defs/column"},
+        "publication_date": {"$ref": "#/$defs/column"}
+      }
+    },
+    "normalization_policy": {"const": "legacy-usage-normalization/1.0"},
+    "contract_sha256": {"$ref": "#/$defs/sha256"},
+    "released_at": {"type": "string", "format": "date-time"},
+    "released_by": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"}
+  },
+  "$defs": {
+    "column": {"type": "string", "minLength": 1, "maxLength": 128},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

@@ -133,6 +133,11 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "catalog-application/catalog-application-response-v3.schema.json",
         "catalog-application/catalog-application-request-v4.schema.json",
         "catalog-application/catalog-application-response-v4.schema.json",
+        "legacy-usage/assessment-assembly-manifest-v1.schema.json",
+        "legacy-usage/legacy-usage-import-manifest-v1.schema.json",
+        "legacy-usage/legacy-usage-mapping-contract-v1.schema.json",
+        "legacy-usage/legacy-usage-row-proposal-v1.schema.json",
+        "legacy-usage/product-usage-graph-projection-v1.schema.json",
     ):
         assert required in source
 

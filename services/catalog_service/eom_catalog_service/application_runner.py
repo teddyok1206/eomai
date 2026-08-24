@@ -13,10 +13,11 @@ from eom_catalog_service.application_server import CatalogApplicationServer
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
+from eom_catalog_service.legacy_usage_models import LegacyUsageImportRecord
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.runtime_privileges import catalog_runtime_privileges_ready
 
-_RUNTIME_MODEL_TABLES = (OperatorRecord.__table__,)
+_RUNTIME_MODEL_TABLES = (OperatorRecord.__table__, LegacyUsageImportRecord.__table__)
 
 
 def serve() -> int:

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-usage/legacy-usage-import-manifest/1.0",
+  "title": "Legacy Usage Import Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "legacy_usage_import_id", "source", "mapping_contract_revision_id",
+    "mapping_contract_sha256", "request_sha256", "state", "row_count", "resolved_count",
+    "unresolved_count", "conflict_count", "rejected_count", "created_at", "created_by"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-usage-import-manifest/1.0"},
+    "legacy_usage_import_id": {"type": "string", "pattern": "^legacyimport_[0-9a-f]{32}$"},
+    "source": {"$ref": "#/$defs/source"},
+    "mapping_contract_revision_id": {"type": "string", "pattern": "^legacymaprev_[0-9a-f]{32}$"},
+    "mapping_contract_sha256": {"$ref": "#/$defs/sha256"},
+    "request_sha256": {"$ref": "#/$defs/sha256"},
+    "state": {"enum": ["PROPOSED", "REVIEWED", "COMMITTED", "FAILED"]},
+    "row_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "resolved_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "unresolved_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "conflict_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "rejected_count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "created_at": {"type": "string", "format": "date-time"},
+    "created_by": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intake_batch_id", "source_file_id", "artifact_id", "artifact_revision_id",
+        "member_path", "schema_ref", "media_type", "sha256"
+      ],
+      "properties": {
+        "intake_batch_id": {"type": "string", "pattern": "^intake_[0-9a-f]{32}$"},
+        "source_file_id": {"type": "string", "pattern": "^sourcefile_[0-9a-f]{32}$"},
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "pattern": "^source/[A-Za-z0-9._()가-힣/-]{1,500}$"},
+        "schema_ref": {"const": "eom://schemas/legacy-usage/workbook/1.0"},
+        "media_type": {"const": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

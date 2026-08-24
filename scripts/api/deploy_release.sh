@@ -415,6 +415,11 @@ catalog_resources = {
     "knowledge/evidence-bundle-publication-result-v1.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v1.schema.json",
     "knowledge/educational-retrieval-requirement-v1.schema.json": "schemas/knowledge/educational-retrieval-requirement-v1.schema.json",
     "knowledge/evidence-bundle-publication-result-v2.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v2.schema.json",
+    "legacy-usage/assessment-assembly-manifest-v1.schema.json": "schemas/legacy-usage/assessment-assembly-manifest-v1.schema.json",
+    "legacy-usage/legacy-usage-import-manifest-v1.schema.json": "schemas/legacy-usage/legacy-usage-import-manifest-v1.schema.json",
+    "legacy-usage/legacy-usage-mapping-contract-v1.schema.json": "schemas/legacy-usage/legacy-usage-mapping-contract-v1.schema.json",
+    "legacy-usage/legacy-usage-row-proposal-v1.schema.json": "schemas/legacy-usage/legacy-usage-row-proposal-v1.schema.json",
+    "legacy-usage/product-usage-graph-projection-v1.schema.json": "schemas/legacy-usage/product-usage-graph-projection-v1.schema.json",
 }
 with zipfile.ZipFile(platform_wheel) as archive:
     names = set(archive.namelist())

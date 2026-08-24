@@ -1240,7 +1240,9 @@ def test_database_uniqueness_definition_conflict_and_two_session_claim(
                 )
                 session.flush()
 
-            definition = session.scalar(select(WorkflowDefinitionRecord))
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            definition = session.get(WorkflowDefinitionRecord, workflow.definition_id)
             assert definition is not None
             with pytest.raises(DBAPIError, match="immutable"), session.begin_nested():
                 definition.source_path = "/tmp/changed-definition.yaml"

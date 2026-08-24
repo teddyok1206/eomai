@@ -6,7 +6,10 @@ from pathlib import Path
 import eom_hwpx_manager.models  # noqa: F401
 import eom_workflow_runner.models  # noqa: F401
 import pytest
-from eom_catalog_service import knowledge_graph_models  # noqa: F401
+from eom_catalog_service import (  # noqa: F401
+    knowledge_graph_models,
+    legacy_usage_models,
+)
 from eom_identifiers import content_sha256
 from eom_orchestrator import control_models  # noqa: F401
 from eom_orchestrator.control_models import HELD_LEASE_PREDICATE
@@ -125,7 +128,7 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260824_0014"
+    assert CURRENT_MIGRATION_REVISION == "20260824_0015"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -238,6 +241,59 @@ def test_evidence_retrieval_migration_is_additive_indexed_and_pointer_oriented()
     assert not {"payload", "bytes", "content", "markdown", "nas_path"}.intersection(
         entries.columns.keys()
     )
+
+
+def test_legacy_usage_migration_is_additive_indexed_and_review_gated() -> None:
+    source = Path("migrations/versions/20260824_0015_legacy_product_usage_intake.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'down_revision: str | Sequence[str] | None = "20260824_0014"' in source
+    assert "UPDATE items" not in source
+    assert "UPDATE usage_records" not in source
+    assert "DELETE FROM" not in source
+    for table_name in (
+        "assessment_forms",
+        "assessment_form_revisions",
+        "assessment_assemblies",
+        "assessment_assembly_revisions",
+        "assessment_item_placements",
+        "publications",
+        "publication_revisions",
+        "usage_records_v1",
+        "legacy_usage_mapping_contract_revisions",
+        "legacy_usage_imports",
+        "legacy_usage_row_proposals",
+        "legacy_usage_row_reviews",
+        "product_usage_projections",
+    ):
+        assert f'"{table_name}"' in source
+        assert table_name in Base.metadata.tables
+        table = Base.metadata.tables[table_name]
+        assert all(not isinstance(column.type, LargeBinary) for column in table.columns)
+    for index_name in (
+        "ix_usage_v1_item_reverse",
+        "ix_usage_v1_product_revision",
+        "ix_usage_v1_form_revision",
+        "ix_usage_v1_publication",
+        "ix_usage_v1_import",
+        "ix_legacy_usage_rows_import_state",
+        "ix_legacy_usage_rows_import_source_key",
+    ):
+        assert index_name in source
+    assert "legacy_usage_imports_transition" in source
+    assert "enforce_legacy_usage_import_transition" in source
+    assert "legacy usage import immutable fields cannot be changed" in source
+    assert "OLD.state = 'PROPOSED' AND NEW.state IN ('REVIEWED','FAILED')" in source
+    assert "OLD.state = 'REVIEWED' AND NEW.state IN ('COMMITTED','FAILED')" in source
+    immutable_trigger_block = source[
+        source.index("    for table in (") : source.index("\n\n\ndef downgrade")
+    ]
+    assert '"legacy_usage_row_proposals",' in immutable_trigger_block
+    assert '"legacy_usage_row_reviews",' in immutable_trigger_block
+    assert 'f"CREATE TRIGGER {table}_immutable' in immutable_trigger_block
+    usage = Base.metadata.tables["usage_records_v1"]
+    assert {"legacy_usage_import_id", "legacy_usage_row_id"}.issubset(usage.columns.keys())
+    assert not {"bytes", "payload", "workbook", "nas_path"}.intersection(usage.columns.keys())
 
 
 def test_workflow_command_claim_index_includes_delayed_availability() -> None:

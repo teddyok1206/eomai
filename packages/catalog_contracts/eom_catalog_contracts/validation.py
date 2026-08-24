@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "assessment-assembly-manifest": CatalogSchemaResource(
+            "schemas/legacy-usage/assessment-assembly-manifest-v1.schema.json",
+            "resources/legacy-usage/assessment-assembly-manifest-v1.schema.json",
+            "1.0",
+            "sha256:785d470fceff548e4d6d01a4b5c964bd1193f659d66c4844bce07fb7a3ee62c6",
+        ),
         "intake-manifest": CatalogSchemaResource(
             "schemas/content-intake/intake-manifest-v1.schema.json",
             "resources/content-intake/intake-manifest-v1.schema.json",
@@ -41,6 +47,30 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/content-intake/mapping-proposal-v1.schema.json",
             "1.0",
             "sha256:4e2699ca42b8fe0c4ecb0993ce4119110cbebf273eecb135d57414c7e1e40a83",
+        ),
+        "legacy-usage-import-manifest": CatalogSchemaResource(
+            "schemas/legacy-usage/legacy-usage-import-manifest-v1.schema.json",
+            "resources/legacy-usage/legacy-usage-import-manifest-v1.schema.json",
+            "1.0",
+            "sha256:c25893647ebab2969b8f403f409a52c3fa78d169277d1cc00db483f2ee21c3a0",
+        ),
+        "legacy-usage-mapping-contract": CatalogSchemaResource(
+            "schemas/legacy-usage/legacy-usage-mapping-contract-v1.schema.json",
+            "resources/legacy-usage/legacy-usage-mapping-contract-v1.schema.json",
+            "1.0",
+            "sha256:9e697413fe059e3041b6e828d5ec280f27b9cf83466969625a45d1066d9f8548",
+        ),
+        "legacy-usage-row-proposal": CatalogSchemaResource(
+            "schemas/legacy-usage/legacy-usage-row-proposal-v1.schema.json",
+            "resources/legacy-usage/legacy-usage-row-proposal-v1.schema.json",
+            "1.0",
+            "sha256:60824ea6e061eeb56e447af4312e15296d9a88abee42a70ef45808af5049957f",
+        ),
+        "product-usage-graph-projection": CatalogSchemaResource(
+            "schemas/legacy-usage/product-usage-graph-projection-v1.schema.json",
+            "resources/legacy-usage/product-usage-graph-projection-v1.schema.json",
+            "1.0",
+            "sha256:ac5a3d66d83769a523e2dd8331c9562650a04de3e2368a3f9d91968fa8076820",
         ),
         "uncertainties": CatalogSchemaResource(
             "schemas/content-intake/uncertainties-v1.schema.json",

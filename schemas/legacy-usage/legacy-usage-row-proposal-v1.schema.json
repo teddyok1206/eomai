@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-usage/legacy-usage-row-proposal/1.0",
+  "title": "Legacy Usage Row Proposal V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "legacy_usage_row_id", "legacy_usage_import_id", "source_row_key",
+    "source_row_number", "normalized_row_sha256", "proposal_state", "resolved", "form",
+    "placement", "publication",
+    "candidate_revision_ids", "reason_codes", "review_decision", "reviewed_at", "reviewed_by"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-usage-row-proposal/1.0"},
+    "legacy_usage_row_id": {"type": "string", "pattern": "^legacyrow_[0-9a-f]{32}$"},
+    "legacy_usage_import_id": {"type": "string", "pattern": "^legacyimport_[0-9a-f]{32}$"},
+    "source_row_key": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "source_row_number": {"type": "integer", "minimum": 1, "maximum": 100001},
+    "normalized_row_sha256": {"$ref": "#/$defs/sha256"},
+    "proposal_state": {"enum": ["RESOLVED", "UNRESOLVED", "CONFLICT", "REJECTED"]},
+    "resolved": {"oneOf": [{"$ref": "#/$defs/resolved"}, {"type": "null"}]},
+    "form": {"oneOf": [{"$ref": "#/$defs/form"}, {"type": "null"}]},
+    "placement": {"oneOf": [{"$ref": "#/$defs/placement"}, {"type": "null"}]},
+    "publication": {"oneOf": [{"$ref": "#/$defs/publication"}, {"type": "null"}]},
+    "candidate_revision_ids": {
+      "type": "array", "maxItems": 20, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 64}
+    },
+    "reason_codes": {
+      "type": "array", "maxItems": 20, "uniqueItems": true,
+      "items": {"enum": [
+        "MISSING_REQUIRED_VALUE", "INVALID_VALUE", "POINTER_NOT_FOUND",
+        "POINTER_OWNERSHIP_MISMATCH", "ITEM_REVISION_NOT_APPROVED", "ITEM_HASH_MISMATCH",
+        "DUPLICATE_SOURCE_ROW", "DUPLICATE_PLACEMENT", "AMBIGUOUS_POINTER",
+        "CANONICAL_TARGET_ALREADY_EXISTS",
+        "UNSUPPORTED_FORMULA"
+      ]}
+    },
+    "review_decision": {"enum": ["PENDING", "APPROVE", "REJECT"]},
+    "reviewed_at": {"type": ["string", "null"], "format": "date-time"},
+    "reviewed_by": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+        {"type": "null"}
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "resolved": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "deliverable_id", "deliverable_revision_id", "assessment_form_id",
+        "assessment_form_revision_id", "publication_id", "publication_revision_id", "item_id",
+        "item_revision_id", "item_manifest_sha256"
+      ],
+      "properties": {
+        "deliverable_id": {"type": "string", "pattern": "^deliverable_[0-9a-f]{32}$"},
+        "deliverable_revision_id": {"type": "string", "pattern": "^delivrev_[0-9a-f]{32}$"},
+        "assessment_form_id": {"type": "string", "pattern": "^form_[0-9a-f]{32}$"},
+        "assessment_form_revision_id": {"type": "string", "pattern": "^formrev_[0-9a-f]{32}$"},
+        "publication_id": {"type": "string", "pattern": "^publication_[0-9a-f]{32}$"},
+        "publication_revision_id": {"type": "string", "pattern": "^publicationrev_[0-9a-f]{32}$"},
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "item_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "placement": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "section_key", "section_ordinal", "position", "display_number", "points_milli",
+        "usage_role"
+      ],
+      "properties": {
+        "section_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+        "section_ordinal": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "position": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "display_number": {"type": "string", "minLength": 1, "maxLength": 32},
+        "points_milli": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "usage_role": {"enum": ["PRIMARY", "PRACTICE", "REVIEW", "EXAMPLE", "OTHER_REVIEWED"]}
+      }
+    },
+    "form": {
+      "type": "object", "additionalProperties": false,
+      "required": ["form_key", "revision_number", "ordinal", "display_label"],
+      "properties": {
+        "form_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+        "revision_number": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "ordinal": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "display_label": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "publication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["publication_key", "revision_number", "publication_date"],
+      "properties": {
+        "publication_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+        "revision_number": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "publication_date": {"type": "string", "format": "date"}
+      }
+    }
+  }
+}

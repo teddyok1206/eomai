@@ -57,6 +57,24 @@ PHASE9_SCHEMA_SHA256 = {
     ),
 }
 
+PHASE11_SCHEMA_SHA256 = {
+    "assessment-assembly-manifest": (
+        "sha256:785d470fceff548e4d6d01a4b5c964bd1193f659d66c4844bce07fb7a3ee62c6"
+    ),
+    "legacy-usage-import-manifest": (
+        "sha256:c25893647ebab2969b8f403f409a52c3fa78d169277d1cc00db483f2ee21c3a0"
+    ),
+    "legacy-usage-mapping-contract": (
+        "sha256:9e697413fe059e3041b6e828d5ec280f27b9cf83466969625a45d1066d9f8548"
+    ),
+    "legacy-usage-row-proposal": (
+        "sha256:60824ea6e061eeb56e447af4312e15296d9a88abee42a70ef45808af5049957f"
+    ),
+    "product-usage-graph-projection": (
+        "sha256:ac5a3d66d83769a523e2dd8331c9562650a04de3e2368a3f9d91968fa8076820"
+    ),
+}
+
 
 def _prompt_envelope() -> dict[str, object]:
     return {
@@ -78,7 +96,7 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 42
+    assert len(entries) == 47
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {
@@ -86,6 +104,7 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         "evidence-bundle-publication-result-v2",
         "catalog-application-request-v4",
         "catalog-application-response-v4",
+        *PHASE11_SCHEMA_SHA256,
     }.issubset({name for name, _ in entries})
     for name, entry in entries:
         canonical = REPOSITORY_ROOT / entry.canonical_path
@@ -104,6 +123,11 @@ def test_phase8_graph_contract_bytes_are_pinned_before_publication() -> None:
 def test_phase9_retrieval_contract_bytes_are_pinned_before_publication() -> None:
     inventory = dict(catalog_schema_inventory())
     assert {name: inventory[name].sha256 for name in PHASE9_SCHEMA_SHA256} == PHASE9_SCHEMA_SHA256
+
+
+def test_phase11_legacy_usage_contract_bytes_are_pinned_before_rollout() -> None:
+    inventory = dict(catalog_schema_inventory())
+    assert {name: inventory[name].sha256 for name in PHASE11_SCHEMA_SHA256} == PHASE11_SCHEMA_SHA256
 
 
 def test_prompt_envelope_validates_and_invalid_fixture_is_rejected() -> None:

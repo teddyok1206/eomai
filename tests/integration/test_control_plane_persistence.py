@@ -8,9 +8,12 @@ from threading import Barrier
 from typing import Any
 from uuid import uuid4
 
+import eom_catalog_service.knowledge_graph_models
+import eom_catalog_service.legacy_usage_models
 import eom_catalog_service.models  # noqa: F401
 import eom_hwpx_manager.models  # noqa: F401
 import eom_identity_service.models  # noqa: F401
+import eom_orchestrator.knowledge_analysis_models  # noqa: F401
 import eom_workflow_runner.models  # noqa: F401
 import pytest
 from alembic.autogenerate import compare_metadata
