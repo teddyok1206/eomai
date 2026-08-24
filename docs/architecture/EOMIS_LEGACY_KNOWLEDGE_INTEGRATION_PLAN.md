@@ -366,7 +366,18 @@ inventory entry or Artifact Revision and exact hash. It supports at least:
 - `LEGACY_ITEM_REPRESENTATION_OF`;
 - `EVALUATION_BASELINE_FOR`.
 
-### 7.4 No immediate change to Knowledge Analysis V2
+### 7.4 `legacy-source-rights-review/1.0`
+
+A source-level immutable review records owner/document type, reviewed rights state, exact evidence
+pointers, allowed internal processing, model-role exposure, excerpt/page-image materialization,
+item-grounding permission, answer-bearing status, retention policy, withdrawal behavior, reviewer,
+UTC time, and canonical hash. Rejected sources cannot retain any use permission. Model exposure must
+name an allowed worker role, and item grounding requires model exposure.
+
+This source-level evidence closes the selection pointer. It does not replace the later corpus-level
+retrieval access-policy aggregate or legal policy.
+
+### 7.5 No immediate change to Knowledge Analysis V2
 
 The first pilot uses the existing `CONTENT_INTAKE_FILE` source variant and analyzes one original PDF
 at a time. The request pins the exact source file, Artifact Revision, member path, media type, size,
@@ -377,7 +388,7 @@ owned materialization adapter. It may create a job-local derivative but may not 
 PDF identity. The accepted anchor still records a locator that resolves to the original PDF page or
 section and an excerpt hash derived under the reviewed extraction policy.
 
-### 7.5 Conditional future Document Revision
+### 7.6 Conditional future Document Revision
 
 Do not add a generic Document aggregate merely to start the pilot. Add it only when at least two
 real recurring cases require logical edition/revision history or multi-member source resolution,
@@ -832,8 +843,8 @@ mutation.
 
 Work:
 
-1. add Draft 2020-12 schemas for inventory, selection, relation manifest, and if needed PDF page-
-   range materialization;
+1. add Draft 2020-12 schemas for inventory, selection, relation manifest, source rights review, and
+   PDF page-range materialization;
 2. add frozen Pydantic models and canonical hashing;
 3. package schema resources and pin historical schema bytes;
 4. define stable error codes;

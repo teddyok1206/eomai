@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-knowledge/pdf-page-range-materialization-manifest/1.0",
+  "title": "EOM PDF Page Range Materialization Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "materialization_id", "original", "original_size_bytes",
+    "source_page_count", "renderer_implementation", "renderer_version",
+    "rendering_options_sha256", "page_ranges", "created_at", "created_by", "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "pdf-page-range-materialization-manifest/1.0"},
+    "materialization_id": {"type": "string", "pattern": "^pdfmaterialization_[0-9a-f]{32}$"},
+    "original": {"$ref": "#/$defs/pdfArtifactPointer"},
+    "original_size_bytes": {"type": "integer", "minimum": 1, "maximum": 1125899906842624},
+    "source_page_count": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "renderer_implementation": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+    "renderer_version": {"type": "string", "minLength": 1, "maxLength": 64},
+    "rendering_options_sha256": {"$ref": "#/$defs/sha256"},
+    "page_ranges": {
+      "type": "array", "minItems": 1, "maxItems": 10000,
+      "items": {"$ref": "#/$defs/pageRange"}
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "created_by": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "pdfArtifactPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pointer_type", "artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "pointer_type": {"const": "ARTIFACT_MEMBER"},
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "minLength": 3, "maxLength": 512, "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+/[^\\u0000-\\u001f\\u007f]+$"},
+        "schema_ref": {"type": "string", "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"},
+        "media_type": {"const": "application/pdf"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "pageRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first_page", "last_page", "child", "size_bytes"],
+      "properties": {
+        "first_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "last_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "child": {"$ref": "#/$defs/pdfArtifactPointer"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 104857600}
+      }
+    }
+  }
+}

@@ -103,6 +103,7 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
 
     for required in (
         "eom_catalog_contracts/knowledge.py",
+        "eom_catalog_contracts/legacy_knowledge.py",
         "knowledge/knowledge-types-v1.schema.json",
         "knowledge/knowledge-analysis-request-v1.schema.json",
         "knowledge/knowledge-analysis-result-v1.schema.json",
@@ -127,6 +128,11 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "knowledge/evidence-bundle-publication-result-v1.schema.json",
         "knowledge/educational-retrieval-requirement-v1.schema.json",
         "knowledge/evidence-bundle-publication-result-v2.schema.json",
+        "legacy-knowledge/legacy-source-inventory-v1.schema.json",
+        "legacy-knowledge/legacy-source-relation-manifest-v1.schema.json",
+        "legacy-knowledge/legacy-source-rights-review-v1.schema.json",
+        "legacy-knowledge/legacy-source-selection-v1.schema.json",
+        "legacy-knowledge/pdf-page-range-materialization-manifest-v1.schema.json",
         "catalog-application/catalog-application-request-v2.schema.json",
         "catalog-application/catalog-application-response-v2.schema.json",
         "catalog-application/catalog-application-request-v3.schema.json",

@@ -66,6 +66,36 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:60824ea6e061eeb56e447af4312e15296d9a88abee42a70ef45808af5049957f",
         ),
+        "legacy-source-inventory": CatalogSchemaResource(
+            "schemas/legacy-knowledge/legacy-source-inventory-v1.schema.json",
+            "resources/legacy-knowledge/legacy-source-inventory-v1.schema.json",
+            "1.0",
+            "sha256:7fdce3b0bfeab4248c546d3eb6404fc9ddc8a5f340b31d48d3e4f3ac70954411",
+        ),
+        "legacy-source-relation-manifest": CatalogSchemaResource(
+            "schemas/legacy-knowledge/legacy-source-relation-manifest-v1.schema.json",
+            "resources/legacy-knowledge/legacy-source-relation-manifest-v1.schema.json",
+            "1.0",
+            "sha256:0f4c5b0e67243e5b6686d1d7bff8871a0f31f895a3b8e8ecfd888294a8605c26",
+        ),
+        "legacy-source-rights-review": CatalogSchemaResource(
+            "schemas/legacy-knowledge/legacy-source-rights-review-v1.schema.json",
+            "resources/legacy-knowledge/legacy-source-rights-review-v1.schema.json",
+            "1.0",
+            "sha256:0ab0b051ca3bb4830fbc0d8c35af38bd809e617e6edc3e270e8103e23487c7c7",
+        ),
+        "legacy-source-selection": CatalogSchemaResource(
+            "schemas/legacy-knowledge/legacy-source-selection-v1.schema.json",
+            "resources/legacy-knowledge/legacy-source-selection-v1.schema.json",
+            "1.0",
+            "sha256:89acd96ec4f08ec7aa11da34370db02666fdccb289e0574b5c21065f43940111",
+        ),
+        "pdf-page-range-materialization-manifest": CatalogSchemaResource(
+            "schemas/legacy-knowledge/pdf-page-range-materialization-manifest-v1.schema.json",
+            "resources/legacy-knowledge/pdf-page-range-materialization-manifest-v1.schema.json",
+            "1.0",
+            "sha256:08bf76c009dadebce705bf667cee8364a23b378ee57427aa754fdb968876d6aa",
+        ),
         "product-usage-graph-projection": CatalogSchemaResource(
             "schemas/legacy-usage/product-usage-graph-projection-v1.schema.json",
             "resources/legacy-usage/product-usage-graph-projection-v1.schema.json",

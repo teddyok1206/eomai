@@ -70,6 +70,7 @@ eom_catalog_contracts = [
   "resources/content-pack/*.json",
   "resources/item-registry/*.json",
   "resources/knowledge/*.json",
+  "resources/legacy-knowledge/*.json",
   "resources/legacy-usage/*.json",
 ]
 
