@@ -10,6 +10,7 @@ import secrets
 import stat
 import sys
 from pathlib import Path
+from typing import NoReturn
 from urllib.parse import quote, unquote, urlsplit
 
 import psycopg
@@ -19,12 +20,13 @@ REPOSITORY = Path("/home/eom/EOM")
 POSTGRES_ENV = Path("/etc/eom/secrets/postgres.env")
 TARGET_ENV = Path("/etc/eom/secrets/catalog-manager.env")
 ROLE = "eom_catalog_manager_runtime"
+LEGACY_ROLE = "eom_api_runtime"
 
 sys.path.insert(0, str(REPOSITORY / "services/catalog_service"))
 from eom_catalog_service.runtime_privileges import INSERT_TABLES, TABLE_PRIVILEGES  # noqa: E402
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(message)
 
 
@@ -83,15 +85,27 @@ def _existing_password(root_uid: int, api_gid: int, database: str) -> str | None
     if set(values) != {"EOM_DATABASE_URL"}:
         fail("existing Catalog runtime secret key set is invalid")
     parsed = urlsplit(values["EOM_DATABASE_URL"])
+    username = parsed.username
+    password = parsed.password
+    if password is None:
+        fail("existing Catalog runtime database URL is invalid")
     if (
-        parsed.username != ROLE
-        or parsed.password is None
+        parsed.scheme != "postgresql+psycopg"
         or parsed.hostname != "127.0.0.1"
         or parsed.port != 5432
         or unquote(parsed.path.removeprefix("/")) != database
+        or parsed.query
+        or parsed.fragment
     ):
         fail("existing Catalog runtime database URL is invalid")
-    return unquote(parsed.password)
+    if username == LEGACY_ROLE:
+        # Phase 7 splits Catalog away from the historical shared API runtime role. The exact
+        # loopback/database identity above is the only legacy form eligible for this one-way
+        # transition. Generate a fresh dedicated credential and leave the API role untouched.
+        return None
+    if username != ROLE:
+        fail("existing Catalog runtime database URL is invalid")
+    return unquote(password)
 
 
 def _install_secret(content: bytes, root_uid: int, api_gid: int) -> None:
