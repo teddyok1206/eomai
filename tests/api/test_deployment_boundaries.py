@@ -125,10 +125,14 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "knowledge/evidence-bundle-manifest-v1.schema.json",
         "knowledge/evidence-bundle-manifest-v2.schema.json",
         "knowledge/evidence-bundle-publication-result-v1.schema.json",
+        "knowledge/educational-retrieval-requirement-v1.schema.json",
+        "knowledge/evidence-bundle-publication-result-v2.schema.json",
         "catalog-application/catalog-application-request-v2.schema.json",
         "catalog-application/catalog-application-response-v2.schema.json",
         "catalog-application/catalog-application-request-v3.schema.json",
         "catalog-application/catalog-application-response-v3.schema.json",
+        "catalog-application/catalog-application-request-v4.schema.json",
+        "catalog-application/catalog-application-response-v4.schema.json",
     ):
         assert required in source
 
