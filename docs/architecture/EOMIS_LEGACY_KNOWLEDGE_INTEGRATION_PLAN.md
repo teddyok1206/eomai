@@ -871,8 +871,11 @@ and historical hash pins pass.
 
 ### Phase 2 — read-only inventory adapter
 
-Source status: complete against synthetic untrusted fixtures. The checked-in policy is an example
-only; it does not assert real host prefixes. No real legacy root has been scanned and no inventory
+Source status: complete against synthetic untrusted fixtures. A protected operator-only policy was
+also used for one successful read-only dry run of each reviewed real root on 2026-08-24; the
+resulting V2 source-set identities and semantic pilot findings are recorded in
+[EOMIS Legacy Curriculum Semantic Pilot Review](EOMIS_LEGACY_CURRICULUM_SEMANTIC_PILOT.md). The
+checked-in policy remains an example only and does not assert real host prefixes. No inventory
 Artifact has been committed.
 
 Work:
