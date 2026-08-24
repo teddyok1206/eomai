@@ -120,20 +120,24 @@ snapshot merely because it exists in this JSON.
 
 ## 5. Curriculum hierarchy mapping
 
-The existing four-level EOM curriculum binding can represent this source without introducing a new
-generic hierarchy framework:
+The company editorial hierarchy was subsequently fixed by the user in
+[EOM Integrated Science Editorial Outline V1](EOM_INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_V1.md).
+It contains two volumes, six large units, and 35 ordered middle units. The existing four-level EOM
+curriculum binding can represent that hierarchy without introducing a new generic framework:
 
 ```text
-MAJOR                subject family (통합과학 or 과학탐구실험)
-  MIDDLE             numbered course (통합과학1, 통합과학2, ...)
-    MINOR            official content domain/subunit
+MAJOR                EOM volume (I권 or II권)
+  MIDDLE             EOM large unit (대단원 1 through 6)
+    MINOR            EOM middle unit (for example 1-(1))
       ACHIEVEMENT_STANDARD
 ```
 
-This mapping is a review proposal, not yet Framework authority. It fits the observed source and the
-existing `MAJOR -> MIDDLE -> MINOR -> ACHIEVEMENT_STANDARD` invariant. Shared course-level guidance
-does not fit under one achievement subtree and should remain anchored document-section knowledge,
-not be forced into a curriculum unit merely to fill the hierarchy.
+The editorial outline is user-confirmed, but it is still distinct from official Framework
+authority. `I권` is reviewed as the company organization corresponding to `통합과학1`, and `II권`
+to `통합과학2`; those links must be explicit reviewed mappings, not label-based identity. The shape
+fits the existing `MAJOR -> MIDDLE -> MINOR -> ACHIEVEMENT_STANDARD` invariant. Shared course-level
+guidance does not fit under one achievement subtree and should remain anchored document-section
+knowledge, not be forced into a curriculum unit merely to fill the hierarchy.
 
 Dominant access patterns and structures are:
 
@@ -189,8 +193,10 @@ but not to execute a production selection. The remaining human-evidence blockers
 4. retention/withdrawal policy;
 5. the authoritative 2022 curriculum edition/Framework Revision decision.
 
-A schema-valid `legacy-source-selection/1.0` cannot be fabricated around these unknowns because it
-requires a pinned rights-review Artifact pointer and a cleared/restricted decision.
+A schema-valid `legacy-source-selection/2.0` cannot be fabricated around these unknowns because it
+requires a pinned, exact-source-bound rights-review Artifact pointer and a cleared/restricted
+decision. Selection V1 and rights-review V1 remain historical decoding contracts; they are not
+sufficient for new intake because V1 rights evidence did not bind an exact inventory entry/hash.
 
 ## 9. Next implementation slice
 

@@ -6,7 +6,7 @@ import unicodedata
 from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import PurePosixPath
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from eom_identifiers import content_sha256 as canonical_content_sha256
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
@@ -309,8 +309,8 @@ LegacySourcePointer = Annotated[
 ]
 
 
-class LegacySourceRightsReview(FrozenModel):
-    schema_version: Literal["legacy-source-rights-review/1.0"]
+class _LegacySourceRightsReviewBase(FrozenModel):
+    schema_version: str
     rights_review_id: str = Field(pattern=r"^rightsreview_[0-9a-f]{32}$")
     rights_review_revision_id: str = Field(pattern=r"^rightsreviewrev_[0-9a-f]{32}$")
     revision_number: int = Field(ge=1, le=100000)
@@ -351,7 +351,7 @@ class LegacySourceRightsReview(FrozenModel):
     rights_review_sha256: Sha256
 
     @model_validator(mode="after")
-    def coherent_rights(self) -> LegacySourceRightsReview:
+    def coherent_rights(self) -> Self:
         roles = tuple(self.allowed_roles)
         if len(roles) != len(set(roles)) or roles != tuple(sorted(roles)):
             raise ValueError("legacy rights roles must be unique and sorted")
@@ -381,6 +381,17 @@ class LegacySourceRightsReview(FrozenModel):
             raise ValueError("rejected legacy rights cannot allow source use")
         _require_self_hash(self, "rights_review_sha256")
         return self
+
+
+class LegacySourceRightsReview(_LegacySourceRightsReviewBase):
+    schema_version: Literal["legacy-source-rights-review/1.0"]
+
+
+class LegacySourceRightsReviewV2(_LegacySourceRightsReviewBase):
+    """Source-bound successor; V1 remains immutable for historical decoding only."""
+
+    schema_version: Literal["legacy-source-rights-review/2.0"]
+    source: LegacyInventoryEntryPointer
 
 
 class LegacySourceInventoryEntry(FrozenModel):
@@ -590,6 +601,11 @@ class LegacyRightsReviewPointer(LegacyArtifactMemberPointer):
     media_type: Literal["application/json"]
 
 
+class LegacyRightsReviewPointerV2(LegacyArtifactMemberPointer):
+    schema_ref: Literal["eom://schemas/legacy-knowledge/rights-review/2.0"]
+    media_type: Literal["application/json"]
+
+
 class LegacySelectedOriginalSource(FrozenModel):
     entry_key: str = Field(pattern=r"^legacyentry_[0-9a-f]{32}$")
     content_sha256: Sha256
@@ -602,6 +618,20 @@ class LegacySelectedOriginalSource(FrozenModel):
     source_owner_reference: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
     rights_state: Literal["CLEARED_INTERNAL", "CLEARED_LICENSED", "RESTRICTED"]
     rights_review: LegacyRightsReviewPointer
+
+
+class LegacySelectedOriginalSourceV2(FrozenModel):
+    entry_key: str = Field(pattern=r"^legacyentry_[0-9a-f]{32}$")
+    content_sha256: Sha256
+    canonicality: Literal["ORIGINAL"]
+    reviewed_source_family: Literal[
+        "CURRICULUM", "TEXTBOOK", "REFERENCE_BOOK", "GUIDANCE", "ITEM", "USAGE_WORKBOOK"
+    ]
+    declared_intake_role: Literal["REFERENCE", "GUIDELINE", "DATA", "ASSET", "OTHER"]
+    intended_corpus_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$")
+    source_owner_reference: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+    rights_state: Literal["CLEARED_INTERNAL", "CLEARED_LICENSED", "RESTRICTED"]
+    rights_review: LegacyRightsReviewPointerV2
 
 
 class LegacySelectedComparisonEvidence(FrozenModel):
@@ -635,6 +665,46 @@ class LegacySourceSelection(FrozenModel):
             sorted(evidence_keys)
         ):
             raise ValueError("legacy selection entries must use deterministic key order")
+        _require_self_hash(self, "selection_sha256")
+        return self
+
+
+class LegacySourceSelectionV2(FrozenModel):
+    schema_version: Literal["legacy-source-selection/2.0"]
+    selection_id: str = Field(pattern=r"^legacyselection_[0-9a-f]{32}$")
+    inventory_id: str = Field(pattern=r"^legacyinventory_[0-9a-f]{32}$")
+    inventory_sha256: Sha256
+    selected_sources: tuple[LegacySelectedOriginalSourceV2, ...] = Field(
+        min_length=1, max_length=500
+    )
+    comparison_evidence: tuple[LegacySelectedComparisonEvidence, ...] = Field(max_length=500)
+    reviewed_at: UtcDatetime
+    reviewed_by: ActorId
+    selection_sha256: Sha256
+
+    @model_validator(mode="after")
+    def deterministic_selection(self) -> LegacySourceSelectionV2:
+        source_keys = tuple(source.entry_key for source in self.selected_sources)
+        evidence_keys = tuple(evidence.entry_key for evidence in self.comparison_evidence)
+        if len(source_keys) != len(set(source_keys)) or len(evidence_keys) != len(
+            set(evidence_keys)
+        ):
+            raise ValueError("legacy selection entries must be unique")
+        if set(source_keys) & set(evidence_keys):
+            raise ValueError("original sources and comparison evidence cannot overlap")
+        if source_keys != tuple(sorted(source_keys)) or evidence_keys != tuple(
+            sorted(evidence_keys)
+        ):
+            raise ValueError("legacy selection entries must use deterministic key order")
+        identity_payload = self.model_dump(
+            mode="json", exclude={"selection_id", "selection_sha256"}
+        )
+        expected_id = (
+            "legacyselection_"
+            + canonical_content_sha256(identity_payload).removeprefix("sha256:")[:32]
+        )
+        if self.selection_id != expected_id:
+            raise ValueError("selection_id does not match canonical selection identity")
         _require_self_hash(self, "selection_sha256")
         return self
 

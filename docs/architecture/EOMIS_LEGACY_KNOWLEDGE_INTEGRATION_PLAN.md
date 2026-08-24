@@ -362,6 +362,12 @@ One reviewed selection pins:
 The selection cannot name an entry absent from the inventory. Class C cannot be selected. A Class B
 entry cannot be marked original.
 
+Phase 3 adds `legacy-source-selection/2.0` and `legacy-source-rights-review/2.0` additively. V1 bytes
+remain immutable for historical decoding, but new intake uses only V2. The V2 rights review pins the
+exact inventory ID/hash, entry key, and content hash it reviewed; this prevents one owner-level
+rights document from being reused for a different source. V2 selection IDs are derived from their
+canonical identity payload, and conflicting replays fail closed.
+
 ### 7.3 `legacy-source-relation-manifest/1.0`
 
 This small Artifact-backed manifest records reviewed relationships between originals and legacy
@@ -457,6 +463,12 @@ Curriculum Framework Revision
           -> MINOR
               -> ACHIEVEMENT_STANDARD
 ```
+
+For the first Integrated Science framework, the user-confirmed editorial semantics of those levels
+are fixed in [EOM Integrated Science Editorial Outline V1](EOM_INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_V1.md):
+`MAJOR=I권/II권`, `MIDDLE=대단원`, and `MINOR=중단원`. The outline has two volumes, six large units,
+and 35 ordered middle units. It is company editorial authority, while official curriculum-course
+and achievement-standard identities remain separate reviewed source mappings.
 
 The current graph contract validates this shape, sibling ordinals, parent levels, cycles, and
 closure. However, the current persistence layer does not yet own a separate resolvable

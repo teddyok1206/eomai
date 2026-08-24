@@ -96,11 +96,23 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:0ab0b051ca3bb4830fbc0d8c35af38bd809e617e6edc3e270e8103e23487c7c7",
         ),
+        "legacy-source-rights-review-v2": CatalogSchemaResource(
+            "schemas/legacy-knowledge/legacy-source-rights-review-v2.schema.json",
+            "resources/legacy-knowledge/legacy-source-rights-review-v2.schema.json",
+            "2.0",
+            "sha256:de8a98565ffb8b6d326cd716ff8245778a0ea11702838bf6dd5475b7fecef3f5",
+        ),
         "legacy-source-selection": CatalogSchemaResource(
             "schemas/legacy-knowledge/legacy-source-selection-v1.schema.json",
             "resources/legacy-knowledge/legacy-source-selection-v1.schema.json",
             "1.0",
             "sha256:89acd96ec4f08ec7aa11da34370db02666fdccb289e0574b5c21065f43940111",
+        ),
+        "legacy-source-selection-v2": CatalogSchemaResource(
+            "schemas/legacy-knowledge/legacy-source-selection-v2.schema.json",
+            "resources/legacy-knowledge/legacy-source-selection-v2.schema.json",
+            "2.0",
+            "sha256:0c25bfa3c8732f85306b7077199e0f222aab65203c468a8ecb813f6092407775",
         ),
         "pdf-page-range-materialization-manifest": CatalogSchemaResource(
             "schemas/legacy-knowledge/pdf-page-range-materialization-manifest-v1.schema.json",

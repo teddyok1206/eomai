@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from eom_catalog_contracts import (
@@ -21,7 +22,12 @@ from eom_catalog_service.intake_files import (
     source_fingerprint,
     validate_analysis_markdown,
 )
-from eom_content_intake import IntakeError, IntakeState, require_transition
+from eom_catalog_service.intake_service import (
+    IntakeSourceDeclaration,
+    _require_exact_replay,
+    _source_declarations,
+)
+from eom_content_intake import IntakeError, IntakeErrorCode, IntakeState, require_transition
 from pydantic import ValidationError
 
 
@@ -127,6 +133,98 @@ def test_source_discovery_hash_and_deterministic_fingerprint(tmp_path: Path) -> 
     ]
     assert source_fingerprint(first) == source_fingerprint(second)
     assert all(file.sha256.startswith("sha256:") for file in first)
+
+
+def test_reviewed_source_declarations_must_exactly_cover_materialized_files(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / ("legacyentry_" + "a" * 32 + ".pdf")).write_bytes(b"%PDF-1.7\nsynthetic\n%%EOF\n")
+    discovered = discover_source_files(source)
+    declaration = IntakeSourceDeclaration(
+        normalized_relative_path=discovered[0].normalized_relative_path,
+        original_filename="reviewed-original.pdf",
+        media_type="application/pdf",
+        declared_role="GUIDELINE",
+        declared_description="reviewed legacy source",
+    )
+
+    resolved = _source_declarations(discovered, (declaration,))
+
+    assert resolved[declaration.normalized_relative_path] == declaration
+    with pytest.raises(IntakeError, match="do not match"):
+        _source_declarations(
+            discovered,
+            (
+                IntakeSourceDeclaration(
+                    normalized_relative_path="different.pdf",
+                    original_filename="reviewed-original.pdf",
+                    media_type="application/pdf",
+                    declared_role="GUIDELINE",
+                    declared_description="reviewed legacy source",
+                ),
+            ),
+        )
+
+
+def test_reviewed_source_replay_requires_exact_semantic_metadata(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "legacyentry_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pdf").write_bytes(
+        b"%PDF-1.7\nsynthetic\n%%EOF\n"
+    )
+    discovered = discover_source_files(source)
+    declaration = IntakeSourceDeclaration(
+        normalized_relative_path=discovered[0].normalized_relative_path,
+        original_filename="reviewed-original.pdf",
+        media_type="application/pdf",
+        declared_role="GUIDELINE",
+        declared_description="reviewed legacy source",
+    )
+    batch = SimpleNamespace(
+        batch_name="legacy-selection",
+        received_by="operator_01",
+        purpose="reviewed purpose",
+        source_owner_type="legacy_system",
+        source_owner_reference="reviewed_owner",
+    )
+    row = SimpleNamespace(
+        relative_path=f"source/{discovered[0].normalized_relative_path}",
+        original_filename=declaration.original_filename,
+        normalized_filename=discovered[0].normalized_filename,
+        media_type=declaration.media_type,
+        size_bytes=discovered[0].size_bytes,
+        sha256=discovered[0].sha256,
+        declared_role=declaration.declared_role,
+        declared_description=declaration.declared_description,
+    )
+
+    _require_exact_replay(
+        batch,  # type: ignore[arg-type]
+        (row,),  # type: ignore[arg-type]
+        sources=discovered,
+        declarations={declaration.normalized_relative_path: declaration},
+        batch_name=batch.batch_name,
+        received_by=batch.received_by,
+        purpose=batch.purpose,
+        source_owner_type=batch.source_owner_type,
+        source_owner_reference=batch.source_owner_reference,
+    )
+    row.declared_role = "REFERENCE"
+    with pytest.raises(IntakeError) as conflict:
+        _require_exact_replay(
+            batch,  # type: ignore[arg-type]
+            (row,),  # type: ignore[arg-type]
+            sources=discovered,
+            declarations={declaration.normalized_relative_path: declaration},
+            batch_name=batch.batch_name,
+            received_by=batch.received_by,
+            purpose=batch.purpose,
+            source_owner_type=batch.source_owner_type,
+            source_owner_reference=batch.source_owner_reference,
+        )
+    assert conflict.value.code == IntakeErrorCode.CONTENT_INTAKE_IMMUTABLE
 
 
 @pytest.mark.parametrize("kind", ["symlink", "hardlink", "fifo"])

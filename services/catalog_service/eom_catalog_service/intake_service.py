@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from eom_catalog_contracts import (
     HumanDecision,
@@ -30,6 +31,7 @@ from sqlalchemy import Engine, select
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.intake_evidence import IntakeEvidenceResolver
 from eom_catalog_service.intake_files import (
+    DiscoveredSource,
     discover_source_files,
     load_strict_json,
     load_strict_yaml,
@@ -52,6 +54,17 @@ from eom_catalog_service.models import (
 from eom_catalog_service.settings import CatalogSettings
 
 
+@dataclass(frozen=True)
+class IntakeSourceDeclaration:
+    """Reviewed metadata for one already materialized Content Intake source."""
+
+    normalized_relative_path: str
+    original_filename: str
+    media_type: str
+    declared_role: Literal["REFERENCE", "GUIDELINE", "DATA", "ASSET", "OTHER"]
+    declared_description: str
+
+
 class IntakeService:
     def __init__(self, engine: Engine, settings: CatalogSettings | None = None) -> None:
         self.settings = settings or CatalogSettings.from_environment()
@@ -69,8 +82,10 @@ class IntakeService:
         purpose: str = "PLACEHOLDER_PURPOSE",
         source_owner_type: str = "internal_team_member",
         source_owner_reference: str = "team_lead_placeholder",
+        source_declarations: tuple[IntakeSourceDeclaration, ...] | None = None,
     ) -> ContentIntakeBatchRecord:
         sources = discover_source_files(source_directory)
+        declarations = _source_declarations(sources, source_declarations)
         hashes = [source.sha256 for source in sources]
         if len(hashes) != len(set(hashes)):
             raise IntakeError(
@@ -85,6 +100,28 @@ class IntakeService:
                 )
             )
             if existing is not None:
+                if source_declarations is not None:
+                    existing_sources = tuple(
+                        session.scalars(
+                            select(ContentIntakeSourceFileRecord)
+                            .where(
+                                ContentIntakeSourceFileRecord.intake_batch_id
+                                == existing.intake_batch_id
+                            )
+                            .order_by(ContentIntakeSourceFileRecord.relative_path)
+                        )
+                    )
+                    _require_exact_replay(
+                        existing,
+                        existing_sources,
+                        sources=sources,
+                        declarations=declarations,
+                        batch_name=batch_name,
+                        received_by=received_by,
+                        purpose=purpose,
+                        source_owner_type=source_owner_type,
+                        source_owner_reference=source_owner_reference,
+                    )
                 session.expunge(existing)
                 return existing
 
@@ -106,12 +143,18 @@ class IntakeService:
                     {
                         "source_file_id": new_source_file_id(),
                         "relative_path": f"source/{source.normalized_relative_path}",
-                        "original_filename": source.original_filename,
-                        "media_type": source.media_type,
+                        "original_filename": declarations[
+                            source.normalized_relative_path
+                        ].original_filename,
+                        "media_type": declarations[source.normalized_relative_path].media_type,
                         "size_bytes": source.size_bytes,
                         "sha256": source.sha256,
-                        "declared_role": "REFERENCE",
-                        "declared_description": "PLACEHOLDER_SOURCE_FILE",
+                        "declared_role": declarations[
+                            source.normalized_relative_path
+                        ].declared_role,
+                        "declared_description": declarations[
+                            source.normalized_relative_path
+                        ].declared_description,
                     }
                     for source in sources
                 ],
@@ -637,3 +680,89 @@ class IntakeService:
             "payload": event.payload,
             "created_at": event.created_at,
         }
+
+
+def _source_declarations(
+    sources: tuple[DiscoveredSource, ...],
+    reviewed: tuple[IntakeSourceDeclaration, ...] | None,
+) -> dict[str, IntakeSourceDeclaration]:
+    if reviewed is None:
+        return {
+            source.normalized_relative_path: IntakeSourceDeclaration(
+                normalized_relative_path=source.normalized_relative_path,
+                original_filename=source.original_filename,
+                media_type=source.media_type,
+                declared_role="REFERENCE",
+                declared_description="PLACEHOLDER_SOURCE_FILE",
+            )
+            for source in sources
+        }
+    by_path = {declaration.normalized_relative_path: declaration for declaration in reviewed}
+    source_paths = {source.normalized_relative_path for source in sources}
+    if len(by_path) != len(reviewed) or set(by_path) != source_paths:
+        raise IntakeError(
+            IntakeErrorCode.CONTENT_INTAKE_INVALID,
+            "reviewed source declarations do not match materialized sources",
+        )
+    return by_path
+
+
+def _require_exact_replay(
+    existing: ContentIntakeBatchRecord,
+    existing_sources: tuple[ContentIntakeSourceFileRecord, ...],
+    *,
+    sources: tuple[DiscoveredSource, ...],
+    declarations: dict[str, IntakeSourceDeclaration],
+    batch_name: str,
+    received_by: str,
+    purpose: str,
+    source_owner_type: str,
+    source_owner_reference: str,
+) -> None:
+    expected_batch = (
+        batch_name,
+        received_by,
+        purpose,
+        source_owner_type,
+        source_owner_reference,
+    )
+    actual_batch = (
+        existing.batch_name,
+        existing.received_by,
+        existing.purpose,
+        existing.source_owner_type,
+        existing.source_owner_reference,
+    )
+    expected_sources = tuple(
+        sorted(
+            (
+                f"source/{source.normalized_relative_path}",
+                declarations[source.normalized_relative_path].original_filename,
+                source.normalized_filename,
+                declarations[source.normalized_relative_path].media_type,
+                source.size_bytes,
+                source.sha256,
+                declarations[source.normalized_relative_path].declared_role,
+                declarations[source.normalized_relative_path].declared_description,
+            )
+            for source in sources
+        )
+    )
+    actual_sources = tuple(
+        (
+            source.relative_path,
+            source.original_filename,
+            source.normalized_filename,
+            source.media_type,
+            source.size_bytes,
+            source.sha256,
+            source.declared_role,
+            source.declared_description,
+        )
+        for source in existing_sources
+    )
+    if actual_batch != expected_batch or actual_sources != expected_sources:
+        raise IntakeError(
+            IntakeErrorCode.CONTENT_INTAKE_IMMUTABLE,
+            "matching source bytes already have different immutable intake metadata",
+        )

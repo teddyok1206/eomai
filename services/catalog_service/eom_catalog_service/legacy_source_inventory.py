@@ -157,6 +157,12 @@ def load_inventory_manifest(path: Path) -> LegacySourceInventoryV2:
         ) from exc
 
 
+def load_protected_legacy_control_document(path: Path) -> dict[str, Any]:
+    """Read one small operator-protected legacy control document without path disclosure."""
+
+    return _load_json_document(path, protected=True)
+
+
 def write_inventory_manifest(path: Path, inventory: LegacySourceInventoryV2) -> None:
     """Atomically create one operator-protected dry-run manifest."""
 

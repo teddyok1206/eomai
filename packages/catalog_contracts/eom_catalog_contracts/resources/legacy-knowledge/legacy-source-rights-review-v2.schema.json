@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-knowledge/rights-review/2.0",
+  "title": "EOM Legacy Source Rights Review V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "rights_review_id", "rights_review_revision_id", "revision_number",
+    "previous_revision_id", "source", "source_owner_reference", "document_type", "rights_state",
+    "allowed_internal_processing", "allowed_model_exposure", "allowed_roles",
+    "allowed_excerpt_materialization", "allowed_page_image_materialization",
+    "allowed_item_grounding", "answer_bearing", "retention_policy_key",
+    "withdrawal_behavior", "evidence", "reviewed_at", "reviewed_by", "rights_review_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-source-rights-review/2.0"},
+    "rights_review_id": {"type": "string", "pattern": "^rightsreview_[0-9a-f]{32}$"},
+    "rights_review_revision_id": {"type": "string", "pattern": "^rightsreviewrev_[0-9a-f]{32}$"},
+    "revision_number": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "previous_revision_id": {
+      "anyOf": [
+        {"type": "string", "pattern": "^rightsreviewrev_[0-9a-f]{32}$"},
+        {"type": "null"}
+      ]
+    },
+    "source": {"$ref": "#/$defs/inventoryPointer"},
+    "source_owner_reference": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"},
+    "document_type": {"enum": ["CURRICULUM", "TEXTBOOK", "REFERENCE_BOOK", "GUIDANCE", "ASSESSMENT_ITEM", "USAGE_WORKBOOK"]},
+    "rights_state": {"enum": ["CLEARED_INTERNAL", "CLEARED_LICENSED", "RESTRICTED", "REJECTED"]},
+    "allowed_internal_processing": {"type": "boolean"},
+    "allowed_model_exposure": {"type": "boolean"},
+    "allowed_roles": {
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {"enum": ["ADMIN", "RIGHTS_REVIEWER", "DATA_ANALYST_WORKER", "ITEM_AUTHORING_WORKER", "HUMAN_EDITOR"]}
+    },
+    "allowed_excerpt_materialization": {"type": "boolean"},
+    "allowed_page_image_materialization": {"type": "boolean"},
+    "allowed_item_grounding": {"type": "boolean"},
+    "answer_bearing": {"type": "boolean"},
+    "retention_policy_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+    "withdrawal_behavior": {"enum": ["RETIRE_FROM_NEW_RETRIEVAL", "BLOCK_ALL_NEW_USE"]},
+    "evidence": {
+      "type": "array", "minItems": 1, "maxItems": 20,
+      "items": {"$ref": "#/$defs/artifactPointer"}
+    },
+    "reviewed_at": {"type": "string", "format": "date-time"},
+    "reviewed_by": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+    "rights_review_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "inventoryPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pointer_type", "inventory_id", "inventory_sha256", "entry_key", "content_sha256"],
+      "properties": {
+        "pointer_type": {"const": "INVENTORY_ENTRY"},
+        "inventory_id": {"type": "string", "pattern": "^legacyinventory_[0-9a-f]{32}$"},
+        "inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "entry_key": {"type": "string", "pattern": "^legacyentry_[0-9a-f]{32}$"},
+        "content_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifactPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pointer_type", "artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "pointer_type": {"const": "ARTIFACT_MEMBER"},
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "minLength": 3, "maxLength": 512, "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+/[^\\u0000-\\u001f\\u007f]+$"},
+        "schema_ref": {"type": "string", "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"},
+        "media_type": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"rights_state": {"const": "REJECTED"}}},
+      "then": {
+        "properties": {
+          "allowed_internal_processing": {"const": false},
+          "allowed_model_exposure": {"const": false},
+          "allowed_roles": {"maxItems": 0},
+          "allowed_excerpt_materialization": {"const": false},
+          "allowed_page_image_materialization": {"const": false},
+          "allowed_item_grounding": {"const": false}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"allowed_item_grounding": {"const": true}}},
+      "then": {"properties": {"allowed_model_exposure": {"const": true}}}
+    }
+  ]
+}

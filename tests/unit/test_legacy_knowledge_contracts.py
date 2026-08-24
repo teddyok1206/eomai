@@ -289,7 +289,9 @@ def test_legacy_knowledge_schemas_are_canonical_packaged_and_valid() -> None:
         "legacy-source-inventory",
         "legacy-source-relation-manifest",
         "legacy-source-rights-review",
+        "legacy-source-rights-review-v2",
         "legacy-source-selection",
+        "legacy-source-selection-v2",
         "pdf-page-range-materialization-manifest",
     ):
         resource = inventory[key]
@@ -303,6 +305,18 @@ def test_legacy_knowledge_schemas_are_canonical_packaged_and_valid() -> None:
 
 def test_historical_knowledge_contract_hashes_remain_pinned() -> None:
     expected = {
+        "legacy-source-rights-review": (
+            "sha256:0ab0b051ca3bb4830fbc0d8c35af38bd809e617e6edc3e270e8103e23487c7c7"
+        ),
+        "legacy-source-selection": (
+            "sha256:89acd96ec4f08ec7aa11da34370db02666fdccb289e0574b5c21065f43940111"
+        ),
+        "legacy-source-rights-review-v2": (
+            "sha256:de8a98565ffb8b6d326cd716ff8245778a0ea11702838bf6dd5475b7fecef3f5"
+        ),
+        "legacy-source-selection-v2": (
+            "sha256:0c25bfa3c8732f85306b7077199e0f222aab65203c468a8ecb813f6092407775"
+        ),
         "knowledge-analysis-request-v2": (
             "sha256:bf77196f281dc8c2c22e850e576a9137acb7bc1fea3681400f8855dc1f63414f"
         ),
