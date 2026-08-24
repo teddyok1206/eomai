@@ -11,6 +11,17 @@ from fastapi import Request
 from eom_api.request_context import RequestContext
 
 
+def _domain_error_code(exc: Exception) -> str:
+    code = getattr(exc, "code", None)
+    enum_value = getattr(code, "value", None)
+    if isinstance(enum_value, str) and enum_value:
+        return enum_value
+    if isinstance(code, str) and code:
+        return code
+    error_code = getattr(exc, "error_code", None)
+    return error_code if isinstance(error_code, str) and error_code else "DOMAIN_COMMAND_FAILED"
+
+
 def context(request: Request) -> RequestContext:
     value: RequestContext = request.state.request_context
     return value
@@ -100,9 +111,7 @@ def run_command(
     try:
         result = callback()
     except Exception as exc:
-        error_code = getattr(getattr(exc, "code", None), "value", None) or getattr(
-            exc, "error_code", "DOMAIN_COMMAND_FAILED"
-        )
+        error_code = _domain_error_code(exc)
         services.idempotency.fail_final(claim, str(error_code))
         services.audit.append(
             request_context,
