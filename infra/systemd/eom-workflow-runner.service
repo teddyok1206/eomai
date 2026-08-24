@@ -22,6 +22,11 @@ Environment=EOM_HUMAN_ACTOR_CONFIG=/etc/eom/human-actors.yaml
 Environment=EOM_WORKFLOW_RUNNER_CONFIG=/etc/eom/workflow-runner.yaml
 Environment=EOM_WORKFLOW_PROMPT_ROOT=/etc/eom/workflow-prompts
 Environment=EOM_CODEX_CAPABILITY_POLICY=/etc/eom/codex-capabilities.yaml
+Environment=EOM_CATALOG_STAGING_ROOT=/var/lib/eom-workflow-runner/catalog-staging
+ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-workflow-runner/catalog-staging
+ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-workflow-runner/catalog-staging/content-packs
+ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-workflow-runner/catalog-staging/registry
+ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-workflow-runner/catalog-staging/workflow-prompts
 ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner serve
 Restart=on-failure
 RestartSec=3
@@ -62,6 +67,7 @@ ReadWritePaths=/var/lib/eom-workflow-runner
 
 InaccessiblePaths=/home/eom/EOM
 InaccessiblePaths=/home/eom/EOMIS
+InaccessiblePaths=/srv/eom/staging/catalog
 InaccessiblePaths=/root/.codex
 InaccessiblePaths=/var/run/docker.sock
 InaccessiblePaths=-/var/lib/lxd

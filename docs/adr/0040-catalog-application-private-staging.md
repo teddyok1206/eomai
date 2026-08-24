@@ -6,15 +6,18 @@ Accepted.
 
 ## Responsibility and boundary
 
-Interactive Catalog administration and the long-running Catalog application manager have different
-operating-system identities. Operator commands own `/srv/eom/staging/catalog` as `eom:eom`; the
-manager runs as `eom-catalog-manager:eom-api`. Artifact publication needs temporary materialization,
-but neither identity may repair or reuse the other identity's staging tree.
+Interactive Catalog administration, the workflow runner, and the long-running Catalog application
+manager have different operating-system identities. Operator commands own
+`/srv/eom/staging/catalog` as `eom:eom`; the workflow runner uses
+`eom-workflow-runner:eom`, and the manager runs as `eom-catalog-manager:eom-api`. Artifact
+publication needs temporary materialization, but no identity may repair or reuse another identity's
+staging tree.
 
-The Catalog application manager therefore owns a private staging root at
-`/var/lib/eom-catalog-api/staging`. Its systemd unit creates that root and the three declared fixed
-children before startup, with owner/group inherited from the service identity and exact mode
-`0750`. The operator staging root remains unchanged and is explicitly inaccessible to the manager.
+The workflow runner and Catalog application manager therefore own private staging roots at
+`/var/lib/eom-workflow-runner/catalog-staging` and `/var/lib/eom-catalog-api/staging`. Their systemd
+units create the root and three declared fixed children before startup, with owner/group inherited
+from each service identity and exact mode `0750`. The operator staging root remains unchanged and is
+explicitly inaccessible to both services.
 Canonical artifact bytes continue to be committed only to `/mnt/nas/eom/artifacts`; staging copies
 are temporary materialization, not identity.
 

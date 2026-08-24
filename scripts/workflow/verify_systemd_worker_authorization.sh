@@ -5,6 +5,8 @@ REPOSITORY_ROOT="/home/eom/EOM"
 UNIT_ROOT="/etc/systemd/system"
 HELPER_SOURCE="${REPOSITORY_ROOT}/services/orchestrator/eom_orchestrator/worker_exec.py"
 HELPER_INSTALLED="/usr/local/libexec/eom-worker-exec"
+AUTH_HELPER_SOURCE="${REPOSITORY_ROOT}/services/orchestrator/eom_orchestrator/worker_auth_exec.py"
+AUTH_HELPER_INSTALLED="/usr/local/libexec/eom-worker-auth-status"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -18,20 +20,31 @@ fail() {
 [[ "$(stat -c '%U:%G:%a' "${HELPER_INSTALLED}")" == "root:root:755" ]] || \
   fail "worker executable ownership or mode is invalid"
 cmp --silent "${HELPER_SOURCE}" "${HELPER_INSTALLED}" || fail "worker executable source drift"
+[[ -x "${AUTH_HELPER_INSTALLED}" ]] || fail "root-installed worker auth executable is unavailable"
+[[ "$(stat -c '%U:%G:%a' "${AUTH_HELPER_INSTALLED}")" == "root:root:755" ]] || \
+  fail "worker auth executable ownership or mode is invalid"
+cmp --silent "${AUTH_HELPER_SOURCE}" "${AUTH_HELPER_INSTALLED}" || \
+  fail "worker auth executable source drift"
 
 for slot in 01 02 03 04 05; do
   worker_source="${REPOSITORY_ROOT}/infra/systemd/eom-worker-${slot}@.service"
   worker_installed="${UNIT_ROOT}/eom-worker-${slot}@.service"
   probe_source="${REPOSITORY_ROOT}/infra/systemd/eom-worker-probe-${slot}@.service"
   probe_installed="${UNIT_ROOT}/eom-worker-probe-${slot}@.service"
+  auth_source="${REPOSITORY_ROOT}/infra/systemd/eom-worker-auth-${slot}.service"
+  auth_installed="${UNIT_ROOT}/eom-worker-auth-${slot}.service"
   cmp --silent "${worker_source}" "${worker_installed}" || \
     fail "worker template ${slot} source drift"
   cmp --silent "${probe_source}" "${probe_installed}" || \
     fail "worker probe ${slot} source drift"
+  cmp --silent "${auth_source}" "${auth_installed}" || \
+    fail "worker auth ${slot} source drift"
   [[ "$(stat -c '%U:%G:%a' "${worker_installed}")" == "root:root:644" ]] || \
     fail "worker template ${slot} ownership or mode is invalid"
   [[ "$(stat -c '%U:%G:%a' "${probe_installed}")" == "root:root:644" ]] || \
     fail "worker probe ${slot} ownership or mode is invalid"
+  [[ "$(stat -c '%U:%G:%a' "${auth_installed}")" == "root:root:644" ]] || \
+    fail "worker auth ${slot} ownership or mode is invalid"
 
   probe_id="probe_$(tr -d '-' </proc/sys/kernel/random/uuid)"
   probe_unit="eom-worker-probe-${slot}@${probe_id}.service"

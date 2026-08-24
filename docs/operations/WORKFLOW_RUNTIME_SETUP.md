@@ -2,13 +2,12 @@
 
 ## Runtime Accounts
 
-The runner executes as `eom`. It must have the configured `eom-cdx-01` through `eom-cdx-05`
-supplementary groups in both account configuration and the current process. Start a fresh login or
-tmux server after group membership changes.
+The production runner executes as the locked `eom-workflow-runner` identity. It must have the
+configured `eom-cdx-01` through `eom-cdx-05` supplementary groups in both account configuration and
+the current process. The interactive `eom` account is only the operator boundary.
 
 ```bash
-id -un
-id -nG | tr ' ' '\n' | grep '^eom-cdx-'
+id eom-workflow-runner
 ```
 
 Do not add worker users to `eom`, `sudo`, or `docker`. Do not grant capabilities to Python, Codex,
@@ -22,14 +21,17 @@ An operator installs these reviewed sources as root-owned files; normal job exec
 ```text
 infra/systemd/eom-worker-01@.service ... eom-worker-05@.service
 infra/systemd/eom-worker-probe-01@.service ... eom-worker-probe-05@.service
+infra/systemd/eom-worker-auth-01.service ... eom-worker-auth-05.service
 infra/polkit/50-eom-worker-units.rules
 services/orchestrator/eom_orchestrator/worker_exec.py
   -> /usr/local/libexec/eom-worker-exec
+services/orchestrator/eom_orchestrator/worker_auth_exec.py
+  -> /usr/local/libexec/eom-worker-auth-status
 ```
 
 The unit and helper hashes are part of the installed Python release contract. Unit files and the
-helper must be regular root:root files with modes `0644` and `0755`; `eom` must not be able to
-modify them. The polkit rule grants `eom-workflow-runner` only fully anchored worker/probe starts,
+helpers must be regular root:root files with modes `0644` and `0755`; `eom` must not be able to
+modify them. The polkit rule grants `eom-workflow-runner` only fully anchored worker/probe/auth starts,
 grants `eom-hwpx-manager` only fully anchored HWPX builder starts, and lets the interactive `eom`
 operator start only the harmless worker probe. It explicitly denies cross-manager starts, restarts,
 and arbitrary units. If the

@@ -60,12 +60,15 @@ def test_systemd_authorization_verifier_is_nonprivileged_and_negative_by_default
     assert "--uid=root --gid=root /usr/bin/true" in source
     assert "restart" in source
     assert "malformed.service" in source
+    assert "eom-worker-auth-status" in source
+    assert "eom-worker-auth-${slot}.service" in source
 
 
 def test_runtime_scripts_have_valid_shell_syntax() -> None:
     for relative in (
         "scripts/workflow/bootstrap_runtime_paths.sh",
         "scripts/workflow/deploy_runner_service.sh",
+        "scripts/workflow/deploy_worker_runtime.sh",
         "scripts/workflow/install_runner_configuration.sh",
         "scripts/workflow/verify_runtime_paths.sh",
         "scripts/workflow/verify_systemd_worker_authorization.sh",

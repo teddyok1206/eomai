@@ -395,6 +395,22 @@ def test_catalog_application_systemd_boundary_keeps_api_away_from_nas() -> None:
     assert "InaccessiblePaths=/etc/eom/secrets/catalog-manager.env" in api_unit
 
 
+def test_workflow_runner_uses_its_own_catalog_staging_identity() -> None:
+    unit = Path("infra/systemd/eom-workflow-runner.service").read_text(encoding="utf-8")
+    composition = Path("services/workflow_runner/eom_workflow_runner/composition.py").read_text(
+        encoding="utf-8"
+    )
+
+    private_root = "/var/lib/eom-workflow-runner/catalog-staging"
+    assert f"Environment=EOM_CATALOG_STAGING_ROOT={private_root}" in unit
+    assert f"ExecStartPre=/usr/bin/install -d -m 0750 {private_root}" in unit
+    assert f"{private_root}/content-packs" in unit
+    assert f"{private_root}/registry" in unit
+    assert f"{private_root}/workflow-prompts" in unit
+    assert "InaccessiblePaths=/srv/eom/staging/catalog" in unit
+    assert 'runner_user="eom-workflow-runner"' in composition
+
+
 def test_application_api_catalog_client_depends_on_protocol_not_server_implementation() -> None:
     client_source = Path(
         "apps/application_api/eom_api/services/catalog_application_client.py"

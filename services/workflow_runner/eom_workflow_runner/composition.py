@@ -68,6 +68,7 @@ def build_workflow_runtime(
         catalog_settings=actual_catalog_settings,
         catalog_configured=True,
         actor_authorizer=actor_authorizer,
+        runner_user="eom-workflow-runner",
     )
     runner_id = f"runner-{uuid4().hex}"
     control_processor = CodexControlCommandProcessor(
