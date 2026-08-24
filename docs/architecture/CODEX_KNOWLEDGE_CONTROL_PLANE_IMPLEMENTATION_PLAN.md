@@ -23,7 +23,7 @@ Last reviewed: 2026-08-24 UTC
 | 9 — retrieval and Evidence Bundle | `SOURCE_COMPLETE` | [`EDUCATION_RETRIEVAL_EVIDENCE_BUNDLE_V2.md`](EDUCATION_RETRIEVAL_EVIDENCE_BUNDLE_V2.md), additive migration 0014, closed retrieval, deterministic publication, and disposable-DB proof |
 | 10 — knowledge-backed item production | `SOURCE_COMPLETE` | [`KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md`](KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md), immutable preset V2/plan V3 protocols, pre-claim Evidence Bundle resolution, least-needed materialization, opt-in GUI and pointer-only provenance |
 | 11 — legacy Product and Usage intake | `SOURCE_COMPLETE` | [`LEGACY_PRODUCT_USAGE_INTAKE_V1.md`](LEGACY_PRODUCT_USAGE_INTAKE_V1.md), additive migration 0015, guarded XLSX proposal/review/commit service, Product/Form/Assembly/Publication/Usage projection, disposable PostgreSQL proof |
-| 12 — hardening and measured rollout | `IN_PROGRESS` | [`CODEX_KNOWLEDGE_PHASE12_ROLLOUT.md`](../operations/CODEX_KNOWLEDGE_PHASE12_ROLLOUT.md), exact runtime-grant and release-boundary hardening in progress; content-specific graph/live/workbook gates remain separate |
+| 12 — hardening and measured rollout | `DEPLOYED_READY` | [`CODEX_KNOWLEDGE_PHASE12_ROLLOUT.md`](../operations/CODEX_KNOWLEDGE_PHASE12_ROLLOUT.md), source/migration/runtime hardening deployed; content-specific graph/live/workbook rollout stopped at its reviewed-input gate |
 
 Phase 1 added no migration, live worker execution, runtime deployment, or production-data write.
 Phase 2 source work adds an unapplied additive migration and source behavior only; it performed no
@@ -54,6 +54,13 @@ migration 0015 and versioned mapping/import/proposal/projection contracts, and c
 Product/Form/Assembly/Publication/Usage rows only after exact-pointer review. Its source, static,
 security, release, migration-cycle, concurrency, immutability, and disposable PostgreSQL gates
 passed. No production workbook was imported and no graph snapshot was published.
+Phase 12 deployed the Phase 8–11 dual-read runtime, migrations through 0015, exact Catalog runtime
+grants, bounded legacy-usage operator commands, API/Catalog/GUI release artifacts, and a
+commit-pinned migration wrapper. Backup/restore, disposable PostgreSQL, source, release,
+provenance, service, public Studio, and isolation checks passed. Measured content rollout remains a
+separate gate: the deployed database contains no accepted Knowledge Analysis result, Graph
+Snapshot, Evidence Bundle, or reviewed legacy workbook import, so no production graph, preset,
+workbook projection, or live Codex job was invented to claim completion.
 
 ## 1. Outcome
 

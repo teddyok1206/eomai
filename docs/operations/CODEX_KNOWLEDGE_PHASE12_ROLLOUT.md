@@ -1,8 +1,26 @@
 # Codex Knowledge Control Plane Phase 12 Rollout
 
-Status: reviewed hardening and rollout procedure
+Status: runtime hardening deployed; measured content rollout awaiting reviewed inputs
 
 Date: 2026-08-24 UTC
+
+## Deployment readiness record
+
+The reviewed Phase 8–11 runtime payload at source commit
+`12cd103857aaef2a1ee41d501f80df460b7280f6` is installed for Application API, Catalog, and
+Scientific Studio. PostgreSQL is at additive revision `20260824_0015`. The production backup and
+restore dry run, exact API/Catalog runtime-role reconciliation, installed-import isolation, release
+artifact inspection, API/Catalog/Studio health, public HTTPS Studio smoke, and loopback listener
+checks passed. Release tooling was subsequently hardened by commit
+`857388a7abd7a3c63060c89691afafc987be94df`; that tooling-only commit does not change an installed
+runtime package.
+
+No live Codex request, graph publication, Evidence Bundle publication, or legacy workbook import
+was executed during this rollout. Read-only deployment inventory found no accepted Knowledge
+Analysis result, published Graph Snapshot, Evidence Bundle revision, or legacy usage import. The
+only active execution presets remain the independently released `standard-item` and
+`knowledge-analysis` presets. The content-specific rollout therefore stopped at the reviewed-input
+gate instead of creating synthetic production data.
 
 ## Responsibility and boundary
 
