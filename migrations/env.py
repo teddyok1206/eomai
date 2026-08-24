@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
+import eom_catalog_service.knowledge_graph_models
 import eom_catalog_service.models  # noqa: F401
 import eom_hwpx_manager.models  # noqa: F401
 import eom_identity_service.models  # noqa: F401

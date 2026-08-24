@@ -13,6 +13,8 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisSourceV2,
     KnowledgeAnalysisWorkerProposal,
+    KnowledgeGraphPublicationResult,
+    PublishKnowledgeGraphSnapshotCommand,
     ReconcileKnowledgeAnalysisCommand,
     ReviewKnowledgeAnalysisCommand,
 )
@@ -20,6 +22,16 @@ from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.knowledge_analysis_service import (
     KnowledgeAnalysisApplicationService,
     KnowledgeAnalysisServiceError,
+)
+from eom_catalog_service.knowledge_graph_models import (
+    KnowledgeCorpusRecord,
+    KnowledgeGraphSnapshotRecord,
+    KnowledgeNodeRecord,
+    KnowledgeSnapshotAnalysisRecord,
+)
+from eom_catalog_service.knowledge_graph_publication_service import (
+    KnowledgeGraphPublicationError,
+    KnowledgeGraphPublicationService,
 )
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
@@ -58,7 +70,7 @@ from eom_workflow import ArtifactPointer, compile_definition
 from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from eom_workflow_runner.repository import import_workflow_definition
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, func, select, text
 from sqlalchemy.orm import Session
 
 pytestmark = pytest.mark.integration
@@ -389,6 +401,29 @@ def test_knowledge_analysis_history_access_patterns_have_dedicated_indexes(
     )
 
 
+def test_education_graph_access_patterns_have_dedicated_indexes(
+    integration_engine: Engine,
+) -> None:
+    expected = {
+        "ix_knowledge_edge_outbound",
+        "ix_knowledge_edge_inbound",
+        "ix_knowledge_node_source_class",
+        "ix_curriculum_closure_descendants",
+        "ix_curriculum_closure_ancestors",
+        "ix_item_element_revision_kind",
+        "ix_item_element_reverse",
+    }
+    with integration_engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT indexname FROM pg_indexes "
+                "WHERE schemaname = 'app' AND indexname = ANY(:index_names)"
+            ),
+            {"index_names": sorted(expected)},
+        ).scalars()
+        assert set(rows) == expected
+
+
 def test_concurrent_analysis_create_is_single_and_retry_replays(
     integration_engine: Engine,
     tmp_path: Path,
@@ -661,3 +696,141 @@ def test_knowledge_analysis_acceptance_review_and_retry_are_pointer_only(
         failed_record = session.get(KnowledgeAnalysisRunRecord, malformed.analysis_run_id)
         assert failed_record is not None
         assert failed_record.error_code == "KNOWLEDGE_ANALYSIS_POINTER_INVALID"
+
+
+def test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    orchestrator_settings, catalog_settings = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, orchestrator_settings)
+    intake_id, source_file_id = _source(integration_engine, catalog_settings, tmp_path)
+    analysis_service = KnowledgeAnalysisApplicationService(integration_engine, catalog_settings)
+    created = analysis_service.create(
+        _command(
+            intake_id,
+            source_file_id,
+            source_class="TEXTBOOK",
+            idempotency_key=f"phase8-analysis:{uuid4().hex}",
+        )
+    )
+    _complete_proposal(
+        integration_engine,
+        catalog_settings,
+        run_id=created.analysis_run_id,
+        staging_root=tmp_path / "phase8-proposal",
+    )
+    accepted = analysis_service.reconcile(
+        ReconcileKnowledgeAnalysisCommand(
+            analysis_run_id=created.analysis_run_id,
+            requested_by=OPERATOR_ID,
+        )
+    )
+    assert accepted.state == "ACCEPTED"
+
+    value: dict[str, object] = {
+        "schema_version": "knowledge-graph-publication/1.0",
+        "corpus_key": f"phase8-{uuid4().hex[:12]}",
+        "display_name": "Phase 8 immutable graph",
+        "accepted_analysis_run_ids": [created.analysis_run_id],
+        "structure_manifest": None,
+        "expected_current_snapshot_revision_id": None,
+        "publisher_version": "1.0.0",
+        "published_by_operator_id": OPERATOR_ID,
+        "idempotency_key": f"phase8-publication:{uuid4().hex}",
+        "requested_at": NOW.isoformat().replace("+00:00", "Z"),
+        "request_sha256": "sha256:" + "0" * 64,
+    }
+    value["request_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "request_sha256"}
+    )
+    command = PublishKnowledgeGraphSnapshotCommand.model_validate(value)
+    graph_service = KnowledgeGraphPublicationService(integration_engine, catalog_settings)
+    published = graph_service.publish(command)
+    assert published.state == "PUBLISHED"
+    assert published.revision_number == 1
+    assert published.counts.source_revisions == 1
+    assert published.counts.nodes == 1
+    assert published.counts.edges == 0
+    assert graph_service.publish(command) == published
+
+    sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        corpus = session.get(KnowledgeCorpusRecord, published.corpus_id)
+        snapshot = session.get(
+            KnowledgeGraphSnapshotRecord,
+            published.graph_snapshot.graph_snapshot_revision_id,
+        )
+        assert corpus is not None and snapshot is not None
+        assert corpus.current_graph_snapshot_revision_id == snapshot.graph_snapshot_revision_id
+        assert snapshot.manifest_sha256 == published.graph_snapshot.manifest_sha256
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(KnowledgeNodeRecord)
+                .where(
+                    KnowledgeNodeRecord.graph_snapshot_revision_id
+                    == snapshot.graph_snapshot_revision_id
+                )
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(KnowledgeSnapshotAnalysisRecord)
+                .where(
+                    KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id
+                    == snapshot.graph_snapshot_revision_id
+                )
+            )
+            == 1
+        )
+
+    next_commands: list[PublishKnowledgeGraphSnapshotCommand] = []
+    for suffix in ("a", "b"):
+        next_value = {
+            **value,
+            "expected_current_snapshot_revision_id": (
+                published.graph_snapshot.graph_snapshot_revision_id
+            ),
+            "idempotency_key": f"phase8-concurrent-{suffix}:{uuid4().hex}",
+        }
+        next_value["request_sha256"] = content_sha256(
+            {key: item for key, item in next_value.items() if key != "request_sha256"}
+        )
+        next_commands.append(PublishKnowledgeGraphSnapshotCommand.model_validate(next_value))
+
+    barrier = Barrier(2)
+
+    def publish_concurrently(command_value: PublishKnowledgeGraphSnapshotCommand) -> object:
+        barrier.wait(timeout=10)
+        try:
+            return KnowledgeGraphPublicationService(integration_engine, catalog_settings).publish(
+                command_value
+            )
+        except KnowledgeGraphPublicationError as exc:
+            return exc.code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(publish_concurrently, next_commands))
+    winners = [item for item in outcomes if isinstance(item, KnowledgeGraphPublicationResult)]
+    assert len(winners) == 1
+    assert winners[0].revision_number == 2
+    assert outcomes.count("KNOWLEDGE_GRAPH_STALE_CURRENT") == 1
+
+    stale_value = {**value, "idempotency_key": f"phase8-stale:{uuid4().hex}"}
+    stale_value["request_sha256"] = content_sha256(
+        {key: item for key, item in stale_value.items() if key != "request_sha256"}
+    )
+    with pytest.raises(KnowledgeGraphPublicationError) as stale_info:
+        graph_service.publish(PublishKnowledgeGraphSnapshotCommand.model_validate(stale_value))
+    assert stale_info.value.code == "KNOWLEDGE_GRAPH_STALE_CURRENT"
+
+    conflict_value = {**value, "display_name": "Different graph identity"}
+    conflict_value["request_sha256"] = content_sha256(
+        {key: item for key, item in conflict_value.items() if key != "request_sha256"}
+    )
+    with pytest.raises(KnowledgeGraphPublicationError) as conflict_info:
+        graph_service.publish(PublishKnowledgeGraphSnapshotCommand.model_validate(conflict_value))
+    assert conflict_info.value.code == "KNOWLEDGE_GRAPH_IDEMPOTENCY_CONFLICT"

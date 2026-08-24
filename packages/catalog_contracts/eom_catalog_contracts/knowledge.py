@@ -149,6 +149,165 @@ class KnowledgeEdgeType(StrEnum):
     SIMILAR_TO_ITEM = "SIMILAR_TO_ITEM"
 
 
+def _endpoint_pairs(
+    from_types: frozenset[KnowledgeNodeType],
+    to_types: frozenset[KnowledgeNodeType],
+) -> frozenset[tuple[KnowledgeNodeType, KnowledgeNodeType]]:
+    return frozenset((source, target) for source in from_types for target in to_types)
+
+
+_CURRICULUM = frozenset(
+    {
+        KnowledgeNodeType.CURRICULUM_FRAMEWORK_REVISION,
+        KnowledgeNodeType.CURRICULUM_UNIT,
+        KnowledgeNodeType.ACHIEVEMENT_STANDARD,
+    }
+)
+_KNOWLEDGE = frozenset(
+    {
+        KnowledgeNodeType.CONCEPT,
+        KnowledgeNodeType.CLAIM,
+        KnowledgeNodeType.PROCESS,
+        KnowledgeNodeType.OBSERVABLE_PROPERTY,
+        KnowledgeNodeType.FORMULA,
+    }
+)
+_SOURCE = frozenset(
+    {
+        KnowledgeNodeType.DOCUMENT_REVISION,
+        KnowledgeNodeType.DOCUMENT_SECTION,
+        KnowledgeNodeType.FIGURE,
+        KnowledgeNodeType.TABLE,
+        KnowledgeNodeType.EQUATION,
+    }
+)
+_REPRESENTATION = frozenset(
+    {
+        KnowledgeNodeType.DATA_REPRESENTATION,
+        KnowledgeNodeType.FIGURE,
+        KnowledgeNodeType.TABLE,
+        KnowledgeNodeType.EQUATION,
+    }
+)
+_ITEM = frozenset(
+    {
+        KnowledgeNodeType.ITEM_REVISION,
+        KnowledgeNodeType.ITEM_ELEMENT,
+        KnowledgeNodeType.ASSESSMENT_PATTERN,
+    }
+)
+_ALL_NODES = frozenset(KnowledgeNodeType)
+
+
+KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY: dict[
+    KnowledgeEdgeType, frozenset[tuple[KnowledgeNodeType, KnowledgeNodeType]]
+] = {
+    KnowledgeEdgeType.CONTAINS_CURRICULUM_UNIT: _endpoint_pairs(
+        frozenset(
+            {
+                KnowledgeNodeType.CURRICULUM_FRAMEWORK_REVISION,
+                KnowledgeNodeType.CURRICULUM_UNIT,
+            }
+        ),
+        frozenset({KnowledgeNodeType.CURRICULUM_UNIT}),
+    ),
+    KnowledgeEdgeType.PRECEDES_CURRICULUM_UNIT: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.CURRICULUM_UNIT}),
+        frozenset({KnowledgeNodeType.CURRICULUM_UNIT}),
+    ),
+    KnowledgeEdgeType.DEFINES_ACHIEVEMENT_STANDARD: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.CURRICULUM_UNIT}),
+        frozenset({KnowledgeNodeType.ACHIEVEMENT_STANDARD}),
+    ),
+    KnowledgeEdgeType.DEFINES: _endpoint_pairs(
+        _SOURCE | frozenset({KnowledgeNodeType.CLAIM}), _KNOWLEDGE
+    ),
+    KnowledgeEdgeType.EXPLAINS: _endpoint_pairs(_SOURCE | _KNOWLEDGE, _KNOWLEDGE | _REPRESENTATION),
+    KnowledgeEdgeType.IS_A: _endpoint_pairs(_KNOWLEDGE, _KNOWLEDGE),
+    KnowledgeEdgeType.PART_OF: _endpoint_pairs(
+        _CURRICULUM | _SOURCE | _ITEM | _KNOWLEDGE,
+        _CURRICULUM | _SOURCE | _ITEM | _KNOWLEDGE,
+    ),
+    KnowledgeEdgeType.CAUSES: _endpoint_pairs(_KNOWLEDGE, _KNOWLEDGE),
+    KnowledgeEdgeType.AFFECTS: _endpoint_pairs(_KNOWLEDGE, _KNOWLEDGE),
+    KnowledgeEdgeType.DEPENDS_ON: _endpoint_pairs(_KNOWLEDGE, _KNOWLEDGE),
+    KnowledgeEdgeType.CONTRASTS_WITH: _endpoint_pairs(_KNOWLEDGE | _ITEM, _KNOWLEDGE | _ITEM),
+    KnowledgeEdgeType.REQUIRES_PREREQUISITE: _endpoint_pairs(
+        _CURRICULUM | _KNOWLEDGE | _ITEM, _CURRICULUM | _KNOWLEDGE
+    ),
+    KnowledgeEdgeType.SUPPORTS_CLAIM: _endpoint_pairs(
+        _SOURCE | _KNOWLEDGE | _ITEM, frozenset({KnowledgeNodeType.CLAIM})
+    ),
+    KnowledgeEdgeType.CONTRADICTS_CLAIM: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.CLAIM}), frozenset({KnowledgeNodeType.CLAIM})
+    ),
+    KnowledgeEdgeType.ILLUSTRATES: _endpoint_pairs(_REPRESENTATION, _KNOWLEDGE),
+    KnowledgeEdgeType.TABULATES: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.TABLE, KnowledgeNodeType.DATA_REPRESENTATION}), _KNOWLEDGE
+    ),
+    KnowledgeEdgeType.EXPRESSES_AS_EQUATION: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.FORMULA, KnowledgeNodeType.EQUATION}), _KNOWLEDGE
+    ),
+    KnowledgeEdgeType.DERIVED_FROM: _endpoint_pairs(_ALL_NODES, _SOURCE | _ITEM),
+    KnowledgeEdgeType.CITES_SOURCE: _endpoint_pairs(
+        _ALL_NODES,
+        frozenset({KnowledgeNodeType.DOCUMENT_REVISION, KnowledgeNodeType.DOCUMENT_SECTION}),
+    ),
+    KnowledgeEdgeType.ALIGNS_WITH_CURRICULUM: _endpoint_pairs(
+        _KNOWLEDGE | _ITEM,
+        frozenset({KnowledgeNodeType.CURRICULUM_UNIT, KnowledgeNodeType.ACHIEVEMENT_STANDARD}),
+    ),
+    KnowledgeEdgeType.HAS_ITEM_ELEMENT: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.ITEM_REVISION}),
+        frozenset({KnowledgeNodeType.ITEM_ELEMENT}),
+    ),
+    KnowledgeEdgeType.ASSESSES_CONCEPT: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.ITEM_REVISION, KnowledgeNodeType.ITEM_ELEMENT}),
+        frozenset({KnowledgeNodeType.CONCEPT}),
+    ),
+    KnowledgeEdgeType.REQUIRES_CONCEPT: _endpoint_pairs(
+        _ITEM, frozenset({KnowledgeNodeType.CONCEPT})
+    ),
+    KnowledgeEdgeType.USES_SOURCE_EVIDENCE: _endpoint_pairs(_ITEM, _SOURCE),
+    KnowledgeEdgeType.REPRESENTS_CONCEPT: _endpoint_pairs(
+        _REPRESENTATION, frozenset({KnowledgeNodeType.CONCEPT})
+    ),
+    KnowledgeEdgeType.SUPPORTS_STATEMENT: _endpoint_pairs(
+        _SOURCE | _KNOWLEDGE | frozenset({KnowledgeNodeType.ITEM_ELEMENT}),
+        frozenset({KnowledgeNodeType.ITEM_ELEMENT}),
+    ),
+    KnowledgeEdgeType.CONTRADICTS_STATEMENT: _endpoint_pairs(
+        _KNOWLEDGE | frozenset({KnowledgeNodeType.ITEM_ELEMENT}),
+        frozenset({KnowledgeNodeType.ITEM_ELEMENT}),
+    ),
+    KnowledgeEdgeType.PART_OF_INTERACTION: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.ITEM_ELEMENT}),
+        frozenset({KnowledgeNodeType.ITEM_REVISION, KnowledgeNodeType.ITEM_ELEMENT}),
+    ),
+    KnowledgeEdgeType.USES_ASSESSMENT_PATTERN: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.ITEM_REVISION}),
+        frozenset({KnowledgeNodeType.ASSESSMENT_PATTERN}),
+    ),
+    KnowledgeEdgeType.SIMILAR_TO_ITEM: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.ITEM_REVISION}),
+        frozenset({KnowledgeNodeType.ITEM_REVISION}),
+    ),
+}
+
+
+def validate_knowledge_edge_endpoint_types(
+    edge_type: KnowledgeEdgeType | str,
+    from_node_type: KnowledgeNodeType | str,
+    to_node_type: KnowledgeNodeType | str,
+) -> None:
+    """Validate one edge against the closed education-graph ontology."""
+
+    edge = KnowledgeEdgeType(edge_type)
+    endpoints = (KnowledgeNodeType(from_node_type), KnowledgeNodeType(to_node_type))
+    if endpoints not in KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY[edge]:
+        raise ValueError("knowledge edge endpoint types are incompatible")
+
+
 class KnowledgeArtifactMemberPointer(FrozenModel):
     artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
     artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
@@ -728,6 +887,156 @@ class KnowledgeGraphCounts(FrozenModel):
     anchors: int = Field(ge=1, le=20_000_000)
 
 
+class CurriculumUnitBinding(FrozenModel):
+    framework_revision_id: str = Field(pattern=r"^curriculumrev_[0-9a-f]{32}$")
+    curriculum_unit_id: str = Field(pattern=r"^currunit_[0-9a-f]{32}$")
+    node_stable_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$")
+    parent_unit_id: str | None = Field(default=None, pattern=r"^currunit_[0-9a-f]{32}$")
+    unit_level: Literal["MAJOR", "MIDDLE", "MINOR", "ACHIEVEMENT_STANDARD"]
+    ordinal: int = Field(ge=1, le=100000)
+
+
+class ItemElementBinding(FrozenModel):
+    node_stable_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$")
+    item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    item_content_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    item_content_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    item_content_sha256: Sha256
+    schema_ref: Literal[
+        "eom.assessment.item-content/1.0",
+        "eom://schemas/item-registry/assessment-item-content-v1",
+    ]
+    element_kind: Literal[
+        "paragraph", "table", "image", "equation", "statement_set", "statement", "choice"
+    ]
+    element_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    answer_bearing: bool
+
+
+class KnowledgeGraphStructureManifest(FrozenModel):
+    schema_version: Literal["knowledge-graph-structure-manifest/1.0"] = (
+        "knowledge-graph-structure-manifest/1.0"
+    )
+    structure_manifest_id: str = Field(pattern=r"^graphstructure_[0-9a-f]{32}$")
+    source_analysis_run_ids: tuple[
+        Annotated[str, Field(pattern=r"^analysisrun_[0-9a-f]{32}$")], ...
+    ] = Field(min_length=1, max_length=10000)
+    curriculum_units: tuple[CurriculumUnitBinding, ...] = Field(max_length=10000)
+    item_elements: tuple[ItemElementBinding, ...] = Field(max_length=100000)
+    reviewed_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    created_at: UtcDatetime
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def reviewed_structure_is_closed(self) -> KnowledgeGraphStructureManifest:
+        if tuple(sorted(self.source_analysis_run_ids)) != self.source_analysis_run_ids:
+            raise ValueError("structure analysis run IDs must be sorted")
+        if len(self.source_analysis_run_ids) != len(set(self.source_analysis_run_ids)):
+            raise ValueError("structure analysis run IDs must be unique")
+        units = {
+            (item.framework_revision_id, item.curriculum_unit_id): item
+            for item in self.curriculum_units
+        }
+        if len(units) != len(self.curriculum_units):
+            raise ValueError("curriculum unit bindings must be unique")
+        unit_nodes = [item.node_stable_key for item in self.curriculum_units]
+        siblings = [
+            (item.framework_revision_id, item.parent_unit_id, item.ordinal)
+            for item in self.curriculum_units
+        ]
+        if len(unit_nodes) != len(set(unit_nodes)) or len(siblings) != len(set(siblings)):
+            raise ValueError("curriculum node and sibling order must be unique")
+        parent_level = {
+            "MIDDLE": "MAJOR",
+            "MINOR": "MIDDLE",
+            "ACHIEVEMENT_STANDARD": "MINOR",
+        }
+        for item in self.curriculum_units:
+            if item.unit_level == "MAJOR":
+                if item.parent_unit_id is not None:
+                    raise ValueError("major curriculum unit cannot have a parent")
+                continue
+            parent = units.get((item.framework_revision_id, item.parent_unit_id or ""))
+            if parent is None or parent.unit_level != parent_level[item.unit_level]:
+                raise ValueError("curriculum parent pointer or level is invalid")
+        elements = [
+            (item.item_revision_id, item.element_kind, item.element_id)
+            for item in self.item_elements
+        ]
+        element_nodes = [item.node_stable_key for item in self.item_elements]
+        if len(elements) != len(set(elements)) or len(element_nodes) != len(set(element_nodes)):
+            raise ValueError("Item element bindings and graph nodes must be unique")
+        body = self.model_dump(mode="json", exclude={"manifest_sha256"})
+        if content_sha256(body) != self.manifest_sha256:
+            raise ValueError("graph structure manifest hash does not match canonical content")
+        return self
+
+
+class PublishKnowledgeGraphSnapshotCommand(FrozenModel):
+    """Pointer-only command for publishing one immutable graph snapshot."""
+
+    schema_version: Literal["knowledge-graph-publication/1.0"] = "knowledge-graph-publication/1.0"
+    corpus_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    display_name: str = Field(min_length=1, max_length=128)
+    accepted_analysis_run_ids: tuple[
+        Annotated[str, Field(pattern=r"^analysisrun_[0-9a-f]{32}$")], ...
+    ] = Field(min_length=1, max_length=10000)
+    structure_manifest: KnowledgeArtifactMemberPointer | None
+    expected_current_snapshot_revision_id: str | None = Field(
+        default=None, pattern=r"^graphrev_[0-9a-f]{32}$"
+    )
+    publisher_version: str = Field(pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+    published_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    idempotency_key: str = Field(pattern=r"^[\x21-\x7e]{16,128}$")
+    requested_at: UtcDatetime
+    request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def immutable_publication_request(self) -> PublishKnowledgeGraphSnapshotCommand:
+        if tuple(sorted(self.accepted_analysis_run_ids)) != self.accepted_analysis_run_ids:
+            raise ValueError("accepted analysis run IDs must be sorted")
+        if len(self.accepted_analysis_run_ids) != len(set(self.accepted_analysis_run_ids)):
+            raise ValueError("accepted analysis run IDs must be unique")
+        if self.structure_manifest is not None and (
+            self.structure_manifest.member_path != "evidence/graph-structure-manifest.json"
+            or self.structure_manifest.media_type != "application/json"
+            or self.structure_manifest.schema_ref
+            != "eom://schemas/knowledge/knowledge-graph-structure-manifest/1.0"
+        ):
+            raise ValueError("graph structure manifest pointer is incompatible")
+        body = self.model_dump(mode="json", exclude={"request_sha256"})
+        if content_sha256(body) != self.request_sha256:
+            raise ValueError("graph publication request hash does not match canonical content")
+        return self
+
+
+class KnowledgeGraphPublicationResult(FrozenModel):
+    schema_version: Literal["knowledge-graph-publication-result/1.0"] = (
+        "knowledge-graph-publication-result/1.0"
+    )
+    publication_id: str = Field(pattern=r"^graphpub_[0-9a-f]{32}$")
+    corpus_id: str = Field(pattern=r"^corpus_[0-9a-f]{32}$")
+    corpus_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    corpus_revision_id: str = Field(pattern=r"^corpusrev_[0-9a-f]{32}$")
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    revision_number: int = Field(ge=1)
+    state: Literal["PUBLISHED"] = "PUBLISHED"
+    counts: KnowledgeGraphCounts
+    request_sha256: Sha256
+    published_at: UtcDatetime
+    result_sha256: Sha256
+
+    @model_validator(mode="after")
+    def immutable_result_is_hashed(self) -> KnowledgeGraphPublicationResult:
+        if self.graph_snapshot.manifest_sha256 != self.graph_snapshot.manifest_artifact.sha256:
+            raise ValueError("publication manifest pointer hash is inconsistent")
+        body = self.model_dump(mode="json", exclude={"result_sha256"})
+        if content_sha256(body) != self.result_sha256:
+            raise ValueError("graph publication result hash does not match canonical content")
+        return self
+
+
 class KnowledgeGraphSnapshotManifest(FrozenModel):
     schema_version: Literal["knowledge-graph-snapshot-manifest/1.0"] = (
         "knowledge-graph-snapshot-manifest/1.0"
@@ -760,6 +1069,58 @@ class KnowledgeGraphSnapshotManifest(FrozenModel):
         result_revisions = [result.artifact_revision_id for result in self.analysis_results]
         if len(source_revisions) != len(set(source_revisions)):
             raise ValueError("graph snapshot source revisions must be unique")
+        if len(result_revisions) != len(set(result_revisions)):
+            raise ValueError("graph snapshot analysis artifacts must be unique")
+        if self.counts.source_revisions != len(self.source_revisions):
+            raise ValueError("graph source count does not match pinned source revisions")
+        return self
+
+
+class KnowledgeGraphSnapshotManifestV2(FrozenModel):
+    """Snapshot manifest using the exact accepted knowledge-analysis V2 source family."""
+
+    schema_version: Literal["knowledge-graph-snapshot-manifest/2.0"] = (
+        "knowledge-graph-snapshot-manifest/2.0"
+    )
+    graph_id: str = Field(pattern=r"^graph_[0-9a-f]{32}$")
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    revision_number: int = Field(ge=1)
+    previous_graph_snapshot_revision_id: str | None = Field(
+        default=None, pattern=r"^graphrev_[0-9a-f]{32}$"
+    )
+    state: Literal["PUBLISHED"] = "PUBLISHED"
+    ontology_version: Literal["education-knowledge-graph/1.0"] = "education-knowledge-graph/1.0"
+    publisher_version: str = Field(pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+    source_revisions: tuple[KnowledgeAnalysisSourceV2, ...] = Field(min_length=1, max_length=10000)
+    analysis_results: tuple[KnowledgeArtifactMemberPointer, ...] = Field(
+        min_length=1, max_length=10000
+    )
+    projections: KnowledgeGraphProjections
+    counts: KnowledgeGraphCounts
+    snapshot_sha256: Sha256
+    created_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def exact_analysis_sources_are_unique(self) -> KnowledgeGraphSnapshotManifestV2:
+        if self.previous_graph_snapshot_revision_id == self.graph_snapshot_revision_id:
+            raise ValueError("graph snapshot cannot point to itself as its predecessor")
+        source_keys: list[tuple[str, str, str]] = []
+        for source in self.source_revisions:
+            source_identity = (
+                source.source_file_id
+                if isinstance(source, ContentIntakeKnowledgeSourceV2)
+                else source.item_revision_id
+            )
+            source_keys.append(
+                (
+                    source.source_kind,
+                    source_identity,
+                    source.artifact_member.artifact_revision_id,
+                )
+            )
+        result_revisions = [result.artifact_revision_id for result in self.analysis_results]
+        if len(source_keys) != len(set(source_keys)):
+            raise ValueError("graph snapshot V2 source revisions must be unique")
         if len(result_revisions) != len(set(result_revisions)):
             raise ValueError("graph snapshot analysis artifacts must be unique")
         if self.counts.source_revisions != len(self.source_revisions):

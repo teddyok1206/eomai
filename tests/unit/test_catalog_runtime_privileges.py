@@ -29,6 +29,24 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     assert "knowledge_analysis_risk_policy_revisions" not in INSERT_TABLES
     assert "knowledge_analysis_runs" in UPDATE_TABLES
     assert "jobs" in UPDATE_TABLES
+    for table in (
+        "knowledge_corpora",
+        "knowledge_corpus_revisions",
+        "knowledge_graph_snapshots",
+        "knowledge_graph_publications",
+        "knowledge_nodes",
+        "knowledge_edges",
+        "knowledge_node_source_pointers",
+        "knowledge_edge_source_pointers",
+        "knowledge_snapshot_analyses",
+        "curriculum_units",
+        "curriculum_unit_closure",
+        "item_element_refs",
+    ):
+        assert table in READ_TABLES
+        assert table in INSERT_TABLES
+    assert "knowledge_corpora" in UPDATE_TABLES
+    assert "knowledge_graph_snapshots" not in UPDATE_TABLES
     assert "api_sessions" not in READ_TABLES
     assert "api_tokens" not in READ_TABLES
     assert "operator_credentials" not in READ_TABLES

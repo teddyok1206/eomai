@@ -63,6 +63,15 @@ class FakeArtifacts:
             manifest_hash="sha256:" + "4" * 64,
             content_bytes=path.stat().st_size,
             nas_path="/TEST_ONLY/artifact",
+            manifest={
+                "primary_file": "assessment-item-content.json",
+                "files": [
+                    {
+                        "file_name": "assessment-item-content.json",
+                        "sha256": content_sha256(item_content()),
+                    }
+                ],
+            },
         )
 
 

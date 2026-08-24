@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 from eom_catalog_contracts import (
+    KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY,
     EducationRetrievalRequest,
     EvidenceBundleManifest,
     KnowledgeAnalysisProposalReceipt,
@@ -14,8 +15,14 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisResultV2,
     KnowledgeAnalysisReviewDecision,
     KnowledgeAnalysisWorkerProposal,
+    KnowledgeEdgeType,
+    KnowledgeGraphPublicationResult,
     KnowledgeGraphSnapshotManifest,
+    KnowledgeGraphSnapshotManifestV2,
+    KnowledgeGraphStructureManifest,
+    PublishKnowledgeGraphSnapshotCommand,
     validate_contract,
+    validate_knowledge_edge_endpoint_types,
 )
 from eom_identifiers import content_sha256
 from jsonschema import ValidationError
@@ -416,6 +423,14 @@ def _snapshot_manifest() -> dict[str, object]:
     }
 
 
+def _snapshot_manifest_v2() -> dict[str, object]:
+    value = _snapshot_manifest()
+    value["schema_version"] = "knowledge-graph-snapshot-manifest/2.0"
+    value["source_revisions"] = [_analysis_source_v2()]
+    value["analysis_results"] = [_artifact("5", member_path="evidence/accepted-result.json")]
+    return value
+
+
 def _retrieval_request() -> dict[str, object]:
     return {
         "schema_version": "education-retrieval-request/1.0",
@@ -482,6 +497,94 @@ def _evidence_manifest() -> dict[str, object]:
     }
 
 
+def _graph_publication_command() -> dict[str, object]:
+    value: dict[str, object] = {
+        "schema_version": "knowledge-graph-publication/1.0",
+        "corpus_key": "integrated-science",
+        "display_name": "Integrated Science",
+        "accepted_analysis_run_ids": ["analysisrun_" + "1" * 32],
+        "structure_manifest": None,
+        "expected_current_snapshot_revision_id": None,
+        "publisher_version": "0.1.0",
+        "published_by_operator_id": "operator_" + "2" * 32,
+        "idempotency_key": "graph-publication:test:0001",
+        "requested_at": NOW.isoformat().replace("+00:00", "Z"),
+        "request_sha256": "sha256:" + "0" * 64,
+    }
+    value["request_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "request_sha256"}
+    )
+    return value
+
+
+def _graph_structure_manifest() -> dict[str, object]:
+    value: dict[str, object] = {
+        "schema_version": "knowledge-graph-structure-manifest/1.0",
+        "structure_manifest_id": "graphstructure_" + "1" * 32,
+        "source_analysis_run_ids": ["analysisrun_" + "1" * 32],
+        "curriculum_units": [
+            {
+                "framework_revision_id": "curriculumrev_" + "1" * 32,
+                "curriculum_unit_id": "currunit_" + "1" * 32,
+                "node_stable_key": "curriculum.integrated-science",
+                "parent_unit_id": None,
+                "unit_level": "MAJOR",
+                "ordinal": 1,
+            },
+            {
+                "framework_revision_id": "curriculumrev_" + "1" * 32,
+                "curriculum_unit_id": "currunit_" + "2" * 32,
+                "node_stable_key": "curriculum.integrated-science.matter",
+                "parent_unit_id": "currunit_" + "1" * 32,
+                "unit_level": "MIDDLE",
+                "ordinal": 1,
+            },
+        ],
+        "item_elements": [
+            {
+                "node_stable_key": "item.example.table-1",
+                "item_id": "item_" + "1" * 32,
+                "item_revision_id": "itemrev_" + "1" * 32,
+                "item_content_artifact_id": "artifact_" + "1" * 32,
+                "item_content_artifact_revision_id": "rev_" + "1" * 32,
+                "item_content_sha256": "sha256:" + "1" * 64,
+                "schema_ref": "eom.assessment.item-content/1.0",
+                "element_kind": "table",
+                "element_id": "table-1",
+                "answer_bearing": False,
+            }
+        ],
+        "reviewed_by_operator_id": "operator_" + "2" * 32,
+        "created_at": NOW.isoformat().replace("+00:00", "Z"),
+        "manifest_sha256": "sha256:" + "0" * 64,
+    }
+    value["manifest_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "manifest_sha256"}
+    )
+    return value
+
+
+def _graph_publication_result() -> dict[str, object]:
+    value: dict[str, object] = {
+        "schema_version": "knowledge-graph-publication-result/1.0",
+        "publication_id": "graphpub_" + "1" * 32,
+        "corpus_id": "corpus_" + "1" * 32,
+        "corpus_key": "integrated-science",
+        "corpus_revision_id": "corpusrev_" + "1" * 32,
+        "graph_snapshot": _graph_pointer(),
+        "revision_number": 1,
+        "state": "PUBLISHED",
+        "counts": {"source_revisions": 1, "nodes": 2, "edges": 1, "anchors": 1},
+        "request_sha256": "sha256:" + "1" * 64,
+        "published_at": NOW.isoformat().replace("+00:00", "Z"),
+        "result_sha256": "sha256:" + "0" * 64,
+    }
+    value["result_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "result_sha256"}
+    )
+    return value
+
+
 @pytest.mark.parametrize(
     ("name", "value", "model"),
     [
@@ -491,6 +594,26 @@ def _evidence_manifest() -> dict[str, object]:
             "knowledge-graph-snapshot-manifest",
             _snapshot_manifest(),
             KnowledgeGraphSnapshotManifest,
+        ),
+        (
+            "knowledge-graph-publication",
+            _graph_publication_command(),
+            PublishKnowledgeGraphSnapshotCommand,
+        ),
+        (
+            "knowledge-graph-snapshot-manifest-v2",
+            _snapshot_manifest_v2(),
+            KnowledgeGraphSnapshotManifestV2,
+        ),
+        (
+            "knowledge-graph-structure-manifest",
+            _graph_structure_manifest(),
+            KnowledgeGraphStructureManifest,
+        ),
+        (
+            "knowledge-graph-publication-result",
+            _graph_publication_result(),
+            KnowledgeGraphPublicationResult,
         ),
         ("education-retrieval-request", _retrieval_request(), EducationRetrievalRequest),
         ("evidence-bundle-manifest", _evidence_manifest(), EvidenceBundleManifest),
@@ -568,6 +691,68 @@ def test_snapshot_requires_exact_unique_sources_and_counts() -> None:
     duplicate_counts["source_revisions"] = 2
     with pytest.raises(PydanticValidationError, match="source revisions must be unique"):
         KnowledgeGraphSnapshotManifest.model_validate(duplicate)
+
+
+def test_graph_publication_is_pointer_only_sorted_and_self_hashed() -> None:
+    value = _graph_publication_command()
+    validate_contract("knowledge-graph-publication", value)
+    command = PublishKnowledgeGraphSnapshotCommand.model_validate(value)
+    assert command.accepted_analysis_run_ids == ("analysisrun_" + "1" * 32,)
+
+    unsorted = _graph_publication_command()
+    unsorted["accepted_analysis_run_ids"] = [
+        "analysisrun_" + "2" * 32,
+        "analysisrun_" + "1" * 32,
+    ]
+    unsorted["request_sha256"] = content_sha256(
+        {key: item for key, item in unsorted.items() if key != "request_sha256"}
+    )
+    with pytest.raises(PydanticValidationError, match="must be sorted"):
+        PublishKnowledgeGraphSnapshotCommand.model_validate(unsorted)
+
+    changed = _graph_publication_command()
+    changed["display_name"] = "Changed"
+    with pytest.raises(PydanticValidationError, match="request hash"):
+        PublishKnowledgeGraphSnapshotCommand.model_validate(changed)
+
+
+def test_graph_structure_manifest_closes_hierarchy_elements_and_hash() -> None:
+    value = _graph_structure_manifest()
+    validate_contract("knowledge-graph-structure-manifest", value)
+    assert KnowledgeGraphStructureManifest.model_validate(value)
+
+    invalid_parent = _graph_structure_manifest()
+    units = invalid_parent["curriculum_units"]
+    assert isinstance(units, list)
+    units[1]["parent_unit_id"] = "currunit_" + "f" * 32
+    invalid_parent["manifest_sha256"] = content_sha256(
+        {key: item for key, item in invalid_parent.items() if key != "manifest_sha256"}
+    )
+    with pytest.raises(PydanticValidationError, match="parent pointer or level"):
+        KnowledgeGraphStructureManifest.model_validate(invalid_parent)
+
+    duplicate_element = _graph_structure_manifest()
+    elements = duplicate_element["item_elements"]
+    assert isinstance(elements, list)
+    elements.append(deepcopy(elements[0]))
+    duplicate_element["manifest_sha256"] = content_sha256(
+        {key: item for key, item in duplicate_element.items() if key != "manifest_sha256"}
+    )
+    with pytest.raises(PydanticValidationError, match="bindings and graph nodes"):
+        KnowledgeGraphStructureManifest.model_validate(duplicate_element)
+
+    stale_hash = _graph_structure_manifest()
+    stale_hash["reviewed_by_operator_id"] = "operator_" + "3" * 32
+    with pytest.raises(PydanticValidationError, match="manifest hash"):
+        KnowledgeGraphStructureManifest.model_validate(stale_hash)
+
+
+def test_graph_ontology_compatibility_is_closed_and_exhaustive() -> None:
+    assert set(KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY) == set(KnowledgeEdgeType)
+    assert all(KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.values())
+    validate_knowledge_edge_endpoint_types("EXPLAINS", "CLAIM", "CONCEPT")
+    with pytest.raises(ValueError, match="endpoint types are incompatible"):
+        validate_knowledge_edge_endpoint_types("HAS_ITEM_ELEMENT", "CONCEPT", "TABLE")
 
 
 def test_retrieval_is_typed_bounded_and_does_not_invent_phase_six_usage_contract() -> None:

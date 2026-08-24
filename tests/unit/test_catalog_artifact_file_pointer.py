@@ -24,6 +24,23 @@ class _Session:
         return self.revision
 
 
+class _ReadMemberSession:
+    def __init__(self, *, logical: object, revision: object) -> None:
+        self.logical = logical
+        self.revision = revision
+
+    def __enter__(self) -> _ReadMemberSession:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def get(self, model: object, _record_id: str) -> object:
+        if getattr(model, "__name__", "") == "ArtifactRecord":
+            return self.logical
+        return self.revision
+
+
 def _service(
     tmp_path: Path, *, target: Path
 ) -> tuple[CatalogArtifactService, dict[str, str], SimpleNamespace]:
@@ -56,6 +73,54 @@ def _materialized(tmp_path: Path) -> Path:
     target = root / "generated-stimulus.png"
     target.write_bytes(b"bounded-test-png")
     return target
+
+
+def _read_member_service(
+    tmp_path: Path,
+) -> tuple[CatalogArtifactService, dict[str, object], SimpleNamespace]:
+    root = tmp_path / "nas" / "artifact" / "revision"
+    nested = root / "proposals"
+    nested.mkdir(parents=True)
+    target = nested / "proposal.json"
+    payload = b'{"schema_version":"1.0"}'
+    target.write_bytes(payload)
+    digest = sha256_file(target)
+    pointer: dict[str, object] = {
+        "artifact_id": "artifact_" + "3" * 32,
+        "revision_id": "rev_" + "4" * 32,
+        "member_path": "proposals/proposal.json",
+        "sha256": digest,
+        "media_type": "application/json",
+        "schema_ref": "eom.knowledge.analysis-proposal/1.0",
+        "max_bytes": 1024,
+    }
+    logical = SimpleNamespace(
+        approved=True,
+        logical_artifact_id=pointer["artifact_id"],
+    )
+    revision = SimpleNamespace(
+        approved=True,
+        logical_artifact_id=pointer["artifact_id"],
+        nas_path=str(root),
+        manifest={
+            "files": [
+                {
+                    "file_name": pointer["member_path"],
+                    "sha256": digest,
+                    "media_type": pointer["media_type"],
+                    "schema_ref": pointer["schema_ref"],
+                    "bytes": len(payload),
+                }
+            ]
+        },
+    )
+    service = object.__new__(CatalogArtifactService)
+    service.settings = CatalogSettings(nas_artifact_root=tmp_path / "nas")
+    cast(Any, service).sessions = lambda: _ReadMemberSession(
+        logical=logical,
+        revision=revision,
+    )
+    return service, pointer, revision
 
 
 def test_exact_file_pointer_resolves_a_pinned_regular_member(tmp_path: Path) -> None:
@@ -101,3 +166,45 @@ def test_file_pointer_rejects_a_manifest_that_does_not_pin_the_primary_member(
     revision.manifest["primary_file"] = "another.png"
     with pytest.raises(ValueError, match="manifest"):
         service.verify_file_pointer(**pointer)
+
+
+def test_read_member_resolves_an_exact_nested_immutable_pointer(tmp_path: Path) -> None:
+    service, pointer, _ = _read_member_service(tmp_path)
+
+    assert service.read_member(**pointer) == b'{"schema_version":"1.0"}'
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("sha256", "sha256:" + "9" * 64),
+        ("media_type", "text/plain"),
+        ("schema_ref", "eom.knowledge.analysis-proposal/9.9"),
+        ("max_bytes", 1),
+    ],
+)
+def test_read_member_rejects_manifest_pointer_mismatch(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    service, pointer, _ = _read_member_service(tmp_path)
+    pointer[field] = value
+
+    with pytest.raises(ValueError, match="manifest"):
+        service.read_member(**pointer)
+
+
+def test_read_member_rejects_intermediate_symlink_escape(tmp_path: Path) -> None:
+    service, pointer, revision = _read_member_service(tmp_path)
+    root = Path(revision.nas_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = root / "proposals" / "proposal.json"
+    escaped = outside / "proposal.json"
+    target.replace(escaped)
+    (root / "proposals").rmdir()
+    (root / "proposals").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        service.read_member(**pointer)

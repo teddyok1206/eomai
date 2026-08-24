@@ -180,6 +180,36 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:daaf1dffca162018bead549399927e6429a7dac34775fb969c675207d9920f9a",
         ),
+        "knowledge-graph-publication": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-publication-v1.schema.json",
+            "resources/knowledge/knowledge-graph-publication-v1.schema.json",
+            "1.0",
+            "sha256:4594e9f479744d3ecf266d8e68367d5a207f82cc1001602864249bb9c471fd6d",
+        ),
+        "knowledge-graph-publication-result": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-publication-result-v1.schema.json",
+            "resources/knowledge/knowledge-graph-publication-result-v1.schema.json",
+            "1.0",
+            "sha256:c0d81175e94434888c84832e8edb64257370e998b7ebe41f5c382672638f657d",
+        ),
+        "knowledge-graph-projection": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-projection-v1.schema.json",
+            "resources/knowledge/knowledge-graph-projection-v1.schema.json",
+            "1.0",
+            "sha256:b3a78a44dab9cb3a5525e5e1bfe5bc195044221867c92df2a98b08b358701102",
+        ),
+        "knowledge-graph-structure-manifest": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-structure-manifest-v1.schema.json",
+            "resources/knowledge/knowledge-graph-structure-manifest-v1.schema.json",
+            "1.0",
+            "sha256:818ecc197f3d5fdcd24b18ec73c4de5a76ca6db85fb5f01672e7067a3dde4cf9",
+        ),
+        "knowledge-graph-snapshot-manifest-v2": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
+            "resources/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
+            "2.0",
+            "sha256:2fe24ad351ca7dcd10a9ba7909bf0fe0fe6fb2bf7715ca3dac02d1697cf60d09",
+        ),
         "education-retrieval-request": CatalogSchemaResource(
             "schemas/knowledge/education-retrieval-request-v1.schema.json",
             "resources/knowledge/education-retrieval-request-v1.schema.json",

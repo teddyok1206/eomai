@@ -18,6 +18,23 @@ from jsonschema import ValidationError
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 RESOURCE_ROOT = files("eom_catalog_contracts").joinpath("resources")
+PHASE8_SCHEMA_SHA256 = {
+    "knowledge-graph-projection": (
+        "sha256:b3a78a44dab9cb3a5525e5e1bfe5bc195044221867c92df2a98b08b358701102"
+    ),
+    "knowledge-graph-publication-result": (
+        "sha256:c0d81175e94434888c84832e8edb64257370e998b7ebe41f5c382672638f657d"
+    ),
+    "knowledge-graph-publication": (
+        "sha256:4594e9f479744d3ecf266d8e68367d5a207f82cc1001602864249bb9c471fd6d"
+    ),
+    "knowledge-graph-snapshot-manifest-v2": (
+        "sha256:2fe24ad351ca7dcd10a9ba7909bf0fe0fe6fb2bf7715ca3dac02d1697cf60d09"
+    ),
+    "knowledge-graph-structure-manifest": (
+        "sha256:818ecc197f3d5fdcd24b18ec73c4de5a76ca6db85fb5f01672e7067a3dde4cf9"
+    ),
+}
 
 
 def _prompt_envelope() -> dict[str, object]:
@@ -40,7 +57,7 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 27
+    assert len(entries) == 32
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     for name, entry in entries:
@@ -50,6 +67,11 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         assert raw == canonical.read_bytes(), name
         assert "sha256:" + hashlib.sha256(raw).hexdigest() == entry.sha256, name
         assert isinstance(load_schema(name), dict)
+
+
+def test_phase8_graph_contract_bytes_are_pinned_before_publication() -> None:
+    inventory = dict(catalog_schema_inventory())
+    assert {name: inventory[name].sha256 for name in PHASE8_SCHEMA_SHA256} == PHASE8_SCHEMA_SHA256
 
 
 def test_prompt_envelope_validates_and_invalid_fixture_is_rejected() -> None:

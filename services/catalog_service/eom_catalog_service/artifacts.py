@@ -17,7 +17,7 @@ from eom_identifiers import (
 )
 from eom_orchestrator.artifacts import commit_file_set_artifact, stage_file_set_artifact
 from eom_orchestrator.database import build_session_factory, transaction
-from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
+from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_orchestrator.repository import (
     create_artifact_records,
     ensure_protocol_version,
@@ -63,6 +63,7 @@ class CatalogArtifact:
     manifest_hash: str
     content_bytes: int
     nas_path: str
+    manifest: dict[str, Any]
 
 
 class CatalogArtifactService:
@@ -118,6 +119,7 @@ class CatalogArtifactService:
                     manifest_hash=revision.manifest_hash,
                     content_bytes=revision.content_bytes,
                     nas_path=revision.nas_path,
+                    manifest=revision.manifest,
                 )
 
         staging = self.settings.staging_root / job_id / "artifact"
@@ -173,7 +175,81 @@ class CatalogArtifactService:
             manifest_hash=staged.manifest_hash,
             content_bytes=staged.primary_bytes,
             nas_path=str(final),
+            manifest=staged.manifest,
         )
+
+    def read_member(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        sha256: str,
+        media_type: str,
+        schema_ref: str,
+        max_bytes: int,
+    ) -> bytes:
+        """Read one exact immutable member after full pointer and filesystem validation."""
+
+        relative = Path(member_path)
+        if (
+            relative.is_absolute()
+            or relative.as_posix() != member_path
+            or not relative.parts
+            or ".." in relative.parts
+            or max_bytes < 1
+        ):
+            raise ValueError("artifact member pointer is unsafe")
+        with self.sessions() as session:
+            logical = session.get(ArtifactRecord, artifact_id)
+            revision = session.get(ArtifactRevisionRecord, revision_id)
+            if (
+                logical is None
+                or revision is None
+                or not logical.approved
+                or not revision.approved
+                or revision.logical_artifact_id != artifact_id
+                or logical.logical_artifact_id != revision.logical_artifact_id
+            ):
+                raise ValueError("artifact member pointer does not resolve")
+            files = revision.manifest.get("files")
+            matching = (
+                [value for value in files if isinstance(value, dict)]
+                if isinstance(files, list)
+                else []
+            )
+            matching = [value for value in matching if value.get("file_name") == member_path]
+            if (
+                len(matching) != 1
+                or matching[0].get("sha256") != sha256
+                or matching[0].get("media_type") != media_type
+                or matching[0].get("schema_ref") != schema_ref
+                or not isinstance(matching[0].get("bytes"), int)
+                or matching[0]["bytes"] > max_bytes
+            ):
+                raise ValueError("artifact member manifest does not match pointer")
+            storage_root = self.settings.nas_artifact_root.resolve(strict=True)
+            raw_artifact_root = Path(revision.nas_path)
+            root_metadata = raw_artifact_root.lstat()
+            if raw_artifact_root.is_symlink() or not stat.S_ISDIR(root_metadata.st_mode):
+                raise ValueError("artifact root materialization is invalid")
+            artifact_root = raw_artifact_root.resolve(strict=True)
+            if not artifact_root.is_relative_to(storage_root):
+                raise ValueError("artifact member escaped storage root")
+            candidate = artifact_root / relative
+            target = candidate.resolve(strict=True)
+            if target != candidate or not target.is_relative_to(artifact_root):
+                raise ValueError("artifact member traverses a symbolic link")
+            metadata = target.lstat()
+            if (
+                target.is_symlink()
+                or not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_size != matching[0]["bytes"]
+                or metadata.st_size > max_bytes
+                or sha256_file(target) != sha256
+            ):
+                raise ValueError("artifact member materialization is invalid")
+            return target.read_bytes()
 
     def load_json_revision(
         self,

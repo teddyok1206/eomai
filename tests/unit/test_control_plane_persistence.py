@@ -6,6 +6,7 @@ from pathlib import Path
 import eom_hwpx_manager.models  # noqa: F401
 import eom_workflow_runner.models  # noqa: F401
 import pytest
+from eom_catalog_service import knowledge_graph_models  # noqa: F401
 from eom_identifiers import content_sha256
 from eom_orchestrator import control_models  # noqa: F401
 from eom_orchestrator.control_models import HELD_LEASE_PREDICATE
@@ -124,7 +125,7 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260824_0012"
+    assert CURRENT_MIGRATION_REVISION == "20260824_0013"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -156,6 +157,44 @@ def test_knowledge_analysis_rbac_migration_is_additive_and_exact() -> None:
         "knowledge_analysis:review",
     ):
         assert permission in source
+
+
+def test_education_graph_migration_is_additive_indexed_and_pointer_oriented() -> None:
+    source = Path(
+        "migrations/versions/20260824_0013_add_immutable_education_graph_snapshots.py"
+    ).read_text(encoding="utf-8")
+    assert 'down_revision: str | Sequence[str] | None = "20260824_0012"' in source
+    assert "UPDATE item_revisions" not in source
+    assert "DELETE FROM" not in source
+    for table_name in (
+        "knowledge_corpora",
+        "knowledge_corpus_revisions",
+        "knowledge_graph_snapshots",
+        "knowledge_nodes",
+        "knowledge_edges",
+        "knowledge_node_source_pointers",
+        "knowledge_edge_source_pointers",
+        "curriculum_unit_closure",
+        "item_element_refs",
+    ):
+        assert f'"{table_name}"' in source
+    for index_name in (
+        "ix_knowledge_edge_outbound",
+        "ix_knowledge_edge_inbound",
+        "ix_curriculum_closure_descendants",
+        "ix_curriculum_closure_ancestors",
+        "ix_item_element_revision_kind",
+        "ix_item_element_reverse",
+    ):
+        assert index_name in source
+
+    graph_tables = {name for name in Base.metadata.tables if name.startswith("knowledge_")}
+    assert "knowledge_graph_snapshots" in graph_tables
+    for table_name in graph_tables | {"curriculum_unit_closure", "item_element_refs"}:
+        table = Base.metadata.tables[table_name]
+        assert all(not isinstance(column.type, LargeBinary) for column in table.columns)
+    snapshot = Base.metadata.tables["knowledge_graph_snapshots"]
+    assert not snapshot.c.snapshot_sha256.unique
 
 
 def test_existing_hwpx_partial_index_remains_in_composed_metadata() -> None:

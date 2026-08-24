@@ -55,6 +55,23 @@ def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
         assert table in READ_TABLES
         assert table not in INSERT_TABLES
         assert table not in UPDATE_TABLES
+    for table in (
+        "knowledge_corpora",
+        "knowledge_corpus_revisions",
+        "knowledge_graph_snapshots",
+        "knowledge_graph_publications",
+        "knowledge_nodes",
+        "knowledge_edges",
+        "knowledge_node_source_pointers",
+        "knowledge_edge_source_pointers",
+        "knowledge_snapshot_analyses",
+        "curriculum_units",
+        "curriculum_unit_closure",
+        "item_element_refs",
+    ):
+        assert table in READ_TABLES
+        assert table not in INSERT_TABLES
+        assert table not in UPDATE_TABLES
     assert {privilege for privilege, _tables in TABLE_PRIVILEGES} == {
         "SELECT",
         "INSERT",
