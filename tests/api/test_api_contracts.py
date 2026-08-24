@@ -10,6 +10,7 @@ from eom_api_contracts.knowledge_analysis import (
     CreateKnowledgeAnalysisRequest,
     KnowledgeAnalysisReviewRequest,
 )
+from eom_api_contracts.knowledge_retrieval import CreateEvidenceBundleRequest
 from eom_api_contracts.operators import CreateOperatorRequest
 from eom_api_contracts.workflows import WorkflowStartRequest
 from jsonschema import Draft202012Validator
@@ -189,3 +190,30 @@ def test_knowledge_analysis_review_rejects_unsafe_or_empty_notes() -> None:
     for notes in ("", "unsafe\x00note"):
         with pytest.raises(ValidationError):
             KnowledgeAnalysisReviewRequest(decision="REJECT", notes=notes)
+
+
+def test_evidence_bundle_request_is_bounded_sorted_and_pointer_only() -> None:
+    request = CreateEvidenceBundleRequest.model_validate(
+        {
+            "graph_snapshot_revision_id": "graphrev_" + "1" * 32,
+            "query_kind": "ITEM_PREPARATION",
+            "curriculum_scope": None,
+            "topic_keys": ["earth.plate-boundary"],
+            "target_item_revision_id": None,
+            "required_item_elements": [],
+            "source_classes": ["TEXTBOOK"],
+            "evidence_budget": {
+                "max_documents": 4,
+                "max_item_revisions": 0,
+                "max_graph_nodes": 32,
+                "max_claims": 8,
+                "max_context_tokens": 4000,
+            },
+            "access_policy_revision_id": "accessrev_" + "2" * 32,
+        }
+    )
+    assert request.topic_keys == ("earth.plate-boundary",)
+    with pytest.raises(ValidationError, match="sorted and unique"):
+        CreateEvidenceBundleRequest.model_validate(
+            request.model_dump(mode="json") | {"source_classes": ["TEXTBOOK", "CURRICULUM"]}
+        )

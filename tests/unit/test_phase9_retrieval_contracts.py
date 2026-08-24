@@ -20,6 +20,7 @@ NOW = "2026-08-24T00:00:00Z"
 SHA_A = "sha256:" + "a" * 64
 SHA_B = "sha256:" + "b" * 64
 SHA_C = "sha256:" + "c" * 64
+SHA_D = "sha256:" + "d" * 64
 
 
 def _artifact_member(
@@ -216,7 +217,7 @@ def test_phase9_resolved_request_policy_manifest_and_result_validate() -> None:
             member_path="evidence/manifest.json",
             schema_ref="eom://schemas/knowledge/evidence-bundle-manifest/2.0",
             media_type="application/json",
-            sha256=manifest.manifest_sha256,
+            sha256=SHA_D,
         ),
         "manifest_sha256": manifest.manifest_sha256,
         "budget": manifest.budget.model_dump(mode="json"),

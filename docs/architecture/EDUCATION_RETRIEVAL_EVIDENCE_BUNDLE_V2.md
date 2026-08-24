@@ -12,11 +12,17 @@ Operator, derives the effective permission set, and submits a typed command over
 Catalog Unix socket. Workers never query PostgreSQL, traverse the graph, read NAS, or choose an
 access policy.
 
-The first implementation supports only the three closed query kinds accepted in Phase 0:
+The first implementation supports the two Phase 0 graph-grounding query families plus the bounded
+item-preparation composition used by Phase 10:
 
 - `CURRICULUM_COMPONENTS`;
 - `APPROVED_ITEM_STRUCTURE`;
 - `ITEM_PREPARATION`.
+
+Phase 0 Q3 (`PRODUCT_USAGE_HISTORY`) remains intentionally unavailable until Phase 11 establishes
+the canonical Product/Form/Assembly/Publication/Usage ledger and its legacy mapping contract. It
+will be introduced additively under a new immutable request/schema identity; V2 is never widened or
+reinterpreted in place.
 
 It does not accept arbitrary Cypher, SQL, graph paths, embedding prompts, or filesystem paths.
 
@@ -93,6 +99,9 @@ silently widens the query.
 The context Artifact contains one generated `evidence/context.md`. The manifest Artifact contains
 the V2 manifest and points to that exact context member. Job-local materialization in Phase 10
 copies only the validated bounded context member; it does not expose NAS paths or graph access.
+`manifest_sha256` is the manifest's canonical self-hash with that field omitted; the manifest
+Artifact member pointer separately carries the SHA-256 of the complete serialized bytes. Those
+hashes are intentionally distinct and both are verified when the pointer is resolved.
 
 ## 6. Answer-bearing and rights policy
 
@@ -137,4 +146,3 @@ Scanning projection JSONL for every request was rejected because it repeats pars
 `O(n)` lookups. Copying source Markdown into PostgreSQL was rejected as canonical duplication. An
 external graph database or embedding service was rejected because the three accepted query classes
 fit indexed PostgreSQL adjacency/closure and there is no measured benefit yet.
-

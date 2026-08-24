@@ -20,6 +20,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -261,6 +262,282 @@ class KnowledgeNodeRecord(Base):
     stable_key: Mapped[str] = mapped_column(String(192), nullable=False)
     label: Mapped[str] = mapped_column(Text, nullable=False)
     answer_bearing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class KnowledgeNodeTermRecord(Base):
+    """Immutable snapshot-local lexical lookup cache derived from node labels and stable keys."""
+
+    __tablename__ = "knowledge_node_terms"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["graph_snapshot_revision_id", "node_id"],
+            ["knowledge_nodes.graph_snapshot_revision_id", "knowledge_nodes.node_id"],
+            ondelete="CASCADE",
+        ),
+        Index(
+            "ix_knowledge_node_term_lookup",
+            "graph_snapshot_revision_id",
+            "term",
+            "node_id",
+        ),
+        Index(
+            "ix_knowledge_node_term_reverse",
+            "graph_snapshot_revision_id",
+            "node_id",
+            "term",
+        ),
+    )
+
+    graph_snapshot_revision_id: Mapped[str] = mapped_column(String(41), primary_key=True)
+    term: Mapped[str] = mapped_column(String(128), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(72), primary_key=True)
+
+
+class EducationRetrievalAccessPolicyRevisionRecord(Base):
+    __tablename__ = "education_retrieval_access_policy_revisions"
+    __table_args__ = (
+        CheckConstraint("state = 'RELEASED'", name="ck_education_retrieval_policy_state"),
+        CheckConstraint(
+            "content_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_education_retrieval_policy_hash",
+        ),
+    )
+
+    access_policy_revision_id: Mapped[str] = mapped_column(String(42), primary_key=True)
+    schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(71), nullable=False, unique=True)
+    canonical_document: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class EducationRetrievalRequestRecord(Base):
+    __tablename__ = "education_retrieval_requests"
+    __table_args__ = (
+        CheckConstraint("state = 'PUBLISHED'", name="ck_education_retrieval_request_state"),
+        CheckConstraint(
+            "submission_sha256 ~ '^sha256:[0-9a-f]{64}$' "
+            "AND request_sha256 ~ '^sha256:[0-9a-f]{64}$' "
+            "AND requester_permissions_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_education_retrieval_request_hashes",
+        ),
+        CheckConstraint(
+            "query_kind IN ('CURRICULUM_COMPONENTS','APPROVED_ITEM_STRUCTURE','ITEM_PREPARATION')",
+            name="ck_education_retrieval_query_kind",
+        ),
+        CheckConstraint(
+            "requester_role IN ('ADMIN','EDITOR','REVIEWER','WORKER')",
+            name="ck_education_retrieval_requester_role",
+        ),
+        Index(
+            "ix_education_retrieval_snapshot_created",
+            "graph_snapshot_revision_id",
+            text("requested_at DESC"),
+        ),
+    )
+
+    retrieval_request_id: Mapped[str] = mapped_column(String(42), primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    submission_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    request_sha256: Mapped[str] = mapped_column(String(71), nullable=False, unique=True)
+    canonical_request: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    graph_snapshot_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_graph_snapshots.graph_snapshot_revision_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    access_policy_revision_id: Mapped[str] = mapped_column(
+        ForeignKey(
+            "education_retrieval_access_policy_revisions.access_policy_revision_id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+    query_kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    requester_role: Mapped[str] = mapped_column(String(16), nullable=False)
+    requester_operator_id: Mapped[str] = mapped_column(
+        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+    )
+    requester_permissions_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class EvidenceBundleRecord(Base):
+    __tablename__ = "evidence_bundles"
+
+    evidence_bundle_id: Mapped[str] = mapped_column(String(41), primary_key=True)
+    retrieval_request_id: Mapped[str] = mapped_column(
+        ForeignKey("education_retrieval_requests.retrieval_request_id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
+    current_revision_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "evidence_bundle_revisions.evidence_bundle_revision_id",
+            name="fk_evidence_bundle_current_revision",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
+        nullable=True,
+    )
+    created_by_operator_id: Mapped[str] = mapped_column(
+        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class EvidenceBundleRevisionRecord(Base):
+    __tablename__ = "evidence_bundle_revisions"
+    __table_args__ = (
+        CheckConstraint("revision_number >= 1", name="ck_evidence_bundle_revision_number"),
+        CheckConstraint("state = 'PUBLISHED'", name="ck_evidence_bundle_revision_state"),
+        CheckConstraint(
+            "context_sha256 ~ '^sha256:[0-9a-f]{64}$' "
+            "AND manifest_sha256 ~ '^sha256:[0-9a-f]{64}$' "
+            "AND requester_permissions_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_evidence_bundle_revision_hashes",
+        ),
+        CheckConstraint(
+            "document_count >= 0 AND item_revision_count >= 0 "
+            "AND graph_node_count >= 1 AND claim_count >= 0 "
+            "AND estimated_context_tokens >= 1",
+            name="ck_evidence_bundle_revision_counts",
+        ),
+        UniqueConstraint(
+            "evidence_bundle_id", "revision_number", name="uq_evidence_bundle_revision"
+        ),
+        UniqueConstraint("retrieval_request_id", name="uq_evidence_bundle_request"),
+        Index("ix_evidence_bundle_snapshot", "graph_snapshot_revision_id", "created_at"),
+    )
+
+    evidence_bundle_revision_id: Mapped[str] = mapped_column(String(44), primary_key=True)
+    evidence_bundle_id: Mapped[str] = mapped_column(
+        ForeignKey("evidence_bundles.evidence_bundle_id", ondelete="RESTRICT"), nullable=False
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    retrieval_request_id: Mapped[str] = mapped_column(
+        ForeignKey("education_retrieval_requests.retrieval_request_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    graph_snapshot_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_graph_snapshots.graph_snapshot_revision_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    access_policy_revision_id: Mapped[str] = mapped_column(
+        ForeignKey(
+            "education_retrieval_access_policy_revisions.access_policy_revision_id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+    requester_permissions_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    context_artifact_id: Mapped[str] = mapped_column(
+        ForeignKey("artifacts.logical_artifact_id", ondelete="RESTRICT"), nullable=False
+    )
+    context_artifact_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_revisions.revision_id", ondelete="RESTRICT"), nullable=False
+    )
+    context_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    manifest_artifact_id: Mapped[str] = mapped_column(
+        ForeignKey("artifacts.logical_artifact_id", ondelete="RESTRICT"), nullable=False
+    )
+    manifest_artifact_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_revisions.revision_id", ondelete="RESTRICT"), nullable=False
+    )
+    manifest_sha256: Mapped[str] = mapped_column(String(71), nullable=False, unique=True)
+    document_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    item_revision_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    graph_node_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    claim_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    estimated_context_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_by_operator_id: Mapped[str] = mapped_column(
+        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class EvidenceBundleEntryRecord(Base):
+    __tablename__ = "evidence_bundle_entries"
+    __table_args__ = (
+        CheckConstraint(
+            "evidence_kind IN ('DOCUMENT','ITEM_REVISION','CLAIM','TABLE','FIGURE','EQUATION')",
+            name="ck_evidence_bundle_entry_kind",
+        ),
+        CheckConstraint(
+            "evidence_use IN ('GROUNDING','REFERENCE_PATTERN','AVOID_COPY')",
+            name="ck_evidence_bundle_entry_use",
+        ),
+        CheckConstraint(
+            "source_kind IN ('CONTENT_INTAKE_FILE','APPROVED_ITEM_REVISION')",
+            name="ck_evidence_bundle_entry_source_kind",
+        ),
+        CheckConstraint(
+            "relevance_milli >= 0 AND relevance_milli <= 1000",
+            name="ck_evidence_bundle_entry_relevance",
+        ),
+        CheckConstraint(
+            "source_sha256 ~ '^sha256:[0-9a-f]{64}$' AND source_bytes >= 1",
+            name="ck_evidence_bundle_entry_source_metadata",
+        ),
+        CheckConstraint(
+            "(source_kind = 'CONTENT_INTAKE_FILE' AND intake_batch_id IS NOT NULL "
+            "AND source_file_id IS NOT NULL AND item_id IS NULL AND item_revision_id IS NULL) "
+            "OR (source_kind = 'APPROVED_ITEM_REVISION' AND intake_batch_id IS NULL "
+            "AND source_file_id IS NULL AND item_id IS NOT NULL AND item_revision_id IS NOT NULL)",
+            name="ck_evidence_bundle_entry_source_family",
+        ),
+        CheckConstraint(
+            "cardinality(graph_node_ids) >= 1 AND cardinality(graph_node_ids) <= 16 "
+            "AND cardinality(anchor_ids) >= 1 AND cardinality(anchor_ids) <= 32",
+            name="ck_evidence_bundle_entry_pointer_counts",
+        ),
+        UniqueConstraint(
+            "evidence_bundle_revision_id",
+            "source_artifact_revision_id",
+            "source_member_path",
+            "evidence_use",
+            name="uq_evidence_bundle_entry_source_use",
+        ),
+        Index(
+            "ix_evidence_bundle_entry_source",
+            "source_kind",
+            "source_artifact_revision_id",
+        ),
+        Index("ix_evidence_bundle_entry_nodes", "graph_node_ids", postgresql_using="gin"),
+        Index("ix_evidence_bundle_entry_anchors", "anchor_ids", postgresql_using="gin"),
+    )
+
+    evidence_bundle_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("evidence_bundle_revisions.evidence_bundle_revision_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    evidence_id: Mapped[str] = mapped_column(String(45), primary_key=True)
+    evidence_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    evidence_use: Mapped[str] = mapped_column(String(24), nullable=False)
+    source_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_class: Mapped[str] = mapped_column(String(32), nullable=False)
+    intake_batch_id: Mapped[str | None] = mapped_column(String(39), nullable=True)
+    source_file_id: Mapped[str | None] = mapped_column(String(43), nullable=True)
+    item_id: Mapped[str | None] = mapped_column(String(37), nullable=True)
+    item_revision_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    source_artifact_id: Mapped[str] = mapped_column(
+        ForeignKey("artifacts.logical_artifact_id", ondelete="RESTRICT"), nullable=False
+    )
+    source_artifact_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_revisions.revision_id", ondelete="RESTRICT"), nullable=False
+    )
+    source_member_path: Mapped[str] = mapped_column(Text, nullable=False)
+    source_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    source_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    source_schema_ref: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    source_media_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_logical_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    graph_node_ids: Mapped[list[str]] = mapped_column(ARRAY(String(72)), nullable=False)
+    anchor_ids: Mapped[list[str]] = mapped_column(ARRAY(String(71)), nullable=False)
+    relevance_milli: Mapped[int] = mapped_column(Integer, nullable=False)
+    answer_bearing: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
 
 class KnowledgeEdgeRecord(Base):

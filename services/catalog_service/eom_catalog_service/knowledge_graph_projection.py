@@ -22,6 +22,20 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 _LEXICAL_TOKEN = re.compile(r"[0-9A-Za-z가-힣]+")
 
 
+def knowledge_node_terms(stable_key: str, label: str) -> tuple[str, ...]:
+    """Return the deterministic bounded lexical keys stored with one immutable node."""
+
+    return tuple(
+        sorted(
+            {
+                token
+                for token in _LEXICAL_TOKEN.findall(f"{stable_key} {label}".casefold())
+                if 2 <= len(token) <= 128
+            }
+        )
+    )
+
+
 class KnowledgeGraphProjectionError(ValueError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -414,9 +428,8 @@ def serialize_education_graph_projection(
     closure_documents = [item.document() for item in projection.curriculum_closure]
     lexical: dict[str, set[str]] = {}
     for node in projection.nodes:
-        for token in _LEXICAL_TOKEN.findall(f"{node.stable_key} {node.label}".casefold()):
-            if len(token) >= 2:
-                lexical.setdefault(token, set()).add(node.node_id)
+        for token in knowledge_node_terms(node.stable_key, node.label):
+            lexical.setdefault(token, set()).add(node.node_id)
     lexical_document = {
         "schema_version": "knowledge-graph-lexical-index/1.0",
         "entries": [

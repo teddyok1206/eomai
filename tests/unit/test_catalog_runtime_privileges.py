@@ -35,6 +35,7 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
         "knowledge_graph_snapshots",
         "knowledge_graph_publications",
         "knowledge_nodes",
+        "knowledge_node_terms",
         "knowledge_edges",
         "knowledge_node_source_pointers",
         "knowledge_edge_source_pointers",
@@ -46,6 +47,18 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
         assert table in READ_TABLES
         assert table in INSERT_TABLES
     assert "knowledge_corpora" in UPDATE_TABLES
+    for table in (
+        "education_retrieval_requests",
+        "evidence_bundles",
+        "evidence_bundle_revisions",
+        "evidence_bundle_entries",
+    ):
+        assert table in READ_TABLES
+        assert table in INSERT_TABLES
+    assert "education_retrieval_access_policy_revisions" in READ_TABLES
+    assert "education_retrieval_access_policy_revisions" not in INSERT_TABLES
+    assert "evidence_bundles" in UPDATE_TABLES
+    assert "evidence_bundle_revisions" not in UPDATE_TABLES
     assert "knowledge_graph_snapshots" not in UPDATE_TABLES
     assert "api_sessions" not in READ_TABLES
     assert "api_tokens" not in READ_TABLES

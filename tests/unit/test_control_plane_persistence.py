@@ -125,7 +125,7 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260824_0013"
+    assert CURRENT_MIGRATION_REVISION == "20260824_0014"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -203,6 +203,41 @@ def test_existing_hwpx_partial_index_remains_in_composed_metadata() -> None:
     requested = indexes["ix_hwpx_application_builds_requested_fifo"]
     assert not requested.unique
     assert str(requested.dialect_options["postgresql"]["where"]) == "state = 'REQUESTED'"
+
+
+def test_evidence_retrieval_migration_is_additive_indexed_and_pointer_oriented() -> None:
+    source = Path("migrations/versions/20260824_0014_evidence_bundle_retrieval.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'down_revision: str | Sequence[str] | None = "20260824_0013"' in source
+    assert "UPDATE item_revisions" not in source
+    assert "DELETE FROM evidence_" not in source
+    for table_name in (
+        "knowledge_node_terms",
+        "education_retrieval_access_policy_revisions",
+        "education_retrieval_requests",
+        "evidence_bundles",
+        "evidence_bundle_revisions",
+        "evidence_bundle_entries",
+    ):
+        assert f'"{table_name}"' in source
+        table = Base.metadata.tables[table_name]
+        assert all(not isinstance(column.type, LargeBinary) for column in table.columns)
+    for index_name in (
+        "ix_knowledge_node_term_lookup",
+        "ix_education_retrieval_snapshot_created",
+        "ix_evidence_bundle_entry_nodes",
+        "ix_evidence_bundle_entry_anchors",
+    ):
+        assert index_name in source
+    assert "accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9" in source
+    assert "sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0" in source
+    request_table = Base.metadata.tables["education_retrieval_requests"]
+    assert request_table.c.idempotency_key.unique
+    entries = Base.metadata.tables["evidence_bundle_entries"]
+    assert not {"payload", "bytes", "content", "markdown", "nas_path"}.intersection(
+        entries.columns.keys()
+    )
 
 
 def test_workflow_command_claim_index_includes_delayed_availability() -> None:

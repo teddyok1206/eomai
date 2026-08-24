@@ -30,6 +30,13 @@ from eom_api_contracts.knowledge_analysis import (
     KnowledgeAnalysisRunView,
     KnowledgeAnalysisSourceInput,
 )
+from eom_api_contracts.knowledge_retrieval import (
+    CreateEvidenceBundleRequest,
+    CurriculumRetrievalScopeInput,
+    EvidenceBudgetInput,
+    EvidenceBundleBudgetView,
+    EvidenceBundleView,
+)
 
 __all__ = [
     "ApiModel",
@@ -37,8 +44,13 @@ __all__ = [
     "ArtifactPointer",
     "CommandResult",
     "ContentIntakeAnalysisSourceInput",
+    "CreateEvidenceBundleRequest",
     "CreateHwpxBuildRequest",
     "CreateKnowledgeAnalysisRequest",
+    "CurriculumRetrievalScopeInput",
+    "EvidenceBudgetInput",
+    "EvidenceBundleBudgetView",
+    "EvidenceBundleView",
     "HwpxBuildOptions",
     "HwpxBuildState",
     "HwpxBuildView",

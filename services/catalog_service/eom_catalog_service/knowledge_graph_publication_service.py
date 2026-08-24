@@ -54,6 +54,7 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeGraphSnapshotRecord,
     KnowledgeNodeRecord,
     KnowledgeNodeSourcePointerRecord,
+    KnowledgeNodeTermRecord,
     KnowledgeSnapshotAnalysisRecord,
 )
 from eom_catalog_service.knowledge_graph_projection import (
@@ -62,6 +63,7 @@ from eom_catalog_service.knowledge_graph_projection import (
     EducationGraphProjectionFiles,
     KnowledgeGraphProjectionError,
     build_education_graph_projection,
+    knowledge_node_terms,
     serialize_education_graph_projection,
 )
 from eom_catalog_service.models import (
@@ -944,6 +946,14 @@ class KnowledgeGraphPublicationService:
                         answer_bearing=node.answer_bearing,
                     )
                 )
+                for term in knowledge_node_terms(node.stable_key, node.label):
+                    session.add(
+                        KnowledgeNodeTermRecord(
+                            graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+                            term=term,
+                            node_id=node.node_id,
+                        )
+                    )
                 for pointer in node.source_pointers:
                     session.add(
                         KnowledgeNodeSourcePointerRecord(

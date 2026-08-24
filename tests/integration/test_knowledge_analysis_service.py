@@ -9,6 +9,7 @@ from uuid import uuid4
 import eom_identity_service.models  # noqa: F401
 import pytest
 from eom_catalog_contracts import (
+    CreateEvidenceBundleCommand,
     CreateKnowledgeAnalysisCommand,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisSourceV2,
@@ -24,14 +25,23 @@ from eom_catalog_service.knowledge_analysis_service import (
     KnowledgeAnalysisServiceError,
 )
 from eom_catalog_service.knowledge_graph_models import (
+    EducationRetrievalRequestRecord,
+    EvidenceBundleEntryRecord,
+    EvidenceBundleRecord,
+    EvidenceBundleRevisionRecord,
     KnowledgeCorpusRecord,
     KnowledgeGraphSnapshotRecord,
     KnowledgeNodeRecord,
+    KnowledgeNodeTermRecord,
     KnowledgeSnapshotAnalysisRecord,
 )
 from eom_catalog_service.knowledge_graph_publication_service import (
     KnowledgeGraphPublicationError,
     KnowledgeGraphPublicationService,
+)
+from eom_catalog_service.knowledge_retrieval_service import (
+    KnowledgeRetrievalApplicationService,
+    KnowledgeRetrievalServiceError,
 )
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
@@ -111,6 +121,15 @@ def _settings(tmp_path: Path) -> tuple[Settings, CatalogSettings]:
 def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
     sessions = build_session_factory(engine)
     with transaction(sessions) as session:
+        # Keep this integration fixture self-contained.  The two control-plane
+        # presets below pin different immutable workflow protocol revisions;
+        # neither bootstrap may depend on another test having registered them.
+        for protocol_version in ("workflow-role/1.3.0", "workflow-role/1.4.0"):
+            ensure_protocol_version(
+                session,
+                protocol_version,
+                role_schema_bundle_hash(protocol_version),
+            )
         if session.get(OperatorRecord, OPERATOR_ID) is None:
             session.add(
                 OperatorRecord(
@@ -754,7 +773,81 @@ def test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently(
     assert published.counts.edges == 0
     assert graph_service.publish(command) == published
 
+    retrieval_value: dict[str, object] = {
+        "operation": "CREATE_EVIDENCE_BUNDLE",
+        "graph_snapshot_revision_id": published.graph_snapshot.graph_snapshot_revision_id,
+        "query_kind": "ITEM_PREPARATION",
+        "curriculum_scope": None,
+        "topic_keys": ["earth.plate-boundary"],
+        "target_item_revision_id": None,
+        "required_item_elements": [],
+        "source_classes": ["TEXTBOOK"],
+        "evidence_budget": {
+            "max_documents": 2,
+            "max_item_revisions": 0,
+            "max_graph_nodes": 8,
+            "max_claims": 2,
+            "max_context_tokens": 2000,
+        },
+        "access_policy_revision_id": "accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9",
+        "requester_role": "ADMIN",
+        "requester_permission_keys": ["knowledge_graph:read", "knowledge_graph:retrieve"],
+        "requested_by": OPERATOR_ID,
+        "idempotency_key": f"phase9-retrieval:{uuid4().hex}",
+        "submission_sha256": "sha256:" + "0" * 64,
+    }
+    retrieval_value["submission_sha256"] = content_sha256(
+        {
+            key: item
+            for key, item in retrieval_value.items()
+            if key not in {"idempotency_key", "submission_sha256"}
+        }
+    )
+    retrieval_command = CreateEvidenceBundleCommand.model_validate(retrieval_value)
+    retrieval_service = KnowledgeRetrievalApplicationService(integration_engine, catalog_settings)
+    evidence = retrieval_service.create(retrieval_command)
+    assert evidence.state == "PUBLISHED"
+    assert evidence.budget.document_count == 1
+    assert evidence.budget.item_revision_count == 0
+    assert evidence.budget.graph_node_count == 1
+    assert retrieval_service.create(retrieval_command) == evidence
+
     sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        artifact_revision_count_before_miss = session.scalar(
+            select(func.count()).select_from(ArtifactRevisionRecord)
+        )
+    miss_value = {
+        **retrieval_value,
+        "topic_keys": ["unknown.missing-topic"],
+        "idempotency_key": f"phase9-retrieval-miss:{uuid4().hex}",
+    }
+    miss_value["submission_sha256"] = content_sha256(
+        {
+            key: item
+            for key, item in miss_value.items()
+            if key not in {"idempotency_key", "submission_sha256"}
+        }
+    )
+    with pytest.raises(KnowledgeRetrievalServiceError) as miss_info:
+        retrieval_service.create(CreateEvidenceBundleCommand.model_validate(miss_value))
+    assert miss_info.value.code == "KNOWLEDGE_RETRIEVAL_INSUFFICIENT_EVIDENCE"
+    with sessions() as session:
+        assert (
+            session.scalar(select(func.count()).select_from(ArtifactRevisionRecord))
+            == artifact_revision_count_before_miss
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(EducationRetrievalRequestRecord)
+                .where(
+                    EducationRetrievalRequestRecord.idempotency_key == miss_value["idempotency_key"]
+                )
+            )
+            == 0
+        )
+
     with sessions() as session:
         corpus = session.get(KnowledgeCorpusRecord, published.corpus_id)
         snapshot = session.get(
@@ -771,6 +864,34 @@ def test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently(
                 .where(
                     KnowledgeNodeRecord.graph_snapshot_revision_id
                     == snapshot.graph_snapshot_revision_id
+                )
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(KnowledgeNodeTermRecord)
+                .where(
+                    KnowledgeNodeTermRecord.graph_snapshot_revision_id
+                    == snapshot.graph_snapshot_revision_id
+                )
+            )
+            == 3
+        )
+        request_record = session.get(EducationRetrievalRequestRecord, evidence.retrieval_request_id)
+        bundle = session.get(EvidenceBundleRecord, evidence.evidence_bundle_id)
+        revision = session.get(EvidenceBundleRevisionRecord, evidence.evidence_bundle_revision_id)
+        assert request_record is not None and bundle is not None and revision is not None
+        assert bundle.current_revision_id == revision.evidence_bundle_revision_id
+        assert revision.manifest_sha256 == evidence.manifest_sha256
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(EvidenceBundleEntryRecord)
+                .where(
+                    EvidenceBundleEntryRecord.evidence_bundle_revision_id
+                    == revision.evidence_bundle_revision_id
                 )
             )
             == 1

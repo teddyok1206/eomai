@@ -73,6 +73,7 @@ def test_admin_only_operations_are_explicit() -> None:
         "execution_preset_release",
         "execution_preset_deprecate",
     }.issubset(admin_operations)
+    assert {"knowledge_retrieval_create", "evidence_bundle_get"}.issubset(admin_operations)
     assert {
         "knowledge_analysis_list",
         "knowledge_analysis_create",

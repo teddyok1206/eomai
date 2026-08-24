@@ -71,6 +71,9 @@ class PermissionKey(StrEnum):
     KNOWLEDGE_ANALYSIS_READ = "knowledge_analysis:read"
     KNOWLEDGE_ANALYSIS_CREATE = "knowledge_analysis:create"
     KNOWLEDGE_ANALYSIS_REVIEW = "knowledge_analysis:review"
+    KNOWLEDGE_GRAPH_READ = "knowledge_graph:read"
+    KNOWLEDGE_GRAPH_RETRIEVE = "knowledge_graph:retrieve"
+    KNOWLEDGE_GRAPH_PUBLISH = "knowledge_graph:publish"
 
 
 VIEWER_PERMISSIONS = frozenset(

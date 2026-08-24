@@ -68,6 +68,11 @@ def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
         "curriculum_units",
         "curriculum_unit_closure",
         "item_element_refs",
+        "education_retrieval_access_policy_revisions",
+        "education_retrieval_requests",
+        "evidence_bundles",
+        "evidence_bundle_revisions",
+        "evidence_bundle_entries",
     ):
         assert table in READ_TABLES
         assert table not in INSERT_TABLES

@@ -12,6 +12,7 @@ from eom_orchestrator.database import build_engine
 from eom_catalog_service.application_server import CatalogApplicationServer
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
+from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.runtime_privileges import catalog_runtime_privileges_ready
 
@@ -38,6 +39,7 @@ def serve() -> int:
             StructuredItemContentImportService(engine),
             RegistryService(engine),
             KnowledgeAnalysisApplicationService(engine),
+            KnowledgeRetrievalApplicationService(engine),
         )
         thread = threading.Thread(
             target=server.serve_forever,

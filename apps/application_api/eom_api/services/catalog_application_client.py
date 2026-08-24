@@ -18,7 +18,9 @@ from eom_catalog_contracts import (
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CreateEvidenceBundleCommand,
     CreateKnowledgeAnalysisCommand,
+    EvidenceBundlePublicationResult,
     ItemContentQuery,
     KnowledgeAnalysisApplicationResult,
     ReconcileKnowledgeAnalysisCommand,
@@ -90,6 +92,17 @@ class CatalogApplicationClient:
     ) -> KnowledgeAnalysisApplicationResult:
         return self._analysis_request(command)
 
+    def create_evidence_bundle(
+        self, command: CreateEvidenceBundleCommand
+    ) -> EvidenceBundlePublicationResult:
+        response = self._request(command)
+        if response.operation != command.operation or response.evidence is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog Evidence Bundle response is invalid",
+            )
+        return response.evidence
+
     def _analysis_request(
         self,
         command: CreateKnowledgeAnalysisCommand
@@ -110,10 +123,11 @@ class CatalogApplicationClient:
         | ItemContentQuery
         | CreateKnowledgeAnalysisCommand
         | ReconcileKnowledgeAnalysisCommand
-        | ReviewKnowledgeAnalysisCommand,
+        | ReviewKnowledgeAnalysisCommand
+        | CreateEvidenceBundleCommand,
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
-        validate_contract("catalog-application-request-v2", payload)
+        validate_contract("catalog-application-request-v3", payload)
         self._validate_socket()
         connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
@@ -133,7 +147,7 @@ class CatalogApplicationClient:
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError
-            validate_contract("catalog-application-response-v2", value)
+            validate_contract("catalog-application-response-v3", value)
             response = CatalogApplicationResponse.model_validate(value)
         except CatalogApplicationClientError:
             raise
@@ -215,6 +229,11 @@ class CatalogApplicationClient:
                     raise CatalogApplicationClientError(
                         error_code,
                         "Catalog knowledge analysis operation failed",
+                    ) from None
+                if error_code.startswith("KNOWLEDGE_RETRIEVAL_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog knowledge retrieval operation failed",
                     ) from None
                 raise CatalogApplicationClientError(
                     CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,

@@ -1474,7 +1474,6 @@ class EvidenceBundlePublicationResult(FrozenModel):
             or self.manifest_artifact.media_type != "application/json"
             or self.manifest_artifact.schema_ref
             != "eom://schemas/knowledge/evidence-bundle-manifest/2.0"
-            or self.manifest_artifact.sha256 != self.manifest_sha256
         ):
             raise ValueError("Evidence Bundle manifest Artifact pointer is incompatible")
         body = self.model_dump(mode="json", exclude={"result_sha256"})

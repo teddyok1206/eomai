@@ -15,12 +15,15 @@ from eom_catalog_contracts import (
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CreateEvidenceBundleCommand,
     CreateKnowledgeAnalysisCommand,
+    EvidenceBundlePublicationResult,
     KnowledgeAnalysisApplicationResult,
     ReviewedItemContentImportCommand,
     validate_contract,
 )
 from eom_catalog_service.application_server import CatalogApplicationServer
+from eom_identifiers import content_sha256
 
 from tests.unit.test_assessment_item_content import item_content
 
@@ -55,6 +58,93 @@ class FakeKnowledgeAnalysis:
     review = create
 
 
+class FakeKnowledgeRetrieval:
+    def create(self, command: object) -> EvidenceBundlePublicationResult:
+        assert isinstance(command, CreateEvidenceBundleCommand)
+        value = {
+            "schema_version": "evidence-bundle-publication-result/1.0",
+            "evidence_bundle_id": "evidence_" + "1" * 32,
+            "evidence_bundle_revision_id": "evidencerev_" + "2" * 32,
+            "revision_number": 1,
+            "state": "PUBLISHED",
+            "retrieval_request_id": "retrieval_" + "3" * 32,
+            "retrieval_request_sha256": "sha256:" + "4" * 64,
+            "graph_snapshot": {
+                "graph_id": "graph_" + "5" * 32,
+                "graph_snapshot_revision_id": command.graph_snapshot_revision_id,
+                "manifest_artifact": {
+                    "artifact_id": "artifact_" + "6" * 32,
+                    "artifact_revision_id": "rev_" + "7" * 32,
+                    "sha256": "sha256:" + "8" * 64,
+                    "schema_ref": ("eom://schemas/knowledge/knowledge-graph-snapshot-manifest/2.0"),
+                    "media_type": "application/json",
+                    "logical_name": "manifest.json",
+                    "member_path": "projections/manifest.json",
+                },
+                "manifest_sha256": "sha256:" + "8" * 64,
+            },
+            "access_policy_revision_id": command.access_policy_revision_id,
+            "access_policy_sha256": "sha256:" + "9" * 64,
+            "manifest_artifact": {
+                "artifact_id": "artifact_" + "a" * 32,
+                "artifact_revision_id": "rev_" + "b" * 32,
+                "sha256": "sha256:" + "c" * 64,
+                "schema_ref": "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+                "media_type": "application/json",
+                "logical_name": "manifest.json",
+                "member_path": "evidence/manifest.json",
+            },
+            "manifest_sha256": "sha256:" + "d" * 64,
+            "budget": {
+                "document_count": 1,
+                "item_revision_count": 0,
+                "graph_node_count": 1,
+                "claim_count": 0,
+                "estimated_context_tokens": 128,
+            },
+            "published_at": "2026-08-24T00:00:00Z",
+            "result_sha256": "sha256:" + "0" * 64,
+        }
+        value["result_sha256"] = content_sha256(
+            {key: item for key, item in value.items() if key != "result_sha256"}
+        )
+        return EvidenceBundlePublicationResult.model_validate(value)
+
+
+def _retrieval_command() -> CreateEvidenceBundleCommand:
+    value = {
+        "operation": "CREATE_EVIDENCE_BUNDLE",
+        "graph_snapshot_revision_id": "graphrev_" + "e" * 32,
+        "query_kind": "ITEM_PREPARATION",
+        "curriculum_scope": None,
+        "topic_keys": ["earth.plate-boundary"],
+        "target_item_revision_id": None,
+        "required_item_elements": [],
+        "source_classes": ["TEXTBOOK"],
+        "evidence_budget": {
+            "max_documents": 2,
+            "max_item_revisions": 0,
+            "max_graph_nodes": 8,
+            "max_claims": 2,
+            "max_context_tokens": 2000,
+        },
+        "access_policy_revision_id": "accessrev_" + "f" * 32,
+        "requester_role": "ADMIN",
+        "requester_permission_keys": ["knowledge_graph:read", "knowledge_graph:retrieve"],
+        "requested_by": "operator_" + "1" * 32,
+        "idempotency_key": "knowledge-retrieval-round-trip",
+        "submission_sha256": "sha256:" + "0" * 64,
+    }
+    value["submission_sha256"] = content_sha256(
+        {
+            key: item
+            for key, item in value.items()
+            if key not in {"idempotency_key", "submission_sha256"}
+        }
+    )
+    return CreateEvidenceBundleCommand.model_validate(value)
+
+
 def _server(tmp_path: Path, *, allowed_uid: int | None = None) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -63,6 +153,7 @@ def _server(tmp_path: Path, *, allowed_uid: int | None = None) -> CatalogApplica
         FakeImports(),
         FakeRegistry(),
         FakeKnowledgeAnalysis(),
+        FakeKnowledgeRetrieval(),
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid() if allowed_uid is None else allowed_uid,
         expected_uid=os.getuid(),
@@ -117,6 +208,16 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-application-response-v2", analysis_response)
 
+    retrieval_command = _retrieval_command()
+    retrieval_request = CatalogApplicationRequest(root=retrieval_command).model_dump(mode="json")
+    validate_contract("catalog-application-request-v3", retrieval_request)
+    retrieval_response = CatalogApplicationResponse(
+        status="OK",
+        operation="CREATE_EVIDENCE_BUNDLE",
+        evidence=FakeKnowledgeRetrieval().create(retrieval_command),
+    ).model_dump(mode="json", exclude_none=True)
+    validate_contract("catalog-application-response-v3", retrieval_response)
+
 
 def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
     tmp_path: Path,
@@ -154,6 +255,9 @@ def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
             )
         )
         assert analysis.analysis_run_id == "analysisrun_" + "7" * 32
+        evidence = client.create_evidence_bundle(_retrieval_command())
+        assert evidence.evidence_bundle_revision_id == "evidencerev_" + "2" * 32
+        assert evidence.graph_snapshot.graph_snapshot_revision_id == "graphrev_" + "e" * 32
     finally:
         server.shutdown()
         server.server_close()

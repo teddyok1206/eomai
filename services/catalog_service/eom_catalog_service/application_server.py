@@ -21,6 +21,7 @@ from eom_catalog_contracts import (
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CreateEvidenceBundleCommand,
     CreateKnowledgeAnalysisCommand,
     ItemContentQuery,
     ReconcileKnowledgeAnalysisCommand,
@@ -38,6 +39,10 @@ from eom_catalog_service.item_content_import import StructuredItemContentImportS
 from eom_catalog_service.knowledge_analysis_service import (
     KnowledgeAnalysisApplicationService,
     KnowledgeAnalysisServiceError,
+)
+from eom_catalog_service.knowledge_retrieval_service import (
+    KnowledgeRetrievalApplicationService,
+    KnowledgeRetrievalServiceError,
 )
 from eom_catalog_service.registry_service import RegistryService
 
@@ -78,9 +83,10 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 "CREATE_KNOWLEDGE_ANALYSIS",
                 "RECONCILE_KNOWLEDGE_ANALYSIS",
                 "REVIEW_KNOWLEDGE_ANALYSIS",
+                "CREATE_EVIDENCE_BUNDLE",
             }:
                 operation = raw_operation
-            validate_contract("catalog-application-request-v2", value)
+            validate_contract("catalog-application-request-v3", value)
             request = CatalogApplicationRequest.model_validate(value).root
         except (
             UnicodeError,
@@ -140,9 +146,20 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     operation=request.operation,
                     analysis=self.server.knowledge_analysis.review(request),
                 )
+            elif isinstance(request, CreateEvidenceBundleCommand):
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    evidence=self.server.knowledge_retrieval.create(request),
+                )
             else:  # pragma: no cover - discriminated contract makes this unreachable
                 raise TypeError("unsupported catalog application request")
-        except (CatalogError, RegistryError, KnowledgeAnalysisServiceError) as exc:
+        except (
+            CatalogError,
+            RegistryError,
+            KnowledgeAnalysisServiceError,
+            KnowledgeRetrievalServiceError,
+        ) as exc:
             code = getattr(exc.code, "value", str(exc.code))
             self.server.write_error(self.wfile, request.operation, code)
             return
@@ -164,6 +181,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         imports: StructuredItemContentImportService,
         registry: RegistryService,
         knowledge_analysis: KnowledgeAnalysisApplicationService,
+        knowledge_retrieval: KnowledgeRetrievalApplicationService,
         *,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
@@ -173,6 +191,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.imports = imports
         self.registry = registry
         self.knowledge_analysis = knowledge_analysis
+        self.knowledge_retrieval = knowledge_retrieval
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
         self.expected_uid = os.geteuid() if expected_uid is None else expected_uid
@@ -224,7 +243,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
     @staticmethod
     def write_response(stream: Any, response: CatalogApplicationResponse) -> None:
         payload = response.model_dump(mode="json", exclude_none=True)
-        validate_contract("catalog-application-response-v2", payload)
+        validate_contract("catalog-application-response-v3", payload)
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         raw = encoded.encode("utf-8")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:

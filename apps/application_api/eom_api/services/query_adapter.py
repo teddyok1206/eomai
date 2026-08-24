@@ -33,8 +33,17 @@ from eom_api_contracts.knowledge_analysis import (
     KnowledgeAnalysisCountsView,
     KnowledgeAnalysisRunView,
 )
+from eom_api_contracts.knowledge_retrieval import (
+    EvidenceBundleBudgetView,
+    EvidenceBundleView,
+)
 from eom_api_contracts.usage import UsagePlanView, UsageRecordView
 from eom_api_contracts.workflows import WorkflowStepView, WorkflowView
+from eom_catalog_service.knowledge_graph_models import (
+    EducationRetrievalRequestRecord,
+    EvidenceBundleRecord,
+    EvidenceBundleRevisionRecord,
+)
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
     ContentIntakeEventRecord,
@@ -61,6 +70,7 @@ from eom_orchestrator.knowledge_analysis_models import (
     KnowledgeAnalysisEventRecord,
     KnowledgeAnalysisRunRecord,
 )
+from eom_orchestrator.models import ArtifactRevisionRecord
 from eom_workflow_runner.models import (
     WorkflowEventRecord,
     WorkflowInstanceRecord,
@@ -195,6 +205,70 @@ class QueryAdapter:
                     row.created_at,
                 )
                 for row in rows
+            )
+
+    def evidence_bundle(self, evidence_bundle_id: str) -> EvidenceBundleView:
+        with self.sessions() as session:
+            bundle = session.get(EvidenceBundleRecord, evidence_bundle_id)
+            if bundle is None or bundle.current_revision_id is None:
+                self._not_found("EVIDENCE_BUNDLE_NOT_FOUND")
+            revision = session.get(EvidenceBundleRevisionRecord, bundle.current_revision_id)
+            request = (
+                session.get(EducationRetrievalRequestRecord, revision.retrieval_request_id)
+                if revision is not None
+                else None
+            )
+            manifest_artifact = (
+                session.get(ArtifactRevisionRecord, revision.manifest_artifact_revision_id)
+                if revision is not None
+                else None
+            )
+            context_artifact = (
+                session.get(ArtifactRevisionRecord, revision.context_artifact_revision_id)
+                if revision is not None
+                else None
+            )
+            if (
+                revision is None
+                or request is None
+                or manifest_artifact is None
+                or context_artifact is None
+                or revision.evidence_bundle_id != bundle.evidence_bundle_id
+                or revision.retrieval_request_id != bundle.retrieval_request_id
+                or request.retrieval_request_id != bundle.retrieval_request_id
+                or not manifest_artifact.approved
+                or manifest_artifact.logical_artifact_id != revision.manifest_artifact_id
+                or not context_artifact.approved
+                or context_artifact.logical_artifact_id != revision.context_artifact_id
+                or context_artifact.content_hash != revision.context_sha256
+            ):
+                self._not_found("EVIDENCE_BUNDLE_POINTER_INVALID")
+            return EvidenceBundleView(
+                evidence_bundle_id=bundle.evidence_bundle_id,
+                evidence_bundle_revision_id=revision.evidence_bundle_revision_id,
+                revision_number=revision.revision_number,
+                state=revision.state,  # type: ignore[arg-type]
+                retrieval_request_id=request.retrieval_request_id,
+                retrieval_request_sha256=request.request_sha256,
+                graph_snapshot_revision_id=revision.graph_snapshot_revision_id,
+                access_policy_revision_id=revision.access_policy_revision_id,
+                requester_permissions_sha256=revision.requester_permissions_sha256,
+                context_artifact_id=revision.context_artifact_id,
+                context_artifact_revision_id=revision.context_artifact_revision_id,
+                context_sha256=revision.context_sha256,
+                manifest_artifact_id=revision.manifest_artifact_id,
+                manifest_artifact_revision_id=revision.manifest_artifact_revision_id,
+                manifest_artifact_sha256=manifest_artifact.content_hash,
+                manifest_sha256=revision.manifest_sha256,
+                budget=EvidenceBundleBudgetView(
+                    document_count=revision.document_count,
+                    item_revision_count=revision.item_revision_count,
+                    graph_node_count=revision.graph_node_count,
+                    claim_count=revision.claim_count,
+                    estimated_context_tokens=revision.estimated_context_tokens,
+                ),
+                created_by_operator_id=revision.created_by_operator_id,
+                created_at=revision.created_at,
             )
 
     def list_intakes(
