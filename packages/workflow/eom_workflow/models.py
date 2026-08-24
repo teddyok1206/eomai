@@ -12,6 +12,8 @@ from eom_catalog_contracts import (
     EquationBlock,
     ItemScore,
     ItemSolution,
+    KnowledgeAnalysisRequestV2,
+    KnowledgeAnalysisWorkerProposal,
     ParagraphBlock,
     SingleChoiceInteraction,
     StatementSetBlock,
@@ -70,7 +72,7 @@ class WorkflowLimits(FrozenModel):
 class AgentStep(FrozenModel):
     key: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
     type: Literal["agent"]
-    worker_role: Literal["authoring", "image", "review", "item_management"]
+    worker_role: Literal["authoring", "image", "review", "item_management", "support"]
     result_schema: str = Field(pattern=r"^[a-z][a-z-]+-result@[0-9]+\.[0-9]+$")
     on_success: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
 
@@ -119,6 +121,11 @@ class WorkerRequest(FrozenModel):
         "GENERATED_KNOWLEDGE_ITEM_REQUEST",
     ]
     image_mode: Literal["skip", "required"]
+
+
+class KnowledgeAnalysisWorkerRequest(FrozenModel):
+    request_name: Literal["KNOWLEDGE_ANALYSIS_REQUEST"] = "KNOWLEDGE_ANALYSIS_REQUEST"
+    analysis_request: KnowledgeAnalysisRequestV2
 
 
 class ItemBrief(FrozenModel):
@@ -175,6 +182,7 @@ class WorkflowRequest(FrozenModel):
         "PLACEHOLDER_REQUEST",
         "KNOWLEDGE_ITEM_REQUEST",
         "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+        "KNOWLEDGE_ANALYSIS_REQUEST",
     ]
     image_mode: Literal["skip", "required"]
     content_pack: ContentPackSelection | None = None
@@ -184,6 +192,7 @@ class WorkflowRequest(FrozenModel):
     item_brief: ItemBrief | None = None
     stimulus_asset: StimulusAssetSelection | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    analysis_request: KnowledgeAnalysisRequestV2 | None = None
 
     @model_validator(mode="after")
     def validate_catalog_request(self) -> WorkflowRequest:
@@ -217,7 +226,29 @@ class WorkflowRequest(FrozenModel):
                 raise ValueError(
                     "generated knowledge workflow requires source-free pack, brief, and image role"
                 )
+        elif self.request_name == "KNOWLEDGE_ANALYSIS_REQUEST":
+            if (
+                self.analysis_request is None
+                or self.image_mode != "skip"
+                or any(
+                    value is not None
+                    for value in (
+                        self.content_pack,
+                        self.profiles,
+                        self.source_intake,
+                        self.registry_intent,
+                        self.item_brief,
+                        self.stimulus_asset,
+                        self.execution_preset_key,
+                    )
+                )
+            ):
+                raise ValueError(
+                    "knowledge analysis requires one pinned V2 request and no item fields"
+                )
         else:
+            if self.analysis_request is not None:
+                raise ValueError("non-analysis workflow cannot include an analysis request")
             if self.item_brief is not None or self.stimulus_asset is not None:
                 raise ValueError("placeholder workflow cannot include a knowledge item brief")
             if self.content_pack is not None and (
@@ -226,7 +257,11 @@ class WorkflowRequest(FrozenModel):
                 raise ValueError("placeholder Content Pack requires source Intake evidence")
         return self
 
-    def worker_request(self) -> WorkerRequest:
+    def worker_request(self) -> WorkerRequest | KnowledgeAnalysisWorkerRequest:
+        if self.analysis_request is not None:
+            return KnowledgeAnalysisWorkerRequest(analysis_request=self.analysis_request)
+        if self.request_name == "KNOWLEDGE_ANALYSIS_REQUEST":
+            raise ValueError("knowledge analysis worker request is missing its pinned request")
         return WorkerRequest(request_name=self.request_name, image_mode=self.image_mode)
 
 
@@ -254,23 +289,28 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.1.0",
         "workflow-role/1.2.0",
         "workflow-role/1.3.0",
+        "workflow-role/1.4.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
     step_run_id: StepRunId
     attempt: int = Field(ge=1, le=10)
-    role: Literal["authoring", "image", "review", "item_management"]
-    request: WorkerRequest
+    role: Literal["authoring", "image", "review", "item_management", "support"]
+    request: WorkerRequest | KnowledgeAnalysisWorkerRequest
     upstream_artifacts: tuple[ArtifactPointer, ...]
     artifact: ArtifactSpec
 
     @field_validator("request", mode="before")
     @classmethod
-    def normalize_worker_request(cls, value: object) -> WorkerRequest:
+    def normalize_worker_request(
+        cls, value: object
+    ) -> WorkerRequest | KnowledgeAnalysisWorkerRequest:
         if isinstance(value, BaseModel):
             value = value.model_dump(mode="json")
         if not isinstance(value, dict):
             raise ValueError("worker request must be an object")
+        if value.get("request_name") == "KNOWLEDGE_ANALYSIS_REQUEST":
+            return KnowledgeAnalysisWorkerRequest.model_validate(value)
         return WorkerRequest.model_validate(
             {"request_name": value.get("request_name"), "image_mode": value.get("image_mode")}
         )
@@ -325,6 +365,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.1.0",
         "workflow-role/1.2.0",
         "workflow-role/1.3.0",
+        "workflow-role/1.4.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -576,6 +617,16 @@ class GeneratedRegistrationRoleResultV4(RoleResultBase):
     output: KnowledgeRegistrationOutput
 
 
+class KnowledgeAnalysisProposalOutput(FrozenModel):
+    proposal: KnowledgeAnalysisWorkerProposal
+
+
+class KnowledgeAnalysisProposalRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.4.0"] = "workflow-role/1.4.0"
+    role: Literal["support"] = "support"
+    output: KnowledgeAnalysisProposalOutput
+
+
 RoleResult = (
     AuthoringRoleResult
     | ImageRoleResult
@@ -593,4 +644,5 @@ RoleResult = (
     | GeneratedImageRoleResultV4
     | GeneratedReviewRoleResultV4
     | GeneratedRegistrationRoleResultV4
+    | KnowledgeAnalysisProposalRoleResult
 )

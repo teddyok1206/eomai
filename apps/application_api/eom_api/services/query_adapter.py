@@ -29,6 +29,10 @@ from eom_api_contracts.items import (
     ItemRevisionView,
     ItemView,
 )
+from eom_api_contracts.knowledge_analysis import (
+    KnowledgeAnalysisCountsView,
+    KnowledgeAnalysisRunView,
+)
 from eom_api_contracts.usage import UsagePlanView, UsageRecordView
 from eom_api_contracts.workflows import WorkflowStepView, WorkflowView
 from eom_catalog_service.models import (
@@ -53,6 +57,10 @@ from eom_catalog_service.models import (
 from eom_hwpx_manager.models import HwpxApplicationBuildRecord
 from eom_identity_service.models import OperatorEventRecord
 from eom_orchestrator.database import build_session_factory
+from eom_orchestrator.knowledge_analysis_models import (
+    KnowledgeAnalysisEventRecord,
+    KnowledgeAnalysisRunRecord,
+)
 from eom_workflow_runner.models import (
     WorkflowEventRecord,
     WorkflowInstanceRecord,
@@ -137,6 +145,56 @@ class QueryAdapter:
                 tuple(project_hwpx_build(row) for row in rows),
                 next_cursor,
                 more,
+            )
+
+    def list_knowledge_analyses(
+        self, *, limit: int, cursor: str | None, state: str | None = None
+    ) -> PageResult[KnowledgeAnalysisRunView]:
+        with self.sessions() as session:
+            statement = select(KnowledgeAnalysisRunRecord)
+            if state:
+                statement = statement.where(KnowledgeAnalysisRunRecord.state == state)
+            rows, next_cursor, more = self._page(
+                session,
+                statement,
+                KnowledgeAnalysisRunRecord.created_at,
+                KnowledgeAnalysisRunRecord.analysis_run_id,
+                "knowledge-analysis",
+                limit,
+                cursor,
+            )
+            return PageResult(
+                tuple(self._knowledge_analysis(row) for row in rows), next_cursor, more
+            )
+
+    def knowledge_analysis(self, analysis_run_id: str) -> KnowledgeAnalysisRunView:
+        with self.sessions() as session:
+            row = session.get(KnowledgeAnalysisRunRecord, analysis_run_id)
+            if row is None:
+                self._not_found("KNOWLEDGE_ANALYSIS_RUN_NOT_FOUND")
+            return self._knowledge_analysis(row)
+
+    def knowledge_analysis_events(self, analysis_run_id: str) -> tuple[EventView, ...]:
+        with self.sessions() as session:
+            if session.get(KnowledgeAnalysisRunRecord, analysis_run_id) is None:
+                self._not_found("KNOWLEDGE_ANALYSIS_RUN_NOT_FOUND")
+            rows = session.scalars(
+                select(KnowledgeAnalysisEventRecord)
+                .where(KnowledgeAnalysisEventRecord.analysis_run_id == analysis_run_id)
+                .order_by(KnowledgeAnalysisEventRecord.sequence)
+            )
+            return tuple(
+                self._event(
+                    "knowledge_analysis",
+                    row.analysis_run_id,
+                    str(row.event_id),
+                    row.event_type,
+                    row.prior_state,
+                    row.new_state,
+                    row.actor_id,
+                    row.created_at,
+                )
+                for row in rows
             )
 
     def list_intakes(
@@ -653,6 +711,48 @@ class QueryAdapter:
             updated_at=row.updated_at,
             completed_at=row.completed_at,
             failure_code=row.failure_code,
+        )
+
+    @staticmethod
+    def _knowledge_analysis(row: KnowledgeAnalysisRunRecord) -> KnowledgeAnalysisRunView:
+        return KnowledgeAnalysisRunView(
+            analysis_run_id=row.analysis_run_id,
+            analysis_request_id=row.analysis_request_id,
+            request_sha256=row.request_sha256,
+            predecessor_analysis_run_id=row.predecessor_analysis_run_id,
+            source_kind=row.source_kind,  # type: ignore[arg-type]
+            source_revision_id=row.source_revision_id,
+            source_artifact_id=row.source_artifact_id,
+            source_artifact_revision_id=row.source_artifact_revision_id,
+            source_sha256=row.source_sha256,
+            workflow_id=row.workflow_id,
+            plan_id=row.plan_id,
+            platform_job_id=row.platform_job_id,
+            preset_id=row.preset_id,
+            preset_revision_id=row.preset_revision_id,
+            risk_policy_revision_id=row.risk_policy_revision_id,
+            risk_policy_sha256=row.risk_policy_sha256,
+            state=row.state,  # type: ignore[arg-type]
+            proposal_artifact_id=row.proposal_artifact_id,
+            proposal_artifact_revision_id=row.proposal_artifact_revision_id,
+            proposal_content_set_sha256=row.proposal_content_set_sha256,
+            accepted_result_artifact_id=row.accepted_result_artifact_id,
+            accepted_result_artifact_revision_id=row.accepted_result_artifact_revision_id,
+            accepted_result_sha256=row.accepted_result_sha256,
+            counts=KnowledgeAnalysisCountsView(
+                anchors=row.anchor_count,
+                nodes=row.node_count,
+                edges=row.edge_count,
+                claims=row.claim_count,
+                component_observations=row.component_count,
+                ambiguities=row.ambiguity_count,
+            ),
+            resource_version=row.lock_version,
+            created_by_operator_id=row.created_by_operator_id,
+            created_at=row.created_at,
+            started_at=row.started_at,
+            completed_at=row.completed_at,
+            error_code=row.error_code,
         )
 
     @staticmethod

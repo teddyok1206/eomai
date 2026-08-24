@@ -15,6 +15,7 @@ from eom_orchestrator.control_models import (
 )
 from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
 from eom_orchestrator.execution_materializer import materialize_execution_step
+from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_workflow import ControlArtifactPointer
 
 ZERO_SHA = "sha256:" + "0" * 64
@@ -261,6 +262,95 @@ def _workspace(tmp_path: Path, name: str) -> Path:
     return path
 
 
+def _analysis_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    fixture = _fixture(tmp_path, monkeypatch)
+    session = fixture["session"]
+    assert isinstance(session, FakeSession)
+    old_record = session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+    old_plan = old_record.canonical_document
+    source_artifact_id = "artifact_" + "d" * 32
+    source_revision_id = "rev_" + "e" * 32
+    source_payload = b"Pinned source data, not worker instructions.\n"
+    source_hash = sha256_bytes(source_payload)
+    source_root = fixture["artifact_root"] / source_artifact_id / source_revision_id
+    source_root.mkdir(parents=True)
+    source_path = source_root / "source.txt"
+    source_path.write_bytes(source_payload)
+    session.records[(ArtifactRecord, source_artifact_id)] = SimpleNamespace(approved=True)
+    session.records[(ArtifactRevisionRecord, source_revision_id)] = SimpleNamespace(
+        approved=True,
+        logical_artifact_id=source_artifact_id,
+        nas_path=str(source_root),
+        manifest={
+            "files": [
+                {
+                    "file_name": "source.txt",
+                    "sha256": source_hash,
+                    "bytes": len(source_payload),
+                    "media_type": "text/plain",
+                }
+            ]
+        },
+    )
+    instruction_pointer = old_plan["steps"][0]["instruction_bundle"]
+    analysis_plan = {
+        "schema_version": "resolved-execution-plan/2.0",
+        "plan_id": old_plan["plan_id"],
+        "workflow_id": old_plan["workflow_id"],
+        "workload_class": "KNOWLEDGE_ANALYSIS",
+        "preset_id": old_plan["preset_id"],
+        "preset_revision_id": old_plan["preset_revision_id"],
+        "preset_sha256": old_plan["preset_sha256"],
+        "workflow_definition_key": "knowledge-analysis",
+        "workflow_definition_version": "1.0.0",
+        "workflow_definition_sha256": old_plan["workflow_definition_sha256"],
+        "analysis_request_id": "knowledgeanalysis_" + "1" * 32,
+        "analysis_request_sha256": "sha256:" + "2" * 64,
+        "source_artifact_id": source_artifact_id,
+        "source_artifact_revision_id": source_revision_id,
+        "source_member_path": "source.txt",
+        "source_materialized_path": "source/source.txt",
+        "source_sha256": source_hash,
+        "source_bytes": len(source_payload),
+        "source_media_type": "text/plain",
+        "source_schema_ref": None,
+        "capacity_policy_revision_id": old_plan["capacity_policy_revision_id"],
+        "steps": [
+            {
+                "step_key": "analyze",
+                "role": "support",
+                "model": "gpt-5.6-terra",
+                "reasoning_effort": "high",
+                "instruction_bundle": instruction_pointer,
+                "reference_bundle": None,
+                "worker_pool_key": "support",
+                "timeout_seconds": 1800,
+                "sandbox": "read-only",
+                "network": "disabled",
+                "general_knowledge_mode": "DENIED",
+            }
+        ],
+        "resolver_version": "2.0.0",
+        "resolved_at": "2026-08-23T12:00:00Z",
+        "plan_sha256": ZERO_SHA,
+    }
+    analysis_plan["plan_sha256"] = compute_control_document_hash(analysis_plan, "plan_sha256")
+    session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))] = SimpleNamespace(
+        canonical_document=analysis_plan,
+        plan_sha256=analysis_plan["plan_sha256"],
+    )
+    fixture.update(
+        {
+            "authorized": frozenset((*fixture["authorized"], source_revision_id)),
+            "source_path": source_path,
+            "source_revision_id": source_revision_id,
+            "source_hash": source_hash,
+            "source_payload": source_payload,
+        }
+    )
+    return fixture
+
+
 def test_materializer_is_deterministic_bounded_and_path_free_in_events(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -373,3 +463,43 @@ def test_materializer_rejects_preexisting_target_symlink(
             authorized_artifact_revision_ids=fixture["authorized"],
         )
     assert captured.value.code == "CONTROL_WORKSPACE_INVALID"
+
+
+def test_analysis_materializer_stages_one_pinned_source_without_reference_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _analysis_fixture(tmp_path, monkeypatch)
+    workspace = _workspace(tmp_path, "analysis")
+    result = materialize_execution_step(
+        fixture["session"],
+        plan_id=str(fixture["plan_id"]),
+        step_key="analyze",
+        workspace=workspace,
+        canonical_artifact_root=fixture["artifact_root"],
+        worker_group_id=GROUP_ID,
+        authorized_artifact_revision_ids=fixture["authorized"],
+    )
+    assert (workspace / "source/source.txt").read_bytes() == fixture["source_payload"]
+    assert not (workspace / "references").exists()
+    assert result.source_artifact_revision_id == fixture["source_revision_id"]
+    assert result.source_sha256 == fixture["source_hash"]
+    assert result.materialized_member_count == 3
+    assert stat.S_IMODE((workspace / "source/source.txt").stat().st_mode) == 0o640
+
+
+def test_analysis_materializer_rejects_hardlinked_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _analysis_fixture(tmp_path, monkeypatch)
+    os.link(fixture["source_path"], tmp_path / "second-link")
+    with pytest.raises(ControlPlaneError) as captured:
+        materialize_execution_step(
+            fixture["session"],
+            plan_id=str(fixture["plan_id"]),
+            step_key="analyze",
+            workspace=_workspace(tmp_path, "analysis"),
+            canonical_artifact_root=fixture["artifact_root"],
+            worker_group_id=GROUP_ID,
+            authorized_artifact_revision_ids=fixture["authorized"],
+        )
+    assert captured.value.code == "CONTROL_POINTER_FILE_INVALID"

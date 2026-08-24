@@ -201,7 +201,11 @@ def create_workflow_instance(
         protocol_version="1.0.1",
         role_schema_version=role_schema_version,
         state=WorkflowState.REQUESTED.value,
-        stage=WorkflowStage.AUTHORING.value,
+        stage=(
+            WorkflowStage.KNOWLEDGE_ANALYSIS.value
+            if request.request_name == "KNOWLEDGE_ANALYSIS_REQUEST"
+            else WorkflowStage.AUTHORING.value
+        ),
         current_step_key=start_step,
         request_payload=request_data,
         initial_request=request_data,

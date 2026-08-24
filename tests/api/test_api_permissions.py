@@ -14,6 +14,10 @@ def test_role_permission_matrix() -> None:
     assert PermissionKey.WORKFLOW_START in ROLE_PERMISSIONS[RoleKey.AUTHOR]
     assert PermissionKey.WORKFLOW_APPROVE in ROLE_PERMISSIONS[RoleKey.REVIEWER]
     assert PermissionKey.DELIVERABLE_CREATE in ROLE_PERMISSIONS[RoleKey.EDITOR]
+    for role in (RoleKey.VIEWER, RoleKey.AUTHOR, RoleKey.REVIEWER, RoleKey.EDITOR):
+        assert PermissionKey.KNOWLEDGE_ANALYSIS_READ not in ROLE_PERMISSIONS[role]
+        assert PermissionKey.KNOWLEDGE_ANALYSIS_CREATE not in ROLE_PERMISSIONS[role]
+        assert PermissionKey.KNOWLEDGE_ANALYSIS_REVIEW not in ROLE_PERMISSIONS[role]
     assert ROLE_PERMISSIONS[RoleKey.ADMIN] == frozenset(PermissionKey)
 
 
@@ -68,4 +72,12 @@ def test_admin_only_operations_are_explicit() -> None:
         "execution_preset_draft_create",
         "execution_preset_release",
         "execution_preset_deprecate",
+    }.issubset(admin_operations)
+    assert {
+        "knowledge_analysis_list",
+        "knowledge_analysis_create",
+        "knowledge_analysis_get",
+        "knowledge_analysis_events",
+        "knowledge_analysis_reconcile",
+        "knowledge_analysis_review",
     }.issubset(admin_operations)

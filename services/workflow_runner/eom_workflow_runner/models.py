@@ -36,6 +36,7 @@ WORKFLOW_STATES = (
     "CANCELLED",
 )
 WORKFLOW_STAGES = (
+    "KNOWLEDGE_ANALYSIS",
     "AUTHORING",
     "IMAGE_REQUIRED",
     "IMAGE_SKIPPED",
@@ -91,8 +92,9 @@ class WorkflowInstanceRecord(Base):
             name="ck_workflow_instances_state",
         ),
         CheckConstraint(
-            "stage IN ('AUTHORING','IMAGE_REQUIRED','IMAGE_SKIPPED','REVIEWING',"
-            "'AWAITING_HUMAN_APPROVAL','REGISTERING','COMPLETED','FAILED','CANCELLED')",
+            "stage IN ('KNOWLEDGE_ANALYSIS','AUTHORING','IMAGE_REQUIRED','IMAGE_SKIPPED',"
+            "'REVIEWING','AWAITING_HUMAN_APPROVAL','REGISTERING','COMPLETED','FAILED',"
+            "'CANCELLED')",
             name="ck_workflow_instances_stage",
         ),
         Index("ix_workflow_instances_request_hash", "request_hash"),

@@ -24,6 +24,7 @@ from eom_workflow.models import (
     GeneratedReviewRoleResult,
     GeneratedReviewRoleResultV4,
     ImageRoleResult,
+    KnowledgeAnalysisProposalRoleResult,
     KnowledgeAuthoringRoleResult,
     KnowledgeImageRoleResult,
     KnowledgeRegistrationRoleResult,
@@ -70,6 +71,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "registration-result@4.0",
         }
     ),
+    "support": frozenset({"knowledge-analysis-proposal-result@1.0"}),
 }
 RESULT_SCHEMA_FILES = {
     "authoring-result@1.0": "authoring-result.schema.json",
@@ -88,6 +90,7 @@ RESULT_SCHEMA_FILES = {
     "image-result@4.0": "image-result-v4.schema.json",
     "review-result@4.0": "review-result-v4.schema.json",
     "registration-result@4.0": "registration-result-v4.schema.json",
+    "knowledge-analysis-proposal-result@1.0": ("knowledge-analysis-proposal-result-v1.schema.json"),
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -96,6 +99,7 @@ INPUT_SCHEMA_FILES = {
     "item_management": "registration-input.schema.json",
 }
 INPUT_SCHEMA_FILES_V1_1 = INPUT_SCHEMA_FILES
+INPUT_SCHEMA_FILES_V1_4 = {"support": "knowledge-analysis-input-v1.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -113,18 +117,21 @@ RESULT_SCHEMA_PROTOCOLS = {
         for schema_id in RESULT_SCHEMA_FILES
         if schema_id.endswith("@4.0")
     },
+    "knowledge-analysis-proposal-result@1.0": "workflow-role/1.4.0",
 }
 PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.0.1": INPUT_SCHEMA_FILES,
     "workflow-role/1.1.0": INPUT_SCHEMA_FILES_V1_1,
     "workflow-role/1.2.0": INPUT_SCHEMA_FILES_V1_1,
     "workflow-role/1.3.0": INPUT_SCHEMA_FILES_V1_1,
+    "workflow-role/1.4.0": INPUT_SCHEMA_FILES_V1_4,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
     "workflow-role/1.1.0",
     "workflow-role/1.2.0",
     "workflow-role/1.3.0",
+    "workflow-role/1.4.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -132,6 +139,7 @@ ROLE_SCHEMA_FILES = tuple(
             *RESULT_SCHEMA_FILES.values(),
             *INPUT_SCHEMA_FILES.values(),
             *INPUT_SCHEMA_FILES_V1_1.values(),
+            *INPUT_SCHEMA_FILES_V1_4.values(),
         }
     )
 )
@@ -191,7 +199,7 @@ def load_role_input_schema(
             if protocol_version in {"workflow-role/1.2.0", "workflow-role/1.3.0"}
             else "KNOWLEDGE_ITEM_REQUEST"
         )
-    return schema
+    return _inline_catalog_schema(schema)
 
 
 def load_role_result_schema(schema_id: str) -> dict[str, Any]:
@@ -237,6 +245,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return GeneratedReviewRoleResultV4.model_validate(value)
         if schema_id == "registration-result@4.0" and role == "item_management":
             return GeneratedRegistrationRoleResultV4.model_validate(value)
+        if schema_id == "knowledge-analysis-proposal-result@1.0" and role == "support":
+            return KnowledgeAnalysisProposalRoleResult.model_validate(value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":
@@ -296,9 +306,23 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     schema.pop("$id", None)
     if schema_id == "authoring-result@2.0":
         _project_knowledge_authoring_content(schema)
+    if schema_id == "knowledge-analysis-proposal-result@1.0":
+        _strip_knowledge_analysis_codex_guards(schema)
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
     return schema
+
+
+def _strip_knowledge_analysis_codex_guards(value: object) -> None:
+    """Leave cross-field/path guards to canonical schema + typed validation after generation."""
+
+    if isinstance(value, dict):
+        value.pop("not", None)
+        for child in value.values():
+            _strip_knowledge_analysis_codex_guards(child)
+    elif isinstance(value, list):
+        for child in value:
+            _strip_knowledge_analysis_codex_guards(child)
 
 
 def validate_codex_structured_output_schema(schema: dict[str, Any]) -> None:
@@ -412,8 +436,36 @@ def role_schema_bundle_hash(protocol_version: str = "workflow-role/1.0.1") -> st
 
 def _inline_catalog_schema(schema: dict[str, Any]) -> dict[str, Any]:
     reference = "eom://schemas/item-registry/assessment-item-content-v1"
-    if reference not in json.dumps(schema, ensure_ascii=True):
-        return schema
+    serialized = json.dumps(schema, ensure_ascii=True)
+    if reference not in serialized:
+        bundled = schema
+    else:
+        bundled = _inline_assessment_item_schema(schema, reference)
+    knowledge_contracts = (
+        (
+            "eom://schemas/knowledge/knowledge-analysis-request/2.0",
+            "knowledge-analysis-request-v2",
+            "KnowledgeAnalysisRequestV2",
+        ),
+        (
+            "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0",
+            "knowledge-analysis-worker-proposal",
+            "KnowledgeAnalysisWorkerProposal",
+        ),
+    )
+    for contract_reference, catalog_name, definition_name in knowledge_contracts:
+        if contract_reference in json.dumps(bundled, ensure_ascii=True):
+            bundled = _inline_knowledge_contract(
+                bundled,
+                reference=contract_reference,
+                catalog_name=catalog_name,
+                definition_name=definition_name,
+            )
+    Draft202012Validator.check_schema(bundled)
+    return bundled
+
+
+def _inline_assessment_item_schema(schema: dict[str, Any], reference: str) -> dict[str, Any]:
     from eom_catalog_contracts import load_schema
 
     canonical = load_schema("assessment-item-content")
@@ -430,7 +482,73 @@ def _inline_catalog_schema(schema: dict[str, Any]) -> dict[str, Any]:
     bundled = visit(schema)
     if not isinstance(bundled, dict):
         raise WorkflowSchemaError("bundled role result schema is not an object")
-    Draft202012Validator.check_schema(bundled)
+    return bundled
+
+
+def _inline_knowledge_contract(
+    schema: dict[str, Any], *, reference: str, catalog_name: str, definition_name: str
+) -> dict[str, Any]:
+    """Bundle a Catalog-owned contract for Codex and offline JSON Schema validation."""
+
+    from eom_catalog_contracts import load_schema
+
+    root = copy.deepcopy(load_schema(catalog_name))
+    types_v2 = copy.deepcopy(load_schema("knowledge-analysis-types-v2"))
+    types_v1 = copy.deepcopy(load_schema("knowledge-types"))
+    v2_reference = "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/"
+    v1_reference = "eom://schemas/knowledge/knowledge-types-v1#/$defs/"
+
+    def rewrite(value: object, *, local_prefix: str | None = None) -> object:
+        if isinstance(value, dict):
+            rewritten: dict[str, Any] = {}
+            for key, item in value.items():
+                if key == "$ref" and isinstance(item, str):
+                    if item == reference:
+                        rewritten[key] = f"#/$defs/{definition_name}"
+                    elif item.startswith(v2_reference):
+                        rewritten[key] = "#/$defs/AnalysisV2_" + item.removeprefix(v2_reference)
+                    elif item.startswith(v1_reference):
+                        rewritten[key] = "#/$defs/KnowledgeV1_" + item.removeprefix(v1_reference)
+                    elif local_prefix is not None and item.startswith("#/$defs/"):
+                        rewritten[key] = f"#/$defs/{local_prefix}_" + item.removeprefix("#/$defs/")
+                    else:
+                        rewritten[key] = item
+                else:
+                    rewritten[key] = rewrite(item, local_prefix=local_prefix)
+            return rewritten
+        if isinstance(value, list):
+            return [rewrite(item, local_prefix=local_prefix) for item in value]
+        return value
+
+    def body(value: dict[str, Any], *, local_prefix: str | None = None) -> dict[str, Any]:
+        cleaned = {
+            key: item
+            for key, item in value.items()
+            if key not in {"$schema", "$id", "title", "$defs"}
+        }
+        rewritten = rewrite(cleaned, local_prefix=local_prefix)
+        if not isinstance(rewritten, dict):
+            raise WorkflowSchemaError("knowledge contract body is not an object")
+        return rewritten
+
+    bundled = rewrite(schema)
+    if not isinstance(bundled, dict):
+        raise WorkflowSchemaError("bundled role schema is not an object")
+    definitions = bundled.setdefault("$defs", {})
+    if not isinstance(definitions, dict):
+        raise WorkflowSchemaError("bundled role schema definitions are not an object")
+    definitions[definition_name] = body(root)
+    root_definitions = root.get("$defs", {})
+    if not isinstance(root_definitions, dict):
+        raise WorkflowSchemaError("knowledge contract definitions are not an object")
+    for name, value in root_definitions.items():
+        definitions[f"{definition_name}_{name}"] = rewrite(value, local_prefix=definition_name)
+    for prefix, source in (("AnalysisV2", types_v2), ("KnowledgeV1", types_v1)):
+        source_definitions = source.get("$defs")
+        if not isinstance(source_definitions, dict):
+            raise WorkflowSchemaError("knowledge type definitions are not an object")
+        for name, value in source_definitions.items():
+            definitions[f"{prefix}_{name}"] = rewrite(value, local_prefix=prefix)
     return bundled
 
 

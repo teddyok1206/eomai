@@ -20,6 +20,7 @@ from eom_workflow import (
     CompiledWorkflowDefinition,
     DecisionStep,
     HumanGateStep,
+    KnowledgeAnalysisWorkerRequest,
     TerminalStep,
     WorkerRequest,
     WorkflowRequest,
@@ -104,7 +105,7 @@ class RoleJobExecutor(Protocol):
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkerRequest,
+        request: WorkerRequest | KnowledgeAnalysisWorkerRequest,
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
@@ -135,7 +136,7 @@ class PlatformRoleJobExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkerRequest,
+        request: WorkerRequest | KnowledgeAnalysisWorkerRequest,
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
@@ -1256,7 +1257,16 @@ class WorkflowRunner:
                 "workflow_id": workflow.workflow_id,
                 "definition_hash": workflow.definition_hash,
                 "artifact_pointers": pointers,
-                "registration": pointers[-1] if pointers else None,
+                "registration": (
+                    pointers[-1]
+                    if pointers and workflow.definition_key != "knowledge-analysis"
+                    else None
+                ),
+                "analysis_proposal": (
+                    pointers[-1]
+                    if pointers and workflow.definition_key == "knowledge-analysis"
+                    else None
+                ),
                 "item_registration": context.get("item_registration"),
                 "content_pack": context.get("content_pack"),
             }

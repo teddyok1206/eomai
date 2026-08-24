@@ -18,7 +18,8 @@ Last reviewed: 2026-08-23 UTC
 | 4 — auth, capability, and capacity | `SOURCE_COMPLETE` | [`CODEX_AUTH_CAPABILITY_CAPACITY_CONTROLLER.md`](CODEX_AUTH_CAPABILITY_CAPACITY_CONTROLLER.md), exact-identity non-generating probe, reviewed CLI policy, deterministic admission/reconciliation, disposable PostgreSQL concurrency proof |
 | 5 — control-plane MVP and GUI | `DEPLOYED_OBSERVE_PENDING` | [`CODEX_CONTROL_PLANE_MVP.md`](../operations/CODEX_CONTROL_PLANE_MVP.md), migration 0010, released `standard-item` preset, installed runner/API/GUI; five non-generating account observations await fresh ADMIN authentication |
 | 6 — origin and product/usage decisions | `DESIGN_COMPLETE` | [`ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md`](ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md), [`PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md`](PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md), ADRs 0038/0039, eight required scenarios |
-| 7–12 | `NOT_STARTED` | Must satisfy each phase's separate protocol, migration, deployment, and live-run gate |
+| 7 — knowledge-analysis protocol | `SOURCE_COMPLETE` | [`KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md`](KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md) implements and verifies additive V2 contracts, source resolution, support-slot workflow, pointer-only proposal/acceptance artifacts, review, lifecycle, indexing, migration 0011, and failure boundaries |
+| 8–12 | `NOT_STARTED` | Must satisfy each phase's separate protocol, migration, deployment, and live-run gate |
 
 Phase 1 added no migration, live worker execution, runtime deployment, or production-data write.
 Phase 2 source work adds an unapplied additive migration and source behavior only; it performed no
@@ -33,7 +34,12 @@ actual-identity health smoke remain controlled Phase 5 deployment gates.
 Phase 5 source and deployment gates passed. The separately fresh-authenticated, non-generating
 five-account observation and any live one-shot remain distinct evidence boundaries. Phase 6 fixes
 domain ownership and exact field/lifecycle decisions only; it adds no schema resource, migration,
-production data, graph publication, or worker invocation.
+production data, graph publication, or worker invocation. Phase 7 source work preserves all V1
+bytes, adds immutable V2/schema and workflow-role/1.4 resources plus additive migration 0011, uses
+slot05/support, and separates ephemeral worker proposals from accepted pointer-only results. Its
+source, static, security, package-boundary, and disposable PostgreSQL migration/integration gates
+passed. No production migration, runtime deployment, live Codex invocation, or graph publication
+was performed; those remain separately reviewed gates before Phase 8.
 
 ## 1. Outcome
 
@@ -441,6 +447,8 @@ Result: `DESIGN_COMPLETE`. Additive JSON Schema, frozen-model, migration, and ru
 subject to the later protocol/persistence gates and is not implied by this status.
 
 ## 12. Phase 7 — Knowledge Analysis Protocol and Intake Workflow
+
+Implementation design: [`KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md`](KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md).
 
 ### Work
 

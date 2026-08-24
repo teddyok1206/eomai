@@ -6,11 +6,16 @@ import argparse
 import signal
 import threading
 
+from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_engine
 
 from eom_catalog_service.application_server import CatalogApplicationServer
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
+from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.registry_service import RegistryService
+from eom_catalog_service.runtime_privileges import catalog_runtime_privileges_ready
+
+_RUNTIME_MODEL_TABLES = (OperatorRecord.__table__,)
 
 
 def serve() -> int:
@@ -25,9 +30,14 @@ def serve() -> int:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     try:
+        with engine.connect() as connection:
+            if not catalog_runtime_privileges_ready(connection):
+                print("CATALOG_RUNTIME_DATABASE_PRIVILEGES_UNAVAILABLE", flush=True)
+                return 1
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
             RegistryService(engine),
+            KnowledgeAnalysisApplicationService(engine),
         )
         thread = threading.Thread(
             target=server.serve_forever,

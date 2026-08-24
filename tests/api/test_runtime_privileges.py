@@ -46,6 +46,15 @@ def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
     assert "resolved_execution_plans" in READ_TABLES
     assert "resolved_execution_plans" in INSERT_TABLES
     assert "resolved_execution_plans" not in UPDATE_TABLES
+    for table in (
+        "knowledge_analysis_events",
+        "knowledge_analysis_reviews",
+        "knowledge_analysis_risk_policy_revisions",
+        "knowledge_analysis_runs",
+    ):
+        assert table in READ_TABLES
+        assert table not in INSERT_TABLES
+        assert table not in UPDATE_TABLES
     assert {privilege for privilege, _tables in TABLE_PRIVILEGES} == {
         "SELECT",
         "INSERT",

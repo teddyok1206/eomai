@@ -6,6 +6,10 @@ from pathlib import Path
 import pytest
 from eom_api_contracts.auth import LoginRequest
 from eom_api_contracts.common import ArtifactPointer
+from eom_api_contracts.knowledge_analysis import (
+    CreateKnowledgeAnalysisRequest,
+    KnowledgeAnalysisReviewRequest,
+)
 from eom_api_contracts.operators import CreateOperatorRequest
 from eom_api_contracts.workflows import WorkflowStartRequest
 from jsonschema import Draft202012Validator
@@ -147,3 +151,41 @@ def test_artifact_pointer_can_pin_one_safe_member_without_exposing_storage_path(
     assert pointer.artifact_member == "source/diagram.png"
     with pytest.raises(ValidationError, match="artifact member"):
         ArtifactPointer.model_validate(pointer.model_dump() | {"artifact_member": "../diagram.png"})
+
+
+def test_knowledge_analysis_request_is_discriminated_and_retry_is_explicit() -> None:
+    request: CreateKnowledgeAnalysisRequest = CreateKnowledgeAnalysisRequest.model_validate(
+        {
+            "source": {
+                "source_kind": "APPROVED_ITEM_REVISION",
+                "source_class": "APPROVED_ITEM",
+                "item_revision_id": "itemrev_" + "1" * 32,
+            },
+            "preset_key": "knowledge-analysis",
+            "general_knowledge_mode": "DISABLED",
+            "risk_policy_revision_id": "analysisriskrev_" + "2" * 32,
+            "predecessor_analysis_run_id": "analysisrun_" + "3" * 32,
+        }
+    )
+    assert request.source.source_kind == "APPROVED_ITEM_REVISION"
+    assert request.predecessor_analysis_run_id == "analysisrun_" + "3" * 32
+    with pytest.raises(ValidationError):
+        CreateKnowledgeAnalysisRequest.model_validate(
+            request.model_dump(mode="json")
+            | {
+                "source": {
+                    "source_kind": "APPROVED_ITEM_REVISION",
+                    "source_class": "TEXTBOOK",
+                    "item_revision_id": "itemrev_" + "1" * 32,
+                }
+            }
+        )
+
+
+def test_knowledge_analysis_review_rejects_unsafe_or_empty_notes() -> None:
+    assert KnowledgeAnalysisReviewRequest(decision="APPROVE", notes="Reviewed.").decision == (
+        "APPROVE"
+    )
+    for notes in ("", "unsafe\x00note"):
+        with pytest.raises(ValidationError):
+            KnowledgeAnalysisReviewRequest(decision="REJECT", notes=notes)

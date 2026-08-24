@@ -79,17 +79,21 @@ class CatalogArtifactService:
         idempotency_key: str,
         request: dict[str, Any],
         result: dict[str, Any],
+        file_metadata: dict[str, dict[str, str]] | None = None,
+        manifest_version: str = "catalog-file-set/1.0",
+        protocol_version: str = CATALOG_PROTOCOL_VERSION,
+        protocol_schema_hash: str = CATALOG_SCHEMA_HASH,
     ) -> CatalogArtifact:
         idempotency_key = normalize_catalog_idempotency_key(idempotency_key)
         job_id = new_job_id()
         artifact_id = new_logical_artifact_id()
         revision_id = new_revision_id()
         with transaction(self.sessions) as session:
-            ensure_protocol_version(session, CATALOG_PROTOCOL_VERSION, CATALOG_SCHEMA_HASH)
+            ensure_protocol_version(session, protocol_version, protocol_schema_hash)
             job, created = submit_structured_job(
                 session,
                 job_id=job_id,
-                protocol_version=CATALOG_PROTOCOL_VERSION,
+                protocol_version=protocol_version,
                 idempotency_key=idempotency_key,
                 task_type=artifact_type,
                 request=request,
@@ -125,7 +129,8 @@ class CatalogArtifactService:
             revision_id=revision_id,
             artifact_type=artifact_type,
             staging=staging,
-            manifest_version="catalog-file-set/1.0",
+            manifest_version=manifest_version,
+            file_metadata=file_metadata,
         )
         with transaction(self.sessions) as session:
             transition_job(session, job_id, JobState.VALIDATED, "CATALOG_ARTIFACT_VALIDATED")

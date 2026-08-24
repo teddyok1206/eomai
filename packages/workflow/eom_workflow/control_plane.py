@@ -26,6 +26,13 @@ def _safe_relative_markdown_path(value: str) -> str:
     return value
 
 
+def _safe_canonical_member_path(value: str) -> str:
+    path = PurePosixPath(value)
+    if path.is_absolute() or ".." in path.parts or "." in path.parts or not path.parts:
+        raise ValueError("source member path must be normalized and relative")
+    return value
+
+
 UtcDatetime = Annotated[datetime, AfterValidator(_require_utc)]
 Sha256 = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 ArtifactId = Annotated[str, Field(pattern=r"^artifact_[0-9a-f]{32}$")]
@@ -37,6 +44,11 @@ SafeRelativeMarkdownPath = Annotated[
     str,
     Field(pattern=r"^(instructions|references)/[A-Za-z0-9._/-]+\.md$", max_length=512),
     AfterValidator(_safe_relative_markdown_path),
+]
+SafeCanonicalMemberPath = Annotated[
+    str,
+    Field(pattern=r"^[A-Za-z0-9._()가-힣/-]+$", min_length=1, max_length=512),
+    AfterValidator(_safe_canonical_member_path),
 ]
 
 
@@ -272,6 +284,52 @@ class ResolvedExecutionPlan(FrozenModel):
             raise ValueError("resolved step keys must be unique")
         if self.evidence_bundle_revision_id is not None and self.graph_snapshot_revision_id is None:
             raise ValueError("an Evidence Bundle requires its pinned Graph Snapshot")
+        return self
+
+
+class ResolvedExecutionPlanV2(FrozenModel):
+    """Single-support-worker plan for one exact knowledge-analysis request and source."""
+
+    schema_version: Literal["resolved-execution-plan/2.0"] = "resolved-execution-plan/2.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["KNOWLEDGE_ANALYSIS"] = "KNOWLEDGE_ANALYSIS"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["knowledge-analysis"] = "knowledge-analysis"
+    workflow_definition_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    workflow_definition_sha256: Sha256
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    analysis_request_sha256: Sha256
+    source_artifact_id: ArtifactId
+    source_artifact_revision_id: ArtifactRevisionId
+    source_member_path: SafeCanonicalMemberPath
+    source_materialized_path: str = Field(
+        pattern=r"^source/[A-Za-z0-9._()가-힣/-]+$", min_length=8, max_length=512
+    )
+    source_sha256: Sha256
+    source_bytes: int = Field(ge=1, le=100 * 1024 * 1024)
+    source_media_type: str = Field(pattern=r"^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$", max_length=128)
+    source_schema_ref: str | None = Field(default=None, max_length=256)
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
+    resolver_version: str = Field(pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def one_support_step_and_exact_hash(self) -> ResolvedExecutionPlanV2:
+        step = self.steps[0]
+        if step.step_key != "analyze" or step.role != "support":
+            raise ValueError("knowledge analysis plan requires the analyze support step")
+        if step.worker_pool_key != "support":
+            raise ValueError("knowledge analysis plan requires the support worker pool")
+        body = self.model_dump(mode="json", exclude={"plan_sha256"})
+        if content_sha256(body) != self.plan_sha256:
+            raise ValueError("knowledge analysis plan hash does not match canonical content")
         return self
 
 

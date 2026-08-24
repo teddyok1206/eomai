@@ -106,9 +106,28 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "knowledge/knowledge-types-v1.schema.json",
         "knowledge/knowledge-analysis-request-v1.schema.json",
         "knowledge/knowledge-analysis-result-v1.schema.json",
+        "knowledge/knowledge-analysis-types-v2.schema.json",
+        "knowledge/knowledge-analysis-request-v2.schema.json",
+        "knowledge/knowledge-analysis-worker-proposal-v1.schema.json",
+        "knowledge/knowledge-analysis-proposal-receipt-v1.schema.json",
+        "knowledge/knowledge-analysis-risk-policy-v1.schema.json",
+        "knowledge/knowledge-analysis-review-decision-v1.schema.json",
+        "knowledge/knowledge-analysis-result-v2.schema.json",
         "knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
         "knowledge/education-retrieval-request-v1.schema.json",
         "knowledge/evidence-bundle-manifest-v1.schema.json",
+        "catalog-application/catalog-application-request-v2.schema.json",
+        "catalog-application/catalog-application-response-v2.schema.json",
+    ):
+        assert required in source
+
+    for required in (
+        "eom_api/routers/knowledge_analysis.py",
+        "eom_api/services/catalog_application_client.py",
+        "eom_catalog_service/knowledge_analysis_risk.py",
+        "eom_catalog_service/knowledge_analysis_service.py",
+        "eom_catalog_service/knowledge_analysis_sources.py",
+        "eom_catalog_service/runtime_privileges.py",
     ):
         assert required in source
 

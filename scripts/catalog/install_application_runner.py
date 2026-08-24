@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""Install the reviewed Catalog manager unit and its DB-only runtime secret."""
+"""Install the reviewed Catalog application unit after its dedicated secret exists."""
 
 from __future__ import annotations
 
 import grp
 import os
 import pwd
-import secrets
 import stat
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 REPOSITORY = Path("/home/eom/EOM")
-SOURCE_ENV = Path("/etc/eom/secrets/api.env")
 TARGET_ENV = Path("/etc/eom/secrets/catalog-manager.env")
 UNIT_SOURCE = REPOSITORY / "infra/systemd/eom-catalog-application-runner.service"
 UNIT_TARGET = Path("/etc/systemd/system/eom-catalog-application-runner.service")
+CATALOG_RUNTIME_ROLE = "eom_catalog_manager_runtime"
 
 
 def fail(message: str) -> None:
@@ -35,8 +35,7 @@ def _metadata_is(path: Path, uid: int, gid: int, mode: int) -> bool:
 
 
 def _read_regular(path: Path, uid: int, gid: int, mode: int) -> bytes:
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags)
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     try:
         metadata = os.fstat(descriptor)
         if not (
@@ -54,59 +53,32 @@ def _read_regular(path: Path, uid: int, gid: int, mode: int) -> bytes:
         os.close(descriptor)
 
 
-def _parse_source(raw: bytes) -> dict[str, str]:
-    values: dict[str, str] = {}
+def _validate_catalog_secret(raw: bytes) -> None:
     try:
         lines = raw.decode("utf-8").splitlines()
     except UnicodeError:
-        fail("API runtime secret encoding is invalid")
+        fail("Catalog runtime secret encoding is invalid")
+    values: dict[str, str] = {}
     for line in lines:
         if not line or line.startswith("#"):
             continue
         if "=" not in line:
-            fail("API runtime secret syntax is invalid")
+            fail("Catalog runtime secret syntax is invalid")
         key, value = line.split("=", 1)
-        if key in values or not key or any(ord(character) < 32 for character in value):
-            fail("API runtime secret entry is invalid")
+        if key in values or any(ord(character) < 32 for character in value):
+            fail("Catalog runtime secret entry is invalid")
         values[key] = value
-    required = {
-        "EOM_API_DATABASE_URL",
-        "EOM_API_TOKEN_HASH_KEY",
-        "EOM_API_FINGERPRINT_KEY",
-    }
-    if set(values) != required:
-        fail("API runtime secret key set is invalid")
-    return values
-
-
-def _install_secret(content: bytes, uid: int, gid: int) -> None:
-    if TARGET_ENV.exists() or TARGET_ENV.is_symlink():
-        if not _metadata_is(TARGET_ENV, uid, gid, 0o640):
-            fail("existing Catalog manager secret metadata is unsafe")
-        if _read_regular(TARGET_ENV, uid, gid, 0o640) == content:
-            return
-    temporary = TARGET_ENV.with_name(f".{TARGET_ENV.name}.{secrets.token_hex(8)}")
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(temporary, flags, 0o600)
-    try:
-        os.fchown(descriptor, uid, gid)
-        os.fchmod(descriptor, 0o640)
-        if os.write(descriptor, content) != len(content):
-            fail("Catalog manager secret write was incomplete")
-        os.fsync(descriptor)
-    except BaseException:
-        temporary.unlink(missing_ok=True)
-        raise
-    finally:
-        os.close(descriptor)
-    os.replace(temporary, TARGET_ENV)
-    parent_descriptor = os.open(TARGET_ENV.parent, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        os.fsync(parent_descriptor)
-    finally:
-        os.close(parent_descriptor)
-    if _read_regular(TARGET_ENV, uid, gid, 0o640) != content:
-        fail("Catalog manager secret installation verification failed")
+    if set(values) != {"EOM_DATABASE_URL"}:
+        fail("Catalog runtime secret key set is invalid")
+    parsed = urlsplit(values["EOM_DATABASE_URL"])
+    if (
+        parsed.username != CATALOG_RUNTIME_ROLE
+        or parsed.password is None
+        or parsed.hostname != "127.0.0.1"
+        or parsed.port != 5432
+        or not unquote(parsed.path.removeprefix("/"))
+    ):
+        fail("Catalog runtime database URL identity is invalid")
 
 
 def main() -> None:
@@ -134,28 +106,17 @@ def main() -> None:
         fail("repository working tree is not clean")
     root_uid = pwd.getpwnam("root").pw_uid
     root_gid = grp.getgrnam("root").gr_gid
-    eom_gid = grp.getgrnam("eom").gr_gid
     api_gid = grp.getgrnam("eom-api").gr_gid
     pwd.getpwnam("eom-catalog-manager")
-    secrets_parent = TARGET_ENV.parent
-    parent_metadata = secrets_parent.lstat()
-    if not (
-        stat.S_ISDIR(parent_metadata.st_mode)
-        and not secrets_parent.is_symlink()
-        and parent_metadata.st_uid == root_uid
-        and parent_metadata.st_gid == eom_gid
-        and stat.S_IMODE(parent_metadata.st_mode) == 0o750
-    ):
-        fail("runtime secret directory metadata is unsafe")
-    values = _parse_source(_read_regular(SOURCE_ENV, root_uid, api_gid, 0o640))
-    content = f"EOM_DATABASE_URL={values['EOM_API_DATABASE_URL']}\n".encode()
-    _install_secret(content, root_uid, api_gid)
+    if not _metadata_is(TARGET_ENV, root_uid, api_gid, 0o640):
+        fail("dedicated Catalog runtime secret is unavailable")
+    _validate_catalog_secret(_read_regular(TARGET_ENV, root_uid, api_gid, 0o640))
     subprocess.run(
         ["/usr/bin/install", "-o", "root", "-g", "root", "-m", "0644", UNIT_SOURCE, UNIT_TARGET],
         check=True,
     )
     if not _metadata_is(UNIT_TARGET, root_uid, root_gid, 0o644):
-        fail("Catalog manager unit installation verification failed")
+        fail("Catalog application unit installation verification failed")
     print("catalog_application_runner_install=PASS")
 
 

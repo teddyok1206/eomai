@@ -20,7 +20,13 @@ from eom_protocol import (
     WorkerResult,
     validate_message,
 )
-from eom_workflow.models import ArtifactPointer, RoleWorkerInput, WorkerRequest
+from eom_workflow.models import (
+    ArtifactPointer,
+    KnowledgeAnalysisProposalRoleResult,
+    KnowledgeAnalysisWorkerRequest,
+    RoleWorkerInput,
+    WorkerRequest,
+)
 from eom_workflow.models import ArtifactSpec as WorkflowArtifactSpec
 from eom_workflow.schemas import (
     WorkflowSchemaError,
@@ -35,7 +41,12 @@ from sqlalchemy import Engine, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from eom_orchestrator.artifacts import commit_artifact, stage_artifact, stage_structured_artifact
+from eom_orchestrator.artifacts import (
+    commit_artifact,
+    commit_file_set_artifact,
+    stage_artifact,
+    stage_structured_artifact,
+)
 from eom_orchestrator.capacity_controller import CodexCapacityController, LeaseClaim
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.control_service import ControlPlaneError
@@ -46,6 +57,7 @@ from eom_orchestrator.execution_materializer import (
     authorized_execution_artifact_revisions,
     materialize_execution_step,
 )
+from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
 from eom_orchestrator.logging import log_event
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.protocol import protocol_schema_hash
@@ -208,7 +220,7 @@ class Orchestrator:
         step_key: str,
         attempt: int,
         role: str,
-        request: WorkerRequest,
+        request: WorkerRequest | KnowledgeAnalysisWorkerRequest,
         upstream_artifacts: tuple[ArtifactPointer, ...],
         result_schema: str,
         idempotency_key: str,
@@ -317,7 +329,11 @@ class Orchestrator:
                         step_key=str(plan_step["step_key"]),
                         job_id=job_id,
                         attempt=attempt,
-                        workload_class="CODEX",
+                        workload_class=(
+                            "KNOWLEDGE_ANALYSIS"
+                            if request.request_name == "KNOWLEDGE_ANALYSIS_REQUEST"
+                            else "CODEX"
+                        ),
                         acquired_at=datetime.now(UTC),
                         ttl=timedelta(seconds=int(plan_step["timeout_seconds"])),
                     )
@@ -418,16 +434,47 @@ class Orchestrator:
                     "workflow worker result identifiers do not match input",
                 )
             result_document = result.model_dump(mode="json")
-            staged = stage_structured_artifact(
-                result=result_document,
-                job_id=job_id,
-                logical_artifact_id=artifact.logical_artifact_id,
-                revision_id=artifact.revision_id,
-                staging=staging,
-                worker_slot=slot.slot_id,
-            )
-            self._transition(job_id, JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED")
-            final_path = commit_artifact(staged, self.settings.nas_artifact_root)
+            if result_schema == "knowledge-analysis-proposal-result@1.0":
+                if not isinstance(result, KnowledgeAnalysisProposalRoleResult) or not isinstance(
+                    worker_input.request, KnowledgeAnalysisWorkerRequest
+                ):
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "knowledge proposal typed boundary is inconsistent",
+                    )
+                staged_file_set, receipt = stage_knowledge_analysis_proposal(
+                    proposal=result.output.proposal,
+                    request=worker_input.request.analysis_request,
+                    job_id=job_id,
+                    logical_artifact_id=artifact.logical_artifact_id,
+                    revision_id=artifact.revision_id,
+                    staging=staging,
+                )
+                self._transition(job_id, JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED")
+                final_path = commit_file_set_artifact(
+                    staged_file_set, self.settings.nas_artifact_root
+                )
+                content_hash = staged_file_set.primary_hash
+                manifest_hash = staged_file_set.manifest_hash
+                content_bytes = staged_file_set.primary_bytes
+                manifest_document = staged_file_set.manifest
+                database_result = receipt.model_dump(mode="json")
+            else:
+                staged = stage_structured_artifact(
+                    result=result_document,
+                    job_id=job_id,
+                    logical_artifact_id=artifact.logical_artifact_id,
+                    revision_id=artifact.revision_id,
+                    staging=staging,
+                    worker_slot=slot.slot_id,
+                )
+                self._transition(job_id, JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED")
+                final_path = commit_artifact(staged, self.settings.nas_artifact_root)
+                content_hash = staged.content_hash
+                manifest_hash = staged.manifest_hash
+                content_bytes = staged.manifest.content_bytes
+                manifest_document = staged.manifest.model_dump(mode="json")
+                database_result = result_document
             with transaction(self.sessions) as session:
                 committing = session.execute(
                     select(JobRecord).where(JobRecord.job_id == job_id).with_for_update()
@@ -435,12 +482,12 @@ class Orchestrator:
                 create_artifact_records(
                     session,
                     job=committing,
-                    content_hash=staged.content_hash,
-                    manifest_hash=staged.manifest_hash,
-                    content_bytes=staged.manifest.content_bytes,
+                    content_hash=content_hash,
+                    manifest_hash=manifest_hash,
+                    content_bytes=content_bytes,
                     nas_path=str(final_path),
-                    manifest=staged.manifest.model_dump(mode="json"),
-                    result=result_document,
+                    manifest=manifest_document,
+                    result=database_result,
                 )
                 transition_job(
                     session,
@@ -450,7 +497,7 @@ class Orchestrator:
                     data={
                         "logical_artifact_id": artifact.logical_artifact_id,
                         "revision_id": artifact.revision_id,
-                        "content_hash": staged.content_hash,
+                        "content_hash": content_hash,
                     },
                 )
         except WorkflowSchemaError as exc:

@@ -42,7 +42,9 @@ from eom_orchestrator.capacity_controller import (
     set_auth_binding_operational_state,
 )
 from eom_orchestrator.control_bootstrap import (
+    KnowledgeAnalysisBootstrapResult,
     StandardBootstrapResult,
+    bootstrap_knowledge_analysis_control_plane,
     bootstrap_standard_control_plane,
 )
 from eom_orchestrator.control_commands import (
@@ -59,6 +61,7 @@ from eom_orchestrator.control_models import (
     ExecutionPresetEvaluationRecord,
     ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
+    WorkerCapacityPolicyRecord,
     WorkerLeaseEventRecord,
     WorkerLeaseRecord,
 )
@@ -1508,6 +1511,80 @@ def test_standard_bootstrap_is_idempotent_and_materializes_only_pinned_markdown(
     assert (workspace / "instructions/platform.md").is_file()
     assert (workspace / "instructions/authoring.md").is_file()
     assert (workspace / "references/general-knowledge-provenance.md").is_file()
+
+
+def test_knowledge_analysis_bootstrap_is_idempotent_and_support_only(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    staging_root = tmp_path / "staging"
+    nas_root = tmp_path / "nas"
+    staging_root.mkdir()
+    nas_root.mkdir()
+    settings = Settings(
+        worker_config=Path("config/worker-slots.example.yaml").resolve(),
+        staging_root=staging_root,
+        workspace_root=tmp_path / "worker-workspaces",
+        worker_home_root=tmp_path / "worker-homes",
+        nas_artifact_root=nas_root.resolve(),
+        codex_binary=Path("/usr/local/bin/codex"),
+        codex_capability_policy=Path("config/codex-capabilities.example.yaml").resolve(),
+        worker_timeout_seconds=600,
+    )
+    sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        capacity_exists = session.scalar(
+            select(WorkerCapacityPolicyRecord).where(
+                WorkerCapacityPolicyRecord.policy_key == "fixed-host"
+            )
+        )
+    if capacity_exists is None:
+        bootstrap_standard_control_plane(
+            integration_engine,
+            config_directory=Path("config/control-plane/standard-item-v1").resolve(),
+            source_commit="a" * 40,
+            actor_id="phase7-integration",
+            evaluation_cases_total=1,
+            settings=settings,
+        )
+
+    def bootstrap() -> KnowledgeAnalysisBootstrapResult:
+        return bootstrap_knowledge_analysis_control_plane(
+            integration_engine,
+            config_directory=Path("config/control-plane/knowledge-analysis-v1").resolve(),
+            source_commit="b" * 40,
+            actor_id="phase7-integration",
+            evaluation_cases_total=3,
+            settings=settings,
+        )
+
+    first = bootstrap()
+    assert bootstrap() == first
+    with sessions() as session:
+        logical = session.scalar(
+            select(ExecutionPresetRecord).where(
+                ExecutionPresetRecord.preset_key == "knowledge-analysis"
+            )
+        )
+        assert logical is not None
+        assert logical.current_revision_id == first.preset_revision_id
+        revision = session.get(ExecutionPresetRevisionRecord, first.preset_revision_id)
+        assert revision is not None
+        policy = revision.canonical_document
+        assert policy["compatible_workflow_protocols"] == ["workflow-role/1.4.0"]
+        assert policy["capacity_policy_revision_id"] == first.capacity_policy_revision_id
+        assert policy["general_knowledge_policy"] == "ALLOW_WITH_PROVENANCE"
+        assert len(policy["role_policies"]) == 1
+        role = policy["role_policies"][0]
+        assert role["role"] == "support"
+        assert role["worker_pool_key"] == "support"
+        assert role["reference_bundle"] is None
+        assert role["instruction_bundle"]["bundle_revision_id"] == (
+            first.instruction_bundle_revision_id
+        )
+        protocol = session.get(ProtocolVersionRecord, "workflow-role/1.4.0")
+        assert protocol is not None
+        assert protocol.schema_sha256 == role_schema_bundle_hash("workflow-role/1.4.0")
 
 
 def test_historical_protocol_rows_remain_byte_identical(db_session: Session) -> None:

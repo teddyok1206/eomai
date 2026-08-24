@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-risk-policy/1.0",
+  "title": "EOM Knowledge Analysis Risk Policy V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "risk_policy_revision_id",
+    "state",
+    "minimum_confidence_milli",
+    "review_source_classes",
+    "review_when_general_knowledge_used",
+    "review_when_blocking_ambiguity_present",
+    "maximum_auto_accept_counts",
+    "created_at",
+    "content_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-analysis-risk-policy/1.0"},
+    "risk_policy_revision_id": {
+      "type": "string",
+      "pattern": "^analysisriskrev_[0-9a-f]{32}$"
+    },
+    "state": {"const": "RELEASED"},
+    "minimum_confidence_milli": {"type": "integer", "minimum": 0, "maximum": 1000},
+    "review_source_classes": {
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["CURRICULUM", "TEXTBOOK", "APPROVED_ITEM", "PAST_EXAM", "INTERNAL_GUIDE"]
+      }
+    },
+    "review_when_general_knowledge_used": {"type": "boolean"},
+    "review_when_blocking_ambiguity_present": {"type": "boolean"},
+    "maximum_auto_accept_counts": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalCounts"
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "content_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

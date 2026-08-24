@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-request-v2",
+  "title": "EOM Catalog Application Request V2",
+  "$defs": {
+    "actorId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 128,
+      "pattern": "^[!-~]+$"
+    },
+    "analysisRunId": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+    "analysisSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_kind", "source_class", "intake_batch_id", "source_file_id"],
+          "properties": {
+            "source_kind": {"const": "CONTENT_INTAKE_FILE"},
+            "source_class": {
+              "enum": ["CURRICULUM", "TEXTBOOK", "PAST_EXAM", "INTERNAL_GUIDE"]
+            },
+            "intake_batch_id": {"type": "string", "pattern": "^intake_[0-9a-f]{32}$"},
+            "source_file_id": {"type": "string", "pattern": "^sourcefile_[0-9a-f]{32}$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_kind", "source_class", "item_revision_id"],
+          "properties": {
+            "source_kind": {"const": "APPROVED_ITEM_REVISION"},
+            "source_class": {"enum": ["APPROVED_ITEM", "PAST_EXAM"]},
+            "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"}
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "base_revision_id", "expected_version", "reviewed_by", "review_reason", "content"],
+      "properties": {
+        "operation": {"const": "IMPORT_REVIEWED_ITEM_CONTENT"},
+        "base_revision_id": {"type": "string", "pattern": "^itemrev_[a-z0-9]{8,55}$"},
+        "expected_version": {"type": "integer", "minimum": 1},
+        "reviewed_by": {"$ref": "#/$defs/actorId"},
+        "review_reason": {"type": "string", "minLength": 10, "maxLength": 2000},
+        "content": {"$ref": "eom://schemas/item-registry/assessment-item-content-v1"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "item_revision_id"],
+      "properties": {
+        "operation": {"const": "GET_ITEM_CONTENT"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[a-z0-9]{8,55}$"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "source", "preset_key", "general_knowledge_mode", "risk_policy_revision_id", "predecessor_analysis_run_id", "requested_by", "idempotency_key"],
+      "properties": {
+        "operation": {"const": "CREATE_KNOWLEDGE_ANALYSIS"},
+        "source": {"$ref": "#/$defs/analysisSource"},
+        "preset_key": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+        "general_knowledge_mode": {"enum": ["DISABLED", "AUXILIARY_UNATTRIBUTED"]},
+        "risk_policy_revision_id": {
+          "type": "string",
+          "pattern": "^analysisriskrev_[0-9a-f]{32}$"
+        },
+        "predecessor_analysis_run_id": {
+          "anyOf": [
+            {"$ref": "#/$defs/analysisRunId"},
+            {"type": "null"}
+          ]
+        },
+        "requested_by": {"$ref": "#/$defs/actorId"},
+        "idempotency_key": {"$ref": "#/$defs/idempotencyKey"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "analysis_run_id", "requested_by"],
+      "properties": {
+        "operation": {"const": "RECONCILE_KNOWLEDGE_ANALYSIS"},
+        "analysis_run_id": {"$ref": "#/$defs/analysisRunId"},
+        "requested_by": {"$ref": "#/$defs/actorId"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "analysis_run_id", "expected_version", "decision", "notes", "decided_by", "idempotency_key"],
+      "properties": {
+        "operation": {"const": "REVIEW_KNOWLEDGE_ANALYSIS"},
+        "analysis_run_id": {"$ref": "#/$defs/analysisRunId"},
+        "expected_version": {"type": "integer", "minimum": 1},
+        "decision": {"enum": ["APPROVE", "REJECT"]},
+        "notes": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "decided_by": {"$ref": "#/$defs/actorId"},
+        "idempotency_key": {"$ref": "#/$defs/idempotencyKey"}
+      }
+    }
+  ]
+}

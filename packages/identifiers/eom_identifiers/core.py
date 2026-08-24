@@ -95,6 +95,22 @@ def new_execution_preset_evaluation_id() -> str:
     return f"preseteval_{uuid4().hex}"
 
 
+def new_knowledge_analysis_request_id() -> str:
+    return f"knowledgeanalysis_{uuid4().hex}"
+
+
+def new_knowledge_analysis_run_id() -> str:
+    return f"analysisrun_{uuid4().hex}"
+
+
+def new_knowledge_analysis_result_id() -> str:
+    return f"knowledgeanalysisresult_{uuid4().hex}"
+
+
+def new_knowledge_analysis_decision_id() -> str:
+    return f"analysisdecision_{uuid4().hex}"
+
+
 def _canonical_value(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         value = value.model_dump(mode="python")

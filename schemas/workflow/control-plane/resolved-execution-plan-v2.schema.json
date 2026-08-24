@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/resolved-execution-plan/2.0",
+  "title": "EOM Knowledge Analysis Resolved Execution Plan V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "workflow_id",
+    "workload_class",
+    "preset_id",
+    "preset_revision_id",
+    "preset_sha256",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "analysis_request_id",
+    "analysis_request_sha256",
+    "source_artifact_id",
+    "source_artifact_revision_id",
+    "source_member_path",
+    "source_materialized_path",
+    "source_sha256",
+    "source_bytes",
+    "source_media_type",
+    "source_schema_ref",
+    "capacity_policy_revision_id",
+    "steps",
+    "resolver_version",
+    "resolved_at",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "resolved-execution-plan/2.0"},
+    "plan_id": {"type": "string", "pattern": "^execplan_[0-9a-f]{32}$"},
+    "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "workload_class": {"const": "KNOWLEDGE_ANALYSIS"},
+    "preset_id": {"type": "string", "pattern": "^execpreset_[0-9a-f]{32}$"},
+    "preset_revision_id": {"type": "string", "pattern": "^execpresetrev_[0-9a-f]{32}$"},
+    "preset_sha256": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"},
+    "workflow_definition_key": {"const": "knowledge-analysis"},
+    "workflow_definition_version": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/semver"},
+    "workflow_definition_sha256": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"},
+    "analysis_request_id": {"type": "string", "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"},
+    "analysis_request_sha256": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"},
+    "source_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+    "source_artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+    "source_member_path": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._()가-힣/-]+$",
+      "not": {"pattern": "(?:^|/)\\.\\.?(/|$)"},
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "source_materialized_path": {
+      "type": "string",
+      "pattern": "^source/[A-Za-z0-9._()가-힣/-]+$",
+      "minLength": 8,
+      "maxLength": 512
+    },
+    "source_sha256": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"},
+    "source_bytes": {"type": "integer", "minimum": 1, "maximum": 104857600},
+    "source_media_type": {
+      "type": "string",
+      "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$",
+      "maxLength": 128
+    },
+    "source_schema_ref": {
+      "anyOf": [
+        {"type": "string", "minLength": 1, "maxLength": 256},
+        {"type": "null"}
+      ]
+    },
+    "capacity_policy_revision_id": {"type": "string", "pattern": "^capacityrev_[0-9a-f]{32}$"},
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "step_key", "role", "model", "reasoning_effort", "instruction_bundle",
+          "reference_bundle", "worker_pool_key", "timeout_seconds", "sandbox", "network",
+          "general_knowledge_mode"
+        ],
+        "properties": {
+          "step_key": {"const": "analyze"},
+          "role": {"const": "support"},
+          "model": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+          "reasoning_effort": {"type": "string", "enum": ["minimal", "low", "medium", "high", "xhigh"]},
+          "instruction_bundle": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/bundleRevisionPointer"},
+          "reference_bundle": {
+            "anyOf": [
+              {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/bundleRevisionPointer"},
+              {"type": "null"}
+            ]
+          },
+          "worker_pool_key": {"const": "support"},
+          "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 7200},
+          "sandbox": {"const": "read-only"},
+          "network": {"const": "disabled"},
+          "general_knowledge_mode": {"type": "string", "enum": ["DENIED", "ALLOWED_WITH_PROVENANCE"]}
+        }
+      }
+    },
+    "resolver_version": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/semver"},
+    "resolved_at": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"},
+    "plan_sha256": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"}
+  }
+}

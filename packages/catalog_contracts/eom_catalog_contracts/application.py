@@ -54,8 +54,67 @@ class ItemContentQuery(FrozenModel):
     item_revision_id: ItemRevisionId
 
 
+class ContentIntakeKnowledgeAnalysisSelection(FrozenModel):
+    source_kind: Literal["CONTENT_INTAKE_FILE"] = "CONTENT_INTAKE_FILE"
+    source_class: Literal["CURRICULUM", "TEXTBOOK", "PAST_EXAM", "INTERNAL_GUIDE"]
+    intake_batch_id: str = Field(pattern=r"^intake_[0-9a-f]{32}$")
+    source_file_id: str = Field(pattern=r"^sourcefile_[0-9a-f]{32}$")
+
+
+class ApprovedItemKnowledgeAnalysisSelection(FrozenModel):
+    source_kind: Literal["APPROVED_ITEM_REVISION"] = "APPROVED_ITEM_REVISION"
+    source_class: Literal["APPROVED_ITEM", "PAST_EXAM"]
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+
+
+KnowledgeAnalysisSourceSelection = Annotated[
+    ContentIntakeKnowledgeAnalysisSelection | ApprovedItemKnowledgeAnalysisSelection,
+    Field(discriminator="source_kind"),
+]
+
+
+class CreateKnowledgeAnalysisCommand(FrozenModel):
+    operation: Literal["CREATE_KNOWLEDGE_ANALYSIS"] = "CREATE_KNOWLEDGE_ANALYSIS"
+    source: KnowledgeAnalysisSourceSelection
+    preset_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    general_knowledge_mode: Literal["DISABLED", "AUXILIARY_UNATTRIBUTED"]
+    risk_policy_revision_id: str = Field(pattern=r"^analysisriskrev_[0-9a-f]{32}$")
+    predecessor_analysis_run_id: str | None = Field(
+        default=None, pattern=r"^analysisrun_[0-9a-f]{32}$"
+    )
+    requested_by: ActorId
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[\x21-\x7e]+$")
+
+
+class ReconcileKnowledgeAnalysisCommand(FrozenModel):
+    operation: Literal["RECONCILE_KNOWLEDGE_ANALYSIS"] = "RECONCILE_KNOWLEDGE_ANALYSIS"
+    analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    requested_by: ActorId
+
+
+class ReviewKnowledgeAnalysisCommand(FrozenModel):
+    operation: Literal["REVIEW_KNOWLEDGE_ANALYSIS"] = "REVIEW_KNOWLEDGE_ANALYSIS"
+    analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    expected_version: int = Field(ge=1)
+    decision: Literal["APPROVE", "REJECT"]
+    notes: str = Field(min_length=1, max_length=2000)
+    decided_by: ActorId
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[\x21-\x7e]+$")
+
+    @field_validator("notes")
+    @classmethod
+    def safe_notes(cls, value: str) -> str:
+        if any(ord(character) < 32 and character not in "\t\n\r" for character in value):
+            raise ValueError("review notes contain a control character")
+        return value
+
+
 CatalogApplicationRequestValue = Annotated[
-    ReviewedItemContentImportCommand | ItemContentQuery,
+    ReviewedItemContentImportCommand
+    | ItemContentQuery
+    | CreateKnowledgeAnalysisCommand
+    | ReconcileKnowledgeAnalysisCommand
+    | ReviewKnowledgeAnalysisCommand,
     Field(discriminator="operation"),
 ]
 
@@ -73,16 +132,48 @@ class ReviewedItemContentImportResult(FrozenModel):
     content_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
+class KnowledgeAnalysisApplicationResult(FrozenModel):
+    analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    state: Literal[
+        "REQUESTED",
+        "RESOLVED",
+        "QUEUED",
+        "RUNNING",
+        "VALIDATING",
+        "NEEDS_REVIEW",
+        "ACCEPTED",
+        "REJECTED",
+        "FAILED",
+        "CANCELLED",
+    ]
+    resource_version: int = Field(ge=1)
+    proposal_artifact_revision_id: str | None = Field(default=None, pattern=r"^rev_[0-9a-f]{32}$")
+    accepted_result_artifact_revision_id: str | None = Field(
+        default=None, pattern=r"^rev_[0-9a-f]{32}$"
+    )
+
+
 class CatalogApplicationResponse(FrozenModel):
     status: Literal["OK", "ERROR"]
-    operation: Literal["IMPORT_REVIEWED_ITEM_CONTENT", "GET_ITEM_CONTENT"]
+    operation: Literal[
+        "IMPORT_REVIEWED_ITEM_CONTENT",
+        "GET_ITEM_CONTENT",
+        "CREATE_KNOWLEDGE_ANALYSIS",
+        "RECONCILE_KNOWLEDGE_ANALYSIS",
+        "REVIEW_KNOWLEDGE_ANALYSIS",
+    ]
     result: ReviewedItemContentImportResult | None = None
+    analysis: KnowledgeAnalysisApplicationResult | None = None
     content: AssessmentItemContent | None = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
 
     @model_validator(mode="after")
     def exact_variant(self) -> CatalogApplicationResponse:
-        present = sum(value is not None for value in (self.result, self.content, self.error_code))
+        present = sum(
+            value is not None
+            for value in (self.result, self.analysis, self.content, self.error_code)
+        )
         if present != 1:
             raise ValueError("catalog application response must contain exactly one payload")
         if self.status == "ERROR":
@@ -95,4 +186,14 @@ class CatalogApplicationResponse(FrozenModel):
             raise ValueError("catalog import response requires result")
         if self.operation == "GET_ITEM_CONTENT" and self.content is None:
             raise ValueError("catalog content response requires content")
+        if (
+            self.operation
+            in {
+                "CREATE_KNOWLEDGE_ANALYSIS",
+                "RECONCILE_KNOWLEDGE_ANALYSIS",
+                "REVIEW_KNOWLEDGE_ANALYSIS",
+            }
+            and self.analysis is None
+        ):
+            raise ValueError("knowledge analysis response requires analysis result")
         return self

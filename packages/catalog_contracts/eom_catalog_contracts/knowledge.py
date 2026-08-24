@@ -7,6 +7,7 @@ from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
+from eom_identifiers import content_sha256
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
@@ -43,6 +44,44 @@ SafeMemberPath = Annotated[
 ]
 AnchorId = Annotated[str, Field(pattern=r"^anchor_[a-z0-9][a-z0-9_-]{0,63}$")]
 NodeId = Annotated[str, Field(pattern=r"^knode_[a-z0-9][a-z0-9_-]{0,63}$")]
+
+
+def _safe_canonical_member_path(value: str) -> str:
+    path = PurePosixPath(value)
+    if path.is_absolute() or ".." in path.parts or "." in path.parts or not path.parts:
+        raise ValueError("canonical artifact member path must be normalized and relative")
+    return value
+
+
+def _safe_source_path(value: str) -> str:
+    _safe_canonical_member_path(value)
+    if PurePosixPath(value).parts[0] != "source":
+        raise ValueError("analysis source must materialize under source/")
+    return value
+
+
+def _safe_normalized_path(value: str) -> str:
+    _safe_canonical_member_path(value)
+    if PurePosixPath(value).parts[0] != "normalized":
+        raise ValueError("analysis proposal members must materialize under normalized/")
+    return value
+
+
+CanonicalMemberPath = Annotated[
+    str,
+    Field(pattern=r"^[A-Za-z0-9._()가-힣/-]+$", min_length=1, max_length=512),
+    AfterValidator(_safe_canonical_member_path),
+]
+AnalysisSourcePath = Annotated[
+    str,
+    Field(pattern=r"^source/[A-Za-z0-9._()가-힣/-]+$", min_length=8, max_length=512),
+    AfterValidator(_safe_source_path),
+]
+AnalysisNormalizedPath = Annotated[
+    str,
+    Field(pattern=r"^normalized/[A-Za-z0-9._()가-힣/-]+$", min_length=12, max_length=512),
+    AfterValidator(_safe_normalized_path),
+]
 
 
 class FrozenModel(BaseModel):
@@ -275,6 +314,386 @@ class KnowledgeAnalysisResult(FrozenModel):
         ]
         if any(not set(references).issubset(anchors) for references in referenced_anchor_sets):
             raise ValueError("proposal source anchor pointer does not resolve")
+        return self
+
+
+class KnowledgeAnalysisSourceArtifactMemberV2(FrozenModel):
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    member_path: CanonicalMemberPath
+    materialized_path: AnalysisSourcePath
+    sha256: Sha256
+    bytes: int = Field(ge=1, le=100 * 1024 * 1024)
+    schema_ref: str | None = Field(
+        default=None,
+        pattern=r"^eom(?:\.assess(?:ment)?|://schemas/)[A-Za-z0-9._/@:-]{1,191}$",
+        max_length=256,
+    )
+    media_type: str = Field(pattern=r"^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$", max_length=128)
+    logical_name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$")
+
+
+class ContentIntakeKnowledgeSourceV2(FrozenModel):
+    source_kind: Literal["CONTENT_INTAKE_FILE"] = "CONTENT_INTAKE_FILE"
+    source_class: Literal["CURRICULUM", "TEXTBOOK", "PAST_EXAM", "INTERNAL_GUIDE"]
+    intake_batch_id: str = Field(pattern=r"^intake_[0-9a-f]{32}$")
+    source_file_id: str = Field(pattern=r"^sourcefile_[0-9a-f]{32}$")
+    lifecycle_state: Literal["ELIGIBLE"] = "ELIGIBLE"
+    artifact_member: KnowledgeAnalysisSourceArtifactMemberV2
+
+
+class ApprovedItemKnowledgeSourceV2(FrozenModel):
+    source_kind: Literal["APPROVED_ITEM_REVISION"] = "APPROVED_ITEM_REVISION"
+    source_class: Literal["APPROVED_ITEM", "PAST_EXAM"]
+    item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    lifecycle_state: Literal["APPROVED"] = "APPROVED"
+    artifact_member: KnowledgeAnalysisSourceArtifactMemberV2
+
+
+KnowledgeAnalysisSourceV2 = Annotated[
+    ContentIntakeKnowledgeSourceV2 | ApprovedItemKnowledgeSourceV2,
+    Field(discriminator="source_kind"),
+]
+
+
+KNOWLEDGE_ANALYSIS_OUTPUTS_V2 = frozenset(
+    {
+        "NORMALIZED_MARKDOWN",
+        "SOURCE_ANCHORS",
+        "NODES",
+        "EDGES",
+        "CLAIMS",
+        "COMPONENT_OBSERVATIONS",
+        "UNRESOLVED_AMBIGUITIES",
+    }
+)
+
+
+class KnowledgeAnalysisRequestV2(FrozenModel):
+    schema_version: Literal["knowledge-analysis-request/2.0"] = "knowledge-analysis-request/2.0"
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    source: KnowledgeAnalysisSourceV2
+    execution_preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    execution_preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    execution_preset_sha256: Sha256
+    worker_proposal_schema_ref: Literal[
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+    ] = "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+    accepted_result_schema_ref: Literal["eom://schemas/knowledge/knowledge-analysis-result/2.0"] = (
+        "eom://schemas/knowledge/knowledge-analysis-result/2.0"
+    )
+    predecessor_analysis_run_id: str | None = Field(
+        default=None, pattern=r"^analysisrun_[0-9a-f]{32}$"
+    )
+    prior_graph_snapshot: KnowledgeGraphSnapshotPointer | None
+    requested_outputs: tuple[
+        Literal[
+            "NORMALIZED_MARKDOWN",
+            "SOURCE_ANCHORS",
+            "NODES",
+            "EDGES",
+            "CLAIMS",
+            "COMPONENT_OBSERVATIONS",
+            "UNRESOLVED_AMBIGUITIES",
+        ],
+        ...,
+    ] = Field(min_length=7, max_length=7)
+    general_knowledge_mode: Literal["DISABLED", "AUXILIARY_UNATTRIBUTED"]
+    risk_policy_revision_id: str = Field(pattern=r"^analysisriskrev_[0-9a-f]{32}$")
+    created_at: UtcDatetime
+    request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_outputs_and_hash(self) -> KnowledgeAnalysisRequestV2:
+        if set(self.requested_outputs) != KNOWLEDGE_ANALYSIS_OUTPUTS_V2:
+            raise ValueError("knowledge analysis V2 requires the complete bounded output set")
+        body = self.model_dump(mode="json", exclude={"request_sha256"})
+        if content_sha256(body) != self.request_sha256:
+            raise ValueError("knowledge analysis request hash does not match canonical content")
+        return self
+
+
+class KnowledgeSourceAnchorV2(FrozenModel):
+    anchor_id: AnchorId
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    member_path: CanonicalMemberPath
+    anchor_kind: Literal[
+        "PAGE", "SECTION", "PARAGRAPH", "TABLE", "FIGURE", "EQUATION", "ITEM_ELEMENT"
+    ]
+    locator: str = Field(min_length=1, max_length=256)
+    excerpt_sha256: Sha256
+
+    _text = field_validator("locator")(_safe_text)
+
+
+class ProposedKnowledgeClaimV2(FrozenModel):
+    claim_id: str = Field(pattern=r"^claim_[a-z0-9][a-z0-9_-]{0,63}$")
+    text: str = Field(min_length=1, max_length=4000)
+    confidence_milli: int = Field(ge=0, le=1000)
+    anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=32)
+    general_knowledge_influenced: bool
+
+    _text = field_validator("text")(_safe_text)
+
+
+class KnowledgeComponentObservationV2(FrozenModel):
+    component_id: str = Field(pattern=r"^component_[a-z0-9][a-z0-9_-]{0,63}$")
+    kind: Literal["PARAGRAPH", "TABLE", "FIGURE", "EQUATION"]
+    anchor_id: AnchorId
+    confidence_milli: int = Field(ge=0, le=1000)
+
+
+class KnowledgeAmbiguityV2(FrozenModel):
+    code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    description: str = Field(min_length=1, max_length=2000)
+    blocking: bool
+    anchor_ids: tuple[AnchorId, ...] = Field(max_length=32)
+
+    _text = field_validator("description")(_safe_text)
+
+
+class KnowledgeAnalysisWorkerProposal(FrozenModel):
+    schema_version: Literal["knowledge-analysis-worker-proposal/1.0"] = (
+        "knowledge-analysis-worker-proposal/1.0"
+    )
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    normalized_markdown: str = Field(min_length=1, max_length=262144)
+    anchors: tuple[KnowledgeSourceAnchorV2, ...] = Field(min_length=1, max_length=1024)
+    nodes: tuple[ProposedKnowledgeNode, ...] = Field(min_length=1, max_length=512)
+    edges: tuple[ProposedKnowledgeEdge, ...] = Field(max_length=1024)
+    claims: tuple[ProposedKnowledgeClaimV2, ...] = Field(max_length=512)
+    component_observations: tuple[KnowledgeComponentObservationV2, ...] = Field(max_length=512)
+    unresolved_ambiguities: tuple[KnowledgeAmbiguityV2, ...] = Field(max_length=128)
+    general_knowledge_used: bool
+    completed_at: UtcDatetime
+
+    _markdown = field_validator("normalized_markdown")(_safe_text)
+
+    @model_validator(mode="after")
+    def proposal_references_are_closed(self) -> KnowledgeAnalysisWorkerProposal:
+        anchor_ids = [anchor.anchor_id for anchor in self.anchors]
+        node_ids = [node.node_id for node in self.nodes]
+        edge_ids = [edge.edge_id for edge in self.edges]
+        claim_ids = [claim.claim_id for claim in self.claims]
+        component_ids = [item.component_id for item in self.component_observations]
+        ambiguity_codes = [item.code for item in self.unresolved_ambiguities]
+        stable_keys = [node.stable_key for node in self.nodes]
+        for values, label in (
+            (anchor_ids, "anchor"),
+            (node_ids, "node"),
+            (stable_keys, "node stable key"),
+            (edge_ids, "edge"),
+            (claim_ids, "claim"),
+            (component_ids, "component"),
+            (ambiguity_codes, "ambiguity code"),
+        ):
+            if len(values) != len(set(values)):
+                raise ValueError(f"knowledge proposal {label} identities must be unique")
+        anchors = set(anchor_ids)
+        nodes = set(node_ids)
+        referenced_anchors = [
+            *(node.anchor_ids for node in self.nodes),
+            *(edge.anchor_ids for edge in self.edges),
+            *(claim.anchor_ids for claim in self.claims),
+            *((item.anchor_id,) for item in self.component_observations),
+            *(item.anchor_ids for item in self.unresolved_ambiguities),
+        ]
+        if any(not set(values).issubset(anchors) for values in referenced_anchors):
+            raise ValueError("knowledge proposal anchor pointer does not resolve")
+        for edge in self.edges:
+            if edge.from_node_id not in nodes or edge.to_node_id not in nodes:
+                raise ValueError("knowledge proposal edge endpoint does not resolve")
+            if edge.from_node_id == edge.to_node_id:
+                raise ValueError("knowledge proposal self-edges are not allowed")
+        influenced = any(claim.general_knowledge_influenced for claim in self.claims)
+        if influenced and not self.general_knowledge_used:
+            raise ValueError("claim provenance requires general_knowledge_used")
+        return self
+
+
+class KnowledgeProposalCounts(FrozenModel):
+    anchors: int = Field(ge=1, le=1024)
+    nodes: int = Field(ge=1, le=512)
+    edges: int = Field(ge=0, le=1024)
+    claims: int = Field(ge=0, le=512)
+    component_observations: int = Field(ge=0, le=512)
+    ambiguities: int = Field(ge=0, le=128)
+
+
+class KnowledgeAnalysisRiskPolicy(FrozenModel):
+    """Immutable deterministic review policy applied after proposal validation."""
+
+    schema_version: Literal["knowledge-analysis-risk-policy/1.0"] = (
+        "knowledge-analysis-risk-policy/1.0"
+    )
+    risk_policy_revision_id: str = Field(pattern=r"^analysisriskrev_[0-9a-f]{32}$")
+    state: Literal["RELEASED"] = "RELEASED"
+    minimum_confidence_milli: int = Field(ge=0, le=1000)
+    review_source_classes: tuple[
+        Literal["CURRICULUM", "TEXTBOOK", "APPROVED_ITEM", "PAST_EXAM", "INTERNAL_GUIDE"],
+        ...,
+    ] = Field(max_length=5)
+    review_when_general_knowledge_used: bool
+    review_when_blocking_ambiguity_present: bool
+    maximum_auto_accept_counts: KnowledgeProposalCounts
+    created_at: UtcDatetime
+    content_sha256: Sha256
+
+    @model_validator(mode="after")
+    def immutable_policy_is_canonical(self) -> KnowledgeAnalysisRiskPolicy:
+        if len(self.review_source_classes) != len(set(self.review_source_classes)):
+            raise ValueError("knowledge analysis review source classes must be unique")
+        body = self.model_dump(mode="json", exclude={"content_sha256"})
+        if content_sha256(body) != self.content_sha256:
+            raise ValueError("knowledge analysis risk policy hash does not match canonical content")
+        return self
+
+
+class KnowledgeProposalArtifactMember(FrozenModel):
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    member_path: AnalysisNormalizedPath
+    sha256: Sha256
+    bytes: int = Field(ge=0, le=2 * 1024 * 1024)
+    schema_ref: str = Field(
+        pattern=r"^eom://schemas/knowledge/[A-Za-z0-9._/@:-]{1,191}$", max_length=256
+    )
+    media_type: Literal["text/markdown", "application/x-ndjson", "application/json"]
+    logical_name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$")
+
+
+class KnowledgeProposalMembers(FrozenModel):
+    normalized_markdown: KnowledgeProposalArtifactMember
+    anchors: KnowledgeProposalArtifactMember
+    nodes: KnowledgeProposalArtifactMember
+    edges: KnowledgeProposalArtifactMember
+    claims: KnowledgeProposalArtifactMember
+    component_observations: KnowledgeProposalArtifactMember
+    unresolved_ambiguities: KnowledgeProposalArtifactMember
+
+
+class KnowledgeAnalysisProposalReceipt(FrozenModel):
+    schema_version: Literal["knowledge-analysis-proposal-receipt/1.0"] = (
+        "knowledge-analysis-proposal-receipt/1.0"
+    )
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    source: KnowledgeAnalysisSourceV2
+    status: Literal["PROPOSED_VALIDATED"] = "PROPOSED_VALIDATED"
+    members: KnowledgeProposalMembers
+    counts: KnowledgeProposalCounts
+    general_knowledge_used: bool
+    minimum_confidence_milli: int | None = Field(default=None, ge=0, le=1000)
+    blocking_ambiguity_count: int = Field(ge=0, le=128)
+    content_set_sha256: Sha256
+    completed_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def member_set_is_one_immutable_artifact(self) -> KnowledgeAnalysisProposalReceipt:
+        members = list(self.members.__class__.model_fields)
+        values = [getattr(self.members, name) for name in members]
+        identities = {(value.artifact_id, value.artifact_revision_id) for value in values}
+        if len(identities) != 1:
+            raise ValueError("proposal members must share one Artifact Revision")
+        expected = {
+            "normalized_markdown": ("normalized/document.md", "text/markdown"),
+            "anchors": ("normalized/anchors.jsonl", "application/x-ndjson"),
+            "nodes": ("normalized/nodes.jsonl", "application/x-ndjson"),
+            "edges": ("normalized/edges.jsonl", "application/x-ndjson"),
+            "claims": ("normalized/claims.jsonl", "application/x-ndjson"),
+            "component_observations": (
+                "normalized/components.jsonl",
+                "application/x-ndjson",
+            ),
+            "unresolved_ambiguities": (
+                "normalized/ambiguities.jsonl",
+                "application/x-ndjson",
+            ),
+        }
+        if any(
+            (getattr(self.members, name).member_path, getattr(self.members, name).media_type)
+            != expected[name]
+            for name in members
+        ):
+            raise ValueError("proposal member path or media type is inconsistent")
+        descriptors = [
+            {
+                "member_path": value.member_path,
+                "sha256": value.sha256,
+                "bytes": value.bytes,
+                "schema_ref": value.schema_ref,
+                "media_type": value.media_type,
+            }
+            for value in sorted(values, key=lambda item: item.member_path)
+        ]
+        if content_sha256(descriptors) != self.content_set_sha256:
+            raise ValueError("proposal content-set hash does not match member descriptors")
+        return self
+
+
+class KnowledgeAnalysisReviewDecision(FrozenModel):
+    schema_version: Literal["knowledge-analysis-review-decision/1.0"] = (
+        "knowledge-analysis-review-decision/1.0"
+    )
+    decision_id: str = Field(pattern=r"^analysisdecision_[0-9a-f]{32}$")
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    proposal_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    proposal_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    proposal_content_set_sha256: Sha256
+    risk_policy_revision_id: str = Field(pattern=r"^analysisriskrev_[0-9a-f]{32}$")
+    decision: Literal["APPROVE", "REJECT"]
+    decided_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    notes: str = Field(min_length=1, max_length=2000)
+    decided_at: UtcDatetime
+    decision_sha256: Sha256
+
+    _text = field_validator("notes")(_safe_text)
+
+    @model_validator(mode="after")
+    def exact_decision_hash(self) -> KnowledgeAnalysisReviewDecision:
+        body = self.model_dump(mode="json", exclude={"decision_sha256"})
+        if content_sha256(body) != self.decision_sha256:
+            raise ValueError("knowledge analysis decision hash does not match canonical content")
+        return self
+
+
+class KnowledgeAnalysisResultV2(FrozenModel):
+    schema_version: Literal["knowledge-analysis-result/2.0"] = "knowledge-analysis-result/2.0"
+    analysis_result_id: str = Field(pattern=r"^knowledgeanalysisresult_[0-9a-f]{32}$")
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    analysis_request_sha256: Sha256
+    source: KnowledgeAnalysisSourceV2
+    status: Literal["ACCEPTED"] = "ACCEPTED"
+    proposal_receipt: KnowledgeProposalArtifactMember
+    proposal_content_set_sha256: Sha256
+    risk_policy_revision_id: str = Field(pattern=r"^analysisriskrev_[0-9a-f]{32}$")
+    acceptance_mode: Literal["AUTO_POLICY", "HUMAN_APPROVED"]
+    review_decision: KnowledgeArtifactMemberPointer | None
+    counts: KnowledgeProposalCounts
+    general_knowledge_used: bool
+    minimum_confidence_milli: int | None = Field(default=None, ge=0, le=1000)
+    blocking_ambiguity_count: int = Field(ge=0, le=128)
+    accepted_at: UtcDatetime
+    result_sha256: Sha256
+
+    @model_validator(mode="after")
+    def acceptance_is_pointer_only_and_hashed(self) -> KnowledgeAnalysisResultV2:
+        if (
+            self.proposal_receipt.member_path != "normalized/proposal-receipt.json"
+            or self.proposal_receipt.media_type != "application/json"
+        ):
+            raise ValueError("accepted result requires the exact proposal receipt member")
+        human = self.acceptance_mode == "HUMAN_APPROVED"
+        if human != (self.review_decision is not None):
+            raise ValueError("human acceptance requires one review decision pointer")
+        if self.review_decision is not None and (
+            self.review_decision.media_type != "application/json"
+            or not self.review_decision.member_path.startswith("evidence/")
+        ):
+            raise ValueError("review decision pointer has the wrong media type or member path")
+        body = self.model_dump(mode="json", exclude={"result_sha256"})
+        if content_sha256(body) != self.result_sha256:
+            raise ValueError("knowledge analysis result hash does not match canonical content")
         return self
 
 

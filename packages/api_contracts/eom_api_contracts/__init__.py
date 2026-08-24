@@ -21,12 +21,24 @@ from eom_api_contracts.hwpx import (
     HwpxSupports,
     HwpxValidationState,
 )
+from eom_api_contracts.knowledge_analysis import (
+    ApprovedItemAnalysisSourceInput,
+    ContentIntakeAnalysisSourceInput,
+    CreateKnowledgeAnalysisRequest,
+    KnowledgeAnalysisCountsView,
+    KnowledgeAnalysisReviewRequest,
+    KnowledgeAnalysisRunView,
+    KnowledgeAnalysisSourceInput,
+)
 
 __all__ = [
     "ApiModel",
+    "ApprovedItemAnalysisSourceInput",
     "ArtifactPointer",
     "CommandResult",
+    "ContentIntakeAnalysisSourceInput",
     "CreateHwpxBuildRequest",
+    "CreateKnowledgeAnalysisRequest",
     "HwpxBuildOptions",
     "HwpxBuildState",
     "HwpxBuildView",
@@ -35,6 +47,10 @@ __all__ = [
     "HwpxDeliveryProfile",
     "HwpxSupports",
     "HwpxValidationState",
+    "KnowledgeAnalysisCountsView",
+    "KnowledgeAnalysisReviewRequest",
+    "KnowledgeAnalysisRunView",
+    "KnowledgeAnalysisSourceInput",
     "ListResponse",
     "PageMeta",
     "ProblemDetails",

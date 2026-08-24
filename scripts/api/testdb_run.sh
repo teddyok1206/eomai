@@ -171,5 +171,6 @@ export EOM_RUN_INTEGRATION=1
   tests/integration/test_workflow_engine.py \
   tests/integration/test_workflow_submission_idempotency.py \
   tests/integration/test_control_plane_persistence.py \
+  tests/integration/test_knowledge_analysis_service.py \
   tests/api/test_workflow_approval_runtime_role.py
 printf 'Disposable Application API and workflow integration tests passed.\n'

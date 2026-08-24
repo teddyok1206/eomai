@@ -53,7 +53,7 @@
           "properties": {
             "key": {"$ref": "#/$defs/stepKey"},
             "type": {"const": "agent"},
-            "worker_role": {"enum": ["authoring", "image", "review", "item_management"]},
+            "worker_role": {"enum": ["authoring", "image", "review", "item_management", "support"]},
             "result_schema": {"type": "string", "pattern": "^[a-z][a-z-]+-result@[0-9]+\\.[0-9]+$"},
             "on_success": {"$ref": "#/$defs/stepKey"}
           }

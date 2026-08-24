@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -18,29 +21,46 @@ def _installer() -> ModuleType:
     return module
 
 
-def test_catalog_manager_secret_projection_contains_only_database_url() -> None:
+def test_catalog_manager_accepts_only_its_dedicated_database_identity() -> None:
     installer = _installer()
-    values = installer._parse_source(  # type: ignore[attr-defined]
-        b"EOM_API_DATABASE_URL=postgresql://synthetic.invalid/eom\n"
-        b"EOM_API_TOKEN_HASH_KEY=synthetic-token-key\n"
-        b"EOM_API_FINGERPRINT_KEY=synthetic-fingerprint-key\n"
+    installer._validate_catalog_secret(
+        b"EOM_DATABASE_URL=postgresql+psycopg://"
+        b"eom_catalog_manager_runtime:synthetic@127.0.0.1:5432/eom\n"
     )
-
-    projected = f"EOM_DATABASE_URL={values['EOM_API_DATABASE_URL']}\n"
-    assert projected == "EOM_DATABASE_URL=postgresql://synthetic.invalid/eom\n"
-    assert "TOKEN" not in projected
-    assert "FINGERPRINT" not in projected
 
 
 def test_catalog_manager_secret_projection_rejects_extra_keys() -> None:
     installer = _installer()
     with pytest.raises(SystemExit, match="key set is invalid"):
-        installer._parse_source(  # type: ignore[attr-defined]
-            b"EOM_API_DATABASE_URL=postgresql://synthetic.invalid/eom\n"
-            b"EOM_API_TOKEN_HASH_KEY=synthetic-token-key\n"
-            b"EOM_API_FINGERPRINT_KEY=synthetic-fingerprint-key\n"
+        installer._validate_catalog_secret(
+            b"EOM_DATABASE_URL=postgresql+psycopg://"
+            b"eom_catalog_manager_runtime:synthetic@127.0.0.1:5432/eom\n"
             b"UNEXPECTED=value\n"
         )
+
+
+def test_catalog_manager_rejects_api_or_remote_database_identity() -> None:
+    installer = _installer()
+    for value in (
+        b"postgresql+psycopg://eom_api_runtime:synthetic@127.0.0.1:5432/eom",
+        b"postgresql+psycopg://eom_catalog_manager_runtime:synthetic@db.invalid:5432/eom",
+    ):
+        with pytest.raises(SystemExit, match="identity is invalid"):
+            installer._validate_catalog_secret(b"EOM_DATABASE_URL=" + value + b"\n")
+
+
+def test_catalog_runtime_role_bootstrap_is_exact_and_separate_from_api() -> None:
+    source = (REPOSITORY_ROOT / "scripts/catalog/bootstrap_runtime_role.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'ROLE = "eom_catalog_manager_runtime"' in source
+    assert "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA app" in source
+    assert "TABLE_PRIVILEGES" in source
+    assert "eom_api_runtime" not in source
+    assert "api.env" not in source
+    assert "TOKEN_HASH" not in source
+    assert "FINGERPRINT" not in source
 
 
 def test_catalog_manager_unit_owns_nas_commit_boundary_without_api_secret() -> None:
@@ -62,3 +82,24 @@ def test_catalog_manager_unit_owns_nas_commit_boundary_without_api_secret() -> N
         REPOSITORY_ROOT / "apps/application_api/eom_api/services/catalog_application_client.py"
     ).read_text(encoding="utf-8")
     assert 'pwd.getpwnam("eom-catalog-manager")' in client
+
+
+def test_standalone_catalog_runner_resolves_every_registered_foreign_key() -> None:
+    probe = """
+import eom_catalog_service.application_runner
+from eom_orchestrator.models import Base
+
+assert "operators" in Base.metadata.tables
+for table in Base.metadata.tables.values():
+    for foreign_key in table.foreign_keys:
+        foreign_key.column
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", probe],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+
+    assert completed.returncode == 0, completed.stderr

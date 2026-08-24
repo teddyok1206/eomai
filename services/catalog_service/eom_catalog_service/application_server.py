@@ -21,9 +21,12 @@ from eom_catalog_contracts import (
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CreateKnowledgeAnalysisCommand,
     ItemContentQuery,
+    ReconcileKnowledgeAnalysisCommand,
     ReviewedItemContentImportCommand,
     ReviewedItemContentImportResult,
+    ReviewKnowledgeAnalysisCommand,
     validate_contract,
 )
 from eom_item_registry import RegistryError
@@ -32,6 +35,10 @@ from pydantic import ValidationError
 
 from eom_catalog_service.errors import CatalogError
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
+from eom_catalog_service.knowledge_analysis_service import (
+    KnowledgeAnalysisApplicationService,
+    KnowledgeAnalysisServiceError,
+)
 from eom_catalog_service.registry_service import RegistryService
 
 CATALOG_APPLICATION_SOCKET = Path(CATALOG_APPLICATION_SOCKET_PATH)
@@ -65,9 +72,15 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if not isinstance(value, dict):
                 raise ValueError
             raw_operation = value.get("operation")
-            if raw_operation in {"IMPORT_REVIEWED_ITEM_CONTENT", "GET_ITEM_CONTENT"}:
+            if raw_operation in {
+                "IMPORT_REVIEWED_ITEM_CONTENT",
+                "GET_ITEM_CONTENT",
+                "CREATE_KNOWLEDGE_ANALYSIS",
+                "RECONCILE_KNOWLEDGE_ANALYSIS",
+                "REVIEW_KNOWLEDGE_ANALYSIS",
+            }:
                 operation = raw_operation
-            validate_contract("catalog-application-request", value)
+            validate_contract("catalog-application-request-v2", value)
             request = CatalogApplicationRequest.model_validate(value).root
         except (
             UnicodeError,
@@ -109,9 +122,27 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     operation=request.operation,
                     content=self.server.registry.load_item_content(request.item_revision_id),
                 )
+            elif isinstance(request, CreateKnowledgeAnalysisCommand):
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    analysis=self.server.knowledge_analysis.create(request),
+                )
+            elif isinstance(request, ReconcileKnowledgeAnalysisCommand):
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    analysis=self.server.knowledge_analysis.reconcile(request),
+                )
+            elif isinstance(request, ReviewKnowledgeAnalysisCommand):
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    analysis=self.server.knowledge_analysis.review(request),
+                )
             else:  # pragma: no cover - discriminated contract makes this unreachable
                 raise TypeError("unsupported catalog application request")
-        except (CatalogError, RegistryError) as exc:
+        except (CatalogError, RegistryError, KnowledgeAnalysisServiceError) as exc:
             code = getattr(exc.code, "value", str(exc.code))
             self.server.write_error(self.wfile, request.operation, code)
             return
@@ -132,6 +163,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self,
         imports: StructuredItemContentImportService,
         registry: RegistryService,
+        knowledge_analysis: KnowledgeAnalysisApplicationService,
         *,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
@@ -140,6 +172,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
     ) -> None:
         self.imports = imports
         self.registry = registry
+        self.knowledge_analysis = knowledge_analysis
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
         self.expected_uid = os.geteuid() if expected_uid is None else expected_uid
@@ -191,7 +224,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
     @staticmethod
     def write_response(stream: Any, response: CatalogApplicationResponse) -> None:
         payload = response.model_dump(mode="json", exclude_none=True)
-        validate_contract("catalog-application-response", payload)
+        validate_contract("catalog-application-response-v2", payload)
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         raw = encoded.encode("utf-8")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:

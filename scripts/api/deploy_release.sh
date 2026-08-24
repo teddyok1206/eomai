@@ -171,6 +171,8 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/runtime_isolation_pidfd.py",
         "eom_api/runtime_isolation_verifier.py",
         "eom_api/routers/control_plane.py",
+        "eom_api/routers/knowledge_analysis.py",
+        "eom_api/services/catalog_application_client.py",
         "eom_api/services/control_plane_adapter.py",
         "eom_api/openapi/eom-api-v1.openapi.json",
         "eom_api/openapi/eom-api-v1.sha256",
@@ -261,10 +263,14 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/application_server.py",
         "eom_catalog_service/generated_stimulus.py",
         "eom_catalog_service/item_content_import.py",
+        "eom_catalog_service/knowledge_analysis_risk.py",
+        "eom_catalog_service/knowledge_analysis_service.py",
+        "eom_catalog_service/knowledge_analysis_sources.py",
         "eom_catalog_service/knowledge_stimulus.py",
         "eom_catalog_service/settings.py",
         "eom_catalog_service/staging.py",
         "eom_catalog_service/registry_service.py",
+        "eom_catalog_service/runtime_privileges.py",
     }
     hwpx_application_runtime = {
         "eom_hwpx_manager/application_adapter.py",
@@ -369,6 +375,8 @@ catalog_prefix = "eom_catalog_contracts/resources/"
 catalog_resources = {
     "catalog-application/catalog-application-request-v1.schema.json": "schemas/catalog-application/catalog-application-request-v1.schema.json",
     "catalog-application/catalog-application-response-v1.schema.json": "schemas/catalog-application/catalog-application-response-v1.schema.json",
+    "catalog-application/catalog-application-request-v2.schema.json": "schemas/catalog-application/catalog-application-request-v2.schema.json",
+    "catalog-application/catalog-application-response-v2.schema.json": "schemas/catalog-application/catalog-application-response-v2.schema.json",
     "content-intake/intake-manifest-v1.schema.json": "schemas/content-intake/intake-manifest-v1.schema.json",
     "content-intake/mapping-proposal-v1.schema.json": "schemas/content-intake/mapping-proposal-v1.schema.json",
     "content-intake/uncertainties-v1.schema.json": "schemas/content-intake/uncertainties-v1.schema.json",
@@ -382,6 +390,13 @@ catalog_resources = {
     "knowledge/knowledge-types-v1.schema.json": "schemas/knowledge/knowledge-types-v1.schema.json",
     "knowledge/knowledge-analysis-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-request-v1.schema.json",
     "knowledge/knowledge-analysis-result-v1.schema.json": "schemas/knowledge/knowledge-analysis-result-v1.schema.json",
+    "knowledge/knowledge-analysis-types-v2.schema.json": "schemas/knowledge/knowledge-analysis-types-v2.schema.json",
+    "knowledge/knowledge-analysis-request-v2.schema.json": "schemas/knowledge/knowledge-analysis-request-v2.schema.json",
+    "knowledge/knowledge-analysis-worker-proposal-v1.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v1.schema.json",
+    "knowledge/knowledge-analysis-proposal-receipt-v1.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v1.schema.json",
+    "knowledge/knowledge-analysis-risk-policy-v1.schema.json": "schemas/knowledge/knowledge-analysis-risk-policy-v1.schema.json",
+    "knowledge/knowledge-analysis-review-decision-v1.schema.json": "schemas/knowledge/knowledge-analysis-review-decision-v1.schema.json",
+    "knowledge/knowledge-analysis-result-v2.schema.json": "schemas/knowledge/knowledge-analysis-result-v2.schema.json",
     "knowledge/knowledge-graph-snapshot-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
     "knowledge/education-retrieval-request-v1.schema.json": "schemas/knowledge/education-retrieval-request-v1.schema.json",
     "knowledge/evidence-bundle-manifest-v1.schema.json": "schemas/knowledge/evidence-bundle-manifest-v1.schema.json",
@@ -422,6 +437,10 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             ).read_bytes()
         )
         definitions.append(definition)
+    analysis_definition = root / "knowledge-analysis.v1.yaml"
+    analysis_definition.write_bytes(
+        (Path(os.environ["REPOSITORY_ROOT"]) / "config/workflows/knowledge-analysis.v1.yaml").read_bytes()
+    )
     worker_config = root / "worker-slots.yaml"
     worker_config.write_bytes(
         (Path(os.environ["REPOSITORY_ROOT"]) / "config/worker-slots.example.yaml").read_bytes()
@@ -468,7 +487,7 @@ import sys
 from pathlib import Path
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, analysis_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -536,6 +555,7 @@ for role in INPUT_SCHEMA_FILES:
     load_role_input_schema(role, "workflow-role/1.1.0")
     load_role_input_schema(role, "workflow-role/1.2.0")
     load_role_input_schema(role, "workflow-role/1.3.0")
+load_role_input_schema("support", "workflow-role/1.4.0")
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
     load_codex_result_schema(schema_id)
@@ -547,6 +567,12 @@ compiled_versions = {
 }
 if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0"}:
     raise SystemExit("generic workflow definition versions mismatch")
+analysis = compile_definition(Path(analysis_definition), {"support"})
+if (
+    analysis.definition.definition_key != "knowledge-analysis"
+    or analysis.definition.definition_version != "1.0.0"
+):
+    raise SystemExit("knowledge analysis workflow definition mismatch")
 for name, _ in catalog_schema_inventory():
     load_schema(name)
 validate_contract(
@@ -577,6 +603,7 @@ validate_contract(
             str(installed_root),
             os.environ["REPOSITORY_ROOT"],
             *(str(definition) for definition in definitions),
+            str(analysis_definition),
             str(worker_config),
             str(staging),
             str(workspace_root),

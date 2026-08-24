@@ -18,9 +18,13 @@ from eom_catalog_contracts import (
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CreateKnowledgeAnalysisCommand,
     ItemContentQuery,
+    KnowledgeAnalysisApplicationResult,
+    ReconcileKnowledgeAnalysisCommand,
     ReviewedItemContentImportCommand,
     ReviewedItemContentImportResult,
+    ReviewKnowledgeAnalysisCommand,
     validate_contract,
 )
 from eom_item_registry import RegistryError, RegistryErrorCode
@@ -71,12 +75,45 @@ class CatalogApplicationClient:
             )
         return response.content
 
+    def create_knowledge_analysis(
+        self, command: CreateKnowledgeAnalysisCommand
+    ) -> KnowledgeAnalysisApplicationResult:
+        return self._analysis_request(command)
+
+    def reconcile_knowledge_analysis(
+        self, command: ReconcileKnowledgeAnalysisCommand
+    ) -> KnowledgeAnalysisApplicationResult:
+        return self._analysis_request(command)
+
+    def review_knowledge_analysis(
+        self, command: ReviewKnowledgeAnalysisCommand
+    ) -> KnowledgeAnalysisApplicationResult:
+        return self._analysis_request(command)
+
+    def _analysis_request(
+        self,
+        command: CreateKnowledgeAnalysisCommand
+        | ReconcileKnowledgeAnalysisCommand
+        | ReviewKnowledgeAnalysisCommand,
+    ) -> KnowledgeAnalysisApplicationResult:
+        response = self._request(command)
+        if response.operation != command.operation or response.analysis is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog knowledge analysis response is invalid",
+            )
+        return response.analysis
+
     def _request(
         self,
-        command: ReviewedItemContentImportCommand | ItemContentQuery,
+        command: ReviewedItemContentImportCommand
+        | ItemContentQuery
+        | CreateKnowledgeAnalysisCommand
+        | ReconcileKnowledgeAnalysisCommand
+        | ReviewKnowledgeAnalysisCommand,
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
-        validate_contract("catalog-application-request", payload)
+        validate_contract("catalog-application-request-v2", payload)
         self._validate_socket()
         connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
@@ -96,7 +133,7 @@ class CatalogApplicationClient:
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError
-            validate_contract("catalog-application-response", value)
+            validate_contract("catalog-application-response-v2", value)
             response = CatalogApplicationResponse.model_validate(value)
         except CatalogApplicationClientError:
             raise
@@ -174,6 +211,11 @@ class CatalogApplicationClient:
             try:
                 catalog_code = CatalogApplicationErrorCode(error_code)
             except ValueError as exc:
+                if error_code.startswith("KNOWLEDGE_ANALYSIS_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog knowledge analysis operation failed",
+                    ) from None
                 raise CatalogApplicationClientError(
                     CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
                     "Catalog application returned an unknown error code",

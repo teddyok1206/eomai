@@ -19,12 +19,14 @@ fail() {
 
 declare -A FILES=(
   ["${REPOSITORY_ROOT}/config/workflows/generic-item-development.v1.4.yaml"]="${WORKFLOW_ROOT}/generic-item-development.yaml"
+  ["${REPOSITORY_ROOT}/config/workflows/knowledge-analysis.v1.yaml"]="${WORKFLOW_ROOT}/knowledge-analysis.yaml"
   ["${REPOSITORY_ROOT}/config/human-actors.example.yaml"]="${CONFIG_ROOT}/human-actors.yaml"
   ["${REPOSITORY_ROOT}/config/workflow-runner.example.yaml"]="${CONFIG_ROOT}/workflow-runner.yaml"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/authoring.txt"]="${PROMPT_ROOT}/authoring.txt"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/image.txt"]="${PROMPT_ROOT}/image.txt"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/review.txt"]="${PROMPT_ROOT}/review.txt"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/registration.txt"]="${PROMPT_ROOT}/registration.txt"
+  ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/support.txt"]="${PROMPT_ROOT}/support.txt"
 )
 
 for source in "${!FILES[@]}"; do

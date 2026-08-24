@@ -10,6 +10,7 @@ import pytest
 from eom_workflow.control_schemas import control_schema_inventory, load_control_schema
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
+    INPUT_SCHEMA_FILES_V1_4,
     RESULT_SCHEMA_FILES,
     WorkflowSchemaError,
     load_definition_schema,
@@ -29,7 +30,11 @@ EXPECTED_RESOURCES = frozenset(
 
 
 def test_workflow_schema_resources_match_canonical_sources() -> None:
-    mapped_names = (*INPUT_SCHEMA_FILES.values(), *RESULT_SCHEMA_FILES.values())
+    mapped_names = (
+        *INPUT_SCHEMA_FILES.values(),
+        *INPUT_SCHEMA_FILES_V1_4.values(),
+        *RESULT_SCHEMA_FILES.values(),
+    )
     assert len(mapped_names) == len(set(mapped_names))
     assert {
         "workflow-definition.schema.json",
@@ -53,6 +58,10 @@ def test_workflow_schemas_load_from_package_resources() -> None:
     assert load_knowledge_item_brief_schema()["$id"].endswith("knowledge-item-brief-v1")
     for role in INPUT_SCHEMA_FILES:
         assert load_role_input_schema(role)["$id"].endswith("-input.schema.json")
+    for role in INPUT_SCHEMA_FILES_V1_4:
+        assert load_role_input_schema(role, "workflow-role/1.4.0")["$id"].endswith(
+            "-input-v1.schema.json"
+        )
     for schema_id in RESULT_SCHEMA_FILES:
         assert "-result" in load_role_result_schema(schema_id)["$id"]
     for name, _ in control_schema_inventory():

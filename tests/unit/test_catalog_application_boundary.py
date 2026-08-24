@@ -15,6 +15,8 @@ from eom_catalog_contracts import (
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CreateKnowledgeAnalysisCommand,
+    KnowledgeAnalysisApplicationResult,
     ReviewedItemContentImportCommand,
     validate_contract,
 )
@@ -40,6 +42,19 @@ class FakeRegistry:
         return AssessmentItemContent.model_validate(item_content())
 
 
+class FakeKnowledgeAnalysis:
+    def create(self, _command: object) -> KnowledgeAnalysisApplicationResult:
+        return KnowledgeAnalysisApplicationResult(
+            analysis_run_id="analysisrun_" + "7" * 32,
+            workflow_id="workflow_" + "8" * 32,
+            state="QUEUED",
+            resource_version=3,
+        )
+
+    reconcile = create
+    review = create
+
+
 def _server(tmp_path: Path, *, allowed_uid: int | None = None) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -47,6 +62,7 @@ def _server(tmp_path: Path, *, allowed_uid: int | None = None) -> CatalogApplica
     return CatalogApplicationServer(  # type: ignore[arg-type]
         FakeImports(),
         FakeRegistry(),
+        FakeKnowledgeAnalysis(),
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid() if allowed_uid is None else allowed_uid,
         expected_uid=os.getuid(),
@@ -79,6 +95,28 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-application-response", response)
 
+    analysis_command = CreateKnowledgeAnalysisCommand(
+        source={
+            "source_kind": "CONTENT_INTAKE_FILE",
+            "source_class": "TEXTBOOK",
+            "intake_batch_id": "intake_" + "1" * 32,
+            "source_file_id": "sourcefile_" + "2" * 32,
+        },
+        preset_key="knowledge-analysis",
+        general_knowledge_mode="DISABLED",
+        risk_policy_revision_id="analysisriskrev_" + "3" * 32,
+        requested_by="operator_test_admin",
+        idempotency_key="knowledge-analysis-contract-key",
+    )
+    analysis_request = CatalogApplicationRequest(root=analysis_command).model_dump(mode="json")
+    validate_contract("catalog-application-request-v2", analysis_request)
+    analysis_response = CatalogApplicationResponse(
+        status="OK",
+        operation="CREATE_KNOWLEDGE_ANALYSIS",
+        analysis=FakeKnowledgeAnalysis().create(analysis_command),
+    ).model_dump(mode="json", exclude_none=True)
+    validate_contract("catalog-application-response-v2", analysis_response)
+
 
 def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
     tmp_path: Path,
@@ -100,6 +138,22 @@ def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
         assert imported.item_revision_id == "itemrev_" + "2" * 32
         loaded = client.load_item_content("itemrev_" + "2" * 32)
         assert loaded == AssessmentItemContent.model_validate(item_content())
+        analysis = client.create_knowledge_analysis(
+            CreateKnowledgeAnalysisCommand(
+                source={
+                    "source_kind": "CONTENT_INTAKE_FILE",
+                    "source_class": "TEXTBOOK",
+                    "intake_batch_id": "intake_" + "1" * 32,
+                    "source_file_id": "sourcefile_" + "2" * 32,
+                },
+                preset_key="knowledge-analysis",
+                general_knowledge_mode="DISABLED",
+                risk_policy_revision_id="analysisriskrev_" + "3" * 32,
+                requested_by="operator_test_admin",
+                idempotency_key="knowledge-analysis-round-trip",
+            )
+        )
+        assert analysis.analysis_run_id == "analysisrun_" + "7" * 32
     finally:
         server.shutdown()
         server.server_close()

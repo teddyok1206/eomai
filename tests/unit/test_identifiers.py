@@ -23,6 +23,10 @@ from eom_identifiers import (
     new_instruction_bundle_id,
     new_instruction_bundle_revision_id,
     new_job_id,
+    new_knowledge_analysis_decision_id,
+    new_knowledge_analysis_request_id,
+    new_knowledge_analysis_result_id,
+    new_knowledge_analysis_run_id,
     new_logical_artifact_id,
     new_reference_bundle_id,
     new_reference_bundle_revision_id,
@@ -53,6 +57,10 @@ def test_ids_have_distinct_namespaces() -> None:
     assert re.fullmatch(r"workerlease_[0-9a-f]{32}", new_worker_lease_id())
     assert re.fullmatch(r"codexcmd_[0-9a-f]{32}", new_codex_control_command_id())
     assert re.fullmatch(r"preseteval_[0-9a-f]{32}", new_execution_preset_evaluation_id())
+    assert re.fullmatch(r"knowledgeanalysis_[0-9a-f]{32}", new_knowledge_analysis_request_id())
+    assert re.fullmatch(r"analysisrun_[0-9a-f]{32}", new_knowledge_analysis_run_id())
+    assert re.fullmatch(r"knowledgeanalysisresult_[0-9a-f]{32}", new_knowledge_analysis_result_id())
+    assert re.fullmatch(r"analysisdecision_[0-9a-f]{32}", new_knowledge_analysis_decision_id())
 
 
 def test_canonical_serialization_and_hash_are_stable() -> None:

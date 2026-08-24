@@ -1,0 +1,443 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-types/2.0",
+  "title": "EOM Knowledge Analysis Shared Types V2",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "safeCanonicalMemberPath": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._()가-힣/-]+$",
+      "not": {
+        "pattern": "(?:^|/)\\.\\.?(/|$)"
+      },
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "safeSourcePath": {
+      "type": "string",
+      "pattern": "^source/[A-Za-z0-9._()가-힣/-]+$",
+      "not": {
+        "pattern": "(?:^|/)\\.\\.?(/|$)"
+      },
+      "minLength": 8,
+      "maxLength": 512
+    },
+    "safeNormalizedPath": {
+      "type": "string",
+      "pattern": "^normalized/[A-Za-z0-9._()가-힣/-]+$",
+      "not": {
+        "pattern": "(?:^|/)\\.\\.?(/|$)"
+      },
+      "minLength": 12,
+      "maxLength": 512
+    },
+    "sourceArtifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "materialized_path",
+        "sha256",
+        "bytes",
+        "schema_ref",
+        "media_type",
+        "logical_name"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "$ref": "#/$defs/safeCanonicalMemberPath"
+        },
+        "materialized_path": {
+          "$ref": "#/$defs/safeSourcePath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 104857600
+        },
+        "schema_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^eom(?:\\.assess(?:ment)?|://schemas/)[A-Za-z0-9._/@:-]{1,191}$",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$",
+          "maxLength": 128
+        },
+        "logical_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$"
+        }
+      }
+    },
+    "contentIntakeSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind",
+        "source_class",
+        "intake_batch_id",
+        "source_file_id",
+        "lifecycle_state",
+        "artifact_member"
+      ],
+      "properties": {
+        "source_kind": {
+          "const": "CONTENT_INTAKE_FILE"
+        },
+        "source_class": {
+          "type": "string",
+          "enum": ["CURRICULUM", "TEXTBOOK", "PAST_EXAM", "INTERNAL_GUIDE"]
+        },
+        "intake_batch_id": {
+          "type": "string",
+          "pattern": "^intake_[0-9a-f]{32}$"
+        },
+        "source_file_id": {
+          "type": "string",
+          "pattern": "^sourcefile_[0-9a-f]{32}$"
+        },
+        "lifecycle_state": {
+          "const": "ELIGIBLE"
+        },
+        "artifact_member": {
+          "$ref": "#/$defs/sourceArtifactMember"
+        }
+      }
+    },
+    "approvedItemSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind",
+        "source_class",
+        "item_id",
+        "item_revision_id",
+        "lifecycle_state",
+        "artifact_member"
+      ],
+      "properties": {
+        "source_kind": {
+          "const": "APPROVED_ITEM_REVISION"
+        },
+        "source_class": {
+          "type": "string",
+          "enum": ["APPROVED_ITEM", "PAST_EXAM"]
+        },
+        "item_id": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{32}$"
+        },
+        "item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "lifecycle_state": {
+          "const": "APPROVED"
+        },
+        "artifact_member": {
+          "$ref": "#/$defs/sourceArtifactMember"
+        }
+      }
+    },
+    "analysisSource": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/contentIntakeSource"
+        },
+        {
+          "$ref": "#/$defs/approvedItemSource"
+        }
+      ]
+    },
+    "sourceAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "anchor_id",
+        "artifact_revision_id",
+        "member_path",
+        "anchor_kind",
+        "locator",
+        "excerpt_sha256"
+      ],
+      "properties": {
+        "anchor_id": {
+          "type": "string",
+          "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "$ref": "#/$defs/safeCanonicalMemberPath"
+        },
+        "anchor_kind": {
+          "type": "string",
+          "enum": ["PAGE", "SECTION", "PARAGRAPH", "TABLE", "FIGURE", "EQUATION", "ITEM_ELEMENT"]
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "excerpt_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "proposedNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "node_type", "stable_key", "label", "anchor_ids"],
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "node_type": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/nodeType"
+        },
+        "stable_key": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "proposedEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edge_id",
+        "edge_type",
+        "from_node_id",
+        "to_node_id",
+        "confidence_milli",
+        "anchor_ids"
+      ],
+      "properties": {
+        "edge_id": {
+          "type": "string",
+          "pattern": "^kedge_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "edge_type": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/edgeType"
+        },
+        "from_node_id": {
+          "type": "string",
+          "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "to_node_id": {
+          "type": "string",
+          "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "confidence_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "proposedClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_id", "text", "confidence_milli", "anchor_ids", "general_knowledge_influenced"],
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "pattern": "^claim_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "confidence_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        },
+        "general_knowledge_influenced": {
+          "type": "boolean"
+        }
+      }
+    },
+    "componentObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component_id", "kind", "anchor_id", "confidence_milli"],
+      "properties": {
+        "component_id": {
+          "type": "string",
+          "pattern": "^component_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["PARAGRAPH", "TABLE", "FIGURE", "EQUATION"]
+        },
+        "anchor_id": {
+          "type": "string",
+          "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "confidence_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      }
+    },
+    "ambiguity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "description", "blocking", "anchor_ids"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "blocking": {
+          "type": "boolean"
+        },
+        "anchor_ids": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "proposalCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["anchors", "nodes", "edges", "claims", "component_observations", "ambiguities"],
+      "properties": {
+        "anchors": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "nodes": {"type": "integer", "minimum": 1, "maximum": 512},
+        "edges": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "claims": {"type": "integer", "minimum": 0, "maximum": 512},
+        "component_observations": {"type": "integer", "minimum": 0, "maximum": 512},
+        "ambiguities": {"type": "integer", "minimum": 0, "maximum": 128}
+      }
+    },
+    "proposalArtifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "bytes",
+        "schema_ref",
+        "media_type",
+        "logical_name"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "$ref": "#/$defs/safeNormalizedPath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2097152
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/knowledge/[A-Za-z0-9._/@:-]{1,191}$",
+          "maxLength": 256
+        },
+        "media_type": {
+          "type": "string",
+          "enum": ["text/markdown", "application/x-ndjson", "application/json"]
+        },
+        "logical_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$"
+        }
+      }
+    }
+  }
+}

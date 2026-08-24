@@ -11,7 +11,8 @@ from typing import Literal
 
 import yaml
 from eom_identifiers import canonical_json_bytes
-from eom_workflow import BundleRevisionPointer, ControlArtifactPointer
+from eom_workflow import BundleRevisionPointer, ControlArtifactPointer, WorkerCapacityPolicy
+from eom_workflow.schemas import role_schema_bundle_hash
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -22,6 +23,8 @@ from eom_orchestrator.control_models import (
     ExecutionPresetEvaluationRecord,
     ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
+    WorkerCapacityPolicyRecord,
+    WorkerCapacityPolicyRevisionRecord,
 )
 from eom_orchestrator.control_service import (
     ControlPlaneError,
@@ -39,7 +42,7 @@ from eom_orchestrator.preset_lifecycle import (
     record_execution_preset_evaluation,
     release_execution_preset,
 )
-from eom_orchestrator.repository import upsert_worker_slot
+from eom_orchestrator.repository import ensure_protocol_version, upsert_worker_slot
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerSlot
@@ -102,6 +105,47 @@ class StandardBootstrapResult(BaseModel):
     instruction_bundle_revision_ids: tuple[str, ...]
     reference_bundle_revision_id: str
     auth_binding_ids: tuple[str, ...]
+    evaluation_id: str
+    source_commit: str
+
+
+class KnowledgeAnalysisBootstrapManifest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["knowledge-analysis-control-bootstrap/1.0"]
+    preset_key: Literal["knowledge-analysis"]
+    display_name: str = Field(min_length=1, max_length=128)
+    description: str = Field(min_length=1, max_length=1000)
+    created_at: datetime
+    model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"]
+    general_knowledge_policy: Literal["ALLOW_WITH_PROVENANCE", "DENY"]
+    compatible_workflow_protocols: tuple[Literal["workflow-role/1.4.0"], ...] = Field(
+        min_length=1, max_length=1
+    )
+    platform_instruction_path: Literal["instructions/platform.md"]
+    role_instruction_path: Literal["instructions/knowledge-analysis.md"]
+    slot_key: Literal["slot05"]
+    worker_pool_key: Literal["support"]
+    timeout_seconds: int = Field(ge=30, le=7200)
+
+    @model_validator(mode="after")
+    def exact_analysis_contract(self) -> KnowledgeAnalysisBootstrapManifest:
+        if self.created_at.tzinfo is None or self.created_at.utcoffset() != timedelta(0):
+            raise ValueError("knowledge analysis bootstrap timestamp must use UTC")
+        if self.compatible_workflow_protocols != ("workflow-role/1.4.0",):
+            raise ValueError("knowledge analysis bootstrap protocol must be exact")
+        return self
+
+
+class KnowledgeAnalysisBootstrapResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    preset_id: str
+    preset_revision_id: str
+    preset_policy_sha256: str
+    capacity_policy_revision_id: str
+    instruction_bundle_revision_id: str
     evaluation_id: str
     source_commit: str
 
@@ -176,6 +220,9 @@ def bootstrap_standard_control_plane(
             role=role.role,
             platform_artifact=platform_artifact,
             role_artifact=role_artifact,
+            identity_key=f"standard-item:{role.role}",
+            bundle_key=f"standard-item-{role.role}",
+            role_relative_path=role.instruction_path,
             source_commit=source_commit,
             actor_id=actor_id,
             created_at=manifest.created_at,
@@ -312,6 +359,184 @@ def bootstrap_standard_control_plane(
     )
 
 
+def bootstrap_knowledge_analysis_control_plane(
+    engine: Engine,
+    *,
+    config_directory: Path,
+    source_commit: str,
+    actor_id: str,
+    evaluation_cases_total: int,
+    settings: Settings | None = None,
+) -> KnowledgeAnalysisBootstrapResult:
+    """Publish the reviewed support-only analysis preset without running Codex."""
+
+    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "source commit is invalid")
+    if not actor_id or len(actor_id) > 128 or not 1 <= evaluation_cases_total <= 10000:
+        raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "bootstrap operator input is invalid")
+    manifest = load_knowledge_analysis_bootstrap_manifest(config_directory)
+    actual_settings = settings or Settings.from_environment()
+    sessions = build_session_factory(engine)
+    publisher = ControlArtifactPublisher(engine, actual_settings)
+    registry = resolve_worker_configuration(actual_settings).registry
+    matching_slots = [
+        slot
+        for slot in registry.config.slots
+        if f"slot{slot.slot_id}" == manifest.slot_key
+        and str(slot.role) == "support"
+        and slot.enabled
+    ]
+    if len(registry.config.slots) != 5 or len(matching_slots) != 1:
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_SLOT_MISMATCH",
+            "knowledge analysis requires the enabled fixed slot05 support identity",
+        )
+    with transaction(sessions) as session:
+        for protocol_version in manifest.compatible_workflow_protocols:
+            ensure_protocol_version(
+                session,
+                protocol_version,
+                role_schema_bundle_hash(protocol_version),
+            )
+    capacity_revision_id = _released_analysis_capacity_policy(sessions)
+    platform_artifact = _publish_markdown(
+        publisher,
+        payload=_read_member(config_directory, manifest.platform_instruction_path),
+        logical_name="platform.md",
+        schema_ref="eom://schemas/workflow/instruction-member/1.0",
+        key="knowledge-analysis-platform-v1",
+        source_commit=source_commit,
+        created_at=manifest.created_at,
+    )
+    role_artifact = _publish_markdown(
+        publisher,
+        payload=_read_member(config_directory, manifest.role_instruction_path),
+        logical_name="knowledge-analysis.md",
+        schema_ref="eom://schemas/workflow/instruction-member/1.0",
+        key="knowledge-analysis-role-v1",
+        source_commit=source_commit,
+        created_at=manifest.created_at,
+    )
+    instruction = _publish_instruction_bundle(
+        publisher,
+        sessions,
+        role="support",
+        platform_artifact=platform_artifact,
+        role_artifact=role_artifact,
+        identity_key="knowledge-analysis:support",
+        bundle_key="knowledge-analysis-support",
+        role_relative_path=manifest.role_instruction_path,
+        source_commit=source_commit,
+        actor_id=actor_id,
+        created_at=manifest.created_at,
+    )
+    role_policies: list[dict[str, object]] = [
+        {
+            "role": "support",
+            "model_candidates": [
+                {"model": manifest.model, "reasoning_effort": manifest.reasoning_effort}
+            ],
+            "instruction_bundle": instruction.model_dump(mode="json"),
+            "reference_bundle": None,
+            "worker_pool_key": manifest.worker_pool_key,
+            "timeout_seconds": manifest.timeout_seconds,
+            "sandbox": "read-only",
+            "network": "disabled",
+        }
+    ]
+    draft = _find_or_create_analysis_draft(
+        sessions,
+        manifest=manifest,
+        role_policies=role_policies,
+        capacity_policy_revision_id=capacity_revision_id,
+        actor_id=actor_id,
+    )
+    policy_sha256 = execution_preset_policy_sha256(draft.canonical_document)
+    if draft.state == "RELEASED":
+        with sessions() as session:
+            evaluation = session.scalar(
+                select(ExecutionPresetEvaluationRecord)
+                .where(
+                    ExecutionPresetEvaluationRecord.preset_id == draft.preset_id,
+                    ExecutionPresetEvaluationRecord.evaluated_policy_sha256 == policy_sha256,
+                    ExecutionPresetEvaluationRecord.outcome == "PASS",
+                    ExecutionPresetEvaluationRecord.scope.in_(("NON_LIVE", "LIVE_ONE_SHOT")),
+                )
+                .order_by(
+                    ExecutionPresetEvaluationRecord.completed_at.desc(),
+                    ExecutionPresetEvaluationRecord.evaluation_id.desc(),
+                )
+            )
+            if evaluation is None:
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_HISTORY_INVALID",
+                    "released knowledge analysis preset lacks evaluation evidence",
+                )
+        return KnowledgeAnalysisBootstrapResult(
+            preset_id=draft.preset_id,
+            preset_revision_id=draft.preset_revision_id,
+            preset_policy_sha256=policy_sha256,
+            capacity_policy_revision_id=capacity_revision_id,
+            instruction_bundle_revision_id=instruction.bundle_revision_id,
+            evaluation_id=evaluation.evaluation_id,
+            source_commit=source_commit,
+        )
+    report_document: dict[str, object] = {
+        "schema_version": "execution-preset-evaluation-report/1.0",
+        "evaluated_preset_revision_id": draft.preset_revision_id,
+        "evaluated_policy_sha256": policy_sha256,
+        "scope": "NON_LIVE",
+        "outcome": "PASS",
+        "summary_code": "FAKE_ADAPTER_ACCEPTANCE",
+        "cases_total": evaluation_cases_total,
+        "cases_passed": evaluation_cases_total,
+        "quality_score_permille": 1000,
+        "completed_at": (manifest.created_at + timedelta(minutes=1))
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "report_sha256": "sha256:" + "0" * 64,
+    }
+    report_document["report_sha256"] = compute_control_document_hash(
+        report_document, "report_sha256"
+    )
+    report_payload = canonical_json_bytes(report_document) + b"\n"
+    report_artifact = publisher.publish_bytes(
+        payload=report_payload,
+        logical_name="knowledge-analysis-preset-evaluation.json",
+        schema_ref="eom://schemas/workflow/execution-preset-evaluation-report/1.0",
+        media_type="application/json",
+        artifact_type="control_preset_evaluation",
+        idempotency_key=(
+            "control-bootstrap:knowledge-analysis-evaluation:"
+            f"{hashlib.sha256(report_payload).hexdigest()}"
+        ),
+        created_at=manifest.created_at + timedelta(minutes=1),
+        source_commit=source_commit,
+    )
+    with transaction(sessions) as session:
+        evaluation = record_execution_preset_evaluation(
+            session,
+            document=report_document,
+            report_artifact=report_artifact.pointer,
+            created_by=actor_id,
+        )
+        released = release_execution_preset(
+            session,
+            draft_revision_id=draft.preset_revision_id,
+            released_by=actor_id,
+            released_at=manifest.created_at + timedelta(minutes=2),
+        )
+    return KnowledgeAnalysisBootstrapResult(
+        preset_id=released.preset_id,
+        preset_revision_id=released.preset_revision_id,
+        preset_policy_sha256=policy_sha256,
+        capacity_policy_revision_id=capacity_revision_id,
+        instruction_bundle_revision_id=instruction.bundle_revision_id,
+        evaluation_id=evaluation.evaluation_id,
+        source_commit=source_commit,
+    )
+
+
 def load_standard_bootstrap_manifest(config_directory: Path) -> StandardBootstrapManifest:
     root = _safe_root(config_directory)
     raw = _read_file(root / "bootstrap.yaml", root=root, max_bytes=MAX_BOOTSTRAP_MANIFEST_BYTES)
@@ -321,6 +546,21 @@ def load_standard_bootstrap_manifest(config_directory: Path) -> StandardBootstra
     except (UnicodeError, yaml.YAMLError, ValueError) as exc:
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_INVALID", "standard bootstrap manifest is invalid"
+        ) from exc
+
+
+def load_knowledge_analysis_bootstrap_manifest(
+    config_directory: Path,
+) -> KnowledgeAnalysisBootstrapManifest:
+    root = _safe_root(config_directory)
+    raw = _read_file(root / "bootstrap.yaml", root=root, max_bytes=MAX_BOOTSTRAP_MANIFEST_BYTES)
+    try:
+        value: object = yaml.safe_load(raw.decode("utf-8"))
+        return KnowledgeAnalysisBootstrapManifest.model_validate(value)
+    except (UnicodeError, yaml.YAMLError, ValueError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_INVALID",
+            "knowledge analysis bootstrap manifest is invalid",
         ) from exc
 
 
@@ -354,12 +594,15 @@ def _publish_instruction_bundle(
     role: str,
     platform_artifact: ControlArtifactPointer,
     role_artifact: ControlArtifactPointer,
+    identity_key: str,
+    bundle_key: str,
+    role_relative_path: str,
     source_commit: str,
     actor_id: str,
     created_at: datetime,
 ) -> BundleRevisionPointer:
-    bundle_id = _stable_id("instrbundle_", f"standard-item:{role}")
-    revision_id = _stable_id("instrrev_", f"standard-item:{role}:v1")
+    bundle_id = _stable_id("instrbundle_", identity_key)
+    revision_id = _stable_id("instrrev_", f"{identity_key}:v1")
     document: dict[str, object] = {
         "schema_version": "instruction-bundle-manifest/1.0",
         "bundle_id": bundle_id,
@@ -374,7 +617,7 @@ def _publish_instruction_bundle(
             },
             {
                 "layer": "ROLE",
-                "relative_path": f"instructions/{role.replace('_', '-')}.md",
+                "relative_path": role_relative_path,
                 "artifact": role_artifact.model_dump(mode="json"),
             },
         ],
@@ -396,7 +639,7 @@ def _publish_instruction_bundle(
     with transaction(sessions) as session:
         revision = record_bundle_revision(
             session,
-            bundle_key=f"standard-item-{role}",
+            bundle_key=bundle_key,
             manifest_artifact=manifest,
             document=document,
             created_by=actor_id,
@@ -633,6 +876,130 @@ def _find_or_create_draft(
         if len(matching) > 1 or (revisions and not matching):
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_CONFLICT", "standard preset draft history differs"
+            )
+        if matching:
+            return matching[0]
+        return create_execution_preset_draft(
+            session,
+            preset_key=manifest.preset_key,
+            display_name=manifest.display_name,
+            description=manifest.description,
+            role_policies=role_policies,
+            capacity_policy_revision_id=capacity_policy_revision_id,
+            general_knowledge_policy=manifest.general_knowledge_policy,
+            compatible_workflow_protocols=list(manifest.compatible_workflow_protocols),
+            created_by=actor_id,
+            created_at=manifest.created_at,
+        )
+
+
+def _released_analysis_capacity_policy(sessions: sessionmaker[Session]) -> str:
+    with sessions() as session:
+        logical = session.scalar(
+            select(WorkerCapacityPolicyRecord).where(
+                WorkerCapacityPolicyRecord.policy_key == "fixed-host"
+            )
+        )
+        revision = (
+            session.get(WorkerCapacityPolicyRevisionRecord, logical.current_revision_id)
+            if logical is not None and logical.current_revision_id is not None
+            else None
+        )
+        if (
+            logical is None
+            or logical.state != "ACTIVE"
+            or revision is None
+            or revision.capacity_policy_id != logical.capacity_policy_id
+            or revision.state != "RELEASED"
+        ):
+            raise ControlPlaneError(
+                "CONTROL_CAPACITY_POLICY_MISSING",
+                "released fixed-host capacity policy is unavailable",
+            )
+        policy = WorkerCapacityPolicy.model_validate(revision.canonical_document)
+        support = [pool for pool in policy.pools if pool.pool_key == "support"]
+        if (
+            policy.content_sha256 != revision.content_sha256
+            or policy.max_active_knowledge_analysis != 1
+            or len(support) != 1
+            or support[0].roles != ("support",)
+            or support[0].slot_keys != ("slot05",)
+            or support[0].max_active != 1
+        ):
+            raise ControlPlaneError(
+                "CONTROL_CAPACITY_POLICY_INVALID",
+                "fixed-host knowledge analysis capacity contract differs",
+            )
+        return revision.capacity_policy_revision_id
+
+
+def _find_or_create_analysis_draft(
+    sessions: sessionmaker[Session],
+    *,
+    manifest: KnowledgeAnalysisBootstrapManifest,
+    role_policies: list[dict[str, object]],
+    capacity_policy_revision_id: str,
+    actor_id: str,
+) -> ExecutionPresetRevisionRecord:
+    preview: dict[str, object] = {
+        "schema_version": "execution-preset-revision/1.0",
+        "preset_id": "execpreset_" + "0" * 32,
+        "preset_revision_id": "execpresetrev_" + "0" * 32,
+        "revision_number": 1,
+        "state": "DRAFT",
+        "display_name": manifest.display_name,
+        "description": manifest.description,
+        "role_policies": role_policies,
+        "capacity_policy_revision_id": capacity_policy_revision_id,
+        "general_knowledge_policy": manifest.general_knowledge_policy,
+        "compatible_workflow_protocols": list(manifest.compatible_workflow_protocols),
+        "content_sha256": "sha256:" + "0" * 64,
+        "created_at": manifest.created_at,
+    }
+    expected_policy_sha256 = execution_preset_policy_sha256(preview)
+    with transaction(sessions) as session:
+        logical = session.scalar(
+            select(ExecutionPresetRecord)
+            .where(ExecutionPresetRecord.preset_key == manifest.preset_key)
+            .with_for_update()
+        )
+        revisions = (
+            tuple(
+                session.scalars(
+                    select(ExecutionPresetRevisionRecord)
+                    .where(ExecutionPresetRevisionRecord.preset_id == logical.preset_id)
+                    .order_by(ExecutionPresetRevisionRecord.revision_number)
+                )
+            )
+            if logical is not None
+            else ()
+        )
+        if logical is not None and logical.state != "ACTIVE":
+            raise ControlPlaneError("CONTROL_PRESET_RETIRED", "knowledge preset is retired")
+        if logical is not None and logical.current_revision_id is not None:
+            current = session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
+            if (
+                current is None
+                or current.state != "RELEASED"
+                or execution_preset_policy_sha256(current.canonical_document)
+                != expected_policy_sha256
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_CONFLICT",
+                    "released knowledge analysis preset policy differs",
+                )
+            return current
+        matching = [
+            revision
+            for revision in revisions
+            if revision.state == "DRAFT"
+            and execution_preset_policy_sha256(revision.canonical_document)
+            == expected_policy_sha256
+        ]
+        if len(matching) > 1 or (revisions and not matching):
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_CONFLICT",
+                "knowledge analysis preset draft history differs",
             )
         if matching:
             return matching[0]

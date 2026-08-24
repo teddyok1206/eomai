@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-review-decision/1.0",
+  "title": "EOM Knowledge Analysis Review Decision V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decision_id",
+    "analysis_request_id",
+    "proposal_artifact_id",
+    "proposal_artifact_revision_id",
+    "proposal_content_set_sha256",
+    "risk_policy_revision_id",
+    "decision",
+    "decided_by_operator_id",
+    "notes",
+    "decided_at",
+    "decision_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-analysis-review-decision/1.0"
+    },
+    "decision_id": {
+      "type": "string",
+      "pattern": "^analysisdecision_[0-9a-f]{32}$"
+    },
+    "analysis_request_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+    },
+    "proposal_artifact_id": {
+      "type": "string",
+      "pattern": "^artifact_[0-9a-f]{32}$"
+    },
+    "proposal_artifact_revision_id": {
+      "type": "string",
+      "pattern": "^rev_[0-9a-f]{32}$"
+    },
+    "proposal_content_set_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+    },
+    "risk_policy_revision_id": {
+      "type": "string",
+      "pattern": "^analysisriskrev_[0-9a-f]{32}$"
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["APPROVE", "REJECT"]
+    },
+    "decided_by_operator_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "notes": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "decided_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/utcTimestamp"
+    },
+    "decision_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+    }
+  }
+}

@@ -19,6 +19,7 @@ from eom_workflow import (
     InstructionBundleManifest,
     ReferenceBundleManifest,
     ResolvedExecutionPlan,
+    ResolvedExecutionPlanV2,
     WorkerCapacityPolicy,
     WorkerLeaseView,
     control_schema_inventory,
@@ -178,6 +179,54 @@ def _resolved_plan() -> dict[str, object]:
     }
 
 
+def _resolved_analysis_plan() -> dict[str, object]:
+    value: dict[str, object] = {
+        "schema_version": "resolved-execution-plan/2.0",
+        "plan_id": "execplan_" + "a" * 32,
+        "workflow_id": "workflow_" + "a" * 32,
+        "workload_class": "KNOWLEDGE_ANALYSIS",
+        "preset_id": "execpreset_" + "a" * 32,
+        "preset_revision_id": "execpresetrev_" + "a" * 32,
+        "preset_sha256": "sha256:" + "a" * 64,
+        "workflow_definition_key": "knowledge-analysis",
+        "workflow_definition_version": "1.0.0",
+        "workflow_definition_sha256": "sha256:" + "b" * 64,
+        "analysis_request_id": "knowledgeanalysis_" + "a" * 32,
+        "analysis_request_sha256": "sha256:" + "c" * 64,
+        "source_artifact_id": "artifact_" + "d" * 32,
+        "source_artifact_revision_id": "rev_" + "d" * 32,
+        "source_member_path": "source/chapter-1.pdf",
+        "source_materialized_path": "source/chapter-1.pdf",
+        "source_sha256": "sha256:" + "d" * 64,
+        "source_bytes": 1024,
+        "source_media_type": "application/pdf",
+        "source_schema_ref": None,
+        "capacity_policy_revision_id": "capacityrev_" + "e" * 32,
+        "steps": [
+            {
+                "step_key": "analyze",
+                "role": "support",
+                "model": "gpt-5.6-terra",
+                "reasoning_effort": "high",
+                "instruction_bundle": _instruction_pointer(),
+                "reference_bundle": None,
+                "worker_pool_key": "support",
+                "timeout_seconds": 1800,
+                "sandbox": "read-only",
+                "network": "disabled",
+                "general_knowledge_mode": "DENIED",
+            }
+        ],
+        "resolver_version": "2.0.0",
+        "resolved_at": NOW.isoformat().replace("+00:00", "Z"),
+        "plan_sha256": ZERO_SHA,
+    }
+    value["plan_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "plan_sha256"}
+    )
+    return value
+
+
 def _capacity_policy() -> dict[str, object]:
     return {
         "schema_version": "worker-capacity-policy/1.0",
@@ -226,7 +275,7 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 13
+    assert len(entries) == 14
     assert len({name for name, _ in entries}) == len(entries)
     for name, entry in entries:
         canonical = REPOSITORY_ROOT / entry.canonical_path
@@ -244,6 +293,11 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
         ("instruction-bundle-manifest", _instruction_manifest(), InstructionBundleManifest),
         ("reference-bundle-manifest", _reference_manifest(), ReferenceBundleManifest),
         ("resolved-execution-plan", _resolved_plan(), ResolvedExecutionPlan),
+        (
+            "resolved-execution-plan-v2",
+            _resolved_analysis_plan(),
+            ResolvedExecutionPlanV2,
+        ),
         ("codex-invocation", _codex_invocation(), CodexInvocation),
         (
             "codex-auth-health-view",
@@ -423,6 +477,22 @@ def test_codex_invocation_rejects_hash_drift_at_typed_boundary() -> None:
     value["model"] = "gpt-5.6-luna"
     with pytest.raises(PydanticValidationError, match="hash does not match"):
         CodexInvocation.model_validate(value)
+
+
+def test_analysis_plan_is_support_only_and_hash_pinned() -> None:
+    wrong_role = _resolved_analysis_plan()
+    steps = wrong_role["steps"]
+    assert isinstance(steps, list)
+    steps[0]["role"] = "authoring"
+    with pytest.raises(ValidationError):
+        validate_control_contract("resolved-execution-plan-v2", wrong_role)
+    with pytest.raises(PydanticValidationError, match="analyze support step"):
+        ResolvedExecutionPlanV2.model_validate(wrong_role)
+
+    stale_source = _resolved_analysis_plan()
+    stale_source["source_sha256"] = "sha256:" + "f" * 64
+    with pytest.raises(PydanticValidationError, match="plan hash does not match"):
+        ResolvedExecutionPlanV2.model_validate(stale_source)
 
 
 def test_capacity_contract_pins_host_limits_and_rejects_overcommit() -> None:

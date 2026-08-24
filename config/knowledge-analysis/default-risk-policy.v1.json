@@ -1,0 +1,21 @@
+{
+  "schema_version": "knowledge-analysis-risk-policy/1.0",
+  "risk_policy_revision_id": "analysisriskrev_7f0f1d7c2f7c4a3cb97c090938e8ac30",
+  "state": "RELEASED",
+  "minimum_confidence_milli": 700,
+  "review_source_classes": [
+    "PAST_EXAM"
+  ],
+  "review_when_general_knowledge_used": true,
+  "review_when_blocking_ambiguity_present": true,
+  "maximum_auto_accept_counts": {
+    "anchors": 800,
+    "nodes": 400,
+    "edges": 800,
+    "claims": 400,
+    "component_observations": 400,
+    "ambiguities": 64
+  },
+  "created_at": "2026-08-23T00:00:00Z",
+  "content_sha256": "sha256:fa6efb2e77a3e639061317ca7d7617f072c01ecae807859f0222eaeccd208c0f"
+}

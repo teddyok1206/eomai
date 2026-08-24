@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
+from eom_identifiers import content_sha256
+from eom_workflow.compiler import compile_definition
 from eom_workflow.models import ArtifactPointer, ArtifactSpec, RoleWorkerInput, WorkflowRequest
 from eom_workflow.schemas import (
     RESULT_SCHEMA_FILES,
@@ -25,6 +28,7 @@ WORKFLOW_ID = "workflow_0123456789abcdef0123456789abcdef"
 STEP_RUN_ID = "steprun_0123456789abcdef0123456789abcdef"
 ARTIFACT_ID = "artifact_0123456789abcdef0123456789abcdef"
 REVISION_ID = "rev_0123456789abcdef0123456789abcdef"
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _input(role: str) -> RoleWorkerInput:
@@ -100,6 +104,7 @@ def test_all_workflow_schemas_are_valid_draft_2020_12() -> None:
     Draft202012Validator.check_schema(load_definition_schema())
     for role in ("authoring", "image", "review", "item_management"):
         Draft202012Validator.check_schema(load_role_input_schema(role))
+    Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.4.0"))
     for schema_id in RESULT_SCHEMA_FILES:
         Draft202012Validator.check_schema(load_role_result_schema(schema_id))
 
@@ -155,6 +160,160 @@ def test_role_schema_bundle_hash_is_canonical() -> None:
     first = role_schema_bundle_hash()
     assert first == role_schema_bundle_hash()
     assert first.startswith("sha256:")
+    assert role_schema_bundle_hash("workflow-role/1.2.0") == (
+        "sha256:09c325824484d1bbcb46e14fa3007aa2b51f9750235a1969dee67b2b795d60f4"
+    )
+    assert role_schema_bundle_hash("workflow-role/1.3.0") == (
+        "sha256:dce3e0921cf2d0d236f813101406286cb86cabaef07c95030f05028fad664ab8"
+    )
+    assert role_schema_bundle_hash("workflow-role/1.4.0") == (
+        "sha256:c385885dc445cee96ae8f0c2a122678c3db68f9b10d8162c7695108fbcc47b4b"
+    )
+
+
+def _knowledge_analysis_request() -> dict[str, object]:
+    value: dict[str, object] = {
+        "schema_version": "knowledge-analysis-request/2.0",
+        "predecessor_analysis_run_id": None,
+        "analysis_request_id": "knowledgeanalysis_" + "1" * 32,
+        "source": {
+            "source_kind": "CONTENT_INTAKE_FILE",
+            "source_class": "TEXTBOOK",
+            "intake_batch_id": "intake_" + "2" * 32,
+            "source_file_id": "sourcefile_" + "3" * 32,
+            "lifecycle_state": "ELIGIBLE",
+            "artifact_member": {
+                "artifact_id": "artifact_" + "4" * 32,
+                "artifact_revision_id": "rev_" + "5" * 32,
+                "member_path": "source.pdf",
+                "materialized_path": "source/source.pdf",
+                "sha256": "sha256:" + "6" * 64,
+                "bytes": 123,
+                "schema_ref": None,
+                "media_type": "application/pdf",
+                "logical_name": "source.pdf",
+            },
+        },
+        "execution_preset_id": "execpreset_" + "7" * 32,
+        "execution_preset_revision_id": "execpresetrev_" + "8" * 32,
+        "execution_preset_sha256": "sha256:" + "9" * 64,
+        "worker_proposal_schema_ref": (
+            "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+        ),
+        "accepted_result_schema_ref": "eom://schemas/knowledge/knowledge-analysis-result/2.0",
+        "prior_graph_snapshot": None,
+        "requested_outputs": [
+            "NORMALIZED_MARKDOWN",
+            "SOURCE_ANCHORS",
+            "NODES",
+            "EDGES",
+            "CLAIMS",
+            "COMPONENT_OBSERVATIONS",
+            "UNRESOLVED_AMBIGUITIES",
+        ],
+        "general_knowledge_mode": "AUXILIARY_UNATTRIBUTED",
+        "risk_policy_revision_id": "analysisriskrev_" + "a" * 32,
+        "created_at": "2026-08-23T00:00:00Z",
+    }
+    value["request_sha256"] = content_sha256(value)
+    return value
+
+
+def _knowledge_analysis_result() -> dict[str, object]:
+    return {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.4.0",
+        "job_id": JOB_ID,
+        "workflow_id": WORKFLOW_ID,
+        "step_run_id": STEP_RUN_ID,
+        "status": "ok",
+        "artifact": {
+            "logical_artifact_id": ARTIFACT_ID,
+            "revision_id": REVISION_ID,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+        "completed_at": "2026-08-23T00:00:00Z",
+        "role": "support",
+        "output": {
+            "proposal": {
+                "schema_version": "knowledge-analysis-worker-proposal/1.0",
+                "analysis_request_id": "knowledgeanalysis_" + "1" * 32,
+                "normalized_markdown": "# source\n",
+                "anchors": [
+                    {
+                        "anchor_id": "anchor_source",
+                        "artifact_revision_id": "rev_" + "5" * 32,
+                        "member_path": "source.pdf",
+                        "anchor_kind": "PAGE",
+                        "locator": "page=1",
+                        "excerpt_sha256": "sha256:" + "b" * 64,
+                    }
+                ],
+                "nodes": [
+                    {
+                        "node_id": "knode_concept",
+                        "node_type": "CONCEPT",
+                        "stable_key": "concept.source",
+                        "label": "source concept",
+                        "anchor_ids": ["anchor_source"],
+                    }
+                ],
+                "edges": [],
+                "claims": [],
+                "component_observations": [],
+                "unresolved_ambiguities": [],
+                "general_knowledge_used": False,
+                "completed_at": "2026-08-23T00:00:00Z",
+            }
+        },
+    }
+
+
+def test_knowledge_analysis_support_protocol_is_schema_first_and_typed() -> None:
+    worker_input = {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.4.0",
+        "job_id": JOB_ID,
+        "workflow_id": WORKFLOW_ID,
+        "step_run_id": STEP_RUN_ID,
+        "attempt": 1,
+        "role": "support",
+        "request": {
+            "request_name": "KNOWLEDGE_ANALYSIS_REQUEST",
+            "analysis_request": _knowledge_analysis_request(),
+        },
+        "upstream_artifacts": [],
+        "artifact": {
+            "logical_artifact_id": ARTIFACT_ID,
+            "revision_id": REVISION_ID,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+    }
+    parsed_input = validate_role_input(worker_input, "support", "workflow-role/1.4.0")
+    assert parsed_input.request.request_name == "KNOWLEDGE_ANALYSIS_REQUEST"
+    parsed_result = validate_role_result(
+        _knowledge_analysis_result(), "support", "knowledge-analysis-proposal-result@1.0"
+    )
+    assert parsed_result.role == "support"
+
+
+def test_knowledge_analysis_support_protocol_fails_closed_on_dangling_anchor() -> None:
+    result = _knowledge_analysis_result()
+    result["output"]["proposal"]["nodes"][0]["anchor_ids"] = ["anchor_missing"]  # type: ignore[index]
+    with pytest.raises(WorkflowSchemaError, match="failed typed validation"):
+        validate_role_result(result, "support", "knowledge-analysis-proposal-result@1.0")
+
+
+def test_knowledge_analysis_workflow_is_single_support_step_and_immutable() -> None:
+    compiled = compile_definition(ROOT / "config/workflows/knowledge-analysis.v1.yaml", {"support"})
+    assert compiled.sha256 == (
+        "sha256:786c7e7d2a65fc5dd30b47faff87c363646c2c1d9a44956e66deb46564accedf"
+    )
+    assert [step.key for step in compiled.definition.steps] == ["analyze", "complete"]
+    assert compiled.definition.limits.max_rework_cycles == 0
+    assert compiled.definition.limits.max_step_attempts == 1
 
 
 def test_completed_worker_error_result_preserves_invalid_result_semantics() -> None:
@@ -188,8 +347,9 @@ def test_catalog_request_is_projected_to_the_worker_contract() -> None:
         "request_name": "PLACEHOLDER_REQUEST",
         "image_mode": "skip",
     }
-    worker_input = _input("authoring").model_copy(update={"request": request})
-    parsed = RoleWorkerInput.model_validate(worker_input.model_dump(mode="json"))
+    worker_input = _input("authoring").model_dump(mode="json")
+    worker_input["request"] = request.model_dump(mode="json")
+    parsed = RoleWorkerInput.model_validate(worker_input)
     assert parsed.request.model_dump(mode="json") == {
         "request_name": "PLACEHOLDER_REQUEST",
         "image_mode": "skip",

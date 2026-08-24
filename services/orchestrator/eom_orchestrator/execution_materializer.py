@@ -14,6 +14,7 @@ from eom_workflow import (
     InstructionBundleManifest,
     ReferenceBundleManifest,
     ResolvedExecutionPlan,
+    ResolvedExecutionPlanV2,
     validate_control_contract,
 )
 from eom_workflow.control_plane import (
@@ -32,9 +33,11 @@ from eom_orchestrator.control_service import (
     compute_control_document_hash,
     resolve_control_artifact_pointer,
 )
+from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 
 MAX_MARKDOWN_MEMBER_BYTES = 2 * 1024 * 1024
 MAX_MATERIALIZED_BYTES = 32 * 1024 * 1024
+MAX_ANALYSIS_MATERIALIZED_BYTES = 132 * 1024 * 1024
 COPY_BUFFER_BYTES = 1024 * 1024
 WORKSPACE_MODE = 0o2770
 MATERIALIZED_DIRECTORY_MODE = 0o750
@@ -59,6 +62,8 @@ class MaterializedExecution:
     materialized_member_count: int
     materialized_bytes: int
     invocation_path: Path
+    source_artifact_revision_id: str | None = None
+    source_sha256: str | None = None
 
     def event_data(self) -> dict[str, str | int | None]:
         """Return the bounded path-free projection safe for an append-only job event."""
@@ -77,6 +82,8 @@ class MaterializedExecution:
             "invocation_sha256": self.invocation_sha256,
             "materialized_member_count": self.materialized_member_count,
             "materialized_bytes": self.materialized_bytes,
+            "source_artifact_revision_id": self.source_artifact_revision_id,
+            "source_sha256": self.source_sha256,
         }
 
 
@@ -97,7 +104,14 @@ def materialize_execution_step(
     plan_record = session.get(ResolvedExecutionPlanRecord, plan_id)
     if plan_record is None:
         raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
-    plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
+    is_analysis = plan_record.canonical_document.get("schema_version") == (
+        "resolved-execution-plan/2.0"
+    )
+    plan: ResolvedExecutionPlan | ResolvedExecutionPlanV2
+    if is_analysis:
+        plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
+    else:
+        plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
         raise ControlPlaneError("CONTROL_PLAN_HASH_MISMATCH", "resolved plan record is stale")
     matching = [step for step in plan.steps if step.step_key == step_key]
@@ -133,7 +147,7 @@ def materialize_execution_step(
         )
         total_bytes += len(payload)
         member_count += 1
-        _require_total_size(total_bytes)
+        _require_total_size(total_bytes, analysis=is_analysis)
         instruction_docs.append((component.layer, component.relative_path, payload))
     layers = {layer for layer, _, _ in instruction_docs}
     if layers != {"PLATFORM", "ROLE"}:
@@ -155,11 +169,28 @@ def materialize_execution_step(
             )
             total_bytes += len(payload)
             member_count += 1
-            _require_total_size(total_bytes)
+            _require_total_size(total_bytes, analysis=is_analysis)
+
+    source_artifact_revision_id: str | None = None
+    source_sha256: str | None = None
+    if isinstance(plan, ResolvedExecutionPlanV2):
+        payload = _materialize_analysis_source(
+            session,
+            plan=plan,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        )
+        total_bytes += len(payload)
+        member_count += 1
+        _require_total_size(total_bytes, analysis=True)
+        source_artifact_revision_id = plan.source_artifact_revision_id
+        source_sha256 = plan.source_sha256
 
     agents_bytes = _agents_document(instruction_docs)
     total_bytes += len(agents_bytes)
-    _require_total_size(total_bytes)
+    _require_total_size(total_bytes, analysis=is_analysis)
     agents_path = workspace / "AGENTS.md"
     _write_exclusive(agents_path, agents_bytes, group_id=worker_group_id)
 
@@ -179,7 +210,7 @@ def materialize_execution_step(
     invocation_path = workspace / "codex-invocation.json"
     invocation_bytes = canonical_json_bytes(invocation) + b"\n"
     total_bytes += len(invocation_bytes)
-    _require_total_size(total_bytes)
+    _require_total_size(total_bytes, analysis=is_analysis)
     _write_exclusive(
         invocation_path,
         invocation_bytes,
@@ -204,6 +235,8 @@ def materialize_execution_step(
         materialized_member_count=member_count,
         materialized_bytes=total_bytes,
         invocation_path=invocation_path,
+        source_artifact_revision_id=source_artifact_revision_id,
+        source_sha256=source_sha256,
     )
 
 
@@ -215,7 +248,12 @@ def authorized_execution_artifact_revisions(
     plan_record = session.get(ResolvedExecutionPlanRecord, plan_id)
     if plan_record is None:
         raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
-    plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
+    if plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/2.0":
+        plan: ResolvedExecutionPlan | ResolvedExecutionPlanV2 = (
+            ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
+        )
+    else:
+        plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
         plan.plan_sha256 != plan_record.plan_sha256
         or compute_control_document_hash(plan_record.canonical_document, "plan_sha256")
@@ -227,6 +265,8 @@ def authorized_execution_artifact_revisions(
         raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
     step = matches[0]
     revision_ids: set[str] = set()
+    if isinstance(plan, ResolvedExecutionPlanV2):
+        revision_ids.add(plan.source_artifact_revision_id)
     bundles: list[tuple[BundleRevisionPointer, str]] = [(step.instruction_bundle, "INSTRUCTION")]
     if step.reference_bundle is not None:
         bundles.append((step.reference_bundle, "REFERENCE"))
@@ -402,6 +442,68 @@ def _manifest_entry(manifest: dict[str, object], logical_name: str) -> dict[str,
     return matches[0]
 
 
+def _materialize_analysis_source(
+    session: Session,
+    *,
+    plan: ResolvedExecutionPlanV2,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> bytes:
+    if plan.source_artifact_revision_id not in authorized_artifact_revision_ids:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_PERMISSION_DENIED", "analysis source revision is not authorized"
+        )
+    logical = session.get(ArtifactRecord, plan.source_artifact_id)
+    revision = session.get(ArtifactRevisionRecord, plan.source_artifact_revision_id)
+    if (
+        logical is None
+        or revision is None
+        or not logical.approved
+        or not revision.approved
+        or revision.logical_artifact_id != plan.source_artifact_id
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_REVISION_INVALID", "analysis source Artifact pointer is stale"
+        )
+    expected_root = artifact_root / plan.source_artifact_id / plan.source_artifact_revision_id
+    stored_root = Path(revision.nas_path)
+    if stored_root != expected_root:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_STORAGE_MISMATCH", "analysis source storage is not canonical"
+        )
+    entry = _manifest_entry(revision.manifest, plan.source_member_path)
+    if (
+        entry.get("sha256") != plan.source_sha256
+        or entry.get("bytes") != plan.source_bytes
+        or entry.get("media_type") != plan.source_media_type
+        or entry.get("schema_ref") != plan.source_schema_ref
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_MANIFEST_MISMATCH", "analysis source manifest differs from plan"
+        )
+    payload = _read_verified_source(
+        stored_root / PurePosixPath(plan.source_member_path),
+        canonical_root=artifact_root,
+        expected_sha256=plan.source_sha256,
+        expected_bytes=plan.source_bytes,
+    )
+    relative = PurePosixPath(plan.source_materialized_path)
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or relative.parts[0] != "source"
+        or ".." in relative.parts
+        or "." in relative.parts
+    ):
+        raise ControlPlaneError("CONTROL_POINTER_UNSAFE", "analysis source path is unsafe")
+    destination = workspace.joinpath(*relative.parts)
+    _ensure_parent(destination.parent, workspace=workspace, group_id=worker_group_id)
+    _write_exclusive(destination, payload, group_id=worker_group_id)
+    return payload
+
+
 def _canonical_root(path: Path) -> Path:
     try:
         metadata = path.lstat()
@@ -439,7 +541,11 @@ def _read_verified_source(
         )
         try:
             metadata = os.fstat(descriptor)
-            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size != expected_bytes:
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_nlink != 1
+                or metadata.st_size != expected_bytes
+            ):
                 raise ValueError("artifact member metadata differs")
             digest = hashlib.sha256()
             chunks: list[bytes] = []
@@ -539,8 +645,9 @@ def _agents_document(instruction_docs: list[tuple[str, str, bytes]]) -> bytes:
     return b"".join(sections)
 
 
-def _require_total_size(value: int) -> None:
-    if value > MAX_MATERIALIZED_BYTES:
+def _require_total_size(value: int, *, analysis: bool) -> None:
+    limit = MAX_ANALYSIS_MATERIALIZED_BYTES if analysis else MAX_MATERIALIZED_BYTES
+    if value > limit:
         raise ControlPlaneError(
             "CONTROL_MATERIALIZATION_TOO_LARGE", "job-local materialization exceeds size limit"
         )

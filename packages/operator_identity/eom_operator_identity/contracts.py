@@ -68,6 +68,9 @@ class PermissionKey(StrEnum):
     CODEX_ACCOUNT_MANAGE = "codex_account:manage"
     EXECUTION_PRESET_READ = "execution_preset:read"
     EXECUTION_PRESET_MANAGE = "execution_preset:manage"
+    KNOWLEDGE_ANALYSIS_READ = "knowledge_analysis:read"
+    KNOWLEDGE_ANALYSIS_CREATE = "knowledge_analysis:create"
+    KNOWLEDGE_ANALYSIS_REVIEW = "knowledge_analysis:review"
 
 
 VIEWER_PERMISSIONS = frozenset(

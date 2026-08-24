@@ -196,6 +196,7 @@ Textbook / Mock exam / Item bank
 - [Codex and Education Knowledge Control Plane Implementation Plan](docs/architecture/CODEX_KNOWLEDGE_CONTROL_PLANE_IMPLEMENTATION_PLAN.md)
 - [Item Origin, Organization, and Assessment Occurrence V1 Design](docs/architecture/ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md)
 - [Product, Form, Assembly, Publication, Usage, and Distribution V1 Design](docs/architecture/PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md)
+- [Knowledge Analysis Intake and Workflow V1](docs/architecture/KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md)
 - [Codex Control-Plane MVP Operations](docs/operations/CODEX_CONTROL_PLANE_MVP.md)
 - [Codex and Education Knowledge Phase 0 Baseline](docs/architecture/CODEX_KNOWLEDGE_PHASE0_BASELINE.md)
 - [Education Graph V0 Acceptance Queries](docs/architecture/EDUCATION_GRAPH_V0_ACCEPTANCE_QUERIES.md)
