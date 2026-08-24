@@ -194,6 +194,7 @@ Textbook / Mock exam / Item bank
 - [Codex Session, Execution Preset, and Worker Capacity Design](docs/architecture/CODEX_SESSION_PRESETS_AND_CAPACITY.md)
 - [Education Knowledge and Assessment Item GraphRAG Design](docs/architecture/EDUCATION_KNOWLEDGE_ITEM_GRAPHRAG.md)
 - [Codex and Education Knowledge Control Plane Implementation Plan](docs/architecture/CODEX_KNOWLEDGE_CONTROL_PLANE_IMPLEMENTATION_PLAN.md)
+- [EOMIS Legacy Knowledge Integration Plan](docs/architecture/EOMIS_LEGACY_KNOWLEDGE_INTEGRATION_PLAN.md)
 - [Item Origin, Organization, and Assessment Occurrence V1 Design](docs/architecture/ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md)
 - [Product, Form, Assembly, Publication, Usage, and Distribution V1 Design](docs/architecture/PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md)
 - [Knowledge Analysis Intake and Workflow V1](docs/architecture/KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md)
