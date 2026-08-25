@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Literal
 
 from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceipt,
+    KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisRequestV2,
+    KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeProposalArtifactMember,
     KnowledgeProposalCounts,
@@ -65,17 +68,18 @@ PROPOSAL_MEMBERS: tuple[tuple[str, str, ProposalMediaType, str], ...] = (
         "eom://schemas/knowledge/ambiguity/2.0",
     ),
 )
+_DOCUMENT_ANCHOR_LOCATOR = re.compile(r"^physical_page=([1-9][0-9]{0,5})(?:;.{1,220})?$")
 
 
 def stage_knowledge_analysis_proposal(
     *,
     proposal: KnowledgeAnalysisWorkerProposal,
-    request: KnowledgeAnalysisRequestV2,
+    request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3,
     job_id: str,
     logical_artifact_id: str,
     revision_id: str,
     staging: Path,
-) -> tuple[StagedFileSet, KnowledgeAnalysisProposalReceipt]:
+) -> tuple[StagedFileSet, KnowledgeAnalysisProposalReceipt | KnowledgeAnalysisProposalReceiptV2]:
     """Split one bounded worker value into deterministic immutable Artifact members."""
 
     if proposal.analysis_request_id != request.analysis_request_id:
@@ -93,6 +97,16 @@ def stage_knowledge_analysis_proposal(
             ErrorCode.WORKER_RESULT_INVALID,
             "knowledge proposal source anchor does not match the pinned source",
         )
+    if isinstance(request, KnowledgeAnalysisRequestV3):
+        first_page = request.source.first_physical_page
+        last_page = request.source.last_physical_page
+        for anchor in proposal.anchors:
+            locator = _DOCUMENT_ANCHOR_LOCATOR.fullmatch(anchor.locator)
+            if locator is None or not first_page <= int(locator.group(1)) <= last_page:
+                raise PlatformError(
+                    ErrorCode.WORKER_RESULT_INVALID,
+                    "document source anchor is outside the selected physical-page range",
+                )
     source_directory = staging / "knowledge-proposal-source"
     artifact_stage = staging / "knowledge-proposal-artifact"
     if source_directory.exists() or artifact_stage.exists():
@@ -143,35 +157,46 @@ def stage_knowledge_analysis_proposal(
             *(claim.confidence_milli for claim in proposal.claims),
             *(item.confidence_milli for item in proposal.component_observations),
         ]
-        receipt = KnowledgeAnalysisProposalReceipt(
-            analysis_request_id=request.analysis_request_id,
-            source=request.source,
-            members=KnowledgeProposalMembers.model_validate(member_values),
-            counts=KnowledgeProposalCounts(
+        receipt_value = {
+            "analysis_request_id": request.analysis_request_id,
+            "source": request.source.model_dump(mode="json"),
+            "members": KnowledgeProposalMembers.model_validate(member_values).model_dump(
+                mode="json"
+            ),
+            "counts": KnowledgeProposalCounts(
                 anchors=len(proposal.anchors),
                 nodes=len(proposal.nodes),
                 edges=len(proposal.edges),
                 claims=len(proposal.claims),
                 component_observations=len(proposal.component_observations),
                 ambiguities=len(proposal.unresolved_ambiguities),
-            ),
-            general_knowledge_used=proposal.general_knowledge_used,
-            minimum_confidence_milli=min(confidence_values) if confidence_values else None,
-            blocking_ambiguity_count=sum(
+            ).model_dump(mode="json"),
+            "general_knowledge_used": proposal.general_knowledge_used,
+            "minimum_confidence_milli": min(confidence_values) if confidence_values else None,
+            "blocking_ambiguity_count": sum(
                 1 for item in proposal.unresolved_ambiguities if item.blocking
             ),
-            content_set_sha256=content_sha256(
+            "content_set_sha256": content_sha256(
                 sorted(descriptors, key=lambda item: str(item["member_path"]))
             ),
-            completed_at=proposal.completed_at,
-        )
+            "completed_at": proposal.completed_at,
+        }
+        receipt: KnowledgeAnalysisProposalReceipt | KnowledgeAnalysisProposalReceiptV2
+        if isinstance(request, KnowledgeAnalysisRequestV3):
+            receipt = KnowledgeAnalysisProposalReceiptV2.model_validate(receipt_value)
+        else:
+            receipt = KnowledgeAnalysisProposalReceipt.model_validate(receipt_value)
         receipt_path = source_directory / "proposal-receipt.json"
         receipt_path.write_bytes(canonical_json_bytes(receipt))
         receipt_path.chmod(0o640)
         receipt_member = "normalized/proposal-receipt.json"
         files[receipt_member] = receipt_path
         metadata[receipt_member] = {
-            "schema_ref": "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/1.0",
+            "schema_ref": (
+                "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/2.0"
+                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV2)
+                else "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/1.0"
+            ),
             "media_type": "application/json",
         }
         staged = stage_file_set_artifact(

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-response-v6",
+  "title": "EOM Catalog Application Response V6",
+  "oneOf": [
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "operation", "item_production_evidence"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {"const": "CREATE_ITEM_PRODUCTION_EVIDENCE"},
+        "item_production_evidence": {
+          "oneOf": [
+            {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/2.0"},
+            {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/3.0"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "operation", "error_code"],
+      "properties": {
+        "status": {"const": "ERROR"},
+        "operation": {"const": "CREATE_ITEM_PRODUCTION_EVIDENCE"},
+        "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}
+      }
+    }
+  ]
+}

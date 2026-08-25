@@ -6,11 +6,13 @@ from uuid import uuid4
 
 import pytest
 from eom_catalog_contracts import TextbookAnalysisBundleManifest, validate_contract
+from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.educational_document_service import (
     EducationalDocumentError,
     EducationalDocumentService,
     prepare_textbook_registration_request,
 )
+from eom_catalog_service.knowledge_analysis_sources import resolve_educational_document_source
 from eom_catalog_service.models import (
     EducationalDocumentRecord,
     EducationalDocumentRegistrationRecord,
@@ -202,6 +204,24 @@ def test_document_registration_is_idempotent_pointer_only_and_immutable(
         "pdf" not in revision.result and "bytes" not in revision.result
         for revision in artifact_revisions
     )
+
+    resolved = resolve_educational_document_source(
+        db_session,
+        CatalogArtifactService(integration_engine, settings),
+        document_revision_id=first.document_revision_id,
+        source_class="TEXTBOOK",
+        first_physical_page=1,
+        last_physical_page=1,
+        curriculum_unit_keys=("1-(1)",),
+    )
+    assert resolved.document_id == first.document_id
+    assert resolved.document_revision_id == first.document_revision_id
+    assert resolved.artifact_member.member_path == "source/original.pdf"
+    assert tuple(member.member_kind for member in resolved.materialization_members) == (
+        "INDEX",
+        "PAGE",
+    )
+    assert resolved.materialization_members[1].materialized_path.endswith("page-000001.md")
 
     with pytest.raises(DBAPIError, match="immutable"), db_session.begin_nested():
         revision.title = "changed"

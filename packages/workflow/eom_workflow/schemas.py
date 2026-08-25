@@ -25,6 +25,7 @@ from eom_workflow.models import (
     GeneratedReviewRoleResultV4,
     ImageRoleResult,
     KnowledgeAnalysisProposalRoleResult,
+    KnowledgeAnalysisProposalRoleResultV2,
     KnowledgeAnalysisWorkerRequest,
     KnowledgeAuthoringRoleResult,
     KnowledgeImageRoleResult,
@@ -72,7 +73,9 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "registration-result@4.0",
         }
     ),
-    "support": frozenset({"knowledge-analysis-proposal-result@1.0"}),
+    "support": frozenset(
+        {"knowledge-analysis-proposal-result@1.0", "knowledge-analysis-proposal-result@2.0"}
+    ),
 }
 RESULT_SCHEMA_FILES = {
     "authoring-result@1.0": "authoring-result.schema.json",
@@ -92,6 +95,7 @@ RESULT_SCHEMA_FILES = {
     "review-result@4.0": "review-result-v4.schema.json",
     "registration-result@4.0": "registration-result-v4.schema.json",
     "knowledge-analysis-proposal-result@1.0": ("knowledge-analysis-proposal-result-v1.schema.json"),
+    "knowledge-analysis-proposal-result@2.0": ("knowledge-analysis-proposal-result-v2.schema.json"),
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -101,6 +105,7 @@ INPUT_SCHEMA_FILES = {
 }
 INPUT_SCHEMA_FILES_V1_1 = INPUT_SCHEMA_FILES
 INPUT_SCHEMA_FILES_V1_4 = {"support": "knowledge-analysis-input-v1.schema.json"}
+INPUT_SCHEMA_FILES_V1_5 = {"support": "knowledge-analysis-input-v2.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -119,6 +124,7 @@ RESULT_SCHEMA_PROTOCOLS = {
         if schema_id.endswith("@4.0")
     },
     "knowledge-analysis-proposal-result@1.0": "workflow-role/1.4.0",
+    "knowledge-analysis-proposal-result@2.0": "workflow-role/1.5.0",
 }
 PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.0.1": INPUT_SCHEMA_FILES,
@@ -126,6 +132,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.2.0": INPUT_SCHEMA_FILES_V1_1,
     "workflow-role/1.3.0": INPUT_SCHEMA_FILES_V1_1,
     "workflow-role/1.4.0": INPUT_SCHEMA_FILES_V1_4,
+    "workflow-role/1.5.0": INPUT_SCHEMA_FILES_V1_5,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -133,6 +140,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.2.0",
     "workflow-role/1.3.0",
     "workflow-role/1.4.0",
+    "workflow-role/1.5.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -141,6 +149,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES.values(),
             *INPUT_SCHEMA_FILES_V1_1.values(),
             *INPUT_SCHEMA_FILES_V1_4.values(),
+            *INPUT_SCHEMA_FILES_V1_5.values(),
         }
     )
 )
@@ -248,6 +257,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return GeneratedRegistrationRoleResultV4.model_validate(value)
         if schema_id == "knowledge-analysis-proposal-result@1.0" and role == "support":
             return KnowledgeAnalysisProposalRoleResult.model_validate(value)
+        if schema_id == "knowledge-analysis-proposal-result@2.0" and role == "support":
+            return KnowledgeAnalysisProposalRoleResultV2.model_validate(value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":
@@ -295,7 +306,10 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
         worker_input.artifact.logical_artifact_id
     )
     _mapping(artifact_properties, "revision_id")["const"] = worker_input.artifact.revision_id
-    if schema_id == "knowledge-analysis-proposal-result@1.0":
+    if schema_id in {
+        "knowledge-analysis-proposal-result@1.0",
+        "knowledge-analysis-proposal-result@2.0",
+    }:
         if not isinstance(worker_input.request, KnowledgeAnalysisWorkerRequest):
             raise WorkflowSchemaError("knowledge analysis result requires its typed worker request")
         output = _mapping(_mapping(schema, "properties"), "output")
@@ -322,7 +336,10 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     schema.pop("$id", None)
     if schema_id == "authoring-result@2.0":
         _project_knowledge_authoring_content(schema)
-    if schema_id == "knowledge-analysis-proposal-result@1.0":
+    if schema_id in {
+        "knowledge-analysis-proposal-result@1.0",
+        "knowledge-analysis-proposal-result@2.0",
+    }:
         _project_knowledge_analysis_codex_contract(schema)
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
@@ -491,6 +508,11 @@ def _inline_catalog_schema(schema: dict[str, Any]) -> dict[str, Any]:
             "KnowledgeAnalysisRequestV2",
         ),
         (
+            "eom://schemas/knowledge/knowledge-analysis-request/3.0",
+            "knowledge-analysis-request-v3",
+            "KnowledgeAnalysisRequestV3",
+        ),
+        (
             "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0",
             "knowledge-analysis-worker-proposal",
             "KnowledgeAnalysisWorkerProposal",
@@ -536,8 +558,10 @@ def _inline_knowledge_contract(
     from eom_catalog_contracts import load_schema
 
     root = copy.deepcopy(load_schema(catalog_name))
+    types_v3 = copy.deepcopy(load_schema("knowledge-analysis-types-v3"))
     types_v2 = copy.deepcopy(load_schema("knowledge-analysis-types-v2"))
     types_v1 = copy.deepcopy(load_schema("knowledge-types"))
+    v3_reference = "eom://schemas/knowledge/knowledge-analysis-types/3.0#/$defs/"
     v2_reference = "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/"
     v1_reference = "eom://schemas/knowledge/knowledge-types-v1#/$defs/"
 
@@ -548,6 +572,8 @@ def _inline_knowledge_contract(
                 if key == "$ref" and isinstance(item, str):
                     if item == reference:
                         rewritten[key] = f"#/$defs/{definition_name}"
+                    elif item.startswith(v3_reference):
+                        rewritten[key] = "#/$defs/AnalysisV3_" + item.removeprefix(v3_reference)
                     elif item.startswith(v2_reference):
                         rewritten[key] = "#/$defs/AnalysisV2_" + item.removeprefix(v2_reference)
                     elif item.startswith(v1_reference):
@@ -586,7 +612,13 @@ def _inline_knowledge_contract(
         raise WorkflowSchemaError("knowledge contract definitions are not an object")
     for name, value in root_definitions.items():
         definitions[f"{definition_name}_{name}"] = rewrite(value, local_prefix=definition_name)
-    for prefix, source in (("AnalysisV2", types_v2), ("KnowledgeV1", types_v1)):
+    type_sources = [
+        ("AnalysisV2", types_v2),
+        ("KnowledgeV1", types_v1),
+    ]
+    if v3_reference in json.dumps(root, ensure_ascii=True):
+        type_sources.insert(0, ("AnalysisV3", types_v3))
+    for prefix, source in type_sources:
         source_definitions = source.get("$defs")
         if not isinstance(source_definitions, dict):
             raise WorkflowSchemaError("knowledge type definitions are not an object")

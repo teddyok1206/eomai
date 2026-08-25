@@ -11,7 +11,7 @@ import socketserver
 import stat
 import struct
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from eom_catalog_contracts import (
     CATALOG_APPLICATION_MAX_MESSAGE_BYTES,
@@ -92,7 +92,11 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 (
                     "catalog-application-request-v4"
                     if operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
-                    else "catalog-application-request-v3"
+                    else (
+                        "catalog-application-request-v5"
+                        if operation == "CREATE_KNOWLEDGE_ANALYSIS"
+                        else "catalog-application-request-v3"
+                    )
                 ),
                 value,
             )
@@ -262,9 +266,13 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         payload = response.model_dump(mode="json", exclude_none=True)
         validate_contract(
             (
-                "catalog-application-response-v4"
+                "catalog-application-response-v6"
                 if response.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
-                else "catalog-application-response-v3"
+                else (
+                    "catalog-application-response-v5"
+                    if response.operation == "CREATE_EVIDENCE_BUNDLE"
+                    else "catalog-application-response-v3"
+                )
             ),
             payload,
         )
@@ -280,7 +288,18 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             stream,
             CatalogApplicationResponse(
                 status="ERROR",
-                operation=operation,  # type: ignore[arg-type]
+                operation=cast(
+                    Literal[
+                        "IMPORT_REVIEWED_ITEM_CONTENT",
+                        "GET_ITEM_CONTENT",
+                        "CREATE_KNOWLEDGE_ANALYSIS",
+                        "RECONCILE_KNOWLEDGE_ANALYSIS",
+                        "REVIEW_KNOWLEDGE_ANALYSIS",
+                        "CREATE_EVIDENCE_BUNDLE",
+                        "CREATE_ITEM_PRODUCTION_EVIDENCE",
+                    ],
+                    operation,
+                ),
                 error_code=error_code,
             ),
         )

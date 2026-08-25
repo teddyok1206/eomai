@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from eom_api_contracts.common import ApiModel, Sha256, UtcDatetime
 
@@ -22,8 +22,40 @@ class ApprovedItemAnalysisSourceInput(ApiModel):
     item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
 
 
+class EducationalDocumentAnalysisSourceInput(ApiModel):
+    source_kind: Literal["DOCUMENT_REVISION"] = "DOCUMENT_REVISION"
+    source_class: Literal["TEXTBOOK", "CURRICULUM", "INTERNAL_GUIDE"]
+    document_revision_id: str = Field(pattern=r"^edudocrev_[0-9a-f]{32}$")
+    first_physical_page: int = Field(ge=1, le=100000)
+    last_physical_page: int = Field(ge=1, le=100000)
+    curriculum_unit_keys: tuple[
+        Annotated[
+            str,
+            Field(
+                pattern=(
+                    r"^(1-\([1-4]\)|2-\([1-6]\)|3-\([1-7]\)|4-\([1-7]\)|"
+                    r"5-\([1-7]\)|6-\([1-4]\))$"
+                )
+            ),
+        ],
+        ...,
+    ] = Field(max_length=16)
+
+    @model_validator(mode="after")
+    def bounded_document_selection(self) -> EducationalDocumentAnalysisSourceInput:
+        if self.last_physical_page < self.first_physical_page:
+            raise ValueError("document analysis page range is reversed")
+        if self.last_physical_page - self.first_physical_page + 1 > 32:
+            raise ValueError("document analysis page range exceeds 32 pages")
+        if self.curriculum_unit_keys != tuple(sorted(set(self.curriculum_unit_keys))):
+            raise ValueError("document curriculum keys must be sorted and unique")
+        return self
+
+
 KnowledgeAnalysisSourceInput = Annotated[
-    ContentIntakeAnalysisSourceInput | ApprovedItemAnalysisSourceInput,
+    ContentIntakeAnalysisSourceInput
+    | ApprovedItemAnalysisSourceInput
+    | EducationalDocumentAnalysisSourceInput,
     Field(discriminator="source_kind"),
 ]
 
@@ -66,7 +98,7 @@ class KnowledgeAnalysisRunView(ApiModel):
     predecessor_analysis_run_id: str | None = Field(
         default=None, pattern=r"^analysisrun_[0-9a-f]{32}$"
     )
-    source_kind: Literal["CONTENT_INTAKE_FILE", "APPROVED_ITEM_REVISION"]
+    source_kind: Literal["CONTENT_INTAKE_FILE", "APPROVED_ITEM_REVISION", "DOCUMENT_REVISION"]
     source_revision_id: str
     source_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
     source_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")

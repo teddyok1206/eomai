@@ -14,6 +14,7 @@ from eom_catalog_contracts import (
     ApprovedItemKnowledgeAnalysisSelection,
     ContentIntakeKnowledgeAnalysisSelection,
     CreateKnowledgeAnalysisCommand,
+    EducationalDocumentKnowledgeAnalysisSelection,
     ReconcileKnowledgeAnalysisCommand,
     ReviewKnowledgeAnalysisCommand,
 )
@@ -81,11 +82,17 @@ def create_knowledge_analysis(
             raw_key=idempotency_key,
         )
         source_data = body.source.model_dump(mode="json")
-        source = (
-            ContentIntakeKnowledgeAnalysisSelection.model_validate(source_data)
-            if body.source.source_kind == "CONTENT_INTAKE_FILE"
-            else ApprovedItemKnowledgeAnalysisSelection.model_validate(source_data)
+        source: (
+            ContentIntakeKnowledgeAnalysisSelection
+            | ApprovedItemKnowledgeAnalysisSelection
+            | EducationalDocumentKnowledgeAnalysisSelection
         )
+        if body.source.source_kind == "CONTENT_INTAKE_FILE":
+            source = ContentIntakeKnowledgeAnalysisSelection.model_validate(source_data)
+        elif body.source.source_kind == "APPROVED_ITEM_REVISION":
+            source = ApprovedItemKnowledgeAnalysisSelection.model_validate(source_data)
+        else:
+            source = EducationalDocumentKnowledgeAnalysisSelection.model_validate(source_data)
         result = request.app.state.services.catalog_application.create_knowledge_analysis(
             CreateKnowledgeAnalysisCommand(
                 source=source,

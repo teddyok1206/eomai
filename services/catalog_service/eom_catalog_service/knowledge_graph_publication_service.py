@@ -12,15 +12,20 @@ from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     AssessmentItemContent,
     ContentIntakeKnowledgeSourceV2,
+    EducationalDocumentKnowledgeSourceV3,
     KnowledgeAnalysisProposalReceipt,
+    KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisRequestV2,
+    KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisResultV2,
+    KnowledgeAnalysisResultV3,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphCounts,
     KnowledgeGraphProjections,
     KnowledgeGraphPublicationResult,
     KnowledgeGraphSnapshotManifestV2,
+    KnowledgeGraphSnapshotManifestV3,
     KnowledgeGraphSnapshotPointer,
     KnowledgeGraphStructureManifest,
     PublishKnowledgeGraphSnapshotCommand,
@@ -41,6 +46,7 @@ from eom_catalog_service.knowledge_analysis_sources import (
     KnowledgeAnalysisSourceError,
     resolve_approved_item_source,
     resolve_content_intake_source,
+    resolve_educational_document_source,
 )
 from eom_catalog_service.knowledge_graph_models import (
     CurriculumUnitClosureRecord,
@@ -87,6 +93,26 @@ KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL = "catalog-knowledge-graph/1.1"
+KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL,
+        "contracts": [
+            "knowledge-graph-publication/1.0",
+            "knowledge-graph-structure-manifest/1.0",
+            "knowledge-graph-snapshot-manifest/3.0",
+            "knowledge-graph-publication-result/1.0",
+            "knowledge-graph-projection/2.0",
+        ],
+    }
+)
+type KnowledgeAnalysisRequestContract = KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3
+type KnowledgeAnalysisReceiptContract = (
+    KnowledgeAnalysisProposalReceipt | KnowledgeAnalysisProposalReceiptV2
+)
+type KnowledgeGraphSnapshotContract = (
+    KnowledgeGraphSnapshotManifestV2 | KnowledgeGraphSnapshotManifestV3
+)
 
 
 class KnowledgeGraphPublicationError(RuntimeError):
@@ -99,11 +125,39 @@ def _typed_id(prefix: str, value: dict[str, object]) -> str:
     return prefix + content_sha256(value).removeprefix("sha256:")[:32]
 
 
+def _manifest_member_schema_ref(revision: ArtifactRevisionRecord) -> str:
+    files = revision.manifest.get("files")
+    if not isinstance(files, list):
+        raise KnowledgeGraphPublicationError(
+            "KNOWLEDGE_GRAPH_CURRENT_INVALID",
+            "graph manifest Artifact has no member inventory",
+        )
+    matches = [
+        item
+        for item in files
+        if isinstance(item, dict) and item.get("file_name") == "projections/manifest.json"
+    ]
+    allowed = {
+        "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/2.0",
+        "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/3.0",
+    }
+    if len(matches) != 1 or matches[0].get("schema_ref") not in allowed:
+        raise KnowledgeGraphPublicationError(
+            "KNOWLEDGE_GRAPH_CURRENT_INVALID",
+            "graph manifest Artifact schema is incompatible",
+        )
+    return str(matches[0]["schema_ref"])
+
+
 def _source_revision_id(
-    source: ContentIntakeKnowledgeSourceV2 | ApprovedItemKnowledgeSourceV2,
+    source: ContentIntakeKnowledgeSourceV2
+    | ApprovedItemKnowledgeSourceV2
+    | EducationalDocumentKnowledgeSourceV3,
 ) -> str:
     if isinstance(source, ApprovedItemKnowledgeSourceV2):
         return source.item_revision_id
+    if isinstance(source, EducationalDocumentKnowledgeSourceV3):
+        return source.document_revision_id
     return source.source_file_id
 
 
@@ -202,20 +256,37 @@ class KnowledgeGraphPublicationService:
             edges=len(projection.edges),
             anchors=projection.anchor_count,
         )
-        manifest = KnowledgeGraphSnapshotManifestV2(
-            graph_id=ids["graph_id"],
-            graph_snapshot_revision_id=ids["graph_snapshot_revision_id"],
-            revision_number=revision_number,
-            previous_graph_snapshot_revision_id=previous_snapshot_revision_id,
-            publisher_version=command.publisher_version,
-            source_revisions=tuple(item.source for item in projection.analyses),
-            analysis_results=tuple(item.accepted_result for item in projection.analyses),
-            projections=projections,
-            counts=counts,
-            snapshot_sha256=projection_files.snapshot_sha256,
-            created_at=command.requested_at,
-        )
-        validate_contract("knowledge-graph-snapshot-manifest-v2", manifest.model_dump(mode="json"))
+        manifest_value = {
+            "graph_id": ids["graph_id"],
+            "graph_snapshot_revision_id": ids["graph_snapshot_revision_id"],
+            "revision_number": revision_number,
+            "previous_graph_snapshot_revision_id": previous_snapshot_revision_id,
+            "publisher_version": command.publisher_version,
+            "source_revisions": [
+                item.source.model_dump(mode="json") for item in projection.analyses
+            ],
+            "analysis_results": [
+                item.accepted_result.model_dump(mode="json") for item in projection.analyses
+            ],
+            "projections": projections.model_dump(mode="json"),
+            "counts": counts.model_dump(mode="json"),
+            "snapshot_sha256": projection_files.snapshot_sha256,
+            "created_at": command.requested_at,
+        }
+        manifest: KnowledgeGraphSnapshotContract
+        if any(
+            isinstance(item.source, EducationalDocumentKnowledgeSourceV3)
+            for item in projection.analyses
+        ):
+            manifest = KnowledgeGraphSnapshotManifestV3.model_validate(manifest_value)
+            validate_contract(
+                "knowledge-graph-snapshot-manifest-v3", manifest.model_dump(mode="json")
+            )
+        else:
+            manifest = KnowledgeGraphSnapshotManifestV2.model_validate(manifest_value)
+            validate_contract(
+                "knowledge-graph-snapshot-manifest-v2", manifest.model_dump(mode="json")
+            )
         manifest_artifact = self._commit_manifest(command, manifest)
         return self._commit_database_snapshot(
             command=command,
@@ -263,7 +334,14 @@ class KnowledgeGraphPublicationService:
                 "publication source is missing or not accepted",
             )
         try:
-            request = KnowledgeAnalysisRequestV2.model_validate(run.canonical_request)
+            request_version = run.canonical_request.get("schema_version")
+            request: KnowledgeAnalysisRequestContract
+            if request_version == "knowledge-analysis-request/3.0":
+                request = KnowledgeAnalysisRequestV3.model_validate(run.canonical_request)
+            elif request_version == "knowledge-analysis-request/2.0":
+                request = KnowledgeAnalysisRequestV2.model_validate(run.canonical_request)
+            else:
+                raise ValueError("unsupported accepted analysis request schema")
             resolved_source = self._resolve_source_again(session, request)
         except (ValidationError, KnowledgeAnalysisSourceError) as exc:
             raise KnowledgeGraphPublicationError(
@@ -291,12 +369,18 @@ class KnowledgeGraphPublicationService:
             artifact_type="knowledge-analysis-accepted-result",
             primary_file="evidence/accepted-result.json",
         )
+        document_source = isinstance(request, KnowledgeAnalysisRequestV3)
+        accepted_schema_ref = (
+            "eom://schemas/knowledge/knowledge-analysis-result/3.0"
+            if document_source
+            else "eom://schemas/knowledge/knowledge-analysis-result/2.0"
+        )
         accepted_value = self._read_json_member(
             KnowledgeArtifactMemberPointer(
                 artifact_id=run.accepted_result_artifact_id,
                 artifact_revision_id=run.accepted_result_artifact_revision_id,
                 sha256=run.accepted_result_sha256,
-                schema_ref="eom://schemas/knowledge/knowledge-analysis-result/2.0",
+                schema_ref=accepted_schema_ref,
                 media_type="application/json",
                 logical_name="accepted-result.json",
                 member_path="evidence/accepted-result.json",
@@ -304,11 +388,23 @@ class KnowledgeGraphPublicationService:
             max_bytes=1_048_576,
             expected_bytes=accepted_revision.content_bytes,
         )
+        accepted: KnowledgeAnalysisResultV2 | KnowledgeAnalysisResultV3
+        database_accepted: KnowledgeAnalysisResultV2 | KnowledgeAnalysisResultV3
         try:
-            validate_contract("knowledge-analysis-result-v2", accepted_value)
-            accepted = KnowledgeAnalysisResultV2.model_validate(accepted_value)
-            validate_contract("knowledge-analysis-result-v2", accepted_revision.result)
-            database_accepted = KnowledgeAnalysisResultV2.model_validate(accepted_revision.result)
+            if document_source:
+                validate_contract("knowledge-analysis-result-v3", accepted_value)
+                accepted = KnowledgeAnalysisResultV3.model_validate(accepted_value)
+                validate_contract("knowledge-analysis-result-v3", accepted_revision.result)
+                database_accepted = KnowledgeAnalysisResultV3.model_validate(
+                    accepted_revision.result
+                )
+            else:
+                validate_contract("knowledge-analysis-result-v2", accepted_value)
+                accepted = KnowledgeAnalysisResultV2.model_validate(accepted_value)
+                validate_contract("knowledge-analysis-result-v2", accepted_revision.result)
+                database_accepted = KnowledgeAnalysisResultV2.model_validate(
+                    accepted_revision.result
+                )
         except (ValidationError, ValueError) as exc:
             raise KnowledgeGraphPublicationError(
                 "KNOWLEDGE_GRAPH_RESULT_INVALID", "accepted analysis result is invalid"
@@ -340,13 +436,25 @@ class KnowledgeGraphPublicationService:
             max_bytes=max(1, accepted.proposal_receipt.bytes),
             expected_bytes=accepted.proposal_receipt.bytes,
         )
+        receipt: KnowledgeAnalysisReceiptContract
+        database_receipt: KnowledgeAnalysisReceiptContract
         try:
-            validate_contract("knowledge-analysis-proposal-receipt", proposal_receipt_value)
-            receipt = KnowledgeAnalysisProposalReceipt.model_validate(proposal_receipt_value)
-            validate_contract("knowledge-analysis-proposal-receipt", proposal_revision.result)
-            database_receipt = KnowledgeAnalysisProposalReceipt.model_validate(
-                proposal_revision.result
-            )
+            if document_source:
+                validate_contract("knowledge-analysis-proposal-receipt-v2", proposal_receipt_value)
+                receipt = KnowledgeAnalysisProposalReceiptV2.model_validate(proposal_receipt_value)
+                validate_contract(
+                    "knowledge-analysis-proposal-receipt-v2", proposal_revision.result
+                )
+                database_receipt = KnowledgeAnalysisProposalReceiptV2.model_validate(
+                    proposal_revision.result
+                )
+            else:
+                validate_contract("knowledge-analysis-proposal-receipt", proposal_receipt_value)
+                receipt = KnowledgeAnalysisProposalReceipt.model_validate(proposal_receipt_value)
+                validate_contract("knowledge-analysis-proposal-receipt", proposal_revision.result)
+                database_receipt = KnowledgeAnalysisProposalReceipt.model_validate(
+                    proposal_revision.result
+                )
         except (ValidationError, ValueError) as exc:
             raise KnowledgeGraphPublicationError(
                 "KNOWLEDGE_GRAPH_PROPOSAL_INVALID", "analysis proposal receipt is invalid"
@@ -391,7 +499,7 @@ class KnowledgeGraphPublicationService:
                 artifact_id=run.accepted_result_artifact_id,
                 artifact_revision_id=run.accepted_result_artifact_revision_id,
                 sha256=run.accepted_result_sha256,
-                schema_ref="eom://schemas/knowledge/knowledge-analysis-result/2.0",
+                schema_ref=accepted_schema_ref,
                 media_type="application/json",
                 logical_name="accepted-result.json",
                 member_path="evidence/accepted-result.json",
@@ -399,10 +507,13 @@ class KnowledgeGraphPublicationService:
             proposal=proposal,
         )
 
-    @staticmethod
     def _resolve_source_again(
-        session: Session, request: KnowledgeAnalysisRequestV2
-    ) -> ContentIntakeKnowledgeSourceV2 | ApprovedItemKnowledgeSourceV2:
+        self, session: Session, request: KnowledgeAnalysisRequestContract
+    ) -> (
+        ContentIntakeKnowledgeSourceV2
+        | ApprovedItemKnowledgeSourceV2
+        | EducationalDocumentKnowledgeSourceV3
+    ):
         source = request.source
         if isinstance(source, ContentIntakeKnowledgeSourceV2):
             return resolve_content_intake_source(
@@ -411,10 +522,20 @@ class KnowledgeGraphPublicationService:
                 source_file_id=source.source_file_id,
                 source_class=source.source_class,
             )
-        return resolve_approved_item_source(
+        if isinstance(source, ApprovedItemKnowledgeSourceV2):
+            return resolve_approved_item_source(
+                session,
+                item_revision_id=source.item_revision_id,
+                source_class=source.source_class,
+            )
+        return resolve_educational_document_source(
             session,
-            item_revision_id=source.item_revision_id,
+            self.artifacts,
+            document_revision_id=source.document_revision_id,
             source_class=source.source_class,
+            first_physical_page=source.first_physical_page,
+            last_physical_page=source.last_physical_page,
+            curriculum_unit_keys=source.curriculum_unit_keys,
         )
 
     @staticmethod
@@ -476,7 +597,7 @@ class KnowledgeGraphPublicationService:
             ) from exc
 
     def _load_proposal(
-        self, receipt: KnowledgeAnalysisProposalReceipt
+        self, receipt: KnowledgeAnalysisReceiptContract
     ) -> KnowledgeAnalysisWorkerProposal:
         values: dict[str, Any] = {}
         for field_name in receipt.members.__class__.model_fields:
@@ -665,6 +786,10 @@ class KnowledgeGraphPublicationService:
         command: PublishKnowledgeGraphSnapshotCommand,
         files: EducationGraphProjectionFiles,
     ) -> CatalogArtifact:
+        document_projection = any(
+            metadata.get("schema_ref") == "eom://schemas/knowledge/knowledge-graph-projection/2.0"
+            for metadata in files.metadata.values()
+        )
         try:
             with tempfile.TemporaryDirectory(
                 prefix="knowledge-graph-projection.", dir=self.settings.staging_root
@@ -691,8 +816,16 @@ class KnowledgeGraphPublicationService:
                     },
                     file_metadata=files.metadata,
                     manifest_version="knowledge-graph-projection-file-set/1.0",
-                    protocol_version=KNOWLEDGE_GRAPH_CATALOG_PROTOCOL,
-                    protocol_schema_hash=KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH,
+                    protocol_version=(
+                        KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL
+                        if document_projection
+                        else KNOWLEDGE_GRAPH_CATALOG_PROTOCOL
+                    ),
+                    protocol_schema_hash=(
+                        KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH
+                        if document_projection
+                        else KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH
+                    ),
                 )
         except (OSError, RuntimeError, ValueError) as exc:
             raise KnowledgeGraphPublicationError(
@@ -745,7 +878,7 @@ class KnowledgeGraphPublicationService:
     def _commit_manifest(
         self,
         command: PublishKnowledgeGraphSnapshotCommand,
-        manifest: KnowledgeGraphSnapshotManifestV2,
+        manifest: KnowledgeGraphSnapshotContract,
     ) -> CatalogArtifact:
         try:
             with tempfile.TemporaryDirectory(
@@ -768,14 +901,24 @@ class KnowledgeGraphPublicationService:
                     file_metadata={
                         "projections/manifest.json": {
                             "schema_ref": (
-                                "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/2.0"
+                                "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/3.0"
+                                if isinstance(manifest, KnowledgeGraphSnapshotManifestV3)
+                                else "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/2.0"
                             ),
                             "media_type": "application/json",
                         }
                     },
                     manifest_version="knowledge-graph-snapshot-manifest-file-set/1.0",
-                    protocol_version=KNOWLEDGE_GRAPH_CATALOG_PROTOCOL,
-                    protocol_schema_hash=KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH,
+                    protocol_version=(
+                        KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL
+                        if isinstance(manifest, KnowledgeGraphSnapshotManifestV3)
+                        else KNOWLEDGE_GRAPH_CATALOG_PROTOCOL
+                    ),
+                    protocol_schema_hash=(
+                        KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH
+                        if isinstance(manifest, KnowledgeGraphSnapshotManifestV3)
+                        else KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH
+                    ),
                 )
         except (OSError, RuntimeError, ValueError) as exc:
             raise KnowledgeGraphPublicationError(
@@ -792,7 +935,7 @@ class KnowledgeGraphPublicationService:
         previous_corpus_revision_id: str | None,
         projection: EducationGraphProjection,
         projection_artifact: CatalogArtifact,
-        manifest: KnowledgeGraphSnapshotManifestV2,
+        manifest: KnowledgeGraphSnapshotContract,
         manifest_artifact: CatalogArtifact,
     ) -> KnowledgeGraphPublicationResult:
         with transaction(self.sessions) as session:
@@ -1062,10 +1205,23 @@ class KnowledgeGraphPublicationService:
     ) -> KnowledgeGraphPublicationResult:
         corpus = session.get(KnowledgeCorpusRecord, publication.corpus_id)
         snapshot = session.get(KnowledgeGraphSnapshotRecord, publication.graph_snapshot_revision_id)
-        if corpus is None or snapshot is None:
+        manifest_revision = (
+            session.get(ArtifactRevisionRecord, snapshot.manifest_artifact_revision_id)
+            if snapshot is not None
+            else None
+        )
+        if (
+            corpus is None
+            or snapshot is None
+            or manifest_revision is None
+            or not manifest_revision.approved
+            or manifest_revision.logical_artifact_id != snapshot.manifest_artifact_id
+            or manifest_revision.content_hash != snapshot.manifest_sha256
+        ):
             raise KnowledgeGraphPublicationError(
                 "KNOWLEDGE_GRAPH_CURRENT_INVALID", "publication result pointers do not resolve"
             )
+        manifest_schema_ref = _manifest_member_schema_ref(manifest_revision)
         value: dict[str, Any] = {
             "schema_version": "knowledge-graph-publication-result/1.0",
             "publication_id": publication.publication_id,
@@ -1079,7 +1235,7 @@ class KnowledgeGraphPublicationService:
                     artifact_id=snapshot.manifest_artifact_id,
                     artifact_revision_id=snapshot.manifest_artifact_revision_id,
                     sha256=snapshot.manifest_sha256,
-                    schema_ref=("eom://schemas/knowledge/knowledge-graph-snapshot-manifest/2.0"),
+                    schema_ref=manifest_schema_ref,
                     media_type="application/json",
                     logical_name="manifest.json",
                     member_path="projections/manifest.json",

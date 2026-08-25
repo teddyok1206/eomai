@@ -258,6 +258,24 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "4.0",
             "sha256:41d5d126c0759538861f493010567fef87e4468c925c0892592567bebf5a9c30",
         ),
+        "catalog-application-response-v5": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v5.schema.json",
+            "resources/catalog-application/catalog-application-response-v5.schema.json",
+            "5.0",
+            "sha256:1155fa976a1dc1913cbd51c97084bb17824211fe9ecd32c65e5d6f74ceec16a9",
+        ),
+        "catalog-application-response-v6": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v6.schema.json",
+            "resources/catalog-application/catalog-application-response-v6.schema.json",
+            "6.0",
+            "sha256:cc85a5642643693717b63c952061ad90e7a6b681c1c1e2940c447679c1a69dab",
+        ),
+        "catalog-application-request-v5": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v5.schema.json",
+            "resources/catalog-application/catalog-application-request-v5.schema.json",
+            "5.0",
+            "sha256:614599a6e49e160c2090be55b8039811bd610776c6a7d485fccc2a447d8503e2",
+        ),
         "knowledge-types": CatalogSchemaResource(
             "schemas/knowledge/knowledge-types-v1.schema.json",
             "resources/knowledge/knowledge-types-v1.schema.json",
@@ -288,6 +306,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:bf77196f281dc8c2c22e850e576a9137acb7bc1fea3681400f8855dc1f63414f",
         ),
+        "knowledge-analysis-types-v3": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-types-v3.schema.json",
+            "resources/knowledge/knowledge-analysis-types-v3.schema.json",
+            "3.0",
+            "sha256:7270e1f7fa9154e5a5f00f4e48bea2d49399ea9570ed1d81a1fc566eecdcea76",
+        ),
+        "knowledge-analysis-request-v3": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-request-v3.schema.json",
+            "resources/knowledge/knowledge-analysis-request-v3.schema.json",
+            "3.0",
+            "sha256:314c70a742970aa8a586a034269d8bc262860bd478042c6c46ebfc86bc8780d8",
+        ),
         "knowledge-analysis-worker-proposal": CatalogSchemaResource(
             "schemas/knowledge/knowledge-analysis-worker-proposal-v1.schema.json",
             "resources/knowledge/knowledge-analysis-worker-proposal-v1.schema.json",
@@ -299,6 +329,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/knowledge-analysis-proposal-receipt-v1.schema.json",
             "1.0",
             "sha256:9159e7ef26da33825052f6704d13b1ff80bb2c68afdbc0a9474fab19912e69a7",
+        ),
+        "knowledge-analysis-proposal-receipt-v2": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-proposal-receipt-v2.schema.json",
+            "resources/knowledge/knowledge-analysis-proposal-receipt-v2.schema.json",
+            "2.0",
+            "sha256:5af94d49dc656f4833182cd554a4e1ae1faea795927253a5577572e54fc31c98",
         ),
         "knowledge-analysis-risk-policy": CatalogSchemaResource(
             "schemas/knowledge/knowledge-analysis-risk-policy-v1.schema.json",
@@ -317,6 +353,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/knowledge-analysis-result-v2.schema.json",
             "2.0",
             "sha256:e017752dc52ca32cb18d5e671525d1415c76ce19df023ac33fd3a43e811c3d48",
+        ),
+        "knowledge-analysis-result-v3": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-result-v3.schema.json",
+            "resources/knowledge/knowledge-analysis-result-v3.schema.json",
+            "3.0",
+            "sha256:e32b715cfdded7e18631f0d4979a5a5125e450a3d13d238359d1231d24703f32",
         ),
         "knowledge-graph-snapshot-manifest": CatalogSchemaResource(
             "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
@@ -342,6 +384,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:b3a78a44dab9cb3a5525e5e1bfe5bc195044221867c92df2a98b08b358701102",
         ),
+        "knowledge-graph-projection-v2": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-projection-v2.schema.json",
+            "resources/knowledge/knowledge-graph-projection-v2.schema.json",
+            "2.0",
+            "sha256:fd820117c31c746bf5a8f525bc5b71367f4020318be79bb06ae2eeb1bbda2a9a",
+        ),
         "knowledge-graph-structure-manifest": CatalogSchemaResource(
             "schemas/knowledge/knowledge-graph-structure-manifest-v1.schema.json",
             "resources/knowledge/knowledge-graph-structure-manifest-v1.schema.json",
@@ -353,6 +401,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
             "2.0",
             "sha256:2fe24ad351ca7dcd10a9ba7909bf0fe0fe6fb2bf7715ca3dac02d1697cf60d09",
+        ),
+        "knowledge-graph-snapshot-manifest-v3": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-snapshot-manifest-v3.schema.json",
+            "resources/knowledge/knowledge-graph-snapshot-manifest-v3.schema.json",
+            "3.0",
+            "sha256:a8a8fbd41022ce0200b1979a4c2d24ca95a27cd5571b143dab61cab84344b50d",
         ),
         "education-retrieval-access-policy": CatalogSchemaResource(
             "schemas/knowledge/education-retrieval-access-policy-v1.schema.json",
@@ -390,6 +444,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:a908f3dffd665292e5b171d799e8e1e95faa0ed5a4df3cfdc426c8f4f4bfcdaa",
         ),
+        "evidence-bundle-manifest-v3": CatalogSchemaResource(
+            "schemas/knowledge/evidence-bundle-manifest-v3.schema.json",
+            "resources/knowledge/evidence-bundle-manifest-v3.schema.json",
+            "3.0",
+            "sha256:22d326637c08e00089b0fc0af2ca0a14eeb68c452f5cf822a2cbd91902dbae23",
+        ),
         "evidence-bundle-publication-result": CatalogSchemaResource(
             "schemas/knowledge/evidence-bundle-publication-result-v1.schema.json",
             "resources/knowledge/evidence-bundle-publication-result-v1.schema.json",
@@ -401,6 +461,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/evidence-bundle-publication-result-v2.schema.json",
             "2.0",
             "sha256:af55e991a17dbc56f43f75d3c6fb245efea64e0668149e96cad69b59f6305770",
+        ),
+        "evidence-bundle-publication-result-v3": CatalogSchemaResource(
+            "schemas/knowledge/evidence-bundle-publication-result-v3.schema.json",
+            "resources/knowledge/evidence-bundle-publication-result-v3.schema.json",
+            "3.0",
+            "sha256:c490617299d48da76552eee36c12e33268d915ca02167c629ea74b741cdc7f21",
         ),
     }
 )

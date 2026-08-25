@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eom_catalog_contracts import KnowledgeAnalysisProposalReceipt, KnowledgeAnalysisRiskPolicy
+from eom_catalog_contracts import (
+    KnowledgeAnalysisProposalReceipt,
+    KnowledgeAnalysisProposalReceiptV2,
+    KnowledgeAnalysisRiskPolicy,
+)
 
 
 @dataclass(frozen=True)
@@ -14,7 +18,7 @@ class KnowledgeAnalysisRiskEvaluation:
 
 
 def evaluate_knowledge_analysis_risk(
-    receipt: KnowledgeAnalysisProposalReceipt,
+    receipt: KnowledgeAnalysisProposalReceipt | KnowledgeAnalysisProposalReceiptV2,
     policy: KnowledgeAnalysisRiskPolicy,
 ) -> KnowledgeAnalysisRiskEvaluation:
     """Evaluate one validated receipt in O(1) from its bounded summary counts."""

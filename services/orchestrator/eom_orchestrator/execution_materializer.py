@@ -19,6 +19,7 @@ from eom_workflow import (
     ResolvedExecutionPlan,
     ResolvedExecutionPlanV2,
     ResolvedExecutionPlanV3,
+    ResolvedExecutionPlanV4,
     ResolvedStepExecutionV3,
     validate_control_contract,
 )
@@ -115,14 +116,23 @@ def materialize_execution_step(
     plan_record = session.get(ResolvedExecutionPlanRecord, plan_id)
     if plan_record is None:
         raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
-    is_analysis = plan_record.canonical_document.get("schema_version") == (
-        "resolved-execution-plan/2.0"
+    plan_schema_version = plan_record.canonical_document.get("schema_version")
+    is_analysis = plan_schema_version in {
+        "resolved-execution-plan/2.0",
+        "resolved-execution-plan/4.0",
+    }
+    plan: (
+        ResolvedExecutionPlan
+        | ResolvedExecutionPlanV2
+        | ResolvedExecutionPlanV3
+        | ResolvedExecutionPlanV4
     )
-    plan: ResolvedExecutionPlan | ResolvedExecutionPlanV2 | ResolvedExecutionPlanV3
-    if is_analysis:
+    if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
-    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
+    elif plan_schema_version == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/4.0":
+        plan = ResolvedExecutionPlanV4.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -203,6 +213,20 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.source_artifact_revision_id
         source_sha256 = plan.source_sha256
+    elif isinstance(plan, ResolvedExecutionPlanV4):
+        document_bytes, document_members = _materialize_analysis_document_source(
+            session,
+            plan=plan,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        )
+        total_bytes += document_bytes
+        member_count += document_members
+        _require_total_size(total_bytes, analysis=True)
+        source_artifact_revision_id = plan.document_source.artifact_member.artifact_revision_id
+        source_sha256 = plan.document_source.artifact_member.sha256
     elif isinstance(plan, ResolvedExecutionPlanV3):
         assert isinstance(step, ResolvedStepExecutionV3)
         if step.evidence_access == "EVIDENCE_CONTEXT":
@@ -285,11 +309,16 @@ def authorized_execution_artifact_revisions(
     if plan_record is None:
         raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
     if plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/2.0":
-        plan: ResolvedExecutionPlan | ResolvedExecutionPlanV2 | ResolvedExecutionPlanV3 = (
-            ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
-        )
+        plan: (
+            ResolvedExecutionPlan
+            | ResolvedExecutionPlanV2
+            | ResolvedExecutionPlanV3
+            | ResolvedExecutionPlanV4
+        ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/4.0":
+        plan = ResolvedExecutionPlanV4.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -305,6 +334,13 @@ def authorized_execution_artifact_revisions(
     revision_ids: set[str] = set()
     if isinstance(plan, ResolvedExecutionPlanV2):
         revision_ids.add(plan.source_artifact_revision_id)
+    elif isinstance(plan, ResolvedExecutionPlanV4):
+        # The original PDF, bundle manifest, and rights attestation are pinned
+        # provenance. Only the selected Markdown members cross the explicit
+        # materialization boundary into the worker workspace.
+        revision_ids.update(
+            member.artifact_revision_id for member in plan.document_source.materialization_members
+        )
     elif isinstance(plan, ResolvedExecutionPlanV3):
         assert isinstance(step, ResolvedStepExecutionV3)
         if step.evidence_access == "EVIDENCE_CONTEXT":
@@ -549,6 +585,91 @@ def _materialize_analysis_source(
     _ensure_parent(destination.parent, workspace=workspace, group_id=worker_group_id)
     _write_exclusive(destination, payload, group_id=worker_group_id)
     return payload
+
+
+def _materialize_analysis_document_source(
+    session: Session,
+    *,
+    plan: ResolvedExecutionPlanV4,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> tuple[int, int]:
+    """Materialize only the exact analysis index/pages; the original PDF stays canonical."""
+
+    source = plan.document_source
+    total_bytes = 0
+    for member in source.materialization_members:
+        if member.artifact_revision_id not in authorized_artifact_revision_ids:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_PERMISSION_DENIED",
+                "document analysis member revision is not authorized",
+            )
+        logical = session.get(ArtifactRecord, member.artifact_id)
+        revision = session.get(ArtifactRevisionRecord, member.artifact_revision_id)
+        if (
+            logical is None
+            or revision is None
+            or not logical.approved
+            or not revision.approved
+            or revision.logical_artifact_id != member.artifact_id
+        ):
+            raise ControlPlaneError(
+                "CONTROL_POINTER_REVISION_INVALID",
+                "document analysis member Artifact pointer is stale",
+            )
+        expected_root = artifact_root / member.artifact_id / member.artifact_revision_id
+        stored_root = Path(revision.nas_path)
+        if stored_root != expected_root:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_STORAGE_MISMATCH",
+                "document analysis member storage is not canonical",
+            )
+        entry = _manifest_entry(revision.manifest, member.member_path)
+        if (
+            entry.get("sha256") != member.sha256
+            or entry.get("bytes") != member.bytes
+            or entry.get("media_type") != member.media_type
+            or entry.get("schema_ref") != member.schema_ref
+        ):
+            raise ControlPlaneError(
+                "CONTROL_POINTER_MANIFEST_MISMATCH",
+                "document analysis member manifest differs from the plan",
+            )
+        payload = _read_verified_source(
+            stored_root / PurePosixPath(member.member_path),
+            canonical_root=artifact_root,
+            expected_sha256=member.sha256,
+            expected_bytes=member.bytes,
+        )
+        try:
+            payload.decode("utf-8")
+        except UnicodeError as exc:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_ENCODING_INVALID",
+                "document analysis member is not UTF-8 Markdown",
+            ) from exc
+        relative = PurePosixPath(member.materialized_path)
+        if (
+            relative.is_absolute()
+            or relative.parts[:2] != ("source", "document")
+            or ".." in relative.parts
+            or "." in relative.parts
+        ):
+            raise ControlPlaneError(
+                "CONTROL_POINTER_UNSAFE", "document analysis materialized path is unsafe"
+            )
+        destination = workspace.joinpath(*relative.parts)
+        _ensure_parent(destination.parent, workspace=workspace, group_id=worker_group_id)
+        _write_exclusive(destination, payload, group_id=worker_group_id)
+        total_bytes += len(payload)
+    if total_bytes != source.materialization_bytes:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_SIZE_INVALID",
+            "document analysis materialized byte count differs from the plan",
+        )
+    return total_bytes, len(source.materialization_members)
 
 
 def _materialize_evidence_context(

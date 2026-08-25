@@ -15,15 +15,20 @@ from eom_catalog_contracts import (
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CurriculumRetrievalScope,
+    EducationalDocumentKnowledgeSourceV3,
     EducationRetrievalAccessPolicy,
     EducationRetrievalRequestV2,
     EvidenceBundleManifestV2,
+    EvidenceBundleManifestV3,
     EvidenceBundleMaterialsV2,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
+    EvidenceBundlePublicationResultV3,
     EvidenceEntryV2,
+    EvidenceEntryV3,
     KnowledgeAnalysisRequestV2,
-    KnowledgeAnalysisSourceV2,
+    KnowledgeAnalysisRequestV3,
+    KnowledgeAnalysisSourceV3,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphSnapshotPointer,
     validate_contract,
@@ -43,6 +48,7 @@ from eom_catalog_service.knowledge_analysis_sources import (
     KnowledgeAnalysisSourceError,
     resolve_approved_item_source,
     resolve_content_intake_source,
+    resolve_educational_document_source,
 )
 from eom_catalog_service.knowledge_graph_models import (
     CurriculumUnitClosureRecord,
@@ -76,6 +82,26 @@ KNOWLEDGE_RETRIEVAL_CATALOG_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_PROTOCOL = "catalog-knowledge-retrieval/1.1"
+KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_PROTOCOL,
+        "contracts": [
+            "education-retrieval-access-policy/1.0",
+            "education-retrieval-request/2.0",
+            "evidence-bundle-manifest/3.0",
+            "evidence-bundle-publication-result/3.0",
+        ],
+    }
+)
+type EvidenceEntryContract = EvidenceEntryV2 | EvidenceEntryV3
+type EvidenceManifestContract = EvidenceBundleManifestV2 | EvidenceBundleManifestV3
+type EvidencePublicationContract = (
+    EvidenceBundlePublicationResult | EvidenceBundlePublicationResultV3
+)
+type ItemProductionEvidencePublicationContract = (
+    EvidenceBundlePublicationResultV2 | EvidenceBundlePublicationResultV3
+)
 MAX_RETRIEVAL_CANDIDATES = 256
 MAX_POINTER_ROWS_PER_NODE = 32
 MAX_CONTEXT_BYTES = 64 * 1024
@@ -89,7 +115,7 @@ class KnowledgeRetrievalServiceError(RuntimeError):
 
 @dataclass(frozen=True)
 class _Candidate:
-    source: KnowledgeAnalysisSourceV2
+    source: KnowledgeAnalysisSourceV3
     node_ids: tuple[str, ...]
     anchor_ids: tuple[str, ...]
     node_labels: tuple[str, ...]
@@ -110,6 +136,29 @@ def _context_tokens(value: str) -> int:
     return max(1, (len(value.encode("utf-8")) + 1) // 2)
 
 
+def _artifact_member_schema_ref(
+    revision: ArtifactRevisionRecord,
+    *,
+    member_path: str,
+    allowed: frozenset[str],
+) -> str:
+    files = revision.manifest.get("files")
+    if not isinstance(files, list):
+        raise KnowledgeRetrievalServiceError(
+            "KNOWLEDGE_RETRIEVAL_PUBLICATION_INVALID",
+            "published Artifact manifest has no member inventory",
+        )
+    matches = [
+        item for item in files if isinstance(item, dict) and item.get("file_name") == member_path
+    ]
+    if len(matches) != 1 or matches[0].get("schema_ref") not in allowed:
+        raise KnowledgeRetrievalServiceError(
+            "KNOWLEDGE_RETRIEVAL_PUBLICATION_INVALID",
+            "published Artifact member schema is incompatible",
+        )
+    return str(matches[0]["schema_ref"])
+
+
 class KnowledgeRetrievalApplicationService:
     """Own one closed retrieval query and publish only immutable pointer-oriented output."""
 
@@ -120,7 +169,7 @@ class KnowledgeRetrievalApplicationService:
 
     def create_item_production(
         self, command: CreateItemProductionEvidenceCommand
-    ) -> EvidenceBundlePublicationResultV2:
+    ) -> ItemProductionEvidencePublicationContract:
         """Resolve a stable educational intent without accepting a raw snapshot control."""
 
         internal_key = "item-evidence:" + content_sha256(
@@ -310,7 +359,7 @@ class KnowledgeRetrievalApplicationService:
                 "item production evidence key has different immutable input",
             )
 
-    def create(self, command: CreateEvidenceBundleCommand) -> EvidenceBundlePublicationResult:
+    def create(self, command: CreateEvidenceBundleCommand) -> EvidencePublicationContract:
         existing = self._existing(command)
         if existing is not None:
             return existing
@@ -354,14 +403,17 @@ class KnowledgeRetrievalApplicationService:
             member_path="evidence/context.md",
         )
         node_ids = {node_id for entry in entries for node_id in entry.graph_node_ids}
+        document_sources = {
+            (
+                entry.source.document_revision_id
+                if isinstance(entry.source, EducationalDocumentKnowledgeSourceV3)
+                else entry.source.source_file_id
+            )
+            for entry in entries
+            if not isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
+        }
         budget = {
-            "document_count": len(
-                {
-                    entry.source.source_file_id
-                    for entry in entries
-                    if isinstance(entry.source, ContentIntakeKnowledgeSourceV2)
-                }
-            ),
+            "document_count": len(document_sources),
             "item_revision_count": len(
                 {
                     entry.source.item_revision_id
@@ -374,7 +426,14 @@ class KnowledgeRetrievalApplicationService:
             "estimated_context_tokens": _context_tokens(context_markdown),
         }
         manifest_value: dict[str, Any] = {
-            "schema_version": "evidence-bundle-manifest/2.0",
+            "schema_version": (
+                "evidence-bundle-manifest/3.0"
+                if any(
+                    isinstance(entry.source, EducationalDocumentKnowledgeSourceV3)
+                    for entry in entries
+                )
+                else "evidence-bundle-manifest/2.0"
+            ),
             "evidence_bundle_id": evidence_bundle_id,
             "evidence_bundle_revision_id": evidence_bundle_revision_id,
             "revision_number": 1,
@@ -395,9 +454,14 @@ class KnowledgeRetrievalApplicationService:
         manifest_value["manifest_sha256"] = content_sha256(
             {key: value for key, value in manifest_value.items() if key != "manifest_sha256"}
         )
+        manifest: EvidenceManifestContract
         try:
-            validate_contract("evidence-bundle-manifest-v2", manifest_value)
-            manifest = EvidenceBundleManifestV2.model_validate(manifest_value)
+            if manifest_value["schema_version"] == "evidence-bundle-manifest/3.0":
+                validate_contract("evidence-bundle-manifest-v3", manifest_value)
+                manifest = EvidenceBundleManifestV3.model_validate(manifest_value)
+            else:
+                validate_contract("evidence-bundle-manifest-v2", manifest_value)
+                manifest = EvidenceBundleManifestV2.model_validate(manifest_value)
         except (ValueError, ValidationError) as exc:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_RESULT_INVALID",
@@ -421,9 +485,7 @@ class KnowledgeRetrievalApplicationService:
                 "Evidence Bundle publication conflicted with another transaction",
             ) from exc
 
-    def _existing(
-        self, command: CreateEvidenceBundleCommand
-    ) -> EvidenceBundlePublicationResult | None:
+    def _existing(self, command: CreateEvidenceBundleCommand) -> EvidencePublicationContract | None:
         with self.sessions() as session:
             record = session.scalar(
                 select(EducationRetrievalRequestRecord).where(
@@ -472,6 +534,16 @@ class KnowledgeRetrievalApplicationService:
                 "KNOWLEDGE_RETRIEVAL_SNAPSHOT_STALE",
                 "graph snapshot manifest pointer is stale",
             )
+        manifest_schema_ref = _artifact_member_schema_ref(
+            revision,
+            member_path="projections/manifest.json",
+            allowed=frozenset(
+                {
+                    "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/2.0",
+                    "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/3.0",
+                }
+            ),
+        )
         return KnowledgeGraphSnapshotPointer(
             graph_id=snapshot.graph_id,
             graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
@@ -479,7 +551,7 @@ class KnowledgeRetrievalApplicationService:
                 artifact_id=snapshot.manifest_artifact_id,
                 artifact_revision_id=snapshot.manifest_artifact_revision_id,
                 sha256=snapshot.manifest_sha256,
-                schema_ref="eom://schemas/knowledge/knowledge-graph-snapshot-manifest/2.0",
+                schema_ref=manifest_schema_ref,
                 media_type="application/json",
                 logical_name="manifest.json",
                 member_path="projections/manifest.json",
@@ -787,7 +859,7 @@ class KnowledgeRetrievalApplicationService:
                 continue
             grouped[(pointer.artifact_revision_id, pointer.member_path)].append(pointer)
 
-        source_cache: dict[tuple[str, str], KnowledgeAnalysisSourceV2] = {}
+        source_cache: dict[tuple[str, str], KnowledgeAnalysisSourceV3] = {}
         values: list[_Candidate] = []
         for key, pointers in sorted(grouped.items()):
             nodes_for_source = {
@@ -836,12 +908,12 @@ class KnowledgeRetrievalApplicationService:
             )[:MAX_RETRIEVAL_CANDIDATES]
         )
 
-    @staticmethod
     def _resolve_snapshot_source(
+        self,
         session: Session,
         snapshot_id: str,
         pointer: KnowledgeNodeSourcePointerRecord,
-    ) -> KnowledgeAnalysisSourceV2:
+    ) -> KnowledgeAnalysisSourceV3:
         association = session.scalar(
             select(KnowledgeSnapshotAnalysisRecord).where(
                 KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id == snapshot_id,
@@ -862,21 +934,40 @@ class KnowledgeRetrievalApplicationService:
                 "pinned graph analysis is absent or unaccepted",
             )
         try:
-            source = KnowledgeAnalysisRequestV2.model_validate(run.canonical_request).source
-            actual = (
-                resolve_content_intake_source(
+            schema_version = run.canonical_request.get("schema_version")
+            if schema_version == "knowledge-analysis-request/3.0":
+                document_source = KnowledgeAnalysisRequestV3.model_validate(
+                    run.canonical_request
+                ).source
+                source: KnowledgeAnalysisSourceV3 = document_source
+                actual: KnowledgeAnalysisSourceV3 = resolve_educational_document_source(
                     session,
-                    intake_batch_id=source.intake_batch_id,
-                    source_file_id=source.source_file_id,
-                    source_class=source.source_class,
+                    self.artifacts,
+                    document_revision_id=document_source.document_revision_id,
+                    source_class=document_source.source_class,
+                    first_physical_page=document_source.first_physical_page,
+                    last_physical_page=document_source.last_physical_page,
+                    curriculum_unit_keys=document_source.curriculum_unit_keys,
                 )
-                if isinstance(source, ContentIntakeKnowledgeSourceV2)
-                else resolve_approved_item_source(
-                    session,
-                    item_revision_id=source.item_revision_id,
-                    source_class=source.source_class,
+            else:
+                legacy_source = KnowledgeAnalysisRequestV2.model_validate(
+                    run.canonical_request
+                ).source
+                source = legacy_source
+                actual = (
+                    resolve_content_intake_source(
+                        session,
+                        intake_batch_id=legacy_source.intake_batch_id,
+                        source_file_id=legacy_source.source_file_id,
+                        source_class=legacy_source.source_class,
+                    )
+                    if isinstance(legacy_source, ContentIntakeKnowledgeSourceV2)
+                    else resolve_approved_item_source(
+                        session,
+                        item_revision_id=legacy_source.item_revision_id,
+                        source_class=legacy_source.source_class,
+                    )
                 )
-            )
         except (KnowledgeAnalysisSourceError, ValidationError, ValueError) as exc:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_SOURCE_STALE",
@@ -900,8 +991,8 @@ class KnowledgeRetrievalApplicationService:
         *,
         request: EducationRetrievalRequestV2,
         candidates: tuple[_Candidate, ...],
-    ) -> tuple[tuple[EvidenceEntryV2, ...], str]:
-        selected: list[EvidenceEntryV2] = []
+    ) -> tuple[tuple[EvidenceEntryContract, ...], str]:
+        selected: list[EvidenceEntryContract] = []
         documents: set[str] = set()
         items: set[str] = set()
         nodes: set[str] = set()
@@ -917,9 +1008,14 @@ class KnowledgeRetrievalApplicationService:
         ]
         for candidate in candidates:
             source = candidate.source
-            source_document = isinstance(source, ContentIntakeKnowledgeSourceV2)
+            source_document = isinstance(
+                source,
+                ContentIntakeKnowledgeSourceV2 | EducationalDocumentKnowledgeSourceV3,
+            )
             if isinstance(source, ContentIntakeKnowledgeSourceV2):
                 source_identity = source.source_file_id
+            elif isinstance(source, EducationalDocumentKnowledgeSourceV3):
+                source_identity = source.document_revision_id
             else:
                 source_identity = source.item_revision_id
             new_documents = documents | ({source_identity} if source_document else set())
@@ -950,16 +1046,28 @@ class KnowledgeRetrievalApplicationService:
                     "use": use,
                 },
             )
-            entry = EvidenceEntryV2(
-                evidence_id=evidence_id,
-                evidence_kind=kind,
-                use=use,
-                source=source,
-                graph_node_ids=candidate.node_ids,
-                anchor_ids=candidate.anchor_ids,
-                relevance_milli=candidate.relevance_milli,
-                answer_bearing=candidate.answer_bearing,
-            )
+            if isinstance(source, EducationalDocumentKnowledgeSourceV3):
+                entry: EvidenceEntryContract = EvidenceEntryV3(
+                    evidence_id=evidence_id,
+                    evidence_kind=kind,
+                    use=use,
+                    source=source,
+                    graph_node_ids=candidate.node_ids,
+                    anchor_ids=candidate.anchor_ids,
+                    relevance_milli=candidate.relevance_milli,
+                    answer_bearing=candidate.answer_bearing,
+                )
+            else:
+                entry = EvidenceEntryV2(
+                    evidence_id=evidence_id,
+                    evidence_kind=kind,
+                    use=use,
+                    source=source,
+                    graph_node_ids=candidate.node_ids,
+                    anchor_ids=candidate.anchor_ids,
+                    relevance_milli=candidate.relevance_milli,
+                    answer_bearing=candidate.answer_bearing,
+                )
             label = "; ".join(candidate.node_labels)
             line = (
                 f"- `{entry.evidence_id}` score={entry.relevance_milli} use={entry.use} "
@@ -1014,6 +1122,9 @@ class KnowledgeRetrievalApplicationService:
                 source = Path(raw_directory) / "context.md"
                 source.write_text(markdown, encoding="utf-8")
                 source.chmod(0o640)
+                document_graph = request.graph_snapshot.manifest_artifact.schema_ref.endswith(
+                    "/3.0"
+                )
                 return self.artifacts.commit_file_set(
                     files={"evidence/context.md": source},
                     primary_file="evidence/context.md",
@@ -1031,8 +1142,16 @@ class KnowledgeRetrievalApplicationService:
                         }
                     },
                     manifest_version="evidence-bundle-context-file-set/1.0",
-                    protocol_version=KNOWLEDGE_RETRIEVAL_CATALOG_PROTOCOL,
-                    protocol_schema_hash=KNOWLEDGE_RETRIEVAL_CATALOG_SCHEMA_HASH,
+                    protocol_version=(
+                        KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_PROTOCOL
+                        if document_graph
+                        else KNOWLEDGE_RETRIEVAL_CATALOG_PROTOCOL
+                    ),
+                    protocol_schema_hash=(
+                        KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_SCHEMA_HASH
+                        if document_graph
+                        else KNOWLEDGE_RETRIEVAL_CATALOG_SCHEMA_HASH
+                    ),
                 )
         except (OSError, RuntimeError, ValueError) as exc:
             raise KnowledgeRetrievalServiceError(
@@ -1041,7 +1160,7 @@ class KnowledgeRetrievalApplicationService:
             ) from exc
 
     def _commit_manifest(
-        self, request: EducationRetrievalRequestV2, manifest: EvidenceBundleManifestV2
+        self, request: EducationRetrievalRequestV2, manifest: EvidenceManifestContract
     ) -> CatalogArtifact:
         try:
             with tempfile.TemporaryDirectory(
@@ -1065,13 +1184,25 @@ class KnowledgeRetrievalApplicationService:
                     },
                     file_metadata={
                         "evidence/manifest.json": {
-                            "schema_ref": "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+                            "schema_ref": (
+                                "eom://schemas/knowledge/evidence-bundle-manifest/3.0"
+                                if isinstance(manifest, EvidenceBundleManifestV3)
+                                else "eom://schemas/knowledge/evidence-bundle-manifest/2.0"
+                            ),
                             "media_type": "application/json",
                         }
                     },
                     manifest_version="evidence-bundle-manifest-file-set/1.0",
-                    protocol_version=KNOWLEDGE_RETRIEVAL_CATALOG_PROTOCOL,
-                    protocol_schema_hash=KNOWLEDGE_RETRIEVAL_CATALOG_SCHEMA_HASH,
+                    protocol_version=(
+                        KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_PROTOCOL
+                        if isinstance(manifest, EvidenceBundleManifestV3)
+                        else KNOWLEDGE_RETRIEVAL_CATALOG_PROTOCOL
+                    ),
+                    protocol_schema_hash=(
+                        KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_SCHEMA_HASH
+                        if isinstance(manifest, EvidenceBundleManifestV3)
+                        else KNOWLEDGE_RETRIEVAL_CATALOG_SCHEMA_HASH
+                    ),
                 )
         except (OSError, RuntimeError, ValueError) as exc:
             raise KnowledgeRetrievalServiceError(
@@ -1084,10 +1215,10 @@ class KnowledgeRetrievalApplicationService:
         *,
         command: CreateEvidenceBundleCommand,
         request: EducationRetrievalRequestV2,
-        manifest: EvidenceBundleManifestV2,
+        manifest: EvidenceManifestContract,
         context_artifact: CatalogArtifact,
         manifest_artifact: CatalogArtifact,
-    ) -> EvidenceBundlePublicationResult:
+    ) -> EvidencePublicationContract:
         with transaction(self.sessions) as session:
             session.execute(
                 text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
@@ -1182,6 +1313,10 @@ class KnowledgeRetrievalApplicationService:
                         source_file_id=getattr(source, "source_file_id", None),
                         item_id=getattr(source, "item_id", None),
                         item_revision_id=getattr(source, "item_revision_id", None),
+                        educational_document_id=getattr(source, "document_id", None),
+                        educational_document_revision_id=getattr(
+                            source, "document_revision_id", None
+                        ),
                         source_artifact_id=member.artifact_id,
                         source_artifact_revision_id=member.artifact_revision_id,
                         source_member_path=member.member_path,
@@ -1205,7 +1340,7 @@ class KnowledgeRetrievalApplicationService:
         session: Session,
         request: EducationRetrievalRequestRecord,
         revision: EvidenceBundleRevisionRecord,
-    ) -> EvidenceBundlePublicationResult:
+    ) -> EvidencePublicationContract:
         request_model = EducationRetrievalRequestV2.model_validate(request.canonical_request)
         policy = session.get(
             EducationRetrievalAccessPolicyRevisionRecord, revision.access_policy_revision_id
@@ -1231,6 +1366,16 @@ class KnowledgeRetrievalApplicationService:
                 "KNOWLEDGE_RETRIEVAL_PUBLICATION_INVALID",
                 "published Evidence Bundle pointers do not resolve",
             )
+        manifest_schema_ref = _artifact_member_schema_ref(
+            artifact_revision,
+            member_path="evidence/manifest.json",
+            allowed=frozenset(
+                {
+                    "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+                    "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
+                }
+            ),
+        )
         value: dict[str, Any] = {
             "schema_version": "evidence-bundle-publication-result/1.0",
             "evidence_bundle_id": revision.evidence_bundle_id,
@@ -1246,7 +1391,7 @@ class KnowledgeRetrievalApplicationService:
                 artifact_id=revision.manifest_artifact_id,
                 artifact_revision_id=revision.manifest_artifact_revision_id,
                 sha256=artifact_revision.content_hash,
-                schema_ref="eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+                schema_ref=manifest_schema_ref,
                 media_type="application/json",
                 logical_name="manifest.json",
                 member_path="evidence/manifest.json",
@@ -1262,9 +1407,28 @@ class KnowledgeRetrievalApplicationService:
             "published_at": _utc_json(revision.created_at),
             "result_sha256": "sha256:" + "0" * 64,
         }
+        if manifest_schema_ref.endswith("/3.0"):
+            value.update(
+                {
+                    "schema_version": "evidence-bundle-publication-result/3.0",
+                    "requester_permissions_sha256": revision.requester_permissions_sha256,
+                    "context_artifact": KnowledgeArtifactMemberPointer(
+                        artifact_id=revision.context_artifact_id,
+                        artifact_revision_id=revision.context_artifact_revision_id,
+                        sha256=revision.context_sha256,
+                        schema_ref="eom://schemas/knowledge/evidence-bundle-context/1.0",
+                        media_type="text/markdown",
+                        logical_name="context.md",
+                        member_path="evidence/context.md",
+                    ).model_dump(mode="json"),
+                }
+            )
         value["result_sha256"] = content_sha256(
             {key: item for key, item in value.items() if key != "result_sha256"}
         )
+        if manifest_schema_ref.endswith("/3.0"):
+            validate_contract("evidence-bundle-publication-result-v3", value)
+            return EvidenceBundlePublicationResultV3.model_validate(value)
         validate_contract("evidence-bundle-publication-result", value)
         return EvidenceBundlePublicationResult.model_validate(value)
 
@@ -1273,8 +1437,10 @@ class KnowledgeRetrievalApplicationService:
         session: Session,
         request: EducationRetrievalRequestRecord,
         revision: EvidenceBundleRevisionRecord,
-    ) -> EvidenceBundlePublicationResultV2:
+    ) -> ItemProductionEvidencePublicationContract:
         base = self._result(session, request, revision)
+        if isinstance(base, EvidenceBundlePublicationResultV3):
+            return base
         context_revision = session.get(
             ArtifactRevisionRecord, revision.context_artifact_revision_id
         )

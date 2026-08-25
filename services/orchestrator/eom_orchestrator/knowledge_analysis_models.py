@@ -10,6 +10,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Identity,
     Index,
     Integer,
@@ -53,7 +54,7 @@ class KnowledgeAnalysisRunRecord(Base):
             name="ck_knowledge_analysis_run_state",
         ),
         CheckConstraint(
-            "source_kind IN ('CONTENT_INTAKE_FILE','APPROVED_ITEM_REVISION')",
+            "source_kind IN ('CONTENT_INTAKE_FILE','APPROVED_ITEM_REVISION','DOCUMENT_REVISION')",
             name="ck_knowledge_analysis_source_kind",
         ),
         CheckConstraint(
@@ -71,10 +72,25 @@ class KnowledgeAnalysisRunRecord(Base):
         ),
         CheckConstraint(
             "(source_kind = 'CONTENT_INTAKE_FILE' AND source_file_id IS NOT NULL "
-            "AND item_id IS NULL AND item_revision_id IS NULL) OR "
+            "AND item_id IS NULL AND item_revision_id IS NULL "
+            "AND educational_document_id IS NULL AND educational_document_revision_id IS NULL) OR "
             "(source_kind = 'APPROVED_ITEM_REVISION' AND source_file_id IS NULL "
-            "AND item_id IS NOT NULL AND item_revision_id IS NOT NULL)",
+            "AND item_id IS NOT NULL AND item_revision_id IS NOT NULL "
+            "AND educational_document_id IS NULL AND educational_document_revision_id IS NULL) OR "
+            "(source_kind = 'DOCUMENT_REVISION' AND source_file_id IS NULL "
+            "AND item_id IS NULL AND item_revision_id IS NULL "
+            "AND educational_document_id IS NOT NULL "
+            "AND educational_document_revision_id IS NOT NULL)",
             name="ck_knowledge_analysis_source_pointer_family",
+        ),
+        ForeignKeyConstraint(
+            ("educational_document_id", "educational_document_revision_id"),
+            (
+                "educational_document_revisions.document_id",
+                "educational_document_revisions.document_revision_id",
+            ),
+            name="fk_knowledge_analysis_educational_document_revision_identity",
+            ondelete="RESTRICT",
         ),
         CheckConstraint(
             "(proposal_artifact_id IS NULL AND proposal_artifact_revision_id IS NULL "
@@ -118,6 +134,12 @@ class KnowledgeAnalysisRunRecord(Base):
             "source_file_id",
             "created_at",
             postgresql_where=text("source_file_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_knowledge_analysis_document_revision",
+            "educational_document_revision_id",
+            "created_at",
+            postgresql_where=text("educational_document_revision_id IS NOT NULL"),
         ),
         Index(
             "ix_knowledge_analysis_runnable",
@@ -164,6 +186,10 @@ class KnowledgeAnalysisRunRecord(Base):
     item_revision_id: Mapped[str | None] = mapped_column(
         ForeignKey("item_revisions.item_revision_id", ondelete="RESTRICT"), nullable=True
     )
+    educational_document_id: Mapped[str | None] = mapped_column(
+        ForeignKey("educational_documents.document_id", ondelete="RESTRICT"), nullable=True
+    )
+    educational_document_revision_id: Mapped[str | None] = mapped_column(String(42), nullable=True)
     source_artifact_id: Mapped[str] = mapped_column(
         ForeignKey("artifacts.logical_artifact_id", ondelete="RESTRICT"), nullable=False
     )

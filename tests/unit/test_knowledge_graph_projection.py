@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import pytest
 from eom_catalog_contracts import (
     ContentIntakeKnowledgeSourceV2,
+    EducationalDocumentKnowledgeSourceV3,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphStructureManifest,
@@ -41,6 +42,82 @@ def _source(seed: str) -> ContentIntakeKnowledgeSourceV2:
                 "media_type": "text/markdown",
                 "logical_name": "curriculum.md",
             },
+        }
+    )
+
+
+def _document_source(seed: str) -> EducationalDocumentKnowledgeSourceV3:
+    analysis_artifact = "artifact_" + "a" * 32
+    analysis_revision = "rev_" + "a" * 32
+    return EducationalDocumentKnowledgeSourceV3.model_validate(
+        {
+            "source_kind": "DOCUMENT_REVISION",
+            "source_class": "TEXTBOOK",
+            "document_id": "edudoc_" + seed * 32,
+            "document_revision_id": "edudocrev_" + seed * 32,
+            "lifecycle_state": "APPROVED",
+            "artifact_member": {
+                "artifact_id": "artifact_" + seed * 32,
+                "artifact_revision_id": "rev_" + seed * 32,
+                "member_path": "source/original.pdf",
+                "sha256": "sha256:" + seed * 64,
+                "bytes": 4096,
+                "schema_ref": "eom://schemas/educational-document/pdf-source/1.0",
+                "media_type": "application/pdf",
+                "logical_name": "original.pdf",
+            },
+            "analysis_bundle_manifest": {
+                "artifact_id": analysis_artifact,
+                "artifact_revision_id": analysis_revision,
+                "member_path": "analysis/manifest.json",
+                "sha256": "sha256:" + "a" * 64,
+                "schema_ref": (
+                    "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0"
+                ),
+                "media_type": "application/json",
+                "logical_name": "manifest.json",
+            },
+            "rights_attestation": {
+                "artifact_id": "artifact_" + "b" * 32,
+                "artifact_revision_id": "rev_" + "b" * 32,
+                "member_path": "rights/attestation.json",
+                "sha256": "sha256:" + "b" * 64,
+                "schema_ref": "eom://schemas/educational-document/rights-attestation/1.0",
+                "media_type": "application/json",
+                "logical_name": "attestation.json",
+            },
+            "first_physical_page": 1,
+            "last_physical_page": 1,
+            "curriculum_unit_keys": ["1-(1)"],
+            "materialization_members": [
+                {
+                    "member_kind": "INDEX",
+                    "physical_page": None,
+                    "artifact_id": analysis_artifact,
+                    "artifact_revision_id": analysis_revision,
+                    "member_path": "analysis/index.md",
+                    "materialized_path": "source/document/index.md",
+                    "sha256": "sha256:" + "c" * 64,
+                    "bytes": 10,
+                    "schema_ref": ("eom://schemas/educational-document/extracted-markdown/1.0"),
+                    "media_type": "text/markdown; charset=utf-8",
+                    "logical_name": "index.md",
+                },
+                {
+                    "member_kind": "PAGE",
+                    "physical_page": 1,
+                    "artifact_id": analysis_artifact,
+                    "artifact_revision_id": analysis_revision,
+                    "member_path": "analysis/pages/page-000001.md",
+                    "materialized_path": "source/document/pages/page-000001.md",
+                    "sha256": "sha256:" + "d" * 64,
+                    "bytes": 20,
+                    "schema_ref": ("eom://schemas/educational-document/extracted-markdown/1.0"),
+                    "media_type": "text/markdown; charset=utf-8",
+                    "logical_name": "page-000001.md",
+                },
+            ],
+            "materialization_bytes": 30,
         }
     )
 
@@ -247,3 +324,44 @@ def test_projection_fails_closed_on_conflicts_incompatible_edges_and_source_set(
     with pytest.raises(KnowledgeGraphProjectionError) as source_info:
         build_education_graph_projection((_analysis("1"),), _structure())
     assert source_info.value.code == "KNOWLEDGE_GRAPH_STRUCTURE_SOURCE_MISMATCH"
+
+
+def test_document_revision_projection_uses_additive_v2_schema_and_original_pdf_anchor() -> None:
+    proposal = _proposal("4")
+    anchor = proposal.anchors[0].model_copy(
+        update={
+            "artifact_revision_id": "rev_" + "4" * 32,
+            "member_path": "source/original.pdf",
+            "anchor_kind": "PAGE",
+            "locator": "physical_page=1;paragraph=1",
+        }
+    )
+    analysis = AcceptedAnalysisProposal(
+        analysis_run_id="analysisrun_" + "4" * 32,
+        source=_document_source("4"),
+        accepted_result=KnowledgeArtifactMemberPointer(
+            artifact_id="artifact_" + "e" * 32,
+            artifact_revision_id="rev_" + "e" * 32,
+            sha256="sha256:" + "e" * 64,
+            schema_ref="eom://schemas/knowledge/knowledge-analysis-result/3.0",
+            media_type="application/json",
+            logical_name="accepted-result.json",
+            member_path="evidence/accepted-result.json",
+        ),
+        proposal=proposal.model_copy(update={"anchors": (anchor,)}),
+    )
+
+    projection = build_education_graph_projection((analysis,), None)
+    serialized = serialize_education_graph_projection(projection)
+    assert all(
+        metadata["schema_ref"] == "eom://schemas/knowledge/knowledge-graph-projection/2.0"
+        for path, metadata in serialized.metadata.items()
+        if path != "projections/graph.md"
+    )
+    node = json.loads(serialized.members["projections/nodes.jsonl"].splitlines()[0])
+    pointer = node["source_pointers"][0]
+    assert pointer["source_kind"] == "DOCUMENT_REVISION"
+    assert pointer["source_revision_id"] == "edudocrev_" + "4" * 32
+    assert pointer["member_path"] == "source/original.pdf"
+    assert pointer["locator"].startswith("physical_page=1")
+    validate_contract("knowledge-graph-projection-v2", node)

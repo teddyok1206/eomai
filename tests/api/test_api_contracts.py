@@ -328,6 +328,33 @@ def test_knowledge_analysis_request_is_discriminated_and_retry_is_explicit() -> 
             }
         )
 
+    document_request = CreateKnowledgeAnalysisRequest.model_validate(
+        {
+            "source": {
+                "source_kind": "DOCUMENT_REVISION",
+                "source_class": "TEXTBOOK",
+                "document_revision_id": "edudocrev_" + "4" * 32,
+                "first_physical_page": 10,
+                "last_physical_page": 12,
+                "curriculum_unit_keys": ["1-(1)", "1-(2)"],
+            },
+            "preset_key": "knowledge-analysis",
+            "general_knowledge_mode": "AUXILIARY_UNATTRIBUTED",
+            "risk_policy_revision_id": "analysisriskrev_" + "5" * 32,
+            "predecessor_analysis_run_id": None,
+        }
+    )
+    assert document_request.source.source_kind == "DOCUMENT_REVISION"
+    assert document_request.source.curriculum_unit_keys == ("1-(1)", "1-(2)")
+    with pytest.raises(ValidationError):
+        CreateKnowledgeAnalysisRequest.model_validate(
+            document_request.model_dump(mode="json")
+            | {
+                "source": document_request.source.model_dump(mode="json")
+                | {"last_physical_page": 42}
+            }
+        )
+
 
 def test_knowledge_analysis_review_rejects_unsafe_or_empty_notes() -> None:
     assert KnowledgeAnalysisReviewRequest(decision="APPROVE", notes="Reviewed.").decision == (

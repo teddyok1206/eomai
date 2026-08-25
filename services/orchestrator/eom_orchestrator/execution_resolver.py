@@ -6,9 +6,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from eom_catalog_contracts import (
+    EducationalDocumentKnowledgeSourceV3,
     EducationalRetrievalRequirement,
     EvidenceBundlePublicationResultV2,
+    EvidenceBundlePublicationResultV3,
     KnowledgeAnalysisRequestV2,
+    KnowledgeAnalysisRequestV3,
 )
 from eom_identifiers import content_sha256, new_execution_plan_id
 from eom_workflow.control_plane import (
@@ -17,10 +20,12 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlan,
     ResolvedExecutionPlanV2,
     ResolvedExecutionPlanV3,
+    ResolvedExecutionPlanV4,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     WorkerRole,
 )
+from eom_workflow.control_schemas import validate_control_contract
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -107,7 +112,7 @@ def resolve_knowledge_backed_execution_plan(
     *,
     preset_revision_id: str,
     requirement: EducationalRetrievalRequirement,
-    evidence: EvidenceBundlePublicationResultV2,
+    evidence: EvidenceBundlePublicationResultV2 | EvidenceBundlePublicationResultV3,
     dependencies: ResolvedPlanDependencyEvidence,
     steps: tuple[ExecutionStepRequirement, ...],
     resolved_at: datetime | None = None,
@@ -336,9 +341,9 @@ def resolve_knowledge_analysis_plan(
     workflow_definition_version: str,
     workflow_definition_sha256: str,
     workflow_role_schema_version: str,
-    request: KnowledgeAnalysisRequestV2,
+    request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3,
     resolved_at: datetime | None = None,
-) -> ResolvedExecutionPlanV2:
+) -> ResolvedExecutionPlanV2 | ResolvedExecutionPlanV4:
     """Resolve one exact released support policy without consulting a mutable latest pointer."""
 
     existing = session.scalar(
@@ -347,6 +352,8 @@ def resolve_knowledge_analysis_plan(
         )
     )
     if existing is not None:
+        if isinstance(request.source, EducationalDocumentKnowledgeSourceV3):
+            return ResolvedExecutionPlanV4.model_validate(existing.canonical_document)
         return ResolvedExecutionPlanV2.model_validate(existing.canonical_document)
     preset_record = session.get(ExecutionPresetRevisionRecord, request.execution_preset_revision_id)
     logical = session.get(ExecutionPresetRecord, request.execution_preset_id)
@@ -392,10 +399,8 @@ def resolve_knowledge_analysis_plan(
         network=policy.network,
         general_knowledge_mode=("ALLOWED_WITH_PROVENANCE" if knowledge_allowed else "DENIED"),
     )
-    source = request.source.artifact_member
     actual_resolved_at = resolved_at or datetime.now(UTC)
     document: dict[str, object] = {
-        "schema_version": "resolved-execution-plan/2.0",
         "plan_id": new_execution_plan_id(),
         "workflow_id": workflow_id,
         "workload_class": "KNOWLEDGE_ANALYSIS",
@@ -407,22 +412,42 @@ def resolve_knowledge_analysis_plan(
         "workflow_definition_sha256": workflow_definition_sha256,
         "analysis_request_id": request.analysis_request_id,
         "analysis_request_sha256": request.request_sha256,
-        "source_artifact_id": source.artifact_id,
-        "source_artifact_revision_id": source.artifact_revision_id,
-        "source_member_path": source.member_path,
-        "source_materialized_path": source.materialized_path,
-        "source_sha256": source.sha256,
-        "source_bytes": source.bytes,
-        "source_media_type": source.media_type,
-        "source_schema_ref": source.schema_ref,
         "capacity_policy_revision_id": preset.capacity_policy_revision_id,
         "steps": [step.model_dump(mode="json")],
-        "resolver_version": "2.0.0",
-        "resolved_at": actual_resolved_at,
+        "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
+    if isinstance(request.source, EducationalDocumentKnowledgeSourceV3):
+        document.update(
+            {
+                "schema_version": "resolved-execution-plan/4.0",
+                "document_source": request.source.model_dump(mode="json"),
+                "resolver_version": "4.0.0",
+            }
+        )
+    else:
+        source = request.source.artifact_member
+        document.update(
+            {
+                "schema_version": "resolved-execution-plan/2.0",
+                "source_artifact_id": source.artifact_id,
+                "source_artifact_revision_id": source.artifact_revision_id,
+                "source_member_path": source.member_path,
+                "source_materialized_path": source.materialized_path,
+                "source_sha256": source.sha256,
+                "source_bytes": source.bytes,
+                "source_media_type": source.media_type,
+                "source_schema_ref": source.schema_ref,
+                "resolver_version": "2.0.0",
+            }
+        )
     document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
-    model = ResolvedExecutionPlanV2.model_validate(document)
+    model: ResolvedExecutionPlanV2 | ResolvedExecutionPlanV4
+    if document["schema_version"] == "resolved-execution-plan/4.0":
+        validate_control_contract("resolved-execution-plan-v4", document)
+        model = ResolvedExecutionPlanV4.model_validate(document)
+    else:
+        model = ResolvedExecutionPlanV2.model_validate(document)
     record = ResolvedExecutionPlanRecord(
         plan_id=model.plan_id,
         workflow_id=model.workflow_id,

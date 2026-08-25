@@ -15,6 +15,7 @@ from eom_catalog_contracts.knowledge import (
     EvidenceBudget,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
+    EvidenceBundlePublicationResultV3,
     KnowledgeSourceClass,
     PermissionKeyValue,
 )
@@ -77,8 +78,40 @@ class ApprovedItemKnowledgeAnalysisSelection(FrozenModel):
     item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
 
 
+class EducationalDocumentKnowledgeAnalysisSelection(FrozenModel):
+    source_kind: Literal["DOCUMENT_REVISION"] = "DOCUMENT_REVISION"
+    source_class: Literal["TEXTBOOK", "CURRICULUM", "INTERNAL_GUIDE"]
+    document_revision_id: str = Field(pattern=r"^edudocrev_[0-9a-f]{32}$")
+    first_physical_page: int = Field(ge=1, le=100000)
+    last_physical_page: int = Field(ge=1, le=100000)
+    curriculum_unit_keys: tuple[
+        Annotated[
+            str,
+            Field(
+                pattern=(
+                    r"^(1-\([1-4]\)|2-\([1-6]\)|3-\([1-7]\)|4-\([1-7]\)|"
+                    r"5-\([1-7]\)|6-\([1-4]\))$"
+                )
+            ),
+        ],
+        ...,
+    ] = Field(max_length=16)
+
+    @model_validator(mode="after")
+    def bounded_page_range(self) -> EducationalDocumentKnowledgeAnalysisSelection:
+        if self.last_physical_page < self.first_physical_page:
+            raise ValueError("document analysis page range is reversed")
+        if self.last_physical_page - self.first_physical_page + 1 > 32:
+            raise ValueError("document analysis page range exceeds 32 pages")
+        if self.curriculum_unit_keys != tuple(sorted(set(self.curriculum_unit_keys))):
+            raise ValueError("document curriculum keys must be sorted and unique")
+        return self
+
+
 KnowledgeAnalysisSourceSelection = Annotated[
-    ContentIntakeKnowledgeAnalysisSelection | ApprovedItemKnowledgeAnalysisSelection,
+    ContentIntakeKnowledgeAnalysisSelection
+    | ApprovedItemKnowledgeAnalysisSelection
+    | EducationalDocumentKnowledgeAnalysisSelection,
     Field(discriminator="source_kind"),
 ]
 
@@ -250,8 +283,10 @@ class CatalogApplicationResponse(FrozenModel):
     ]
     result: ReviewedItemContentImportResult | None = None
     analysis: KnowledgeAnalysisApplicationResult | None = None
-    evidence: EvidenceBundlePublicationResult | None = None
-    item_production_evidence: EvidenceBundlePublicationResultV2 | None = None
+    evidence: EvidenceBundlePublicationResult | EvidenceBundlePublicationResultV3 | None = None
+    item_production_evidence: (
+        EvidenceBundlePublicationResultV2 | EvidenceBundlePublicationResultV3 | None
+    ) = None
     content: AssessmentItemContent | None = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
 

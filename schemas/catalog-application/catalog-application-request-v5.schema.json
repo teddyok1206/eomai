@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-request-v5",
+  "title": "EOM Catalog Application Knowledge Analysis Request V5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation", "source", "preset_key", "general_knowledge_mode", "risk_policy_revision_id",
+    "predecessor_analysis_run_id", "requested_by", "idempotency_key"
+  ],
+  "properties": {
+    "operation": {"const": "CREATE_KNOWLEDGE_ANALYSIS"},
+    "source": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["source_kind", "source_class", "intake_batch_id", "source_file_id"],
+          "properties": {
+            "source_kind": {"const": "CONTENT_INTAKE_FILE"},
+            "source_class": {"enum": ["CURRICULUM", "TEXTBOOK", "PAST_EXAM", "INTERNAL_GUIDE"]},
+            "intake_batch_id": {"type": "string", "pattern": "^intake_[0-9a-f]{32}$"},
+            "source_file_id": {"type": "string", "pattern": "^sourcefile_[0-9a-f]{32}$"}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["source_kind", "source_class", "item_revision_id"],
+          "properties": {
+            "source_kind": {"const": "APPROVED_ITEM_REVISION"},
+            "source_class": {"enum": ["APPROVED_ITEM", "PAST_EXAM"]},
+            "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": [
+            "source_kind", "source_class", "document_revision_id", "first_physical_page",
+            "last_physical_page", "curriculum_unit_keys"
+          ],
+          "properties": {
+            "source_kind": {"const": "DOCUMENT_REVISION"},
+            "source_class": {"enum": ["TEXTBOOK", "CURRICULUM", "INTERNAL_GUIDE"]},
+            "document_revision_id": {
+              "type": "string", "pattern": "^edudocrev_[0-9a-f]{32}$"
+            },
+            "first_physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+            "last_physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+            "curriculum_unit_keys": {
+              "type": "array", "maxItems": 16, "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(1-\\([1-4]\\)|2-\\([1-6]\\)|3-\\([1-7]\\)|4-\\([1-7]\\)|5-\\([1-7]\\)|6-\\([1-4]\\))$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "preset_key": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+    "general_knowledge_mode": {"enum": ["DISABLED", "AUXILIARY_UNATTRIBUTED"]},
+    "risk_policy_revision_id": {
+      "type": "string", "pattern": "^analysisriskrev_[0-9a-f]{32}$"
+    },
+    "predecessor_analysis_run_id": {
+      "oneOf": [
+        {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+        {"type": "null"}
+      ]
+    },
+    "requested_by": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+    "idempotency_key": {
+      "type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[!-~]+$"
+    }
+  }
+}

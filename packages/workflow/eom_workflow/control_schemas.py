@@ -77,6 +77,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "3.0",
             "sha256:6cd0700e97c595cb52f9fea40df3f530f11e333a69d167a0b4fc9d2e45767d9b",
         ),
+        "resolved-execution-plan-v4": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v4.schema.json",
+            "resources/control-plane/resolved-execution-plan-v4.schema.json",
+            "4.0",
+            "sha256:3ea326016ebba09cd221b0108cb9cd70262ae6e447e484357234b14109529220",
+        ),
         "codex-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-invocation-v1.schema.json",
             "resources/control-plane/codex-invocation-v1.schema.json",
@@ -198,6 +204,19 @@ def _control_schema_registry() -> Registry[Any]:
         identifier = schema.get("$id")
         if not isinstance(identifier, str):
             raise _resource_error(name, "schema identifier is missing")
+        installed.append((identifier, Resource.from_contents(schema)))
+    # V4 plans reuse the Catalog-owned document-source definition instead of duplicating it.
+    from eom_catalog_contracts import load_schema
+
+    for name in (
+        "knowledge-types",
+        "knowledge-analysis-types-v2",
+        "knowledge-analysis-types-v3",
+    ):
+        schema = load_schema(name)
+        identifier = schema.get("$id")
+        if not isinstance(identifier, str):
+            raise _resource_error(name, "Catalog schema identifier is missing")
         installed.append((identifier, Resource.from_contents(schema)))
     return Registry().with_resources(installed)
 

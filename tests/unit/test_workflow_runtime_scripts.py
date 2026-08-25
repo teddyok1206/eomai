@@ -92,7 +92,8 @@ def test_worker_runtime_doctor_receives_each_slot_group_explicitly() -> None:
 def test_runner_configuration_installs_root_owned_capability_policy() -> None:
     source = (ROOT / "scripts/workflow/install_runner_configuration.sh").read_text(encoding="utf-8")
 
-    assert "config/workflows/knowledge-analysis.v1.yaml" in source
+    assert "config/workflows/knowledge-analysis.v2.yaml" in source
+    assert (ROOT / "config/workflows/knowledge-analysis.v1.yaml").is_file()
     assert "/knowledge-analysis.yaml" in source
     assert "content/prompt-templates/placeholders/support.txt" in source
     assert "/support.txt" in source

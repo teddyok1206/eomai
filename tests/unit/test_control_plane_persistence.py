@@ -12,7 +12,10 @@ from eom_catalog_service import (  # noqa: F401
     legacy_usage_models,
 )
 from eom_identifiers import content_sha256
-from eom_orchestrator import control_models  # noqa: F401
+from eom_orchestrator import (  # noqa: F401
+    control_models,
+    knowledge_analysis_models,
+)
 from eom_orchestrator.control_models import HELD_LEASE_PREDICATE
 from eom_orchestrator.control_service import (
     ControlPlaneError,
@@ -129,7 +132,7 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260825_0016"
+    assert CURRENT_MIGRATION_REVISION == "20260825_0017"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -325,6 +328,45 @@ def test_educational_document_migration_is_pointer_only_and_revision_immutable()
     assert {"source_artifact_id", "source_artifact_revision_id", "source_sha256"}.issubset(
         revisions.columns.keys()
     )
+
+
+def test_document_analysis_source_migration_is_additive_pointer_only_and_indexed() -> None:
+    source = Path(
+        "migrations/versions/20260825_0017_knowledge_analysis_document_sources.py"
+    ).read_text(encoding="utf-8")
+    assert 'down_revision: str | None = "20260825_0016"' in source
+    assert "DOCUMENT_REVISION" in source
+    for table_name in (
+        "knowledge_analysis_runs",
+        "knowledge_snapshot_analyses",
+        "evidence_bundle_entries",
+    ):
+        table = Base.metadata.tables[table_name]
+        assert all(not isinstance(column.type, LargeBinary) for column in table.columns)
+        assert not {"payload", "pdf", "markdown", "nas_path"}.intersection(table.columns.keys())
+    for table_name in ("knowledge_analysis_runs", "evidence_bundle_entries"):
+        assert {
+            "educational_document_id",
+            "educational_document_revision_id",
+        }.issubset(Base.metadata.tables[table_name].columns.keys())
+    assert "ix_knowledge_analysis_document_revision" in source
+    assert "ix_evidence_bundle_entry_document_revision" in source
+    assert "ck_knowledge_analysis_source_pointer_family" in source
+    assert "ck_evidence_bundle_entry_source_family" in source
+    assert "uq_educational_document_revision_identity" in source
+    for constraint_name in (
+        "fk_knowledge_analysis_educational_document_revision_identity",
+        "fk_evidence_entry_educational_document_revision_identity",
+    ):
+        assert constraint_name in source
+    assert "fk_knowledge_analysis_educational_document_revision_identity" in {
+        constraint.name
+        for constraint in Base.metadata.tables["knowledge_analysis_runs"].foreign_key_constraints
+    }
+    assert "fk_evidence_entry_educational_document_revision_identity" in {
+        constraint.name
+        for constraint in Base.metadata.tables["evidence_bundle_entries"].foreign_key_constraints
+    }
 
 
 def test_workflow_command_claim_index_includes_delayed_availability() -> None:

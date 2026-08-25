@@ -354,6 +354,178 @@ def _analysis_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[s
     return fixture
 
 
+def _document_analysis_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    fixture = _fixture(tmp_path, monkeypatch)
+    session = fixture["session"]
+    assert isinstance(session, FakeSession)
+    old_record = session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+    old_plan = old_record.canonical_document
+    instruction_pointer = old_plan["steps"][0]["instruction_bundle"]
+    instruction_record = session.records[
+        (ExecutionBundleRevisionRecord, instruction_pointer["bundle_revision_id"])
+    ]
+    instruction_record.manifest_artifact_revision_id = instruction_pointer["manifest_artifact"][
+        "artifact_revision_id"
+    ]
+
+    analysis_artifact_id = "artifact_" + "d" * 32
+    analysis_revision_id = "rev_" + "d" * 32
+    analysis_root = fixture["artifact_root"] / analysis_artifact_id / analysis_revision_id
+    payloads = {
+        "analysis/index.md": b"# Document index\n",
+        "analysis/pages/page-000010.md": b"# Physical page 10\n",
+        "analysis/pages/page-000011.md": b"# Physical page 11\n",
+    }
+    files: list[dict[str, object]] = []
+    for member_path, payload in payloads.items():
+        destination = analysis_root / member_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(payload)
+        files.append(
+            {
+                "file_name": member_path,
+                "sha256": sha256_bytes(payload),
+                "bytes": len(payload),
+                "media_type": "text/markdown; charset=utf-8",
+                "schema_ref": "eom://schemas/educational-document/extracted-markdown/1.0",
+            }
+        )
+    session.records[(ArtifactRecord, analysis_artifact_id)] = SimpleNamespace(approved=True)
+    session.records[(ArtifactRevisionRecord, analysis_revision_id)] = SimpleNamespace(
+        approved=True,
+        logical_artifact_id=analysis_artifact_id,
+        nas_path=str(analysis_root),
+        manifest={"files": files},
+    )
+    original_artifact_id = "artifact_" + "e" * 32
+    original_revision_id = "rev_" + "e" * 32
+    rights_artifact_id = "artifact_" + "f" * 32
+    rights_revision_id = "rev_" + "f" * 32
+
+    members: list[dict[str, object]] = []
+    for member_kind, physical_page, member_path, materialized_path, logical_name in (
+        ("INDEX", None, "analysis/index.md", "source/document/index.md", "index.md"),
+        (
+            "PAGE",
+            10,
+            "analysis/pages/page-000010.md",
+            "source/document/pages/page-000010.md",
+            "page-000010.md",
+        ),
+        (
+            "PAGE",
+            11,
+            "analysis/pages/page-000011.md",
+            "source/document/pages/page-000011.md",
+            "page-000011.md",
+        ),
+    ):
+        payload = payloads[member_path]
+        members.append(
+            {
+                "member_kind": member_kind,
+                "physical_page": physical_page,
+                "artifact_id": analysis_artifact_id,
+                "artifact_revision_id": analysis_revision_id,
+                "member_path": member_path,
+                "materialized_path": materialized_path,
+                "sha256": sha256_bytes(payload),
+                "bytes": len(payload),
+                "schema_ref": ("eom://schemas/educational-document/extracted-markdown/1.0"),
+                "media_type": "text/markdown; charset=utf-8",
+                "logical_name": logical_name,
+            }
+        )
+    document_source = {
+        "source_kind": "DOCUMENT_REVISION",
+        "source_class": "TEXTBOOK",
+        "document_id": "edudoc_" + "1" * 32,
+        "document_revision_id": "edudocrev_" + "2" * 32,
+        "lifecycle_state": "APPROVED",
+        "artifact_member": {
+            "artifact_id": original_artifact_id,
+            "artifact_revision_id": original_revision_id,
+            "member_path": "source/original.pdf",
+            "sha256": "sha256:" + "e" * 64,
+            "bytes": 4096,
+            "schema_ref": "eom://schemas/educational-document/pdf-source/1.0",
+            "media_type": "application/pdf",
+            "logical_name": "original.pdf",
+        },
+        "analysis_bundle_manifest": {
+            "artifact_id": analysis_artifact_id,
+            "artifact_revision_id": analysis_revision_id,
+            "member_path": "analysis/manifest.json",
+            "sha256": "sha256:" + "d" * 64,
+            "schema_ref": ("eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0"),
+            "media_type": "application/json",
+            "logical_name": "manifest.json",
+        },
+        "rights_attestation": {
+            "artifact_id": rights_artifact_id,
+            "artifact_revision_id": rights_revision_id,
+            "member_path": "rights/attestation.json",
+            "sha256": "sha256:" + "f" * 64,
+            "schema_ref": "eom://schemas/educational-document/rights-attestation/1.0",
+            "media_type": "application/json",
+            "logical_name": "attestation.json",
+        },
+        "first_physical_page": 10,
+        "last_physical_page": 11,
+        "curriculum_unit_keys": ["1-(1)"],
+        "materialization_members": members,
+        "materialization_bytes": sum(len(payload) for payload in payloads.values()),
+    }
+    document_plan = {
+        "schema_version": "resolved-execution-plan/4.0",
+        "plan_id": old_plan["plan_id"],
+        "workflow_id": old_plan["workflow_id"],
+        "workload_class": "KNOWLEDGE_ANALYSIS",
+        "preset_id": old_plan["preset_id"],
+        "preset_revision_id": old_plan["preset_revision_id"],
+        "preset_sha256": old_plan["preset_sha256"],
+        "workflow_definition_key": "knowledge-analysis",
+        "workflow_definition_version": "2.0.0",
+        "workflow_definition_sha256": old_plan["workflow_definition_sha256"],
+        "analysis_request_id": "knowledgeanalysis_" + "1" * 32,
+        "analysis_request_sha256": "sha256:" + "2" * 64,
+        "document_source": document_source,
+        "capacity_policy_revision_id": old_plan["capacity_policy_revision_id"],
+        "steps": [
+            {
+                "step_key": "analyze",
+                "role": "support",
+                "model": "gpt-5.6-terra",
+                "reasoning_effort": "high",
+                "instruction_bundle": instruction_pointer,
+                "reference_bundle": None,
+                "worker_pool_key": "support",
+                "timeout_seconds": 1800,
+                "sandbox": "read-only",
+                "network": "disabled",
+                "general_knowledge_mode": "DENIED",
+            }
+        ],
+        "resolver_version": "4.0.0",
+        "resolved_at": "2026-08-25T12:00:00Z",
+        "plan_sha256": ZERO_SHA,
+    }
+    document_plan["plan_sha256"] = compute_control_document_hash(document_plan, "plan_sha256")
+    session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))] = SimpleNamespace(
+        canonical_document=document_plan,
+        plan_sha256=document_plan["plan_sha256"],
+    )
+    fixture.update(
+        {
+            "analysis_revision_id": analysis_revision_id,
+            "original_revision_id": original_revision_id,
+            "rights_revision_id": rights_revision_id,
+            "payloads": payloads,
+        }
+    )
+    return fixture
+
+
 def test_knowledge_materializer_stages_only_exact_context_and_records_provenance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -758,6 +930,68 @@ def test_analysis_materializer_stages_one_pinned_source_without_reference_bundle
     assert result.source_sha256 == fixture["source_hash"]
     assert result.materialized_member_count == 3
     assert stat.S_IMODE((workspace / "source/source.txt").stat().st_mode) == 0o640
+
+
+def test_document_analysis_materializer_stages_only_selected_markdown_members(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _document_analysis_fixture(tmp_path, monkeypatch)
+    authorized = authorized_execution_artifact_revisions(
+        fixture["session"], plan_id=str(fixture["plan_id"]), step_key="analyze"
+    )
+    assert fixture["analysis_revision_id"] in authorized
+    assert fixture["original_revision_id"] not in authorized
+    assert fixture["rights_revision_id"] not in authorized
+
+    workspace = _workspace(tmp_path, "document-analysis")
+    result = materialize_execution_step(
+        fixture["session"],
+        plan_id=str(fixture["plan_id"]),
+        step_key="analyze",
+        workspace=workspace,
+        canonical_artifact_root=fixture["artifact_root"],
+        worker_group_id=GROUP_ID,
+        authorized_artifact_revision_ids=authorized,
+    )
+
+    for member_path, payload in fixture["payloads"].items():
+        relative = member_path.removeprefix("analysis/")
+        expected = (
+            workspace / "source/document/index.md"
+            if relative == "index.md"
+            else workspace / "source/document" / relative
+        )
+        assert expected.read_bytes() == payload
+        assert stat.S_IMODE(expected.stat().st_mode) == 0o640
+    assert not (workspace / "source/original.pdf").exists()
+    assert not (workspace / "rights").exists()
+    assert result.source_artifact_revision_id == fixture["original_revision_id"]
+    assert result.materialized_member_count == 5
+
+
+def test_document_analysis_materializer_fails_closed_on_member_hash_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _document_analysis_fixture(tmp_path, monkeypatch)
+    authorized = authorized_execution_artifact_revisions(
+        fixture["session"], plan_id=str(fixture["plan_id"]), step_key="analyze"
+    )
+    revision = fixture["session"].records[(ArtifactRevisionRecord, fixture["analysis_revision_id"])]
+    (Path(revision.nas_path) / "analysis/pages/page-000011.md").write_bytes(b"tampered\n")
+    with pytest.raises(ControlPlaneError) as captured:
+        materialize_execution_step(
+            fixture["session"],
+            plan_id=str(fixture["plan_id"]),
+            step_key="analyze",
+            workspace=_workspace(tmp_path, "document-analysis"),
+            canonical_artifact_root=fixture["artifact_root"],
+            worker_group_id=GROUP_ID,
+            authorized_artifact_revision_ids=authorized,
+        )
+    assert captured.value.code in {
+        "CONTROL_POINTER_FILE_INVALID",
+        "CONTROL_POINTER_HASH_MISMATCH",
+    }
 
 
 def test_analysis_materializer_rejects_hardlinked_source(

@@ -9,8 +9,9 @@ from typing import Any
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     CurriculumUnitBinding,
+    EducationalDocumentKnowledgeSourceV3,
     ItemElementBinding,
-    KnowledgeAnalysisSourceV2,
+    KnowledgeAnalysisSourceV3,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphStructureManifest,
@@ -77,7 +78,7 @@ class GraphSourcePointer:
 @dataclass(frozen=True)
 class AcceptedAnalysisProposal:
     analysis_run_id: str
-    source: KnowledgeAnalysisSourceV2
+    source: KnowledgeAnalysisSourceV3
     accepted_result: KnowledgeArtifactMemberPointer
     proposal: KnowledgeAnalysisWorkerProposal
 
@@ -182,9 +183,11 @@ def _stable_id(prefix: str, value: dict[str, object]) -> str:
     return f"{prefix}{digest}"
 
 
-def _source_revision_id(source: KnowledgeAnalysisSourceV2) -> str:
+def _source_revision_id(source: KnowledgeAnalysisSourceV3) -> str:
     if isinstance(source, ApprovedItemKnowledgeSourceV2):
         return source.item_revision_id
+    if isinstance(source, EducationalDocumentKnowledgeSourceV3):
+        return source.document_revision_id
     return source.source_file_id
 
 
@@ -461,13 +464,21 @@ def serialize_education_graph_projection(
         members["projections/curriculum-closure.jsonl"] = b"".join(
             canonical_json_bytes(value) + b"\n" for value in closure_documents
         )
+    projection_schema = (
+        "eom://schemas/knowledge/knowledge-graph-projection/2.0"
+        if any(
+            isinstance(analysis.source, EducationalDocumentKnowledgeSourceV3)
+            for analysis in projection.analyses
+        )
+        else "eom://schemas/knowledge/knowledge-graph-projection/1.0"
+    )
     metadata = {
         "projections/nodes.jsonl": {
-            "schema_ref": "eom://schemas/knowledge/knowledge-graph-projection/1.0",
+            "schema_ref": projection_schema,
             "media_type": "application/x-ndjson",
         },
         "projections/edges.jsonl": {
-            "schema_ref": "eom://schemas/knowledge/knowledge-graph-projection/1.0",
+            "schema_ref": projection_schema,
             "media_type": "application/x-ndjson",
         },
         "projections/graph.md": {
@@ -475,13 +486,13 @@ def serialize_education_graph_projection(
             "media_type": "text/markdown",
         },
         "projections/lexical-index.json": {
-            "schema_ref": "eom://schemas/knowledge/knowledge-graph-projection/1.0",
+            "schema_ref": projection_schema,
             "media_type": "application/json",
         },
     }
     if closure_documents:
         metadata["projections/curriculum-closure.jsonl"] = {
-            "schema_ref": "eom://schemas/knowledge/knowledge-graph-projection/1.0",
+            "schema_ref": projection_schema,
             "media_type": "application/x-ndjson",
         }
     descriptors = [

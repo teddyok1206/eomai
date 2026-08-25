@@ -276,6 +276,26 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-application-response-v2", analysis_response)
 
+    document_analysis_command = CreateKnowledgeAnalysisCommand(
+        source={
+            "source_kind": "DOCUMENT_REVISION",
+            "source_class": "TEXTBOOK",
+            "document_revision_id": "edudocrev_" + "4" * 32,
+            "first_physical_page": 10,
+            "last_physical_page": 11,
+            "curriculum_unit_keys": ["1-(1)"],
+        },
+        preset_key="knowledge-analysis",
+        general_knowledge_mode="AUXILIARY_UNATTRIBUTED",
+        risk_policy_revision_id="analysisriskrev_" + "5" * 32,
+        requested_by="operator_test_admin",
+        idempotency_key="knowledge-analysis-document-contract-key",
+    )
+    document_analysis_request = CatalogApplicationRequest(
+        root=document_analysis_command
+    ).model_dump(mode="json")
+    validate_contract("catalog-application-request-v5", document_analysis_request)
+
     retrieval_command = _retrieval_command()
     retrieval_request = CatalogApplicationRequest(root=retrieval_command).model_dump(mode="json")
     validate_contract("catalog-application-request-v3", retrieval_request)
@@ -285,6 +305,7 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
         evidence=FakeKnowledgeRetrieval().create(retrieval_command),
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-application-response-v3", retrieval_response)
+    validate_contract("catalog-application-response-v5", retrieval_response)
     item_command = _item_evidence_command()
     item_request = CatalogApplicationRequest(root=item_command).model_dump(mode="json")
     validate_contract("catalog-application-request-v4", item_request)
@@ -294,6 +315,7 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
         item_production_evidence=FakeKnowledgeRetrieval().create_item_production(item_command),
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-application-response-v4", item_response)
+    validate_contract("catalog-application-response-v6", item_response)
 
 
 def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(

@@ -516,6 +516,170 @@ KnowledgeAnalysisSourceV2 = Annotated[
 ]
 
 
+class KnowledgeAnalysisOriginalSourceMemberV3(FrozenModel):
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    member_path: CanonicalMemberPath
+    sha256: Sha256
+    bytes: int = Field(ge=1, le=1024 * 1024 * 1024)
+    schema_ref: Literal["eom://schemas/educational-document/pdf-source/1.0"]
+    media_type: Literal["application/pdf"] = "application/pdf"
+    logical_name: Literal["original.pdf"] = "original.pdf"
+
+
+class KnowledgeAnalysisDocumentDependencyV3(FrozenModel):
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    member_path: CanonicalMemberPath
+    sha256: Sha256
+    schema_ref: str = Field(pattern=r"^eom://schemas/[A-Za-z0-9._/@:-]{1,220}$", max_length=256)
+    media_type: Literal["application/json"] = "application/json"
+    logical_name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$")
+
+
+class KnowledgeAnalysisDocumentMaterializationMemberV3(FrozenModel):
+    member_kind: Literal["INDEX", "PAGE"]
+    physical_page: int | None = Field(default=None, ge=1, le=100000)
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    member_path: str = Field(
+        pattern=r"^analysis/(index\.md|pages/page-[0-9]{6}\.md)$", max_length=64
+    )
+    materialized_path: str = Field(
+        pattern=r"^source/document/(index\.md|pages/page-[0-9]{6}\.md)$", max_length=80
+    )
+    sha256: Sha256
+    bytes: int = Field(ge=1, le=2 * 1024 * 1024)
+    schema_ref: Literal["eom://schemas/educational-document/extracted-markdown/1.0"]
+    media_type: Literal["text/markdown; charset=utf-8"] = "text/markdown; charset=utf-8"
+    logical_name: str = Field(pattern=r"^(index|page-[0-9]{6})\.md$", max_length=32)
+
+    @model_validator(mode="after")
+    def exact_materialization_name(self) -> KnowledgeAnalysisDocumentMaterializationMemberV3:
+        if self.member_kind == "INDEX":
+            if (
+                self.physical_page is not None
+                or self.member_path != "analysis/index.md"
+                or self.materialized_path != "source/document/index.md"
+                or self.logical_name != "index.md"
+                or self.schema_ref != "eom://schemas/educational-document/extracted-markdown/1.0"
+            ):
+                raise ValueError("document analysis index member contract is inconsistent")
+            return self
+        if self.physical_page is None:
+            raise ValueError("document analysis page member requires a physical page")
+        file_name = f"page-{self.physical_page:06d}.md"
+        if (
+            self.member_path != f"analysis/pages/{file_name}"
+            or self.materialized_path != f"source/document/pages/{file_name}"
+            or self.logical_name != file_name
+            or self.schema_ref != "eom://schemas/educational-document/extracted-markdown/1.0"
+        ):
+            raise ValueError("document analysis page member contract is inconsistent")
+        return self
+
+
+class EducationalDocumentKnowledgeSourceV3(FrozenModel):
+    source_kind: Literal["DOCUMENT_REVISION"] = "DOCUMENT_REVISION"
+    source_class: Literal["TEXTBOOK", "CURRICULUM", "INTERNAL_GUIDE"]
+    document_id: str = Field(pattern=r"^edudoc_[0-9a-f]{32}$")
+    document_revision_id: str = Field(pattern=r"^edudocrev_[0-9a-f]{32}$")
+    lifecycle_state: Literal["APPROVED"] = "APPROVED"
+    artifact_member: KnowledgeAnalysisOriginalSourceMemberV3
+    analysis_bundle_manifest: KnowledgeAnalysisDocumentDependencyV3
+    rights_attestation: KnowledgeAnalysisDocumentDependencyV3
+    first_physical_page: int = Field(ge=1, le=100000)
+    last_physical_page: int = Field(ge=1, le=100000)
+    curriculum_unit_keys: tuple[
+        Annotated[
+            str,
+            Field(
+                pattern=(
+                    r"^(1-\([1-4]\)|2-\([1-6]\)|3-\([1-7]\)|4-\([1-7]\)|"
+                    r"5-\([1-7]\)|6-\([1-4]\))$"
+                )
+            ),
+        ],
+        ...,
+    ] = Field(max_length=16)
+    materialization_members: tuple[KnowledgeAnalysisDocumentMaterializationMemberV3, ...] = Field(
+        min_length=2, max_length=33
+    )
+    materialization_bytes: int = Field(ge=2, le=2 * 1024 * 1024)
+
+    @model_validator(mode="after")
+    def bounded_document_selection(self) -> EducationalDocumentKnowledgeSourceV3:
+        if self.last_physical_page < self.first_physical_page:
+            raise ValueError("document analysis page range is reversed")
+        expected_pages = tuple(range(self.first_physical_page, self.last_physical_page + 1))
+        if len(expected_pages) > 32:
+            raise ValueError("document analysis page range exceeds 32 pages")
+        if self.curriculum_unit_keys != tuple(sorted(set(self.curriculum_unit_keys))):
+            raise ValueError("document curriculum keys must be sorted and unique")
+        indexes = tuple(
+            member for member in self.materialization_members if member.member_kind == "INDEX"
+        )
+        pages = tuple(
+            member for member in self.materialization_members if member.member_kind == "PAGE"
+        )
+        if len(indexes) != 1 or tuple(member.physical_page for member in pages) != expected_pages:
+            raise ValueError("document materialization must contain one index and every page")
+        if self.materialization_members != (*indexes, *pages):
+            raise ValueError("document materialization members must use index-then-page order")
+        identities = {
+            (member.artifact_id, member.artifact_revision_id)
+            for member in self.materialization_members
+        }
+        paths = {member.member_path for member in self.materialization_members}
+        destinations = {member.materialized_path for member in self.materialization_members}
+        if (
+            len(identities) != 1
+            or len(paths) != len(self.materialization_members)
+            or len(destinations) != len(self.materialization_members)
+        ):
+            raise ValueError("document materialization pointers are mixed or duplicated")
+        if identities != {
+            (
+                self.analysis_bundle_manifest.artifact_id,
+                self.analysis_bundle_manifest.artifact_revision_id,
+            )
+        }:
+            raise ValueError("document materialization does not use its pinned analysis bundle")
+        selected_bytes = sum(member.bytes for member in self.materialization_members)
+        if selected_bytes != self.materialization_bytes:
+            raise ValueError("document materialization byte count is inconsistent")
+        if (
+            self.analysis_bundle_manifest.schema_ref
+            != "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0"
+            or self.analysis_bundle_manifest.member_path != "analysis/manifest.json"
+            or self.rights_attestation.schema_ref
+            != "eom://schemas/educational-document/rights-attestation/1.0"
+            or self.rights_attestation.member_path != "rights/attestation.json"
+        ):
+            raise ValueError("document analysis dependency pointer contract is inconsistent")
+        return self
+
+
+KnowledgeAnalysisSourceV3 = Annotated[
+    ContentIntakeKnowledgeSourceV2
+    | ApprovedItemKnowledgeSourceV2
+    | EducationalDocumentKnowledgeSourceV3,
+    Field(discriminator="source_kind"),
+]
+
+
+def _analysis_source_revision_id(
+    source: ContentIntakeKnowledgeSourceV2
+    | ApprovedItemKnowledgeSourceV2
+    | EducationalDocumentKnowledgeSourceV3,
+) -> str:
+    if isinstance(source, ContentIntakeKnowledgeSourceV2):
+        return source.source_file_id
+    if isinstance(source, ApprovedItemKnowledgeSourceV2):
+        return source.item_revision_id
+    return source.document_revision_id
+
+
 KNOWLEDGE_ANALYSIS_OUTPUTS_V2 = frozenset(
     {
         "NORMALIZED_MARKDOWN",
@@ -529,19 +693,14 @@ KNOWLEDGE_ANALYSIS_OUTPUTS_V2 = frozenset(
 )
 
 
-class KnowledgeAnalysisRequestV2(FrozenModel):
-    schema_version: Literal["knowledge-analysis-request/2.0"] = "knowledge-analysis-request/2.0"
+class _KnowledgeAnalysisRequestBase(FrozenModel):
     analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
-    source: KnowledgeAnalysisSourceV2
     execution_preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
     execution_preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
     execution_preset_sha256: Sha256
     worker_proposal_schema_ref: Literal[
         "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
     ] = "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
-    accepted_result_schema_ref: Literal["eom://schemas/knowledge/knowledge-analysis-result/2.0"] = (
-        "eom://schemas/knowledge/knowledge-analysis-result/2.0"
-    )
     predecessor_analysis_run_id: str | None = Field(
         default=None, pattern=r"^analysisrun_[0-9a-f]{32}$"
     )
@@ -564,13 +723,29 @@ class KnowledgeAnalysisRequestV2(FrozenModel):
     request_sha256: Sha256
 
     @model_validator(mode="after")
-    def exact_outputs_and_hash(self) -> KnowledgeAnalysisRequestV2:
+    def exact_outputs_and_hash(self) -> _KnowledgeAnalysisRequestBase:
         if set(self.requested_outputs) != KNOWLEDGE_ANALYSIS_OUTPUTS_V2:
             raise ValueError("knowledge analysis V2 requires the complete bounded output set")
         body = self.model_dump(mode="json", exclude={"request_sha256"})
         if content_sha256(body) != self.request_sha256:
             raise ValueError("knowledge analysis request hash does not match canonical content")
         return self
+
+
+class KnowledgeAnalysisRequestV2(_KnowledgeAnalysisRequestBase):
+    schema_version: Literal["knowledge-analysis-request/2.0"] = "knowledge-analysis-request/2.0"
+    source: KnowledgeAnalysisSourceV2
+    accepted_result_schema_ref: Literal["eom://schemas/knowledge/knowledge-analysis-result/2.0"] = (
+        "eom://schemas/knowledge/knowledge-analysis-result/2.0"
+    )
+
+
+class KnowledgeAnalysisRequestV3(_KnowledgeAnalysisRequestBase):
+    schema_version: Literal["knowledge-analysis-request/3.0"] = "knowledge-analysis-request/3.0"
+    source: EducationalDocumentKnowledgeSourceV3
+    accepted_result_schema_ref: Literal["eom://schemas/knowledge/knowledge-analysis-result/3.0"] = (
+        "eom://schemas/knowledge/knowledge-analysis-result/3.0"
+    )
 
 
 class KnowledgeSourceAnchorV2(FrozenModel):
@@ -732,12 +907,8 @@ class KnowledgeProposalMembers(FrozenModel):
     unresolved_ambiguities: KnowledgeProposalArtifactMember
 
 
-class KnowledgeAnalysisProposalReceipt(FrozenModel):
-    schema_version: Literal["knowledge-analysis-proposal-receipt/1.0"] = (
-        "knowledge-analysis-proposal-receipt/1.0"
-    )
+class _KnowledgeAnalysisProposalReceiptBase(FrozenModel):
     analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
-    source: KnowledgeAnalysisSourceV2
     status: Literal["PROPOSED_VALIDATED"] = "PROPOSED_VALIDATED"
     members: KnowledgeProposalMembers
     counts: KnowledgeProposalCounts
@@ -748,7 +919,7 @@ class KnowledgeAnalysisProposalReceipt(FrozenModel):
     completed_at: UtcDatetime
 
     @model_validator(mode="after")
-    def member_set_is_one_immutable_artifact(self) -> KnowledgeAnalysisProposalReceipt:
+    def member_set_is_one_immutable_artifact(self) -> _KnowledgeAnalysisProposalReceiptBase:
         members = list(self.members.__class__.model_fields)
         values = [getattr(self.members, name) for name in members]
         identities = {(value.artifact_id, value.artifact_revision_id) for value in values}
@@ -790,6 +961,20 @@ class KnowledgeAnalysisProposalReceipt(FrozenModel):
         return self
 
 
+class KnowledgeAnalysisProposalReceipt(_KnowledgeAnalysisProposalReceiptBase):
+    schema_version: Literal["knowledge-analysis-proposal-receipt/1.0"] = (
+        "knowledge-analysis-proposal-receipt/1.0"
+    )
+    source: KnowledgeAnalysisSourceV2
+
+
+class KnowledgeAnalysisProposalReceiptV2(_KnowledgeAnalysisProposalReceiptBase):
+    schema_version: Literal["knowledge-analysis-proposal-receipt/2.0"] = (
+        "knowledge-analysis-proposal-receipt/2.0"
+    )
+    source: EducationalDocumentKnowledgeSourceV3
+
+
 class KnowledgeAnalysisReviewDecision(FrozenModel):
     schema_version: Literal["knowledge-analysis-review-decision/1.0"] = (
         "knowledge-analysis-review-decision/1.0"
@@ -816,12 +1001,10 @@ class KnowledgeAnalysisReviewDecision(FrozenModel):
         return self
 
 
-class KnowledgeAnalysisResultV2(FrozenModel):
-    schema_version: Literal["knowledge-analysis-result/2.0"] = "knowledge-analysis-result/2.0"
+class _KnowledgeAnalysisResultBase(FrozenModel):
     analysis_result_id: str = Field(pattern=r"^knowledgeanalysisresult_[0-9a-f]{32}$")
     analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
     analysis_request_sha256: Sha256
-    source: KnowledgeAnalysisSourceV2
     status: Literal["ACCEPTED"] = "ACCEPTED"
     proposal_receipt: KnowledgeProposalArtifactMember
     proposal_content_set_sha256: Sha256
@@ -836,7 +1019,7 @@ class KnowledgeAnalysisResultV2(FrozenModel):
     result_sha256: Sha256
 
     @model_validator(mode="after")
-    def acceptance_is_pointer_only_and_hashed(self) -> KnowledgeAnalysisResultV2:
+    def acceptance_is_pointer_only_and_hashed(self) -> _KnowledgeAnalysisResultBase:
         if (
             self.proposal_receipt.member_path != "normalized/proposal-receipt.json"
             or self.proposal_receipt.media_type != "application/json"
@@ -853,6 +1036,24 @@ class KnowledgeAnalysisResultV2(FrozenModel):
         body = self.model_dump(mode="json", exclude={"result_sha256"})
         if content_sha256(body) != self.result_sha256:
             raise ValueError("knowledge analysis result hash does not match canonical content")
+        return self
+
+
+class KnowledgeAnalysisResultV2(_KnowledgeAnalysisResultBase):
+    schema_version: Literal["knowledge-analysis-result/2.0"] = "knowledge-analysis-result/2.0"
+    source: KnowledgeAnalysisSourceV2
+
+
+class KnowledgeAnalysisResultV3(_KnowledgeAnalysisResultBase):
+    schema_version: Literal["knowledge-analysis-result/3.0"] = "knowledge-analysis-result/3.0"
+    source: EducationalDocumentKnowledgeSourceV3
+
+    @model_validator(mode="after")
+    def v3_receipt_pointer(self) -> KnowledgeAnalysisResultV3:
+        if self.proposal_receipt.schema_ref != (
+            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/2.0"
+        ):
+            raise ValueError("knowledge analysis V3 requires a proposal receipt V2 pointer")
         return self
 
 
@@ -1121,6 +1322,52 @@ class KnowledgeGraphSnapshotManifestV2(FrozenModel):
         result_revisions = [result.artifact_revision_id for result in self.analysis_results]
         if len(source_keys) != len(set(source_keys)):
             raise ValueError("graph snapshot V2 source revisions must be unique")
+        if len(result_revisions) != len(set(result_revisions)):
+            raise ValueError("graph snapshot analysis artifacts must be unique")
+        if self.counts.source_revisions != len(self.source_revisions):
+            raise ValueError("graph source count does not match pinned source revisions")
+        return self
+
+
+class KnowledgeGraphSnapshotManifestV3(FrozenModel):
+    """Snapshot manifest supporting the additive Educational Document source family."""
+
+    schema_version: Literal["knowledge-graph-snapshot-manifest/3.0"] = (
+        "knowledge-graph-snapshot-manifest/3.0"
+    )
+    graph_id: str = Field(pattern=r"^graph_[0-9a-f]{32}$")
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    revision_number: int = Field(ge=1)
+    previous_graph_snapshot_revision_id: str | None = Field(
+        default=None, pattern=r"^graphrev_[0-9a-f]{32}$"
+    )
+    state: Literal["PUBLISHED"] = "PUBLISHED"
+    ontology_version: Literal["education-knowledge-graph/1.0"] = "education-knowledge-graph/1.0"
+    publisher_version: str = Field(pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+    source_revisions: tuple[KnowledgeAnalysisSourceV3, ...] = Field(min_length=1, max_length=10000)
+    analysis_results: tuple[KnowledgeArtifactMemberPointer, ...] = Field(
+        min_length=1, max_length=10000
+    )
+    projections: KnowledgeGraphProjections
+    counts: KnowledgeGraphCounts
+    snapshot_sha256: Sha256
+    created_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def exact_analysis_sources_are_unique(self) -> KnowledgeGraphSnapshotManifestV3:
+        if self.previous_graph_snapshot_revision_id == self.graph_snapshot_revision_id:
+            raise ValueError("graph snapshot cannot point to itself as its predecessor")
+        source_keys = [
+            (
+                source.source_kind,
+                _analysis_source_revision_id(source),
+                source.artifact_member.artifact_revision_id,
+            )
+            for source in self.source_revisions
+        ]
+        result_revisions = [result.artifact_revision_id for result in self.analysis_results]
+        if len(source_keys) != len(set(source_keys)):
+            raise ValueError("graph snapshot V3 source revisions must be unique")
         if len(result_revisions) != len(set(result_revisions)):
             raise ValueError("graph snapshot analysis artifacts must be unique")
         if self.counts.source_revisions != len(self.source_revisions):
@@ -1398,6 +1645,29 @@ class EvidenceEntryV2(FrozenModel):
         return self
 
 
+class EvidenceEntryV3(FrozenModel):
+    evidence_id: str = Field(pattern=r"^evidenceitem_[0-9a-f]{32}$")
+    evidence_kind: Literal["DOCUMENT", "ITEM_REVISION", "CLAIM", "TABLE", "FIGURE", "EQUATION"]
+    use: Literal["GROUNDING", "REFERENCE_PATTERN", "AVOID_COPY"]
+    source: KnowledgeAnalysisSourceV3
+    graph_node_ids: tuple[NodeId, ...] = Field(min_length=1, max_length=16)
+    anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=32)
+    relevance_milli: int = Field(ge=0, le=1000)
+    answer_bearing: bool
+
+    @model_validator(mode="after")
+    def graph_and_anchor_pointers_are_sorted(self) -> EvidenceEntryV3:
+        for values, label in (
+            (self.graph_node_ids, "graph node IDs"),
+            (self.anchor_ids, "anchor IDs"),
+        ):
+            if tuple(sorted(values)) != values or len(values) != len(set(values)):
+                raise ValueError(f"Evidence Bundle {label} must be sorted and unique")
+        if self.answer_bearing and self.use != "AVOID_COPY":
+            raise ValueError("answer-bearing evidence must be marked AVOID_COPY")
+        return self
+
+
 class EvidenceBundleMaterialsV2(FrozenModel):
     context_markdown: KnowledgeArtifactMemberPointer
 
@@ -1460,6 +1730,70 @@ class EvidenceBundleManifestV2(FrozenModel):
             entry.source.source_file_id
             for entry in self.entries
             if isinstance(entry.source, ContentIntakeKnowledgeSourceV2)
+        }
+        items = {
+            entry.source.item_revision_id
+            for entry in self.entries
+            if isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
+        }
+        graph_nodes = {node_id for entry in self.entries for node_id in entry.graph_node_ids}
+        claims = sum(entry.evidence_kind == "CLAIM" for entry in self.entries)
+        if (len(documents), len(items), len(graph_nodes), claims) != (
+            self.budget.document_count,
+            self.budget.item_revision_count,
+            self.budget.graph_node_count,
+            self.budget.claim_count,
+        ):
+            raise ValueError("Evidence Bundle counts do not match selected entries")
+        body = self.model_dump(mode="json", exclude={"manifest_sha256"})
+        if content_sha256(body) != self.manifest_sha256:
+            raise ValueError("Evidence Bundle manifest hash does not match canonical content")
+        return self
+
+
+class EvidenceBundleManifestV3(FrozenModel):
+    schema_version: Literal["evidence-bundle-manifest/3.0"] = "evidence-bundle-manifest/3.0"
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    revision_number: int = Field(ge=1)
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    retrieval_request_sha256: Sha256
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: Sha256
+    requester_permissions_sha256: Sha256
+    materials: EvidenceBundleMaterialsV2
+    entries: tuple[EvidenceEntryV3, ...] = Field(min_length=1, max_length=128)
+    budget: EvidenceBundleBudget
+    manifest_sha256: Sha256
+    created_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def manifest_is_deduplicated_bounded_and_hashed(self) -> EvidenceBundleManifestV3:
+        expected_order = tuple(
+            sorted(self.entries, key=lambda item: (-item.relevance_milli, item.evidence_id))
+        )
+        if expected_order != self.entries:
+            raise ValueError("Evidence Bundle entries must use deterministic ranking order")
+        identities = [entry.evidence_id for entry in self.entries]
+        immutable_sources = [
+            (
+                entry.source.source_kind,
+                _analysis_source_revision_id(entry.source),
+                entry.source.artifact_member.artifact_revision_id,
+                entry.source.artifact_member.member_path,
+                entry.use,
+            )
+            for entry in self.entries
+        ]
+        if len(identities) != len(set(identities)):
+            raise ValueError("Evidence Bundle entry IDs must be unique")
+        if len(immutable_sources) != len(set(immutable_sources)):
+            raise ValueError("Evidence Bundle cannot duplicate an immutable source for one use")
+        documents = {
+            _analysis_source_revision_id(entry.source)
+            for entry in self.entries
+            if not isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
         }
         items = {
             entry.source.item_revision_id
@@ -1554,4 +1888,46 @@ class EvidenceBundlePublicationResultV2(FrozenModel):
         body = self.model_dump(mode="json", exclude={"result_sha256"})
         if content_sha256(body) != self.result_sha256:
             raise ValueError("Evidence Bundle publication V2 result hash does not match content")
+        return self
+
+
+class EvidenceBundlePublicationResultV3(FrozenModel):
+    """Execution-ready result whose manifest may contain Document Revision sources."""
+
+    schema_version: Literal["evidence-bundle-publication-result/3.0"] = (
+        "evidence-bundle-publication-result/3.0"
+    )
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    revision_number: int = Field(ge=1)
+    state: Literal["PUBLISHED"] = "PUBLISHED"
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    retrieval_request_sha256: Sha256
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: Sha256
+    requester_permissions_sha256: Sha256
+    manifest_artifact: KnowledgeArtifactMemberPointer
+    manifest_sha256: Sha256
+    context_artifact: KnowledgeArtifactMemberPointer
+    budget: EvidenceBundleBudget
+    published_at: UtcDatetime
+    result_sha256: Sha256
+
+    @model_validator(mode="after")
+    def execution_materials_are_exact_and_hashed(self) -> EvidenceBundlePublicationResultV3:
+        if (
+            self.manifest_artifact.member_path != "evidence/manifest.json"
+            or self.manifest_artifact.media_type != "application/json"
+            or self.manifest_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-manifest/3.0"
+            or self.context_artifact.member_path != "evidence/context.md"
+            or self.context_artifact.media_type != "text/markdown"
+            or self.context_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-context/1.0"
+        ):
+            raise ValueError("Evidence Bundle V3 execution material pointer is incompatible")
+        body = self.model_dump(mode="json", exclude={"result_sha256"})
+        if content_sha256(body) != self.result_sha256:
+            raise ValueError("Evidence Bundle publication V3 result hash does not match content")
         return self

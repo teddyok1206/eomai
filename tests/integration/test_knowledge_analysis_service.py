@@ -11,15 +11,23 @@ import pytest
 from eom_catalog_contracts import (
     CreateEvidenceBundleCommand,
     CreateKnowledgeAnalysisCommand,
+    EducationalDocumentKnowledgeAnalysisSelection,
     KnowledgeAnalysisRequestV2,
+    KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisSourceV2,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeGraphPublicationResult,
     PublishKnowledgeGraphSnapshotCommand,
     ReconcileKnowledgeAnalysisCommand,
     ReviewKnowledgeAnalysisCommand,
+    TextbookAnalysisBundleManifest,
+    validate_contract,
 )
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.educational_document_service import (
+    EducationalDocumentService,
+    prepare_textbook_registration_request,
+)
 from eom_catalog_service.knowledge_analysis_service import (
     KnowledgeAnalysisApplicationService,
     KnowledgeAnalysisServiceError,
@@ -49,6 +57,7 @@ from eom_catalog_service.models import (
 )
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import (
+    canonical_json_bytes,
     content_sha256,
     new_job_id,
     new_logical_artifact_id,
@@ -63,6 +72,7 @@ from eom_orchestrator.control_bootstrap import (
 )
 from eom_orchestrator.control_models import (
     ExecutionPresetRecord,
+    ResolvedExecutionPlanRecord,
     WorkerCapacityPolicyRecord,
 )
 from eom_orchestrator.database import build_session_factory, transaction
@@ -81,6 +91,7 @@ from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from eom_workflow_runner.repository import import_workflow_definition
 from sqlalchemy import Engine, func, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 pytestmark = pytest.mark.integration
@@ -124,7 +135,11 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
         # Keep this integration fixture self-contained.  The two control-plane
         # presets below pin different immutable workflow protocol revisions;
         # neither bootstrap may depend on another test having registered them.
-        for protocol_version in ("workflow-role/1.3.0", "workflow-role/1.4.0"):
+        for protocol_version in (
+            "workflow-role/1.3.0",
+            "workflow-role/1.4.0",
+            "workflow-role/1.5.0",
+        ):
             ensure_protocol_version(
                 session,
                 protocol_version,
@@ -144,10 +159,12 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
                     lock_version=1,
                 )
             )
-        compiled = compile_definition(
-            Path("config/workflows/knowledge-analysis.v1.yaml").resolve(), {"support"}
-        )
-        import_workflow_definition(session, compiled)
+        for version in ("1", "2"):
+            compiled = compile_definition(
+                Path(f"config/workflows/knowledge-analysis.v{version}.yaml").resolve(),
+                {"support"},
+            )
+            import_workflow_definition(session, compiled)
         capacity = session.scalar(
             select(WorkerCapacityPolicyRecord).where(
                 WorkerCapacityPolicyRecord.policy_key == "fixed-host"
@@ -177,6 +194,14 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
             evaluation_cases_total=3,
             settings=settings,
         )
+    bootstrap_knowledge_analysis_control_plane(
+        engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v2").resolve(),
+        source_commit="c" * 40,
+        actor_id="phase7-integration",
+        evaluation_cases_total=3,
+        settings=settings,
+    )
 
 
 def _source(engine: Engine, settings: CatalogSettings, tmp_path: Path) -> tuple[str, str]:
@@ -231,6 +256,113 @@ def _source(engine: Engine, settings: CatalogSettings, tmp_path: Path) -> tuple[
             )
         )
     return intake_id, source_file_id
+
+
+def _document_source(engine: Engine, settings: CatalogSettings, tmp_path: Path) -> tuple[str, str]:
+    fixture_root = tmp_path / f"document-{uuid4().hex}"
+    fixture_root.mkdir()
+    source = fixture_root / "source.pdf"
+    source.write_bytes(b"%PDF-1.7\nintegration licensed textbook\n")
+    source.chmod(0o400)
+    bundle_root = fixture_root / "bundle"
+    pages_root = bundle_root / "pages"
+    pages_root.mkdir(parents=True)
+    index_payload = b"# index\n"
+    page_payload = "# page 1\n\n시간과 공간\n".encode()
+    (bundle_root / "index.md").write_bytes(index_payload)
+    (pages_root / "page-000001.md").write_bytes(page_payload)
+    text_payload = "시간과 공간\n".encode()
+    anchor_id = "textbookanchor_" + uuid4().hex
+    manifest_value: dict[str, object] = {
+        "schema_version": "textbook-analysis-bundle-manifest/1.0",
+        "bundle_id": "textbookbundle_" + uuid4().hex,
+        "bundle_state": "PRE_CANONICAL_REVIEW_ONLY",
+        "source": {
+            "media_type": "application/pdf",
+            "sha256": sha256_bytes(source.read_bytes()),
+            "size_bytes": source.stat().st_size,
+            "page_count": 1,
+        },
+        "canonical_source": None,
+        "document": {
+            "publisher_key": "miraen",
+            "publisher_label": "미래엔",
+            "title": "통합과학 1",
+            "curriculum_volume": "I",
+            "language": "ko-KR",
+        },
+        "scope": {"first_physical_page": 1, "last_physical_page": 1},
+        "extractor": {
+            "implementation": "integration-fixture",
+            "version": "1.0.0",
+            "implementation_sha256": "sha256:" + "a" * 64,
+            "options_sha256": "sha256:" + "b" * 64,
+        },
+        "index_member": {
+            "member_path": "index.md",
+            "media_type": "text/markdown; charset=utf-8",
+            "member_sha256": sha256_bytes(index_payload),
+        },
+        "pages": [
+            {
+                "physical_page": 1,
+                "printed_page": None,
+                "anchor_id": anchor_id,
+                "member_path": "pages/page-000001.md",
+                "media_type": "text/markdown; charset=utf-8",
+                "extraction_state": "TEXT",
+                "character_count": len(text_payload.decode()),
+                "replacement_character_count": 0,
+                "text_sha256": sha256_bytes(text_payload),
+                "member_sha256": sha256_bytes(page_payload),
+            }
+        ],
+        "curriculum_mappings": [
+            {
+                "mapping_id": "textbookmapping_" + uuid4().hex,
+                "eom_unit_key": "1-(1)",
+                "eom_unit_label": "시간과 공간",
+                "first_physical_page": 1,
+                "last_physical_page": 1,
+                "evidence_anchor_ids": [anchor_id],
+                "mapping_kind": "PRIMARY",
+                "confidence_milli": 1000,
+                "review_state": "PROPOSED",
+            }
+        ],
+        "generated_at": "2026-08-25T00:00:00Z",
+        "generated_by": "codex-data-analysis-pilot",
+    }
+    manifest_value["manifest_sha256"] = content_sha256(manifest_value)
+    manifest = TextbookAnalysisBundleManifest.model_validate(manifest_value)
+    validate_contract("textbook-analysis-bundle-manifest", manifest.model_dump(mode="json"))
+    (bundle_root / "manifest.json").write_bytes(canonical_json_bytes(manifest))
+    for path in (
+        bundle_root / "manifest.json",
+        bundle_root / "index.md",
+        pages_root / "page-000001.md",
+    ):
+        path.chmod(0o400)
+    pages_root.chmod(0o500)
+    bundle_root.chmod(0o500)
+
+    unique = uuid4().hex
+    request = prepare_textbook_registration_request(
+        source_path=source,
+        analysis_bundle_root=bundle_root,
+        document_key=f"textbook-miraen-analysis-integration-{unique}",
+        edition_label="purchased-2026",
+        registered_by=OPERATOR_ID,
+        registration_key=f"knowledge-analysis-document:{unique}",
+        confirmation_reference="operator-confirmation:licensed-integration-fixture",
+        registered_at=NOW,
+    )
+    receipt = EducationalDocumentService(engine, settings).register_textbook(
+        request,
+        source_path=source,
+        analysis_bundle_root=bundle_root,
+    )
+    return receipt.document_id, receipt.document_revision_id
 
 
 def _command(
@@ -441,6 +573,64 @@ def test_education_graph_access_patterns_have_dedicated_indexes(
             {"index_names": sorted(expected)},
         ).scalars()
         assert set(rows) == expected
+
+
+def test_document_revision_analysis_create_pins_v3_source_and_v4_plan(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    orchestrator_settings, catalog_settings = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, orchestrator_settings)
+    document_id, document_revision_id = _document_source(
+        integration_engine, catalog_settings, tmp_path
+    )
+    other_document_id, _ = _document_source(integration_engine, catalog_settings, tmp_path)
+    service = KnowledgeAnalysisApplicationService(integration_engine, catalog_settings)
+    command = CreateKnowledgeAnalysisCommand(
+        source=EducationalDocumentKnowledgeAnalysisSelection(
+            source_class="TEXTBOOK",
+            document_revision_id=document_revision_id,
+            first_physical_page=1,
+            last_physical_page=1,
+            curriculum_unit_keys=("1-(1)",),
+        ),
+        preset_key="knowledge-analysis",
+        general_knowledge_mode="DISABLED",
+        risk_policy_revision_id=POLICY_ID,
+        predecessor_analysis_run_id=None,
+        requested_by=OPERATOR_ID,
+        idempotency_key=f"document-analysis:{uuid4().hex}",
+    )
+    created = service.create(command)
+    assert created.state == "QUEUED"
+    assert service.create(command) == created
+
+    sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        run = session.get(KnowledgeAnalysisRunRecord, created.analysis_run_id)
+        assert run is not None
+        request = KnowledgeAnalysisRequestV3.model_validate(run.canonical_request)
+        plan = session.get(ResolvedExecutionPlanRecord, run.plan_id)
+        workflow = session.get(WorkflowInstanceRecord, run.workflow_id)
+        assert plan is not None and workflow is not None
+        assert run.source_kind == "DOCUMENT_REVISION"
+        assert run.educational_document_id == document_id
+        assert run.educational_document_revision_id == document_revision_id
+        assert run.source_revision_id == document_revision_id
+        assert request.source.document_id == document_id
+        assert request.source.document_revision_id == document_revision_id
+        assert request.source.first_physical_page == 1
+        assert request.source.last_physical_page == 1
+        assert tuple(member.member_kind for member in request.source.materialization_members) == (
+            "INDEX",
+            "PAGE",
+        )
+        assert plan.canonical_document["schema_version"] == "resolved-execution-plan/4.0"
+        assert workflow.definition_version == "2.0.0"
+        assert workflow.role_schema_version == "workflow-role/1.5.0"
+        with pytest.raises(DBAPIError), session.begin_nested():
+            run.educational_document_id = other_document_id
+            session.flush()
 
 
 def test_concurrent_analysis_create_is_single_and_retry_replays(

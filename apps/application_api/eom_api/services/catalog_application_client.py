@@ -23,6 +23,7 @@ from eom_catalog_contracts import (
     CreateKnowledgeAnalysisCommand,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
+    EvidenceBundlePublicationResultV3,
     ItemContentQuery,
     KnowledgeAnalysisApplicationResult,
     ReconcileKnowledgeAnalysisCommand,
@@ -96,7 +97,7 @@ class CatalogApplicationClient:
 
     def create_evidence_bundle(
         self, command: CreateEvidenceBundleCommand
-    ) -> EvidenceBundlePublicationResult:
+    ) -> EvidenceBundlePublicationResult | EvidenceBundlePublicationResultV3:
         response = self._request(command)
         if response.operation != command.operation or response.evidence is None:
             raise CatalogApplicationClientError(
@@ -107,7 +108,7 @@ class CatalogApplicationClient:
 
     def create_item_production_evidence(
         self, command: CreateItemProductionEvidenceCommand
-    ) -> EvidenceBundlePublicationResultV2:
+    ) -> EvidenceBundlePublicationResultV2 | EvidenceBundlePublicationResultV3:
         response = self._request(command)
         if response.operation != command.operation or response.item_production_evidence is None:
             raise CatalogApplicationClientError(
@@ -144,12 +145,20 @@ class CatalogApplicationClient:
         request_schema = (
             "catalog-application-request-v4"
             if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
-            else "catalog-application-request-v3"
+            else (
+                "catalog-application-request-v5"
+                if command.operation == "CREATE_KNOWLEDGE_ANALYSIS"
+                else "catalog-application-request-v3"
+            )
         )
         response_schema = (
-            "catalog-application-response-v4"
+            "catalog-application-response-v6"
             if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
-            else "catalog-application-response-v3"
+            else (
+                "catalog-application-response-v5"
+                if command.operation == "CREATE_EVIDENCE_BUNDLE"
+                else "catalog-application-response-v3"
+            )
         )
         validate_contract(request_schema, payload)
         self._validate_socket()

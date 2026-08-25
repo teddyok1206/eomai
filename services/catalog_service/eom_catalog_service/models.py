@@ -223,6 +223,11 @@ class EducationalDocumentRevisionRecord(Base):
             "revision_number",
             name="uq_educational_document_revision_number",
         ),
+        UniqueConstraint(
+            "document_id",
+            "document_revision_id",
+            name="uq_educational_document_revision_identity",
+        ),
         UniqueConstraint("registration_key", name="uq_educational_document_registration_key"),
         UniqueConstraint(
             "registration_request_sha256",

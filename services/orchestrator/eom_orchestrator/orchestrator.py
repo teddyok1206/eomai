@@ -7,6 +7,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Literal, cast
 from uuid import uuid4
 
 from eom_identifiers import new_job_id, new_logical_artifact_id, new_revision_id
@@ -23,6 +24,7 @@ from eom_protocol import (
 from eom_workflow.models import (
     ArtifactPointer,
     KnowledgeAnalysisProposalRoleResult,
+    KnowledgeAnalysisProposalRoleResultV2,
     KnowledgeAnalysisWorkerRequest,
     RoleWorkerInput,
     WorkerRequest,
@@ -259,7 +261,10 @@ class Orchestrator:
                 workflow_id=workflow_id,
                 step_run_id=step_run_id,
                 attempt=attempt,
-                role=role,  # type: ignore[arg-type]
+                role=cast(
+                    Literal["authoring", "image", "review", "item_management", "support"],
+                    role,
+                ),
                 request=request,
                 upstream_artifacts=upstream_artifacts,
                 artifact=artifact,
@@ -434,8 +439,16 @@ class Orchestrator:
                     "workflow worker result identifiers do not match input",
                 )
             result_document = result.model_dump(mode="json")
-            if result_schema == "knowledge-analysis-proposal-result@1.0":
-                if not isinstance(result, KnowledgeAnalysisProposalRoleResult) or not isinstance(
+            if result_schema in {
+                "knowledge-analysis-proposal-result@1.0",
+                "knowledge-analysis-proposal-result@2.0",
+            }:
+                expected_result_type = (
+                    KnowledgeAnalysisProposalRoleResultV2
+                    if result_schema == "knowledge-analysis-proposal-result@2.0"
+                    else KnowledgeAnalysisProposalRoleResult
+                )
+                if not isinstance(result, expected_result_type) or not isinstance(
                     worker_input.request, KnowledgeAnalysisWorkerRequest
                 ):
                     raise PlatformError(

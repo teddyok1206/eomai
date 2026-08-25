@@ -112,7 +112,10 @@ class StandardBootstrapResult(BaseModel):
 class KnowledgeAnalysisBootstrapManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["knowledge-analysis-control-bootstrap/1.0"]
+    schema_version: Literal[
+        "knowledge-analysis-control-bootstrap/1.0",
+        "knowledge-analysis-control-bootstrap/2.0",
+    ]
     preset_key: Literal["knowledge-analysis"]
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=1000)
@@ -120,9 +123,9 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
     model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
     reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"]
     general_knowledge_policy: Literal["ALLOW_WITH_PROVENANCE", "DENY"]
-    compatible_workflow_protocols: tuple[Literal["workflow-role/1.4.0"], ...] = Field(
-        min_length=1, max_length=1
-    )
+    compatible_workflow_protocols: tuple[
+        Literal["workflow-role/1.4.0", "workflow-role/1.5.0"], ...
+    ] = Field(min_length=1, max_length=2)
     platform_instruction_path: Literal["instructions/platform.md"]
     role_instruction_path: Literal["instructions/knowledge-analysis.md"]
     slot_key: Literal["slot05"]
@@ -133,7 +136,12 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
     def exact_analysis_contract(self) -> KnowledgeAnalysisBootstrapManifest:
         if self.created_at.tzinfo is None or self.created_at.utcoffset() != timedelta(0):
             raise ValueError("knowledge analysis bootstrap timestamp must use UTC")
-        if self.compatible_workflow_protocols != ("workflow-role/1.4.0",):
+        expected_protocols = (
+            ("workflow-role/1.4.0",)
+            if self.schema_version == "knowledge-analysis-control-bootstrap/1.0"
+            else ("workflow-role/1.4.0", "workflow-role/1.5.0")
+        )
+        if self.compatible_workflow_protocols != expected_protocols:
             raise ValueError("knowledge analysis bootstrap protocol must be exact")
         return self
 
@@ -399,12 +407,15 @@ def bootstrap_knowledge_analysis_control_plane(
                 role_schema_bundle_hash(protocol_version),
             )
     capacity_revision_id = _released_analysis_capacity_policy(sessions)
+    bootstrap_revision = (
+        1 if manifest.schema_version == "knowledge-analysis-control-bootstrap/1.0" else 2
+    )
     platform_artifact = _publish_markdown(
         publisher,
         payload=_read_member(config_directory, manifest.platform_instruction_path),
         logical_name="platform.md",
         schema_ref="eom://schemas/workflow/instruction-member/1.0",
-        key="knowledge-analysis-platform-v1",
+        key=f"knowledge-analysis-platform-v{bootstrap_revision}",
         source_commit=source_commit,
         created_at=manifest.created_at,
     )
@@ -413,7 +424,7 @@ def bootstrap_knowledge_analysis_control_plane(
         payload=_read_member(config_directory, manifest.role_instruction_path),
         logical_name="knowledge-analysis.md",
         schema_ref="eom://schemas/workflow/instruction-member/1.0",
-        key="knowledge-analysis-role-v1",
+        key=f"knowledge-analysis-role-v{bootstrap_revision}",
         source_commit=source_commit,
         created_at=manifest.created_at,
     )
@@ -429,6 +440,7 @@ def bootstrap_knowledge_analysis_control_plane(
         source_commit=source_commit,
         actor_id=actor_id,
         created_at=manifest.created_at,
+        revision_number=bootstrap_revision,
     )
     role_policies: list[dict[str, object]] = [
         {
@@ -600,14 +612,15 @@ def _publish_instruction_bundle(
     source_commit: str,
     actor_id: str,
     created_at: datetime,
+    revision_number: int = 1,
 ) -> BundleRevisionPointer:
     bundle_id = _stable_id("instrbundle_", identity_key)
-    revision_id = _stable_id("instrrev_", f"{identity_key}:v1")
+    revision_id = _stable_id("instrrev_", f"{identity_key}:v{revision_number}")
     document: dict[str, object] = {
         "schema_version": "instruction-bundle-manifest/1.0",
         "bundle_id": bundle_id,
         "bundle_revision_id": revision_id,
-        "revision_number": 1,
+        "revision_number": revision_number,
         "state": "RELEASED",
         "components": [
             {
@@ -978,17 +991,32 @@ def _find_or_create_analysis_draft(
             raise ControlPlaneError("CONTROL_PRESET_RETIRED", "knowledge preset is retired")
         if logical is not None and logical.current_revision_id is not None:
             current = session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
-            if (
-                current is None
-                or current.state != "RELEASED"
-                or execution_preset_policy_sha256(current.canonical_document)
-                != expected_policy_sha256
-            ):
+            if current is None or current.state != "RELEASED":
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_CONFLICT",
+                    "released knowledge analysis preset pointer differs",
+                )
+            if execution_preset_policy_sha256(current.canonical_document) == expected_policy_sha256:
+                return current
+            if manifest.schema_version == "knowledge-analysis-control-bootstrap/1.0":
                 raise ControlPlaneError(
                     "CONTROL_BOOTSTRAP_CONFLICT",
                     "released knowledge analysis preset policy differs",
                 )
-            return current
+        released_matching = [
+            revision
+            for revision in revisions
+            if revision.state == "RELEASED"
+            and execution_preset_policy_sha256(revision.canonical_document)
+            == expected_policy_sha256
+        ]
+        if len(released_matching) > 1:
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_CONFLICT",
+                "knowledge analysis preset has duplicate released policy revisions",
+            )
+        if released_matching:
+            return released_matching[0]
         matching = [
             revision
             for revision in revisions
@@ -996,7 +1024,19 @@ def _find_or_create_analysis_draft(
             and execution_preset_policy_sha256(revision.canonical_document)
             == expected_policy_sha256
         ]
-        if len(matching) > 1 or (revisions and not matching):
+        other_drafts = [revision for revision in revisions if revision.state == "DRAFT"]
+        released_policy_hashes = {
+            execution_preset_policy_sha256(revision.canonical_document)
+            for revision in revisions
+            if revision.state == "RELEASED"
+        }
+        unresolved_other_drafts = [
+            revision
+            for revision in other_drafts
+            if execution_preset_policy_sha256(revision.canonical_document)
+            not in released_policy_hashes
+        ]
+        if len(matching) > 1 or (unresolved_other_drafts and not matching):
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_CONFLICT",
                 "knowledge analysis preset draft history differs",

@@ -8,6 +8,7 @@ from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
 from eom_catalog_contracts import (
+    EducationalDocumentKnowledgeSourceV3,
     EducationalRetrievalRequirement,
     EvidenceBudget,
     KnowledgeArtifactMemberPointer,
@@ -471,6 +472,45 @@ class ResolvedExecutionPlanV3(FrozenModel):
         body = self.model_dump(mode="json", exclude={"plan_sha256"})
         if content_sha256(body) != self.plan_sha256:
             raise ValueError("knowledge-backed execution plan hash differs")
+        return self
+
+
+class ResolvedExecutionPlanV4(FrozenModel):
+    """One document analysis plan with exact bounded Markdown materialization pointers."""
+
+    schema_version: Literal["resolved-execution-plan/4.0"] = "resolved-execution-plan/4.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["KNOWLEDGE_ANALYSIS"] = "KNOWLEDGE_ANALYSIS"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["knowledge-analysis"] = "knowledge-analysis"
+    workflow_definition_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    workflow_definition_sha256: Sha256
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    analysis_request_sha256: Sha256
+    document_source: EducationalDocumentKnowledgeSourceV3
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
+    resolver_version: str = Field(pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def one_document_support_step_and_exact_hash(self) -> ResolvedExecutionPlanV4:
+        step = self.steps[0]
+        if (
+            step.step_key != "analyze"
+            or step.role != WorkerRole.SUPPORT
+            or step.worker_pool_key != "support"
+        ):
+            raise ValueError("document analysis plan requires the analyze support step")
+        body = self.model_dump(mode="json", exclude={"plan_sha256"})
+        if content_sha256(body) != self.plan_sha256:
+            raise ValueError("document analysis plan hash does not match canonical content")
         return self
 
 
