@@ -166,7 +166,12 @@ unprivileged-user-namespace restriction remains enabled; this profile grants `us
 root-owned Bubblewrap binary bundled with Codex. Verification runs a model-free, read-only
 Bubblewrap namespace smoke under the fixed worker identity and systemd restrictions. Do not replace
 this contract by disabling `kernel.apparmor_restrict_unprivileged_userns` globally or by disabling
-the Codex sandbox.
+the Codex sandbox. The worker capability bounding, permitted, effective, and ambient sets remain
+empty. The outer unit intentionally sets `ProtectKernelTunables=false` because that systemd mount
+namespace prevents Bubblewrap from mounting the workload's private `/proc`; the unprivileged
+capability-free worker and nested sandbox preserve the proc/sys boundary instead. The deployer
+checks the three granted-capability fields before the smoke. Do not add `CAP_SYS_ADMIN`,
+`CAP_NET_ADMIN`, or another capability as a workaround.
 
 Do not manually edit commands, leases, attempts, or workflow states. Correct the failed readiness
 check and run again.

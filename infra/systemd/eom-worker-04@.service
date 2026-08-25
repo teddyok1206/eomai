@@ -17,7 +17,10 @@ PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=read-only
-ProtectKernelTunables=true
+# Codex's nested Bubblewrap mounts a private /proc. The outer systemd
+# ProtectKernelTunables mount namespace blocks that operation; the worker has
+# no capabilities and the nested sandbox owns the proc/sys boundary instead.
+ProtectKernelTunables=false
 ProtectKernelModules=true
 ProtectControlGroups=true
 ProtectClock=true

@@ -8,6 +8,7 @@ POLKIT_ROOT=/etc/polkit-1/rules.d
 APPARMOR_SOURCE="${REPOSITORY}/infra/apparmor/eom-codex-bwrap"
 APPARMOR_TARGET=/etc/apparmor.d/eom-codex-bwrap
 APPARMOR_PARSER=/usr/sbin/apparmor_parser
+GETCAP=/usr/sbin/getcap
 CODEX_BWRAP=/usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap
 SERVICE=eom-workflow-runner.service
 RELEASE_ROOT=/var/lib/eom-worker-runtime-deployments
@@ -23,6 +24,33 @@ require_regular() {
   local path="$1" metadata="$2"
   [[ -f "${path}" && ! -L "${path}" && "$(stat -c '%U:%G:%a' "${path}")" == "${metadata}" ]] || \
     fail "runtime artifact metadata mismatch: ${path}"
+}
+
+run_fixed_worker_sandbox_smoke() {
+  local unit=$1
+  shift
+  systemd-run --quiet --wait --collect --service-type=oneshot \
+    --unit="${unit}" \
+    --uid=eom-cdx-05 --gid=eom-cdx-05 \
+    --property=NoNewPrivileges=yes \
+    --property=PrivateTmp=yes \
+    --property=PrivateDevices=yes \
+    --property=ProtectSystem=strict \
+    --property=ProtectHome=read-only \
+    --property=ProtectKernelTunables=no \
+    --property=ProtectKernelModules=yes \
+    --property=ProtectControlGroups=yes \
+    --property=RestrictSUIDSGID=yes \
+    --property=LockPersonality=yes \
+    --property=RestrictRealtime=yes \
+    --property=CapabilityBoundingSet= \
+    --property=AmbientCapabilities= \
+    --property='RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK' \
+    --property=SystemCallArchitectures=native \
+    --property=InaccessiblePaths=/mnt/nas \
+    --property=InaccessiblePaths=/home/eom/EOM \
+    --property=InaccessiblePaths=/home/eom/EOMIS \
+    "$@"
 }
 
 recover() {
@@ -71,8 +99,11 @@ for source in "${SOURCES[@]}"; do
 done
 [[ -x "${APPARMOR_PARSER}" && ! -L "${APPARMOR_PARSER}" ]] || \
   fail "AppArmor parser is unavailable"
+require_regular "${GETCAP}" root:root:755
 "${APPARMOR_PARSER}" -Q -K "${APPARMOR_SOURCE}"
 require_regular "${CODEX_BWRAP}" root:root:755
+[[ -z "$("${GETCAP}" -n "${CODEX_BWRAP}")" ]] || \
+  fail "Codex Bubblewrap must not have file capabilities"
 
 if [[ ${ACTION} == install ]]; then
   systemctl stop "${SERVICE}"
@@ -136,30 +167,17 @@ for slot in 01 02 03 04 05; do
   done
 done
 
+CAPABILITY_SMOKE_UNIT="eom-worker-capability-smoke-${EXPECTED_COMMIT:0:12}"
+run_fixed_worker_sandbox_smoke "${CAPABILITY_SMOKE_UNIT}" \
+  /bin/sh -eu -c '
+    /bin/grep -Eq "^CapPrm:[[:space:]]+0000000000000000$" /proc/self/status
+    /bin/grep -Eq "^CapEff:[[:space:]]+0000000000000000$" /proc/self/status
+    /bin/grep -Eq "^CapAmb:[[:space:]]+0000000000000000$" /proc/self/status
+  '
 BWRAP_SMOKE_UNIT="eom-worker-bwrap-smoke-${EXPECTED_COMMIT:0:12}"
-systemd-run --quiet --wait --collect --service-type=oneshot \
-  --unit="${BWRAP_SMOKE_UNIT}" \
-  --uid=eom-cdx-05 --gid=eom-cdx-05 \
-  --property=NoNewPrivileges=yes \
-  --property=PrivateTmp=yes \
-  --property=PrivateDevices=yes \
-  --property=ProtectSystem=strict \
-  --property=ProtectHome=read-only \
-  --property=ProtectKernelTunables=yes \
-  --property=ProtectKernelModules=yes \
-  --property=ProtectControlGroups=yes \
-  --property=RestrictSUIDSGID=yes \
-  --property=LockPersonality=yes \
-  --property=RestrictRealtime=yes \
-  --property=CapabilityBoundingSet= \
-  --property=AmbientCapabilities= \
-  --property='RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK' \
-  --property=SystemCallArchitectures=native \
-  --property=InaccessiblePaths=/mnt/nas \
-  --property=InaccessiblePaths=/home/eom/EOM \
-  --property=InaccessiblePaths=/home/eom/EOMIS \
+run_fixed_worker_sandbox_smoke "${BWRAP_SMOKE_UNIT}" \
   "${CODEX_BWRAP}" --unshare-all --die-with-parent --new-session \
-    --ro-bind / / --proc /proc --dev /dev --chdir /tmp /usr/bin/true
+  --ro-bind / / --proc /proc --dev /dev --chdir /tmp /usr/bin/true
 
 systemctl is-active --quiet "${SERVICE}" || fail "workflow runner is not active"
 systemctl is-enabled --quiet "${SERVICE}" || fail "workflow runner is not enabled"

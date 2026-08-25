@@ -116,18 +116,28 @@ root-owned Codex executable before invoking the fixed Codex CLI.
 | client timeout and `systemctl stop` | server `TimeoutStartSec=600`, client guard at 630s | changed; no `stop` authorization is required |
 | `--pipe` capture | bounded workspace stdout/stderr files | changed; correctness depends only on result/status protocols |
 | `--collect` | oneshot process ends; status remains queryable | changed; no process lingers and exit metadata remains available |
-| implicit capability/address policy | empty capabilities, kernel/control-group/SUID/personality/realtime/device/host/clock guards, fixed address families | strengthened without blocking Codex network access |
+| implicit capability/address policy | empty capabilities, kernel-module/control-group/SUID/personality/realtime/device/host/clock guards, fixed address families, nested-sandbox-owned proc/sys boundary | strengthened without blocking Codex sandbox construction or network access |
 
 The fixed worker address-family allowlist includes `AF_NETLINK` solely because Bubblewrap uses a
 route netlink socket to configure loopback inside the worker's private sandbox network namespace.
-It does not include `AF_PACKET`, add a capability, or grant host-network access; the resolved Codex
-sandbox remains responsible for the workload's network policy.
+It does not include `AF_PACKET` or grant host-network access; the resolved Codex sandbox remains
+responsible for the workload's network policy. The capability bounding, permitted, effective, and
+ambient sets all remain empty; the deployer proves the latter three sets before every model-free
+Bubblewrap smoke.
+
+The outer fixed unit explicitly leaves `ProtectKernelTunables` disabled. Enabling that systemd
+mount namespace prevents Codex's nested Bubblewrap from mounting its private `/proc`. This does not
+give the worker permission to modify host tunables: it remains an unprivileged identity with no
+capabilities and `NoNewPrivileges`, while the AppArmor-authorized Bubblewrap sandbox creates the
+private proc/sys view used by the workload. Kernel modules and control groups remain protected, and
+the fixed unit keeps its explicit inaccessible-path boundary.
 
 Ubuntu 24.04 restricts the additional namespaced capabilities used by unprivileged sandbox
 constructors. The root-owned `eom-codex-bwrap` AppArmor profile therefore adds only `userns,` to
 Codex's bundled Bubblewrap executable. The global user-namespace restriction stays enabled. The
-commit-pinned worker runtime deployer validates and loads this profile, then runs Bubblewrap under
-the same address-family and capability restrictions without contacting a model or executing a job.
+commit-pinned worker runtime deployer validates and loads this profile, proves the worker has no
+granted host capability, then runs Bubblewrap under the same address-family and empty-capability
+restrictions without contacting a model or executing a job.
 
 The installed systemd 255/polkit 124 mechanism exposes `unit` and `verb` for `StartUnit()`. The
 root-owned rule grants `eom-workflow-runner` only `verb=start` for fully anchored worker and harmless

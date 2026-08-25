@@ -102,7 +102,20 @@ def test_worker_runtime_deployer_installs_and_smokes_bubblewrap_profile() -> Non
     assert '"${APPARMOR_PARSER}" -Q -K "${APPARMOR_SOURCE}"' in deployer
     assert '"${APPARMOR_PARSER}" -r -K "${APPARMOR_TARGET}"' in deployer
     assert "systemd-run --quiet --wait --collect --service-type=oneshot" in deployer
+    assert 'run_fixed_worker_sandbox_smoke "${CAPABILITY_SMOKE_UNIT}"' in deployer
+    assert 'run_fixed_worker_sandbox_smoke "${BWRAP_SMOKE_UNIT}"' in deployer
     assert "--unshare-all --die-with-parent --new-session" in deployer
+    assert "--property=ProtectKernelTunables=no" in deployer
+    assert "--property=CapabilityBoundingSet=" in deployer
+    assert "--property=AmbientCapabilities=" in deployer
+    assert "^CapPrm:[[:space:]]+" in deployer
+    assert "^CapEff:[[:space:]]+" in deployer
+    assert "^CapAmb:[[:space:]]+" in deployer
+    assert "0000000000000000" in deployer
+    assert "CAP_CHOWN" not in deployer
+    assert "CAP_SYS_ADMIN" not in deployer
+    assert "CAP_NET_ADMIN" not in deployer
+    assert "Codex Bubblewrap must not have file capabilities" in deployer
     assert "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK" in deployer
     assert "AF_PACKET" not in deployer
 

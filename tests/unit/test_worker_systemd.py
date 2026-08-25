@@ -586,13 +586,14 @@ def test_worker_templates_fix_identity_command_and_sandbox() -> None:
         "ProtectSystem=strict",
         "ProtectHome=read-only",
         "PrivateTmp=true",
-        "ProtectKernelTunables=true",
+        "ProtectKernelTunables=false",
         "ProtectKernelModules=true",
         "ProtectControlGroups=true",
         "RestrictSUIDSGID=true",
         "LockPersonality=true",
         "RestrictRealtime=true",
         "CapabilityBoundingSet=",
+        "AmbientCapabilities=",
         "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
         "UMask=0007",
         "MemoryMax=6G",
@@ -630,8 +631,11 @@ def test_worker_templates_allow_only_bubblewrap_control_netlink() -> None:
             "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
         )
         assert "AF_PACKET" not in source
-        assert "CapabilityBoundingSet=" in source
-        assert "AmbientCapabilities=" in source
+        assert source.count("CapabilityBoundingSet=") == 1
+        assert source.count("AmbientCapabilities=") == 1
+        assert "CAP_CHOWN" not in source
+        assert "CAP_SYS_ADMIN" not in source
+        assert "CAP_NET_ADMIN" not in source
 
 
 def test_auth_templates_are_non_generating_identity_isolated_probes() -> None:
