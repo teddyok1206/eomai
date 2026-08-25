@@ -65,7 +65,8 @@ def test_artifact_mount_hardener_is_commit_pinned_atomic_and_recoverable() -> No
     assert "findmnt --verify" in source
     assert 'install -o root -g root -m 0600 "${FSTAB}" "${BACKUP}"' in source
     assert 'mv -fT "${UPDATED}" "${FSTAB}"' in source
-    assert 'mount -o remount "${MOUNT_POINT}"' in source
+    assert 'systemctl restart "${MOUNT_UNIT}"' in source
+    assert 'systemctl is-active --quiet "${AUTOMOUNT_UNIT}"' in source
     assert "trap recover EXIT" in source
     assert "file_mode=0640" in source
     assert "dir_mode=0770" in source

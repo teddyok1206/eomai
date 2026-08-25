@@ -4,6 +4,8 @@ set -euo pipefail
 REPOSITORY=/home/eom/EOM
 FSTAB=/etc/fstab
 MOUNT_POINT=/mnt/nas
+MOUNT_UNIT=mnt-nas.mount
+AUTOMOUNT_UNIT=mnt-nas.automount
 ARTIFACT_ROOT=/mnt/nas/eom/artifacts
 EXPECTED_SOURCE=//172.30.1.30/AI_Linux
 RELEASE_ROOT=/var/lib/eom-deploy/artifact-mount
@@ -81,7 +83,7 @@ recover() {
         mv -fT "${restore}" "${FSTAB}" || true
       fi
       systemctl daemon-reload || true
-      mount -o remount "${MOUNT_POINT}" || true
+      systemctl restart "${MOUNT_UNIT}" || true
     fi
     if [[ ${STOPPED} -eq 1 ]]; then
       systemctl start "${SERVICES[@]}" || true
@@ -103,6 +105,8 @@ EXPECTED_COMMIT=$1
 [[ -f ${FSTAB} && ! -L ${FSTAB} && "$(stat -c '%U:%G:%a' "${FSTAB}")" == root:root:644 ]] || \
   fail "fstab metadata is unsafe"
 [[ -d ${ARTIFACT_ROOT} && ! -L ${ARTIFACT_ROOT} ]] || fail "Artifact root is unsafe"
+systemctl is-active --quiet "${MOUNT_UNIT}" || fail "Artifact mount unit is not active"
+systemctl is-active --quiet "${AUTOMOUNT_UNIT}" || fail "Artifact automount unit is not active"
 for service in "${SERVICES[@]}"; do
   systemctl is-active --quiet "${service}" || fail "${service} is not active"
   systemctl is-enabled --quiet "${service}" || fail "${service} is not enabled"
@@ -132,7 +136,9 @@ STOPPED=1
 mv -fT "${UPDATED}" "${FSTAB}"
 UPDATED=
 systemctl daemon-reload
-mount -o remount "${MOUNT_POINT}"
+systemctl restart "${MOUNT_UNIT}"
+systemctl is-active --quiet "${MOUNT_UNIT}"
+systemctl is-active --quiet "${AUTOMOUNT_UNIT}"
 verify_mount
 for identity in eom-workflow-runner eom-catalog-manager eom-hwpx-manager; do
   verify_writer_identity "${identity}"

@@ -50,7 +50,8 @@ System users, groups, polkit, systemd, and CIFS mount options remain infrastruct
 models and protocols do not import or encode Linux identities. Application clients validate the
 fixed server socket UID as part of the local transport adapter. The mount hardener changes only the
 single reviewed fstab entry, validates it before replacement, records a protected rollback copy,
-and restores both fstab and service availability on failure.
+restarts only the generated mount unit so CIFS re-reads creation-mode options, and restores fstab,
+mount, and service availability on failure.
 
 ## Failure and simpler alternative
 
