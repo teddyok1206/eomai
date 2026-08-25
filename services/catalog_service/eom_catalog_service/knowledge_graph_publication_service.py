@@ -36,7 +36,7 @@ from eom_identity_service.models import OperatorRecord
 from eom_item_registry import RegistryError
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
-from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from pydantic import ValidationError
 from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
@@ -366,7 +366,8 @@ class KnowledgeGraphPublicationService:
             artifact_id=run.accepted_result_artifact_id,
             revision_id=run.accepted_result_artifact_revision_id,
             content_hash=run.accepted_result_sha256,
-            artifact_type="knowledge-analysis-accepted-result",
+            logical_artifact_type="knowledge-analysis-accepted-result",
+            manifest_artifact_type="knowledge-analysis-accepted-result",
             primary_file="evidence/accepted-result.json",
         )
         document_source = isinstance(request, KnowledgeAnalysisRequestV3)
@@ -420,7 +421,8 @@ class KnowledgeGraphPublicationService:
             artifact_id=run.proposal_artifact_id,
             revision_id=run.proposal_artifact_revision_id,
             content_hash=accepted.proposal_receipt.sha256,
-            artifact_type="knowledge-analysis-proposal",
+            logical_artifact_type="workflow_support",
+            manifest_artifact_type="knowledge-analysis-proposal",
             primary_file="normalized/proposal-receipt.json",
         )
         proposal_receipt_value = self._read_json_member(
@@ -545,20 +547,30 @@ class KnowledgeGraphPublicationService:
         artifact_id: str,
         revision_id: str,
         content_hash: str,
-        artifact_type: str,
+        logical_artifact_type: str,
+        manifest_artifact_type: str,
         primary_file: str,
     ) -> ArtifactRevisionRecord:
         logical = session.get(ArtifactRecord, artifact_id)
         revision = session.get(ArtifactRevisionRecord, revision_id)
+        job = session.get(JobRecord, revision.job_id) if revision is not None else None
         if (
             logical is None
             or revision is None
+            or job is None
             or not logical.approved
             or not revision.approved
-            or logical.artifact_type != artifact_type
+            or job.status != "SUCCEEDED"
+            or job.error_code is not None
+            or job.logical_artifact_id != artifact_id
+            or job.revision_id != revision_id
+            or logical.job_id != job.job_id
+            or revision.job_id != job.job_id
+            or logical.artifact_type != logical_artifact_type
+            or job.task_type != logical_artifact_type
             or revision.logical_artifact_id != artifact_id
             or revision.content_hash != content_hash
-            or revision.manifest.get("artifact_type") != artifact_type
+            or revision.manifest.get("artifact_type") != manifest_artifact_type
             or revision.manifest.get("primary_file") != primary_file
         ):
             raise KnowledgeGraphPublicationError(

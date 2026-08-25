@@ -78,7 +78,7 @@ from eom_orchestrator.control_models import (
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
-from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
+from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_orchestrator.repository import (
     create_artifact_records,
     ensure_protocol_version,
@@ -466,7 +466,7 @@ def _complete_proposal(
             job_id=job_id,
             protocol_version="workflow-role/1.4.0",
             idempotency_key=f"phase7-proposal:{run_id}",
-            task_type="knowledge-analysis-proposal",
+            task_type="workflow_support",
             request={"analysis_run_id": run_id},
             logical_artifact_id=artifact_id,
             revision_id=revision_id,
@@ -912,6 +912,7 @@ def test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently(
     tmp_path: Path,
 ) -> None:
     orchestrator_settings, catalog_settings = _settings(tmp_path)
+    sessions = build_session_factory(integration_engine)
     _ensure_dependencies(integration_engine, orchestrator_settings)
     intake_id, source_file_id = _source(integration_engine, catalog_settings, tmp_path)
     analysis_service = KnowledgeAnalysisApplicationService(integration_engine, catalog_settings)
@@ -955,6 +956,19 @@ def test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently(
     )
     command = PublishKnowledgeGraphSnapshotCommand.model_validate(value)
     graph_service = KnowledgeGraphPublicationService(integration_engine, catalog_settings)
+    with sessions() as session:
+        accepted_run = session.get(KnowledgeAnalysisRunRecord, created.analysis_run_id)
+        assert accepted_run is not None
+        assert accepted_run.proposal_artifact_id is not None
+        assert accepted_run.proposal_artifact_revision_id is not None
+        assert accepted_run.platform_job_id is not None
+        proposal_artifact_id = accepted_run.proposal_artifact_id
+        proposal_artifact_revision_id = accepted_run.proposal_artifact_revision_id
+        proposal_artifact = session.get(ArtifactRecord, proposal_artifact_id)
+        proposal_revision = session.get(ArtifactRevisionRecord, proposal_artifact_revision_id)
+        assert proposal_artifact is not None and proposal_revision is not None
+        assert proposal_artifact.artifact_type == "workflow_support"
+        assert proposal_revision.manifest["artifact_type"] == "knowledge-analysis-proposal"
     published = graph_service.publish(command)
     assert published.state == "PUBLISHED"
     assert published.revision_number == 1
@@ -1002,7 +1016,6 @@ def test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently(
     assert evidence.budget.graph_node_count == 1
     assert retrieval_service.create(retrieval_command) == evidence
 
-    sessions = build_session_factory(integration_engine)
     with sessions() as session:
         artifact_revision_count_before_miss = session.scalar(
             select(func.count()).select_from(ArtifactRevisionRecord)
