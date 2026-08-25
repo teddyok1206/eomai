@@ -1038,6 +1038,12 @@ class KnowledgeGraphPublicationService:
                         answer_bearing=node.answer_bearing,
                     )
                 )
+            # These immutable graph records use composite foreign keys without ORM
+            # relationships.  Establish each parent tier explicitly; SQLAlchemy's mapper
+            # ordering alone does not guarantee that nodes precede edges or that edges
+            # precede their source pointers in one flush.
+            session.flush()
+            for node in projection.nodes:
                 for term in knowledge_node_terms(node.stable_key, node.label):
                     session.add(
                         KnowledgeNodeTermRecord(
@@ -1073,6 +1079,21 @@ class KnowledgeGraphPublicationService:
                         answer_bearing=edge.answer_bearing,
                     )
                 )
+            node_by_stable_key = {item.stable_key: item.node_id for item in projection.nodes}
+            for unit in projection.curriculum_units:
+                session.add(
+                    CurriculumUnitRecord(
+                        graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+                        curriculum_unit_id=unit.curriculum_unit_id,
+                        node_id=node_by_stable_key[unit.node_stable_key],
+                        framework_revision_id=unit.framework_revision_id,
+                        parent_unit_id=unit.parent_unit_id,
+                        unit_level=unit.unit_level,
+                        ordinal=unit.ordinal,
+                    )
+                )
+            session.flush()
+            for edge in projection.edges:
                 for pointer in edge.source_pointers:
                     session.add(
                         KnowledgeEdgeSourcePointerRecord(
@@ -1088,20 +1109,6 @@ class KnowledgeGraphPublicationService:
                             excerpt_sha256=pointer.excerpt_sha256,
                         )
                     )
-            node_by_stable_key = {item.stable_key: item.node_id for item in projection.nodes}
-            for unit in projection.curriculum_units:
-                session.add(
-                    CurriculumUnitRecord(
-                        graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
-                        curriculum_unit_id=unit.curriculum_unit_id,
-                        node_id=node_by_stable_key[unit.node_stable_key],
-                        framework_revision_id=unit.framework_revision_id,
-                        parent_unit_id=unit.parent_unit_id,
-                        unit_level=unit.unit_level,
-                        ordinal=unit.ordinal,
-                    )
-                )
-            session.flush()
             for closure in projection.curriculum_closure:
                 session.add(
                     CurriculumUnitClosureRecord(

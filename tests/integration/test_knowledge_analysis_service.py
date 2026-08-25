@@ -38,6 +38,8 @@ from eom_catalog_service.knowledge_graph_models import (
     EvidenceBundleRecord,
     EvidenceBundleRevisionRecord,
     KnowledgeCorpusRecord,
+    KnowledgeEdgeRecord,
+    KnowledgeEdgeSourcePointerRecord,
     KnowledgeGraphSnapshotRecord,
     KnowledgeNodeRecord,
     KnowledgeNodeTermRecord,
@@ -424,6 +426,30 @@ def _proposal(request: KnowledgeAnalysisRequestV2) -> KnowledgeAnalysisWorkerPro
             "completed_at": NOW + timedelta(hours=1),
         }
     )
+
+
+def _proposal_with_edge(request: KnowledgeAnalysisRequestV2) -> KnowledgeAnalysisWorkerProposal:
+    value = _proposal(request).model_dump(mode="json")
+    value["nodes"].append(
+        {
+            "node_id": "knode_tectonic_plate",
+            "node_type": "CONCEPT",
+            "stable_key": "earth.tectonic-plate",
+            "label": "tectonic plate",
+            "anchor_ids": ["anchor_source_1"],
+        }
+    )
+    value["edges"] = [
+        {
+            "edge_id": "kedge_plate_boundary_prerequisite",
+            "edge_type": "REQUIRES_PREREQUISITE",
+            "from_node_id": "knode_plate_boundary",
+            "to_node_id": "knode_tectonic_plate",
+            "confidence_milli": 900,
+            "anchor_ids": ["anchor_source_1"],
+        }
+    ]
+    return KnowledgeAnalysisWorkerProposal.model_validate(value)
 
 
 def _complete_proposal(
@@ -1006,11 +1032,16 @@ def test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently(
             idempotency_key=f"phase8-analysis:{uuid4().hex}",
         )
     )
+    with sessions() as session:
+        created_run = session.get(KnowledgeAnalysisRunRecord, created.analysis_run_id)
+        assert created_run is not None
+        edge_request = KnowledgeAnalysisRequestV2.model_validate(created_run.canonical_request)
     _complete_proposal(
         integration_engine,
         catalog_settings,
         run_id=created.analysis_run_id,
         staging_root=tmp_path / "phase8-proposal",
+        proposal_override=_proposal_with_edge(edge_request),
     )
     accepted = analysis_service.reconcile(
         ReconcileKnowledgeAnalysisCommand(
@@ -1055,8 +1086,8 @@ def test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently(
     assert published.state == "PUBLISHED"
     assert published.revision_number == 1
     assert published.counts.source_revisions == 1
-    assert published.counts.nodes == 1
-    assert published.counts.edges == 0
+    assert published.counts.nodes == 2
+    assert published.counts.edges == 1
     assert graph_service.publish(command) == published
 
     retrieval_value: dict[str, object] = {
@@ -1095,7 +1126,7 @@ def test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently(
     assert evidence.state == "PUBLISHED"
     assert evidence.budget.document_count == 1
     assert evidence.budget.item_revision_count == 0
-    assert evidence.budget.graph_node_count == 1
+    assert evidence.budget.graph_node_count == 2
     assert retrieval_service.create(retrieval_command) == evidence
 
     with sessions() as session:
@@ -1151,7 +1182,7 @@ def test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently(
                     == snapshot.graph_snapshot_revision_id
                 )
             )
-            == 1
+            == 2
         )
         assert (
             session.scalar(
@@ -1162,7 +1193,29 @@ def test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently(
                     == snapshot.graph_snapshot_revision_id
                 )
             )
-            == 3
+            == 6
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(KnowledgeEdgeRecord)
+                .where(
+                    KnowledgeEdgeRecord.graph_snapshot_revision_id
+                    == snapshot.graph_snapshot_revision_id
+                )
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(KnowledgeEdgeSourcePointerRecord)
+                .where(
+                    KnowledgeEdgeSourcePointerRecord.graph_snapshot_revision_id
+                    == snapshot.graph_snapshot_revision_id
+                )
+            )
+            == 1
         )
         request_record = session.get(EducationRetrievalRequestRecord, evidence.retrieval_request_id)
         bundle = session.get(EvidenceBundleRecord, evidence.evidence_bundle_id)
