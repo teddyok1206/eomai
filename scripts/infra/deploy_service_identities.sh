@@ -33,7 +33,7 @@ verify_artifact_mount() {
   [[ ${mount_source} == //172.30.1.30/AI_Linux && ${mount_type} == cifs ]] || \
     fail "Artifact mount identity mismatch"
   for required in forceuid forcegid nounix nosuid nodev noexec "uid=$(id -u eom)" \
-    "gid=$(getent group eom | cut -d: -f3)" file_mode=0640 dir_mode=0770; do
+    "gid=$(getent group eom | cut -d: -f3)" file_mode=0660 dir_mode=0770; do
     require_mount_option "${mount_options}" "${required}"
   done
   [[ "$(stat -c '%U:%G:%a' "${ARTIFACT_MOUNT}")" == eom:eom:770 ]] || \

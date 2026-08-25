@@ -48,7 +48,7 @@ def rewrite_fstab(
         if option.split("=", 1)[0] not in replace_keys and option not in required_flags
     ]
     options.extend(required_flags)
-    options.extend((f"uid={uid}", f"gid={gid}", "file_mode=0640", "dir_mode=0770"))
+    options.extend((f"uid={uid}", f"gid={gid}", "file_mode=0660", "dir_mode=0770"))
     fields[3] = ",".join(options)
     lines[index] = "\t".join(fields) + "\n"
     output_path.write_text("".join(lines), encoding="utf-8")

@@ -41,7 +41,7 @@ verify_mount() {
     fail "Artifact mount identity mismatch"
   for required in forceuid forcegid nounix nosuid nodev noexec \
     "uid=$(id -u eom)" "gid=$(getent group eom | cut -d: -f3)" \
-    file_mode=0640 dir_mode=0770; do
+    file_mode=0660 dir_mode=0770; do
     require_mount_option "${options}" "${required}"
   done
   [[ "$(stat -c '%U:%G:%a' "${MOUNT_POINT}")" == eom:eom:770 ]] || \
@@ -60,7 +60,7 @@ verify_writer_identity() {
     fail "Artifact writer directory metadata mismatch"
   runuser -u "${identity}" -- /bin/sh -c \
     'umask 027; printf probe >"$1"' sh "${SMOKE_FILE}"
-  [[ "$(stat -c '%U:%G:%a' "${SMOKE_FILE}")" == eom:eom:640 ]] || \
+  [[ "$(stat -c '%U:%G:%a' "${SMOKE_FILE}")" == eom:eom:660 ]] || \
     fail "Artifact writer file metadata mismatch"
   runuser -u "${identity}" -- /bin/cat -- "${SMOKE_FILE}" >/dev/null
   runuser -u "${identity}" -- /bin/rm -- "${SMOKE_FILE}"
@@ -155,7 +155,7 @@ done
 printf 'source_commit=%s\n' "${EXPECTED_COMMIT}" >"${BACKUP_DIR}/deployment.txt"
 printf 'deployed_at_utc=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >>"${BACKUP_DIR}/deployment.txt"
 printf 'mount_source=%s\n' "${EXPECTED_SOURCE}" >>"${BACKUP_DIR}/deployment.txt"
-printf 'mount_contract=uid:eom,gid:eom,file:0640,dir:0770,nosuid,nodev,noexec\n' \
+printf 'mount_contract=uid:eom,gid:eom,file:0660,dir:0770,nosuid,nodev,noexec\n' \
   >>"${BACKUP_DIR}/deployment.txt"
 chown root:root "${BACKUP_DIR}/deployment.txt"
 chmod 0600 "${BACKUP_DIR}/deployment.txt"
