@@ -2,6 +2,7 @@
 
 from eom_textbook_analysis.bundle import (
     CurriculumMappingSpec,
+    PopplerTesseractTextExtractor,
     PopplerTextExtractor,
     TextbookBundleBuildRequest,
     build_textbook_analysis_bundle,
@@ -9,6 +10,7 @@ from eom_textbook_analysis.bundle import (
 
 __all__ = [
     "CurriculumMappingSpec",
+    "PopplerTesseractTextExtractor",
     "PopplerTextExtractor",
     "TextbookBundleBuildRequest",
     "build_textbook_analysis_bundle",

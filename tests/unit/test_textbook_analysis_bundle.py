@@ -13,6 +13,8 @@ from eom_textbook_analysis.bundle import (
     PdfInspection,
     TextbookBundleBuildError,
     TextbookBundleBuildRequest,
+    _assert_ocr_image,
+    _requires_ocr,
     build_textbook_analysis_bundle,
 )
 
@@ -21,6 +23,7 @@ class FakeExtractor:
     implementation = "fake-pdf-text"
     version = "1.0.0"
     implementation_sha256 = "sha256:" + "f" * 64
+    options_sha256 = "sha256:" + "e" * 64
 
     def __init__(
         self,
@@ -198,3 +201,41 @@ def test_build_rejects_symlink_source_and_page_boundary_drift(tmp_path: Path) ->
             )
     finally:
         _make_writable_for_cleanup(output)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("통합과학 " * 30, False),
+        ("integrated science " * 30, True),
+        ("통합과학", True),
+        ("", True),
+    ],
+)
+def test_ocr_fallback_requires_both_bounded_text_and_korean_evidence(
+    text: str, expected: bool
+) -> None:
+    assert (
+        _requires_ocr(
+            text,
+            minimum_text_characters=100,
+            minimum_hangul_characters=20,
+        )
+        is expected
+    )
+
+
+def test_ocr_image_boundary_rejects_invalid_bytes_and_symlinks(tmp_path: Path) -> None:
+    image = tmp_path / "page.png"
+    image.write_bytes(b"\x89PNG\r\n\x1a\nfixture")
+    _assert_ocr_image(image)
+
+    invalid = tmp_path / "invalid.png"
+    invalid.write_bytes(b"not-a-png")
+    with pytest.raises(TextbookBundleBuildError, match="TEXTBOOK_OCR_IMAGE_INVALID"):
+        _assert_ocr_image(invalid)
+
+    linked = tmp_path / "linked.png"
+    linked.symlink_to(image)
+    with pytest.raises(TextbookBundleBuildError, match="TEXTBOOK_OCR_IMAGE_INVALID"):
+        _assert_ocr_image(linked)

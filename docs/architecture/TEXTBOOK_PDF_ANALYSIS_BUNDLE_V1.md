@@ -159,3 +159,40 @@ source-evidenced:
 The first full pass maps the MiraeN table of contents and section ranges. Fine-grained concepts,
 claims, figures, tables, equations, and cross-publisher equivalence remain a subsequent Knowledge
 Analysis review step rather than being invented from filenames or table-of-contents metadata.
+
+## 13. Five-publisher completion profile
+
+The reviewed local corpus contains two Integrated Science volumes from MiraeN, Dong-A, Visang,
+Jihaksa, and Chunjae. "The same analysis" means the same manifest, page-anchor, Markdown, and
+proposed EOM-unit mapping contract; it does not require every PDF to use the same extraction
+adapter. The observed source encodings fall into three groups:
+
+- usable embedded text: use pinned Poppler text extraction;
+- mixed embedded text: keep usable embedded text and OCR only pages below the reviewed text and
+  Hangul evidence thresholds;
+- image-only pages: render and OCR every page with pinned local Poppler and Tesseract binaries and
+  pinned Korean/English trained-data hashes.
+
+The OCR adapter is local and deterministic for the pinned executable hashes, trained-data hashes,
+DPI, page segmentation mode, language set, fallback thresholds, normalization rule, and source
+hash. It renders one page at a time into a protected temporary directory, validates a regular
+non-symlink PNG, captures bounded UTF-8 output, and removes the temporary raster when the page is
+complete. It neither installs a dependency nor modifies the EOMIS environment from which an
+already-present Poppler binary may be selected explicitly.
+
+Completion for a volume requires:
+
+- a manifest covering every physical PDF page exactly once;
+- non-empty Korean Markdown for instructional pages, using OCR where the text layer is absent;
+- a proposed mapping for every applicable EOM middle unit in that curriculum volume;
+- separate recording of pages whose extraction contains replacement characters or remains empty;
+- visual review of table-of-contents boundaries and every low-text or OCR-selected page class;
+- unchanged original PDF hash, size, ownership, mode, and staging location;
+- no PDF, raster, extracted page, or long analysis output committed to Git;
+- no claim that the review bundle is a canonical Artifact Revision or accepted graph.
+
+Science Inquiry Experiment material is outside the current editorial scope and is not mapped into
+the 35-unit EOM Integrated Science outline. Fine-grained figures, tables, equations, claims, and
+cross-publisher equivalence remain input to the existing Knowledge Analysis workflow after rights
+review and canonical Artifact registration; this operator adapter does not publish those graph
+facts directly.
