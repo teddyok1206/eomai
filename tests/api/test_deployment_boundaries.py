@@ -278,6 +278,20 @@ def test_release_installs_runtime_verifier_and_packages_fixed_helper() -> None:
     assert 'eom-api-runtime-isolation = "eom_api.runtime_isolation_verifier:main"' in package
 
 
+def test_release_verifies_educational_document_schema_resources() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+
+    for resource in (
+        "educational-document-registration-receipt-v1.schema.json",
+        "educational-document-registration-request-v1.schema.json",
+        "educational-document-revision-manifest-v1.schema.json",
+        "educational-document-rights-attestation-v1.schema.json",
+        "educational-document-types-v1.schema.json",
+    ):
+        assert f'"educational-document/{resource}": ' in deployment
+        assert f'"schemas/educational-document/{resource}"' in deployment
+
+
 def test_release_install_normalizes_restrictive_operator_umask() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
     install_body = deployment.partition("install_wheels() {")[2].partition("\n}")[0]

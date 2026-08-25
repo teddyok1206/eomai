@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/educational-document/registration-request/1.0",
+  "title": "EOM Educational Document Registration Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "identity", "expected_source_sha256", "expected_source_size_bytes", "expected_source_page_count", "expected_analysis_manifest_sha256", "rights", "registration_key", "registered_at", "registered_by", "request_sha256"],
+  "properties": {
+    "schema_version": {"const": "educational-document-registration-request/1.0"},
+    "identity": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/identity"},
+    "expected_source_sha256": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/sha256"},
+    "expected_source_size_bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+    "expected_source_page_count": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "expected_analysis_manifest_sha256": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/sha256"},
+    "rights": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/rightsAttestation"},
+    "registration_key": {"type": "string", "minLength": 16, "maxLength": 200, "pattern": "^[!-~]+$"},
+    "registered_at": {"type": "string", "format": "date-time"},
+    "registered_by": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/actorId"},
+    "request_sha256": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/sha256"}
+  }
+}

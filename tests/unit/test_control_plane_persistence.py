@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+import eom_catalog_service.models  # noqa: F401
 import eom_hwpx_manager.models  # noqa: F401
 import eom_workflow_runner.models  # noqa: F401
 import pytest
@@ -128,7 +129,7 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260824_0015"
+    assert CURRENT_MIGRATION_REVISION == "20260825_0016"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -294,6 +295,36 @@ def test_legacy_usage_migration_is_additive_indexed_and_review_gated() -> None:
     usage = Base.metadata.tables["usage_records_v1"]
     assert {"legacy_usage_import_id", "legacy_usage_row_id"}.issubset(usage.columns.keys())
     assert not {"bytes", "payload", "workbook", "nas_path"}.intersection(usage.columns.keys())
+
+
+def test_educational_document_migration_is_pointer_only_and_revision_immutable() -> None:
+    source = Path("migrations/versions/20260825_0016_educational_documents.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'down_revision: str | None = "20260824_0015"' in source
+    for table_name in (
+        "educational_documents",
+        "educational_document_revisions",
+        "educational_document_registrations",
+    ):
+        assert f'"{table_name}"' in source
+        table = Base.metadata.tables[table_name]
+        assert all(not isinstance(column.type, LargeBinary) for column in table.columns)
+        assert not {"bytes", "payload", "pdf", "markdown", "nas_path"}.intersection(
+            table.columns.keys()
+        )
+    for index_name in (
+        "ix_educational_document_revision_publisher_volume",
+        "ix_educational_document_revision_source_sha",
+        "ix_educational_document_registrations_state",
+    ):
+        assert index_name in source
+    assert "BEFORE UPDATE OR DELETE ON educational_document_revisions" in source
+    assert "educational document revisions are immutable" in source
+    revisions = Base.metadata.tables["educational_document_revisions"]
+    assert {"source_artifact_id", "source_artifact_revision_id", "source_sha256"}.issubset(
+        revisions.columns.keys()
+    )
 
 
 def test_workflow_command_claim_index_includes_delayed_availability() -> None:

@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/educational-document/rights-attestation/1.0",
+  "title": "EOM Educational Document Rights Attestation V1",
+  "$ref": "eom://schemas/educational-document/types/1.0#/$defs/rightsAttestation"
+}

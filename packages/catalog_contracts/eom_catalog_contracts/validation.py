@@ -156,6 +156,36 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.1",
             "sha256:c2f7e5456ac15eaa2526a33ba9de8bef81e9640925a05b1531e9abf80744a664",
         ),
+        "educational-document-types": CatalogSchemaResource(
+            "schemas/educational-document/educational-document-types-v1.schema.json",
+            "resources/educational-document/educational-document-types-v1.schema.json",
+            "1.0",
+            "sha256:395fe3dcbbc300678d4e251fb92cb8c437a59dad2d8f80fdfeda7f54f12c9cb5",
+        ),
+        "educational-document-rights-attestation": CatalogSchemaResource(
+            "schemas/educational-document/educational-document-rights-attestation-v1.schema.json",
+            "resources/educational-document/educational-document-rights-attestation-v1.schema.json",
+            "1.0",
+            "sha256:70a7620748a7547fbc8270b35113cdcd1b997e3bbc2a33a46cea143aa6f8e65c",
+        ),
+        "educational-document-registration-request": CatalogSchemaResource(
+            "schemas/educational-document/educational-document-registration-request-v1.schema.json",
+            "resources/educational-document/educational-document-registration-request-v1.schema.json",
+            "1.0",
+            "sha256:f32c5164ab16fd770d2381e4c031f535850608070fa548f7f9ef9eb9cd09ce2d",
+        ),
+        "educational-document-revision-manifest": CatalogSchemaResource(
+            "schemas/educational-document/educational-document-revision-manifest-v1.schema.json",
+            "resources/educational-document/educational-document-revision-manifest-v1.schema.json",
+            "1.0",
+            "sha256:cd63c557b4166984500e1ad5fb3c0d2ec9fb6f4b6b5bdc17e1999d4db2d807a0",
+        ),
+        "educational-document-registration-receipt": CatalogSchemaResource(
+            "schemas/educational-document/educational-document-registration-receipt-v1.schema.json",
+            "resources/educational-document/educational-document-registration-receipt-v1.schema.json",
+            "1.0",
+            "sha256:8f4d0c05c27a7b79a51206fac4dc904cc7c5db186d25ef98bea32aec53e845f5",
+        ),
         "content-pack-profile": CatalogSchemaResource(
             "schemas/content-pack/profile-v1.schema.json",
             "resources/content-pack/profile-v1.schema.json",

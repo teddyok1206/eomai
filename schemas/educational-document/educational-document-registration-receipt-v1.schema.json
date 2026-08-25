@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/educational-document/registration-receipt/1.0",
+  "title": "EOM Educational Document Registration Receipt V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_id", "document_revision_id", "revision_number", "registration_request_sha256", "revision_manifest", "source", "analysis_bundle_manifest", "rights_attestation"],
+  "properties": {
+    "schema_version": {"const": "educational-document-registration-receipt/1.0"},
+    "document_id": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/documentId"},
+    "document_revision_id": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/documentRevisionId"},
+    "revision_number": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "registration_request_sha256": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/sha256"},
+    "revision_manifest": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/artifactPointer"},
+    "source": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/artifactPointer"},
+    "analysis_bundle_manifest": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/artifactPointer"},
+    "rights_attestation": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/artifactPointer"}
+  }
+}

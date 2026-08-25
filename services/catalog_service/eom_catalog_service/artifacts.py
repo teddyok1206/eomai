@@ -84,6 +84,7 @@ class CatalogArtifactService:
         manifest_version: str = "catalog-file-set/1.0",
         protocol_version: str = CATALOG_PROTOCOL_VERSION,
         protocol_schema_hash: str = CATALOG_SCHEMA_HASH,
+        expected_file_sha256: dict[str, str] | None = None,
     ) -> CatalogArtifact:
         idempotency_key = normalize_catalog_idempotency_key(idempotency_key)
         job_id = new_job_id()
@@ -134,6 +135,10 @@ class CatalogArtifactService:
             manifest_version=manifest_version,
             file_metadata=file_metadata,
         )
+        if expected_file_sha256 is not None:
+            actual_file_sha256 = {member.relative_path: member.sha256 for member in staged.files}
+            if actual_file_sha256 != expected_file_sha256:
+                raise ValueError("catalog artifact staged members do not match expected hashes")
         with transaction(self.sessions) as session:
             transition_job(session, job_id, JobState.VALIDATED, "CATALOG_ARTIFACT_VALIDATED")
             transition_job(session, job_id, JobState.QUEUED, "CATALOG_ARTIFACT_QUEUED")
@@ -190,6 +195,52 @@ class CatalogArtifactService:
         max_bytes: int,
     ) -> bytes:
         """Read one exact immutable member after full pointer and filesystem validation."""
+
+        target = self._resolve_member(
+            artifact_id=artifact_id,
+            revision_id=revision_id,
+            member_path=member_path,
+            sha256=sha256,
+            media_type=media_type,
+            schema_ref=schema_ref,
+            max_bytes=max_bytes,
+        )
+        return target.read_bytes()
+
+    def verify_member(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        sha256: str,
+        media_type: str,
+        schema_ref: str,
+        max_bytes: int,
+    ) -> None:
+        """Rehash one exact member without loading large source bytes into memory."""
+
+        self._resolve_member(
+            artifact_id=artifact_id,
+            revision_id=revision_id,
+            member_path=member_path,
+            sha256=sha256,
+            media_type=media_type,
+            schema_ref=schema_ref,
+            max_bytes=max_bytes,
+        )
+
+    def _resolve_member(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        sha256: str,
+        media_type: str,
+        schema_ref: str,
+        max_bytes: int,
+    ) -> Path:
 
         relative = Path(member_path)
         if (
@@ -249,7 +300,7 @@ class CatalogArtifactService:
                 or sha256_file(target) != sha256
             ):
                 raise ValueError("artifact member materialization is invalid")
-            return target.read_bytes()
+            return target
 
     def load_json_revision(
         self,

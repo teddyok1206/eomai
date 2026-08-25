@@ -111,6 +111,32 @@ def new_knowledge_analysis_decision_id() -> str:
     return f"analysisdecision_{uuid4().hex}"
 
 
+def educational_document_id(document_key: str) -> str:
+    """Return the stable logical ID for one normalized educational-document key."""
+    digest = hashlib.sha256(f"educational-document:{document_key}".encode()).hexdigest()
+    return f"edudoc_{digest[:32]}"
+
+
+def educational_document_revision_id(registration_request_sha256: str) -> str:
+    """Return a replay-stable immutable revision ID for one exact registration request."""
+    digest = hashlib.sha256(
+        f"educational-document-revision:{registration_request_sha256}".encode()
+    ).hexdigest()
+    return f"edudocrev_{digest[:32]}"
+
+
+def educational_document_registration_id(registration_request_sha256: str) -> str:
+    """Return the replay-stable saga ID for one exact document registration."""
+    digest = hashlib.sha256(
+        f"educational-document-registration:{registration_request_sha256}".encode()
+    ).hexdigest()
+    return f"edudocreg_{digest[:32]}"
+
+
+def new_educational_document_rights_attestation_id() -> str:
+    return f"edurights_{uuid4().hex}"
+
+
 def _canonical_value(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         value = value.model_dump(mode="python")

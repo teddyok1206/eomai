@@ -184,6 +184,157 @@ class ContentIntakeEventRecord(Base):
     )
 
 
+class EducationalDocumentRecord(Base):
+    __tablename__ = "educational_documents"
+    __table_args__ = (
+        CheckConstraint(
+            "lifecycle_state IN ('ACTIVE','RETIRED')",
+            name="ck_educational_documents_lifecycle",
+        ),
+    )
+
+    document_id: Mapped[str] = mapped_column(String(39), primary_key=True)
+    document_key: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    document_kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    lifecycle_state: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    current_revision_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "educational_document_revisions.document_revision_id",
+            name="fk_educational_documents_current_revision",
+            use_alter=True,
+        ),
+        nullable=True,
+        unique=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retirement_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class EducationalDocumentRevisionRecord(Base):
+    __tablename__ = "educational_document_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "revision_number",
+            name="uq_educational_document_revision_number",
+        ),
+        UniqueConstraint("registration_key", name="uq_educational_document_registration_key"),
+        UniqueConstraint(
+            "registration_request_sha256",
+            name="uq_educational_document_registration_request_sha",
+        ),
+        CheckConstraint(
+            "revision_number > 0", name="ck_educational_document_revision_number_positive"
+        ),
+        CheckConstraint(
+            "revision_state = 'APPROVED'", name="ck_educational_document_revision_state"
+        ),
+        Index(
+            "ix_educational_document_revision_publisher_volume",
+            "publisher_key",
+            "curriculum_volume",
+            "document_revision_id",
+        ),
+        Index(
+            "ix_educational_document_revision_source_sha",
+            "source_sha256",
+            "document_revision_id",
+        ),
+    )
+
+    document_revision_id: Mapped[str] = mapped_column(String(42), primary_key=True)
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("educational_documents.document_id"), nullable=False, index=True
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    previous_revision_id: Mapped[str | None] = mapped_column(
+        ForeignKey("educational_document_revisions.document_revision_id"), nullable=True
+    )
+    revision_state: Mapped[str] = mapped_column(String(16), nullable=False)
+    registration_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    registration_request_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    publisher_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    publisher_label: Mapped[str] = mapped_column(String(100), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    curriculum_volume: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    edition_label: Mapped[str] = mapped_column(String(100), nullable=False)
+    language: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_artifact_id: Mapped[str] = mapped_column(
+        ForeignKey("artifacts.logical_artifact_id"), nullable=False
+    )
+    source_artifact_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_revisions.revision_id"), nullable=False
+    )
+    source_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    source_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    source_page_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    analysis_artifact_id: Mapped[str] = mapped_column(
+        ForeignKey("artifacts.logical_artifact_id"), nullable=False
+    )
+    analysis_artifact_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_revisions.revision_id"), nullable=False
+    )
+    analysis_manifest_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    rights_artifact_id: Mapped[str] = mapped_column(
+        ForeignKey("artifacts.logical_artifact_id"), nullable=False
+    )
+    rights_artifact_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_revisions.revision_id"), nullable=False
+    )
+    rights_attestation_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    revision_manifest_artifact_id: Mapped[str] = mapped_column(
+        ForeignKey("artifacts.logical_artifact_id"), nullable=False
+    )
+    revision_manifest_artifact_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_revisions.revision_id"), nullable=False
+    )
+    revision_manifest_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+
+
+class EducationalDocumentRegistrationRecord(Base):
+    __tablename__ = "educational_document_registrations"
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "revision_number",
+            name="uq_educational_document_registration_revision_number",
+        ),
+        CheckConstraint(
+            "state IN ('PREPARED','COMMITTED','FAILED')",
+            name="ck_educational_document_registrations_state",
+        ),
+        CheckConstraint(
+            "revision_number > 0",
+            name="ck_educational_document_registration_revision_positive",
+        ),
+    )
+
+    document_registration_id: Mapped[str] = mapped_column(String(42), primary_key=True)
+    registration_key: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
+    registration_request_sha256: Mapped[str] = mapped_column(
+        String(71), unique=True, nullable=False
+    )
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("educational_documents.document_id"), nullable=False, index=True
+    )
+    document_revision_id: Mapped[str] = mapped_column(String(42), unique=True, nullable=False)
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    previous_revision_id: Mapped[str | None] = mapped_column(String(42), nullable=True)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
 class ContentPackRecord(Base):
     __tablename__ = "content_packs"
 

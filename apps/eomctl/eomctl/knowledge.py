@@ -12,6 +12,13 @@ from eom_catalog_contracts import (
     LegacySourceInventoryV2,
     LegacySourceSelectionV2,
 )
+from eom_catalog_service.educational_document_service import (
+    EducationalDocumentError,
+    EducationalDocumentService,
+    load_educational_document_registration_request,
+    prepare_textbook_registration_request,
+    write_educational_document_registration_request,
+)
 from eom_catalog_service.legacy_knowledge_intake_service import LegacyKnowledgeIntakeService
 from eom_catalog_service.legacy_source_inventory import (
     LegacySourceInventoryError,
@@ -35,7 +42,9 @@ knowledge_app = typer.Typer(no_args_is_help=True)
 legacy_knowledge_app = typer.Typer(no_args_is_help=True)
 legacy_inventory_app = typer.Typer(no_args_is_help=True)
 legacy_selection_app = typer.Typer(no_args_is_help=True)
+document_app = typer.Typer(no_args_is_help=True)
 knowledge_app.add_typer(legacy_knowledge_app, name="legacy")
+knowledge_app.add_typer(document_app, name="document")
 legacy_knowledge_app.add_typer(legacy_inventory_app, name="inventory")
 legacy_knowledge_app.add_typer(legacy_selection_app, name="selection")
 
@@ -88,6 +97,123 @@ def _selection_summary(
             }
         )
     return result
+
+
+def _document_failure(exc: EducationalDocumentError) -> Never:
+    _emit({"status": "FAILED", "error_code": exc.code})
+    raise typer.Exit(1)
+
+
+@document_app.command("prepare-textbook")
+def document_prepare_textbook(
+    source_file: Annotated[Path, typer.Option("--source-file", exists=True, dir_okay=False)],
+    analysis_bundle: Annotated[
+        Path, typer.Option("--analysis-bundle", exists=True, file_okay=False)
+    ],
+    document_key: Annotated[str, typer.Option("--document-key")],
+    edition_label: Annotated[str, typer.Option("--edition-label")],
+    registered_by: Annotated[str, typer.Option("--registered-by")],
+    registration_key: Annotated[str, typer.Option("--registration-key")],
+    confirmation_reference: Annotated[str, typer.Option("--confirmation-reference")],
+    output_file: Annotated[Path, typer.Option("--output-file")],
+    confirm_purchased_and_negotiated: Annotated[
+        bool, typer.Option("--confirm-purchased-and-negotiated")
+    ] = False,
+) -> None:
+    """Prepare a protected source-bound registration request without DB or NAS mutation."""
+
+    if not confirm_purchased_and_negotiated:
+        raise typer.BadParameter("explicit purchased-and-negotiated confirmation is required")
+    try:
+        request = prepare_textbook_registration_request(
+            source_path=source_file,
+            analysis_bundle_root=analysis_bundle,
+            document_key=document_key,
+            edition_label=edition_label,
+            registered_by=registered_by,
+            registration_key=registration_key,
+            confirmation_reference=confirmation_reference,
+        )
+        write_educational_document_registration_request(output_file, request)
+    except EducationalDocumentError as exc:
+        _document_failure(exc)
+    _emit(
+        {
+            "status": "PREPARED",
+            "document_key": request.identity.document_key,
+            "source_sha256": request.expected_source_sha256,
+            "source_size_bytes": request.expected_source_size_bytes,
+            "source_page_count": request.expected_source_page_count,
+            "rights_state": request.rights.rights_state,
+            "request_sha256": request.request_sha256,
+            "output_created": True,
+            "db_mutation": False,
+            "nas_mutation": False,
+        }
+    )
+
+
+@document_app.command("register-textbook")
+def document_register_textbook(
+    request_file: Annotated[Path, typer.Option("--request-file", exists=True, dir_okay=False)],
+    source_file: Annotated[Path, typer.Option("--source-file", exists=True, dir_okay=False)],
+    analysis_bundle: Annotated[
+        Path, typer.Option("--analysis-bundle", exists=True, file_okay=False)
+    ],
+    confirm_request_sha256: Annotated[str, typer.Option("--confirm-request-sha256")],
+) -> None:
+    """Commit one reviewed document revision; it starts no worker or analysis workflow."""
+
+    try:
+        request = load_educational_document_registration_request(request_file)
+        if request.request_sha256 != confirm_request_sha256:
+            raise typer.BadParameter("request confirmation hash does not match")
+        engine = build_engine()
+        try:
+            receipt = EducationalDocumentService(engine).register_textbook(
+                request,
+                source_path=source_file,
+                analysis_bundle_root=analysis_bundle,
+            )
+        finally:
+            engine.dispose()
+    except EducationalDocumentError as exc:
+        _document_failure(exc)
+    _emit(
+        {
+            "status": "COMMITTED",
+            **receipt.model_dump(mode="json"),
+            "knowledge_analysis_started": False,
+            "workflow_started": False,
+        }
+    )
+
+
+@document_app.command("inspect")
+def document_inspect(document_id_or_key: str) -> None:
+    """Inspect bounded current-revision pointers without returning paths or bytes."""
+
+    engine = build_engine()
+    try:
+        try:
+            receipt = EducationalDocumentService(engine).inspect(document_id_or_key)
+        except EducationalDocumentError as exc:
+            _document_failure(exc)
+    finally:
+        engine.dispose()
+    _emit(receipt.model_dump(mode="json"))
+
+
+@document_app.command("list")
+def document_list() -> None:
+    """List bounded current document revision receipts in stable document-key order."""
+
+    engine = build_engine()
+    try:
+        receipts = EducationalDocumentService(engine).list_current()
+    finally:
+        engine.dispose()
+    _emit([receipt.model_dump(mode="json") for receipt in receipts])
 
 
 @legacy_inventory_app.command("dry-run")

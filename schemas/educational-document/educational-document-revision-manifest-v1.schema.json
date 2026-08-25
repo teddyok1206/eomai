@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/educational-document/revision-manifest/1.0",
+  "title": "EOM Educational Document Revision Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_id", "document_revision_id", "revision_number", "previous_revision_id", "identity", "source", "source_size_bytes", "source_page_count", "analysis_bundle_manifest", "analysis_bundle_root", "rights_attestation", "registered_at", "registered_by", "registration_request_sha256", "document_revision_sha256"],
+  "properties": {
+    "schema_version": {"const": "educational-document-revision-manifest/1.0"},
+    "document_id": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/documentId"},
+    "document_revision_id": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/documentRevisionId"},
+    "revision_number": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "previous_revision_id": {"oneOf": [{"type": "null"}, {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/documentRevisionId"}]},
+    "identity": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/identity"},
+    "source": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/artifactPointer"},
+    "source_size_bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+    "source_page_count": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "analysis_bundle_manifest": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/artifactPointer"},
+    "analysis_bundle_root": {"const": "analysis"},
+    "rights_attestation": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/artifactPointer"},
+    "registered_at": {"type": "string", "format": "date-time"},
+    "registered_by": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/actorId"},
+    "registration_request_sha256": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/sha256"},
+    "document_revision_sha256": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/sha256"}
+  },
+  "allOf": [
+    {"if": {"properties": {"revision_number": {"const": 1}}, "required": ["revision_number"]}, "then": {"properties": {"previous_revision_id": {"type": "null"}}}},
+    {"if": {"properties": {"revision_number": {"minimum": 2}}, "required": ["revision_number"]}, "then": {"properties": {"previous_revision_id": {"$ref": "eom://schemas/educational-document/types/1.0#/$defs/documentRevisionId"}}}}
+  ]
+}
