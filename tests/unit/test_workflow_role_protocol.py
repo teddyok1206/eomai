@@ -136,6 +136,20 @@ def test_codex_result_projection_rejects_a_property_without_an_explicit_type() -
         validate_codex_structured_output_schema(projected)
 
 
+def test_codex_result_projection_rejects_reference_sibling_keywords() -> None:
+    projected = load_codex_result_schema("knowledge-analysis-proposal-result@2.0")
+    proposal = projected["$defs"]["KnowledgeAnalysisWorkerProposal"]
+    anchor_ref = proposal["properties"]["anchors"]["items"]["$ref"]
+    anchor = projected["$defs"][anchor_ref.removeprefix("#/$defs/")]
+    anchor["properties"]["member_path"]["const"] = "source/original.pdf"
+
+    with pytest.raises(
+        WorkflowSchemaError,
+        match=r"Codex result reference has sibling keywords at .*member_path",
+    ):
+        validate_codex_structured_output_schema(projected)
+
+
 @pytest.mark.parametrize(
     ("role", "schema_id"),
     [
@@ -185,6 +199,8 @@ def test_constrained_knowledge_analysis_schema_fixes_request_identity() -> None:
     anchor = schema["$defs"][anchor_ref.removeprefix("#/$defs/")]
     assert anchor["properties"]["artifact_revision_id"]["const"] == "rev_" + "5" * 32
     assert anchor["properties"]["member_path"]["const"] == "source.pdf"
+    assert anchor["properties"]["member_path"]["type"] == "string"
+    assert "$ref" not in anchor["properties"]["member_path"]
     result = _knowledge_analysis_result()
     result["output"]["proposal"]["analysis_request_id"] = "knowledgeanalysis_" + "2" * 32  # type: ignore[index]
     errors = list(Draft202012Validator(schema).iter_errors(result))

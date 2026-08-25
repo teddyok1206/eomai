@@ -251,6 +251,11 @@ member path. For a V3 document range it also adds a locator pattern containing e
 physical page numbers. The canonical `knowledge-analysis-worker-proposal/1.0` resource and the
 immutable `workflow-role/1.5.0` bundle remain byte-for-byte unchanged.
 
+Codex response-format schemas do not permit sibling keywords beside `$ref`. When a bound string
+field is reference-backed, the projection copies that small immutable string definition into the
+request-local schema, verifies it is an inline string schema, and only then adds `const`. The global
+strict-output validator rejects every remaining `$ref` with siblings before a worker is started.
+
 This projection protects the following boundary:
 
 1. **Responsibility:** the Orchestrator binds an already validated request to the structured-output

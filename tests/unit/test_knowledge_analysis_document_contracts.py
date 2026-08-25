@@ -492,6 +492,9 @@ def test_document_worker_schema_binds_original_source_and_selected_pages() -> No
         request.source.artifact_member.artifact_revision_id
     )
     assert anchor_properties["member_path"]["const"] == (request.source.artifact_member.member_path)
+    assert anchor_properties["member_path"]["type"] == "string"
+    assert anchor_properties["member_path"]["pattern"] == r"^[A-Za-z0-9._()가-힣/-]+$"
+    assert "$ref" not in anchor_properties["member_path"]
     assert anchor_properties["locator"]["pattern"] == (r"^physical_page=(?:1|2)(?:;.{1,220})?$")
 
     result = {

@@ -332,7 +332,7 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
             ("artifact_revision_id", source.artifact_member.artifact_revision_id),
             ("member_path", source.artifact_member.member_path),
         ):
-            _mapping(anchor_properties, field_name)["const"] = value
+            _bind_result_string_const(schema, _mapping(anchor_properties, field_name), value)
         if isinstance(analysis_request, KnowledgeAnalysisRequestV3):
             document_source = analysis_request.source
             pages = "|".join(
@@ -360,6 +360,28 @@ def _knowledge_analysis_anchor_properties(
         raise WorkflowSchemaError("knowledge analysis anchor reference is not projectable")
     anchor_definition = _mapping(_mapping(schema, "$defs"), reference.removeprefix(prefix))
     return _mapping(anchor_definition, "properties")
+
+
+def _bind_result_string_const(
+    schema: dict[str, Any], property_schema: dict[str, Any], value: str
+) -> None:
+    """Bind one exact string without creating a response-format-invalid ref sibling."""
+
+    reference = property_schema.get("$ref")
+    if reference is not None:
+        prefix = "#/$defs/"
+        if set(property_schema) != {"$ref"} or not isinstance(reference, str):
+            raise WorkflowSchemaError("result string reference is not independently projectable")
+        if not reference.startswith(prefix):
+            raise WorkflowSchemaError("result string reference is not local")
+        definition = copy.deepcopy(
+            _mapping(_mapping(schema, "$defs"), reference.removeprefix(prefix))
+        )
+        property_schema.clear()
+        property_schema.update(definition)
+    if property_schema.get("type") != "string" or "$ref" in property_schema:
+        raise WorkflowSchemaError("result const binding requires an inline string schema")
+    property_schema["const"] = value
 
 
 def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
@@ -440,6 +462,10 @@ def validate_codex_structured_output_schema(schema: dict[str, Any]) -> None:
     def visit(value: object, path: tuple[str, ...]) -> None:
         if not isinstance(value, dict):
             return
+        if "$ref" in value and set(value) != {"$ref"}:
+            raise WorkflowSchemaError(
+                f"Codex result reference has sibling keywords at {'.'.join(path) or '$'}"
+            )
         found = unsupported.intersection(value)
         if found:
             raise WorkflowSchemaError(
