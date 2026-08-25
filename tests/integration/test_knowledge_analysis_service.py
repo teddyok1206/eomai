@@ -198,8 +198,8 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
         )
     bootstrap_knowledge_analysis_control_plane(
         engine,
-        config_directory=Path("config/control-plane/knowledge-analysis-v3").resolve(),
-        source_commit="d" * 40,
+        config_directory=Path("config/control-plane/knowledge-analysis-v4").resolve(),
+        source_commit="e" * 40,
         actor_id="phase7-integration",
         evaluation_cases_total=3,
         settings=settings,

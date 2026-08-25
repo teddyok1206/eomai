@@ -19,6 +19,7 @@ CONFIG = ROOT / "config/control-plane/standard-item-v1"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
+ANALYSIS_CONFIG_V4 = ROOT / "config/control-plane/knowledge-analysis-v4"
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:
@@ -96,6 +97,18 @@ def test_knowledge_analysis_v3_adds_ontology_guidance_without_mutating_history()
                 "knowledge-analysis-v2/instructions/knowledge-analysis.md",
                 "fae98c13b3e5bf2d5072c485f96ad94a228709a45c51ef0bd853d9081a2a2c77",
             ),
+            (
+                "knowledge-analysis-v3/bootstrap.yaml",
+                "a4038b78c91c3ebbb817fee25d9914cb54332e366e49835e5b671de891c09828",
+            ),
+            (
+                "knowledge-analysis-v3/instructions/platform.md",
+                "43d44eaa7ff40594490da50e03c4dbec885593963b704d9751ba9bf89a789d9e",
+            ),
+            (
+                "knowledge-analysis-v3/instructions/knowledge-analysis.md",
+                "3b50dfe9f983adfc92d2b8015fcf38edc0dd3b1ceff1dbacfb75b33992e32200",
+            ),
         ),
     )
     for relative_path, expected in expected_sha256.items():
@@ -118,6 +131,41 @@ def test_knowledge_analysis_v3_adds_ontology_guidance_without_mutating_history()
     assert load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V2).schema_version == (
         "knowledge-analysis-control-bootstrap/2.0"
     )
+
+
+def test_knowledge_analysis_v4_uses_xhigh_without_mutating_v3() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V4)
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/4.0"
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    assert manifest.timeout_seconds == 1800
+    assert manifest.slot_key == "slot05"
+    assert manifest.worker_pool_key == "support"
+    assert manifest.general_knowledge_policy == "ALLOW_WITH_PROVENANCE"
+    assert manifest.compatible_workflow_protocols == (
+        "workflow-role/1.4.0",
+        "workflow-role/1.5.0",
+    )
+    assert (
+        hashlib.sha256((ANALYSIS_CONFIG_V3 / "bootstrap.yaml").read_bytes()).hexdigest()
+        == "a4038b78c91c3ebbb817fee25d9914cb54332e366e49835e5b671de891c09828"
+    )
+    expected_v4_sha256 = {
+        "bootstrap.yaml": "80cbf7a476dcaf8ba88414d09eaab37a4ed0ac76c029354d2a8d92db9987e567",
+        "instructions/platform.md": (
+            "43d44eaa7ff40594490da50e03c4dbec885593963b704d9751ba9bf89a789d9e"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "3b50dfe9f983adfc92d2b8015fcf38edc0dd3b1ceff1dbacfb75b33992e32200"
+        ),
+    }
+    for relative_path, expected in expected_v4_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V4 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+    assert (ANALYSIS_CONFIG_V4 / "instructions/knowledge-analysis.md").read_bytes() == (
+        ANALYSIS_CONFIG_V3 / "instructions/knowledge-analysis.md"
+    ).read_bytes()
 
 
 def test_standard_bootstrap_rejects_role_slot_drift_and_symlink_root(tmp_path: Path) -> None:
