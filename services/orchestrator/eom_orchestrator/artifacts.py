@@ -105,29 +105,25 @@ def stage_structured_artifact(
 
 
 def commit_artifact(staged: StagedArtifact, nas_root: Path) -> Path:
-    if not nas_root.is_dir():
-        raise PlatformError(ErrorCode.NAS_UNAVAILABLE, "NAS artifact root is unavailable")
-    try:
-        resolved_root = nas_root.resolve(strict=True)
-    except OSError as exc:
-        raise PlatformError(ErrorCode.NAS_UNAVAILABLE, "NAS artifact root is unavailable") from exc
+    resolved_root = _resolve_nas_root(nas_root)
     logical_dir = nas_root / staged.manifest.logical_artifact_id
     final = logical_dir / staged.manifest.revision_id
-    if logical_dir.is_symlink() or (logical_dir.exists() and not logical_dir.is_dir()):
-        raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "invalid logical artifact path")
-    logical_dir.mkdir(mode=0o755, exist_ok=True)
-    if logical_dir.resolve().parent != resolved_root:
-        raise PlatformError(
-            ErrorCode.ARTIFACT_COMMIT_FAILED, "logical artifact path escaped NAS root"
-        )
-    if final.exists():
-        if final.is_symlink() or not final.is_dir():
-            raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "invalid artifact revision path")
-        _verify_final(staged, final)
-        return final
-
-    temporary = logical_dir / f".{staged.manifest.revision_id}.tmp-{uuid4().hex}"
+    temporary: Path | None = None
     try:
+        if logical_dir.is_symlink() or (logical_dir.exists() and not logical_dir.is_dir()):
+            raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "invalid logical artifact path")
+        logical_dir.mkdir(mode=0o755, exist_ok=True)
+        if logical_dir.resolve().parent != resolved_root:
+            raise PlatformError(
+                ErrorCode.ARTIFACT_COMMIT_FAILED, "logical artifact path escaped NAS root"
+            )
+        if final.is_symlink() or (final.exists() and not final.is_dir()):
+            raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "invalid artifact revision path")
+        if final.exists():
+            _verify_final(staged, final)
+            return final
+
+        temporary = logical_dir / f".{staged.manifest.revision_id}.tmp-{uuid4().hex}"
         temporary.mkdir(mode=0o750)
         shutil.copyfile(staged.result_path, temporary / "result.json")
         shutil.copyfile(staged.manifest_path, temporary / "manifest.json")
@@ -136,10 +132,12 @@ def commit_artifact(staged: StagedArtifact, nas_root: Path) -> Path:
         _fsync_file(temporary / "manifest.json")
         os.replace(temporary, final)
     except PlatformError:
-        shutil.rmtree(temporary, ignore_errors=True)
+        if temporary is not None:
+            shutil.rmtree(temporary, ignore_errors=True)
         raise
     except OSError as exc:
-        shutil.rmtree(temporary, ignore_errors=True)
+        if temporary is not None:
+            shutil.rmtree(temporary, ignore_errors=True)
         raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "NAS artifact commit failed") from exc
     return final
 
@@ -240,21 +238,22 @@ def stage_file_set_artifact(
 
 
 def commit_file_set_artifact(staged: StagedFileSet, nas_root: Path) -> Path:
-    if not nas_root.is_dir():
-        raise PlatformError(ErrorCode.NAS_UNAVAILABLE, "NAS artifact root is unavailable")
-    resolved_root = nas_root.resolve(strict=True)
+    resolved_root = _resolve_nas_root(nas_root)
     logical_dir = nas_root / staged.logical_artifact_id
     final = logical_dir / staged.revision_id
-    if logical_dir.is_symlink() or (logical_dir.exists() and not logical_dir.is_dir()):
-        raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "invalid logical artifact path")
-    logical_dir.mkdir(mode=0o755, exist_ok=True)
-    if logical_dir.resolve().parent != resolved_root:
-        raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "artifact path escaped NAS root")
-    if final.exists():
-        _verify_file_set(staged, final)
-        return final
-    temporary = logical_dir / f".{staged.revision_id}.tmp-{uuid4().hex}"
+    temporary: Path | None = None
     try:
+        if logical_dir.is_symlink() or (logical_dir.exists() and not logical_dir.is_dir()):
+            raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "invalid logical artifact path")
+        logical_dir.mkdir(mode=0o755, exist_ok=True)
+        if logical_dir.resolve().parent != resolved_root:
+            raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "artifact path escaped NAS root")
+        if final.is_symlink() or (final.exists() and not final.is_dir()):
+            raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "invalid artifact revision path")
+        if final.exists():
+            _verify_file_set(staged, final)
+            return final
+        temporary = logical_dir / f".{staged.revision_id}.tmp-{uuid4().hex}"
         temporary.mkdir(mode=0o750)
         for item in staged.files:
             target = temporary / item.relative_path
@@ -267,12 +266,23 @@ def commit_file_set_artifact(staged: StagedFileSet, nas_root: Path) -> Path:
         _fsync_file(temporary / "manifest.json")
         os.replace(temporary, final)
     except PlatformError:
-        shutil.rmtree(temporary, ignore_errors=True)
+        if temporary is not None:
+            shutil.rmtree(temporary, ignore_errors=True)
         raise
     except OSError as exc:
-        shutil.rmtree(temporary, ignore_errors=True)
+        if temporary is not None:
+            shutil.rmtree(temporary, ignore_errors=True)
         raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "NAS artifact commit failed") from exc
     return final
+
+
+def _resolve_nas_root(nas_root: Path) -> Path:
+    if not nas_root.is_dir():
+        raise PlatformError(ErrorCode.NAS_UNAVAILABLE, "NAS artifact root is unavailable")
+    try:
+        return nas_root.resolve(strict=True)
+    except OSError as exc:
+        raise PlatformError(ErrorCode.NAS_UNAVAILABLE, "NAS artifact root is unavailable") from exc
 
 
 def _verify_final(staged: StagedArtifact, directory: Path) -> None:

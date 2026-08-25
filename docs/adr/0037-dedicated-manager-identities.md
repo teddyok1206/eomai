@@ -15,7 +15,7 @@ LXD, device, or desktop groups. Fixed workers remain separate and never receive 
 The fixed identities are `eom-workflow-runner`, `eom-catalog-manager`, and `eom-hwpx-manager`.
 Artifact identity remains logical ID, immutable revision ID, and SHA-256; an OS owner is only a
 storage attribute. The canonical NAS is a CIFS mount with server-independent forced ownership. Its
-reviewed mount contract is `eom:eom`, directory mode `0750`, file mode `0640`, and
+reviewed mount contract is `eom:eom`, directory mode `0770`, file mode `0640`, and
 `nosuid,nodev,noexec`. Catalog and HWPX managers receive the existing `eom` storage group; fixed
 workers never do. Mount permissions do not replace Artifact authorization, lifecycle, schema, or
 hash validation.
@@ -35,6 +35,14 @@ The deployment refuses active fixed worker/HWPX units, installs accounts and sys
 then restarts only the three manager services. Database claims and Artifact commits retain their
 existing transactions and idempotency keys. A service restart never retries a terminal build or
 reinterprets a pinned revision.
+
+The directory group-write bit is required because `nounix,forceuid,forcegid` presents every NAS
+entry as `eom:eom`. Dedicated managers are intentionally not the presented owner, so `0750`
+permits read and traversal but cannot create the immutable temporary revision that precedes atomic
+rename. `0770` permits only the storage-group identities to create beneath their systemd-approved
+Artifact subtree. Files remain `0640`; immutable revisions are verified before reuse and are never
+updated in place. Deployment performs a bounded create/read/delete smoke as each manager and proves
+that a fixed worker still cannot write.
 
 ## Dependency direction and adapters
 

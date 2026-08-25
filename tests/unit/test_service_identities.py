@@ -45,7 +45,7 @@ def test_identity_deployer_verifies_mount_and_polkit_boundaries() -> None:
 
     assert "verify_artifact_mount" in source
     assert "file_mode=0640" in source
-    assert "dir_mode=0750" in source
+    assert "dir_mode=0770" in source
     assert 'chmod 02770 "${ARTIFACT_ROOT}"' not in source
     assert 'chgrp "${ARTIFACT_GROUP}"' not in source
     assert "sudo docker lxd adm" in source
@@ -68,7 +68,13 @@ def test_artifact_mount_hardener_is_commit_pinned_atomic_and_recoverable() -> No
     assert 'mount -o remount "${MOUNT_POINT}"' in source
     assert "trap recover EXIT" in source
     assert "file_mode=0640" in source
-    assert "dir_mode=0750" in source
+    assert "dir_mode=0770" in source
+    assert "verify_writer_identity" in source
+    assert all(
+        identity in source
+        for identity in ("eom-workflow-runner", "eom-catalog-manager", "eom-hwpx-manager")
+    )
+    assert "fixed worker can write the Artifact root" in source
     assert all(flag in source for flag in ("nosuid", "nodev", "noexec"))
     contract_source = MOUNT_CONTRACT.read_text(encoding="utf-8")
     assert "password=" in contract_source
@@ -103,7 +109,7 @@ def test_artifact_mount_contract_rewrites_only_the_pinned_entry(tmp_path: Path) 
     assert "# preserved\nUUID=synthetic / ext4 defaults 0 1\n" in updated
     assert "credentials=/synthetic/credential" in updated
     assert all(option in updated for option in ("uid=1000", "gid=1000"))
-    assert all(option in updated for option in ("file_mode=0640", "dir_mode=0750"))
+    assert all(option in updated for option in ("file_mode=0640", "dir_mode=0770"))
     assert all(option in updated for option in ("nosuid", "nodev", "noexec"))
     assert "uid=9" not in updated and "file_mode=0644" not in updated
 

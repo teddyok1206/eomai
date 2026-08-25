@@ -15,6 +15,8 @@ SERVICES=(
 STOPPED=0
 BACKUP=
 UPDATED=
+SMOKE_DIR=
+SMOKE_FILE=
 
 fail() {
   echo "ERROR: $1" >&2
@@ -37,19 +39,40 @@ verify_mount() {
     fail "Artifact mount identity mismatch"
   for required in forceuid forcegid nounix nosuid nodev noexec \
     "uid=$(id -u eom)" "gid=$(getent group eom | cut -d: -f3)" \
-    file_mode=0640 dir_mode=0750; do
+    file_mode=0640 dir_mode=0770; do
     require_mount_option "${options}" "${required}"
   done
-  [[ "$(stat -c '%U:%G:%a' "${MOUNT_POINT}")" == eom:eom:750 ]] || \
+  [[ "$(stat -c '%U:%G:%a' "${MOUNT_POINT}")" == eom:eom:770 ]] || \
     fail "Artifact mount metadata mismatch"
-  [[ "$(stat -c '%U:%G:%a' "${ARTIFACT_ROOT}")" == eom:eom:750 ]] || \
+  [[ "$(stat -c '%U:%G:%a' "${ARTIFACT_ROOT}")" == eom:eom:770 ]] || \
     fail "Artifact root metadata mismatch"
+}
+
+verify_writer_identity() {
+  local identity=$1
+  SMOKE_DIR="${ARTIFACT_ROOT}/.eom-writer-smoke-${identity}-$$"
+  SMOKE_FILE="${SMOKE_DIR}/probe"
+  [[ ! -e ${SMOKE_DIR} && ! -L ${SMOKE_DIR} ]] || fail "Artifact smoke path exists"
+  runuser -u "${identity}" -- /usr/bin/mkdir -- "${SMOKE_DIR}"
+  [[ "$(stat -c '%U:%G:%a' "${SMOKE_DIR}")" == eom:eom:770 ]] || \
+    fail "Artifact writer directory metadata mismatch"
+  runuser -u "${identity}" -- /bin/sh -c \
+    'umask 027; printf probe >"$1"' sh "${SMOKE_FILE}"
+  [[ "$(stat -c '%U:%G:%a' "${SMOKE_FILE}")" == eom:eom:640 ]] || \
+    fail "Artifact writer file metadata mismatch"
+  runuser -u "${identity}" -- /bin/cat -- "${SMOKE_FILE}" >/dev/null
+  runuser -u "${identity}" -- /bin/rm -- "${SMOKE_FILE}"
+  SMOKE_FILE=
+  runuser -u "${identity}" -- /usr/bin/rmdir -- "${SMOKE_DIR}"
+  SMOKE_DIR=
 }
 
 recover() {
   local status=$?
   trap - EXIT
   if [[ ${status} -ne 0 ]]; then
+    [[ -z ${SMOKE_FILE} || ! -e ${SMOKE_FILE} ]] || rm -f -- "${SMOKE_FILE}"
+    [[ -z ${SMOKE_DIR} || ! -d ${SMOKE_DIR} ]] || rmdir -- "${SMOKE_DIR}" || true
     if [[ -n ${BACKUP} && -f ${BACKUP} ]]; then
       local restore
       restore=$(mktemp /etc/.eom-fstab-restore.XXXXXX) || true
@@ -111,6 +134,11 @@ UPDATED=
 systemctl daemon-reload
 mount -o remount "${MOUNT_POINT}"
 verify_mount
+for identity in eom-workflow-runner eom-catalog-manager eom-hwpx-manager; do
+  verify_writer_identity "${identity}"
+done
+runuser -u eom-cdx-01 -- test ! -w "${ARTIFACT_ROOT}" || \
+  fail "fixed worker can write the Artifact root"
 systemctl start "${SERVICES[@]}"
 STOPPED=0
 for service in "${SERVICES[@]}"; do
@@ -121,12 +149,14 @@ done
 printf 'source_commit=%s\n' "${EXPECTED_COMMIT}" >"${BACKUP_DIR}/deployment.txt"
 printf 'deployed_at_utc=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >>"${BACKUP_DIR}/deployment.txt"
 printf 'mount_source=%s\n' "${EXPECTED_SOURCE}" >>"${BACKUP_DIR}/deployment.txt"
-printf 'mount_contract=uid:eom,gid:eom,file:0640,dir:0750,nosuid,nodev,noexec\n' \
+printf 'mount_contract=uid:eom,gid:eom,file:0640,dir:0770,nosuid,nodev,noexec\n' \
   >>"${BACKUP_DIR}/deployment.txt"
 chown root:root "${BACKUP_DIR}/deployment.txt"
 chmod 0600 "${BACKUP_DIR}/deployment.txt"
 BACKUP=
 
 echo "ARTIFACT_MOUNT_HARDENING=PASS"
+echo "ARTIFACT_MANAGER_WRITERS=PASS"
+echo "FIXED_WORKER_WRITE=DENIED"
 echo "ARTIFACT_WORLD_ACCESS=DENIED"
 echo "RUNTIME_GIT_DEPENDENCY=ABSENT"
