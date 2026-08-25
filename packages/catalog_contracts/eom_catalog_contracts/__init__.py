@@ -105,6 +105,7 @@ from eom_catalog_contracts.knowledge import (
     KnowledgeSourceClass,
     KnowledgeSourceRevisionPointer,
     PublishKnowledgeGraphSnapshotCommand,
+    validate_knowledge_analysis_proposal_ontology,
     validate_knowledge_edge_endpoint_types,
 )
 from eom_catalog_contracts.legacy_knowledge import (
@@ -395,5 +396,6 @@ __all__ = [
     "validate_contract",
     "validate_eom_question_template_content",
     "validate_item_reference_contract",
+    "validate_knowledge_analysis_proposal_ontology",
     "validate_knowledge_edge_endpoint_types",
 ]

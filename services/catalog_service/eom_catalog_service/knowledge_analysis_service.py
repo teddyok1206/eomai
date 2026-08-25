@@ -29,6 +29,7 @@ from eom_catalog_contracts import (
     ReconcileKnowledgeAnalysisCommand,
     ReviewKnowledgeAnalysisCommand,
     validate_contract,
+    validate_knowledge_analysis_proposal_ontology,
 )
 from eom_identifiers import (
     canonical_json_bytes,
@@ -73,6 +74,10 @@ from eom_catalog_service.knowledge_analysis_sources import (
     resolve_approved_item_source,
     resolve_content_intake_source,
     resolve_educational_document_source,
+)
+from eom_catalog_service.knowledge_proposal_resolution import (
+    KnowledgeProposalResolutionError,
+    resolve_knowledge_analysis_proposal,
 )
 from eom_catalog_service.settings import CatalogSettings
 
@@ -473,6 +478,29 @@ class KnowledgeAnalysisApplicationService:
                         actor_id=command.requested_by,
                     )
                 self._apply_proposal(run, receipt, pointer)
+            try:
+                proposal = resolve_knowledge_analysis_proposal(self.artifacts, receipt)
+            except KnowledgeProposalResolutionError as exc:
+                return self._fail(
+                    session,
+                    run,
+                    (
+                        "KNOWLEDGE_ANALYSIS_POINTER_INVALID"
+                        if exc.kind == "POINTER_INVALID"
+                        else "KNOWLEDGE_ANALYSIS_PROPOSAL_INVALID"
+                    ),
+                    command.requested_by,
+                )
+            try:
+                validate_knowledge_analysis_proposal_ontology(proposal)
+            except ValueError:
+                return self._fail(
+                    session,
+                    run,
+                    "KNOWLEDGE_ANALYSIS_ONTOLOGY_INVALID",
+                    command.requested_by,
+                )
+            if run.state != "VALIDATING":
                 self._transition(
                     session,
                     run,

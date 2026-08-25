@@ -1,0 +1,16 @@
+schema_version: knowledge-analysis-control-bootstrap/3.0
+preset_key: knowledge-analysis
+display_name: 지식 분석
+description: 승인된 단일 소스 또는 교육문서의 제한된 Markdown 범위를 고정된 support worker가 폐쇄형 Education Graph ontology에 맞춰 분석하는 검토 가능 일회성 정책입니다.
+created_at: 2026-08-25T17:15:00Z
+model: gpt-5.6-terra
+reasoning_effort: high
+general_knowledge_policy: ALLOW_WITH_PROVENANCE
+compatible_workflow_protocols:
+  - workflow-role/1.4.0
+  - workflow-role/1.5.0
+platform_instruction_path: instructions/platform.md
+role_instruction_path: instructions/knowledge-analysis.md
+slot_key: slot05
+worker_pool_key: support
+timeout_seconds: 1800

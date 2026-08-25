@@ -72,6 +72,10 @@ from eom_catalog_service.knowledge_graph_projection import (
     knowledge_node_terms,
     serialize_education_graph_projection,
 )
+from eom_catalog_service.knowledge_proposal_resolution import (
+    KnowledgeProposalResolutionError,
+    resolve_knowledge_analysis_proposal,
+)
 from eom_catalog_service.models import (
     ItemComponentRecord,
     ItemRecord,
@@ -611,84 +615,17 @@ class KnowledgeGraphPublicationService:
     def _load_proposal(
         self, receipt: KnowledgeAnalysisReceiptContract
     ) -> KnowledgeAnalysisWorkerProposal:
-        values: dict[str, Any] = {}
-        for field_name in receipt.members.__class__.model_fields:
-            pointer = getattr(receipt.members, field_name)
-            try:
-                raw = self.artifacts.read_member(
-                    artifact_id=pointer.artifact_id,
-                    revision_id=pointer.artifact_revision_id,
-                    member_path=pointer.member_path,
-                    sha256=pointer.sha256,
-                    media_type=pointer.media_type,
-                    schema_ref=pointer.schema_ref,
-                    max_bytes=max(1, pointer.bytes),
-                )
-            except (OSError, ValueError) as exc:
-                raise KnowledgeGraphPublicationError(
-                    "KNOWLEDGE_GRAPH_PROPOSAL_POINTER_INVALID",
-                    "analysis proposal member does not resolve",
-                ) from exc
-            if len(raw) != pointer.bytes:
-                raise KnowledgeGraphPublicationError(
-                    "KNOWLEDGE_GRAPH_PROPOSAL_POINTER_INVALID",
-                    "analysis proposal member byte count differs",
-                )
-            if field_name == "normalized_markdown":
-                try:
-                    values[field_name] = raw.decode("utf-8")
-                except UnicodeError as exc:
-                    raise KnowledgeGraphPublicationError(
-                        "KNOWLEDGE_GRAPH_PROPOSAL_INVALID",
-                        "normalized Markdown is not UTF-8",
-                    ) from exc
-                continue
-            rows: list[dict[str, Any]] = []
-            try:
-                for line in raw.splitlines():
-                    value: object = json.loads(line)
-                    if not isinstance(value, dict):
-                        raise ValueError("proposal JSONL row is not an object")
-                    rows.append(value)
-            except (ValueError, json.JSONDecodeError) as exc:
-                raise KnowledgeGraphPublicationError(
-                    "KNOWLEDGE_GRAPH_PROPOSAL_INVALID", "analysis proposal JSONL is invalid"
-                ) from exc
-            values[field_name] = rows
-        proposal_value = {
-            "schema_version": "knowledge-analysis-worker-proposal/1.0",
-            "analysis_request_id": receipt.analysis_request_id,
-            **values,
-            "general_knowledge_used": receipt.general_knowledge_used,
-            "completed_at": receipt.completed_at,
-        }
         try:
-            proposal = KnowledgeAnalysisWorkerProposal.model_validate(proposal_value)
-        except ValidationError as exc:
-            raise KnowledgeGraphPublicationError(
-                "KNOWLEDGE_GRAPH_PROPOSAL_INVALID", "analysis proposal is structurally invalid"
-            ) from exc
-        actual_counts = (
-            len(proposal.anchors),
-            len(proposal.nodes),
-            len(proposal.edges),
-            len(proposal.claims),
-            len(proposal.component_observations),
-            len(proposal.unresolved_ambiguities),
-        )
-        expected_counts = (
-            receipt.counts.anchors,
-            receipt.counts.nodes,
-            receipt.counts.edges,
-            receipt.counts.claims,
-            receipt.counts.component_observations,
-            receipt.counts.ambiguities,
-        )
-        if actual_counts != expected_counts:
-            raise KnowledgeGraphPublicationError(
-                "KNOWLEDGE_GRAPH_PROPOSAL_INVALID", "analysis proposal counts differ"
+            return resolve_knowledge_analysis_proposal(self.artifacts, receipt)
+        except KnowledgeProposalResolutionError as exc:
+            code = (
+                "KNOWLEDGE_GRAPH_PROPOSAL_POINTER_INVALID"
+                if exc.kind == "POINTER_INVALID"
+                else "KNOWLEDGE_GRAPH_PROPOSAL_INVALID"
             )
-        return proposal
+            raise KnowledgeGraphPublicationError(
+                code, "analysis proposal cannot be resolved or validated"
+            ) from exc
 
     def _load_structure_manifest(
         self, pointer: KnowledgeArtifactMemberPointer | None

@@ -115,6 +115,7 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
     schema_version: Literal[
         "knowledge-analysis-control-bootstrap/1.0",
         "knowledge-analysis-control-bootstrap/2.0",
+        "knowledge-analysis-control-bootstrap/3.0",
     ]
     preset_key: Literal["knowledge-analysis"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -407,9 +408,11 @@ def bootstrap_knowledge_analysis_control_plane(
                 role_schema_bundle_hash(protocol_version),
             )
     capacity_revision_id = _released_analysis_capacity_policy(sessions)
-    bootstrap_revision = (
-        1 if manifest.schema_version == "knowledge-analysis-control-bootstrap/1.0" else 2
-    )
+    bootstrap_revision = {
+        "knowledge-analysis-control-bootstrap/1.0": 1,
+        "knowledge-analysis-control-bootstrap/2.0": 2,
+        "knowledge-analysis-control-bootstrap/3.0": 3,
+    }[manifest.schema_version]
     platform_artifact = _publish_markdown(
         publisher,
         payload=_read_member(config_directory, manifest.platform_instruction_path),

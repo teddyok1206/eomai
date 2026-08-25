@@ -846,6 +846,26 @@ class KnowledgeAnalysisWorkerProposal(FrozenModel):
         return self
 
 
+def validate_knowledge_analysis_proposal_ontology(
+    proposal: KnowledgeAnalysisWorkerProposal,
+) -> None:
+    """Validate proposal edges against the closed education-graph ontology.
+
+    This is deliberately separate from the historical worker-proposal Pydantic
+    model.  Older immutable proposal bytes remain structurally readable, while
+    new application acceptance and graph publication can fail closed on the
+    current ontology contract.
+    """
+
+    node_types = {node.node_id: node.node_type for node in proposal.nodes}
+    for edge in proposal.edges:
+        validate_knowledge_edge_endpoint_types(
+            edge.edge_type,
+            node_types[edge.from_node_id],
+            node_types[edge.to_node_id],
+        )
+
+
 class KnowledgeProposalCounts(FrozenModel):
     anchors: int = Field(ge=1, le=1024)
     nodes: int = Field(ge=1, le=512)

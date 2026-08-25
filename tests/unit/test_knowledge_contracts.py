@@ -22,6 +22,7 @@ from eom_catalog_contracts import (
     KnowledgeGraphStructureManifest,
     PublishKnowledgeGraphSnapshotCommand,
     validate_contract,
+    validate_knowledge_analysis_proposal_ontology,
     validate_knowledge_edge_endpoint_types,
 )
 from eom_identifiers import content_sha256
@@ -753,6 +754,98 @@ def test_graph_ontology_compatibility_is_closed_and_exhaustive() -> None:
     validate_knowledge_edge_endpoint_types("EXPLAINS", "CLAIM", "CONCEPT")
     with pytest.raises(ValueError, match="endpoint types are incompatible"):
         validate_knowledge_edge_endpoint_types("HAS_ITEM_ELEMENT", "CONCEPT", "TABLE")
+
+
+@pytest.mark.parametrize(
+    ("edge_type", "from_type", "to_type"),
+    [
+        ("CONTAINS_CURRICULUM_UNIT", "DOCUMENT_REVISION", "DOCUMENT_SECTION"),
+        ("REQUIRES_CONCEPT", "PROCESS", "CONCEPT"),
+        ("REQUIRES_CONCEPT", "PROCESS", "PROCESS"),
+    ],
+)
+def test_analysis_acceptance_ontology_rejects_r6_edge_shapes(
+    edge_type: str,
+    from_type: str,
+    to_type: str,
+) -> None:
+    value = _worker_proposal()
+    value["nodes"] = [
+        {
+            "node_id": "knode_source",
+            "node_type": from_type,
+            "stable_key": "test.source",
+            "label": "source",
+            "anchor_ids": ["anchor_section_1"],
+        },
+        {
+            "node_id": "knode_target",
+            "node_type": to_type,
+            "stable_key": "test.target",
+            "label": "target",
+            "anchor_ids": ["anchor_section_1"],
+        },
+    ]
+    value["edges"] = [
+        {
+            "edge_id": "kedge_incompatible",
+            "edge_type": edge_type,
+            "from_node_id": "knode_source",
+            "to_node_id": "knode_target",
+            "confidence_milli": 900,
+            "anchor_ids": ["anchor_section_1"],
+        }
+    ]
+    proposal = KnowledgeAnalysisWorkerProposal.model_validate(value)
+
+    with pytest.raises(ValueError, match="endpoint types are incompatible"):
+        validate_knowledge_analysis_proposal_ontology(proposal)
+
+
+@pytest.mark.parametrize(
+    ("edge_type", "from_type", "to_type"),
+    [
+        ("PART_OF", "DOCUMENT_SECTION", "DOCUMENT_REVISION"),
+        ("REQUIRES_PREREQUISITE", "PROCESS", "CONCEPT"),
+        ("REQUIRES_PREREQUISITE", "PROCESS", "PROCESS"),
+    ],
+)
+def test_analysis_acceptance_ontology_accepts_explicit_alternatives(
+    edge_type: str,
+    from_type: str,
+    to_type: str,
+) -> None:
+    value = _worker_proposal()
+    value["nodes"] = [
+        {
+            "node_id": "knode_source",
+            "node_type": from_type,
+            "stable_key": "test.source",
+            "label": "source",
+            "anchor_ids": ["anchor_section_1"],
+        },
+        {
+            "node_id": "knode_target",
+            "node_type": to_type,
+            "stable_key": "test.target",
+            "label": "target",
+            "anchor_ids": ["anchor_section_1"],
+        },
+    ]
+    value["edges"] = [
+        {
+            "edge_id": "kedge_compatible",
+            "edge_type": edge_type,
+            "from_node_id": "knode_source",
+            "to_node_id": "knode_target",
+            "confidence_milli": 900,
+            "anchor_ids": ["anchor_section_1"],
+        }
+    ]
+
+    validate_knowledge_analysis_proposal_ontology(
+        KnowledgeAnalysisWorkerProposal.model_validate(value)
+    )
 
 
 def test_retrieval_is_typed_bounded_and_does_not_invent_phase_six_usage_contract() -> None:

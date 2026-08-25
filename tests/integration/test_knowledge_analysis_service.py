@@ -196,8 +196,8 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
         )
     bootstrap_knowledge_analysis_control_plane(
         engine,
-        config_directory=Path("config/control-plane/knowledge-analysis-v2").resolve(),
-        source_commit="c" * 40,
+        config_directory=Path("config/control-plane/knowledge-analysis-v3").resolve(),
+        source_commit="d" * 40,
         actor_id="phase7-integration",
         evaluation_cases_total=3,
         settings=settings,
@@ -432,6 +432,7 @@ def _complete_proposal(
     *,
     run_id: str,
     staging_root: Path,
+    proposal_override: KnowledgeAnalysisWorkerProposal | None = None,
 ) -> ArtifactPointer:
     sessions = build_session_factory(engine)
     with sessions() as session:
@@ -442,7 +443,7 @@ def _complete_proposal(
     job_id = new_job_id()
     artifact_id = new_logical_artifact_id()
     revision_id = new_revision_id()
-    proposal = _proposal(request)
+    proposal = proposal_override or _proposal(request)
     # Production Orchestrator owns and creates the per-job staging root before
     # proposal serialization; mirror that boundary instead of making the
     # serializer create or broaden its parent workspace.
@@ -526,6 +527,39 @@ def _complete_proposal(
         workflow.completed_at = proposal.completed_at
         workflow.lock_version += 1
     return pointer
+
+
+def _ontology_invalid_proposal(
+    request: KnowledgeAnalysisRequestV2,
+) -> KnowledgeAnalysisWorkerProposal:
+    value = _proposal(request).model_dump(mode="json")
+    value["nodes"] = [
+        {
+            "node_id": "knode_process",
+            "node_type": "PROCESS",
+            "stable_key": "earth.process",
+            "label": "earth process",
+            "anchor_ids": ["anchor_source_1"],
+        },
+        {
+            "node_id": "knode_concept",
+            "node_type": "CONCEPT",
+            "stable_key": "earth.concept",
+            "label": "earth concept",
+            "anchor_ids": ["anchor_source_1"],
+        },
+    ]
+    value["edges"] = [
+        {
+            "edge_id": "kedge_invalid_requires_concept",
+            "edge_type": "REQUIRES_CONCEPT",
+            "from_node_id": "knode_process",
+            "to_node_id": "knode_concept",
+            "confidence_milli": 900,
+            "anchor_ids": ["anchor_source_1"],
+        }
+    ]
+    return KnowledgeAnalysisWorkerProposal.model_validate(value)
 
 
 def test_knowledge_analysis_history_access_patterns_have_dedicated_indexes(
@@ -685,6 +719,54 @@ def test_concurrent_analysis_create_is_single_and_retry_replays(
             )
             == 1
         )
+
+
+def test_incompatible_proposal_ontology_fails_before_acceptance(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    orchestrator_settings, catalog_settings = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, orchestrator_settings)
+    intake_id, source_file_id = _source(integration_engine, catalog_settings, tmp_path)
+    service = KnowledgeAnalysisApplicationService(integration_engine, catalog_settings)
+    created = service.create(
+        _command(
+            intake_id,
+            source_file_id,
+            source_class="TEXTBOOK",
+            idempotency_key=f"phase7-invalid-ontology:{uuid4().hex}",
+        )
+    )
+    sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        run = session.get(KnowledgeAnalysisRunRecord, created.analysis_run_id)
+        assert run is not None
+        request = KnowledgeAnalysisRequestV2.model_validate(run.canonical_request)
+    _complete_proposal(
+        integration_engine,
+        catalog_settings,
+        run_id=created.analysis_run_id,
+        staging_root=tmp_path / "proposal-invalid-ontology",
+        proposal_override=_ontology_invalid_proposal(request),
+    )
+
+    failed = service.reconcile(
+        ReconcileKnowledgeAnalysisCommand(
+            analysis_run_id=created.analysis_run_id,
+            requested_by=OPERATOR_ID,
+        )
+    )
+
+    assert failed.state == "FAILED"
+    assert failed.accepted_result_artifact_revision_id is None
+    with sessions() as session:
+        stored = session.get(KnowledgeAnalysisRunRecord, created.analysis_run_id)
+        assert stored is not None
+        assert stored.error_code == "KNOWLEDGE_ANALYSIS_ONTOLOGY_INVALID"
+        assert stored.proposal_artifact_id is not None
+        assert stored.proposal_artifact_revision_id is not None
+        assert stored.accepted_result_artifact_id is None
+        assert stored.accepted_result_artifact_revision_id is None
 
 
 def test_knowledge_analysis_acceptance_review_and_retry_are_pointer_only(
