@@ -21,7 +21,9 @@ from eom_catalog_contracts import (
 from eom_identifiers import content_sha256
 from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
-from eom_workflow.schemas import role_schema_bundle_hash
+from eom_workflow.models import ArtifactSpec, KnowledgeAnalysisWorkerRequest, RoleWorkerInput
+from eom_workflow.schemas import constrained_result_schema, role_schema_bundle_hash
+from jsonschema import Draft202012Validator
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 
@@ -134,6 +136,39 @@ def request_v3() -> dict[str, object]:
     }
     value["request_sha256"] = content_sha256(value)
     return value
+
+
+def proposal_v3(request: KnowledgeAnalysisRequestV3) -> dict[str, object]:
+    return {
+        "schema_version": "knowledge-analysis-worker-proposal/1.0",
+        "analysis_request_id": request.analysis_request_id,
+        "normalized_markdown": "# 시간과 공간\n",
+        "anchors": [
+            {
+                "anchor_id": "anchor_page_1",
+                "artifact_revision_id": request.source.artifact_member.artifact_revision_id,
+                "member_path": request.source.artifact_member.member_path,
+                "anchor_kind": "PAGE",
+                "locator": "physical_page=1;paragraph=1",
+                "excerpt_sha256": "sha256:" + "9" * 64,
+            }
+        ],
+        "nodes": [
+            {
+                "node_id": "knode_spacetime",
+                "node_type": "CONCEPT",
+                "stable_key": "science.spacetime",
+                "label": "시간과 공간",
+                "anchor_ids": ["anchor_page_1"],
+            }
+        ],
+        "edges": [],
+        "claims": [],
+        "component_observations": [],
+        "unresolved_ambiguities": [],
+        "general_knowledge_used": False,
+        "completed_at": NOW,
+    }
 
 
 def _member(name: str, seed: str, media_type: str) -> dict[str, object]:
@@ -404,36 +439,7 @@ def test_v3_result_requires_v2_receipt_pointer() -> None:
 
 def test_document_proposal_anchor_is_closed_to_selected_physical_pages(tmp_path: Path) -> None:
     request = KnowledgeAnalysisRequestV3.model_validate(request_v3())
-    proposal_value = {
-        "schema_version": "knowledge-analysis-worker-proposal/1.0",
-        "analysis_request_id": request.analysis_request_id,
-        "normalized_markdown": "# 시간과 공간\n",
-        "anchors": [
-            {
-                "anchor_id": "anchor_page_1",
-                "artifact_revision_id": request.source.artifact_member.artifact_revision_id,
-                "member_path": request.source.artifact_member.member_path,
-                "anchor_kind": "PAGE",
-                "locator": "physical_page=1;paragraph=1",
-                "excerpt_sha256": "sha256:" + "9" * 64,
-            }
-        ],
-        "nodes": [
-            {
-                "node_id": "knode_spacetime",
-                "node_type": "CONCEPT",
-                "stable_key": "science.spacetime",
-                "label": "시간과 공간",
-                "anchor_ids": ["anchor_page_1"],
-            }
-        ],
-        "edges": [],
-        "claims": [],
-        "component_observations": [],
-        "unresolved_ambiguities": [],
-        "general_knowledge_used": False,
-        "completed_at": NOW,
-    }
+    proposal_value = proposal_v3(request)
     proposal = KnowledgeAnalysisWorkerProposal.model_validate(proposal_value)
     _, receipt = stage_knowledge_analysis_proposal(
         proposal=proposal,
@@ -460,6 +466,71 @@ def test_document_proposal_anchor_is_closed_to_selected_physical_pages(tmp_path:
             revision_id="rev_" + "d" * 32,
             staging=tmp_path / "invalid",
         )
+
+
+def test_document_worker_schema_binds_original_source_and_selected_pages() -> None:
+    request = KnowledgeAnalysisRequestV3.model_validate(request_v3())
+    worker_input = RoleWorkerInput(
+        job_id="job_" + "a" * 32,
+        workflow_id="workflow_" + "b" * 32,
+        step_run_id="steprun_" + "c" * 32,
+        attempt=1,
+        role="support",
+        request=KnowledgeAnalysisWorkerRequest(analysis_request=request),
+        upstream_artifacts=(),
+        artifact=ArtifactSpec(
+            logical_artifact_id="artifact_" + "d" * 32,
+            revision_id="rev_" + "d" * 32,
+        ),
+    )
+    schema = constrained_result_schema("knowledge-analysis-proposal-result@2.0", worker_input)
+    proposal_schema = schema["$defs"]["KnowledgeAnalysisWorkerProposal"]
+    anchor_ref = proposal_schema["properties"]["anchors"]["items"]["$ref"]
+    anchor_schema = schema["$defs"][anchor_ref.removeprefix("#/$defs/")]
+    anchor_properties = anchor_schema["properties"]
+    assert anchor_properties["artifact_revision_id"]["const"] == (
+        request.source.artifact_member.artifact_revision_id
+    )
+    assert anchor_properties["member_path"]["const"] == (request.source.artifact_member.member_path)
+    assert anchor_properties["locator"]["pattern"] == (r"^physical_page=(?:1|2)(?:;.{1,220})?$")
+
+    result = {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.5.0",
+        "job_id": worker_input.job_id,
+        "workflow_id": worker_input.workflow_id,
+        "step_run_id": worker_input.step_run_id,
+        "role": "support",
+        "status": "ok",
+        "artifact": worker_input.artifact.model_dump(mode="json"),
+        "output": {"proposal": proposal_v3(request)},
+        "completed_at": NOW,
+    }
+    assert list(Draft202012Validator(schema).iter_errors(result)) == []
+
+    staged_pointer = deepcopy(result)
+    staged_pointer["output"]["proposal"]["anchors"][0]["artifact_revision_id"] = (  # type: ignore[index]
+        request.source.analysis_bundle_manifest.artifact_revision_id
+    )
+    staged_pointer["output"]["proposal"]["anchors"][0]["member_path"] = (  # type: ignore[index]
+        "analysis/index.md"
+    )
+    pointer_errors = list(Draft202012Validator(schema).iter_errors(staged_pointer))
+    assert {
+        tuple(error.absolute_path) for error in pointer_errors if error.validator == "const"
+    } == {
+        ("output", "proposal", "anchors", 0, "artifact_revision_id"),
+        ("output", "proposal", "anchors", 0, "member_path"),
+    }
+
+    outside_page = deepcopy(result)
+    outside_page["output"]["proposal"]["anchors"][0]["locator"] = "physical_page=3"  # type: ignore[index]
+    page_errors = list(Draft202012Validator(schema).iter_errors(outside_page))
+    assert any(
+        tuple(error.absolute_path) == ("output", "proposal", "anchors", 0, "locator")
+        and error.validator == "pattern"
+        for error in page_errors
+    )
 
 
 def test_historical_v2_schema_bytes_are_pinned_and_packaged() -> None:

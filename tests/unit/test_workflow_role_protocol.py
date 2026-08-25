@@ -181,11 +181,51 @@ def test_constrained_knowledge_analysis_schema_fixes_request_identity() -> None:
     assert proposal["properties"]["analysis_request_id"]["const"] == (
         "knowledgeanalysis_" + "1" * 32
     )
+    anchor_ref = proposal["properties"]["anchors"]["items"]["$ref"]
+    anchor = schema["$defs"][anchor_ref.removeprefix("#/$defs/")]
+    assert anchor["properties"]["artifact_revision_id"]["const"] == "rev_" + "5" * 32
+    assert anchor["properties"]["member_path"]["const"] == "source.pdf"
     result = _knowledge_analysis_result()
     result["output"]["proposal"]["analysis_request_id"] = "knowledgeanalysis_" + "2" * 32  # type: ignore[index]
     errors = list(Draft202012Validator(schema).iter_errors(result))
     assert any(
         list(error.absolute_path) == ["output", "proposal", "analysis_request_id"]
+        for error in errors
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("artifact_revision_id", "rev_" + "0" * 32),
+        ("member_path", "source/staged-index.md"),
+    ],
+)
+def test_constrained_knowledge_analysis_schema_rejects_unpinned_anchor_source(
+    field: str, invalid_value: str
+) -> None:
+    request = KnowledgeAnalysisWorkerRequest.model_validate(
+        {"analysis_request": _knowledge_analysis_request()}
+    )
+    worker_input = RoleWorkerInput(
+        job_id=JOB_ID,
+        workflow_id=WORKFLOW_ID,
+        step_run_id=STEP_RUN_ID,
+        attempt=1,
+        role="support",
+        request=request,
+        upstream_artifacts=(),
+        artifact=ArtifactSpec(logical_artifact_id=ARTIFACT_ID, revision_id=REVISION_ID),
+    )
+    schema = constrained_result_schema("knowledge-analysis-proposal-result@1.0", worker_input)
+    result = _knowledge_analysis_result()
+    result["output"]["proposal"]["anchors"][0][field] = invalid_value  # type: ignore[index]
+
+    errors = list(Draft202012Validator(schema).iter_errors(result))
+
+    assert any(
+        list(error.absolute_path) == ["output", "proposal", "anchors", 0, field]
+        and error.validator == "const"
         for error in errors
     )
 

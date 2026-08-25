@@ -240,3 +240,49 @@ Rollout is ordered:
 
 No live Codex execution, graph publication, or repeated textbook analysis is authorized by the
 source implementation itself.
+
+## 13. Per-run source-anchor output binding
+
+The canonical proposal schema intentionally describes anchors for every supported Knowledge
+Analysis source. A concrete one-shot run is narrower: every anchor must resolve to the exact source
+member pinned by that run. The Orchestrator therefore owns an additional, ephemeral output-schema
+projection at the worker boundary. It adds `const` values for the pinned Artifact Revision and
+member path. For a V3 document range it also adds a locator pattern containing exactly the selected
+physical page numbers. The canonical `knowledge-analysis-worker-proposal/1.0` resource and the
+immutable `workflow-role/1.5.0` bundle remain byte-for-byte unchanged.
+
+This projection protects the following boundary:
+
+1. **Responsibility:** the Orchestrator binds an already validated request to the structured-output
+   schema used by one worker invocation; the worker only supplies proposal values.
+2. **Canonical source:** `KnowledgeAnalysisRequestV2/V3.source.artifact_member`, never a staged
+   Markdown path or an implicit current revision.
+3. **Identity model:** the logical source remains separate from the pinned Artifact Revision,
+   member path, and SHA-256. The dynamic schema binds only the identity fields needed in every
+   anchor; the request retains the complete pointer.
+4. **Resolution:** the existing post-generation validator still checks request identity, pointer
+   equality, page range, schema/type closure, and the committed Artifact hash. Projection is an
+   earlier fail-closed guard, not a replacement for authoritative validation.
+5. **Access pattern:** one exact pointer lookup and ordered iteration over at most 32 selected pages.
+   The immutable inclusive range supplies deterministic alternation; no database lookup or repeated
+   list scan is added.
+6. **Complexity and scale:** schema construction is `O(selected pages)` time and space, bounded by
+   32 entries. Result validation remains linear in the bounded proposal.
+7. **Transactions and concurrency:** projection is pure, request-local, and created after the
+   execution plan is pinned. It has no persistence or shared mutable state.
+8. **Dependency direction:** workflow contracts expose the pure projection; Orchestrator calls it.
+   No contract package imports worker, filesystem, SQLAlchemy, or NAS code.
+9. **Failure and retry:** an invalid anchor cannot be emitted as schema-valid structured output. A
+   failed historical run remains immutable; a retry is a new authorized run with a new ID and the
+   same pinned source contract.
+10. **Idempotency:** the same schema ID and canonical worker input produce the same constrained
+    schema. Existing execution identifiers and Artifact output identity remain constrained as
+    before.
+11. **Simpler alternative:** relying only on prose instructions or rejecting the result after model
+    execution is insufficient. Both preserve security but waste a one-shot run and allow a staged
+    derivative path to be selected. Mutating the immutable role schema is also unnecessary because
+    the missing values are request-specific.
+
+Regression tests must prove both V2 and V3 source-pointer constants, V3 inclusive page-range
+locators, rejection of staged index/Markdown pointers, rejection of pages outside the selection,
+stable canonical bundle hashes, and continued post-generation fail-closed validation.

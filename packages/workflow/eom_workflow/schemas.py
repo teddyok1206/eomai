@@ -8,6 +8,7 @@ from importlib import metadata, resources
 from importlib.resources.abc import Traversable
 from typing import Any, Literal, cast
 
+from eom_catalog_contracts import KnowledgeAnalysisRequestV3
 from eom_identifiers import content_sha256
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
@@ -324,8 +325,41 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
         _mapping(proposal_properties, "analysis_request_id")["const"] = (
             worker_input.request.analysis_request.analysis_request_id
         )
+        anchor_properties = _knowledge_analysis_anchor_properties(schema, proposal_properties)
+        analysis_request = worker_input.request.analysis_request
+        source = analysis_request.source
+        for field_name, value in (
+            ("artifact_revision_id", source.artifact_member.artifact_revision_id),
+            ("member_path", source.artifact_member.member_path),
+        ):
+            _mapping(anchor_properties, field_name)["const"] = value
+        if isinstance(analysis_request, KnowledgeAnalysisRequestV3):
+            document_source = analysis_request.source
+            pages = "|".join(
+                str(page)
+                for page in range(
+                    document_source.first_physical_page,
+                    document_source.last_physical_page + 1,
+                )
+            )
+            _mapping(anchor_properties, "locator")["pattern"] = (
+                rf"^physical_page=(?:{pages})(?:;.{{1,220}})?$"
+            )
     validate_codex_structured_output_schema(schema)
     return schema
+
+
+def _knowledge_analysis_anchor_properties(
+    schema: dict[str, Any], proposal_properties: dict[str, Any]
+) -> dict[str, Any]:
+    anchors = _mapping(proposal_properties, "anchors")
+    items = _mapping(anchors, "items")
+    reference = items.get("$ref")
+    prefix = "#/$defs/"
+    if not isinstance(reference, str) or not reference.startswith(prefix):
+        raise WorkflowSchemaError("knowledge analysis anchor reference is not projectable")
+    anchor_definition = _mapping(_mapping(schema, "$defs"), reference.removeprefix(prefix))
+    return _mapping(anchor_definition, "properties")
 
 
 def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
