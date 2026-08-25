@@ -37,11 +37,11 @@ FIXED_WORKER_TIMEOUT_SECONDS = 600
 # These hashes are the installed contract. Tests compare them with the canonical repository
 # sources, and runtime readiness compares them with root-owned installed artifacts.
 WORKER_TEMPLATE_SHA256 = {
-    "01": "0ef8e0e7b10febf252f58eaa113b58f48ffc34b1983e3aead799460e6b586b38",
-    "02": "f939ea2c0fca407209996f4b191796ae349d0c56b716eca8f9f4b5a47c91f174",
-    "03": "6ffe68dd2f919a9249649237ef18bf0423d7abfd3f27360d228340a9a2d98092",
-    "04": "bf1c098eec35327bfa9713ce7fdb1bab2b530209265b64aa4982b818a02abd21",
-    "05": "7bbf49cb966ad2cc673d34c99f1a3f7301a18b021d28d3f9ef07faf3046e566b",
+    "01": "086a3dbf603d3a452b75cff8d84bacc4f056366cc33abeeb611f955fcefa12d4",
+    "02": "8c3af896e9d9685c275544b80e2a85cbf48624ffba2c3e7683b7358ea93ed3a2",
+    "03": "1fba50a7743123df53d96238e843c51950fed384fb7b6672133649497fa55de2",
+    "04": "c768d7ca8e980fadabe6ffd726f4a31c50a928bb156527c402e5fe43126fcb51",
+    "05": "2c975213778576d5e1235fa88e4708c4bc5d96e74da1efc2ffbca954f40ca5ef",
 }
 PROBE_TEMPLATE_SHA256 = {
     "01": "6d74599b84b8ac243656fb1cef1ffb459261ff23195428cd47be4da86134d4e4",

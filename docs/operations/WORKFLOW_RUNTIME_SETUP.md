@@ -161,5 +161,12 @@ runtime verifier for a non-work-claiming production diagnosis.
 sudo -n scripts/workflow/deploy_worker_runtime.sh verify "$(git rev-parse HEAD)"
 ```
 
+The worker runtime deployment also owns `/etc/apparmor.d/eom-codex-bwrap`. Ubuntu's global
+unprivileged-user-namespace restriction remains enabled; this profile grants `userns,` only to the
+root-owned Bubblewrap binary bundled with Codex. Verification runs a model-free, read-only
+Bubblewrap namespace smoke under the fixed worker identity and systemd restrictions. Do not replace
+this contract by disabling `kernel.apparmor_restrict_unprivileged_userns` globally or by disabling
+the Codex sandbox.
+
 Do not manually edit commands, leases, attempts, or workflow states. Correct the failed readiness
 check and run again.

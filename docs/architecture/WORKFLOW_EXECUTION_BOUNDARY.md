@@ -118,6 +118,17 @@ root-owned Codex executable before invoking the fixed Codex CLI.
 | `--collect` | oneshot process ends; status remains queryable | changed; no process lingers and exit metadata remains available |
 | implicit capability/address policy | empty capabilities, kernel/control-group/SUID/personality/realtime/device/host/clock guards, fixed address families | strengthened without blocking Codex network access |
 
+The fixed worker address-family allowlist includes `AF_NETLINK` solely because Bubblewrap uses a
+route netlink socket to configure loopback inside the worker's private sandbox network namespace.
+It does not include `AF_PACKET`, add a capability, or grant host-network access; the resolved Codex
+sandbox remains responsible for the workload's network policy.
+
+Ubuntu 24.04 restricts the additional namespaced capabilities used by unprivileged sandbox
+constructors. The root-owned `eom-codex-bwrap` AppArmor profile therefore adds only `userns,` to
+Codex's bundled Bubblewrap executable. The global user-namespace restriction stays enabled. The
+commit-pinned worker runtime deployer validates and loads this profile, then runs Bubblewrap under
+the same address-family and capability restrictions without contacting a model or executing a job.
+
 The installed systemd 255/polkit 124 mechanism exposes `unit` and `verb` for `StartUnit()`. The
 root-owned rule grants `eom-workflow-runner` only `verb=start` for fully anchored worker and harmless
 probe instances; the interactive `eom` operator may start only a harmless probe. It explicitly

@@ -27,7 +27,9 @@ LockPersonality=true
 RestrictRealtime=true
 CapabilityBoundingSet=
 AmbientCapabilities=
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Bubblewrap needs AF_NETLINK only to configure loopback inside its private
+# network namespace; packet sockets and capabilities remain unavailable.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 SystemCallArchitectures=native
 
 InaccessiblePaths=/mnt/nas

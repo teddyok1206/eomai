@@ -5,6 +5,10 @@ REPOSITORY=/home/eom/EOM
 UNIT_ROOT=/etc/systemd/system
 LIBEXEC_ROOT=/usr/local/libexec
 POLKIT_ROOT=/etc/polkit-1/rules.d
+APPARMOR_SOURCE="${REPOSITORY}/infra/apparmor/eom-codex-bwrap"
+APPARMOR_TARGET=/etc/apparmor.d/eom-codex-bwrap
+APPARMOR_PARSER=/usr/sbin/apparmor_parser
+CODEX_BWRAP=/usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap
 SERVICE=eom-workflow-runner.service
 RELEASE_ROOT=/var/lib/eom-worker-runtime-deployments
 PYTHON=/srv/eom/conda/envs/eom-api/bin/python
@@ -49,6 +53,7 @@ if systemctl list-units --no-legend --state=activating,active,deactivating \
 fi
 
 SOURCES=(
+  "${APPARMOR_SOURCE}"
   "${REPOSITORY}/infra/systemd/eom-workflow-runner.service"
   "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules"
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_exec.py"
@@ -64,10 +69,17 @@ done
 for source in "${SOURCES[@]}"; do
   [[ -f "${source}" && ! -L "${source}" ]] || fail "unsafe runtime source: ${source}"
 done
+[[ -x "${APPARMOR_PARSER}" && ! -L "${APPARMOR_PARSER}" ]] || \
+  fail "AppArmor parser is unavailable"
+"${APPARMOR_PARSER}" -Q -K "${APPARMOR_SOURCE}"
+require_regular "${CODEX_BWRAP}" root:root:755
 
 if [[ ${ACTION} == install ]]; then
   systemctl stop "${SERVICE}"
   STOPPED=1
+  install -o root -g root -m 0644 \
+    "${APPARMOR_SOURCE}" "${APPARMOR_TARGET}"
+  "${APPARMOR_PARSER}" -r -K "${APPARMOR_TARGET}"
   install -o root -g root -m 0644 \
     "${REPOSITORY}/infra/systemd/eom-workflow-runner.service" \
     "${UNIT_ROOT}/eom-workflow-runner.service"
@@ -96,6 +108,8 @@ if [[ ${ACTION} == install ]]; then
   STOPPED=0
 fi
 
+require_regular "${APPARMOR_TARGET}" root:root:644
+cmp -s "${APPARMOR_SOURCE}" "${APPARMOR_TARGET}" || fail "Codex Bubblewrap profile drift"
 systemd-analyze verify "${UNIT_ROOT}/eom-workflow-runner.service" \
   "${UNIT_ROOT}"/eom-worker-{01,02,03,04,05}@.service \
   "${UNIT_ROOT}"/eom-worker-probe-{01,02,03,04,05}@.service \
@@ -121,6 +135,31 @@ for slot in 01 02 03 04 05; do
       fail "worker unit ${name} source drift"
   done
 done
+
+BWRAP_SMOKE_UNIT="eom-worker-bwrap-smoke-${EXPECTED_COMMIT:0:12}"
+systemd-run --quiet --wait --collect --service-type=oneshot \
+  --unit="${BWRAP_SMOKE_UNIT}" \
+  --uid=eom-cdx-05 --gid=eom-cdx-05 \
+  --property=NoNewPrivileges=yes \
+  --property=PrivateTmp=yes \
+  --property=PrivateDevices=yes \
+  --property=ProtectSystem=strict \
+  --property=ProtectHome=read-only \
+  --property=ProtectKernelTunables=yes \
+  --property=ProtectKernelModules=yes \
+  --property=ProtectControlGroups=yes \
+  --property=RestrictSUIDSGID=yes \
+  --property=LockPersonality=yes \
+  --property=RestrictRealtime=yes \
+  --property=CapabilityBoundingSet= \
+  --property=AmbientCapabilities= \
+  --property='RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK' \
+  --property=SystemCallArchitectures=native \
+  --property=InaccessiblePaths=/mnt/nas \
+  --property=InaccessiblePaths=/home/eom/EOM \
+  --property=InaccessiblePaths=/home/eom/EOMIS \
+  "${CODEX_BWRAP}" --unshare-all --die-with-parent --new-session \
+    --ro-bind / / --proc /proc --dev /dev --chdir /tmp /usr/bin/true
 
 systemctl is-active --quiet "${SERVICE}" || fail "workflow runner is not active"
 systemctl is-enabled --quiet "${SERVICE}" || fail "workflow runner is not enabled"
@@ -176,6 +215,7 @@ if [[ ${ACTION} == install ]]; then
     printf 'runner_unit_sha256=%s\n' "$(sha256sum "${UNIT_ROOT}/eom-workflow-runner.service" | cut -d' ' -f1)"
     printf 'worker_exec_sha256=%s\n' "$(sha256sum "${LIBEXEC_ROOT}/eom-worker-exec" | cut -d' ' -f1)"
     printf 'worker_auth_exec_sha256=%s\n' "$(sha256sum "${LIBEXEC_ROOT}/eom-worker-auth-status" | cut -d' ' -f1)"
+    printf 'codex_bwrap_apparmor_sha256=%s\n' "$(sha256sum "${APPARMOR_TARGET}" | cut -d' ' -f1)"
     printf 'deployed_at_utc=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
   } >"${TEMPORARY}"
   mv -f "${TEMPORARY}" "${RECORD}"

@@ -1,0 +1,11 @@
+abi <abi/4.0>,
+
+include <tunables/global>
+
+profile eom-codex-bwrap /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap flags=(unconfined) {
+  # Ubuntu 24.04 otherwise removes the namespaced capabilities Bubblewrap
+  # needs to construct Codex's less-privileged sandbox.
+  userns,
+
+  include if exists <local/eom-codex-bwrap>
+}

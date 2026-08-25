@@ -593,6 +593,7 @@ def test_worker_templates_fix_identity_command_and_sandbox() -> None:
         "LockPersonality=true",
         "RestrictRealtime=true",
         "CapabilityBoundingSet=",
+        "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
         "UMask=0007",
         "MemoryMax=6G",
         "CPUQuota=200%",
@@ -614,6 +615,23 @@ def test_worker_templates_fix_identity_command_and_sandbox() -> None:
         )
         assert "systemd-run" not in source
         assert all(setting in source for setting in required)
+
+
+def test_worker_templates_allow_only_bubblewrap_control_netlink() -> None:
+    for index in range(1, 6):
+        slot_id = f"{index:02d}"
+        source = (ROOT / "infra/systemd" / f"eom-worker-{slot_id}@.service").read_text(
+            encoding="utf-8"
+        )
+        address_family_lines = tuple(
+            line for line in source.splitlines() if line.startswith("RestrictAddressFamilies=")
+        )
+        assert address_family_lines == (
+            "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
+        )
+        assert "AF_PACKET" not in source
+        assert "CapabilityBoundingSet=" in source
+        assert "AmbientCapabilities=" in source
 
 
 def test_auth_templates_are_non_generating_identity_isolated_probes() -> None:

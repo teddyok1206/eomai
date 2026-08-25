@@ -89,6 +89,24 @@ def test_worker_runtime_doctor_receives_each_slot_group_explicitly() -> None:
     assert "eom-workflow-runner:eom:700" in source
 
 
+def test_worker_runtime_deployer_installs_and_smokes_bubblewrap_profile() -> None:
+    deployer = (ROOT / "scripts/workflow/deploy_worker_runtime.sh").read_text(encoding="utf-8")
+    profile = (ROOT / "infra/apparmor/eom-codex-bwrap").read_text(encoding="utf-8")
+
+    assert "profile eom-codex-bwrap " in profile
+    assert "codex-resources/bwrap flags=(unconfined)" in profile
+    assert "userns," in profile
+    assert "capability" not in profile
+    assert "network," not in profile
+    assert "apparmor_restrict_unprivileged_userns=0" not in deployer
+    assert '"${APPARMOR_PARSER}" -Q -K "${APPARMOR_SOURCE}"' in deployer
+    assert '"${APPARMOR_PARSER}" -r -K "${APPARMOR_TARGET}"' in deployer
+    assert "systemd-run --quiet --wait --collect --service-type=oneshot" in deployer
+    assert "--unshare-all --die-with-parent --new-session" in deployer
+    assert "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK" in deployer
+    assert "AF_PACKET" not in deployer
+
+
 def test_runner_configuration_installs_root_owned_capability_policy() -> None:
     source = (ROOT / "scripts/workflow/install_runner_configuration.sh").read_text(encoding="utf-8")
 
