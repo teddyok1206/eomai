@@ -92,7 +92,7 @@ def enqueue_codex_control_command(
                 "idempotency key is bound to another control command",
             )
         return existing
-    binding = session.get(CodexAuthBindingRecord, command.binding_id)
+    binding = session.get(CodexAuthBindingRecord, command.binding_id, with_for_update=True)
     if binding is None:
         raise ControlPlaneError("CONTROL_AUTH_BINDING_MISSING", "auth binding is missing")
     if binding.resource_version != command.expected_resource_version:

@@ -204,8 +204,12 @@ Domain contracts do not import SQLAlchemy, sockets, filesystem code, API code, o
   all evidence, no automatic retry.
 - Runner crash after review: deterministic review key and existing review uniqueness make replay
   idempotent.
-- Capability/auth observation expiry: the underlying workflow may fail normally; the batch records
-  the failure and blocks. The runner does not issue OBSERVE or alter account state.
+- Capability/auth observation expiry: the workflow runner periodically renews sanitized local
+  auth and CLI capability evidence for enabled idle bindings before it expires. This maintenance
+  starts no generating worker, creates no operator command, and stores no browser session, token,
+  cookie, or Codex credential. Active leases and pending operator commands take precedence. A real
+  login expiry is persisted as `AUTH_REQUIRED`; the next range then fails closed rather than
+  fabricating READY evidence. A later operator login is detected by the bounded periodic probe.
 - Database or Catalog socket error: retain/reclaim the short action lease; do not fabricate a
   terminal analysis result.
 
@@ -216,6 +220,10 @@ Domain contracts do not import SQLAlchemy, sockets, filesystem code, API code, o
 - The Catalog runtime receives only the table privileges needed for batch metadata plus its existing
   Knowledge Analysis privileges.
 - Network, worker HOME, Codex auth, NAS, and service identities remain unchanged.
+- Automatic worker-health maintenance uses the existing fixed non-generating auth probe and
+  reviewed CLI capability policy. It refreshes READY evidence five minutes before the 15-minute
+  TTL, retries non-ready idle bindings no more often than every five minutes, and never interrupts
+  a held lease.
 - Slack receives milestone counts and stable error codes only, never textbook or worker content.
 - Deployment is additive: migration, source deploy, Catalog runner restart, and API restart. No
   Content Pack, HWPX builder, worker auth, or Node/Kordoc change is involved.

@@ -7,6 +7,7 @@ import stat
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from eom_identifiers import new_capability_snapshot_id
@@ -130,6 +131,7 @@ def record_reviewed_capability_snapshot(
     observed_at: datetime,
     ttl: timedelta,
     cli_observation: tuple[str, frozenset[str]],
+    source: Literal["LOCAL_OBSERVATION", "OPERATOR_ASSERTED"] = "OPERATOR_ASSERTED",
 ) -> CodexCapabilitySnapshotRecord:
     """Persist exact reviewed model/effort pairs only after CLI compatibility observation."""
 
@@ -153,7 +155,7 @@ def record_reviewed_capability_snapshot(
         "capability_snapshot_id": new_capability_snapshot_id(),
         "binding_id": binding_id,
         "codex_cli_version": cli_version,
-        "source": "OPERATOR_ASSERTED",
+        "source": source,
         "capabilities": capabilities,
         "observed_at": observed_at,
         "valid_until": observed_at + ttl,

@@ -92,6 +92,13 @@ def test_serve_reconciles_capacity_before_polling(
             observed.append("capacity")
             return ()
 
+    class Processor:
+        def maintain_once(self) -> None:
+            observed.append("maintenance")
+
+        def process_once(self) -> None:
+            observed.append("control")
+
     runner = WorkflowRunner(
         engine,
         _workflow_settings(tmp_path),
@@ -99,6 +106,7 @@ def test_serve_reconciles_capacity_before_polling(
         actor_authorizer=cast(WorkflowActorAuthorizer, object()),
         readiness=cast(WorkflowExecutionReadiness, object()),
         available_roles=frozenset({"authoring"}),
+        control_processor=Processor(),
         capacity_reconciler=Reconciler(),
     )
 
@@ -115,7 +123,7 @@ def test_serve_reconciles_capacity_before_polling(
     with pytest.raises(RuntimeError, match="stop-loop"):
         runner.serve()
 
-    assert observed == ["capacity", "workflow", "sleep"]
+    assert observed == ["capacity", "maintenance", "control", "workflow", "sleep"]
     engine.dispose()
 
 

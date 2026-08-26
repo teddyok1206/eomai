@@ -50,6 +50,7 @@ from eom_orchestrator.control_bootstrap import (
     bootstrap_knowledge_analysis_control_plane,
     bootstrap_standard_control_plane,
 )
+from eom_orchestrator.control_command_processor import CodexControlCommandProcessor
 from eom_orchestrator.control_commands import (
     build_codex_control_command,
     claim_next_codex_control_command,
@@ -58,6 +59,8 @@ from eom_orchestrator.control_commands import (
 )
 from eom_orchestrator.control_models import (
     CodexAuthBindingRecord,
+    CodexAuthHealthEventRecord,
+    CodexCapabilityEntryRecord,
     CodexCapabilitySnapshotRecord,
     CodexControlCommandRecord,
     ExecutionBundleRevisionRecord,
@@ -112,6 +115,7 @@ from eom_orchestrator.preset_lifecycle import (
 from eom_orchestrator.protocol import protocol_schema_hash
 from eom_orchestrator.repository import ensure_protocol_version, upsert_worker_slot
 from eom_orchestrator.settings import Settings
+from eom_orchestrator.worker_auth import WorkerAuthObservation
 from eom_orchestrator.worker_systemd import WorkerUnitActivity
 from eom_workflow import ControlArtifactPointer
 from eom_workflow.control_plane import WorkerRole
@@ -927,6 +931,255 @@ def test_reviewed_capability_snapshot_and_drain_fail_closed(db_session: Session)
             ttl=timedelta(minutes=10),
         )
     assert captured.value.code == "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE"
+
+
+def test_automatic_observation_renews_due_idle_binding_without_command(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _complete_control_plane(db_session)
+    binding = db_session.scalar(
+        select(CodexAuthBindingRecord).where(CodexAuthBindingRecord.worker_slot_id == "01")
+    )
+    assert binding is not None
+    observed_at = NOW + timedelta(minutes=55)
+    policy = ReviewedCapabilityPolicy.model_validate(
+        {
+            "version": 1,
+            "expected_codex_cli_version": "0.147.0",
+            "models": [
+                {
+                    "model": "gpt-5.6-terra",
+                    "reasoning_efforts": ["high", "xhigh"],
+                }
+            ],
+        }
+    )
+    observed_slots: list[str] = []
+
+    def observe(**kwargs: Any) -> WorkerAuthObservation:
+        slot = kwargs["slot"]
+        observed_slots.append(slot.slot_id)
+        return WorkerAuthObservation(
+            binding_id=kwargs["binding_id"],
+            slot_key=f"slot{slot.slot_id}",
+            account_label=kwargs["account_label"],
+            state="READY",
+            reason_code=None,
+            codex_cli_version="0.147.0",
+            observed_at=kwargs["observed_at"],
+            valid_until=kwargs["observed_at"] + kwargs["ttl"],
+            probe_unit_name=f"eom-worker-auth-{slot.slot_id}.service",
+        )
+
+    monkeypatch.setattr("eom_orchestrator.control_command_processor.observe_worker_auth", observe)
+    monkeypatch.setattr(
+        "eom_orchestrator.control_command_processor.load_reviewed_capability_policy",
+        lambda _path: policy,
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.control_command_processor.observe_codex_cli_surface",
+        lambda: ("0.147.0", REQUIRED_EXEC_HELP_FLAGS),
+    )
+    sessions = sessionmaker(bind=db_session.connection(), expire_on_commit=False)
+    processor = CodexControlCommandProcessor(
+        sessions,
+        capability_policy_path=Path("/reviewed/codex-capabilities.yaml"),
+        runner_id="runner-automatic-observation-test",
+        now=lambda: observed_at,
+    )
+
+    assert processor.maintain_once() == binding.binding_id
+    assert processor.maintain_once() is None
+    db_session.expire_all()
+    refreshed = db_session.get(CodexAuthBindingRecord, binding.binding_id)
+    assert refreshed is not None
+    assert refreshed.state == "READY"
+    assert refreshed.observed_at == observed_at
+    assert refreshed.valid_until == observed_at + timedelta(minutes=15)
+    snapshot = db_session.scalar(
+        select(CodexCapabilitySnapshotRecord)
+        .where(CodexCapabilitySnapshotRecord.binding_id == binding.binding_id)
+        .order_by(CodexCapabilitySnapshotRecord.observed_at.desc())
+        .limit(1)
+    )
+    assert snapshot is not None
+    assert snapshot.source == "LOCAL_OBSERVATION"
+    assert snapshot.observed_at == observed_at
+    assert {
+        (entry.model, entry.reasoning_effort, entry.state)
+        for entry in db_session.scalars(
+            select(CodexCapabilityEntryRecord).where(
+                CodexCapabilityEntryRecord.capability_snapshot_id == snapshot.capability_snapshot_id
+            )
+        )
+    } == {
+        ("gpt-5.6-terra", "high", "AVAILABLE"),
+        ("gpt-5.6-terra", "xhigh", "AVAILABLE"),
+    }
+    assert db_session.scalar(select(func.count(CodexControlCommandRecord.command_id))) == 0
+    assert observed_slots == ["01"]
+
+
+def test_automatic_observation_defers_to_pending_command(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _complete_control_plane(db_session)
+    binding = db_session.scalar(
+        select(CodexAuthBindingRecord).where(CodexAuthBindingRecord.worker_slot_id == "01")
+    )
+    assert binding is not None
+    operator = OperatorRecord(
+        operator_id="operator_" + uuid4().hex,
+        username=f"automatic-{uuid4().hex[:12]}",
+        normalized_username=f"automatic-{uuid4().hex}",
+        display_name="Automatic observation test operator",
+        status="ACTIVE",
+        must_change_password=False,
+        role_version=1,
+        created_by="automatic-observation-test",
+    )
+    db_session.add(operator)
+    command = build_codex_control_command(
+        command_type="OBSERVE",
+        binding_id=binding.binding_id,
+        expected_resource_version=binding.resource_version,
+        requested_by_operator_id=operator.operator_id,
+        requested_at=NOW + timedelta(minutes=55),
+        reason_code=None,
+    )
+    enqueue_codex_control_command(
+        db_session,
+        document=command,
+        idempotency_key=f"automatic-observe:{uuid4().hex}",
+    )
+    db_session.flush()
+    sessions = sessionmaker(bind=db_session.connection(), expire_on_commit=False)
+    processor = CodexControlCommandProcessor(
+        sessions,
+        capability_policy_path=Path("/reviewed/codex-capabilities.yaml"),
+        runner_id="runner-pending-command-test",
+        now=lambda: NOW + timedelta(minutes=55),
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.control_command_processor.observe_worker_auth",
+        lambda **_kwargs: pytest.fail("automatic observation must defer to a pending command"),
+    )
+
+    assert processor.maintain_once() is None
+
+
+def test_automatic_observation_recovers_after_local_login_becomes_ready(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _complete_control_plane(db_session)
+    binding = db_session.scalar(
+        select(CodexAuthBindingRecord).where(CodexAuthBindingRecord.worker_slot_id == "01")
+    )
+    assert binding is not None
+    clock = [NOW + timedelta(minutes=55)]
+    states = iter(("AUTH_REQUIRED", "READY"))
+    policy = ReviewedCapabilityPolicy.model_validate(
+        {
+            "version": 1,
+            "expected_codex_cli_version": "0.147.0",
+            "models": [
+                {
+                    "model": "gpt-5.6-terra",
+                    "reasoning_efforts": ["xhigh"],
+                }
+            ],
+        }
+    )
+
+    def observe(**kwargs: Any) -> WorkerAuthObservation:
+        state = next(states)
+        slot = kwargs["slot"]
+        return WorkerAuthObservation(
+            binding_id=kwargs["binding_id"],
+            slot_key=f"slot{slot.slot_id}",
+            account_label=kwargs["account_label"],
+            state=state,
+            reason_code=None if state == "READY" else "CODEX_LOGIN_REQUIRED",
+            codex_cli_version="0.147.0",
+            observed_at=kwargs["observed_at"],
+            valid_until=kwargs["observed_at"] + kwargs["ttl"],
+            probe_unit_name=f"eom-worker-auth-{slot.slot_id}.service",
+        )
+
+    monkeypatch.setattr("eom_orchestrator.control_command_processor.observe_worker_auth", observe)
+    monkeypatch.setattr(
+        "eom_orchestrator.control_command_processor.load_reviewed_capability_policy",
+        lambda _path: policy,
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.control_command_processor.observe_codex_cli_surface",
+        lambda: ("0.147.0", REQUIRED_EXEC_HELP_FLAGS),
+    )
+    sessions = sessionmaker(bind=db_session.connection(), expire_on_commit=False)
+    processor = CodexControlCommandProcessor(
+        sessions,
+        capability_policy_path=Path("/reviewed/codex-capabilities.yaml"),
+        runner_id="runner-auth-recovery-test",
+        now=lambda: clock[0],
+    )
+
+    assert processor.maintain_once() == binding.binding_id
+    db_session.expire_all()
+    unavailable = db_session.get(CodexAuthBindingRecord, binding.binding_id)
+    assert unavailable is not None
+    assert unavailable.state == "AUTH_REQUIRED"
+    assert unavailable.reason_code == "CODEX_LOGIN_REQUIRED"
+
+    clock[0] += timedelta(minutes=5)
+    assert processor.maintain_once() == binding.binding_id
+    db_session.expire_all()
+    recovered = db_session.get(CodexAuthBindingRecord, binding.binding_id)
+    assert recovered is not None
+    assert recovered.state == "READY"
+    assert recovered.reason_code is None
+    snapshot = db_session.scalar(
+        select(CodexCapabilitySnapshotRecord)
+        .where(CodexCapabilitySnapshotRecord.binding_id == binding.binding_id)
+        .order_by(CodexCapabilitySnapshotRecord.observed_at.desc())
+        .limit(1)
+    )
+    assert snapshot is not None
+    assert snapshot.source == "LOCAL_OBSERVATION"
+    assert snapshot.observed_at == clock[0]
+    assert db_session.scalar(select(func.count(CodexControlCommandRecord.command_id))) == 0
+
+
+def test_automatic_observation_does_not_interrupt_held_lease(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan_id, workflow_id, _ = _complete_control_plane(db_session)
+    job = _job(db_session, workflow_id=workflow_id)
+    lease = acquire_worker_lease(
+        db_session,
+        plan_id=plan_id,
+        step_key="authoring",
+        job_id=job.job_id,
+        attempt=1,
+        workload_class="CODEX",
+        acquired_at=NOW + timedelta(minutes=1),
+        ttl=timedelta(minutes=30),
+    )
+    db_session.flush()
+    sessions = sessionmaker(bind=db_session.connection(), expire_on_commit=False)
+    processor = CodexControlCommandProcessor(
+        sessions,
+        capability_policy_path=Path("/reviewed/codex-capabilities.yaml"),
+        runner_id="runner-held-lease-test",
+        now=lambda: NOW + timedelta(minutes=55),
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.control_command_processor.observe_worker_auth",
+        lambda **_kwargs: pytest.fail("automatic observation must not interrupt a held lease"),
+    )
+
+    assert lease.state == "ACTIVE"
+    assert processor.maintain_once() is None
+    assert db_session.scalar(select(func.count(CodexAuthHealthEventRecord.event_id))) == 1
 
 
 def test_auth_failure_after_claim_holds_existing_lease_without_interrupt(

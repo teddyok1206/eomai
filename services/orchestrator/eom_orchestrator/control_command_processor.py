@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from eom_orchestrator.capability_observer import (
+    ReviewedCapabilityPolicy,
     load_reviewed_capability_policy,
     observe_codex_cli_surface,
     record_reviewed_capability_snapshot,
@@ -19,11 +21,17 @@ from eom_orchestrator.control_commands import (
     claim_next_codex_control_command,
     terminalize_codex_control_command,
 )
-from eom_orchestrator.control_models import CodexAuthBindingRecord
+from eom_orchestrator.control_models import (
+    CodexAuthBindingRecord,
+    CodexCapabilitySnapshotRecord,
+    CodexControlCommandRecord,
+    WorkerLeaseRecord,
+)
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import transaction
 from eom_orchestrator.models import WorkerSlotRecord
 from eom_orchestrator.worker_auth import (
+    WorkerAuthObservation,
     observe_worker_auth,
     persist_worker_auth_observation,
 )
@@ -32,6 +40,24 @@ from eom_orchestrator.worker_registry import WorkerSlot
 AUTH_OBSERVATION_TTL = timedelta(minutes=15)
 CAPABILITY_OBSERVATION_TTL = timedelta(minutes=15)
 CONTROL_COMMAND_LEASE_TTL = timedelta(minutes=2)
+AUTOMATIC_OBSERVATION_CHECK_INTERVAL = timedelta(seconds=30)
+AUTOMATIC_OBSERVATION_REFRESH_LEAD = timedelta(minutes=5)
+AUTOMATIC_OBSERVATION_RETRY_INTERVAL = timedelta(minutes=5)
+
+
+@dataclass(frozen=True)
+class _ObservationTarget:
+    binding_id: str
+    expected_resource_version: int
+    slot: WorkerSlot
+    account_label: str
+
+
+@dataclass(frozen=True)
+class _CollectedObservation:
+    auth: WorkerAuthObservation
+    policy: ReviewedCapabilityPolicy | None
+    cli: tuple[str, frozenset[str]] | None
 
 
 class CodexControlCommandProcessor:
@@ -49,6 +75,54 @@ class CodexControlCommandProcessor:
         self.capability_policy_path = capability_policy_path
         self.runner_id = runner_id
         self.now = now
+        self._next_maintenance_at = datetime.min.replace(tzinfo=UTC)
+
+    def maintain_once(self) -> str | None:
+        """Refresh one due idle binding from local evidence without an operator command."""
+
+        observed_at = self.now()
+        if observed_at < self._next_maintenance_at:
+            return None
+        self._next_maintenance_at = observed_at + AUTOMATIC_OBSERVATION_CHECK_INTERVAL
+        with self.sessions() as session:
+            target = _next_automatic_observation_target(session, as_of=observed_at)
+        if target is None:
+            return None
+
+        collected = self._collect_observation(target=target, observed_at=observed_at)
+        with transaction(self.sessions) as session:
+            binding = session.get(
+                CodexAuthBindingRecord,
+                target.binding_id,
+                with_for_update=True,
+            )
+            if (
+                binding is None
+                or binding.resource_version != target.expected_resource_version
+                or not _automatic_observation_is_due(session, binding=binding, as_of=observed_at)
+                or _binding_has_held_lease(session, binding=binding)
+                or _binding_has_pending_command(session, binding=binding)
+            ):
+                return None
+            slot_record = session.get(WorkerSlotRecord, binding.worker_slot_id)
+            if slot_record is None or not slot_record.enabled:
+                return None
+            persist_worker_auth_observation(session, collected.auth)
+            if (
+                collected.auth.state == "READY"
+                and collected.policy is not None
+                and collected.cli is not None
+            ):
+                record_reviewed_capability_snapshot(
+                    session,
+                    binding_id=binding.binding_id,
+                    policy=collected.policy,
+                    observed_at=observed_at,
+                    ttl=CAPABILITY_OBSERVATION_TTL,
+                    cli_observation=collected.cli,
+                    source="LOCAL_OBSERVATION",
+                )
+        return target.binding_id
 
     def process_once(self) -> str | None:
         claimed_at = self.now()
@@ -165,30 +239,16 @@ class CodexControlCommandProcessor:
             account_label = binding.account_label
 
         observed_at = self.now()
-        observation = observe_worker_auth(
-            slot=slot,
-            binding_id=binding_id,
-            account_label=account_label,
+        collected = self._collect_observation(
+            target=_ObservationTarget(
+                binding_id=binding_id,
+                expected_resource_version=expected_resource_version,
+                slot=slot,
+                account_label=account_label,
+            ),
             observed_at=observed_at,
-            ttl=AUTH_OBSERVATION_TTL,
         )
-        policy = None
-        cli_observation = None
-        if observation.state == "READY":
-            try:
-                policy = load_reviewed_capability_policy(self.capability_policy_path)
-                cli_observation = observe_codex_cli_surface()
-                if cli_observation[0] != policy.expected_codex_cli_version:
-                    raise ControlPlaneError(
-                        "CONTROL_CAPABILITY_POLICY_MISMATCH",
-                        "reviewed capability policy differs from CLI",
-                    )
-            except ControlPlaneError:
-                observation = replace(
-                    observation,
-                    state="DEGRADED",
-                    reason_code="CAPABILITY_OBSERVATION_FAILED",
-                )
+        observation = collected.auth
 
         with transaction(self.sessions) as session:
             _locked_binding(
@@ -197,14 +257,18 @@ class CodexControlCommandProcessor:
                 expected_resource_version=expected_resource_version,
             )
             updated = persist_worker_auth_observation(session, observation)
-            if observation.state == "READY" and policy is not None and cli_observation is not None:
+            if (
+                observation.state == "READY"
+                and collected.policy is not None
+                and collected.cli is not None
+            ):
                 record_reviewed_capability_snapshot(
                     session,
                     binding_id=binding_id,
-                    policy=policy,
+                    policy=collected.policy,
                     observed_at=observed_at,
                     ttl=CAPABILITY_OBSERVATION_TTL,
-                    cli_observation=cli_observation,
+                    cli_observation=collected.cli,
                 )
             if require_ready and observation.state != "READY":
                 terminalize_codex_control_command(
@@ -228,6 +292,160 @@ class CodexControlCommandProcessor:
                 reason_code=None,
                 processed_at=self.now(),
             )
+
+    def _collect_observation(
+        self, *, target: _ObservationTarget, observed_at: datetime
+    ) -> _CollectedObservation:
+        observation = observe_worker_auth(
+            slot=target.slot,
+            binding_id=target.binding_id,
+            account_label=target.account_label,
+            observed_at=observed_at,
+            ttl=AUTH_OBSERVATION_TTL,
+        )
+        policy = None
+        cli_observation = None
+        if observation.state == "READY":
+            try:
+                policy = load_reviewed_capability_policy(self.capability_policy_path)
+                cli_observation = observe_codex_cli_surface()
+                if cli_observation[0] != policy.expected_codex_cli_version:
+                    raise ControlPlaneError(
+                        "CONTROL_CAPABILITY_POLICY_MISMATCH",
+                        "reviewed capability policy differs from CLI",
+                    )
+            except ControlPlaneError:
+                observation = replace(
+                    observation,
+                    state="DEGRADED",
+                    reason_code="CAPABILITY_OBSERVATION_FAILED",
+                )
+        return _CollectedObservation(
+            auth=observation,
+            policy=policy,
+            cli=cli_observation,
+        )
+
+
+def _next_automatic_observation_target(
+    session: Session, *, as_of: datetime
+) -> _ObservationTarget | None:
+    latest_capability_expiry = (
+        select(func.max(CodexCapabilitySnapshotRecord.valid_until))
+        .where(CodexCapabilitySnapshotRecord.binding_id == CodexAuthBindingRecord.binding_id)
+        .correlate(CodexAuthBindingRecord)
+        .scalar_subquery()
+    )
+    held_lease = exists(
+        select(WorkerLeaseRecord.lease_id).where(
+            WorkerLeaseRecord.binding_id == CodexAuthBindingRecord.binding_id,
+            WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING")),
+        )
+    )
+    pending_command = exists(
+        select(CodexControlCommandRecord.command_id).where(
+            CodexControlCommandRecord.binding_id == CodexAuthBindingRecord.binding_id,
+            CodexControlCommandRecord.state.in_(("PENDING", "PROCESSING")),
+        )
+    )
+    refresh_before = as_of + AUTOMATIC_OBSERVATION_REFRESH_LEAD
+    retry_before = as_of - AUTOMATIC_OBSERVATION_RETRY_INTERVAL
+    row = session.execute(
+        select(CodexAuthBindingRecord, WorkerSlotRecord)
+        .join(
+            WorkerSlotRecord,
+            WorkerSlotRecord.slot_id == CodexAuthBindingRecord.worker_slot_id,
+        )
+        .where(
+            WorkerSlotRecord.enabled.is_(True),
+            CodexAuthBindingRecord.state.notin_(("DRAINING", "DISABLED")),
+            ~held_lease,
+            ~pending_command,
+            or_(
+                and_(
+                    CodexAuthBindingRecord.state == "READY",
+                    or_(
+                        CodexAuthBindingRecord.valid_until <= refresh_before,
+                        latest_capability_expiry.is_(None),
+                        latest_capability_expiry <= refresh_before,
+                    ),
+                ),
+                and_(
+                    CodexAuthBindingRecord.state.in_(("STALE", "AUTH_REQUIRED", "DEGRADED")),
+                    or_(
+                        CodexAuthBindingRecord.observed_at.is_(None),
+                        CodexAuthBindingRecord.observed_at <= retry_before,
+                    ),
+                ),
+            ),
+        )
+        .order_by(
+            CodexAuthBindingRecord.observed_at.asc().nulls_first(),
+            WorkerSlotRecord.slot_id,
+        )
+        .limit(1)
+    ).one_or_none()
+    if row is None:
+        return None
+    binding, slot = row
+    return _ObservationTarget(
+        binding_id=binding.binding_id,
+        expected_resource_version=binding.resource_version,
+        slot=_worker_slot(slot),
+        account_label=binding.account_label,
+    )
+
+
+def _automatic_observation_is_due(
+    session: Session, *, binding: CodexAuthBindingRecord, as_of: datetime
+) -> bool:
+    if binding.state in {"DRAINING", "DISABLED"}:
+        return False
+    if binding.state == "READY":
+        latest_capability_expiry = session.scalar(
+            select(func.max(CodexCapabilitySnapshotRecord.valid_until)).where(
+                CodexCapabilitySnapshotRecord.binding_id == binding.binding_id
+            )
+        )
+        refresh_before = as_of + AUTOMATIC_OBSERVATION_REFRESH_LEAD
+        return (
+            binding.valid_until is None
+            or binding.valid_until <= refresh_before
+            or latest_capability_expiry is None
+            or latest_capability_expiry <= refresh_before
+        )
+    return binding.observed_at is None or (
+        binding.state in {"STALE", "AUTH_REQUIRED", "DEGRADED"}
+        and binding.observed_at <= as_of - AUTOMATIC_OBSERVATION_RETRY_INTERVAL
+    )
+
+
+def _binding_has_held_lease(session: Session, *, binding: CodexAuthBindingRecord) -> bool:
+    return (
+        session.scalar(
+            select(
+                exists().where(
+                    WorkerLeaseRecord.binding_id == binding.binding_id,
+                    WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING")),
+                )
+            )
+        )
+        is True
+    )
+
+
+def _binding_has_pending_command(session: Session, *, binding: CodexAuthBindingRecord) -> bool:
+    return (
+        session.scalar(
+            select(
+                exists().where(
+                    CodexControlCommandRecord.binding_id == binding.binding_id,
+                    CodexControlCommandRecord.state.in_(("PENDING", "PROCESSING")),
+                )
+            )
+        )
+        is True
+    )
 
 
 def _locked_binding(

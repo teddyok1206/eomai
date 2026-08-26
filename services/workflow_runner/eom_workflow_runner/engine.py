@@ -113,6 +113,8 @@ class RoleJobExecutor(Protocol):
 
 
 class ControlCommandProcessor(Protocol):
+    def maintain_once(self) -> str | None: ...
+
     def process_once(self) -> str | None: ...
 
 
@@ -332,16 +334,21 @@ class WorkflowRunner:
         while True:
             if self.capacity_reconciler is not None:
                 self.capacity_reconciler.reconcile_expired(observed_at=datetime.now(UTC))
-            try:
-                result = self.run_once()
-            except WorkflowRuntimeNotReady:
-                result = None
+            maintenance_result = (
+                self.control_processor.maintain_once()
+                if self.control_processor is not None
+                else None
+            )
             control_result = (
                 self.control_processor.process_once()
                 if self.control_processor is not None
                 else None
             )
-            if result is None and control_result is None:
+            try:
+                result = self.run_once()
+            except WorkflowRuntimeNotReady:
+                result = None
+            if result is None and maintenance_result is None and control_result is None:
                 time.sleep(self.runner_config.poll_interval_seconds)
 
     def reconcile(self, workflow_id: str) -> None:
