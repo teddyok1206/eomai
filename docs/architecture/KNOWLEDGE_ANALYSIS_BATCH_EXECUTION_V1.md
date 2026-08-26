@@ -50,6 +50,28 @@ Workers remain isolated, communicate only with the orchestrator, read staged loc
 never write to PostgreSQL or NAS. Only existing orchestrator and Catalog artifact commit boundaries
 materialize canonical artifacts.
 
+### Long-running worker timing amendment
+
+The browser/API fresh-auth policy remains unchanged and must not be confused with local fixed-worker
+health evidence. Local Codex authentication and reviewed CLI capability observations remain
+sanitized, non-generating evidence: they contain no token, cookie, or credential. Their operational
+window is one hour, with renewal beginning thirty minutes before expiry. The runner checks for one
+due idle binding every thirty seconds, so the five fixed slots have a deterministic worst-case
+refresh sweep of 150 seconds, well inside the thirty-minute lead. Active leases are never
+interrupted, and an observation service outage still fails closed after the one-hour bound.
+
+Knowledge Analysis preset revisions remain immutable. V4 retains its historical 1,800-second range
+timeout. V5 reuses the identical reviewed instruction bytes and changes only the typed preset
+identity, description, creation timestamp, and range timeout to the existing validated maximum of
+7,200 seconds. New analysis requests may pin V5; historical V4 plans and failed batches retain their
+original revision and cannot be reinterpreted. The batch aggregate itself has no wall-clock expiry.
+
+Dominant access remains indexed binding-expiry selection followed by deterministic slot order;
+there is no new scan, queue, cache, table, migration, or dependency. Observation persistence remains
+one short transaction per binding. Simply extending an already-persisted V4 revision was rejected
+because it would corrupt immutable execution provenance. Disabling expiry was rejected because a
+stopped observer or real logout must eventually make new work fail closed.
+
 ## 2. Canonical source and immutable identity
 
 The canonical batch request is a schema-valid JSON document normalized into the batch and ordered
@@ -241,7 +263,7 @@ Domain contracts do not import SQLAlchemy, sockets, filesystem code, API code, o
   Knowledge Analysis privileges.
 - Network, worker HOME, Codex auth, NAS, and service identities remain unchanged.
 - Automatic worker-health maintenance uses the existing fixed non-generating auth probe and
-  reviewed CLI capability policy. It refreshes READY evidence five minutes before the 15-minute
+  reviewed CLI capability policy. It refreshes READY evidence thirty minutes before the one-hour
   TTL, retries non-ready idle bindings no more often than every five minutes, and never interrupts
   a held lease.
 - Slack receives milestone counts and stable error codes only, never textbook or worker content.

@@ -35,13 +35,13 @@ from eom_orchestrator.worker_auth import (
     observe_worker_auth,
     persist_worker_auth_observation,
 )
-from eom_orchestrator.worker_registry import WorkerSlot
+from eom_orchestrator.worker_registry import FIXED_WORKER_SLOT_IDS, WorkerSlot
 
-AUTH_OBSERVATION_TTL = timedelta(minutes=15)
-CAPABILITY_OBSERVATION_TTL = timedelta(minutes=15)
+AUTH_OBSERVATION_TTL = timedelta(hours=1)
+CAPABILITY_OBSERVATION_TTL = timedelta(hours=1)
 CONTROL_COMMAND_LEASE_TTL = timedelta(minutes=2)
 AUTOMATIC_OBSERVATION_CHECK_INTERVAL = timedelta(seconds=30)
-AUTOMATIC_OBSERVATION_REFRESH_LEAD = timedelta(minutes=5)
+AUTOMATIC_OBSERVATION_REFRESH_LEAD = timedelta(minutes=30)
 AUTOMATIC_OBSERVATION_RETRY_INTERVAL = timedelta(minutes=5)
 
 
@@ -358,6 +358,7 @@ def _next_automatic_observation_target(
         )
         .where(
             WorkerSlotRecord.enabled.is_(True),
+            WorkerSlotRecord.slot_id.in_(FIXED_WORKER_SLOT_IDS),
             CodexAuthBindingRecord.state.notin_(("DRAINING", "DISABLED")),
             ~held_lease,
             ~pending_command,

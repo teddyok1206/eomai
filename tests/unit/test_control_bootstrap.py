@@ -20,6 +20,7 @@ ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
 ANALYSIS_CONFIG_V4 = ROOT / "config/control-plane/knowledge-analysis-v4"
+ANALYSIS_CONFIG_V5 = ROOT / "config/control-plane/knowledge-analysis-v5"
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:
@@ -165,6 +166,53 @@ def test_knowledge_analysis_v4_uses_xhigh_without_mutating_v3() -> None:
         )
     assert (ANALYSIS_CONFIG_V4 / "instructions/knowledge-analysis.md").read_bytes() == (
         ANALYSIS_CONFIG_V3 / "instructions/knowledge-analysis.md"
+    ).read_bytes()
+
+
+def test_knowledge_analysis_v5_extends_timeout_without_mutating_v4() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V5)
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/5.0"
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    assert manifest.timeout_seconds == 7200
+    assert manifest.slot_key == "slot05"
+    assert manifest.worker_pool_key == "support"
+    assert manifest.general_knowledge_policy == "ALLOW_WITH_PROVENANCE"
+    assert manifest.compatible_workflow_protocols == (
+        "workflow-role/1.4.0",
+        "workflow-role/1.5.0",
+    )
+    expected_v4_sha256 = {
+        "bootstrap.yaml": "80cbf7a476dcaf8ba88414d09eaab37a4ed0ac76c029354d2a8d92db9987e567",
+        "instructions/platform.md": (
+            "43d44eaa7ff40594490da50e03c4dbec885593963b704d9751ba9bf89a789d9e"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "3b50dfe9f983adfc92d2b8015fcf38edc0dd3b1ceff1dbacfb75b33992e32200"
+        ),
+    }
+    for relative_path, expected in expected_v4_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V4 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+    expected_v5_sha256 = {
+        "bootstrap.yaml": "aa80d5d14af6e5eef0de544cdd03aa88f44d3d0b62f565d703da507b042314ea",
+        "instructions/platform.md": (
+            "43d44eaa7ff40594490da50e03c4dbec885593963b704d9751ba9bf89a789d9e"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "3b50dfe9f983adfc92d2b8015fcf38edc0dd3b1ceff1dbacfb75b33992e32200"
+        ),
+    }
+    for relative_path, expected in expected_v5_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V5 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+    assert (ANALYSIS_CONFIG_V5 / "instructions/platform.md").read_bytes() == (
+        ANALYSIS_CONFIG_V4 / "instructions/platform.md"
+    ).read_bytes()
+    assert (ANALYSIS_CONFIG_V5 / "instructions/knowledge-analysis.md").read_bytes() == (
+        ANALYSIS_CONFIG_V4 / "instructions/knowledge-analysis.md"
     ).read_bytes()
 
 

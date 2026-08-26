@@ -50,7 +50,13 @@ from eom_orchestrator.control_bootstrap import (
     bootstrap_knowledge_analysis_control_plane,
     bootstrap_standard_control_plane,
 )
-from eom_orchestrator.control_command_processor import CodexControlCommandProcessor
+from eom_orchestrator.control_command_processor import (
+    AUTH_OBSERVATION_TTL,
+    AUTOMATIC_OBSERVATION_CHECK_INTERVAL,
+    AUTOMATIC_OBSERVATION_REFRESH_LEAD,
+    CAPABILITY_OBSERVATION_TTL,
+    CodexControlCommandProcessor,
+)
 from eom_orchestrator.control_commands import (
     build_codex_control_command,
     claim_next_codex_control_command,
@@ -116,6 +122,7 @@ from eom_orchestrator.protocol import protocol_schema_hash
 from eom_orchestrator.repository import ensure_protocol_version, upsert_worker_slot
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_auth import WorkerAuthObservation
+from eom_orchestrator.worker_registry import FIXED_WORKER_SLOT_IDS
 from eom_orchestrator.worker_systemd import WorkerUnitActivity
 from eom_workflow import ControlArtifactPointer
 from eom_workflow.control_plane import WorkerRole
@@ -995,7 +1002,7 @@ def test_automatic_observation_renews_due_idle_binding_without_command(
     assert refreshed is not None
     assert refreshed.state == "READY"
     assert refreshed.observed_at == observed_at
-    assert refreshed.valid_until == observed_at + timedelta(minutes=15)
+    assert refreshed.valid_until == observed_at + timedelta(hours=1)
     snapshot = db_session.scalar(
         select(CodexCapabilitySnapshotRecord)
         .where(CodexCapabilitySnapshotRecord.binding_id == binding.binding_id)
@@ -1018,6 +1025,14 @@ def test_automatic_observation_renews_due_idle_binding_without_command(
     }
     assert db_session.scalar(select(func.count(CodexControlCommandRecord.command_id))) == 0
     assert observed_slots == ["01"]
+
+
+def test_automatic_observation_window_covers_every_fixed_slot() -> None:
+    assert timedelta(hours=1) == AUTH_OBSERVATION_TTL
+    assert timedelta(hours=1) == CAPABILITY_OBSERVATION_TTL
+    assert timedelta(minutes=30) == AUTOMATIC_OBSERVATION_REFRESH_LEAD
+    assert FIXED_WORKER_SLOT_IDS == ("01", "02", "03", "04", "05")
+    assert AUTOMATIC_OBSERVATION_REFRESH_LEAD >= (AUTOMATIC_OBSERVATION_CHECK_INTERVAL * 5)
 
 
 def test_automatic_observation_defers_to_pending_command(
@@ -1179,7 +1194,14 @@ def test_automatic_observation_does_not_interrupt_held_lease(
 
     assert lease.state == "ACTIVE"
     assert processor.maintain_once() is None
-    assert db_session.scalar(select(func.count(CodexAuthHealthEventRecord.event_id))) == 1
+    assert (
+        db_session.scalar(
+            select(func.count(CodexAuthHealthEventRecord.event_id)).where(
+                CodexAuthHealthEventRecord.binding_id == lease.binding_id
+            )
+        )
+        == 1
+    )
 
 
 def test_auth_failure_after_claim_holds_existing_lease_without_interrupt(
@@ -1843,7 +1865,7 @@ def test_knowledge_analysis_bootstrap_is_idempotent_and_support_only(
         assert protocol.schema_sha256 == role_schema_bundle_hash("workflow-role/1.4.0")
 
 
-def test_knowledge_analysis_v2_v3_and_v4_bootstraps_add_immutable_revisions(
+def test_knowledge_analysis_v2_v3_v4_and_v5_bootstraps_add_immutable_revisions(
     integration_engine: Engine,
     tmp_path: Path,
 ) -> None:
@@ -1933,6 +1955,22 @@ def test_knowledge_analysis_v2_v3_and_v4_bootstraps_add_immutable_revisions(
         evaluation_cases_total=3,
         settings=settings,
     )
+    fifth = bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v5").resolve(),
+        source_commit="f" * 40,
+        actor_id="phase7-integration",
+        evaluation_cases_total=3,
+        settings=settings,
+    )
+    assert fifth == bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v5").resolve(),
+        source_commit="f" * 40,
+        actor_id="phase7-integration",
+        evaluation_cases_total=3,
+        settings=settings,
+    )
     assert (
         len(
             {
@@ -1940,9 +1978,10 @@ def test_knowledge_analysis_v2_v3_and_v4_bootstraps_add_immutable_revisions(
                 second.instruction_bundle_revision_id,
                 third.instruction_bundle_revision_id,
                 fourth.instruction_bundle_revision_id,
+                fifth.instruction_bundle_revision_id,
             }
         )
-        == 4
+        == 5
     )
     with sessions() as session:
         logical = session.scalar(
@@ -1951,7 +1990,7 @@ def test_knowledge_analysis_v2_v3_and_v4_bootstraps_add_immutable_revisions(
             )
         )
         assert logical is not None
-        assert logical.current_revision_id == fourth.preset_revision_id
+        assert logical.current_revision_id == fifth.preset_revision_id
         revisions = tuple(
             session.scalars(
                 select(ExecutionPresetRevisionRecord)
@@ -1959,8 +1998,10 @@ def test_knowledge_analysis_v2_v3_and_v4_bootstraps_add_immutable_revisions(
                 .order_by(ExecutionPresetRevisionRecord.revision_number)
             )
         )
-        assert [revision.revision_number for revision in revisions] == list(range(1, 9))
+        assert [revision.revision_number for revision in revisions] == list(range(1, 11))
         assert [revision.state for revision in revisions] == [
+            "DRAFT",
+            "RELEASED",
             "DRAFT",
             "RELEASED",
             "DRAFT",
@@ -1974,6 +2015,7 @@ def test_knowledge_analysis_v2_v3_and_v4_bootstraps_add_immutable_revisions(
         assert revisions[3].preset_revision_id == second.preset_revision_id
         assert revisions[5].preset_revision_id == third.preset_revision_id
         assert revisions[7].preset_revision_id == fourth.preset_revision_id
+        assert revisions[9].preset_revision_id == fifth.preset_revision_id
         assert revisions[1].canonical_document["compatible_workflow_protocols"] == [
             "workflow-role/1.4.0"
         ]
@@ -1984,6 +2026,7 @@ def test_knowledge_analysis_v2_v3_and_v4_bootstraps_add_immutable_revisions(
         assert revisions[7].canonical_document["role_policies"][0]["model_candidates"] == [
             {"model": "gpt-5.6-terra", "reasoning_effort": "xhigh"}
         ]
+        assert revisions[9].canonical_document["role_policies"][0]["timeout_seconds"] == 7200
 
 
 def test_historical_protocol_rows_remain_byte_identical(db_session: Session) -> None:

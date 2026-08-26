@@ -199,8 +199,8 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
         )
     bootstrap_knowledge_analysis_control_plane(
         engine,
-        config_directory=Path("config/control-plane/knowledge-analysis-v4").resolve(),
-        source_commit="e" * 40,
+        config_directory=Path("config/control-plane/knowledge-analysis-v5").resolve(),
+        source_commit="f" * 40,
         actor_id="phase7-integration",
         evaluation_cases_total=3,
         settings=settings,
@@ -670,7 +670,7 @@ def test_education_graph_access_patterns_have_dedicated_indexes(
         assert set(rows) == expected
 
 
-def test_document_revision_analysis_create_pins_v3_source_and_v4_plan(
+def test_document_revision_analysis_create_pins_v3_source_and_v5_plan(
     integration_engine: Engine,
     tmp_path: Path,
 ) -> None:

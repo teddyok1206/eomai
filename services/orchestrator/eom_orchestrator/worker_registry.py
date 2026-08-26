@@ -13,6 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from eom_orchestrator.errors import PlatformError
 
+FIXED_WORKER_SLOT_IDS = ("01", "02", "03", "04", "05")
+
 
 class SlotLimits(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
