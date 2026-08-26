@@ -19,6 +19,10 @@ from eom_catalog_contracts.knowledge import (
     KnowledgeSourceClass,
     PermissionKeyValue,
 )
+from eom_catalog_contracts.knowledge_analysis_batch import (
+    CreateKnowledgeAnalysisBatchCommand,
+    KnowledgeAnalysisBatchApplicationResult,
+)
 from eom_catalog_contracts.models import ActorId, FrozenModel
 
 ItemRevisionId = Annotated[str, Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")]
@@ -229,6 +233,7 @@ CatalogApplicationRequestValue = Annotated[
     | CreateKnowledgeAnalysisCommand
     | ReconcileKnowledgeAnalysisCommand
     | ReviewKnowledgeAnalysisCommand
+    | CreateKnowledgeAnalysisBatchCommand
     | CreateEvidenceBundleCommand
     | CreateItemProductionEvidenceCommand,
     Field(discriminator="operation"),
@@ -278,11 +283,13 @@ class CatalogApplicationResponse(FrozenModel):
         "CREATE_KNOWLEDGE_ANALYSIS",
         "RECONCILE_KNOWLEDGE_ANALYSIS",
         "REVIEW_KNOWLEDGE_ANALYSIS",
+        "CREATE_KNOWLEDGE_ANALYSIS_BATCH",
         "CREATE_EVIDENCE_BUNDLE",
         "CREATE_ITEM_PRODUCTION_EVIDENCE",
     ]
     result: ReviewedItemContentImportResult | None = None
     analysis: KnowledgeAnalysisApplicationResult | None = None
+    analysis_batch: KnowledgeAnalysisBatchApplicationResult | None = None
     evidence: EvidenceBundlePublicationResult | EvidenceBundlePublicationResultV3 | None = None
     item_production_evidence: (
         EvidenceBundlePublicationResultV2 | EvidenceBundlePublicationResultV3 | None
@@ -297,6 +304,7 @@ class CatalogApplicationResponse(FrozenModel):
             for value in (
                 self.result,
                 self.analysis,
+                self.analysis_batch,
                 self.evidence,
                 self.item_production_evidence,
                 self.content,
@@ -325,6 +333,8 @@ class CatalogApplicationResponse(FrozenModel):
             and self.analysis is None
         ):
             raise ValueError("knowledge analysis response requires analysis result")
+        if self.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH" and self.analysis_batch is None:
+            raise ValueError("knowledge analysis batch response requires batch result")
         if self.operation == "CREATE_EVIDENCE_BUNDLE" and self.evidence is None:
             raise ValueError("evidence creation response requires publication result")
         if (

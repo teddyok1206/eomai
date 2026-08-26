@@ -17,10 +17,12 @@ from eom_catalog_contracts import (
     CatalogApplicationResponse,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
+    CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     KnowledgeAnalysisApplicationResult,
+    KnowledgeAnalysisBatchApplicationResult,
     ReviewedItemContentImportCommand,
     validate_contract,
 )
@@ -58,6 +60,18 @@ class FakeKnowledgeAnalysis:
 
     reconcile = create
     review = create
+
+
+class FakeKnowledgeAnalysisBatch:
+    def create(self, _command: object) -> KnowledgeAnalysisBatchApplicationResult:
+        return KnowledgeAnalysisBatchApplicationResult(
+            batch_id="analysisbatch_" + "9" * 32,
+            state="QUEUED",
+            resource_version=1,
+            total_range_count=1,
+            accepted_range_count=0,
+            failed_range_count=0,
+        )
 
 
 class FakeKnowledgeRetrieval:
@@ -213,6 +227,47 @@ def _item_evidence_command() -> CreateItemProductionEvidenceCommand:
     return CreateItemProductionEvidenceCommand.model_validate(value)
 
 
+def _batch_command() -> CreateKnowledgeAnalysisBatchCommand:
+    value = {
+        "operation": "CREATE_KNOWLEDGE_ANALYSIS_BATCH",
+        "request": {
+            "schema_version": "knowledge-analysis-batch-request/1.0",
+            "preset_key": "knowledge-analysis",
+            "general_knowledge_mode": "AUXILIARY_UNATTRIBUTED",
+            "risk_policy_revision_id": "analysisriskrev_" + "3" * 32,
+            "review_policy": "PREAUTHORIZED_APPROVE_VALIDATED",
+            "ranges": [
+                {
+                    "ordinal": 0,
+                    "source": {
+                        "source_kind": "DOCUMENT_REVISION",
+                        "source_class": "TEXTBOOK",
+                        "document_revision_id": "edudocrev_" + "4" * 32,
+                        "first_physical_page": 1,
+                        "last_physical_page": 4,
+                        "curriculum_unit_keys": ["1-(1)"],
+                    },
+                    "execution": {
+                        "mode": "EXECUTE",
+                        "predecessor_analysis_run_id": None,
+                    },
+                }
+            ],
+        },
+        "requested_by": "operator_" + "1" * 32,
+        "authorized_at": "2026-08-26T00:00:00Z",
+        "idempotency_key": "knowledge-analysis-batch-round-trip",
+        "submission_sha256": "sha256:" + "0" * 64,
+    }
+    value["submission_sha256"] = content_sha256(
+        {
+            "request": value["request"],
+            "requested_by": value["requested_by"],
+        }
+    )
+    return CreateKnowledgeAnalysisBatchCommand.model_validate(value)
+
+
 def _server(tmp_path: Path, *, allowed_uid: int | None = None) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -221,6 +276,7 @@ def _server(tmp_path: Path, *, allowed_uid: int | None = None) -> CatalogApplica
         FakeImports(),
         FakeRegistry(),
         FakeKnowledgeAnalysis(),
+        FakeKnowledgeAnalysisBatch(),
         FakeKnowledgeRetrieval(),
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid() if allowed_uid is None else allowed_uid,
@@ -296,6 +352,16 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
     ).model_dump(mode="json")
     validate_contract("catalog-application-request-v5", document_analysis_request)
 
+    batch_command = _batch_command()
+    batch_request = CatalogApplicationRequest(root=batch_command).model_dump(mode="json")
+    validate_contract("catalog-application-request-v6", batch_request)
+    batch_response = CatalogApplicationResponse(
+        status="OK",
+        operation="CREATE_KNOWLEDGE_ANALYSIS_BATCH",
+        analysis_batch=FakeKnowledgeAnalysisBatch().create(batch_command),
+    ).model_dump(mode="json", exclude_none=True)
+    validate_contract("catalog-application-response-v7", batch_response)
+
     retrieval_command = _retrieval_command()
     retrieval_request = CatalogApplicationRequest(root=retrieval_command).model_dump(mode="json")
     validate_contract("catalog-application-request-v3", retrieval_request)
@@ -354,6 +420,8 @@ def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
             )
         )
         assert analysis.analysis_run_id == "analysisrun_" + "7" * 32
+        batch = client.create_knowledge_analysis_batch(_batch_command())
+        assert batch.batch_id == "analysisbatch_" + "9" * 32
         evidence = client.create_evidence_bundle(_retrieval_command())
         assert evidence.evidence_bundle_revision_id == "evidencerev_" + "2" * 32
         assert evidence.graph_snapshot.graph_snapshot_revision_id == "graphrev_" + "e" * 32

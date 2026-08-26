@@ -111,6 +111,14 @@ def new_knowledge_analysis_decision_id() -> str:
     return f"analysisdecision_{uuid4().hex}"
 
 
+def new_knowledge_analysis_batch_id() -> str:
+    return f"analysisbatch_{uuid4().hex}"
+
+
+def new_knowledge_analysis_range_id() -> str:
+    return f"analysisrange_{uuid4().hex}"
+
+
 def educational_document_id(document_key: str) -> str:
     """Return the stable logical ID for one normalized educational-document key."""
     digest = hashlib.sha256(f"educational-document:{document_key}".encode()).hexdigest()

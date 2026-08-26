@@ -185,6 +185,28 @@ class KnowledgeAnalysisApplicationService:
         self.artifacts = CatalogArtifactService(engine, self.settings)
 
     def create(self, command: CreateKnowledgeAnalysisCommand) -> KnowledgeAnalysisApplicationResult:
+        return self._create(command, pinned_preset=None)
+
+    def create_with_pinned_preset(
+        self,
+        command: CreateKnowledgeAnalysisCommand,
+        *,
+        preset_id: str,
+        preset_revision_id: str,
+    ) -> KnowledgeAnalysisApplicationResult:
+        """Create through the ordinary use case while preserving an authorized preset revision."""
+
+        return self._create(
+            command,
+            pinned_preset=(preset_id, preset_revision_id),
+        )
+
+    def _create(
+        self,
+        command: CreateKnowledgeAnalysisCommand,
+        *,
+        pinned_preset: tuple[str, str] | None,
+    ) -> KnowledgeAnalysisApplicationResult:
         submission = command.model_dump(mode="json", exclude={"operation", "idempotency_key"})
         submission_sha256 = content_sha256(submission)
         try:
@@ -203,14 +225,29 @@ class KnowledgeAnalysisApplicationService:
                     return self._projection(existing)
 
                 source = self._resolve_source(session, command)
-                predecessor = self._retry_predecessor(session, command, source)
-                policy = self._risk_policy(session, command.risk_policy_revision_id)
-                if predecessor is None:
-                    preset_logical, preset_revision = self._published_preset(
+                predecessor = self.retry_predecessor(session, command, source)
+                policy = self.risk_policy(session, command.risk_policy_revision_id)
+                if pinned_preset is not None:
+                    preset_logical, preset_revision = self.pinned_preset(
+                        session,
+                        preset_key=command.preset_key,
+                        preset_id=pinned_preset[0],
+                        preset_revision_id=pinned_preset[1],
+                    )
+                    if predecessor is not None and (
+                        predecessor.preset_id != preset_logical.preset_id
+                        or predecessor.preset_revision_id != preset_revision.preset_revision_id
+                    ):
+                        raise KnowledgeAnalysisServiceError(
+                            "KNOWLEDGE_ANALYSIS_RETRY_INVALID",
+                            "knowledge analysis retry preset differs from the predecessor",
+                        )
+                elif predecessor is None:
+                    preset_logical, preset_revision = self.published_preset(
                         session, command.preset_key
                     )
                 else:
-                    preset_logical, preset_revision = self._pinned_preset(
+                    preset_logical, preset_revision = self.pinned_preset(
                         session,
                         preset_key=command.preset_key,
                         preset_id=predecessor.preset_id,
@@ -464,7 +501,7 @@ class KnowledgeAnalysisApplicationService:
                 return self._projection(run)
             try:
                 receipt, pointer = self._completed_proposal(session, run, workflow)
-                policy = self._risk_policy(session, run.risk_policy_revision_id)
+                policy = self.risk_policy(session, run.risk_policy_revision_id)
             except KnowledgeAnalysisServiceError as exc:
                 return self._fail(session, run, exc.code, command.requested_by)
             if run.state != "VALIDATING":
@@ -577,7 +614,7 @@ class KnowledgeAnalysisApplicationService:
                     "KNOWLEDGE_ANALYSIS_REVIEW_CONFLICT",
                     "knowledge analysis run already has a decision",
                 )
-            policy = self._risk_policy(session, run.risk_policy_revision_id)
+            policy = self.risk_policy(session, run.risk_policy_revision_id)
             request = _analysis_request(run.canonical_request)
             receipt = self._stored_receipt(session, run)
             decided_at = datetime.now(UTC)
@@ -636,7 +673,7 @@ class KnowledgeAnalysisApplicationService:
             )
         with transaction(self.sessions) as session:
             run = self._locked_run(session, run_id)
-            policy = self._risk_policy(session, run.risk_policy_revision_id)
+            policy = self.risk_policy(session, run.risk_policy_revision_id)
             existing = session.scalar(
                 select(KnowledgeAnalysisReviewRecord).where(
                     KnowledgeAnalysisReviewRecord.analysis_run_id == run_id
@@ -777,7 +814,7 @@ class KnowledgeAnalysisApplicationService:
             request = _analysis_request(run.canonical_request)
             receipt = self._stored_receipt(session, run)
             proposal_receipt_pointer = self._proposal_receipt_pointer(session, run)
-            policy = self._risk_policy(session, run.risk_policy_revision_id)
+            policy = self.risk_policy(session, run.risk_policy_revision_id)
             accepted_at = receipt.completed_at
             if acceptance_mode == "HUMAN_APPROVED":
                 review = session.scalar(
@@ -1207,7 +1244,7 @@ class KnowledgeAnalysisApplicationService:
         )
 
     @staticmethod
-    def _retry_predecessor(
+    def retry_predecessor(
         session: Session,
         command: CreateKnowledgeAnalysisCommand,
         source: KnowledgeAnalysisSourceV3,
@@ -1243,7 +1280,7 @@ class KnowledgeAnalysisApplicationService:
         return predecessor
 
     @staticmethod
-    def _published_preset(
+    def published_preset(
         session: Session, preset_key: str
     ) -> tuple[ExecutionPresetRecord, ExecutionPresetRevisionRecord]:
         logical = session.scalar(
@@ -1273,7 +1310,7 @@ class KnowledgeAnalysisApplicationService:
         return logical, revision
 
     @staticmethod
-    def _pinned_preset(
+    def pinned_preset(
         session: Session,
         *,
         preset_key: str,
@@ -1303,7 +1340,7 @@ class KnowledgeAnalysisApplicationService:
         return logical, revision
 
     @staticmethod
-    def _risk_policy(session: Session, revision_id: str) -> KnowledgeAnalysisRiskPolicy:
+    def risk_policy(session: Session, revision_id: str) -> KnowledgeAnalysisRiskPolicy:
         record = session.get(KnowledgeAnalysisRiskPolicyRevisionRecord, revision_id)
         if record is None or record.state != "RELEASED":
             raise KnowledgeAnalysisServiceError(

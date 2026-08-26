@@ -23,6 +23,7 @@ from eom_catalog_contracts import (
     CatalogApplicationResponse,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
+    CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
     ItemContentQuery,
     ReconcileKnowledgeAnalysisCommand,
@@ -37,6 +38,10 @@ from pydantic import ValidationError
 
 from eom_catalog_service.errors import CatalogError
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
+from eom_catalog_service.knowledge_analysis_batch_service import (
+    KnowledgeAnalysisBatchService,
+    KnowledgeAnalysisBatchServiceError,
+)
 from eom_catalog_service.knowledge_analysis_service import (
     KnowledgeAnalysisApplicationService,
     KnowledgeAnalysisServiceError,
@@ -82,6 +87,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 "IMPORT_REVIEWED_ITEM_CONTENT",
                 "GET_ITEM_CONTENT",
                 "CREATE_KNOWLEDGE_ANALYSIS",
+                "CREATE_KNOWLEDGE_ANALYSIS_BATCH",
                 "RECONCILE_KNOWLEDGE_ANALYSIS",
                 "REVIEW_KNOWLEDGE_ANALYSIS",
                 "CREATE_EVIDENCE_BUNDLE",
@@ -90,7 +96,9 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 operation = raw_operation
             validate_contract(
                 (
-                    "catalog-application-request-v4"
+                    "catalog-application-request-v6"
+                    if operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
+                    else "catalog-application-request-v4"
                     if operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
                     else (
                         "catalog-application-request-v5"
@@ -159,6 +167,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     operation=request.operation,
                     analysis=self.server.knowledge_analysis.review(request),
                 )
+            elif isinstance(request, CreateKnowledgeAnalysisBatchCommand):
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    analysis_batch=self.server.knowledge_analysis_batches.create(request),
+                )
             elif isinstance(request, CreateEvidenceBundleCommand):
                 response = CatalogApplicationResponse(
                     status="OK",
@@ -179,6 +193,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             CatalogError,
             RegistryError,
             KnowledgeAnalysisServiceError,
+            KnowledgeAnalysisBatchServiceError,
             KnowledgeRetrievalServiceError,
         ) as exc:
             code = getattr(exc.code, "value", str(exc.code))
@@ -202,6 +217,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         imports: StructuredItemContentImportService,
         registry: RegistryService,
         knowledge_analysis: KnowledgeAnalysisApplicationService,
+        knowledge_analysis_batches: KnowledgeAnalysisBatchService,
         knowledge_retrieval: KnowledgeRetrievalApplicationService,
         *,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
@@ -212,6 +228,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.imports = imports
         self.registry = registry
         self.knowledge_analysis = knowledge_analysis
+        self.knowledge_analysis_batches = knowledge_analysis_batches
         self.knowledge_retrieval = knowledge_retrieval
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
@@ -266,7 +283,9 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         payload = response.model_dump(mode="json", exclude_none=True)
         validate_contract(
             (
-                "catalog-application-response-v6"
+                "catalog-application-response-v7"
+                if response.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
+                else "catalog-application-response-v6"
                 if response.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
                 else (
                     "catalog-application-response-v5"
@@ -293,6 +312,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
                         "IMPORT_REVIEWED_ITEM_CONTENT",
                         "GET_ITEM_CONTENT",
                         "CREATE_KNOWLEDGE_ANALYSIS",
+                        "CREATE_KNOWLEDGE_ANALYSIS_BATCH",
                         "RECONCILE_KNOWLEDGE_ANALYSIS",
                         "REVIEW_KNOWLEDGE_ANALYSIS",
                         "CREATE_EVIDENCE_BUNDLE",

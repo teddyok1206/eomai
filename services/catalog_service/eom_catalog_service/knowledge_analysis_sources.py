@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Literal
 
@@ -74,6 +74,17 @@ class _ArtifactMemberIndex:
     logical: ArtifactRecord
     revision: ArtifactRevisionRecord
     members_by_path: dict[str, dict[str, object]]
+
+
+@dataclass
+class EducationalDocumentSourceResolutionCache:
+    """Transaction-scoped cache for immutable document dependencies during batch creation."""
+
+    artifact_indexes: dict[tuple[str, str], _ArtifactMemberIndex] = field(default_factory=dict)
+    dependency_documents: dict[
+        tuple[str, str, str, str, str, str],
+        tuple[TextbookAnalysisBundleManifest, EducationalDocumentRightsAttestation],
+    ] = field(default_factory=dict)
 
 
 def resolve_content_intake_source(
@@ -224,6 +235,7 @@ def resolve_educational_document_source(
     first_physical_page: int,
     last_physical_page: int,
     curriculum_unit_keys: tuple[str, ...],
+    cache: EducationalDocumentSourceResolutionCache | None = None,
 ) -> EducationalDocumentKnowledgeSourceV3:
     revision = session.get(EducationalDocumentRevisionRecord, document_revision_id)
     document = (
@@ -270,20 +282,23 @@ def resolve_educational_document_source(
             "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
             "Educational Document curriculum keys are not sorted and unique",
         )
-    source_index = _artifact_member_index(
+    source_index = _cached_artifact_member_index(
         session,
         artifact_id=revision.source_artifact_id,
         artifact_revision_id=revision.source_artifact_revision_id,
+        cache=cache,
     )
-    analysis_index = _artifact_member_index(
+    analysis_index = _cached_artifact_member_index(
         session,
         artifact_id=revision.analysis_artifact_id,
         artifact_revision_id=revision.analysis_artifact_revision_id,
+        cache=cache,
     )
-    rights_index = _artifact_member_index(
+    rights_index = _cached_artifact_member_index(
         session,
         artifact_id=revision.rights_artifact_id,
         artifact_revision_id=revision.rights_artifact_revision_id,
+        cache=cache,
     )
     source_pointer = _exact_artifact_member(
         source_index,
@@ -309,36 +324,50 @@ def resolve_educational_document_source(
         media_type="application/json",
         schema_ref=DOCUMENT_RIGHTS_SCHEMA_REF,
     )
-    try:
-        bundle_value = json.loads(
-            artifacts.read_member(
-                artifact_id=revision.analysis_artifact_id,
-                revision_id=revision.analysis_artifact_revision_id,
-                member_path="analysis/manifest.json",
-                sha256=revision.analysis_manifest_sha256,
-                media_type="application/json",
-                schema_ref=DOCUMENT_BUNDLE_SCHEMA_REF,
-                max_bytes=MAX_DOCUMENT_JSON_BYTES,
+    dependency_key = (
+        revision.analysis_artifact_id,
+        revision.analysis_artifact_revision_id,
+        revision.analysis_manifest_sha256,
+        revision.rights_artifact_id,
+        revision.rights_artifact_revision_id,
+        revision.rights_attestation_sha256,
+    )
+    dependencies = cache.dependency_documents.get(dependency_key) if cache is not None else None
+    if dependencies is None:
+        try:
+            bundle_value = json.loads(
+                artifacts.read_member(
+                    artifact_id=revision.analysis_artifact_id,
+                    revision_id=revision.analysis_artifact_revision_id,
+                    member_path="analysis/manifest.json",
+                    sha256=revision.analysis_manifest_sha256,
+                    media_type="application/json",
+                    schema_ref=DOCUMENT_BUNDLE_SCHEMA_REF,
+                    max_bytes=MAX_DOCUMENT_JSON_BYTES,
+                )
             )
-        )
-        rights_value = json.loads(
-            artifacts.read_member(
-                artifact_id=revision.rights_artifact_id,
-                revision_id=revision.rights_artifact_revision_id,
-                member_path="rights/attestation.json",
-                sha256=revision.rights_attestation_sha256,
-                media_type="application/json",
-                schema_ref=DOCUMENT_RIGHTS_SCHEMA_REF,
-                max_bytes=MAX_DOCUMENT_JSON_BYTES,
+            rights_value = json.loads(
+                artifacts.read_member(
+                    artifact_id=revision.rights_artifact_id,
+                    revision_id=revision.rights_artifact_revision_id,
+                    member_path="rights/attestation.json",
+                    sha256=revision.rights_attestation_sha256,
+                    media_type="application/json",
+                    schema_ref=DOCUMENT_RIGHTS_SCHEMA_REF,
+                    max_bytes=MAX_DOCUMENT_JSON_BYTES,
+                )
             )
-        )
-        bundle = TextbookAnalysisBundleManifest.model_validate(bundle_value)
-        rights = EducationalDocumentRightsAttestation.model_validate(rights_value)
-    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-        raise KnowledgeAnalysisSourceError(
-            "KNOWLEDGE_ANALYSIS_SOURCE_HASH_MISMATCH",
-            "Educational Document dependency bytes are invalid",
-        ) from exc
+            bundle = TextbookAnalysisBundleManifest.model_validate(bundle_value)
+            rights = EducationalDocumentRightsAttestation.model_validate(rights_value)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            raise KnowledgeAnalysisSourceError(
+                "KNOWLEDGE_ANALYSIS_SOURCE_HASH_MISMATCH",
+                "Educational Document dependency bytes are invalid",
+            ) from exc
+        dependencies = (bundle, rights)
+        if cache is not None:
+            cache.dependency_documents[dependency_key] = dependencies
+    bundle, rights = dependencies
     if (
         bundle.bundle_state != "CANONICAL"
         or bundle.canonical_source is None
@@ -514,6 +543,26 @@ def _artifact_member_index(
         revision=revision,
         members_by_path=members_by_path,
     )
+
+
+def _cached_artifact_member_index(
+    session: Session,
+    *,
+    artifact_id: str,
+    artifact_revision_id: str,
+    cache: EducationalDocumentSourceResolutionCache | None,
+) -> _ArtifactMemberIndex:
+    key = (artifact_id, artifact_revision_id)
+    if cache is not None and key in cache.artifact_indexes:
+        return cache.artifact_indexes[key]
+    index = _artifact_member_index(
+        session,
+        artifact_id=artifact_id,
+        artifact_revision_id=artifact_revision_id,
+    )
+    if cache is not None:
+        cache.artifact_indexes[key] = index
+    return index
 
 
 def _exact_artifact_member(

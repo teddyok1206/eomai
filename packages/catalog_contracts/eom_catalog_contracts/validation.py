@@ -276,6 +276,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "5.0",
             "sha256:614599a6e49e160c2090be55b8039811bd610776c6a7d485fccc2a447d8503e2",
         ),
+        "catalog-application-request-v6": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v6.schema.json",
+            "resources/catalog-application/catalog-application-request-v6.schema.json",
+            "6.0",
+            "sha256:24e7f04eadb60f631f61be10ef5a492ae80387191205ea7cbb4d91daf9505e9d",
+        ),
+        "catalog-application-response-v7": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v7.schema.json",
+            "resources/catalog-application/catalog-application-response-v7.schema.json",
+            "7.0",
+            "sha256:786bb14244347078fbd4b1a610cadfa72df33a0eb5f5d9ccbc7ce554d570e5d5",
+        ),
         "knowledge-types": CatalogSchemaResource(
             "schemas/knowledge/knowledge-types-v1.schema.json",
             "resources/knowledge/knowledge-types-v1.schema.json",
@@ -317,6 +329,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/knowledge-analysis-request-v3.schema.json",
             "3.0",
             "sha256:314c70a742970aa8a586a034269d8bc262860bd478042c6c46ebfc86bc8780d8",
+        ),
+        "knowledge-analysis-batch-request": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
+            "resources/knowledge/knowledge-analysis-batch-request-v1.schema.json",
+            "1.0",
+            "sha256:6050ea59b635cb50e718e76dd92967ddb88f55dede0e67fed3b55376ec65ce7e",
         ),
         "knowledge-analysis-worker-proposal": CatalogSchemaResource(
             "schemas/knowledge/knowledge-analysis-worker-proposal-v1.schema.json",

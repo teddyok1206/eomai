@@ -30,6 +30,8 @@ from eom_api_contracts.items import (
     ItemView,
 )
 from eom_api_contracts.knowledge_analysis import (
+    KnowledgeAnalysisBatchRangeView,
+    KnowledgeAnalysisBatchView,
     KnowledgeAnalysisCountsView,
     KnowledgeAnalysisRunView,
 )
@@ -42,6 +44,10 @@ from eom_api_contracts.workflows import (
     WorkflowKnowledgeProvenanceView,
     WorkflowStepView,
     WorkflowView,
+)
+from eom_catalog_service.knowledge_analysis_batch_models import (
+    KnowledgeAnalysisBatchRangeRecord,
+    KnowledgeAnalysisBatchRecord,
 )
 from eom_catalog_service.knowledge_graph_models import (
     EducationRetrievalRequestRecord,
@@ -82,7 +88,7 @@ from eom_workflow_runner.models import (
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
-from sqlalchemy import Engine, Select, and_, or_, select
+from sqlalchemy import Engine, Select, and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from eom_api.errors import ApiError
@@ -123,6 +129,41 @@ class CursorCodec:
             if timestamp.tzinfo is None:
                 raise ValueError
             return timestamp, value["i"]
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ApiError(
+                400,
+                "API_CURSOR_INVALID",
+                "Invalid cursor",
+                "The pagination cursor is invalid for this resource.",
+            ) from exc
+
+    def encode_ordinal(self, resource: str, aggregate_id: str, ordinal: int) -> str:
+        payload = json.dumps(
+            {"r": resource, "a": aggregate_id, "o": ordinal},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        signature = hmac.new(self._key, payload, hashlib.sha256).digest()
+        return self._b64(payload + signature)
+
+    def decode_ordinal(self, cursor: str, resource: str, aggregate_id: str) -> int:
+        try:
+            raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4))
+            payload, signature = raw[:-32], raw[-32:]
+            expected = hmac.new(self._key, payload, hashlib.sha256).digest()
+            if not hmac.compare_digest(signature, expected):
+                raise ValueError
+            value = json.loads(payload)
+            ordinal = value["o"]
+            if (
+                value["r"] != resource
+                or value["a"] != aggregate_id
+                or not isinstance(ordinal, int)
+                or isinstance(ordinal, bool)
+                or ordinal < 0
+            ):
+                raise ValueError
+            return ordinal
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise ApiError(
                 400,
@@ -211,6 +252,87 @@ class QueryAdapter:
                     row.created_at,
                 )
                 for row in rows
+            )
+
+    def list_knowledge_analysis_batches(
+        self, *, limit: int, cursor: str | None, state: str | None = None
+    ) -> PageResult[KnowledgeAnalysisBatchView]:
+        with self.sessions() as session:
+            statement = select(KnowledgeAnalysisBatchRecord)
+            if state:
+                statement = statement.where(KnowledgeAnalysisBatchRecord.state == state)
+            rows, next_cursor, more = self._page(
+                session,
+                statement,
+                KnowledgeAnalysisBatchRecord.created_at,
+                KnowledgeAnalysisBatchRecord.batch_id,
+                "knowledge-analysis-batch",
+                limit,
+                cursor,
+            )
+            counts = self._knowledge_analysis_batch_counts(
+                session, tuple(row.batch_id for row in rows)
+            )
+            return PageResult(
+                tuple(
+                    self._knowledge_analysis_batch(
+                        row,
+                        counts.get(row.batch_id, (0, 0)),
+                    )
+                    for row in rows
+                ),
+                next_cursor,
+                more,
+            )
+
+    def knowledge_analysis_batch(self, batch_id: str) -> KnowledgeAnalysisBatchView:
+        with self.sessions() as session:
+            row = session.get(KnowledgeAnalysisBatchRecord, batch_id)
+            if row is None:
+                self._not_found("KNOWLEDGE_ANALYSIS_BATCH_NOT_FOUND")
+            counts = self._knowledge_analysis_batch_counts(session, (batch_id,))
+            return self._knowledge_analysis_batch(row, counts.get(batch_id, (0, 0)))
+
+    def knowledge_analysis_batch_ranges(
+        self,
+        batch_id: str,
+        *,
+        limit: int,
+        cursor: str | None,
+    ) -> PageResult[KnowledgeAnalysisBatchRangeView]:
+        with self.sessions() as session:
+            if session.get(KnowledgeAnalysisBatchRecord, batch_id) is None:
+                self._not_found("KNOWLEDGE_ANALYSIS_BATCH_NOT_FOUND")
+            statement = select(KnowledgeAnalysisBatchRangeRecord).where(
+                KnowledgeAnalysisBatchRangeRecord.batch_id == batch_id
+            )
+            if cursor:
+                ordinal = self.cursors.decode_ordinal(
+                    cursor,
+                    "knowledge-analysis-batch-range",
+                    batch_id,
+                )
+                statement = statement.where(KnowledgeAnalysisBatchRangeRecord.ordinal > ordinal)
+            rows = list(
+                session.scalars(
+                    statement.order_by(KnowledgeAnalysisBatchRangeRecord.ordinal).limit(limit + 1)
+                )
+            )
+            more = len(rows) > limit
+            rows = rows[:limit]
+            next_cursor = (
+                self.cursors.encode_ordinal(
+                    "knowledge-analysis-batch-range",
+                    batch_id,
+                    rows[-1].ordinal,
+                )
+                if more and rows
+                else None
+            )
+            return PageResult(
+                tuple(self._knowledge_analysis_batch_range(row) for row in rows),
+                next_cursor,
+                more,
             )
 
     def evidence_bundle(self, evidence_bundle_id: str) -> EvidenceBundleView:
@@ -925,6 +1047,98 @@ class QueryAdapter:
             started_at=row.started_at,
             completed_at=row.completed_at,
             error_code=row.error_code,
+        )
+
+    @staticmethod
+    def _knowledge_analysis_batch_counts(
+        session: Session,
+        batch_ids: tuple[str, ...],
+    ) -> dict[str, tuple[int, int]]:
+        if not batch_ids:
+            return {}
+        rows = session.execute(
+            select(
+                KnowledgeAnalysisBatchRangeRecord.batch_id,
+                func.count().filter(KnowledgeAnalysisBatchRangeRecord.state == "ACCEPTED"),
+                func.count().filter(KnowledgeAnalysisBatchRangeRecord.state == "FAILED"),
+            )
+            .where(KnowledgeAnalysisBatchRangeRecord.batch_id.in_(batch_ids))
+            .group_by(KnowledgeAnalysisBatchRangeRecord.batch_id)
+        )
+        return {
+            batch_id: (int(accepted_count), int(failed_count))
+            for batch_id, accepted_count, failed_count in rows
+        }
+
+    @staticmethod
+    def _knowledge_analysis_batch(
+        row: KnowledgeAnalysisBatchRecord,
+        counts: tuple[int, int],
+    ) -> KnowledgeAnalysisBatchView:
+        return KnowledgeAnalysisBatchView(
+            batch_id=row.batch_id,
+            request_sha256=row.request_sha256,
+            preset_id=row.preset_id,
+            preset_revision_id=row.preset_revision_id,
+            preset_sha256=row.preset_sha256,
+            risk_policy_revision_id=row.risk_policy_revision_id,
+            risk_policy_sha256=row.risk_policy_sha256,
+            general_knowledge_mode=row.general_knowledge_mode,  # type: ignore[arg-type]
+            review_policy=row.review_policy,  # type: ignore[arg-type]
+            authorized_by_operator_id=row.authorized_by_operator_id,
+            authorized_at=row.authorized_at,
+            state=row.state,  # type: ignore[arg-type]
+            total_range_count=row.total_range_count,
+            accepted_range_count=counts[0],
+            failed_range_count=counts[1],
+            failure_code=row.failure_code,
+            resource_version=row.resource_version,
+            created_at=row.created_at,
+            started_at=row.started_at,
+            completed_at=row.completed_at,
+            updated_at=row.updated_at,
+        )
+
+    @staticmethod
+    def _knowledge_analysis_batch_range(
+        row: KnowledgeAnalysisBatchRangeRecord,
+    ) -> KnowledgeAnalysisBatchRangeView:
+        return KnowledgeAnalysisBatchRangeView(
+            range_id=row.range_id,
+            batch_id=row.batch_id,
+            ordinal=row.ordinal,
+            document_id=row.document_id,
+            document_revision_id=row.document_revision_id,
+            first_physical_page=row.first_physical_page,
+            last_physical_page=row.last_physical_page,
+            curriculum_unit_keys=tuple(row.curriculum_unit_keys),
+            source_artifact_id=row.source_artifact_id,
+            source_artifact_revision_id=row.source_artifact_revision_id,
+            source_sha256=row.source_sha256,
+            source_media_type=row.source_media_type,  # type: ignore[arg-type]
+            source_schema_ref=row.source_schema_ref,  # type: ignore[arg-type]
+            analysis_artifact_id=row.analysis_artifact_id,
+            analysis_artifact_revision_id=row.analysis_artifact_revision_id,
+            analysis_manifest_sha256=row.analysis_manifest_sha256,
+            analysis_media_type=row.analysis_media_type,  # type: ignore[arg-type]
+            analysis_schema_ref=row.analysis_schema_ref,  # type: ignore[arg-type]
+            rights_artifact_id=row.rights_artifact_id,
+            rights_artifact_revision_id=row.rights_artifact_revision_id,
+            rights_attestation_sha256=row.rights_attestation_sha256,
+            rights_media_type=row.rights_media_type,  # type: ignore[arg-type]
+            rights_schema_ref=row.rights_schema_ref,  # type: ignore[arg-type]
+            execution_mode=row.execution_mode,  # type: ignore[arg-type]
+            predecessor_analysis_run_id=row.predecessor_analysis_run_id,
+            reuse_accepted_analysis_run_id=row.reuse_accepted_analysis_run_id,
+            analysis_run_id=row.analysis_run_id,
+            state=row.state,  # type: ignore[arg-type]
+            submission_attempts=row.submission_attempts,
+            error_code=row.error_code,
+            resource_version=row.resource_version,
+            created_at=row.created_at,
+            submitted_at=row.submitted_at,
+            completed_at=row.completed_at,
+            updated_at=row.updated_at,
         )
 
     @staticmethod

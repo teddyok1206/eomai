@@ -29,6 +29,15 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     assert "knowledge_analysis_risk_policy_revisions" not in INSERT_TABLES
     assert "knowledge_analysis_runs" in UPDATE_TABLES
     assert "jobs" in UPDATE_TABLES
+    batch_tables = {
+        "knowledge_analysis_batches",
+        "knowledge_analysis_batch_ranges",
+        "knowledge_analysis_batch_events",
+    }
+    assert batch_tables <= set(READ_TABLES)
+    assert batch_tables <= set(INSERT_TABLES)
+    assert {"knowledge_analysis_batches", "knowledge_analysis_batch_ranges"} <= set(UPDATE_TABLES)
+    assert "knowledge_analysis_batch_events" not in UPDATE_TABLES
     for table in (
         "knowledge_corpora",
         "knowledge_corpus_revisions",

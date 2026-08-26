@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+import eom_catalog_service.knowledge_analysis_batch_models
 import eom_catalog_service.models  # noqa: F401
 import eom_hwpx_manager.models  # noqa: F401
 import eom_workflow_runner.models  # noqa: F401
@@ -132,7 +133,7 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260825_0017"
+    assert CURRENT_MIGRATION_REVISION == "20260826_0018"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -367,6 +368,28 @@ def test_document_analysis_source_migration_is_additive_pointer_only_and_indexed
         constraint.name
         for constraint in Base.metadata.tables["evidence_bundle_entries"].foreign_key_constraints
     }
+
+
+def test_knowledge_analysis_batch_migration_is_pointer_only_and_indexed() -> None:
+    source = Path("migrations/versions/20260826_0018_knowledge_analysis_batches.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'down_revision: str | None = "20260825_0017"' in source
+    for table_name in (
+        "knowledge_analysis_batches",
+        "knowledge_analysis_batch_ranges",
+        "knowledge_analysis_batch_events",
+    ):
+        table = Base.metadata.tables[table_name]
+        assert all(not isinstance(column.type, LargeBinary) for column in table.columns)
+        assert not {"pdf", "markdown", "token", "session_id", "password"}.intersection(
+            table.columns.keys()
+        )
+    assert "uq_knowledge_analysis_batch_active_range" in source
+    assert "ix_knowledge_analysis_batch_range_claim" in source
+    assert "ix_knowledge_analysis_batch_range_document_pages" in source
+    assert "ck_knowledge_analysis_batch_range_pointer_contract" in source
+    assert "FOR UPDATE" not in source
 
 
 def test_workflow_command_claim_index_includes_delayed_availability() -> None:

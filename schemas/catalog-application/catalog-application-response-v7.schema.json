@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-response-v7",
+  "title": "EOM Catalog Application Knowledge Analysis Batch Response V7",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "analysis_batch"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {"const": "CREATE_KNOWLEDGE_ANALYSIS_BATCH"},
+        "analysis_batch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "batch_id", "state", "resource_version", "total_range_count",
+            "accepted_range_count", "failed_range_count"
+          ],
+          "properties": {
+            "batch_id": {"type": "string", "pattern": "^analysisbatch_[0-9a-f]{32}$"},
+            "state": {"enum": ["QUEUED", "RUNNING", "BLOCKED", "SUCCEEDED", "CANCELLED"]},
+            "resource_version": {"type": "integer", "minimum": 1},
+            "total_range_count": {"type": "integer", "minimum": 1, "maximum": 1000},
+            "accepted_range_count": {"type": "integer", "minimum": 0, "maximum": 1000},
+            "failed_range_count": {"type": "integer", "minimum": 0, "maximum": 1000}
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "error_code"],
+      "properties": {
+        "status": {"const": "ERROR"},
+        "operation": {"const": "CREATE_KNOWLEDGE_ANALYSIS_BATCH"},
+        "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}
+      }
+    }
+  ]
+}

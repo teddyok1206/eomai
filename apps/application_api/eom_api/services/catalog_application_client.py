@@ -20,12 +20,14 @@ from eom_catalog_contracts import (
     CatalogApplicationResponse,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
+    CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
     ItemContentQuery,
     KnowledgeAnalysisApplicationResult,
+    KnowledgeAnalysisBatchApplicationResult,
     ReconcileKnowledgeAnalysisCommand,
     ReviewedItemContentImportCommand,
     ReviewedItemContentImportResult,
@@ -85,6 +87,17 @@ class CatalogApplicationClient:
     ) -> KnowledgeAnalysisApplicationResult:
         return self._analysis_request(command)
 
+    def create_knowledge_analysis_batch(
+        self, command: CreateKnowledgeAnalysisBatchCommand
+    ) -> KnowledgeAnalysisBatchApplicationResult:
+        response = self._request(command)
+        if response.operation != command.operation or response.analysis_batch is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog Knowledge Analysis batch response is invalid",
+            )
+        return response.analysis_batch
+
     def reconcile_knowledge_analysis(
         self, command: ReconcileKnowledgeAnalysisCommand
     ) -> KnowledgeAnalysisApplicationResult:
@@ -138,12 +151,15 @@ class CatalogApplicationClient:
         | CreateKnowledgeAnalysisCommand
         | ReconcileKnowledgeAnalysisCommand
         | ReviewKnowledgeAnalysisCommand
+        | CreateKnowledgeAnalysisBatchCommand
         | CreateEvidenceBundleCommand
         | CreateItemProductionEvidenceCommand,
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
         request_schema = (
-            "catalog-application-request-v4"
+            "catalog-application-request-v6"
+            if command.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
+            else "catalog-application-request-v4"
             if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
             else (
                 "catalog-application-request-v5"
@@ -152,7 +168,9 @@ class CatalogApplicationClient:
             )
         )
         response_schema = (
-            "catalog-application-response-v6"
+            "catalog-application-response-v7"
+            if command.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
+            else "catalog-application-response-v6"
             if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
             else (
                 "catalog-application-response-v5"

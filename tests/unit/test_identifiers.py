@@ -23,7 +23,9 @@ from eom_identifiers import (
     new_instruction_bundle_id,
     new_instruction_bundle_revision_id,
     new_job_id,
+    new_knowledge_analysis_batch_id,
     new_knowledge_analysis_decision_id,
+    new_knowledge_analysis_range_id,
     new_knowledge_analysis_request_id,
     new_knowledge_analysis_result_id,
     new_knowledge_analysis_run_id,
@@ -61,6 +63,8 @@ def test_ids_have_distinct_namespaces() -> None:
     assert re.fullmatch(r"analysisrun_[0-9a-f]{32}", new_knowledge_analysis_run_id())
     assert re.fullmatch(r"knowledgeanalysisresult_[0-9a-f]{32}", new_knowledge_analysis_result_id())
     assert re.fullmatch(r"analysisdecision_[0-9a-f]{32}", new_knowledge_analysis_decision_id())
+    assert re.fullmatch(r"analysisbatch_[0-9a-f]{32}", new_knowledge_analysis_batch_id())
+    assert re.fullmatch(r"analysisrange_[0-9a-f]{32}", new_knowledge_analysis_range_id())
 
 
 def test_canonical_serialization_and_hash_are_stable() -> None:

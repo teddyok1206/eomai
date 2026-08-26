@@ -15,6 +15,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisSourceV2,
+    KnowledgeAnalysisSourceV3,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeGraphPublicationResult,
     PublishKnowledgeGraphSnapshotCommand,
@@ -271,10 +272,14 @@ def _document_source(engine: Engine, settings: CatalogSettings, tmp_path: Path) 
     pages_root.mkdir(parents=True)
     index_payload = b"# index\n"
     page_payload = "# page 1\n\n시간과 공간\n".encode()
+    page_two_payload = "# page 2\n\n시간과 공간의 측정\n".encode()
     (bundle_root / "index.md").write_bytes(index_payload)
     (pages_root / "page-000001.md").write_bytes(page_payload)
+    (pages_root / "page-000002.md").write_bytes(page_two_payload)
     text_payload = "시간과 공간\n".encode()
+    text_two_payload = "시간과 공간의 측정\n".encode()
     anchor_id = "textbookanchor_" + uuid4().hex
+    anchor_two_id = "textbookanchor_" + uuid4().hex
     manifest_value: dict[str, object] = {
         "schema_version": "textbook-analysis-bundle-manifest/1.0",
         "bundle_id": "textbookbundle_" + uuid4().hex,
@@ -283,7 +288,7 @@ def _document_source(engine: Engine, settings: CatalogSettings, tmp_path: Path) 
             "media_type": "application/pdf",
             "sha256": sha256_bytes(source.read_bytes()),
             "size_bytes": source.stat().st_size,
-            "page_count": 1,
+            "page_count": 2,
         },
         "canonical_source": None,
         "document": {
@@ -293,7 +298,7 @@ def _document_source(engine: Engine, settings: CatalogSettings, tmp_path: Path) 
             "curriculum_volume": "I",
             "language": "ko-KR",
         },
-        "scope": {"first_physical_page": 1, "last_physical_page": 1},
+        "scope": {"first_physical_page": 1, "last_physical_page": 2},
         "extractor": {
             "implementation": "integration-fixture",
             "version": "1.0.0",
@@ -317,7 +322,19 @@ def _document_source(engine: Engine, settings: CatalogSettings, tmp_path: Path) 
                 "replacement_character_count": 0,
                 "text_sha256": sha256_bytes(text_payload),
                 "member_sha256": sha256_bytes(page_payload),
-            }
+            },
+            {
+                "physical_page": 2,
+                "printed_page": None,
+                "anchor_id": anchor_two_id,
+                "member_path": "pages/page-000002.md",
+                "media_type": "text/markdown; charset=utf-8",
+                "extraction_state": "TEXT",
+                "character_count": len(text_two_payload.decode()),
+                "replacement_character_count": 0,
+                "text_sha256": sha256_bytes(text_two_payload),
+                "member_sha256": sha256_bytes(page_two_payload),
+            },
         ],
         "curriculum_mappings": [
             {
@@ -325,8 +342,8 @@ def _document_source(engine: Engine, settings: CatalogSettings, tmp_path: Path) 
                 "eom_unit_key": "1-(1)",
                 "eom_unit_label": "시간과 공간",
                 "first_physical_page": 1,
-                "last_physical_page": 1,
-                "evidence_anchor_ids": [anchor_id],
+                "last_physical_page": 2,
+                "evidence_anchor_ids": [anchor_id, anchor_two_id],
                 "mapping_kind": "PRIMARY",
                 "confidence_milli": 1000,
                 "review_state": "PROPOSED",
@@ -343,6 +360,7 @@ def _document_source(engine: Engine, settings: CatalogSettings, tmp_path: Path) 
         bundle_root / "manifest.json",
         bundle_root / "index.md",
         pages_root / "page-000001.md",
+        pages_root / "page-000002.md",
     ):
         path.chmod(0o400)
     pages_root.chmod(0o500)
@@ -393,8 +411,15 @@ def _command(
     )
 
 
-def _proposal(request: KnowledgeAnalysisRequestV2) -> KnowledgeAnalysisWorkerProposal:
+def _proposal(
+    request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3,
+) -> KnowledgeAnalysisWorkerProposal:
     source = request.source.artifact_member
+    locator = (
+        f"physical_page={request.source.first_physical_page};paragraph=1"
+        if isinstance(request, KnowledgeAnalysisRequestV3)
+        else "paragraph=1"
+    )
     return KnowledgeAnalysisWorkerProposal.model_validate(
         {
             "analysis_request_id": request.analysis_request_id,
@@ -405,7 +430,7 @@ def _proposal(request: KnowledgeAnalysisRequestV2) -> KnowledgeAnalysisWorkerPro
                     "artifact_revision_id": source.artifact_revision_id,
                     "member_path": source.member_path,
                     "anchor_kind": "PARAGRAPH",
-                    "locator": "paragraph=1",
+                    "locator": locator,
                     "excerpt_sha256": "sha256:" + "c" * 64,
                 }
             ],
@@ -428,7 +453,9 @@ def _proposal(request: KnowledgeAnalysisRequestV2) -> KnowledgeAnalysisWorkerPro
     )
 
 
-def _proposal_with_edge(request: KnowledgeAnalysisRequestV2) -> KnowledgeAnalysisWorkerProposal:
+def _proposal_with_edge(
+    request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3,
+) -> KnowledgeAnalysisWorkerProposal:
     value = _proposal(request).model_dump(mode="json")
     value["nodes"].append(
         {
@@ -464,7 +491,11 @@ def _complete_proposal(
     with sessions() as session:
         run = session.get(KnowledgeAnalysisRunRecord, run_id)
         assert run is not None
-        request = KnowledgeAnalysisRequestV2.model_validate(run.canonical_request)
+        request = (
+            KnowledgeAnalysisRequestV3.model_validate(run.canonical_request)
+            if run.canonical_request.get("schema_version") == "knowledge-analysis-request/3.0"
+            else KnowledgeAnalysisRequestV2.model_validate(run.canonical_request)
+        )
         workflow_id = run.workflow_id
     job_id = new_job_id()
     artifact_id = new_logical_artifact_id()
@@ -534,7 +565,11 @@ def _complete_proposal(
             logical_artifact_id=artifact_id,
             revision_id=revision_id,
             content_hash=staged.primary_hash,
-            result_schema="knowledge-analysis-proposal-result@1.0",
+            result_schema=(
+                "knowledge-analysis-proposal-result@2.0"
+                if isinstance(request, KnowledgeAnalysisRequestV3)
+                else "knowledge-analysis-proposal-result@1.0"
+            ),
         )
         context = dict(workflow.runtime_context)
         context["final_pointer_manifest"] = {
@@ -713,7 +748,7 @@ def test_concurrent_analysis_create_is_single_and_retry_replays(
 
     def synchronized_source(
         session: Session, requested: CreateKnowledgeAnalysisCommand
-    ) -> KnowledgeAnalysisSourceV2:
+    ) -> KnowledgeAnalysisSourceV2 | KnowledgeAnalysisSourceV3:
         source = original(session, requested)
         barrier.wait(timeout=10)
         return source
