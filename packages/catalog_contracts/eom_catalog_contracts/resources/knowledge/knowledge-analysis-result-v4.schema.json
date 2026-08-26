@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-result/4.0",
+  "title": "EOM Accepted Knowledge Analysis Result V4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "analysis_result_id",
+    "analysis_request_id",
+    "analysis_request_sha256",
+    "source",
+    "status",
+    "proposal_receipt",
+    "proposal_content_set_sha256",
+    "risk_policy_revision_id",
+    "acceptance_mode",
+    "review_decision",
+    "counts",
+    "general_knowledge_used",
+    "minimum_confidence_milli",
+    "blocking_ambiguity_count",
+    "accepted_at",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-analysis-result/4.0"
+    },
+    "analysis_result_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$"
+    },
+    "analysis_request_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+    },
+    "analysis_request_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+    },
+    "source": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/3.0#/$defs/documentRevisionSource"
+    },
+    "status": {
+      "const": "ACCEPTED"
+    },
+    "proposal_receipt": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+    },
+    "proposal_content_set_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+    },
+    "risk_policy_revision_id": {
+      "type": "string",
+      "pattern": "^analysisriskrev_[0-9a-f]{32}$"
+    },
+    "acceptance_mode": {
+      "enum": [
+        "AUTO_POLICY",
+        "HUMAN_APPROVED"
+      ]
+    },
+    "review_decision": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "counts": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalCounts"
+    },
+    "general_knowledge_used": {
+      "type": "boolean"
+    },
+    "minimum_confidence_milli": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "blocking_ambiguity_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 128
+    },
+    "accepted_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/utcTimestamp"
+    },
+    "result_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+    }
+  }
+}

@@ -13,9 +13,11 @@ from eom_catalog_contracts import (
     ItemElementBinding,
     KnowledgeAnalysisSourceV3,
     KnowledgeAnalysisWorkerProposal,
+    KnowledgeAnalysisWorkerProposalV2,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphStructureManifest,
     KnowledgeNodeType,
+    ProposedKnowledgeEdgeV2,
     validate_knowledge_edge_endpoint_types,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -80,7 +82,19 @@ class AcceptedAnalysisProposal:
     analysis_run_id: str
     source: KnowledgeAnalysisSourceV3
     accepted_result: KnowledgeArtifactMemberPointer
-    proposal: KnowledgeAnalysisWorkerProposal
+    proposal: KnowledgeAnalysisWorkerProposal | KnowledgeAnalysisWorkerProposalV2
+
+
+def _proposal_edge_type(edge: object) -> str:
+    if isinstance(edge, ProposedKnowledgeEdgeV2):
+        return str(edge.relationship.edge_type)
+    edge_type = getattr(edge, "edge_type", None)
+    if not isinstance(edge_type, str):
+        raise KnowledgeGraphProjectionError(
+            "KNOWLEDGE_GRAPH_EDGE_INCOMPATIBLE",
+            "knowledge graph edge type is unavailable",
+        )
+    return edge_type
 
 
 @dataclass(frozen=True)
@@ -322,9 +336,10 @@ def build_education_graph_projection(
         for proposed_edge in analysis.proposal.edges:
             from_node = proposal_nodes[proposed_edge.from_node_id]
             to_node = proposal_nodes[proposed_edge.to_node_id]
+            edge_type = _proposal_edge_type(proposed_edge)
             try:
                 validate_knowledge_edge_endpoint_types(
-                    proposed_edge.edge_type, from_node.node_type, to_node.node_type
+                    edge_type, from_node.node_type, to_node.node_type
                 )
             except ValueError as exc:
                 raise KnowledgeGraphProjectionError(
@@ -333,7 +348,7 @@ def build_education_graph_projection(
                 ) from exc
             from_id = local_node_ids[(analysis.analysis_run_id, proposed_edge.from_node_id)]
             to_id = local_node_ids[(analysis.analysis_run_id, proposed_edge.to_node_id)]
-            key = (proposed_edge.edge_type, from_id, to_id)
+            key = (edge_type, from_id, to_id)
             pointers = {
                 _source_pointer(analysis, anchor_id) for anchor_id in proposed_edge.anchor_ids
             }
@@ -343,12 +358,12 @@ def build_education_graph_projection(
                     edge_id=_stable_id(
                         "kedge_",
                         {
-                            "edge_type": proposed_edge.edge_type,
+                            "edge_type": edge_type,
                             "from_node_id": from_id,
                             "to_node_id": to_id,
                         },
                     ),
-                    edge_type=proposed_edge.edge_type,
+                    edge_type=edge_type,
                     from_node_id=from_id,
                     to_node_id=to_id,
                     confidence_milli=proposed_edge.confidence_milli,

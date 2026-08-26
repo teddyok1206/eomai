@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV2,
+    KnowledgeAnalysisProposalReceiptV3,
     KnowledgeAnalysisRiskPolicy,
 )
 
@@ -18,7 +19,11 @@ class KnowledgeAnalysisRiskEvaluation:
 
 
 def evaluate_knowledge_analysis_risk(
-    receipt: KnowledgeAnalysisProposalReceipt | KnowledgeAnalysisProposalReceiptV2,
+    receipt: (
+        KnowledgeAnalysisProposalReceipt
+        | KnowledgeAnalysisProposalReceiptV2
+        | KnowledgeAnalysisProposalReceiptV3
+    ),
     policy: KnowledgeAnalysisRiskPolicy,
 ) -> KnowledgeAnalysisRiskEvaluation:
     """Evaluate one validated receipt in O(1) from its bounded summary counts."""

@@ -8,14 +8,18 @@ from typing import Any, Literal
 from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV2,
+    KnowledgeAnalysisProposalReceiptV3,
     KnowledgeAnalysisWorkerProposal,
+    KnowledgeAnalysisWorkerProposalV2,
 )
 from pydantic import ValidationError
 
 from eom_catalog_service.artifacts import CatalogArtifactService
 
 type KnowledgeAnalysisReceipt = (
-    KnowledgeAnalysisProposalReceipt | KnowledgeAnalysisProposalReceiptV2
+    KnowledgeAnalysisProposalReceipt
+    | KnowledgeAnalysisProposalReceiptV2
+    | KnowledgeAnalysisProposalReceiptV3
 )
 
 
@@ -30,7 +34,7 @@ class KnowledgeProposalResolutionError(ValueError):
 def resolve_knowledge_analysis_proposal(
     artifacts: CatalogArtifactService,
     receipt: KnowledgeAnalysisReceipt,
-) -> KnowledgeAnalysisWorkerProposal:
+) -> KnowledgeAnalysisWorkerProposal | KnowledgeAnalysisWorkerProposalV2:
     """Dereference every pinned member once and reconstruct the typed proposal."""
 
     values: dict[str, Any] = {}
@@ -76,14 +80,22 @@ def resolve_knowledge_analysis_proposal(
         values[field_name] = rows
 
     proposal_value = {
-        "schema_version": "knowledge-analysis-worker-proposal/1.0",
+        "schema_version": (
+            "knowledge-analysis-worker-proposal/2.0"
+            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
+            else "knowledge-analysis-worker-proposal/1.0"
+        ),
         "analysis_request_id": receipt.analysis_request_id,
         **values,
         "general_knowledge_used": receipt.general_knowledge_used,
         "completed_at": receipt.completed_at,
     }
     try:
-        proposal = KnowledgeAnalysisWorkerProposal.model_validate(proposal_value)
+        proposal = (
+            KnowledgeAnalysisWorkerProposalV2.model_validate(proposal_value)
+            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
+            else KnowledgeAnalysisWorkerProposal.model_validate(proposal_value)
+        )
     except ValidationError as exc:
         raise KnowledgeProposalResolutionError(
             "CONTENT_INVALID", "analysis proposal is structurally invalid"

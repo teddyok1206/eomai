@@ -9,9 +9,12 @@ from typing import Literal
 from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV2,
+    KnowledgeAnalysisProposalReceiptV3,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
+    KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisWorkerProposal,
+    KnowledgeAnalysisWorkerProposalV2,
     KnowledgeProposalArtifactMember,
     KnowledgeProposalCounts,
     KnowledgeProposalMembers,
@@ -73,13 +76,18 @@ _DOCUMENT_ANCHOR_LOCATOR = re.compile(r"^physical_page=([1-9][0-9]{0,5})(?:;.{1,
 
 def stage_knowledge_analysis_proposal(
     *,
-    proposal: KnowledgeAnalysisWorkerProposal,
-    request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3,
+    proposal: KnowledgeAnalysisWorkerProposal | KnowledgeAnalysisWorkerProposalV2,
+    request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4,
     job_id: str,
     logical_artifact_id: str,
     revision_id: str,
     staging: Path,
-) -> tuple[StagedFileSet, KnowledgeAnalysisProposalReceipt | KnowledgeAnalysisProposalReceiptV2]:
+) -> tuple[
+    StagedFileSet,
+    KnowledgeAnalysisProposalReceipt
+    | KnowledgeAnalysisProposalReceiptV2
+    | KnowledgeAnalysisProposalReceiptV3,
+]:
     """Split one bounded worker value into deterministic immutable Artifact members."""
 
     if proposal.analysis_request_id != request.analysis_request_id:
@@ -97,7 +105,7 @@ def stage_knowledge_analysis_proposal(
             ErrorCode.WORKER_RESULT_INVALID,
             "knowledge proposal source anchor does not match the pinned source",
         )
-    if isinstance(request, KnowledgeAnalysisRequestV3):
+    if isinstance(request, (KnowledgeAnalysisRequestV3, KnowledgeAnalysisRequestV4)):
         first_page = request.source.first_physical_page
         last_page = request.source.last_physical_page
         for anchor in proposal.anchors:
@@ -122,6 +130,8 @@ def stage_knowledge_analysis_proposal(
     try:
         for field_name, member_path, media_type, schema_ref in PROPOSAL_MEMBERS:
             value = getattr(proposal, field_name)
+            if field_name == "edges" and isinstance(proposal, KnowledgeAnalysisWorkerProposalV2):
+                schema_ref = "eom://schemas/knowledge/proposed-edge/3.0"
             if field_name == "normalized_markdown":
                 payload = value.encode("utf-8")
             else:
@@ -181,8 +191,14 @@ def stage_knowledge_analysis_proposal(
             ),
             "completed_at": proposal.completed_at,
         }
-        receipt: KnowledgeAnalysisProposalReceipt | KnowledgeAnalysisProposalReceiptV2
-        if isinstance(request, KnowledgeAnalysisRequestV3):
+        receipt: (
+            KnowledgeAnalysisProposalReceipt
+            | KnowledgeAnalysisProposalReceiptV2
+            | KnowledgeAnalysisProposalReceiptV3
+        )
+        if isinstance(request, KnowledgeAnalysisRequestV4):
+            receipt = KnowledgeAnalysisProposalReceiptV3.model_validate(receipt_value)
+        elif isinstance(request, KnowledgeAnalysisRequestV3):
             receipt = KnowledgeAnalysisProposalReceiptV2.model_validate(receipt_value)
         else:
             receipt = KnowledgeAnalysisProposalReceipt.model_validate(receipt_value)
@@ -193,9 +209,13 @@ def stage_knowledge_analysis_proposal(
         files[receipt_member] = receipt_path
         metadata[receipt_member] = {
             "schema_ref": (
-                "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/2.0"
-                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV2)
-                else "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/1.0"
+                "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/3.0"
+                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
+                else (
+                    "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/2.0"
+                    if isinstance(receipt, KnowledgeAnalysisProposalReceiptV2)
+                    else "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/1.0"
+                )
             ),
             "media_type": "application/json",
         }

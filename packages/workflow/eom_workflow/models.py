@@ -15,7 +15,9 @@ from eom_catalog_contracts import (
     ItemSolution,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
+    KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisWorkerProposal,
+    KnowledgeAnalysisWorkerProposalV2,
     ParagraphBlock,
     SingleChoiceInteraction,
     StatementSetBlock,
@@ -127,7 +129,9 @@ class WorkerRequest(FrozenModel):
 
 class KnowledgeAnalysisWorkerRequest(FrozenModel):
     request_name: Literal["KNOWLEDGE_ANALYSIS_REQUEST"] = "KNOWLEDGE_ANALYSIS_REQUEST"
-    analysis_request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3
+    analysis_request: (
+        KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4
+    )
 
 
 class ItemBrief(FrozenModel):
@@ -195,7 +199,9 @@ class WorkflowRequest(FrozenModel):
     stimulus_asset: StimulusAssetSelection | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     educational_retrieval: EducationalRetrievalRequirement | None = None
-    analysis_request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3 | None = None
+    analysis_request: (
+        KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4 | None
+    ) = None
 
     @model_validator(mode="after")
     def validate_catalog_request(self) -> WorkflowRequest:
@@ -301,6 +307,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.3.0",
         "workflow-role/1.4.0",
         "workflow-role/1.5.0",
+        "workflow-role/1.6.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -378,6 +385,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.3.0",
         "workflow-role/1.4.0",
         "workflow-role/1.5.0",
+        "workflow-role/1.6.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -645,6 +653,16 @@ class KnowledgeAnalysisProposalRoleResultV2(RoleResultBase):
     output: KnowledgeAnalysisProposalOutput
 
 
+class KnowledgeAnalysisProposalOutputV2(FrozenModel):
+    proposal: KnowledgeAnalysisWorkerProposalV2
+
+
+class KnowledgeAnalysisProposalRoleResultV3(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.6.0"] = "workflow-role/1.6.0"
+    role: Literal["support"] = "support"
+    output: KnowledgeAnalysisProposalOutputV2
+
+
 RoleResult = (
     AuthoringRoleResult
     | ImageRoleResult
@@ -664,4 +682,5 @@ RoleResult = (
     | GeneratedRegistrationRoleResultV4
     | KnowledgeAnalysisProposalRoleResult
     | KnowledgeAnalysisProposalRoleResultV2
+    | KnowledgeAnalysisProposalRoleResultV3
 )

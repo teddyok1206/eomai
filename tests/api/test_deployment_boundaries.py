@@ -116,8 +116,12 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "knowledge/knowledge-analysis-result-v2.schema.json",
         "knowledge/knowledge-analysis-types-v3.schema.json",
         "knowledge/knowledge-analysis-request-v3.schema.json",
+        "knowledge/knowledge-analysis-request-v4.schema.json",
+        "knowledge/knowledge-analysis-worker-proposal-v2.schema.json",
         "knowledge/knowledge-analysis-proposal-receipt-v2.schema.json",
+        "knowledge/knowledge-analysis-proposal-receipt-v3.schema.json",
         "knowledge/knowledge-analysis-result-v3.schema.json",
+        "knowledge/knowledge-analysis-result-v4.schema.json",
         "knowledge/knowledge-graph-projection-v1.schema.json",
         "knowledge/knowledge-graph-projection-v2.schema.json",
         "knowledge/knowledge-graph-publication-result-v1.schema.json",
@@ -306,6 +310,14 @@ def test_release_verifies_educational_document_schema_resources() -> None:
     ):
         assert f'"educational-document/{resource}": ' in deployment
         assert f'"schemas/educational-document/{resource}"' in deployment
+
+
+def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+
+    assert "analysis_v1, analysis_v2, analysis_v3" in deployment
+    assert "for path in (analysis_v1, analysis_v2, analysis_v3)" in deployment
+    assert 'analysis_versions != {"1.0.0", "2.0.0", "3.0.0"}' in deployment
 
 
 def test_release_install_normalizes_restrictive_operator_umask() -> None:

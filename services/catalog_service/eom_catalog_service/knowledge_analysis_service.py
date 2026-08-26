@@ -17,10 +17,13 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV2,
+    KnowledgeAnalysisProposalReceiptV3,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
+    KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisResultV2,
     KnowledgeAnalysisResultV3,
+    KnowledgeAnalysisResultV4,
     KnowledgeAnalysisReviewDecision,
     KnowledgeAnalysisRiskPolicy,
     KnowledgeAnalysisSourceV3,
@@ -83,6 +86,7 @@ from eom_catalog_service.settings import CatalogSettings
 
 KNOWLEDGE_ANALYSIS_WORKFLOW_VERSION = "1.0.0"
 KNOWLEDGE_ANALYSIS_DOCUMENT_WORKFLOW_VERSION = "2.0.0"
+KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_WORKFLOW_VERSION = "3.0.0"
 KNOWLEDGE_ANALYSIS_CATALOG_PROTOCOL = "catalog/1.2"
 KNOWLEDGE_ANALYSIS_CATALOG_SCHEMA_HASH = content_sha256(
     {
@@ -109,6 +113,20 @@ KNOWLEDGE_ANALYSIS_DOCUMENT_CATALOG_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_CATALOG_PROTOCOL = "catalog/1.4"
+KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_CATALOG_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_CATALOG_PROTOCOL,
+        "contracts": [
+            "knowledge-analysis-request/4.0",
+            "knowledge-analysis-worker-proposal/2.0",
+            "knowledge-analysis-proposal-receipt/3.0",
+            "knowledge-analysis-risk-policy/1.0",
+            "knowledge-analysis-review-decision/1.0",
+            "knowledge-analysis-result/4.0",
+        ],
+    }
+)
 REQUESTED_OUTPUTS = (
     "NORMALIZED_MARKDOWN",
     "SOURCE_ANCHORS",
@@ -119,11 +137,17 @@ REQUESTED_OUTPUTS = (
     "UNRESOLVED_AMBIGUITIES",
 )
 TERMINAL_RUN_STATES = frozenset({"ACCEPTED", "REJECTED", "FAILED", "CANCELLED"})
-type KnowledgeAnalysisRequestContract = KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3
-type KnowledgeAnalysisReceiptContract = (
-    KnowledgeAnalysisProposalReceipt | KnowledgeAnalysisProposalReceiptV2
+type KnowledgeAnalysisRequestContract = (
+    KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4
 )
-type KnowledgeAnalysisResultContract = KnowledgeAnalysisResultV2 | KnowledgeAnalysisResultV3
+type KnowledgeAnalysisReceiptContract = (
+    KnowledgeAnalysisProposalReceipt
+    | KnowledgeAnalysisProposalReceiptV2
+    | KnowledgeAnalysisProposalReceiptV3
+)
+type KnowledgeAnalysisResultContract = (
+    KnowledgeAnalysisResultV2 | KnowledgeAnalysisResultV3 | KnowledgeAnalysisResultV4
+)
 
 
 def _utc_json_timestamp(value: datetime) -> str:
@@ -140,20 +164,54 @@ def _analysis_request(value: dict[str, Any]) -> KnowledgeAnalysisRequestContract
         return KnowledgeAnalysisRequestV2.model_validate(value)
     if version == "knowledge-analysis-request/3.0":
         return KnowledgeAnalysisRequestV3.model_validate(value)
+    if version == "knowledge-analysis-request/4.0":
+        return KnowledgeAnalysisRequestV4.model_validate(value)
     raise KnowledgeAnalysisServiceError(
         "KNOWLEDGE_ANALYSIS_REQUEST_INVALID", "knowledge analysis request schema is unsupported"
     )
 
 
 def _document_contract(value: KnowledgeAnalysisRequestContract) -> bool:
-    return isinstance(value, KnowledgeAnalysisRequestV3) and isinstance(
-        value.source, EducationalDocumentKnowledgeSourceV3
+    return isinstance(
+        value, (KnowledgeAnalysisRequestV3, KnowledgeAnalysisRequestV4)
+    ) and isinstance(value.source, EducationalDocumentKnowledgeSourceV3)
+
+
+def _endpoint_typed_document_contract(value: KnowledgeAnalysisRequestContract) -> bool:
+    return isinstance(value, KnowledgeAnalysisRequestV4)
+
+
+def _proposal_result_schema(value: KnowledgeAnalysisRequestContract) -> str:
+    if _endpoint_typed_document_contract(value):
+        return "knowledge-analysis-proposal-result@3.0"
+    if _document_contract(value):
+        return "knowledge-analysis-proposal-result@2.0"
+    return "knowledge-analysis-proposal-result@1.0"
+
+
+def _proposal_receipt_schema(value: KnowledgeAnalysisRequestContract) -> tuple[str, str]:
+    if _endpoint_typed_document_contract(value):
+        return (
+            "knowledge-analysis-proposal-receipt-v3",
+            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/3.0",
+        )
+    if _document_contract(value):
+        return (
+            "knowledge-analysis-proposal-receipt-v2",
+            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/2.0",
+        )
+    return (
+        "knowledge-analysis-proposal-receipt",
+        "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/1.0",
     )
 
 
 def _receipt_contract(
     value: dict[str, Any], request: KnowledgeAnalysisRequestContract
 ) -> KnowledgeAnalysisReceiptContract:
+    if _endpoint_typed_document_contract(request):
+        validate_contract("knowledge-analysis-proposal-receipt-v3", value)
+        return KnowledgeAnalysisProposalReceiptV3.model_validate(value)
     if _document_contract(request):
         validate_contract("knowledge-analysis-proposal-receipt-v2", value)
         return KnowledgeAnalysisProposalReceiptV2.model_validate(value)
@@ -162,6 +220,11 @@ def _receipt_contract(
 
 
 def _catalog_protocol(request: KnowledgeAnalysisRequestContract) -> tuple[str, str]:
+    if _endpoint_typed_document_contract(request):
+        return (
+            KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_CATALOG_PROTOCOL,
+            KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_CATALOG_SCHEMA_HASH,
+        )
     if _document_contract(request):
         return (
             KNOWLEDGE_ANALYSIS_DOCUMENT_CATALOG_PROTOCOL,
@@ -254,11 +317,15 @@ class KnowledgeAnalysisApplicationService:
                         preset_revision_id=predecessor.preset_revision_id,
                     )
                 is_document_source = isinstance(source, EducationalDocumentKnowledgeSourceV3)
-                workflow_version = (
-                    KNOWLEDGE_ANALYSIS_DOCUMENT_WORKFLOW_VERSION
-                    if is_document_source
-                    else KNOWLEDGE_ANALYSIS_WORKFLOW_VERSION
+                endpoint_typed_document = is_document_source and (
+                    "workflow-role/1.6.0" in preset_revision.compatible_workflow_protocols
                 )
+                if endpoint_typed_document:
+                    workflow_version = KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_WORKFLOW_VERSION
+                elif is_document_source:
+                    workflow_version = KNOWLEDGE_ANALYSIS_DOCUMENT_WORKFLOW_VERSION
+                else:
+                    workflow_version = KNOWLEDGE_ANALYSIS_WORKFLOW_VERSION
                 definition = session.scalar(
                     select(WorkflowDefinitionRecord).where(
                         WorkflowDefinitionRecord.definition_key == "knowledge-analysis",
@@ -274,9 +341,13 @@ class KnowledgeAnalysisApplicationService:
                 created_at = datetime.now(UTC)
                 request_document: dict[str, Any] = {
                     "schema_version": (
-                        "knowledge-analysis-request/3.0"
-                        if is_document_source
-                        else "knowledge-analysis-request/2.0"
+                        "knowledge-analysis-request/4.0"
+                        if endpoint_typed_document
+                        else (
+                            "knowledge-analysis-request/3.0"
+                            if is_document_source
+                            else "knowledge-analysis-request/2.0"
+                        )
                     ),
                     "analysis_request_id": new_knowledge_analysis_request_id(),
                     "source": source.model_dump(mode="json"),
@@ -284,12 +355,18 @@ class KnowledgeAnalysisApplicationService:
                     "execution_preset_revision_id": preset_revision.preset_revision_id,
                     "execution_preset_sha256": preset_revision.content_sha256,
                     "worker_proposal_schema_ref": (
-                        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+                        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/2.0"
+                        if endpoint_typed_document
+                        else "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
                     ),
                     "accepted_result_schema_ref": (
-                        "eom://schemas/knowledge/knowledge-analysis-result/3.0"
-                        if is_document_source
-                        else "eom://schemas/knowledge/knowledge-analysis-result/2.0"
+                        "eom://schemas/knowledge/knowledge-analysis-result/4.0"
+                        if endpoint_typed_document
+                        else (
+                            "eom://schemas/knowledge/knowledge-analysis-result/3.0"
+                            if is_document_source
+                            else "eom://schemas/knowledge/knowledge-analysis-result/2.0"
+                        )
                     ),
                     "predecessor_analysis_run_id": command.predecessor_analysis_run_id,
                     "prior_graph_snapshot": None,
@@ -307,7 +384,10 @@ class KnowledgeAnalysisApplicationService:
                     }
                 )
                 request: KnowledgeAnalysisRequestContract
-                if is_document_source:
+                if endpoint_typed_document:
+                    validate_contract("knowledge-analysis-request-v4", request_document)
+                    request = KnowledgeAnalysisRequestV4.model_validate(request_document)
+                elif is_document_source:
                     validate_contract("knowledge-analysis-request-v3", request_document)
                     request = KnowledgeAnalysisRequestV3.model_validate(request_document)
                 else:
@@ -858,11 +938,16 @@ class KnowledgeAnalysisApplicationService:
             }
         ).removeprefix("sha256:")[:32]
         document_contract = _document_contract(request)
+        endpoint_typed_document = _endpoint_typed_document_contract(request)
         result_data: dict[str, Any] = {
             "schema_version": (
-                "knowledge-analysis-result/3.0"
-                if document_contract
-                else "knowledge-analysis-result/2.0"
+                "knowledge-analysis-result/4.0"
+                if endpoint_typed_document
+                else (
+                    "knowledge-analysis-result/3.0"
+                    if document_contract
+                    else "knowledge-analysis-result/2.0"
+                )
             ),
             "analysis_result_id": f"knowledgeanalysisresult_{stable_result_seed}",
             "analysis_request_id": request.analysis_request_id,
@@ -886,17 +971,20 @@ class KnowledgeAnalysisApplicationService:
         result_data["result_sha256"] = content_sha256(
             {key: value for key, value in result_data.items() if key != "result_sha256"}
         )
-        result_schema_name = (
-            "knowledge-analysis-result-v3" if document_contract else "knowledge-analysis-result-v2"
-        )
-        result_schema_ref = (
-            "eom://schemas/knowledge/knowledge-analysis-result/3.0"
-            if document_contract
-            else "eom://schemas/knowledge/knowledge-analysis-result/2.0"
-        )
+        if endpoint_typed_document:
+            result_schema_name = "knowledge-analysis-result-v4"
+            result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/4.0"
+        elif document_contract:
+            result_schema_name = "knowledge-analysis-result-v3"
+            result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/3.0"
+        else:
+            result_schema_name = "knowledge-analysis-result-v2"
+            result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/2.0"
         validate_contract(result_schema_name, result_data)
         result: KnowledgeAnalysisResultContract
-        if document_contract:
+        if endpoint_typed_document:
+            result = KnowledgeAnalysisResultV4.model_validate(result_data)
+        elif document_contract:
             result = KnowledgeAnalysisResultV3.model_validate(result_data)
         else:
             result = KnowledgeAnalysisResultV2.model_validate(result_data)
@@ -917,11 +1005,22 @@ class KnowledgeAnalysisApplicationService:
             result=result.model_dump(mode="json"),
             protocol=_catalog_protocol(request),
         )
-        result_model: type[KnowledgeAnalysisResultV2] | type[KnowledgeAnalysisResultV3] = (
-            KnowledgeAnalysisResultV3 if document_contract else KnowledgeAnalysisResultV2
+        result_model: (
+            type[KnowledgeAnalysisResultV2]
+            | type[KnowledgeAnalysisResultV3]
+            | type[KnowledgeAnalysisResultV4]
         )
+        if endpoint_typed_document:
+            result_model = KnowledgeAnalysisResultV4
+        elif document_contract:
+            result_model = KnowledgeAnalysisResultV3
+        else:
+            result_model = KnowledgeAnalysisResultV2
         stored_result = self._artifact_result(artifact, result_model, result_schema_name)
-        assert isinstance(stored_result, (KnowledgeAnalysisResultV2, KnowledgeAnalysisResultV3))
+        assert isinstance(
+            stored_result,
+            (KnowledgeAnalysisResultV2, KnowledgeAnalysisResultV3, KnowledgeAnalysisResultV4),
+        )
         if (
             stored_result.analysis_request_sha256 != request.request_sha256
             or stored_result.proposal_content_set_sha256 != receipt.content_set_sha256
@@ -1015,10 +1114,18 @@ class KnowledgeAnalysisApplicationService:
         self,
         artifact: CatalogArtifact,
         model: type[
-            KnowledgeAnalysisReviewDecision | KnowledgeAnalysisResultV2 | KnowledgeAnalysisResultV3
+            KnowledgeAnalysisReviewDecision
+            | KnowledgeAnalysisResultV2
+            | KnowledgeAnalysisResultV3
+            | KnowledgeAnalysisResultV4
         ],
         schema_name: str,
-    ) -> KnowledgeAnalysisReviewDecision | KnowledgeAnalysisResultV2 | KnowledgeAnalysisResultV3:
+    ) -> (
+        KnowledgeAnalysisReviewDecision
+        | KnowledgeAnalysisResultV2
+        | KnowledgeAnalysisResultV3
+        | KnowledgeAnalysisResultV4
+    ):
         with self.sessions() as session:
             revision = session.get(ArtifactRevisionRecord, artifact.revision_id)
             if (
@@ -1050,12 +1157,7 @@ class KnowledgeAnalysisApplicationService:
                 "completed workflow has no valid analysis proposal pointer",
             ) from exc
         request = _analysis_request(run.canonical_request)
-        document_contract = _document_contract(request)
-        expected_result_schema = (
-            "knowledge-analysis-proposal-result@2.0"
-            if document_contract
-            else "knowledge-analysis-proposal-result@1.0"
-        )
+        expected_result_schema = _proposal_result_schema(request)
         if pointer.result_schema != expected_result_schema:
             raise KnowledgeAnalysisServiceError(
                 "KNOWLEDGE_ANALYSIS_POINTER_INVALID",
@@ -1064,11 +1166,7 @@ class KnowledgeAnalysisApplicationService:
         logical = session.get(ArtifactRecord, pointer.logical_artifact_id)
         revision = session.get(ArtifactRevisionRecord, pointer.revision_id)
         job = session.get(JobRecord, pointer.job_id)
-        receipt_schema_ref = (
-            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/2.0"
-            if document_contract
-            else "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/1.0"
-        )
+        _, receipt_schema_ref = _proposal_receipt_schema(request)
         if (
             logical is None
             or revision is None
@@ -1187,11 +1285,7 @@ class KnowledgeAnalysisApplicationService:
             )
         entry = entries[0]
         request = _analysis_request(run.canonical_request)
-        receipt_schema_ref = (
-            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/2.0"
-            if _document_contract(request)
-            else "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/1.0"
-        )
+        _, receipt_schema_ref = _proposal_receipt_schema(request)
         if (
             entry.get("sha256") != revision.content_hash
             or entry.get("bytes") != revision.content_bytes

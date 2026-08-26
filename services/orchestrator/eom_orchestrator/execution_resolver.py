@@ -12,6 +12,7 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV3,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
+    KnowledgeAnalysisRequestV4,
 )
 from eom_identifiers import content_sha256, new_execution_plan_id
 from eom_workflow.control_plane import (
@@ -341,7 +342,7 @@ def resolve_knowledge_analysis_plan(
     workflow_definition_version: str,
     workflow_definition_sha256: str,
     workflow_role_schema_version: str,
-    request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3,
+    request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4,
     resolved_at: datetime | None = None,
 ) -> ResolvedExecutionPlanV2 | ResolvedExecutionPlanV4:
     """Resolve one exact released support policy without consulting a mutable latest pointer."""

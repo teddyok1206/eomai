@@ -25,6 +25,7 @@ from eom_workflow.models import (
     ArtifactPointer,
     KnowledgeAnalysisProposalRoleResult,
     KnowledgeAnalysisProposalRoleResultV2,
+    KnowledgeAnalysisProposalRoleResultV3,
     KnowledgeAnalysisWorkerRequest,
     RoleWorkerInput,
     WorkerRequest,
@@ -442,12 +443,17 @@ class Orchestrator:
             if result_schema in {
                 "knowledge-analysis-proposal-result@1.0",
                 "knowledge-analysis-proposal-result@2.0",
+                "knowledge-analysis-proposal-result@3.0",
             }:
-                expected_result_type = (
-                    KnowledgeAnalysisProposalRoleResultV2
-                    if result_schema == "knowledge-analysis-proposal-result@2.0"
-                    else KnowledgeAnalysisProposalRoleResult
-                )
+                expected_result_type = {
+                    "knowledge-analysis-proposal-result@1.0": (KnowledgeAnalysisProposalRoleResult),
+                    "knowledge-analysis-proposal-result@2.0": (
+                        KnowledgeAnalysisProposalRoleResultV2
+                    ),
+                    "knowledge-analysis-proposal-result@3.0": (
+                        KnowledgeAnalysisProposalRoleResultV3
+                    ),
+                }[result_schema]
                 if not isinstance(result, expected_result_type) or not isinstance(
                     worker_input.request, KnowledgeAnalysisWorkerRequest
                 ):

@@ -400,6 +400,32 @@ class ProposedKnowledgeEdge(FrozenModel):
     anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=32)
 
 
+class KnowledgeEdgeEndpointContract(FrozenModel):
+    """One explicit, ontology-compatible relationship and endpoint-type triple."""
+
+    edge_type: KnowledgeEdgeType
+    from_node_type: KnowledgeNodeType
+    to_node_type: KnowledgeNodeType
+
+    @model_validator(mode="after")
+    def compatible_endpoint_types(self) -> KnowledgeEdgeEndpointContract:
+        validate_knowledge_edge_endpoint_types(
+            self.edge_type,
+            self.from_node_type,
+            self.to_node_type,
+        )
+        return self
+
+
+class ProposedKnowledgeEdgeV2(FrozenModel):
+    edge_id: str = Field(pattern=r"^kedge_[a-z0-9][a-z0-9_-]{0,63}$")
+    relationship: KnowledgeEdgeEndpointContract
+    from_node_id: NodeId
+    to_node_id: NodeId
+    confidence_milli: int = Field(ge=0, le=1000)
+    anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=32)
+
+
 class ProposedKnowledgeClaim(FrozenModel):
     claim_id: str = Field(pattern=r"^claim_[a-z0-9][a-z0-9_-]{0,63}$")
     text: str = Field(min_length=1, max_length=4000)
@@ -699,8 +725,9 @@ class _KnowledgeAnalysisRequestBase(FrozenModel):
     execution_preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
     execution_preset_sha256: Sha256
     worker_proposal_schema_ref: Literal[
-        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
-    ] = "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0",
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/2.0",
+    ]
     predecessor_analysis_run_id: str | None = Field(
         default=None, pattern=r"^analysisrun_[0-9a-f]{32}$"
     )
@@ -738,6 +765,9 @@ class KnowledgeAnalysisRequestV2(_KnowledgeAnalysisRequestBase):
     accepted_result_schema_ref: Literal["eom://schemas/knowledge/knowledge-analysis-result/2.0"] = (
         "eom://schemas/knowledge/knowledge-analysis-result/2.0"
     )
+    worker_proposal_schema_ref: Literal[
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+    ] = "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
 
 
 class KnowledgeAnalysisRequestV3(_KnowledgeAnalysisRequestBase):
@@ -746,6 +776,22 @@ class KnowledgeAnalysisRequestV3(_KnowledgeAnalysisRequestBase):
     accepted_result_schema_ref: Literal["eom://schemas/knowledge/knowledge-analysis-result/3.0"] = (
         "eom://schemas/knowledge/knowledge-analysis-result/3.0"
     )
+    worker_proposal_schema_ref: Literal[
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+    ] = "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+
+
+class KnowledgeAnalysisRequestV4(_KnowledgeAnalysisRequestBase):
+    """Educational-document request pinned to endpoint-typed proposal protocol V2."""
+
+    schema_version: Literal["knowledge-analysis-request/4.0"] = "knowledge-analysis-request/4.0"
+    worker_proposal_schema_ref: Literal[
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/2.0"
+    ] = "eom://schemas/knowledge/knowledge-analysis-worker-proposal/2.0"
+    accepted_result_schema_ref: Literal["eom://schemas/knowledge/knowledge-analysis-result/4.0"] = (
+        "eom://schemas/knowledge/knowledge-analysis-result/4.0"
+    )
+    source: EducationalDocumentKnowledgeSourceV3
 
 
 class KnowledgeSourceAnchorV2(FrozenModel):
@@ -787,6 +833,55 @@ class KnowledgeAmbiguityV2(FrozenModel):
     _text = field_validator("description")(_safe_text)
 
 
+def _validate_knowledge_proposal_references(
+    *,
+    anchors: tuple[KnowledgeSourceAnchorV2, ...],
+    nodes: tuple[ProposedKnowledgeNode, ...],
+    edges: tuple[ProposedKnowledgeEdge | ProposedKnowledgeEdgeV2, ...],
+    claims: tuple[ProposedKnowledgeClaimV2, ...],
+    component_observations: tuple[KnowledgeComponentObservationV2, ...],
+    unresolved_ambiguities: tuple[KnowledgeAmbiguityV2, ...],
+    general_knowledge_used: bool,
+) -> None:
+    anchor_ids = [anchor.anchor_id for anchor in anchors]
+    node_ids = [node.node_id for node in nodes]
+    edge_ids = [edge.edge_id for edge in edges]
+    claim_ids = [claim.claim_id for claim in claims]
+    component_ids = [item.component_id for item in component_observations]
+    ambiguity_codes = [item.code for item in unresolved_ambiguities]
+    stable_keys = [node.stable_key for node in nodes]
+    for values, label in (
+        (anchor_ids, "anchor"),
+        (node_ids, "node"),
+        (stable_keys, "node stable key"),
+        (edge_ids, "edge"),
+        (claim_ids, "claim"),
+        (component_ids, "component"),
+        (ambiguity_codes, "ambiguity code"),
+    ):
+        if len(values) != len(set(values)):
+            raise ValueError(f"knowledge proposal {label} identities must be unique")
+    known_anchors = set(anchor_ids)
+    known_nodes = set(node_ids)
+    referenced_anchors = [
+        *(node.anchor_ids for node in nodes),
+        *(edge.anchor_ids for edge in edges),
+        *(claim.anchor_ids for claim in claims),
+        *((item.anchor_id,) for item in component_observations),
+        *(item.anchor_ids for item in unresolved_ambiguities),
+    ]
+    if any(not set(values).issubset(known_anchors) for values in referenced_anchors):
+        raise ValueError("knowledge proposal anchor pointer does not resolve")
+    for edge in edges:
+        if edge.from_node_id not in known_nodes or edge.to_node_id not in known_nodes:
+            raise ValueError("knowledge proposal edge endpoint does not resolve")
+        if edge.from_node_id == edge.to_node_id:
+            raise ValueError("knowledge proposal self-edges are not allowed")
+    influenced = any(claim.general_knowledge_influenced for claim in claims)
+    if influenced and not general_knowledge_used:
+        raise ValueError("claim provenance requires general_knowledge_used")
+
+
 class KnowledgeAnalysisWorkerProposal(FrozenModel):
     schema_version: Literal["knowledge-analysis-worker-proposal/1.0"] = (
         "knowledge-analysis-worker-proposal/1.0"
@@ -806,48 +901,61 @@ class KnowledgeAnalysisWorkerProposal(FrozenModel):
 
     @model_validator(mode="after")
     def proposal_references_are_closed(self) -> KnowledgeAnalysisWorkerProposal:
-        anchor_ids = [anchor.anchor_id for anchor in self.anchors]
-        node_ids = [node.node_id for node in self.nodes]
-        edge_ids = [edge.edge_id for edge in self.edges]
-        claim_ids = [claim.claim_id for claim in self.claims]
-        component_ids = [item.component_id for item in self.component_observations]
-        ambiguity_codes = [item.code for item in self.unresolved_ambiguities]
-        stable_keys = [node.stable_key for node in self.nodes]
-        for values, label in (
-            (anchor_ids, "anchor"),
-            (node_ids, "node"),
-            (stable_keys, "node stable key"),
-            (edge_ids, "edge"),
-            (claim_ids, "claim"),
-            (component_ids, "component"),
-            (ambiguity_codes, "ambiguity code"),
-        ):
-            if len(values) != len(set(values)):
-                raise ValueError(f"knowledge proposal {label} identities must be unique")
-        anchors = set(anchor_ids)
-        nodes = set(node_ids)
-        referenced_anchors = [
-            *(node.anchor_ids for node in self.nodes),
-            *(edge.anchor_ids for edge in self.edges),
-            *(claim.anchor_ids for claim in self.claims),
-            *((item.anchor_id,) for item in self.component_observations),
-            *(item.anchor_ids for item in self.unresolved_ambiguities),
-        ]
-        if any(not set(values).issubset(anchors) for values in referenced_anchors):
-            raise ValueError("knowledge proposal anchor pointer does not resolve")
+        _validate_knowledge_proposal_references(
+            anchors=self.anchors,
+            nodes=self.nodes,
+            edges=self.edges,
+            claims=self.claims,
+            component_observations=self.component_observations,
+            unresolved_ambiguities=self.unresolved_ambiguities,
+            general_knowledge_used=self.general_knowledge_used,
+        )
+        return self
+
+
+class KnowledgeAnalysisWorkerProposalV2(FrozenModel):
+    """Proposal whose edges pin and resolve their endpoint types before artifact commit."""
+
+    schema_version: Literal["knowledge-analysis-worker-proposal/2.0"] = (
+        "knowledge-analysis-worker-proposal/2.0"
+    )
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    normalized_markdown: str = Field(min_length=1, max_length=262144)
+    anchors: tuple[KnowledgeSourceAnchorV2, ...] = Field(min_length=1, max_length=1024)
+    nodes: tuple[ProposedKnowledgeNode, ...] = Field(min_length=1, max_length=512)
+    edges: tuple[ProposedKnowledgeEdgeV2, ...] = Field(max_length=1024)
+    claims: tuple[ProposedKnowledgeClaimV2, ...] = Field(max_length=512)
+    component_observations: tuple[KnowledgeComponentObservationV2, ...] = Field(max_length=512)
+    unresolved_ambiguities: tuple[KnowledgeAmbiguityV2, ...] = Field(max_length=128)
+    general_knowledge_used: bool
+    completed_at: UtcDatetime
+
+    _markdown = field_validator("normalized_markdown")(_safe_text)
+
+    @model_validator(mode="after")
+    def edge_endpoint_contracts_resolve(self) -> KnowledgeAnalysisWorkerProposalV2:
+        _validate_knowledge_proposal_references(
+            anchors=self.anchors,
+            nodes=self.nodes,
+            edges=self.edges,
+            claims=self.claims,
+            component_observations=self.component_observations,
+            unresolved_ambiguities=self.unresolved_ambiguities,
+            general_knowledge_used=self.general_knowledge_used,
+        )
+        node_types = {node.node_id: node.node_type for node in self.nodes}
         for edge in self.edges:
-            if edge.from_node_id not in nodes or edge.to_node_id not in nodes:
-                raise ValueError("knowledge proposal edge endpoint does not resolve")
-            if edge.from_node_id == edge.to_node_id:
-                raise ValueError("knowledge proposal self-edges are not allowed")
-        influenced = any(claim.general_knowledge_influenced for claim in self.claims)
-        if influenced and not self.general_knowledge_used:
-            raise ValueError("claim provenance requires general_knowledge_used")
+            relationship = edge.relationship
+            if (
+                node_types[edge.from_node_id] != relationship.from_node_type
+                or node_types[edge.to_node_id] != relationship.to_node_type
+            ):
+                raise ValueError("knowledge proposal edge endpoint type does not match its node")
         return self
 
 
 def validate_knowledge_analysis_proposal_ontology(
-    proposal: KnowledgeAnalysisWorkerProposal,
+    proposal: KnowledgeAnalysisWorkerProposal | KnowledgeAnalysisWorkerProposalV2,
 ) -> None:
     """Validate proposal edges against the closed education-graph ontology.
 
@@ -859,8 +967,13 @@ def validate_knowledge_analysis_proposal_ontology(
 
     node_types = {node.node_id: node.node_type for node in proposal.nodes}
     for edge in proposal.edges:
+        edge_type = (
+            edge.relationship.edge_type
+            if isinstance(edge, ProposedKnowledgeEdgeV2)
+            else edge.edge_type
+        )
         validate_knowledge_edge_endpoint_types(
-            edge.edge_type,
+            edge_type,
             node_types[edge.from_node_id],
             node_types[edge.to_node_id],
         )
@@ -995,6 +1108,31 @@ class KnowledgeAnalysisProposalReceiptV2(_KnowledgeAnalysisProposalReceiptBase):
     source: EducationalDocumentKnowledgeSourceV3
 
 
+class KnowledgeAnalysisProposalReceiptV3(_KnowledgeAnalysisProposalReceiptBase):
+    schema_version: Literal["knowledge-analysis-proposal-receipt/3.0"] = (
+        "knowledge-analysis-proposal-receipt/3.0"
+    )
+    source: EducationalDocumentKnowledgeSourceV3
+
+    @model_validator(mode="after")
+    def endpoint_typed_edge_member(self) -> KnowledgeAnalysisProposalReceiptV3:
+        expected_schema_refs = {
+            "normalized_markdown": "eom://schemas/knowledge/normalized-markdown/1.0",
+            "anchors": "eom://schemas/knowledge/source-anchor/2.0",
+            "nodes": "eom://schemas/knowledge/proposed-node/2.0",
+            "edges": "eom://schemas/knowledge/proposed-edge/3.0",
+            "claims": "eom://schemas/knowledge/proposed-claim/2.0",
+            "component_observations": "eom://schemas/knowledge/component-observation/2.0",
+            "unresolved_ambiguities": "eom://schemas/knowledge/ambiguity/2.0",
+        }
+        if any(
+            getattr(self.members, name).schema_ref != schema_ref
+            for name, schema_ref in expected_schema_refs.items()
+        ):
+            raise ValueError("knowledge proposal V3 member schema reference is inconsistent")
+        return self
+
+
 class KnowledgeAnalysisReviewDecision(FrozenModel):
     schema_version: Literal["knowledge-analysis-review-decision/1.0"] = (
         "knowledge-analysis-review-decision/1.0"
@@ -1074,6 +1212,19 @@ class KnowledgeAnalysisResultV3(_KnowledgeAnalysisResultBase):
             "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/2.0"
         ):
             raise ValueError("knowledge analysis V3 requires a proposal receipt V2 pointer")
+        return self
+
+
+class KnowledgeAnalysisResultV4(_KnowledgeAnalysisResultBase):
+    schema_version: Literal["knowledge-analysis-result/4.0"] = "knowledge-analysis-result/4.0"
+    source: EducationalDocumentKnowledgeSourceV3
+
+    @model_validator(mode="after")
+    def v4_receipt_pointer(self) -> KnowledgeAnalysisResultV4:
+        if self.proposal_receipt.schema_ref != (
+            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/3.0"
+        ):
+            raise ValueError("knowledge analysis V4 requires a proposal receipt V3 pointer")
         return self
 
 

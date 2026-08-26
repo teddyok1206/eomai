@@ -94,6 +94,7 @@ ROLE_BY_RESULT_SCHEMA = {
     "registration-result@4.0": "item_management",
     "knowledge-analysis-proposal-result@1.0": "support",
     "knowledge-analysis-proposal-result@2.0": "support",
+    "knowledge-analysis-proposal-result@3.0": "support",
 }
 GENERATED_RESULT_SCHEMA_PAIRS = frozenset(
     {

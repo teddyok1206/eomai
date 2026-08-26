@@ -118,6 +118,7 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
         "knowledge-analysis-control-bootstrap/3.0",
         "knowledge-analysis-control-bootstrap/4.0",
         "knowledge-analysis-control-bootstrap/5.0",
+        "knowledge-analysis-control-bootstrap/6.0",
     ]
     preset_key: Literal["knowledge-analysis"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -127,8 +128,8 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
     reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"]
     general_knowledge_policy: Literal["ALLOW_WITH_PROVENANCE", "DENY"]
     compatible_workflow_protocols: tuple[
-        Literal["workflow-role/1.4.0", "workflow-role/1.5.0"], ...
-    ] = Field(min_length=1, max_length=2)
+        Literal["workflow-role/1.4.0", "workflow-role/1.5.0", "workflow-role/1.6.0"], ...
+    ] = Field(min_length=1, max_length=3)
     platform_instruction_path: Literal["instructions/platform.md"]
     role_instruction_path: Literal["instructions/knowledge-analysis.md"]
     slot_key: Literal["slot05"]
@@ -139,11 +140,17 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
     def exact_analysis_contract(self) -> KnowledgeAnalysisBootstrapManifest:
         if self.created_at.tzinfo is None or self.created_at.utcoffset() != timedelta(0):
             raise ValueError("knowledge analysis bootstrap timestamp must use UTC")
-        expected_protocols = (
-            ("workflow-role/1.4.0",)
-            if self.schema_version == "knowledge-analysis-control-bootstrap/1.0"
-            else ("workflow-role/1.4.0", "workflow-role/1.5.0")
-        )
+        expected_protocols: tuple[str, ...]
+        if self.schema_version == "knowledge-analysis-control-bootstrap/1.0":
+            expected_protocols = ("workflow-role/1.4.0",)
+        elif self.schema_version == "knowledge-analysis-control-bootstrap/6.0":
+            expected_protocols = (
+                "workflow-role/1.4.0",
+                "workflow-role/1.5.0",
+                "workflow-role/1.6.0",
+            )
+        else:
+            expected_protocols = ("workflow-role/1.4.0", "workflow-role/1.5.0")
         if self.compatible_workflow_protocols != expected_protocols:
             raise ValueError("knowledge analysis bootstrap protocol must be exact")
         return self
@@ -416,6 +423,7 @@ def bootstrap_knowledge_analysis_control_plane(
         "knowledge-analysis-control-bootstrap/3.0": 3,
         "knowledge-analysis-control-bootstrap/4.0": 4,
         "knowledge-analysis-control-bootstrap/5.0": 5,
+        "knowledge-analysis-control-bootstrap/6.0": 6,
     }[manifest.schema_version]
     platform_artifact = _publish_markdown(
         publisher,

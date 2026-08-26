@@ -48,15 +48,28 @@ def test_role_protocol_versions_coexist_without_reinterpreting_history(
 ) -> None:
     old_hash = role_schema_bundle_hash("workflow-role/1.2.0")
     new_hash = role_schema_bundle_hash("workflow-role/1.3.0")
+    analysis_old_hash = role_schema_bundle_hash("workflow-role/1.5.0")
+    analysis_new_hash = role_schema_bundle_hash("workflow-role/1.6.0")
     ensure_protocol_version(db_session, "workflow-role/1.2.0", old_hash)
     ensure_protocol_version(db_session, "workflow-role/1.3.0", new_hash)
+    ensure_protocol_version(db_session, "workflow-role/1.5.0", analysis_old_hash)
+    ensure_protocol_version(db_session, "workflow-role/1.6.0", analysis_new_hash)
+    ensure_protocol_version(db_session, "workflow-role/1.6.0", analysis_new_hash)
     ensure_protocol_version(db_session, "workflow-role/1.3.0", new_hash)
     db_session.flush()
 
     old_record = db_session.get(ProtocolVersionRecord, "workflow-role/1.2.0")
     new_record = db_session.get(ProtocolVersionRecord, "workflow-role/1.3.0")
+    analysis_old_record = db_session.get(ProtocolVersionRecord, "workflow-role/1.5.0")
+    analysis_new_record = db_session.get(ProtocolVersionRecord, "workflow-role/1.6.0")
     assert old_record is not None and old_record.schema_sha256 == old_hash
     assert new_record is not None and new_record.schema_sha256 == new_hash
+    assert (
+        analysis_old_record is not None and analysis_old_record.schema_sha256 == analysis_old_hash
+    )
+    assert (
+        analysis_new_record is not None and analysis_new_record.schema_sha256 == analysis_new_hash
+    )
     with pytest.raises(RuntimeError, match="schema hash mismatch"):
         ensure_protocol_version(db_session, "workflow-role/1.2.0", new_hash)
 

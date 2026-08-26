@@ -21,6 +21,7 @@ ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
 ANALYSIS_CONFIG_V4 = ROOT / "config/control-plane/knowledge-analysis-v4"
 ANALYSIS_CONFIG_V5 = ROOT / "config/control-plane/knowledge-analysis-v5"
+ANALYSIS_CONFIG_V6 = ROOT / "config/control-plane/knowledge-analysis-v6"
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:
@@ -214,6 +215,37 @@ def test_knowledge_analysis_v5_extends_timeout_without_mutating_v4() -> None:
     assert (ANALYSIS_CONFIG_V5 / "instructions/knowledge-analysis.md").read_bytes() == (
         ANALYSIS_CONFIG_V4 / "instructions/knowledge-analysis.md"
     ).read_bytes()
+
+
+def test_knowledge_analysis_v6_adds_endpoint_typed_protocol_without_dropping_legacy() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V6)
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/6.0"
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    assert manifest.timeout_seconds == 7200
+    assert manifest.compatible_workflow_protocols == (
+        "workflow-role/1.4.0",
+        "workflow-role/1.5.0",
+        "workflow-role/1.6.0",
+    )
+    instruction = (ANALYSIS_CONFIG_V6 / manifest.role_instruction_path).read_text(encoding="utf-8")
+    assert "ASSESSMENT_PATTERN" in instruction
+    assert "ASSESSES_CONCEPT" in instruction
+    assert "REQUIRES_CONCEPT" in instruction
+    assert "from_node_type" in instruction
+    expected_v6_sha256 = {
+        "bootstrap.yaml": "1e988b5d67c792268a97d12e57a2d0b195ab9e8b86e363cce4ad5256f7471a1f",
+        "instructions/platform.md": (
+            "43d44eaa7ff40594490da50e03c4dbec885593963b704d9751ba9bf89a789d9e"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "62321ad1f3b268e20377aaf0663bcbcc3ef8265549ca6b597043e8aa3610c312"
+        ),
+    }
+    for relative_path, expected in expected_v6_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V6 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
 
 
 def test_standard_bootstrap_rejects_role_slot_drift_and_symlink_root(tmp_path: Path) -> None:
