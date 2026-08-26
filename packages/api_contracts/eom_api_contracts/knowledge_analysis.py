@@ -57,7 +57,7 @@ class KnowledgeAnalysisBatchSourceInput(EducationalDocumentAnalysisSourceInput):
     source_class: Literal["TEXTBOOK"] = "TEXTBOOK"
     first_physical_page: int = Field(ge=1, le=10000)
     last_physical_page: int = Field(ge=1, le=10000)
-    curriculum_unit_keys: tuple[CurriculumUnitKeyInput, ...] = Field(min_length=1, max_length=32)
+    curriculum_unit_keys: tuple[CurriculumUnitKeyInput, ...] = Field(max_length=32)
 
 
 KnowledgeAnalysisSourceInput = Annotated[
@@ -236,7 +236,7 @@ class KnowledgeAnalysisBatchRangeView(ApiModel):
     document_revision_id: str = Field(pattern=r"^edudocrev_[0-9a-f]{32}$")
     first_physical_page: int = Field(ge=1)
     last_physical_page: int = Field(ge=1)
-    curriculum_unit_keys: tuple[str, ...] = Field(min_length=1, max_length=32)
+    curriculum_unit_keys: tuple[str, ...] = Field(max_length=32)
     source_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
     source_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
     source_sha256: Sha256

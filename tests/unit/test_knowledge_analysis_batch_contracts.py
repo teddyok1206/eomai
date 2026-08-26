@@ -7,6 +7,7 @@ import pytest
 from eom_catalog_contracts import (
     CreateKnowledgeAnalysisBatchCommand,
     KnowledgeAnalysisBatchRequest,
+    KnowledgeAnalysisBatchRequestV2,
     validate_contract,
 )
 from eom_identifiers import content_sha256
@@ -64,6 +65,25 @@ def test_batch_schema_and_typed_contract_accept_ordered_pinned_ranges() -> None:
     assert len(parsed.ranges) == 2
     assert parsed.ranges[0].execution.mode == "REUSE_ACCEPTED"
     assert parsed.ranges[1].execution.mode == "EXECUTE"
+
+
+def test_v1_rejects_but_v1_1_preserves_an_explicit_unmapped_range() -> None:
+    legacy = _request()
+    legacy["ranges"][0]["source"]["curriculum_unit_keys"] = []
+
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("knowledge-analysis-batch-request", legacy)
+    with pytest.raises(ValidationError):
+        KnowledgeAnalysisBatchRequest.model_validate(legacy)
+
+    current = _request()
+    current["schema_version"] = "knowledge-analysis-batch-request/1.1"
+    current["ranges"][0]["source"]["curriculum_unit_keys"] = []
+    validate_contract("knowledge-analysis-batch-request-v2", current)
+    parsed = KnowledgeAnalysisBatchRequestV2.model_validate(current)
+
+    assert parsed.ranges[0].source.curriculum_unit_keys == ()
+    assert parsed.ranges[1].source.curriculum_unit_keys == ("1-(1)",)
 
 
 def test_batch_schema_rejects_unknown_fields_before_typed_validation() -> None:
@@ -128,11 +148,15 @@ def test_batch_command_is_canonically_hashed_and_has_no_auth_material() -> None:
 
 
 def test_batch_schema_canonical_and_packaged_bytes_are_pinned() -> None:
-    expected = "6050ea59b635cb50e718e76dd92967ddb88f55dede0e67fed3b55376ec65ce7e"
-    for path in (
-        "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
-        "packages/catalog_contracts/eom_catalog_contracts/resources/knowledge/"
-        "knowledge-analysis-batch-request-v1.schema.json",
-    ):
-        with open(path, "rb") as schema_file:
-            assert hashlib.sha256(schema_file.read()).hexdigest() == expected
+    expected_by_version = {
+        "v1": "6050ea59b635cb50e718e76dd92967ddb88f55dede0e67fed3b55376ec65ce7e",
+        "v2": "f64c59baa793738cc09dcc264dd0cae0f9d6da702367af4437ef5be0417892dd",
+    }
+    for version, expected in expected_by_version.items():
+        for path in (
+            f"schemas/knowledge/knowledge-analysis-batch-request-{version}.schema.json",
+            "packages/catalog_contracts/eom_catalog_contracts/resources/knowledge/"
+            f"knowledge-analysis-batch-request-{version}.schema.json",
+        ):
+            with open(path, "rb") as schema_file:
+                assert hashlib.sha256(schema_file.read()).hexdigest() == expected

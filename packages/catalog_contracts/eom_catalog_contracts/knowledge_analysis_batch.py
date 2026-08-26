@@ -63,10 +63,7 @@ class KnowledgeAnalysisBatchRangeRequest(FrozenModel):
     execution: KnowledgeAnalysisBatchRangeExecution
 
 
-class KnowledgeAnalysisBatchRequest(FrozenModel):
-    schema_version: Literal["knowledge-analysis-batch-request/1.0"] = (
-        "knowledge-analysis-batch-request/1.0"
-    )
+class _KnowledgeAnalysisBatchRequestBase(FrozenModel):
     preset_key: Literal["knowledge-analysis"] = "knowledge-analysis"
     general_knowledge_mode: Literal["AUXILIARY_UNATTRIBUTED"] = "AUXILIARY_UNATTRIBUTED"
     risk_policy_revision_id: str = Field(pattern=r"^analysisriskrev_[0-9a-f]{32}$")
@@ -74,7 +71,7 @@ class KnowledgeAnalysisBatchRequest(FrozenModel):
     ranges: tuple[KnowledgeAnalysisBatchRangeRequest, ...] = Field(min_length=1, max_length=1000)
 
     @model_validator(mode="after")
-    def ordered_nonoverlapping_ranges(self) -> KnowledgeAnalysisBatchRequest:
+    def ordered_nonoverlapping_ranges(self) -> _KnowledgeAnalysisBatchRequestBase:
         if tuple(item.ordinal for item in self.ranges) != tuple(range(len(self.ranges))):
             raise ValueError("batch range ordinals must be contiguous from zero")
         prior_by_revision: dict[str, KnowledgeAnalysisBatchSourceRange] = {}
@@ -101,9 +98,38 @@ class KnowledgeAnalysisBatchRequest(FrozenModel):
         return self
 
 
+class KnowledgeAnalysisBatchRequest(_KnowledgeAnalysisBatchRequestBase):
+    schema_version: Literal["knowledge-analysis-batch-request/1.0"] = (
+        "knowledge-analysis-batch-request/1.0"
+    )
+
+
+class KnowledgeAnalysisBatchSourceRangeV2(KnowledgeAnalysisBatchSourceRange):
+    """V1.1 source range that preserves an explicit missing curriculum mapping."""
+
+    curriculum_unit_keys: tuple[CurriculumUnitKey, ...] = Field(max_length=32)
+
+
+class KnowledgeAnalysisBatchRangeRequestV2(KnowledgeAnalysisBatchRangeRequest):
+    source: KnowledgeAnalysisBatchSourceRangeV2
+
+
+class KnowledgeAnalysisBatchRequestV2(_KnowledgeAnalysisBatchRequestBase):
+    schema_version: Literal["knowledge-analysis-batch-request/1.1"] = (
+        "knowledge-analysis-batch-request/1.1"
+    )
+    ranges: tuple[KnowledgeAnalysisBatchRangeRequestV2, ...] = Field(min_length=1, max_length=1000)
+
+
+KnowledgeAnalysisBatchRequestValue = Annotated[
+    KnowledgeAnalysisBatchRequest | KnowledgeAnalysisBatchRequestV2,
+    Field(discriminator="schema_version"),
+]
+
+
 class CreateKnowledgeAnalysisBatchCommand(FrozenModel):
     operation: Literal["CREATE_KNOWLEDGE_ANALYSIS_BATCH"] = "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
-    request: KnowledgeAnalysisBatchRequest
+    request: KnowledgeAnalysisBatchRequestValue
     requested_by: ActorId
     authorized_at: UtcDatetime
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[\x21-\x7e]+$")

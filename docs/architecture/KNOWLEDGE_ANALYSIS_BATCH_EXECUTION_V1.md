@@ -4,6 +4,26 @@ Status: design approved for implementation
 
 Date: 2026-08-26 UTC
 
+## V1.1 unmapped-range extension
+
+The immutable `knowledge-analysis-batch-request/1.0` contract remains available byte-for-byte and
+continues to require at least one curriculum unit key per range. The additive
+`knowledge-analysis-batch-request/1.1` contract permits an empty `curriculum_unit_keys` tuple with
+one precise meaning: the pinned textbook pages are intentionally not mapped to a curriculum unit
+at submission time. Typical examples are covers, front matter, transitions, indexes, and appendices.
+
+The canonical source remains the pinned Educational Document Revision and its resolved Artifact
+Revision/hash. Empty keys do not authorize nearest-unit inference, implicit latest-revision lookup,
+or omission of pages. They preserve the absence of a reviewed mapping so downstream analysis can
+produce independently attributable graph evidence without corrupting curriculum provenance.
+
+Dominant access patterns, normalized rows, indexes, transaction boundaries, runner ownership,
+one-attempt behavior, review authorization, and idempotency are unchanged. Validation dispatches
+by the explicit request schema version. Public creation emits V1.1; private Catalog transport reads
+both V1 and V1.1. This adds no dependency, migration, binary payload, cache, or new cross-service
+write path. Filtering unmapped pages was rejected because the product requirement covers every
+page; assigning a nearby unit was rejected because it would manufacture canonical data.
+
 ## 1. Responsibility and boundary
 
 `KnowledgeAnalysisBatch` is an operator-authorized aggregate for executing a finite, immutable set

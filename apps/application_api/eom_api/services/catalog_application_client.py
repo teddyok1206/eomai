@@ -157,7 +157,7 @@ class CatalogApplicationClient:
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
         request_schema = (
-            "catalog-application-request-v6"
+            "catalog-application-request-v7"
             if command.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
             else "catalog-application-request-v4"
             if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"

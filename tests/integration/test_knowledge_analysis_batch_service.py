@@ -13,8 +13,11 @@ from eom_catalog_contracts import (
     EducationalDocumentKnowledgeAnalysisSelection,
     ExecuteKnowledgeAnalysisRange,
     KnowledgeAnalysisBatchRangeRequest,
+    KnowledgeAnalysisBatchRangeRequestV2,
     KnowledgeAnalysisBatchRequest,
+    KnowledgeAnalysisBatchRequestV2,
     KnowledgeAnalysisBatchSourceRange,
+    KnowledgeAnalysisBatchSourceRangeV2,
     ReconcileKnowledgeAnalysisCommand,
     ReuseAcceptedKnowledgeAnalysisRange,
     ReviewKnowledgeAnalysisCommand,
@@ -89,6 +92,33 @@ def _batch_command(
     )
 
 
+def _unmapped_batch_command(document_revision_id: str) -> CreateKnowledgeAnalysisBatchCommand:
+    request = KnowledgeAnalysisBatchRequestV2(
+        risk_policy_revision_id=POLICY_ID,
+        ranges=tuple(
+            KnowledgeAnalysisBatchRangeRequestV2(
+                ordinal=ordinal,
+                source=KnowledgeAnalysisBatchSourceRangeV2(
+                    document_revision_id=document_revision_id,
+                    first_physical_page=ordinal + 1,
+                    last_physical_page=ordinal + 1,
+                    curriculum_unit_keys=() if ordinal == 0 else ("1-(1)",),
+                ),
+                execution=ExecuteKnowledgeAnalysisRange(),
+            )
+            for ordinal in range(2)
+        ),
+    )
+    canonical = {"request": request.model_dump(mode="json"), "requested_by": OPERATOR_ID}
+    return CreateKnowledgeAnalysisBatchCommand(
+        request=request,
+        requested_by=OPERATOR_ID,
+        authorized_at=datetime(2026, 8, 26, 1, tzinfo=UTC),
+        idempotency_key=f"knowledge-analysis-batch-unmapped:{uuid4().hex}",
+        submission_sha256=content_sha256(canonical),
+    )
+
+
 def _make_submitted_range_due(
     engine: Engine,
     *,
@@ -110,7 +140,7 @@ def test_batch_executes_fifo_with_one_active_range_and_no_duplicate_submission(
     _ensure_dependencies(integration_engine, orchestrator_settings)
     document_revision_id = _document_source(integration_engine, catalog_settings, tmp_path)[1]
     service = KnowledgeAnalysisBatchService(integration_engine, catalog_settings)
-    command = _batch_command(document_revision_id)
+    command = _unmapped_batch_command(document_revision_id)
 
     read_calls = 0
     read_member = service.artifacts.read_member
@@ -161,6 +191,8 @@ def test_batch_executes_fifo_with_one_active_range_and_no_duplicate_submission(
             )
         )
         assert tuple(row.state for row in ranges) == ("SUBMITTED", "PENDING")
+        assert ranges[0].curriculum_unit_keys == []
+        assert ranges[1].curriculum_unit_keys == ["1-(1)"]
         assert ranges[0].submission_attempts == 1
         assert ranges[0].analysis_run_id is not None
         first_range_id = ranges[0].range_id

@@ -230,7 +230,29 @@ def test_fresh_admin_authorizes_one_pointer_only_batch_and_replay_is_idempotent(
         assert serialized["request"]["ranges"][0]["source"]["document_revision_id"] == (
             DOCUMENT_REVISION_ID
         )
+        assert serialized["request"]["schema_version"] == ("knowledge-analysis-batch-request/1.1")
         assert not ({"session_id", "token", "password"} & set(serialized))
+    finally:
+        services.engine.dispose()
+
+
+def test_batch_creation_preserves_an_explicit_unmapped_textbook_range() -> None:
+    client, services = _client(admin=True)
+    body = _request_body()
+    ranges = body["ranges"]
+    assert isinstance(ranges, list)
+    ranges[0]["source"]["curriculum_unit_keys"] = []
+    try:
+        with client:
+            response = client.post(
+                "/api/v1/knowledge-analysis-batches",
+                headers={"Idempotency-Key": "knowledge-analysis-batch-api-unmapped-0001"},
+                json=body,
+            )
+        assert response.status_code == 202
+        command = services.catalog_application.commands[0]
+        assert command.request.ranges[0].source.curriculum_unit_keys == ()
+        assert command.request.schema_version == "knowledge-analysis-batch-request/1.1"
     finally:
         services.engine.dispose()
 

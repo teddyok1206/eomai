@@ -76,9 +76,12 @@ class KnowledgeAnalysisBatchService:
     ) -> KnowledgeAnalysisBatchApplicationResult:
         """Validate all immutable dependencies and insert one complete aggregate."""
 
-        validate_contract(
-            "knowledge-analysis-batch-request", command.request.model_dump(mode="json")
+        request_schema = (
+            "knowledge-analysis-batch-request-v2"
+            if command.request.schema_version == "knowledge-analysis-batch-request/1.1"
+            else "knowledge-analysis-batch-request"
         )
+        validate_contract(request_schema, command.request.model_dump(mode="json"))
         try:
             with transaction(self.sessions) as session:
                 existing = session.scalar(

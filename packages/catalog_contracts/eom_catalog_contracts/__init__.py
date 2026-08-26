@@ -113,8 +113,11 @@ from eom_catalog_contracts.knowledge_analysis_batch import (
     ExecuteKnowledgeAnalysisRange,
     KnowledgeAnalysisBatchApplicationResult,
     KnowledgeAnalysisBatchRangeRequest,
+    KnowledgeAnalysisBatchRangeRequestV2,
     KnowledgeAnalysisBatchRequest,
+    KnowledgeAnalysisBatchRequestV2,
     KnowledgeAnalysisBatchSourceRange,
+    KnowledgeAnalysisBatchSourceRangeV2,
     ReuseAcceptedKnowledgeAnalysisRange,
 )
 from eom_catalog_contracts.legacy_knowledge import (
@@ -297,8 +300,11 @@ __all__ = [
     "KnowledgeAnalysisApplicationResult",
     "KnowledgeAnalysisBatchApplicationResult",
     "KnowledgeAnalysisBatchRangeRequest",
+    "KnowledgeAnalysisBatchRangeRequestV2",
     "KnowledgeAnalysisBatchRequest",
+    "KnowledgeAnalysisBatchRequestV2",
     "KnowledgeAnalysisBatchSourceRange",
+    "KnowledgeAnalysisBatchSourceRangeV2",
     "KnowledgeAnalysisDocumentDependencyV3",
     "KnowledgeAnalysisDocumentMaterializationMemberV3",
     "KnowledgeAnalysisOriginalSourceMemberV3",

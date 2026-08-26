@@ -28,6 +28,7 @@ from eom_catalog_contracts import (
 )
 from eom_catalog_service.application_server import CatalogApplicationServer
 from eom_identifiers import content_sha256
+from jsonschema import ValidationError as JsonSchemaValidationError
 
 from tests.unit.test_assessment_item_content import item_content
 
@@ -268,6 +269,16 @@ def _batch_command() -> CreateKnowledgeAnalysisBatchCommand:
     return CreateKnowledgeAnalysisBatchCommand.model_validate(value)
 
 
+def _unmapped_batch_command() -> CreateKnowledgeAnalysisBatchCommand:
+    value = _batch_command().model_dump(mode="json")
+    value["request"]["schema_version"] = "knowledge-analysis-batch-request/1.1"
+    value["request"]["ranges"][0]["source"]["curriculum_unit_keys"] = []
+    value["submission_sha256"] = content_sha256(
+        {"request": value["request"], "requested_by": value["requested_by"]}
+    )
+    return CreateKnowledgeAnalysisBatchCommand.model_validate(value)
+
+
 def _server(tmp_path: Path, *, allowed_uid: int | None = None) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -355,6 +366,13 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
     batch_command = _batch_command()
     batch_request = CatalogApplicationRequest(root=batch_command).model_dump(mode="json")
     validate_contract("catalog-application-request-v6", batch_request)
+    validate_contract("catalog-application-request-v7", batch_request)
+    unmapped_batch_request = CatalogApplicationRequest(root=_unmapped_batch_command()).model_dump(
+        mode="json"
+    )
+    validate_contract("catalog-application-request-v7", unmapped_batch_request)
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("catalog-application-request-v6", unmapped_batch_request)
     batch_response = CatalogApplicationResponse(
         status="OK",
         operation="CREATE_KNOWLEDGE_ANALYSIS_BATCH",

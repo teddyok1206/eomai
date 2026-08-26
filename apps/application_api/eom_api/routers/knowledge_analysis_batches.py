@@ -14,9 +14,9 @@ from eom_api_contracts.knowledge_analysis import (
 from eom_catalog_contracts import (
     CreateKnowledgeAnalysisBatchCommand,
     ExecuteKnowledgeAnalysisRange,
-    KnowledgeAnalysisBatchRangeRequest,
-    KnowledgeAnalysisBatchRequest,
-    KnowledgeAnalysisBatchSourceRange,
+    KnowledgeAnalysisBatchRangeRequestV2,
+    KnowledgeAnalysisBatchRequestV2,
+    KnowledgeAnalysisBatchSourceRangeV2,
     ReuseAcceptedKnowledgeAnalysisRange,
 )
 from eom_identifiers import content_sha256
@@ -56,13 +56,13 @@ def create_knowledge_analysis_batch(
             endpoint_key="knowledge_analysis_batch_create",
             raw_key=idempotency_key,
         )
-        ranges: list[KnowledgeAnalysisBatchRangeRequest] = []
+        ranges: list[KnowledgeAnalysisBatchRangeRequestV2] = []
         for item in body.ranges:
             execution = item.execution
             ranges.append(
-                KnowledgeAnalysisBatchRangeRequest(
+                KnowledgeAnalysisBatchRangeRequestV2(
                     ordinal=item.ordinal,
-                    source=KnowledgeAnalysisBatchSourceRange(
+                    source=KnowledgeAnalysisBatchSourceRangeV2(
                         document_revision_id=item.source.document_revision_id,
                         first_physical_page=item.source.first_physical_page,
                         last_physical_page=item.source.last_physical_page,
@@ -79,7 +79,7 @@ def create_knowledge_analysis_batch(
                     ),
                 )
             )
-        batch_request = KnowledgeAnalysisBatchRequest(
+        batch_request = KnowledgeAnalysisBatchRequestV2(
             preset_key=body.preset_key,
             general_knowledge_mode=body.general_knowledge_mode,
             risk_policy_revision_id=body.risk_policy_revision_id,
