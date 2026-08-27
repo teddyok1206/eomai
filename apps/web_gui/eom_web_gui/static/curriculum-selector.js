@@ -37,6 +37,45 @@ export function isCurriculumDescendant(units, childKey, ancestorKey) {
   return Object.values(ancestors).includes(ancestorKey);
 }
 
+export function curriculumOptionsForSelection(units, selection) {
+  const byKey = indexCurriculumUnits(units);
+  const selectedLarge = selection.large || "";
+  const selectedMiddle = selection.middle || "";
+  if (selectedLarge && byKey.get(selectedLarge)?.level !== "LARGE") {
+    throw new Error("CURRICULUM_LARGE_SELECTION_INVALID");
+  }
+  if (selectedMiddle && byKey.get(selectedMiddle)?.level !== "MIDDLE") {
+    throw new Error("CURRICULUM_MIDDLE_SELECTION_INVALID");
+  }
+
+  function belongsTo(unit, ancestorKey) {
+    let current = unit;
+    const visited = new Set();
+    while (current?.parent_key) {
+      if (visited.has(current.key)) throw new Error("CURRICULUM_OUTLINE_CYCLE");
+      visited.add(current.key);
+      if (current.parent_key === ancestorKey) return true;
+      if (current.level === "LARGE") return false;
+      current = byKey.get(current.parent_key);
+      if (!current) throw new Error("CURRICULUM_OUTLINE_PARENT_MISSING");
+    }
+    return false;
+  }
+
+  const large = units.filter((unit) => unit.level === "LARGE");
+  const middle = units.filter(
+    (unit) => unit.level === "MIDDLE" && (!selectedLarge || unit.parent_key === selectedLarge),
+  );
+  const small = units.filter(
+    (unit) =>
+      unit.level === "SMALL" &&
+      (!selectedMiddle
+        ? !selectedLarge || belongsTo(unit, selectedLarge)
+        : unit.parent_key === selectedMiddle),
+  );
+  return {large, middle, small};
+}
+
 export function reconcileCurriculumSelection(units, selection, changedLevel) {
   const next = {
     large: selection.large || "",

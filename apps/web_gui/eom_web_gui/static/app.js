@@ -1,5 +1,6 @@
 import {
   curriculumAncestors,
+  curriculumOptionsForSelection,
   deepestCurriculumUnitKey,
   reconcileCurriculumSelection,
 } from "./curriculum-selector.js";
@@ -297,22 +298,34 @@ function renderCurriculumOutline() {
   const units = state.curriculumOutline?.units;
   if (!Array.isArray(units)) return;
   const byKey = new Map(units.map((unit) => [unit.key, unit]));
+  const options = curriculumOptionsForSelection(units, state.curriculumSelection);
   replaceCurriculumOptions(
     form.elements.curriculum_large_unit_key,
     "대단원 선택",
-    units.filter((unit) => unit.level === "LARGE"),
+    options.large,
     (unit) => `${unit.code} ${unit.label}`,
   );
   replaceCurriculumOptions(
     form.elements.curriculum_middle_unit_key,
     "중단원 선택",
-    units.filter((unit) => unit.level === "MIDDLE"),
+    options.middle,
     (unit) => {
       const parent = byKey.get(unit.parent_key);
       return `${unit.code} ${unit.label}${parent ? ` · ${parent.label}` : ""}`;
     },
   );
-  setCurriculumSelection(state.curriculumSelection);
+  replaceCurriculumOptions(
+    form.elements.curriculum_small_unit_key,
+    options.small.length ? "소단원 선택" : "소단원 목록 준비 중",
+    options.small,
+    (unit) => {
+      const parent = byKey.get(unit.parent_key);
+      return `${unit.code} ${unit.label}${parent ? ` · ${parent.label}` : ""}`;
+    },
+  );
+  form.elements.curriculum_large_unit_key.value = state.curriculumSelection.large;
+  form.elements.curriculum_middle_unit_key.value = state.curriculumSelection.middle;
+  form.elements.curriculum_small_unit_key.value = state.curriculumSelection.small;
 }
 
 function setCurriculumSelection(selection) {
@@ -321,10 +334,7 @@ function setCurriculumSelection(selection) {
     middle: selection.middle || "",
     small: selection.small || "",
   };
-  const form = $("#draft-form");
-  form.elements.curriculum_large_unit_key.value = state.curriculumSelection.large;
-  form.elements.curriculum_middle_unit_key.value = state.curriculumSelection.middle;
-  form.elements.curriculum_small_unit_key.value = state.curriculumSelection.small;
+  renderCurriculumOutline();
 }
 
 function changeCurriculumSelection(level, value) {
@@ -348,10 +358,10 @@ function syncGraphGroundingCapability() {
 function syncCurriculumSelectorAvailability() {
   const form = $("#draft-form");
   const available = Array.isArray(state.curriculumOutline?.units);
+  const smallAvailable = state.curriculumOutline?.units.some((unit) => unit.level === "SMALL") === true;
   form.elements.curriculum_large_unit_key.disabled = !available;
   form.elements.curriculum_middle_unit_key.disabled = !available;
-  // SMALL remains a reserved UI slot until a reviewed source list is published.
-  form.elements.curriculum_small_unit_key.disabled = true;
+  form.elements.curriculum_small_unit_key.disabled = !smallAvailable;
 }
 
 async function loadCurriculumOutline() {

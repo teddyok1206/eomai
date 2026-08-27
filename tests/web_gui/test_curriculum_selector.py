@@ -24,7 +24,11 @@ def test_middle_first_selection_fills_parent_and_fails_closed(tmp_path: Path) ->
         )
     )
     script = f"""
-import {{curriculumAncestors, reconcileCurriculumSelection}} from {json.dumps(module.as_uri())};
+import {{
+  curriculumAncestors,
+  curriculumOptionsForSelection,
+  reconcileCurriculumSelection,
+}} from {json.dumps(module.as_uri())};
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 const outline = JSON.parse(input);
@@ -34,6 +38,11 @@ const selected = reconcileCurriculumSelection(
   "MIDDLE",
 );
 if (selected.large !== "eom.is.large.3") throw new Error("MIDDLE_PARENT_NOT_FILLED");
+const selectedOptions = curriculumOptionsForSelection(outline.units, selected);
+if (selectedOptions.middle.length !== 7) throw new Error("MIDDLE_OPTIONS_NOT_FILTERED");
+if (selectedOptions.middle.some((unit) => unit.parent_key !== "eom.is.large.3")) {{
+  throw new Error("MIDDLE_OPTIONS_ESCAPE_LARGE");
+}}
 const changed = reconcileCurriculumSelection(
   outline.units,
   {{...selected, large: "eom.is.large.4"}},
@@ -44,7 +53,38 @@ const futureUnits = [...outline.units, {{
   key: "eom.is.small.3-2-a",
   level: "SMALL",
   parent_key: "eom.is.middle.3-2",
+  code: "3-(2)-가",
+  label: "가",
+}}, {{
+  key: "eom.is.small.3-3-a",
+  level: "SMALL",
+  parent_key: "eom.is.middle.3-3",
+  code: "3-(3)-가",
+  label: "가",
+}}, {{
+  key: "eom.is.small.4-1-a",
+  level: "SMALL",
+  parent_key: "eom.is.middle.4-1",
+  code: "4-(1)-가",
+  label: "가",
 }}];
+const largeOnlyOptions = curriculumOptionsForSelection(futureUnits, {{
+  large: "eom.is.large.3", middle: "", small: "",
+}});
+if (largeOnlyOptions.small.map((unit) => unit.key).join(",") !==
+    "eom.is.small.3-2-a,eom.is.small.3-3-a") {{
+  throw new Error("SMALL_OPTIONS_NOT_FILTERED_BY_LARGE");
+}}
+const middleOptions = curriculumOptionsForSelection(futureUnits, {{
+  large: "eom.is.large.3", middle: "eom.is.middle.3-2", small: "",
+}});
+if (middleOptions.small.map((unit) => unit.key).join(",") !== "eom.is.small.3-2-a") {{
+  throw new Error("SMALL_OPTIONS_NOT_FILTERED_BY_MIDDLE");
+}}
+const unscopedOptions = curriculumOptionsForSelection(futureUnits, {{
+  large: "", middle: "", small: "",
+}});
+if (unscopedOptions.small.length !== 3) throw new Error("SMALL_FIRST_OPTIONS_MISSING");
 const futureSmall = reconcileCurriculumSelection(
   futureUnits,
   {{large: "", middle: "", small: "eom.is.small.3-2-a"}},

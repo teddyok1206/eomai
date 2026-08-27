@@ -141,7 +141,8 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "graph_grounding_available === true" in javascript
     assert "curriculum_large_unit_key.disabled = !available" in javascript
     assert "curriculum_middle_unit_key.disabled = !available" in javascript
-    assert "curriculum_small_unit_key.disabled = true" in javascript
+    assert "curriculum_small_unit_key.disabled = !smallAvailable" in javascript
+    assert "curriculumOptionsForSelection" in javascript
     assert "state.draft === null" not in javascript
     assert "pendingCurriculumSelection" in javascript
     assert "fillDraft(draft, pendingCurriculumSelection)" in javascript
