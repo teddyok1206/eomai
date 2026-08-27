@@ -69,7 +69,7 @@ class Settings:
     nas_artifact_root: Path = Path("/mnt/nas/eom/artifacts")
     codex_binary: Path = Path("/usr/local/bin/codex")
     codex_capability_policy: Path = DEFAULT_CODEX_CAPABILITY_POLICY
-    worker_timeout_seconds: int = 600
+    worker_timeout_seconds: int = 1800
     worker_config_source: WorkerConfigSource = WorkerConfigSource.OPERATOR_DEFAULT
 
     @classmethod
@@ -95,7 +95,7 @@ class Settings:
             ),
             codex_binary=Path(os.environ.get("EOM_CODEX_BINARY", "/usr/local/bin/codex")),
             codex_capability_policy=capability_policy,
-            worker_timeout_seconds=int(os.environ.get("EOM_WORKER_TIMEOUT_SECONDS", "600")),
+            worker_timeout_seconds=int(os.environ.get("EOM_WORKER_TIMEOUT_SECONDS", "1800")),
             worker_config_source=(
                 WorkerConfigSource.ENVIRONMENT
                 if configured_worker_path

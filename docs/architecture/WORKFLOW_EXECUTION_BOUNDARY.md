@@ -113,7 +113,7 @@ root-owned Codex executable before invoking the fixed Codex CLI.
 | `MemoryMax=6G` | `MemoryMax=6G` | retained |
 | `CPUQuota=200%` | `CPUQuota=200%` | retained |
 | `TasksMax=256` | `TasksMax=256` | retained |
-| client timeout and `systemctl stop` | server `TimeoutStartSec=600`, client guard at 630s | changed; no `stop` authorization is required |
+| client timeout and `systemctl stop` | standard server `TimeoutStartSec=1800`, client guard at 1830s | changed; no `stop` authorization is required |
 | `--pipe` capture | bounded workspace stdout/stderr files | changed; correctness depends only on result/status protocols |
 | `--collect` | oneshot process ends; status remains queryable | changed; no process lingers and exit metadata remains available |
 | implicit capability/address policy | empty capabilities, kernel-module/control-group/SUID/personality/realtime/device/host/clock guards, fixed address families, nested-sandbox-owned proc/sys boundary | strengthened without blocking Codex sandbox construction or network access |

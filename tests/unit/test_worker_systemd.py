@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from eom_orchestrator.control_bootstrap import load_standard_bootstrap_manifest
 from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.worker_exec import (
     _load_image_inputs,
@@ -28,6 +29,7 @@ from eom_orchestrator.worker_systemd import (
     FixedUnitStatus,
     WorkerAuthSystemdObservation,
     auth_unit_name,
+    fixed_worker_timeout_seconds,
     inspect_worker_unit_activity,
     launch_worker_unit,
     observe_worker_auth_systemd,
@@ -48,11 +50,13 @@ PROBE_UNIT = "eom-worker-probe-01@probe_0123456789abcdef0123456789abcdef.service
 
 def _slot(index: int = 1) -> WorkerSlot:
     slot_id = f"{index:02d}"
-    return WorkerSlot(
-        slot_id=slot_id,
-        linux_user=f"eom-cdx-{slot_id}",
-        role="authoring",
-        enabled=True,
+    return WorkerSlot.model_validate(
+        {
+            "slot_id": slot_id,
+            "linux_user": f"eom-cdx-{slot_id}",
+            "role": "authoring",
+            "enabled": True,
+        }
     )
 
 
@@ -145,7 +149,7 @@ def test_launcher_preserves_worker_exit_code(monkeypatch: pytest.MonkeyPatch) ->
         ),
     )
 
-    run = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+    run = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=1800)
 
     assert run.exit_code == 1
 
@@ -165,7 +169,7 @@ def test_launcher_distinguishes_unit_start_failure(monkeypatch: pytest.MonkeyPat
     )
 
     with pytest.raises(PlatformError) as captured:
-        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=1800)
 
     assert captured.value.code is ErrorCode.WORKER_UNAVAILABLE
 
@@ -180,7 +184,7 @@ def test_launcher_distinguishes_systemd_timeout(monkeypatch: pytest.MonkeyPatch)
     )
 
     with pytest.raises(PlatformError) as captured:
-        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=1800)
 
     assert captured.value.code is ErrorCode.WORKER_TIMEOUT
 
@@ -192,7 +196,7 @@ def test_launcher_accepts_success_with_retained_metadata(monkeypatch: pytest.Mon
         lambda *_args, **_kwargs: FixedUnitRun(unit, 0, b"", b"", _status(), 3),
     )
 
-    run = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+    run = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=1800)
 
     assert run.exit_code == 0
     assert run.status is not None and run.status.process_started
@@ -208,7 +212,7 @@ def test_launcher_accepts_success_with_collected_reset_metadata(
         lambda *_args, **_kwargs: FixedUnitRun(unit, 0, b"", b"", reset, 3),
     )
 
-    run = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+    run = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=1800)
 
     assert run.exit_code == 0
     assert run.status == reset
@@ -243,7 +247,7 @@ def test_launcher_accepts_production_collected_lifecycle(
 
     monkeypatch.setattr("eom_orchestrator.worker_systemd.subprocess.run", run)
 
-    result = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+    result = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=1800)
 
     assert result.exit_code == 0
     assert result.status is not None and not result.status.process_started
@@ -263,7 +267,7 @@ def test_launcher_accepts_success_when_collected_status_is_unavailable(
         lambda *_args, **_kwargs: FixedUnitRun(unit, 0, b"", b"", None, 4),
     )
 
-    run = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+    run = launch_worker_unit(_slot(), JOB_ID, timeout_seconds=1800)
 
     assert run.exit_code == 0
     assert run.status is None
@@ -277,7 +281,7 @@ def test_launcher_rejects_missing_unit(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     with pytest.raises(PlatformError) as captured:
-        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=1800)
 
     assert captured.value.code is ErrorCode.WORKER_UNAVAILABLE
 
@@ -292,7 +296,7 @@ def test_launcher_rejects_lingering_unit(monkeypatch: pytest.MonkeyPatch) -> Non
     )
 
     with pytest.raises(PlatformError) as captured:
-        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=1800)
 
     assert captured.value.code is ErrorCode.WORKER_UNAVAILABLE
 
@@ -307,14 +311,14 @@ def test_launcher_rejects_unexpected_activity_observation(
     )
 
     with pytest.raises(PlatformError) as captured:
-        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=600)
+        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=1800)
 
     assert captured.value.code is ErrorCode.WORKER_UNAVAILABLE
 
 
 def test_launcher_rejects_timeout_outside_fixed_unit_contract() -> None:
     with pytest.raises(PlatformError) as captured:
-        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=599)
+        launch_worker_unit(_slot(), JOB_ID, timeout_seconds=1799)
 
     assert captured.value.code is ErrorCode.WORKER_UNAVAILABLE
 
@@ -651,14 +655,29 @@ def test_canonical_unit_and_helper_hashes_match_runtime_contract() -> None:
     assert hashlib.sha256(auth_executable.read_bytes()).hexdigest() == WORKER_AUTH_EXECUTABLE_SHA256
 
 
-def test_only_analysis_slot_has_the_two_hour_systemd_ceiling() -> None:
+def test_standard_and_analysis_slots_have_their_reviewed_systemd_ceilings() -> None:
     for index in range(1, 5):
         unit = ROOT / "infra/systemd" / f"eom-worker-{index:02d}@.service"
-        assert "TimeoutStartSec=600\n" in unit.read_text(encoding="utf-8")
+        assert "TimeoutStartSec=1800\n" in unit.read_text(encoding="utf-8")
     analysis_unit = ROOT / "infra/systemd/eom-worker-05@.service"
     analysis_text = analysis_unit.read_text(encoding="utf-8")
     assert "TimeoutStartSec=7200\n" in analysis_text
-    assert "TimeoutStartSec=600\n" not in analysis_text
+    assert "TimeoutStartSec=1800\n" not in analysis_text
+
+
+def test_standard_preset_timeouts_match_fixed_worker_unit_contract() -> None:
+    manifest = load_standard_bootstrap_manifest(ROOT / "config/control-plane/standard-item-v1")
+    for role in manifest.roles:
+        slot_id = role.slot_key.removeprefix("slot")
+        slot = WorkerSlot.model_validate(
+            {
+                "slot_id": slot_id,
+                "linux_user": f"eom-cdx-{slot_id}",
+                "role": role.role,
+                "enabled": True,
+            }
+        )
+        assert role.timeout_seconds == fixed_worker_timeout_seconds(slot)
 
 
 def test_collect_mode_is_only_in_probe_unit_sections() -> None:

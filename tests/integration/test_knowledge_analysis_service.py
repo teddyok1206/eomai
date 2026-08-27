@@ -132,7 +132,7 @@ def _settings(tmp_path: Path) -> tuple[Settings, CatalogSettings]:
             nas_artifact_root=nas.resolve(),
             codex_binary=Path("/usr/local/bin/codex"),
             codex_capability_policy=Path("config/codex-capabilities.example.yaml").resolve(),
-            worker_timeout_seconds=600,
+            worker_timeout_seconds=1800,
         ),
         CatalogSettings(
             staging_root=catalog_staging,

@@ -32,7 +32,7 @@ AUTHORIZATION_DENIED_MARKERS = (
     b"not authorized",
     b"permission denied",
 )
-FIXED_WORKER_TIMEOUT_SECONDS = 600
+FIXED_WORKER_TIMEOUT_SECONDS = 1800
 FIXED_ANALYSIS_WORKER_TIMEOUT_SECONDS = 7200
 
 
@@ -49,10 +49,10 @@ def fixed_worker_timeout_seconds(slot: WorkerSlot) -> int:
 # These hashes are the installed contract. Tests compare them with the canonical repository
 # sources, and runtime readiness compares them with root-owned installed artifacts.
 WORKER_TEMPLATE_SHA256 = {
-    "01": "2437274b7e217745a57f33191545d1d0b22211a9307d0907b9f168bbaac7673a",
-    "02": "f028faf6adbcd6285a686b3bf3c2524db20f86cdb55a92fdffd8b3a11357d8f3",
-    "03": "01f88dcea971c8738a0b190596329195aa18e26f2697c735eeaf258c1b494365",
-    "04": "7e3f42342b3e800fa354e57160027ff29f8ac13b7936c02613c9dcdcdb786c5a",
+    "01": "3c0f2b5b19852714a38739f20a73ade9f003832ae521711b5f08a83dd7238437",
+    "02": "08590fce316a9d6e3e3d57680204b3030d1b5672429fa32d9a91253cb85d62e8",
+    "03": "e261fdc7e5c5af7c260107a9594da605aa37d6edc0d14ea1733e5489ecae0f2f",
+    "04": "328fce8d9099d71925658552626d38e0702550b8da3d451f5f017fec32460a17",
     "05": "b992622ee6c718a60ca3d9601ac56646213ab59703e6670a7b6edbf3484b4672",
 }
 PROBE_TEMPLATE_SHA256 = {

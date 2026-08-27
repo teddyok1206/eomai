@@ -1723,7 +1723,7 @@ def test_standard_bootstrap_is_idempotent_and_materializes_only_pinned_markdown(
         nas_artifact_root=nas_root.resolve(),
         codex_binary=Path("/usr/local/bin/codex"),
         codex_capability_policy=Path("config/codex-capabilities.example.yaml").resolve(),
-        worker_timeout_seconds=600,
+        worker_timeout_seconds=1800,
     )
 
     def bootstrap() -> StandardBootstrapResult:
@@ -1807,7 +1807,7 @@ def test_knowledge_analysis_bootstrap_is_idempotent_and_support_only(
         nas_artifact_root=nas_root.resolve(),
         codex_binary=Path("/usr/local/bin/codex"),
         codex_capability_policy=Path("config/codex-capabilities.example.yaml").resolve(),
-        worker_timeout_seconds=600,
+        worker_timeout_seconds=1800,
     )
     sessions = build_session_factory(integration_engine)
     with sessions() as session:
@@ -1881,7 +1881,7 @@ def test_knowledge_analysis_v2_through_v8_bootstraps_add_immutable_revisions(
         nas_artifact_root=nas_root.resolve(),
         codex_binary=Path("/usr/local/bin/codex"),
         codex_capability_policy=Path("config/codex-capabilities.example.yaml").resolve(),
-        worker_timeout_seconds=600,
+        worker_timeout_seconds=1800,
     )
     sessions = build_session_factory(integration_engine)
     with sessions() as session:
