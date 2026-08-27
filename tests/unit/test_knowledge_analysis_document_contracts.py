@@ -472,6 +472,43 @@ def test_typed_identity_protocol_rejects_node_id_type_drift() -> None:
         KnowledgeAnalysisWorkerProposalV5.model_validate(invalid)
 
 
+def test_typed_identity_result_schema_binds_exact_page_image_hashes() -> None:
+    request = KnowledgeAnalysisRequestV7.model_validate(request_v7())
+    worker_input = RoleWorkerInput(
+        protocol_version="workflow-role/1.10.0",
+        job_id="job_" + "a" * 32,
+        workflow_id="workflow_" + "b" * 32,
+        step_run_id="steprun_" + "c" * 32,
+        attempt=1,
+        role="support",
+        request=KnowledgeAnalysisWorkerRequest(analysis_request=request),
+        upstream_artifacts=(),
+        artifact=ArtifactSpec(
+            logical_artifact_id="artifact_" + "d" * 32,
+            revision_id="rev_" + "d" * 32,
+        ),
+    )
+    schema = constrained_result_schema("knowledge-analysis-proposal-result@7.0", worker_input)
+    result = {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.10.0",
+        "job_id": worker_input.job_id,
+        "workflow_id": worker_input.workflow_id,
+        "step_run_id": worker_input.step_run_id,
+        "role": "support",
+        "status": "ok",
+        "artifact": worker_input.artifact.model_dump(mode="json"),
+        "output": {"proposal": typed_identity_proposal(request)},
+        "completed_at": NOW,
+    }
+    assert list(Draft202012Validator(schema).iter_errors(result)) == []
+
+    observations = result["output"]["proposal"]["page_image_observations"]  # type: ignore[index]
+    observations[1]["image_sha256"] = "sha256:" + "f" * 64  # type: ignore[index]
+    errors = list(Draft202012Validator(schema).iter_errors(result))
+    assert any(tuple(error.absolute_path)[-1:] == (1,) for error in errors)
+
+
 def test_typed_identity_proposal_stages_exact_v6_receipt(tmp_path: Path) -> None:
     request = KnowledgeAnalysisRequestV7.model_validate(request_v7())
     proposal = KnowledgeAnalysisWorkerProposalV5.model_validate(typed_identity_proposal(request))

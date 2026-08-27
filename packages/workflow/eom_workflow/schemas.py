@@ -443,6 +443,13 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
             _mapping(anchor_properties, "locator")["pattern"] = (
                 rf"^physical_page=(?:{pages})(?:;.{{1,220}})?$"
             )
+        if isinstance(analysis_request, (KnowledgeAnalysisRequestV6, KnowledgeAnalysisRequestV7)):
+            _bind_page_image_observations(
+                schema,
+                proposal_properties,
+                analysis_request,
+            )
+            _prune_unreferenced_definitions(schema)
     validate_codex_structured_output_schema(schema)
     return schema
 
@@ -480,6 +487,48 @@ def _bind_result_string_const(
     if property_schema.get("type") != "string" or "$ref" in property_schema:
         raise WorkflowSchemaError("result const binding requires an inline string schema")
     property_schema["const"] = value
+
+
+def _bind_page_image_observations(
+    schema: dict[str, Any],
+    proposal_properties: dict[str, Any],
+    analysis_request: KnowledgeAnalysisRequestV6 | KnowledgeAnalysisRequestV7,
+) -> None:
+    """Bind model-visible page attestations to exact immutable request pointers."""
+
+    observations = _mapping(proposal_properties, "page_image_observations")
+    item_schema = _mapping(observations, "items")
+    reference = item_schema.get("$ref")
+    prefix = "#/$defs/"
+    if (
+        set(item_schema) != {"$ref"}
+        or not isinstance(reference, str)
+        or not reference.startswith(prefix)
+    ):
+        raise WorkflowSchemaError("page-image observation schema is not independently projectable")
+    definition = _mapping(_mapping(schema, "$defs"), reference.removeprefix(prefix))
+    expected_images = tuple(
+        member
+        for member in analysis_request.source.materialization_members
+        if member.member_kind == "PAGE_IMAGE"
+    )
+    if len(expected_images) != analysis_request.source.page_image_count:
+        raise WorkflowSchemaError("page-image request pointer count is inconsistent")
+    alternatives: list[dict[str, Any]] = []
+    for member in expected_images:
+        if member.physical_page is None:
+            raise WorkflowSchemaError("page-image request pointer has no physical page")
+        branch = copy.deepcopy(definition)
+        properties = _mapping(branch, "properties")
+        physical_page = _mapping(properties, "physical_page")
+        if physical_page.get("type") != "integer":
+            raise WorkflowSchemaError("page-image physical page is not projectable")
+        physical_page["const"] = member.physical_page
+        _bind_result_string_const(schema, _mapping(properties, "image_sha256"), member.sha256)
+        alternatives.append(branch)
+    observations["minItems"] = len(alternatives)
+    observations["maxItems"] = len(alternatives)
+    observations["items"] = {"anyOf": alternatives}
 
 
 def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
