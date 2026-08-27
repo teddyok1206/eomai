@@ -124,6 +124,21 @@ The one-item and HWPX views use the same three-part handoff language—fixed req
 production, secure delivery—without creating another state machine. Their visual steps are derived
 from the existing Item Revision, HWPX build, validation, and download-availability values.
 
+### Advanced execution policy
+
+Execution Preset mutation is an infrequent administrator operation, not routine production work. It
+remains collapsed under `고급 실행 정책` by default. The Studio does not accept an arbitrary preset
+JSON document: an administrator selects an existing active immutable V1 revision, changes only the
+guided model/effort/timeout and descriptive fields, and preserves its pinned capacity, instruction,
+reference, sandbox, network, and protocol pointers.
+Model/effort choices are drawn only from candidates already released for the same role in another
+active editable preset; a merely observed account capability is not treated as publication approval.
+
+Creating a DRAFT and releasing that DRAFT are separate review boundaries. Each renders a summary,
+requires a fresh explicit confirmation, and becomes invalid when editable input changes. Knowledge
+retrieval V2 presets are deliberately excluded from this bounded editor because changing their
+access-policy and Evidence Bundle contract requires the reviewed platform rollout path.
+
 ## 6. Typography, density, and motion
 
 - Human text uses the existing local/system Korean sans stack.

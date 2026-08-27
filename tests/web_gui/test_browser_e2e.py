@@ -33,11 +33,15 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "소단원 목록 준비 중",
             "자연어 출제 요구",
             "Graph 매핑 준비 중",
+            "고급 실행 정책",
+            "DRAFT 생성 전 확인",
+            "DRAFT Release 검토",
         ):
             assert marker in shell.text
         assert client.get("/studio/assets/styles.css").status_code == 200
         assert client.get("/studio/assets/app.js").status_code == 200
         assert client.get("/studio/assets/curriculum-selector.js").status_code == 200
+        assert client.get("/studio/assets/execution-preset-editor.js").status_code == 200
         assert client.get("/studio/assets/presentation-vocabulary.ko-KR.json").status_code == 200
 
         draft = client.post(

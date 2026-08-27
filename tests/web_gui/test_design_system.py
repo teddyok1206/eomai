@@ -91,6 +91,21 @@ def test_technical_details_are_progressively_disclosed_without_hiding_recovery()
     assert 'id="hwpx-build-load"' in HTML
 
 
+def test_execution_preset_mutation_is_guided_and_separately_reviewed() -> None:
+    assert '<details id="advanced-preset-policy"' in HTML
+    assert "고급 실행 정책" in HTML
+    assert 'id="preset-base-select"' in HTML
+    assert 'id="preset-review-panel"' in HTML
+    assert 'id="preset-review-confirm"' in HTML
+    assert 'id="preset-release-panel"' in HTML
+    assert 'id="preset-release-confirm"' in HTML
+    assert 'id="preset-draft-json"' not in HTML
+    assert 'JSON.parse($("#preset-draft-json")' not in JAVASCRIPT
+    assert 'actionButton("Release 검토"' in JAVASCRIPT
+    assert "state.reviewedPresetDraft" in JAVASCRIPT
+    assert "state.presetReleaseCandidate" in JAVASCRIPT
+
+
 def test_static_design_assets_have_no_external_runtime_dependency() -> None:
     for text in (HTML, CSS, JAVASCRIPT):
         assert "https://" not in text

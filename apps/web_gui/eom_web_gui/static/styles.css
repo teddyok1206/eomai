@@ -283,7 +283,36 @@ html[data-ui-mode="human"] .panel-heading .eyebrow { display: none; }
 .control-card .form-actions { margin-top: 10px; flex-wrap: wrap; }
 .analysis-progress { width: 100%; height: 8px; margin-top: 8px; accent-color: var(--eom-primary); }
 .admin-preset-panel { margin-top: 15px; }
-.admin-preset-panel textarea { width: 100%; resize: vertical; border: 1px solid #b9c2d0; border-radius: 5px; padding: 10px; font: var(--eom-type-caption)/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.advanced-policy > summary { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px; cursor: pointer; list-style-position: inside; }
+.advanced-policy > summary::marker { color: var(--eom-info-cobalt); }
+.advanced-policy > summary > span:first-child { display: inline-flex; flex-direction: column; gap: 3px; }
+.advanced-policy > summary strong { font-size: 17px; }
+.advanced-policy > summary small { color: var(--eom-text-muted); font-size: var(--eom-type-caption); font-weight: 400; }
+.advanced-policy[open] > summary { border-bottom: 1px solid var(--eom-border); background: #f8faf9; }
+.policy-notice { margin: 0 0 16px; padding: 12px 14px; border-left: 4px solid var(--eom-signal-amber); background: #fffaf0; color: var(--eom-graphite); font-size: var(--eom-type-label); line-height: 1.6; }
+.guided-policy-form { display: grid; gap: 16px; }
+.guided-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.guided-policy-grid label, .policy-role-card label { display: grid; gap: 6px; color: #465166; font-size: var(--eom-type-label); font-weight: 700; }
+.guided-policy-grid .wide { grid-column: 1 / -1; }
+.guided-policy-grid input, .guided-policy-grid select, .guided-policy-grid textarea, .policy-role-card input, .policy-role-card select { width: 100%; min-height: 40px; border: 1px solid #b9c2d0; border-radius: 5px; padding: 8px 10px; background: white; color: var(--eom-text); }
+.guided-policy-grid textarea { resize: vertical; line-height: 1.55; }
+.guided-policy-grid input[readonly] { background: var(--eom-surface-muted); color: var(--eom-text-muted); }
+.policy-role-list { display: grid; gap: 11px; }
+.policy-role-card { padding: 14px; border: 1px solid var(--eom-border); border-radius: 6px; background: #fafbfd; }
+.policy-role-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.policy-role-card h3 { margin: 0; font-size: 15px; }
+.policy-role-card header span { color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
+.policy-role-fields { display: grid; grid-template-columns: minmax(240px, 1fr) 150px; gap: 10px; }
+.policy-candidate-list { display: grid; gap: 8px; }
+.policy-pointer-details { margin-top: 12px; border-top: 1px solid var(--eom-border); }
+.policy-pointer-details summary { padding: 10px 0 0; color: var(--eom-info-cobalt); font-size: var(--eom-type-caption); font-weight: 700; cursor: pointer; }
+.policy-pointer-details dl { padding: 10px 0 0; }
+.policy-review { margin-top: 18px; padding: 16px; border: 1px solid #b8c9de; border-left: 4px solid var(--eom-info-cobalt); border-radius: 6px; background: #f3f7fb; }
+.policy-review h3 { margin: 0 0 6px; font-size: 16px; }
+.policy-review > p { margin: 0 0 10px; color: var(--eom-text-muted); font-size: var(--eom-type-label); }
+.policy-review .summary-grid { padding: 10px 0; }
+.policy-review .check { color: var(--eom-graphite); font-size: var(--eom-type-label); }
+.release-review { border-color: #dbc38e; border-left-color: var(--eom-signal-amber); background: #fffaf0; }
 
 .knowledge-boundary { margin-bottom: 14px; display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 8px 12px; padding: 12px 14px; border: 1px solid #b8c9de; border-left: 4px solid var(--eom-info-cobalt); border-radius: 6px; background: #f3f7fb; }
 .knowledge-boundary strong { color: #294f86; font-size: var(--eom-type-body); }
@@ -399,6 +428,10 @@ html[data-ui-mode="human"] .panel-heading .eyebrow { display: none; }
   .draft-form { grid-template-columns: 1fr; }
   .draft-form .wide { grid-column: auto; }
   .curriculum-selector { grid-template-columns: 1fr; }
+  .advanced-policy > summary { align-items: flex-start; }
+  .advanced-policy > summary > .status-badge { display: none; }
+  .guided-policy-grid, .policy-role-fields { grid-template-columns: 1fr; }
+  .guided-policy-grid .wide { grid-column: auto; }
   .structured-import-grid { grid-template-columns: 1fr; }
   .structured-import-grid .wide { grid-column: auto; }
   .quality-picker { grid-template-columns: 1fr; }
