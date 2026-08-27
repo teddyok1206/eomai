@@ -323,6 +323,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.6.0",
         "workflow-role/1.7.0",
         "workflow-role/1.8.0",
+        "workflow-role/1.9.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -403,6 +404,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.6.0",
         "workflow-role/1.7.0",
         "workflow-role/1.8.0",
+        "workflow-role/1.9.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -700,6 +702,12 @@ class KnowledgeAnalysisProposalRoleResultV5(RoleResultBase):
     output: KnowledgeAnalysisProposalOutputV4
 
 
+class KnowledgeAnalysisProposalRoleResultV6(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.9.0"] = "workflow-role/1.9.0"
+    role: Literal["support"] = "support"
+    output: KnowledgeAnalysisProposalOutputV4
+
+
 RoleResult = (
     AuthoringRoleResult
     | ImageRoleResult
@@ -722,4 +730,5 @@ RoleResult = (
     | KnowledgeAnalysisProposalRoleResultV3
     | KnowledgeAnalysisProposalRoleResultV4
     | KnowledgeAnalysisProposalRoleResultV5
+    | KnowledgeAnalysisProposalRoleResultV6
 )

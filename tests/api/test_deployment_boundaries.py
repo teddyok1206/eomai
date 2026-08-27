@@ -333,12 +333,16 @@ def test_release_verifies_educational_document_schema_resources() -> None:
 def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
-    assert "analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5" in deployment
     assert (
-        "for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5)"
+        "analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6" in deployment
+    )
+    assert (
+        "for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6)"
         in deployment
     )
-    assert 'analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0"}' in deployment
+    assert (
+        'analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0", "6.0.0"}' in deployment
+    )
 
 
 def test_release_install_normalizes_restrictive_operator_umask() -> None:

@@ -113,6 +113,7 @@ def test_all_workflow_schemas_are_valid_draft_2020_12() -> None:
     Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.4.0"))
     Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.7.0"))
     Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.8.0"))
+    Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.9.0"))
     for schema_id in RESULT_SCHEMA_FILES:
         Draft202012Validator.check_schema(load_role_result_schema(schema_id))
 
@@ -273,6 +274,58 @@ def test_role_schema_bundle_hash_is_canonical() -> None:
     assert role_schema_bundle_hash("workflow-role/1.8.0") == (
         "sha256:1b99d22abf59081d8843934571d33346d0d0083fcfb9a000c5683577dc8827cc"
     )
+    assert role_schema_bundle_hash("workflow-role/1.9.0") == (
+        "sha256:e70c0dbd4856aeabbbedac97552933d5edbd44221f0cb5e7f8763d315d14e207"
+    )
+
+
+def _unresolved_schema_references(schema: dict[str, object]) -> set[str]:
+    unresolved: set[str] = set()
+
+    def resolve(reference: str) -> None:
+        if not reference.startswith("#/"):
+            unresolved.add(reference)
+            return
+        current: object = schema
+        for raw_token in reference[2:].split("/"):
+            token = raw_token.replace("~1", "/").replace("~0", "~")
+            if isinstance(current, dict) and token in current:
+                current = current[token]
+            elif isinstance(current, list) and token.isdigit() and int(token) < len(current):
+                current = current[int(token)]
+            else:
+                unresolved.add(reference)
+                return
+
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            reference = value.get("$ref")
+            if isinstance(reference, str):
+                resolve(reference)
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(schema)
+    return unresolved
+
+
+def test_multimodal_protocol_v1_9_closes_historical_transitive_references() -> None:
+    historical_input = load_role_input_schema("support", "workflow-role/1.8.0")
+    historical_result = load_role_result_schema("knowledge-analysis-proposal-result@5.0")
+    expected_historical_gap = {
+        "#/$defs/AnalysisV3_documentDependencyPointer",
+        "#/$defs/AnalysisV3_originalSourceMember",
+    }
+    assert _unresolved_schema_references(historical_input) == expected_historical_gap
+    assert _unresolved_schema_references(historical_result) == expected_historical_gap
+
+    corrected_input = load_role_input_schema("support", "workflow-role/1.9.0")
+    corrected_result = load_role_result_schema("knowledge-analysis-proposal-result@6.0")
+    assert _unresolved_schema_references(corrected_input) == set()
+    assert _unresolved_schema_references(corrected_result) == set()
 
 
 def _knowledge_analysis_request() -> dict[str, object]:
@@ -465,6 +518,19 @@ def test_multimodal_knowledge_analysis_workflow_is_additive_and_immutable() -> N
     analyze = compiled.definition.steps[0]
     assert analyze.type == "agent"
     assert analyze.result_schema == "knowledge-analysis-proposal-result@5.0"
+    assert compiled.definition.limits.max_rework_cycles == 0
+    assert compiled.definition.limits.max_step_attempts == 1
+
+
+def test_schema_closed_multimodal_workflow_is_additive_and_immutable() -> None:
+    compiled = compile_definition(ROOT / "config/workflows/knowledge-analysis.v6.yaml", {"support"})
+    assert compiled.sha256 == (
+        "sha256:406c6014df943ccf9de723bdcf0816864b5575011a3e1dc4ece70fc61cfe0b70"
+    )
+    assert compiled.definition.definition_version == "6.0.0"
+    analyze = compiled.definition.steps[0]
+    assert analyze.type == "agent"
+    assert analyze.result_schema == "knowledge-analysis-proposal-result@6.0"
     assert compiled.definition.limits.max_rework_cycles == 0
     assert compiled.definition.limits.max_step_attempts == 1
 

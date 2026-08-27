@@ -35,6 +35,7 @@ from eom_workflow.models import (
     KnowledgeAnalysisProposalRoleResultV3,
     KnowledgeAnalysisProposalRoleResultV4,
     KnowledgeAnalysisProposalRoleResultV5,
+    KnowledgeAnalysisProposalRoleResultV6,
     KnowledgeAnalysisWorkerRequest,
     KnowledgeAuthoringRoleResult,
     KnowledgeImageRoleResult,
@@ -89,6 +90,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "knowledge-analysis-proposal-result@3.0",
             "knowledge-analysis-proposal-result@4.0",
             "knowledge-analysis-proposal-result@5.0",
+            "knowledge-analysis-proposal-result@6.0",
         }
     ),
 }
@@ -114,6 +116,7 @@ RESULT_SCHEMA_FILES = {
     "knowledge-analysis-proposal-result@3.0": ("knowledge-analysis-proposal-result-v3.schema.json"),
     "knowledge-analysis-proposal-result@4.0": ("knowledge-analysis-proposal-result-v4.schema.json"),
     "knowledge-analysis-proposal-result@5.0": ("knowledge-analysis-proposal-result-v5.schema.json"),
+    "knowledge-analysis-proposal-result@6.0": ("knowledge-analysis-proposal-result-v6.schema.json"),
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -127,6 +130,7 @@ INPUT_SCHEMA_FILES_V1_5 = {"support": "knowledge-analysis-input-v2.schema.json"}
 INPUT_SCHEMA_FILES_V1_6 = {"support": "knowledge-analysis-input-v3.schema.json"}
 INPUT_SCHEMA_FILES_V1_7 = {"support": "knowledge-analysis-input-v4.schema.json"}
 INPUT_SCHEMA_FILES_V1_8 = {"support": "knowledge-analysis-input-v5.schema.json"}
+INPUT_SCHEMA_FILES_V1_9 = {"support": "knowledge-analysis-input-v6.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -149,6 +153,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "knowledge-analysis-proposal-result@3.0": "workflow-role/1.6.0",
     "knowledge-analysis-proposal-result@4.0": "workflow-role/1.7.0",
     "knowledge-analysis-proposal-result@5.0": "workflow-role/1.8.0",
+    "knowledge-analysis-proposal-result@6.0": "workflow-role/1.9.0",
 }
 PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.0.1": INPUT_SCHEMA_FILES,
@@ -160,6 +165,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.6.0": INPUT_SCHEMA_FILES_V1_6,
     "workflow-role/1.7.0": INPUT_SCHEMA_FILES_V1_7,
     "workflow-role/1.8.0": INPUT_SCHEMA_FILES_V1_8,
+    "workflow-role/1.9.0": INPUT_SCHEMA_FILES_V1_9,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -171,6 +177,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.6.0",
     "workflow-role/1.7.0",
     "workflow-role/1.8.0",
+    "workflow-role/1.9.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -183,6 +190,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_6.values(),
             *INPUT_SCHEMA_FILES_V1_7.values(),
             *INPUT_SCHEMA_FILES_V1_8.values(),
+            *INPUT_SCHEMA_FILES_V1_9.values(),
         }
     )
 )
@@ -242,7 +250,10 @@ def load_role_input_schema(
             if protocol_version in {"workflow-role/1.2.0", "workflow-role/1.3.0"}
             else "KNOWLEDGE_ITEM_REQUEST"
         )
-    return _inline_catalog_schema(schema)
+    return _inline_catalog_schema(
+        schema,
+        require_reference_closure=protocol_version == "workflow-role/1.9.0",
+    )
 
 
 def load_role_result_schema(schema_id: str) -> dict[str, Any]:
@@ -252,7 +263,10 @@ def load_role_result_schema(schema_id: str) -> dict[str, Any]:
         raise WorkflowSchemaError(f"unknown role result schema: {schema_id}") from exc
     logical_name = f"roles/{file_name}"
     schema = load_json_schema(ROLE_RESOURCE_ROOT.joinpath(file_name), logical_name)
-    return _inline_catalog_schema(schema)
+    return _inline_catalog_schema(
+        schema,
+        require_reference_closure=schema_id == "knowledge-analysis-proposal-result@6.0",
+    )
 
 
 def validate_schema_message(schema: dict[str, Any], value: object, name: str) -> None:
@@ -298,6 +312,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return KnowledgeAnalysisProposalRoleResultV4.model_validate(value)
         if schema_id == "knowledge-analysis-proposal-result@5.0" and role == "support":
             return KnowledgeAnalysisProposalRoleResultV5.model_validate(value)
+        if schema_id == "knowledge-analysis-proposal-result@6.0" and role == "support":
+            return KnowledgeAnalysisProposalRoleResultV6.model_validate(value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":
@@ -351,6 +367,7 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
         "knowledge-analysis-proposal-result@3.0",
         "knowledge-analysis-proposal-result@4.0",
         "knowledge-analysis-proposal-result@5.0",
+        "knowledge-analysis-proposal-result@6.0",
     }:
         if not isinstance(worker_input.request, KnowledgeAnalysisWorkerRequest):
             raise WorkflowSchemaError("knowledge analysis result requires its typed worker request")
@@ -365,6 +382,7 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
             "knowledge-analysis-proposal-result@3.0": "KnowledgeAnalysisWorkerProposalV2",
             "knowledge-analysis-proposal-result@4.0": "KnowledgeAnalysisWorkerProposalV3",
             "knowledge-analysis-proposal-result@5.0": "KnowledgeAnalysisWorkerProposalV4",
+            "knowledge-analysis-proposal-result@6.0": "KnowledgeAnalysisWorkerProposalV4",
         }[schema_id]
         if proposal_ref.get("$ref") != f"#/$defs/{proposal_definition_name}":
             raise WorkflowSchemaError("knowledge analysis proposal reference is not projectable")
@@ -454,9 +472,13 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         "knowledge-analysis-proposal-result@3.0",
         "knowledge-analysis-proposal-result@4.0",
         "knowledge-analysis-proposal-result@5.0",
+        "knowledge-analysis-proposal-result@6.0",
     }:
         _project_knowledge_analysis_codex_contract(schema, schema_id=schema_id)
-    if schema_id == "knowledge-analysis-proposal-result@5.0":
+    if schema_id in {
+        "knowledge-analysis-proposal-result@5.0",
+        "knowledge-analysis-proposal-result@6.0",
+    }:
         _prune_unreferenced_definitions(schema)
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
@@ -479,6 +501,7 @@ def _project_knowledge_analysis_codex_contract(schema: dict[str, Any], *, schema
         "knowledge-analysis-proposal-result@3.0": "KnowledgeAnalysisWorkerProposalV2",
         "knowledge-analysis-proposal-result@4.0": "KnowledgeAnalysisWorkerProposalV3",
         "knowledge-analysis-proposal-result@5.0": "KnowledgeAnalysisWorkerProposalV4",
+        "knowledge-analysis-proposal-result@6.0": "KnowledgeAnalysisWorkerProposalV4",
     }[schema_id]
     if proposal_reference != {"$ref": f"#/$defs/{proposal_definition_name}"}:
         raise WorkflowSchemaError("knowledge analysis proposal reference is not projectable")
@@ -669,7 +692,9 @@ def role_schema_bundle_hash(protocol_version: str = "workflow-role/1.0.1") -> st
     return content_sha256(schemas)
 
 
-def _inline_catalog_schema(schema: dict[str, Any]) -> dict[str, Any]:
+def _inline_catalog_schema(
+    schema: dict[str, Any], *, require_reference_closure: bool = False
+) -> dict[str, Any]:
     reference = "eom://schemas/item-registry/assessment-item-content-v1"
     serialized = json.dumps(schema, ensure_ascii=True)
     if reference not in serialized:
@@ -730,8 +755,11 @@ def _inline_catalog_schema(schema: dict[str, Any]) -> dict[str, Any]:
                 reference=contract_reference,
                 catalog_name=catalog_name,
                 definition_name=definition_name,
+                close_type_dependencies=require_reference_closure,
             )
     Draft202012Validator.check_schema(bundled)
+    if require_reference_closure:
+        _validate_local_reference_closure(bundled)
     return bundled
 
 
@@ -756,7 +784,12 @@ def _inline_assessment_item_schema(schema: dict[str, Any], reference: str) -> di
 
 
 def _inline_knowledge_contract(
-    schema: dict[str, Any], *, reference: str, catalog_name: str, definition_name: str
+    schema: dict[str, Any],
+    *,
+    reference: str,
+    catalog_name: str,
+    definition_name: str,
+    close_type_dependencies: bool,
 ) -> dict[str, Any]:
     """Bundle a Catalog-owned contract for Codex and offline JSON Schema validation."""
 
@@ -821,14 +854,32 @@ def _inline_knowledge_contract(
         raise WorkflowSchemaError("knowledge contract definitions are not an object")
     for name, value in root_definitions.items():
         definitions[f"{definition_name}_{name}"] = rewrite(value, local_prefix=definition_name)
-    type_sources = [
-        ("AnalysisV2", types_v2),
-        ("KnowledgeV1", types_v1),
-    ]
-    if v4_reference in json.dumps(root, ensure_ascii=True):
-        type_sources.insert(0, ("AnalysisV4", types_v4))
-    if v3_reference in json.dumps(root, ensure_ascii=True):
-        type_sources.insert(0, ("AnalysisV3", types_v3))
+    serialized_root = json.dumps(root, ensure_ascii=True)
+    if close_type_dependencies:
+        type_families = (
+            (v4_reference, "AnalysisV4", types_v4),
+            (v3_reference, "AnalysisV3", types_v3),
+            (v2_reference, "AnalysisV2", types_v2),
+            (v1_reference, "KnowledgeV1", types_v1),
+        )
+        selected_prefixes: set[str] = set()
+        pending: list[dict[str, Any]] = [root]
+        while pending:
+            serialized_source = json.dumps(pending.pop(), ensure_ascii=True)
+            for family_reference, prefix, source in type_families:
+                if prefix not in selected_prefixes and family_reference in serialized_source:
+                    selected_prefixes.add(prefix)
+                    pending.append(source)
+        type_sources = [
+            (prefix, source) for _, prefix, source in type_families if prefix in selected_prefixes
+        ]
+    else:
+        # Preserve the byte-for-byte historical v1.4--v1.8 bundle projection.
+        type_sources = [("AnalysisV2", types_v2), ("KnowledgeV1", types_v1)]
+        if v4_reference in serialized_root:
+            type_sources.insert(0, ("AnalysisV4", types_v4))
+        if v3_reference in serialized_root:
+            type_sources.insert(0, ("AnalysisV3", types_v3))
     for prefix, source in type_sources:
         source_definitions = source.get("$defs")
         if not isinstance(source_definitions, dict):
@@ -836,6 +887,38 @@ def _inline_knowledge_contract(
         for name, value in source_definitions.items():
             definitions[f"{prefix}_{name}"] = rewrite(value, local_prefix=prefix)
     return bundled
+
+
+def _validate_local_reference_closure(schema: dict[str, Any]) -> None:
+    """Require every reference in a self-contained role schema to resolve locally."""
+
+    def resolve(reference: str) -> None:
+        if reference == "#":
+            return
+        if not reference.startswith("#/"):
+            raise WorkflowSchemaError(f"workflow schema reference is external: {reference}")
+        current: object = schema
+        for raw_token in reference[2:].split("/"):
+            token = raw_token.replace("~1", "/").replace("~0", "~")
+            if isinstance(current, dict) and token in current:
+                current = current[token]
+            elif isinstance(current, list) and token.isdigit() and int(token) < len(current):
+                current = current[int(token)]
+            else:
+                raise WorkflowSchemaError(f"workflow schema reference is unresolved: {reference}")
+
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            reference = value.get("$ref")
+            if isinstance(reference, str):
+                resolve(reference)
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(schema)
 
 
 def _project_knowledge_authoring_content(schema: dict[str, Any]) -> None:

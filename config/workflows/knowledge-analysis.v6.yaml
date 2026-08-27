@@ -1,0 +1,19 @@
+schema_version: "1.0"
+definition_key: "knowledge-analysis"
+definition_version: "6.0.0"
+start_step: "analyze"
+
+limits:
+  max_rework_cycles: 0
+  max_step_attempts: 1
+
+steps:
+  - key: "analyze"
+    type: "agent"
+    worker_role: "support"
+    result_schema: "knowledge-analysis-proposal-result@6.0"
+    on_success: "complete"
+
+  - key: "complete"
+    type: "terminal"
+    terminal_status: "COMPLETED"

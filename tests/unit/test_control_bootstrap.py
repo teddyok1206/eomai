@@ -24,6 +24,7 @@ ANALYSIS_CONFIG_V5 = ROOT / "config/control-plane/knowledge-analysis-v5"
 ANALYSIS_CONFIG_V6 = ROOT / "config/control-plane/knowledge-analysis-v6"
 ANALYSIS_CONFIG_V7 = ROOT / "config/control-plane/knowledge-analysis-v7"
 ANALYSIS_CONFIG_V8 = ROOT / "config/control-plane/knowledge-analysis-v8"
+ANALYSIS_CONFIG_V9 = ROOT / "config/control-plane/knowledge-analysis-v9"
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:
@@ -347,6 +348,43 @@ def test_knowledge_analysis_v8_requires_every_page_image_without_content_quotas(
         assert hashlib.sha256((ANALYSIS_CONFIG_V8 / relative_path).read_bytes()).hexdigest() == (
             expected
         )
+
+
+def test_knowledge_analysis_v9_adds_schema_closed_protocol_without_mutating_v8() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V9)
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/9.0"
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    assert manifest.timeout_seconds == 7200
+    assert manifest.slot_key == "slot05"
+    assert manifest.worker_pool_key == "support"
+    assert manifest.compatible_workflow_protocols == (
+        "workflow-role/1.4.0",
+        "workflow-role/1.5.0",
+        "workflow-role/1.6.0",
+        "workflow-role/1.7.0",
+        "workflow-role/1.8.0",
+        "workflow-role/1.9.0",
+    )
+    expected_v9_sha256 = {
+        "bootstrap.yaml": "9075e8a390a3d69752eb4f7a57093440c14981d514a6778487f68876673d2214",
+        "instructions/platform.md": (
+            "d89ba7eaffda1580178d215ad510e5401ed268473140cf3c3d53bb7195b9df91"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "a01e69bfb6714087ce8eb55b031e71838f5640a8773f23385e5f59f77ee3f345"
+        ),
+    }
+    for relative_path, expected in expected_v9_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V9 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+    assert (ANALYSIS_CONFIG_V9 / "instructions/platform.md").read_bytes() == (
+        ANALYSIS_CONFIG_V8 / "instructions/platform.md"
+    ).read_bytes()
+    assert (ANALYSIS_CONFIG_V9 / "instructions/knowledge-analysis.md").read_bytes() == (
+        ANALYSIS_CONFIG_V8 / "instructions/knowledge-analysis.md"
+    ).read_bytes()
 
 
 def test_standard_bootstrap_rejects_role_slot_drift_and_symlink_root(tmp_path: Path) -> None:

@@ -96,6 +96,7 @@ KNOWLEDGE_ANALYSIS_DOCUMENT_WORKFLOW_VERSION = "2.0.0"
 KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_WORKFLOW_VERSION = "3.0.0"
 KNOWLEDGE_ANALYSIS_INTEGRITY_DOCUMENT_WORKFLOW_VERSION = "4.0.0"
 KNOWLEDGE_ANALYSIS_MULTIMODAL_DOCUMENT_WORKFLOW_VERSION = "5.0.0"
+KNOWLEDGE_ANALYSIS_SCHEMA_CLOSED_MULTIMODAL_WORKFLOW_VERSION = "6.0.0"
 KNOWLEDGE_ANALYSIS_CATALOG_PROTOCOL = "catalog/1.2"
 KNOWLEDGE_ANALYSIS_CATALOG_SCHEMA_HASH = content_sha256(
     {
@@ -261,9 +262,15 @@ def _multimodal_document_contract(value: KnowledgeAnalysisRequestContract) -> bo
     return isinstance(value, KnowledgeAnalysisRequestV6)
 
 
-def _proposal_result_schema(value: KnowledgeAnalysisRequestContract) -> str:
+def _proposal_result_schema(
+    value: KnowledgeAnalysisRequestContract, *, workflow_version: str | None = None
+) -> str:
     if _multimodal_document_contract(value):
-        return "knowledge-analysis-proposal-result@5.0"
+        return (
+            "knowledge-analysis-proposal-result@6.0"
+            if workflow_version == KNOWLEDGE_ANALYSIS_SCHEMA_CLOSED_MULTIMODAL_WORKFLOW_VERSION
+            else "knowledge-analysis-proposal-result@5.0"
+        )
     if _integrity_document_contract(value):
         return "knowledge-analysis-proposal-result@4.0"
     if _endpoint_typed_document_contract(value):
@@ -431,12 +438,17 @@ class KnowledgeAnalysisApplicationService:
                     (EducationalDocumentKnowledgeSourceV3, EducationalDocumentKnowledgeSourceV4),
                 )
                 multimodal_document = isinstance(source, EducationalDocumentKnowledgeSourceV4)
-                if multimodal_document and (
-                    "workflow-role/1.8.0" not in preset_revision.compatible_workflow_protocols
+                schema_closed_multimodal = multimodal_document and (
+                    "workflow-role/1.9.0" in preset_revision.compatible_workflow_protocols
+                )
+                if (
+                    multimodal_document
+                    and not schema_closed_multimodal
+                    and ("workflow-role/1.8.0" not in preset_revision.compatible_workflow_protocols)
                 ):
                     raise KnowledgeAnalysisServiceError(
                         "KNOWLEDGE_ANALYSIS_PRESET_INCOMPATIBLE",
-                        "multimodal document analysis requires workflow-role/1.8.0",
+                        "multimodal document analysis requires a compatible multimodal protocol",
                     )
                 integrity_document = is_document_source and (
                     "workflow-role/1.7.0" in preset_revision.compatible_workflow_protocols
@@ -444,7 +456,9 @@ class KnowledgeAnalysisApplicationService:
                 endpoint_typed_document = is_document_source and (
                     "workflow-role/1.6.0" in preset_revision.compatible_workflow_protocols
                 )
-                if multimodal_document:
+                if schema_closed_multimodal:
+                    workflow_version = KNOWLEDGE_ANALYSIS_SCHEMA_CLOSED_MULTIMODAL_WORKFLOW_VERSION
+                elif multimodal_document:
                     workflow_version = KNOWLEDGE_ANALYSIS_MULTIMODAL_DOCUMENT_WORKFLOW_VERSION
                 elif integrity_document:
                     workflow_version = KNOWLEDGE_ANALYSIS_INTEGRITY_DOCUMENT_WORKFLOW_VERSION
@@ -1359,7 +1373,9 @@ class KnowledgeAnalysisApplicationService:
                 "completed workflow has no valid analysis proposal pointer",
             ) from exc
         request = _analysis_request(run.canonical_request)
-        expected_result_schema = _proposal_result_schema(request)
+        expected_result_schema = _proposal_result_schema(
+            request, workflow_version=workflow.definition_version
+        )
         if pointer.result_schema != expected_result_schema:
             raise KnowledgeAnalysisServiceError(
                 "KNOWLEDGE_ANALYSIS_POINTER_INVALID",

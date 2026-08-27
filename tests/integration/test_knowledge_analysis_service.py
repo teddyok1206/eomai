@@ -154,6 +154,7 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
             "workflow-role/1.6.0",
             "workflow-role/1.7.0",
             "workflow-role/1.8.0",
+            "workflow-role/1.9.0",
         ):
             ensure_protocol_version(
                 session,
@@ -174,7 +175,7 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
                     lock_version=1,
                 )
             )
-        for version in ("1", "2", "3", "4", "5"):
+        for version in ("1", "2", "3", "4", "5", "6"):
             compiled = compile_definition(
                 Path(f"config/workflows/knowledge-analysis.v{version}.yaml").resolve(),
                 {"support"},
@@ -705,6 +706,9 @@ def _complete_proposal(
         else:
             request = KnowledgeAnalysisRequestV2.model_validate(run.canonical_request)
         workflow_id = run.workflow_id
+        workflow = session.get(WorkflowInstanceRecord, workflow_id)
+        assert workflow is not None
+        workflow_version = workflow.definition_version
     job_id = new_job_id()
     artifact_id = new_logical_artifact_id()
     revision_id = new_revision_id()
@@ -723,7 +727,9 @@ def _complete_proposal(
     )
     with transaction(sessions) as session:
         protocol_version = (
-            "workflow-role/1.8.0"
+            "workflow-role/1.9.0"
+            if isinstance(request, KnowledgeAnalysisRequestV6) and workflow_version == "6.0.0"
+            else "workflow-role/1.8.0"
             if isinstance(request, KnowledgeAnalysisRequestV6)
             else (
                 "workflow-role/1.7.0"
@@ -789,7 +795,9 @@ def _complete_proposal(
             revision_id=revision_id,
             content_hash=staged.primary_hash,
             result_schema=(
-                "knowledge-analysis-proposal-result@5.0"
+                "knowledge-analysis-proposal-result@6.0"
+                if isinstance(request, KnowledgeAnalysisRequestV6) and workflow_version == "6.0.0"
+                else "knowledge-analysis-proposal-result@5.0"
                 if isinstance(request, KnowledgeAnalysisRequestV6)
                 else (
                     "knowledge-analysis-proposal-result@4.0"
@@ -1346,6 +1354,72 @@ def test_v8_multimodal_document_analysis_flows_through_graph_and_retrieval(
     ).create(CreateEvidenceBundleCommand.model_validate(retrieval_value))
     assert evidence.schema_version == "evidence-bundle-publication-result/4.0"
     assert evidence.state == "PUBLISHED"
+
+
+def _assert_v9_multimodal_document_analysis_uses_schema_closed_protocol(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    orchestrator_settings, catalog_settings = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, orchestrator_settings)
+    bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v9").resolve(),
+        source_commit="9" * 40,
+        actor_id="phase7-integration",
+        evaluation_cases_total=3,
+        settings=orchestrator_settings,
+    )
+    _, document_revision_id = _document_source(
+        integration_engine,
+        catalog_settings,
+        tmp_path,
+        multimodal=True,
+    )
+    service = KnowledgeAnalysisApplicationService(integration_engine, catalog_settings)
+    created = service.create(
+        CreateKnowledgeAnalysisCommand(
+            source=EducationalDocumentKnowledgeAnalysisSelection(
+                source_class="TEXTBOOK",
+                document_revision_id=document_revision_id,
+                first_physical_page=1,
+                last_physical_page=2,
+                curriculum_unit_keys=("1-(1)",),
+            ),
+            preset_key="knowledge-analysis",
+            general_knowledge_mode="AUXILIARY_UNATTRIBUTED",
+            risk_policy_revision_id=POLICY_ID,
+            predecessor_analysis_run_id=None,
+            requested_by=OPERATOR_ID,
+            idempotency_key=f"document-analysis-v9:{uuid4().hex}",
+        )
+    )
+
+    sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        run = session.get(KnowledgeAnalysisRunRecord, created.analysis_run_id)
+        assert run is not None
+        request = KnowledgeAnalysisRequestV6.model_validate(run.canonical_request)
+        workflow = session.get(WorkflowInstanceRecord, run.workflow_id)
+        assert workflow is not None
+        assert workflow.definition_version == "6.0.0"
+        assert workflow.role_schema_version == "workflow-role/1.9.0"
+
+    pointer = _complete_proposal(
+        integration_engine,
+        catalog_settings,
+        run_id=created.analysis_run_id,
+        staging_root=tmp_path / "proposal-v9",
+        proposal_override=_proposal_with_edge(request),
+    )
+    assert pointer.result_schema == "knowledge-analysis-proposal-result@6.0"
+    accepted = service.reconcile(
+        ReconcileKnowledgeAnalysisCommand(
+            analysis_run_id=created.analysis_run_id,
+            requested_by=OPERATOR_ID,
+        )
+    )
+    assert accepted.state == "ACCEPTED"
 
 
 def test_concurrent_analysis_create_is_single_and_retry_replays(

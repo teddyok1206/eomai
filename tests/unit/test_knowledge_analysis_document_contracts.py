@@ -22,6 +22,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
+    KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
     KnowledgeAnalysisResultV5,
@@ -37,7 +38,11 @@ from eom_identifiers import content_sha256
 from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
 from eom_workflow.models import ArtifactSpec, KnowledgeAnalysisWorkerRequest, RoleWorkerInput
-from eom_workflow.schemas import constrained_result_schema, role_schema_bundle_hash
+from eom_workflow.schemas import (
+    constrained_result_schema,
+    role_schema_bundle_hash,
+    validate_role_input,
+)
 from jsonschema import Draft202012Validator
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
@@ -290,6 +295,23 @@ def request_v5() -> dict[str, object]:
     return value
 
 
+def request_v6() -> dict[str, object]:
+    value = request_v5()
+    value["schema_version"] = "knowledge-analysis-request/6.0"
+    value["source"] = multimodal_document_source()
+    value["worker_proposal_schema_ref"] = (
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/4.0"
+    )
+    value["accepted_result_schema_ref"] = "eom://schemas/knowledge/knowledge-analysis-result/6.0"
+    requested_outputs = value["requested_outputs"]
+    assert isinstance(requested_outputs, list)
+    requested_outputs.append("PAGE_IMAGE_OBSERVATIONS")
+    value["request_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "request_sha256"}
+    )
+    return value
+
+
 def proposal_v5(request: KnowledgeAnalysisRequestV5) -> dict[str, object]:
     historical_request = KnowledgeAnalysisRequestV4.model_validate(request_v4())
     value = proposal_v4(historical_request)
@@ -327,6 +349,35 @@ def proposal_v5(request: KnowledgeAnalysisRequestV5) -> dict[str, object]:
         },
     ]
     return value
+
+
+def test_v1_9_role_input_validates_a_production_shaped_multimodal_request() -> None:
+    raw = {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.9.0",
+        "job_id": "job_" + "1" * 32,
+        "workflow_id": "workflow_" + "2" * 32,
+        "step_run_id": "steprun_" + "3" * 32,
+        "attempt": 1,
+        "role": "support",
+        "request": {
+            "request_name": "KNOWLEDGE_ANALYSIS_REQUEST",
+            "analysis_request": request_v6(),
+        },
+        "upstream_artifacts": [],
+        "artifact": {
+            "logical_artifact_id": "artifact_" + "4" * 32,
+            "revision_id": "rev_" + "4" * 32,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+    }
+
+    parsed = validate_role_input(raw, "support", "workflow-role/1.9.0")
+
+    assert parsed.protocol_version == "workflow-role/1.9.0"
+    assert isinstance(parsed.request.analysis_request, KnowledgeAnalysisRequestV6)
+    assert parsed.request.analysis_request.source.page_image_count == 2
 
 
 def test_multimodal_proposal_accepts_honest_empty_content_without_relaxing_delivery() -> None:
@@ -1275,6 +1326,12 @@ def test_multimodal_protocol_schema_bytes_are_pinned_and_packaged() -> None:
         "knowledge-analysis-proposal-result-v5.schema.json": (
             "dda775b76b62f2c3b0caff136cd02543cdcf95869e1045e763feffdecb89e0a8"
         ),
+        "knowledge-analysis-input-v6.schema.json": (
+            "51e35a91e6d6696ad40379fdc82f6d959603acd9723d42ee04d48faf5a8ea804"
+        ),
+        "knowledge-analysis-proposal-result-v6.schema.json": (
+            "4a677f16d105e3dfd137b77a212b6512ff11e05611b0b4fa365ebd757baa7665"
+        ),
     }
     for name, digest in workflow_expected.items():
         canonical = (ROOT / "schemas/workflow/roles" / name).read_bytes()
@@ -1299,6 +1356,9 @@ def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> Non
     assert role_schema_bundle_hash("workflow-role/1.8.0") == (
         "sha256:1b99d22abf59081d8843934571d33346d0d0083fcfb9a000c5683577dc8827cc"
     )
+    assert role_schema_bundle_hash("workflow-role/1.9.0") == (
+        "sha256:e70c0dbd4856aeabbbedac97552933d5edbd44221f0cb5e7f8763d315d14e207"
+    )
     expected_definitions = {
         "knowledge-analysis.v1.yaml": (
             "75d2a750632a8ddbd5d350d00f28ecbfd79aa6527f1fb26436f664eb47b810d8"
@@ -1314,6 +1374,9 @@ def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> Non
         ),
         "knowledge-analysis.v5.yaml": (
             "953b68dc48baebc504651c5b9ea2662f54d2a7d57798abb10bbc3d26cf7204f3"
+        ),
+        "knowledge-analysis.v6.yaml": (
+            "1262ee13be0ffc423e58fdebe8447435d92104015c9863d0e47d829d3dfd9c88"
         ),
     }
     for name, digest in expected_definitions.items():
