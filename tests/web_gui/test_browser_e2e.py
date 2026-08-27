@@ -139,7 +139,12 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert 'select name="curriculum_middle_unit_key" disabled' in html
     assert 'input name="knowledge_grounding" type="checkbox" disabled' in html
     assert "graph_grounding_available === true" in javascript
-    assert "state.draft === null" in javascript
+    assert "curriculum_large_unit_key.disabled = !available" in javascript
+    assert "curriculum_middle_unit_key.disabled = !available" in javascript
+    assert "curriculum_small_unit_key.disabled = true" in javascript
+    assert "state.draft === null" not in javascript
+    assert "pendingCurriculumSelection" in javascript
+    assert "fillDraft(draft, pendingCurriculumSelection)" in javascript
     assert "curriculum_selected_unit_key: selectedUnitKey" in javascript
     assert "state.draft.draft_spec_sha256}`" in javascript
     assert "draft_spec_sha256.slice" not in javascript

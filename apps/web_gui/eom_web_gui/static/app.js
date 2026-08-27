@@ -345,17 +345,24 @@ function syncGraphGroundingCapability() {
     : "Graph 매핑 준비 중 · 교육과정 분류는 지금 사용할 수 있습니다.";
 }
 
-async function loadCurriculumOutline() {
+function syncCurriculumSelectorAvailability() {
   const form = $("#draft-form");
+  const available = Array.isArray(state.curriculumOutline?.units);
+  form.elements.curriculum_large_unit_key.disabled = !available;
+  form.elements.curriculum_middle_unit_key.disabled = !available;
+  // SMALL remains a reserved UI slot until a reviewed source list is published.
+  form.elements.curriculum_small_unit_key.disabled = true;
+}
+
+async function loadCurriculumOutline() {
   try {
     state.curriculumOutline = await api("/curriculum/editorial-outline");
     renderCurriculumOutline();
     syncGraphGroundingCapability();
-    form.elements.curriculum_large_unit_key.disabled = state.draft === null;
-    form.elements.curriculum_middle_unit_key.disabled = state.draft === null;
+    syncCurriculumSelectorAvailability();
   } catch (failure) {
-    form.elements.curriculum_large_unit_key.disabled = true;
-    form.elements.curriculum_middle_unit_key.disabled = true;
+    state.curriculumOutline = null;
+    syncCurriculumSelectorAvailability();
     syncGraphGroundingCapability();
     showMessage($("#draft-message"), `교육과정 목록 조회 실패: ${failure.message}`, "error");
   }
@@ -379,6 +386,7 @@ function installRequestDraft() {
 
 async function analyzeDraft() {
   const message = $("#draft-message");
+  const pendingCurriculumSelection = {...state.curriculumSelection};
   showMessage(message, "요청을 구조화하고 있습니다.");
   try {
     const draft = await api("/request-drafts", {
@@ -387,7 +395,7 @@ async function analyzeDraft() {
       body: {original_request_text: $("#request-text").value},
     });
     state.draft = draft;
-    fillDraft(draft);
+    fillDraft(draft, pendingCurriculumSelection);
     setStatus($("#draft-state"), "success", "✓", "검토 가능");
     showMessage(message, "문항 요청 초안을 검토하세요. 참고 자료 묶음 없이 일반 지식 모드로 바로 제출할 수 있습니다.", "success");
     $("#draft-save").disabled = false;
@@ -397,7 +405,7 @@ async function analyzeDraft() {
   }
 }
 
-function fillDraft(draft) {
+function fillDraft(draft, fallbackCurriculumSelection = {large: "", middle: "", small: ""}) {
   const form = $("#draft-form");
   for (const key of ["subject", "topic", "item_format", "task_type", "difficulty", "choice_count"]) {
     form.elements[key].value = draft[key];
@@ -410,13 +418,12 @@ function fillDraft(draft) {
   const graphGroundingAvailable = state.curriculumOutline?.graph_grounding_available === true;
   form.elements.knowledge_grounding.checked = draft.knowledge_grounding && graphGroundingAvailable;
   form.elements.knowledge_grounding.disabled = !graphGroundingAvailable;
-  form.elements.curriculum_large_unit_key.disabled = state.curriculumOutline === null;
-  form.elements.curriculum_middle_unit_key.disabled = state.curriculumOutline === null;
+  syncCurriculumSelectorAvailability();
   const selectedKey = draft.curriculum_selected_unit_key || "";
   setCurriculumSelection(
     state.curriculumOutline && selectedKey
       ? curriculumAncestors(state.curriculumOutline.units, selectedKey)
-      : {large: "", middle: "", small: ""},
+      : fallbackCurriculumSelection,
   );
   $("#draft-id").textContent = draft.request_draft_id;
   $("#draft-sha").textContent = draft.draft_spec_sha256;
