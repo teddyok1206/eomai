@@ -205,6 +205,7 @@ Textbook / Mock exam / Item bank
 - [Item Registry V0](docs/architecture/ITEM_REGISTRY_V0.md)
 - [HWPX Application API V0](docs/architecture/HWPX_APPLICATION_API_V0.md)
 - [Web GUI V0](docs/architecture/WEB_GUI_V0.md)
+- [Scientific Studio Presentation Vocabulary](docs/product/SCIENTIFIC_STUDIO_PRESENTATION_VOCABULARY.md)
 - [Application API V0](docs/architecture/APPLICATION_API_V0.md)
 - [Scientific Studio public handover](docs/operations/SCIENTIFIC_STUDIO_PUBLIC_HANDOVER.md)
 - [Repository agent rules](AGENTS.md)

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/web-gui/presentation-vocabulary-v1",
+  "title": "Scientific Studio presentation vocabulary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "locale",
+    "domains",
+    "stages",
+    "errors",
+    "terms"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "eom://schemas/web-gui/presentation-vocabulary-v1"
+    },
+    "schema_version": {
+      "const": "studio-presentation-vocabulary/1.0"
+    },
+    "locale": {
+      "const": "ko-KR"
+    },
+    "domains": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generic",
+        "workflow",
+        "knowledge_analysis",
+        "hwpx_build",
+        "hwpx_capability",
+        "item_revision",
+        "codex_account",
+        "execution_preset"
+      ],
+      "properties": {
+        "generic": {"$ref": "#/$defs/domain"},
+        "workflow": {"$ref": "#/$defs/domain"},
+        "knowledge_analysis": {"$ref": "#/$defs/domain"},
+        "hwpx_build": {"$ref": "#/$defs/domain"},
+        "hwpx_capability": {"$ref": "#/$defs/domain"},
+        "item_revision": {"$ref": "#/$defs/domain"},
+        "codex_account": {"$ref": "#/$defs/domain"},
+        "execution_preset": {"$ref": "#/$defs/domain"}
+      }
+    },
+    "stages": {"$ref": "#/$defs/lowercasePresentations"},
+    "errors": {"$ref": "#/$defs/uppercasePresentations"},
+    "terms": {"$ref": "#/$defs/lowercasePresentations"}
+  },
+  "$defs": {
+    "domain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["states"],
+      "properties": {
+        "states": {"$ref": "#/$defs/uppercasePresentations"}
+      }
+    },
+    "uppercasePresentations": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^[A-Z][A-Z0-9_]*$"},
+      "additionalProperties": {"$ref": "#/$defs/presentation"}
+    },
+    "lowercasePresentations": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+      "additionalProperties": {"$ref": "#/$defs/presentation"}
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "audience"],
+      "properties": {
+        "label": {"type": "string", "minLength": 1, "maxLength": 80},
+        "audience": {"enum": ["USER", "ADMIN", "DIAGNOSTIC"]},
+        "tone": {"enum": ["success", "danger", "warning", "primary", "neutral"]},
+        "icon": {"type": "string", "minLength": 1, "maxLength": 4},
+        "description": {"type": "string", "minLength": 1, "maxLength": 240},
+        "action": {"type": "string", "minLength": 1, "maxLength": 240}
+      }
+    }
+  }
+}

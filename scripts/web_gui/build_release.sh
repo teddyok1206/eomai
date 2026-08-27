@@ -86,6 +86,7 @@ with zipfile.ZipFile(os.environ["WHEEL"]) as archive:
         "eom_web_gui/static/login.html",
         "eom_web_gui/static/app.js",
         "eom_web_gui/static/login.js",
+        "eom_web_gui/static/presentation-vocabulary.ko-KR.json",
         "eom_web_gui/static/styles.css",
     }
     if missing := required - names:
@@ -140,7 +141,14 @@ if direct_url and json.loads(direct_url).get("dir_info", {}).get("editable") is 
 build = json.loads(files("eom_web_gui").joinpath("build-info.json").read_text(encoding="ascii"))
 if build["source_commit"] != __import__("os").environ["EXPECTED_COMMIT"]:
     raise SystemExit("installed Web GUI source commit mismatch")
-for name in ("index.html", "login.html", "app.js", "login.js", "styles.css"):
+for name in (
+    "index.html",
+    "login.html",
+    "app.js",
+    "login.js",
+    "presentation-vocabulary.ko-KR.json",
+    "styles.css",
+):
     if not files("eom_web_gui").joinpath("static", name).is_file():
         raise SystemExit(f"installed Web GUI static resource missing: {name}")
 print("web_gui_installed_simulation=PASS")

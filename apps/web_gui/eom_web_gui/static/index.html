@@ -13,20 +13,20 @@
           <span class="brand-seal" aria-hidden="true">E</span>
           <span><strong>EOM</strong><small>Scientific Studio</small></span>
         </div>
-        <div class="mode-label"><span class="mode-dot" aria-hidden="true"></span> Generic Demo Mode</div>
+        <div class="mode-label"><span class="mode-dot" aria-hidden="true"></span> 일반 문항 제작 모드</div>
         <nav class="navigation">
-          <button type="button" class="nav-item active" data-view-target="workflow"><span aria-hidden="true">▤</span> Workflow 상세</button>
+          <button type="button" class="nav-item active" data-view-target="workflow"><span aria-hidden="true">▤</span> 문항 제작 진행</button>
           <button type="button" class="nav-item" data-view-target="request"><span aria-hidden="true">＋</span> 새 문항 요청</button>
           <button type="button" class="nav-item" data-view-target="item"><span aria-hidden="true">▧</span> 완성 문항</button>
           <button type="button" class="nav-item" data-view-target="approval"><span aria-hidden="true">◆</span> 승인 대기</button>
           <button type="button" class="nav-item" data-view-target="hwpx"><span aria-hidden="true">▱</span> HWPX</button>
-          <button type="button" class="nav-item admin-only" data-view-target="control"><span aria-hidden="true">⚙</span> Codex Control</button>
+          <button type="button" class="nav-item admin-only" data-view-target="control"><span aria-hidden="true">⚙</span> Codex 실행 관리</button>
           <button type="button" class="nav-item admin-only" data-view-target="explorer"><span aria-hidden="true">⌘</span> DB Explorer</button>
           <button type="button" class="nav-item" data-view-target="dashboard"><span aria-hidden="true">⌂</span> 대시보드</button>
         </nav>
         <div class="sidebar-footer">
-          <p>Application API V0</p>
-          <span class="status-badge tone-success"><span class="status-icon" aria-hidden="true">✓</span> Stable baseline</span>
+          <p>EOM 운영 연결</p>
+          <span class="status-badge tone-success"><span class="status-icon" aria-hidden="true">✓</span> 안정화 기준 적용</span>
         </div>
       </aside>
 
@@ -34,7 +34,7 @@
         <header class="topbar">
           <div class="command-bar">
             <button class="mobile-menu" id="mobile-menu" type="button" aria-label="메뉴 열기">☰</button>
-            <label class="global-search"><span aria-hidden="true">⌕</span><input id="global-id" placeholder="Workflow, Item, Job ID 검색" autocomplete="off"></label>
+            <label class="global-search"><span aria-hidden="true">⌕</span><input id="global-id" placeholder="문항 제작, 문항, HWPX ID 검색" autocomplete="off"></label>
             <button class="button quiet" id="global-load" type="button">열기</button>
           </div>
           <div class="topbar-status" aria-live="polite">
@@ -48,26 +48,26 @@
         <main class="main-area">
           <section class="view active" data-view="workflow" aria-labelledby="workflow-title">
             <div class="page-heading">
-              <div><p class="eyebrow">WORKFLOW WORKSPACE</p><h1 id="workflow-title">Workflow 상세</h1><p>사람이 이해할 수 있는 단계와 검증 근거만 표시합니다.</p></div>
-              <div class="heading-actions"><input id="workflow-id" class="id-input" placeholder="workflow_…"><button id="workflow-load" class="button primary" type="button">Workflow 불러오기</button></div>
+              <div><p class="eyebrow">ITEM PRODUCTION</p><h1 id="workflow-title">문항 제작 진행</h1><p>문항이 만들어지고 검토·등록되는 과정을 확인합니다.</p></div>
+              <div class="heading-actions"><input id="workflow-id" class="id-input" placeholder="workflow_…"><button id="workflow-load" class="button primary" type="button">제작 진행 불러오기</button></div>
             </div>
             <div class="three-column-workspace">
               <aside class="stage-rail panel">
                 <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h2>제작 단계</h2></div><span id="workflow-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div>
                 <ol id="stage-list" class="stage-list">
-                  <li class="current"><span>1</span><div><strong>요청 접수</strong><small>Workflow를 선택하세요</small></div></li>
-                  <li><span>2</span><div><strong>Authoring</strong><small>대기</small></div></li>
-                  <li><span>3</span><div><strong>Review</strong><small>대기</small></div></li>
-                  <li><span>4</span><div><strong>승인</strong><small>대기</small></div></li>
-                  <li><span>5</span><div><strong>Registration</strong><small>대기</small></div></li>
-                  <li><span>6</span><div><strong>HWPX</strong><small id="hwpx-step-state">Capability 확인 중</small></div></li>
+                  <li class="current"><span>1</span><div><strong>요청 접수</strong><small>제작 진행을 선택하세요</small></div></li>
+                  <li><span>2</span><div><strong>문항 작성</strong><small>대기</small></div></li>
+                  <li><span>3</span><div><strong>품질 검토</strong><small>대기</small></div></li>
+                  <li><span>4</span><div><strong>검토 승인</strong><small>대기</small></div></li>
+                  <li><span>5</span><div><strong>완성 문항 등록</strong><small>대기</small></div></li>
+                  <li><span>6</span><div><strong>HWPX 제작</strong><small id="hwpx-step-state">제작 가능 여부 확인 중</small></div></li>
                 </ol>
               </aside>
 
               <div class="workflow-center">
                 <section class="panel timeline-panel">
-                  <div class="panel-heading"><div><p class="eyebrow">OPERATIONAL EVENTS</p><h2>실행 Timeline</h2></div><div class="stream-state"><span id="stream-status" class="status-badge tone-neutral"><span class="status-icon">●</span> Polling</span><button id="timeline-refresh" class="icon-button" type="button" aria-label="Timeline 새로고침">↻</button></div></div>
-                  <ol id="timeline" class="timeline"><li class="empty-state">Workflow를 불러오면 실행 이력이 표시됩니다.</li></ol>
+                  <div class="panel-heading"><div><p class="eyebrow">PRODUCTION HISTORY</p><h2>제작 이력</h2></div><div class="stream-state"><span id="stream-status" class="status-badge tone-neutral"><span class="status-icon">●</span> 자동 갱신</span><button id="timeline-refresh" class="icon-button" type="button" aria-label="제작 이력 새로고침">↻</button></div></div>
+                  <ol id="timeline" class="timeline"><li class="empty-state">문항 제작 진행을 불러오면 이력이 표시됩니다.</li></ol>
                 </section>
                 <section class="panel operational-log-panel">
                   <div class="panel-heading compact"><div><p class="eyebrow">SANITIZED LOG</p><h2>운영 기록</h2></div><span class="muted-label">No raw shell / No chain-of-thought</span></div>
@@ -76,16 +76,16 @@
               </div>
 
               <aside class="inspector panel">
-                <div class="panel-heading"><div><p class="eyebrow">INSPECTOR</p><h2>Workflow 정보</h2></div></div>
-                <dl id="workflow-inspector" class="inspector-list"><dt>Workflow</dt><dd>-</dd><dt>상태</dt><dd>-</dd><dt>현재 단계</dt><dd>-</dd><dt>ETag</dt><dd>-</dd></dl>
-                <div class="inspector-section"><h3>실행 정책</h3><p>Generic Demo · balanced</p></div>
+                <div class="panel-heading"><div><p class="eyebrow">DETAILS</p><h2>문항 제작 정보</h2></div></div>
+                <dl id="workflow-inspector" class="inspector-list"><dt>문항 제작 진행 ID</dt><dd>-</dd><dt>진행 상태</dt><dd>-</dd><dt>현재 단계</dt><dd>-</dd><dt>ETag</dt><dd>-</dd></dl>
+                <div class="inspector-section"><h3>실행 정책</h3><p>일반 문항 제작 · 균형형</p></div>
                 <div class="inspector-section"><h3>HWPX 상태</h3><span id="hwpx-inspector-badge" class="status-badge tone-warning"><span class="status-icon">◆</span> 확인 중</span></div>
               </aside>
             </div>
           </section>
 
           <section class="view" data-view="request" aria-labelledby="request-title">
-            <div class="page-heading"><div><p class="eyebrow">REQUEST DRAFT</p><h1 id="request-title">새 문항 요청</h1><p>자연어를 검토 가능한 Brief로 정규화하고, 필요하면 승인된 교육 근거를 고정해 실제 문항을 제작합니다.</p></div><span class="status-badge tone-primary"><span class="status-icon">◆</span> EOM Template Mode</span></div>
+            <div class="page-heading"><div><p class="eyebrow">NEW ITEM REQUEST</p><h1 id="request-title">새 문항 요청</h1><p>자연어 요청을 검토 가능한 문항 요구사항으로 정리하고 실제 문항을 제작합니다.</p></div><span class="status-badge tone-primary"><span class="status-icon">◆</span> EOM 문항 템플릿</span></div>
             <div class="request-layout">
               <section class="panel request-composer">
                 <div class="panel-heading"><div><p class="eyebrow">NATURAL LANGUAGE</p><h2>어떤 문항을 만들까요?</h2></div></div>
@@ -95,7 +95,7 @@
                 </div>
               </section>
               <section class="panel draft-panel">
-                <div class="panel-heading"><div><p class="eyebrow">STRUCTURED BRIEF</p><h2>Request Draft</h2></div><span id="draft-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 분석 전</span></div>
+                <div class="panel-heading"><div><p class="eyebrow">STRUCTURED REQUIREMENTS</p><h2>문항 요청 초안</h2></div><span id="draft-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 분석 전</span></div>
                 <form id="draft-form" class="draft-form">
                   <label>언어<input name="language" value="한국어" disabled></label>
                   <label>과목<input name="subject" required maxlength="80"></label>
@@ -105,48 +105,48 @@
                   <label>난이도<select name="difficulty"><option value="easy">하</option><option value="medium" selected>중</option><option value="hard">상</option></select></label>
                   <label>선택지 수<input name="choice_count" type="number" value="5" readonly></label>
                   <input name="source_intake_batch_id" type="hidden" value="">
-                  <p class="wide">기본 경로는 Source Intake 없이 구조화 Brief와 worker의 일반 과학 지식을 사용합니다.</p>
+                  <p class="wide">기본 경로는 참고 자료 묶음 없이 구조화된 요구사항과 작업자의 일반 과학 지식을 사용합니다.</p>
                   <fieldset class="wide admin-only"><legend>승인된 교육 지식 근거 · ADMIN</legend><label class="check"><input name="knowledge_grounding" type="checkbox"> Education Graph의 검증된 Evidence Bundle을 사용</label><label>교육과정 안정 키<input name="curriculum_root_key" maxlength="192" placeholder="earth.plate-boundary" disabled><small>Graph 경로나 Revision을 입력하지 않습니다. 관리된 교육과정 키만 허용됩니다.</small></label><p>선택 시 현재 공개된 science-core snapshot과 승인 정책을 서버가 고정하며, 근거가 없거나 오래된 pointer면 worker 실행 전에 실패합니다.</p></fieldset>
                   <fieldset class="wide"><legend>EOM 템플릿 필수 요소</legend><label class="check"><input name="equation_required" type="checkbox" checked disabled> 수식</label><label class="check"><input name="image_required" type="checkbox" checked disabled> eom-cdx가 문항에 맞춰 생성하는 자료 그림</label></fieldset>
                   <label class="wide">검증된 실행 프리셋<select name="quality_profile"><option value="balanced" selected>standard-item · 표준 문항 제작</option></select><small>모델·추론 깊이·worker 계정은 검증된 immutable 프리셋이 결정합니다.</small></label>
-                  <div class="wide draft-meta"><span>Draft ID</span><code id="draft-id">-</code><span>Request SHA</span><code id="draft-sha">-</code></div>
+                  <div class="wide draft-meta"><span>요청 초안 ID</span><code id="draft-id">-</code><span>요청 내용 SHA</span><code id="draft-sha">-</code></div>
                   <p id="draft-message" class="form-message wide" aria-live="polite"></p>
-                  <div class="wide form-actions"><button id="draft-save" class="button secondary" type="button" disabled>Draft 저장</button><button id="draft-submit" class="button primary" type="button" disabled>문항 생성 시작</button></div>
+                  <div class="wide form-actions"><button id="draft-save" class="button secondary" type="button" disabled>초안 저장</button><button id="draft-submit" class="button primary" type="button" disabled>문항 제작 시작</button></div>
                 </form>
               </section>
             </div>
           </section>
 
           <section class="view" data-view="item" aria-labelledby="item-title">
-            <div class="page-heading"><div><p class="eyebrow">EDITORIAL PREVIEW</p><h1 id="item-title">완성 문항</h1><p>고정된 Item Revision을 출판 문서와 같은 작업면에서 검토합니다.</p></div><div class="heading-actions"><input id="item-id" class="id-input" placeholder="item_…"><input id="revision-id" class="id-input" placeholder="itemrev_…"><button id="item-load" class="button primary" type="button">Preview</button></div></div>
+            <div class="page-heading"><div><p class="eyebrow">FINAL ITEM REVIEW</p><h1 id="item-title">완성 문항</h1><p>고정된 문항 버전을 출판 문서와 같은 작업면에서 검토합니다.</p></div><div class="heading-actions"><input id="item-id" class="id-input" placeholder="item_…"><input id="revision-id" class="id-input" placeholder="itemrev_…"><button id="item-load" class="button primary" type="button">문항 보기</button></div></div>
             <div class="preview-workspace">
               <article id="document-preview" class="document-canvas" aria-label="A4 문항 미리보기">
                 <header><span>EOM SCIENCE ITEM</span><span id="preview-page-state">METADATA ONLY</span></header>
-                <div id="preview-empty" class="document-empty"><strong>문항 Preview</strong><p>Item과 고정 Revision을 선택하세요.</p></div>
+                <div id="preview-empty" class="document-empty"><strong>완성 문항 미리보기</strong><p>문항과 고정된 문항 버전을 선택하세요.</p></div>
                 <div id="preview-content" hidden>
                   <p class="question-number">1.</p><p id="preview-body" class="question-body"></p><ol id="preview-choices" class="choice-list"></ol>
                   <section id="preview-equations" class="equation-block"></section><section id="preview-tables" class="document-tables"></section>
                   <div class="answer-rule"></div><section class="answer-section"><h3>정답</h3><p id="preview-answer"></p><h3>해설</h3><p id="preview-explanation"></p></section>
                 </div>
               </article>
-              <aside class="inspector panel"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE</p><h2>Revision 정보</h2></div><span id="revision-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div><dl id="item-inspector" class="inspector-list"><dt>Item</dt><dd>-</dd><dt>Revision</dt><dd>-</dd><dt>Workflow</dt><dd>-</dd><dt>Content Pack</dt><dd>-</dd></dl><div class="inspector-section"><h3>Kordoc / HWPX</h3><p>Application API capability를 통해서만 접근합니다.</p><button class="button secondary view-link" data-view-target="hwpx" type="button">HWPX 상태 보기</button></div></aside>
+              <aside class="inspector panel"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE</p><h2>문항 버전 정보</h2></div><span id="revision-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div><dl id="item-inspector" class="inspector-list"><dt>문항 ID</dt><dd>-</dd><dt>문항 버전 ID</dt><dd>-</dd><dt>문항 제작 진행 ID</dt><dd>-</dd><dt>콘텐츠 팩 버전</dt><dd>-</dd></dl><div class="inspector-section"><h3>HWPX 문서 제작</h3><p>검증된 EOM 문항 템플릿을 통해서만 제작합니다.</p><button class="button secondary view-link" data-view-target="hwpx" type="button">HWPX 제작 화면</button></div></aside>
             </div>
             <section class="panel structured-import-panel admin-only"><div class="panel-heading"><div><p class="eyebrow">ADMIN · REVIEWED IMPORT</p><h2>구조화 문항 등록</h2><p>승인된 Intake member를 정확히 pin하고 새 immutable Item Revision을 만듭니다.</p></div></div><div class="panel-body"><div class="structured-import-grid"><label>Base Item Revision<input id="structured-base-revision" placeholder="itemrev_…"></label><label>Revision ETag<input id="structured-revision-etag" placeholder='"v1"' readonly></label><label>Accepted Source Intake<select id="structured-intake"><option value="">ACCEPTED intake 선택</option></select></label><div class="form-actions source-actions"><button id="structured-load-sources" class="button secondary" type="button">이미지 pointer 불러오기</button></div><label class="wide">검토 사유<textarea id="structured-review-reason" rows="3" maxlength="2000" placeholder="본문·정답·해설·artifact pointer를 검토한 근거"></textarea></label><label class="wide">Assessment Item Content JSON<textarea id="structured-content-json" rows="18" spellcheck="false" placeholder="assessment-item-content/1.0 JSON"></textarea></label><label class="check wide"><input id="structured-reviewed" type="checkbox"> 이 구조화 콘텐츠와 모든 pinned pointer를 검토했습니다.</label><pre id="structured-source-pointer" class="pointer-preview wide">선택된 source pointer 없음</pre><p id="structured-import-message" class="form-message wide" aria-live="polite"></p><div class="form-actions wide"><button id="structured-import-submit" class="button primary" type="button">새 Item Revision 등록</button></div></div></div></section>
           </section>
 
           <section class="view" data-view="approval" aria-labelledby="approval-title">
-            <div class="page-heading"><div><p class="eyebrow">HUMAN DECISION</p><h1 id="approval-title">Reviewer 승인</h1><p>현재 ETag를 확인한 replay-safe command만 전송합니다.</p></div></div>
+            <div class="page-heading"><div><p class="eyebrow">HUMAN DECISION</p><h1 id="approval-title">문항 검토 승인</h1><p>최신 문항 제작 상태를 확인한 뒤 검토 결정을 전송합니다.</p></div></div>
             <div class="approval-layout">
-              <section class="panel approval-preview"><div class="panel-heading"><div><p class="eyebrow">CURRENT RESOURCE</p><h2>승인 대상 Workflow</h2></div><span id="approval-state" class="status-badge tone-warning"><span class="status-icon">◆</span> 확인 필요</span></div><dl id="approval-summary" class="summary-grid"><dt>Workflow</dt><dd>-</dd><dt>상태</dt><dd>-</dd><dt>현재 단계</dt><dd>-</dd><dt>ETag</dt><dd>-</dd></dl></section>
-              <section class="panel approval-form-panel"><div class="panel-heading"><div><p class="eyebrow">APPROVAL COMMAND</p><h2>검토 결정</h2></div></div><div class="panel-body"><label>Workflow ID<input id="approval-workflow-id" placeholder="workflow_…"></label><label>현재 ETag<input id="approval-etag" placeholder='"v1"' readonly></label><label>승인 메모<textarea id="approval-reason" rows="5" maxlength="2000"></textarea></label><p id="approval-message" class="form-message" aria-live="polite"></p><div class="form-actions"><button id="approval-load" class="button secondary" type="button">현재 상태 확인</button><button id="approval-submit" class="button primary" type="button" disabled>승인 command 전송</button></div></div></section>
+              <section class="panel approval-preview"><div class="panel-heading"><div><p class="eyebrow">CURRENT ITEM PRODUCTION</p><h2>승인 대상 문항 제작</h2></div><span id="approval-state" class="status-badge tone-warning"><span class="status-icon">◆</span> 확인 필요</span></div><dl id="approval-summary" class="summary-grid"><dt>문항 제작 진행 ID</dt><dd>-</dd><dt>진행 상태</dt><dd>-</dd><dt>현재 단계</dt><dd>-</dd><dt>ETag</dt><dd>-</dd></dl></section>
+              <section class="panel approval-form-panel"><div class="panel-heading"><div><p class="eyebrow">APPROVAL</p><h2>검토 결정</h2></div></div><div class="panel-body"><label>문항 제작 진행 ID<input id="approval-workflow-id" placeholder="workflow_…"></label><label>현재 ETag<input id="approval-etag" placeholder='"v1"' readonly></label><label>승인 메모<textarea id="approval-reason" rows="5" maxlength="2000"></textarea></label><p id="approval-message" class="form-message" aria-live="polite"></p><div class="form-actions"><button id="approval-load" class="button secondary" type="button">현재 상태 확인</button><button id="approval-submit" class="button primary" type="button" disabled>검토 승인</button></div></div></section>
             </div>
           </section>
 
           <section class="view" data-view="hwpx" aria-labelledby="hwpx-title">
-            <div class="page-heading"><div><p class="eyebrow">DOCUMENT DELIVERY</p><h1 id="hwpx-title">HWPX Capability</h1><p>Browser는 renderer나 파일 경로를 직접 다루지 않습니다.</p></div></div>
+            <div class="page-heading"><div><p class="eyebrow">DOCUMENT DELIVERY</p><h1 id="hwpx-title">HWPX 제작 및 다운로드</h1><p>승인된 완성 문항을 EOM 템플릿 HWPX로 제작합니다.</p></div></div>
             <div class="hwpx-layout">
-              <section class="capability-card panel"><div class="capability-symbol" aria-hidden="true">▱</div><div><p class="eyebrow">APPLICATION API ONLY</p><h2 id="hwpx-state-title">HWPX Renderer 상태 확인 중</h2><p id="hwpx-message">Capability를 불러오고 있습니다.</p><dl class="capability-grid"><dt>Renderer key</dt><dd id="renderer-key">-</dd><dt>Version</dt><dd id="renderer-version">-</dd><dt>Build</dt><dd id="hwpx-build-state">-</dd><dt>Validation</dt><dd id="hwpx-validation">-</dd><dt>Native equations</dt><dd id="hwpx-equations">-</dd><dt>Native tables</dt><dd id="hwpx-tables">-</dd><dt>Download</dt><dd id="hwpx-download">-</dd></dl><span id="hwpx-state-badge" class="status-badge tone-warning"><span class="status-icon">◆</span> 준비 확인 중</span></div></section>
-              <section class="panel hwpx-build-panel"><div class="panel-heading"><div><p class="eyebrow">PINNED REVISION</p><h2>EOM 문항 템플릿 HWPX</h2></div><span id="hwpx-job-badge" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div><div class="panel-body"><div class="hwpx-recovery"><label>기존 Build ID<input id="hwpx-existing-build-id" class="id-input" placeholder="hwpxbuild_…" autocomplete="off" spellcheck="false"></label><button id="hwpx-build-load" class="button secondary" type="button">기존 Build 불러오기</button></div><div class="hwpx-recent admin-only"><label>최근 HWPX Builds · ADMIN<select id="hwpx-recent-builds"><option value="">최근 빌드 불러오는 중</option></select></label><button id="hwpx-recent-refresh" class="button quiet" type="button">목록 새로고침</button></div><label>Approved Item Revision ID<input id="hwpx-revision-id" placeholder="itemrev_…"></label><label>문항 번호<input id="hwpx-item-number" type="number" min="1" max="999" value="1"></label><p>승인된 구조화 문항의 수식·표·이미지·선택지·해설을 고정 EOM 문항 템플릿에 배치합니다. 기존 Build ID 또는 ADMIN 최근 목록으로 검증된 결과를 다시 열 수 있습니다.</p><div class="form-actions"><button id="hwpx-build-submit" class="button primary" type="button" disabled>문항 HWPX 만들기</button><button id="hwpx-build-refresh" class="button secondary" type="button" disabled>상태 새로고침</button><a id="hwpx-download-link" class="button secondary" href="#" hidden>HWPX 다운로드</a></div><p id="hwpx-build-message" class="form-message" aria-live="polite"></p><dl class="summary-grid"><dt>Build ID</dt><dd id="hwpx-build-id">-</dd><dt>State</dt><dd id="hwpx-resource-state">-</dd><dt>Artifact Revision</dt><dd id="hwpx-artifact-revision">-</dd><dt>Completed</dt><dd id="hwpx-completed-at">-</dd></dl></div></section>
+              <section class="capability-card panel"><div class="capability-symbol" aria-hidden="true">▱</div><div><p class="eyebrow">SECURE DOCUMENT SERVICE</p><h2 id="hwpx-state-title">HWPX 제작 가능 여부 확인 중</h2><p id="hwpx-message">제작 기능 상태를 불러오고 있습니다.</p><dl class="capability-grid"><dt>제작 엔진</dt><dd id="renderer-key">-</dd><dt>템플릿 버전</dt><dd id="renderer-version">-</dd><dt>제작 가능 여부</dt><dd id="hwpx-build-state">-</dd><dt>검증 상태</dt><dd id="hwpx-validation">-</dd><dt>수식 지원</dt><dd id="hwpx-equations">-</dd><dt>표 지원</dt><dd id="hwpx-tables">-</dd><dt>다운로드</dt><dd id="hwpx-download">-</dd></dl><span id="hwpx-state-badge" class="status-badge tone-warning"><span class="status-icon">◆</span> 준비 확인 중</span></div></section>
+              <section class="panel hwpx-build-panel"><div class="panel-heading"><div><p class="eyebrow">PINNED ITEM VERSION</p><h2>EOM 문항 템플릿 HWPX</h2></div><span id="hwpx-job-badge" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div><div class="panel-body"><div class="hwpx-recovery"><label>기존 HWPX 제작 ID<input id="hwpx-existing-build-id" class="id-input" placeholder="hwpxbuild_…" autocomplete="off" spellcheck="false"></label><button id="hwpx-build-load" class="button secondary" type="button">기존 제작 결과 불러오기</button></div><div class="hwpx-recent admin-only"><label>최근 HWPX 제작 결과 · 관리자<select id="hwpx-recent-builds"><option value="">최근 결과 불러오는 중</option></select></label><button id="hwpx-recent-refresh" class="button quiet" type="button">목록 새로고침</button></div><label>승인된 문항 버전 ID<input id="hwpx-revision-id" placeholder="itemrev_…"></label><label>문항 번호<input id="hwpx-item-number" type="number" min="1" max="999" value="1"></label><p>승인된 문항의 수식·표·이미지·선택지·해설을 고정 EOM 문항 템플릿에 배치합니다. 기존 HWPX 제작 ID 또는 관리자 최근 목록으로 검증된 결과를 다시 열 수 있습니다.</p><div class="form-actions"><button id="hwpx-build-submit" class="button primary" type="button" disabled>문항 HWPX 만들기</button><button id="hwpx-build-refresh" class="button secondary" type="button" disabled>상태 새로고침</button><a id="hwpx-download-link" class="button secondary" href="#" hidden>HWPX 다운로드</a></div><p id="hwpx-build-message" class="form-message" aria-live="polite"></p><dl class="summary-grid"><dt>HWPX 제작 ID</dt><dd id="hwpx-build-id">-</dd><dt>진행 상태</dt><dd id="hwpx-resource-state">-</dd><dt>결과 파일 버전 ID</dt><dd id="hwpx-artifact-revision">-</dd><dt>완료 시각</dt><dd id="hwpx-completed-at">-</dd></dl></div></section>
             </div>
           </section>
 

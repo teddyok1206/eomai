@@ -19,7 +19,7 @@ SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "web-gui"
 
 def test_web_gui_schemas_are_valid_draft_2020_12() -> None:
     schemas = sorted(SCHEMA_ROOT.glob("*.schema.json"))
-    assert len(schemas) == 6
+    assert len(schemas) == 7
     for path in schemas:
         schema = json.loads(path.read_text(encoding="utf-8"))
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"

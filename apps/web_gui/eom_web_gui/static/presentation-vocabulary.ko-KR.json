@@ -1,0 +1,143 @@
+{
+  "$schema": "eom://schemas/web-gui/presentation-vocabulary-v1",
+  "schema_version": "studio-presentation-vocabulary/1.0",
+  "locale": "ko-KR",
+  "domains": {
+    "generic": {
+      "states": {
+        "UNKNOWN": {"label": "알 수 없는 상태", "audience": "USER", "tone": "neutral", "icon": "■"},
+        "REQUESTED": {"label": "요청 접수", "audience": "USER", "tone": "primary", "icon": "●"},
+        "PENDING": {"label": "대기 중", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "QUEUED": {"label": "실행 대기", "audience": "USER", "tone": "primary", "icon": "●"},
+        "CLAIMED": {"label": "작업 준비 중", "audience": "ADMIN", "tone": "primary", "icon": "●"},
+        "SUBMITTED": {"label": "분석 요청됨", "audience": "ADMIN", "tone": "primary", "icon": "●"},
+        "RUNNING": {"label": "처리 중", "audience": "USER", "tone": "primary", "icon": "●"},
+        "VALIDATING": {"label": "결과 검증 중", "audience": "USER", "tone": "primary", "icon": "●"},
+        "AWAITING_HUMAN_APPROVAL": {"label": "검토 승인 대기", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "AWAITING_APPROVAL": {"label": "검토 승인 대기", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "NEEDS_REVIEW": {"label": "검토 필요", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "APPROVED": {"label": "승인됨", "audience": "USER", "tone": "success", "icon": "✓"},
+        "ACCEPTED": {"label": "분석 완료", "audience": "USER", "tone": "success", "icon": "✓"},
+        "COMPLETED": {"label": "완료", "audience": "USER", "tone": "success", "icon": "✓"},
+        "SUCCEEDED": {"label": "완료", "audience": "USER", "tone": "success", "icon": "✓"},
+        "PASS": {"label": "검증 통과", "audience": "USER", "tone": "success", "icon": "✓"},
+        "FAIL": {"label": "검증 실패", "audience": "USER", "tone": "danger", "icon": "!"},
+        "FAILED": {"label": "처리 실패", "audience": "USER", "tone": "danger", "icon": "!"},
+        "BLOCKED": {"label": "진행 중단", "audience": "USER", "tone": "danger", "icon": "!"},
+        "CANCELLED": {"label": "취소됨", "audience": "USER", "tone": "neutral", "icon": "■"},
+        "READY": {"label": "사용 가능", "audience": "USER", "tone": "success", "icon": "✓"},
+        "ACTIVE": {"label": "정상", "audience": "USER", "tone": "success", "icon": "✓"},
+        "AVAILABLE": {"label": "사용 가능", "audience": "USER", "tone": "success", "icon": "✓"},
+        "NOT_AVAILABLE": {"label": "아직 사용할 수 없음", "audience": "USER", "tone": "neutral", "icon": "■"},
+        "UNAVAILABLE": {"label": "사용 불가", "audience": "USER", "tone": "danger", "icon": "!"},
+        "DEGRADED": {"label": "일부 기능 제한", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "PREPARED_NOT_DEPLOYED": {"label": "준비됨 (운영 연결 전)", "audience": "ADMIN", "tone": "warning", "icon": "◆"},
+        "DRAFT": {"label": "초안", "audience": "USER", "tone": "neutral", "icon": "■"},
+        "RELEASED": {"label": "배포됨", "audience": "ADMIN", "tone": "success", "icon": "✓"},
+        "DEPRECATED": {"label": "사용 중단", "audience": "ADMIN", "tone": "neutral", "icon": "■"},
+        "DISABLED": {"label": "비활성", "audience": "ADMIN", "tone": "danger", "icon": "!"},
+        "DRAINING": {"label": "새 작업 중지 중", "audience": "ADMIN", "tone": "warning", "icon": "◆"},
+        "UNHEALTHY": {"label": "점검 필요", "audience": "ADMIN", "tone": "danger", "icon": "!"}
+      }
+    },
+    "workflow": {
+      "states": {
+        "REQUESTED": {"label": "문항 제작 요청 접수", "audience": "USER", "tone": "primary", "icon": "●"},
+        "RUNNING": {"label": "문항 제작 중", "audience": "USER", "tone": "primary", "icon": "●"},
+        "AWAITING_HUMAN_APPROVAL": {"label": "문항 검토 승인 대기", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "AWAITING_APPROVAL": {"label": "문항 검토 승인 대기", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "COMPLETED": {"label": "문항 등록 완료", "audience": "USER", "tone": "success", "icon": "✓"},
+        "FAILED": {"label": "문항 제작 실패", "audience": "USER", "tone": "danger", "icon": "!"},
+        "BLOCKED": {"label": "문항 제작 중단", "audience": "USER", "tone": "danger", "icon": "!"}
+      }
+    },
+    "knowledge_analysis": {
+      "states": {
+        "QUEUED": {"label": "분석 대기", "audience": "ADMIN", "tone": "primary", "icon": "●"},
+        "RUNNING": {"label": "자료 분석 중", "audience": "ADMIN", "tone": "primary", "icon": "●"},
+        "ACCEPTED": {"label": "분석 완료", "audience": "ADMIN", "tone": "success", "icon": "✓"},
+        "FAILED": {"label": "분석 실패", "audience": "ADMIN", "tone": "danger", "icon": "!"},
+        "BLOCKED": {"label": "분석 중단", "audience": "ADMIN", "tone": "danger", "icon": "!"}
+      }
+    },
+    "hwpx_build": {
+      "states": {
+        "REQUESTED": {"label": "HWPX 제작 대기", "audience": "USER", "tone": "primary", "icon": "●"},
+        "RUNNING": {"label": "HWPX 제작 중", "audience": "USER", "tone": "primary", "icon": "●"},
+        "VALIDATING": {"label": "HWPX 검증 중", "audience": "USER", "tone": "primary", "icon": "●"},
+        "SUCCEEDED": {"label": "다운로드 준비 완료", "audience": "USER", "tone": "success", "icon": "✓"},
+        "FAILED": {"label": "HWPX 제작 실패", "audience": "USER", "tone": "danger", "icon": "!"}
+      }
+    },
+    "hwpx_capability": {
+      "states": {
+        "READY": {"label": "HWPX 제작 가능", "audience": "USER", "tone": "success", "icon": "✓"},
+        "DEGRADED": {"label": "HWPX 기능 점검 필요", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "UNAVAILABLE": {"label": "현재 HWPX 제작 불가", "audience": "USER", "tone": "danger", "icon": "!"},
+        "PREPARED_NOT_DEPLOYED": {"label": "HWPX 준비됨 (운영 연결 전)", "audience": "ADMIN", "tone": "warning", "icon": "◆"}
+      }
+    },
+    "item_revision": {
+      "states": {
+        "APPROVED": {"label": "사용 가능", "audience": "USER", "tone": "success", "icon": "✓"},
+        "DRAFT": {"label": "편집 중", "audience": "USER", "tone": "neutral", "icon": "■"},
+        "SUPERSEDED": {"label": "이전 버전", "audience": "USER", "tone": "neutral", "icon": "■"}
+      }
+    },
+    "codex_account": {
+      "states": {
+        "ACTIVE": {"label": "정상", "audience": "ADMIN", "tone": "success", "icon": "✓"},
+        "DRAINING": {"label": "새 작업 중지 중", "audience": "ADMIN", "tone": "warning", "icon": "◆"},
+        "DISABLED": {"label": "비활성", "audience": "ADMIN", "tone": "danger", "icon": "!"},
+        "UNHEALTHY": {"label": "점검 필요", "audience": "ADMIN", "tone": "danger", "icon": "!"}
+      }
+    },
+    "execution_preset": {
+      "states": {
+        "DRAFT": {"label": "검토 전 초안", "audience": "ADMIN", "tone": "neutral", "icon": "■"},
+        "ACTIVE": {"label": "사용 중", "audience": "ADMIN", "tone": "success", "icon": "✓"},
+        "DEPRECATED": {"label": "사용 중단", "audience": "ADMIN", "tone": "neutral", "icon": "■"}
+      }
+    }
+  },
+  "stages": {
+    "request": {"label": "요청 접수", "audience": "USER", "description": "사용자의 문항 요구사항을 구조화합니다."},
+    "authoring": {"label": "문항 작성", "audience": "USER", "description": "문항 본문과 자료를 작성합니다."},
+    "image": {"label": "자료 그림 제작", "audience": "USER", "description": "문항에 필요한 자료 그림을 제작합니다."},
+    "review": {"label": "품질 검토", "audience": "USER", "description": "정답과 과학적 타당성을 검토합니다."},
+    "approval": {"label": "검토 승인", "audience": "USER", "description": "사람이 최종 등록 여부를 승인합니다."},
+    "human_approval": {"label": "검토 승인", "audience": "USER", "description": "사람이 최종 등록 여부를 승인합니다."},
+    "registration": {"label": "완성 문항 등록", "audience": "USER", "description": "검증된 문항을 불변 버전으로 등록합니다."},
+    "item_management": {"label": "완성 문항 등록", "audience": "USER", "description": "검증된 문항을 불변 버전으로 등록합니다."},
+    "hwpx": {"label": "HWPX 제작", "audience": "USER", "description": "승인된 문항을 HWPX 파일로 제작합니다."}
+  },
+  "errors": {
+    "HWPX_APPLICATION_REVISION_INELIGIBLE": {"label": "이 문항 버전은 아직 HWPX로 만들 수 없습니다.", "audience": "USER", "action": "완성 문항에서 현재 승인된 문항 버전을 다시 선택하세요."},
+    "HWPX_RENDERER_NOT_READY": {"label": "HWPX 제작기가 아직 준비되지 않았습니다.", "audience": "USER", "action": "잠시 후 상태를 다시 확인하거나 관리자에게 문의하세요."},
+    "AUTH_REAUTHENTICATION_REQUIRED": {"label": "로그인이 만료되었습니다.", "audience": "USER", "action": "다시 로그인한 뒤 요청을 이어서 진행하세요."},
+    "WEB_REQUEST_INVALID": {"label": "입력한 내용을 확인해 주세요.", "audience": "USER", "action": "필수 항목과 식별자 형식을 확인한 뒤 다시 제출하세요."},
+    "HTTP_400": {"label": "요청 내용을 처리할 수 없습니다.", "audience": "USER", "action": "입력값을 확인하세요."},
+    "HTTP_403": {"label": "이 작업을 수행할 권한이 없습니다.", "audience": "USER", "action": "필요한 역할이 있는 계정으로 로그인하세요."},
+    "HTTP_404": {"label": "요청한 대상을 찾을 수 없습니다.", "audience": "USER", "action": "ID가 정확한지 확인하세요."},
+    "HTTP_409": {"label": "현재 상태에서는 이 작업을 수행할 수 없습니다.", "audience": "USER", "action": "화면을 새로고침해 최신 상태를 확인하세요."},
+    "HTTP_422": {"label": "입력 형식이 올바르지 않습니다.", "audience": "USER", "action": "필수 항목과 입력 형식을 확인하세요."},
+    "HTTP_429": {"label": "요청이 많아 잠시 대기해야 합니다.", "audience": "USER", "action": "잠시 후 다시 시도하세요."},
+    "HTTP_500": {"label": "서비스 내부 오류가 발생했습니다.", "audience": "USER", "action": "관리자에게 기술 오류 코드와 함께 알려주세요."},
+    "HTTP_503": {"label": "서비스를 일시적으로 사용할 수 없습니다.", "audience": "USER", "action": "잠시 후 다시 시도하세요."},
+    "APPLICATION_API_REQUEST_FAILED": {"label": "서비스 요청을 완료하지 못했습니다.", "audience": "USER", "action": "상태를 새로고침한 뒤 다시 확인하세요."}
+  },
+  "terms": {
+    "workflow_id": {"label": "문항 제작 진행 ID", "audience": "DIAGNOSTIC", "description": "한 번의 문항 제작 과정을 식별합니다."},
+    "item_id": {"label": "문항 ID", "audience": "DIAGNOSTIC", "description": "수정 가능한 현재 버전을 가리키는 문항의 논리 식별자입니다."},
+    "item_revision_id": {"label": "문항 버전 ID", "audience": "DIAGNOSTIC", "description": "특정 시점의 불변 문항 버전을 식별합니다."},
+    "hwpx_build_id": {"label": "HWPX 제작 ID", "audience": "DIAGNOSTIC", "description": "한 번의 HWPX 제작 요청을 식별합니다."},
+    "artifact_revision_id": {"label": "결과 파일 버전 ID", "audience": "DIAGNOSTIC", "description": "검증된 결과 파일의 불변 버전을 식별합니다."},
+    "execution_preset": {"label": "실행 프리셋", "audience": "ADMIN", "description": "역할별 모델과 추론 정책을 고정한 버전 정책입니다."},
+    "source_intake": {"label": "참고 자료 묶음", "audience": "USER", "description": "문항 제작 또는 분석에 사용할 검증된 원본 자료 묶음입니다."},
+    "evidence_bundle": {"label": "근거 자료 묶음", "audience": "ADMIN", "description": "분석 결과가 근거로 사용한 자료의 불변 포인터 묶음입니다."},
+    "graph_snapshot": {"label": "지식 그래프 버전", "audience": "ADMIN", "description": "재현 가능한 지식 그래프의 불변 스냅샷입니다."},
+    "worker_slot": {"label": "작업 슬롯", "audience": "ADMIN", "description": "Codex 작업 실행 용량을 나타내는 고정 슬롯입니다."},
+    "schema_version": {"label": "데이터 계약 버전", "audience": "DIAGNOSTIC", "description": "메시지 구조를 검증하는 스키마 버전입니다."},
+    "sha256": {"label": "내용 해시 (SHA-256)", "audience": "DIAGNOSTIC", "description": "불변 파일 내용의 무결성을 확인하는 해시입니다."}
+  }
+}

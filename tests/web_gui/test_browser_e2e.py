@@ -15,21 +15,22 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
         shell = client.get("/studio/")
         assert shell.status_code == 200
         for marker in (
-            "Workflow 상세",
-            "Request Draft",
+            "문항 제작 진행",
+            "문항 요청 초안",
             "완성 문항",
-            "Reviewer 승인",
-            "HWPX Capability",
-            "기존 Build 불러오기",
-            "최근 HWPX Builds",
+            "문항 검토 승인",
+            "HWPX 제작 및 다운로드",
+            "기존 제작 결과 불러오기",
+            "최근 HWPX 제작 결과",
             "DB Explorer Lite",
-            "Generic Demo Mode",
+            "일반 문항 제작 모드",
             "eom-cdx가 문항에 맞춰 생성하는 자료 그림",
-            "Source Intake 없이 구조화 Brief와 worker의 일반 과학 지식",
+            "참고 자료 묶음 없이 구조화된 요구사항과 작업자의 일반 과학 지식",
         ):
             assert marker in shell.text
         assert client.get("/studio/assets/styles.css").status_code == 200
         assert client.get("/studio/assets/app.js").status_code == 200
+        assert client.get("/studio/assets/presentation-vocabulary.ko-KR.json").status_code == 200
 
         draft = client.post(
             "/studio/api/v1/request-drafts",
@@ -100,11 +101,15 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
 def test_browser_assets_are_offline_and_xss_safe() -> None:
     html = Path("apps/web_gui/eom_web_gui/static/index.html").read_text(encoding="utf-8")
     javascript = Path("apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
+    vocabulary = Path(
+        "apps/web_gui/eom_web_gui/static/presentation-vocabulary.ko-KR.json"
+    ).read_text(encoding="utf-8")
     assert "https://" not in html and "http://" not in html
     assert "localStorage" not in javascript
     assert "sessionStorage" not in javascript
     assert "innerHTML" not in javascript
     assert "textContent" in javascript
+    assert "http://" not in vocabulary and "https://" not in vocabulary
     assert 'id="hwpx-existing-build-id"' in html
     assert 'id="hwpx-recent-builds"' in html
     assert "const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/" in javascript
