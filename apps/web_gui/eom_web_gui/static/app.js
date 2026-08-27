@@ -25,6 +25,24 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+const UI_MODE_BY_VIEW = Object.freeze({
+  workflow: "engine",
+  request: "human",
+  item: "human",
+  approval: "human",
+  hwpx: "human",
+  control: "engine",
+  explorer: "engine",
+  dashboard: "human",
+});
+
+function syncUiMode(name) {
+  const mode = UI_MODE_BY_VIEW[name] || "human";
+  const label = mode === "engine" ? "운영·근거 화면" : "사용자 작업면";
+  document.documentElement.dataset.uiMode = mode;
+  $("#surface-mode-label").lastChild.textContent = ` ${label}`;
+  $("#sidebar-mode-label").textContent = label;
+}
 
 async function api(path, options = {}) {
   const headers = {Accept: "application/json", ...(options.headers || {})};
@@ -175,12 +193,14 @@ function toast(value) {
 function showView(name) {
   $$(".view").forEach((element) => element.classList.toggle("active", element.dataset.view === name));
   $$(".nav-item").forEach((element) => element.classList.toggle("active", element.dataset.viewTarget === name));
+  syncUiMode(name);
   $(".sidebar").classList.remove("open");
   if (name === "hwpx") loadHwpx();
   if (name !== "control") window.clearTimeout(state.analysisBatchPollTimer);
   if (name === "control" && hasAdminRole()) loadControlPlane();
   if (name === "dashboard" && state.health) renderDashboard(state.health);
-  window.scrollTo({top: 0, behavior: "smooth"});
+  const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  window.scrollTo({top: 0, behavior});
 }
 
 function installNavigation() {
@@ -391,11 +411,46 @@ function renderWorkflow(bundle) {
     });
   }
   renderDefinitionList($("#workflow-inspector"), summary);
+  renderWorkflowEvidence(provenance);
   renderStages(workflow, bundle.steps || []);
   renderTimeline(bundle.timeline || []);
   renderOperationalLog(bundle);
   $("#approval-etag").value = bundle.etag || "";
   renderApprovalSummary(bundle);
+}
+
+function appendEvidenceChip(root, label, value, technicalValue = "") {
+  const chip = document.createElement("span");
+  chip.className = "evidence-chip";
+  if (technicalValue) chip.title = technicalValue;
+  const heading = document.createElement("strong");
+  heading.textContent = label;
+  chip.append(heading, document.createTextNode(value ? ` ${value}` : ""));
+  root.append(chip);
+}
+
+function renderWorkflowEvidence(provenance) {
+  const root = $("#workflow-evidence");
+  root.replaceChildren();
+  const label = document.createElement("span");
+  label.className = "evidence-label";
+  label.textContent = "제작 근거";
+  root.append(label);
+  if (!provenance) {
+    appendEvidenceChip(root, "요구", "구조화됨");
+    appendEvidenceChip(root, "과학 지식", "작업자 기본 지식");
+    return;
+  }
+  if (provenance.curriculum_root_key) appendEvidenceChip(root, "교육과정", String(provenance.curriculum_root_key));
+  const sourceClasses = Array.isArray(provenance.source_classes) ? provenance.source_classes.filter(Boolean) : [];
+  if (sourceClasses.length) appendEvidenceChip(root, "근거 유형", sourceClasses.join(" · "));
+  if (provenance.evidence_bundle_revision_id) {
+    appendEvidenceChip(root, "근거 묶음", "고정됨", `기술 ID: ${provenance.evidence_bundle_revision_id}`);
+  }
+  if (provenance.graph_snapshot_revision_id) {
+    appendEvidenceChip(root, "지식 그래프", "고정됨", `기술 ID: ${provenance.graph_snapshot_revision_id}`);
+  }
+  if (root.children.length === 1) appendEvidenceChip(root, "근거", "검증된 버전으로 고정됨");
 }
 
 function renderDefinitionList(element, values) {
@@ -424,6 +479,12 @@ function renderStages(workflow, steps) {
       : "제작 가능 여부 확인 필요";
     detail.textContent = completed.has(key) ? "완료" : key === current ? "현재 단계" : key === "hwpx" ? hwpxState : "대기";
     element.querySelector("span").textContent = completed.has(key) ? "✓" : String(index + 1);
+  });
+  $$("#production-map li").forEach((element) => {
+    const key = element.dataset.flowStage;
+    element.classList.toggle("complete", completed.has(key));
+    element.classList.toggle("current", key === current && !completed.has(key));
+    element.setAttribute("aria-current", key === current && !completed.has(key) ? "step" : "false");
   });
 }
 
@@ -1212,6 +1273,7 @@ async function logout() {
 
 async function boot() {
   await loadPresentationVocabulary();
+  syncUiMode("workflow");
   installNavigation();
   installRequestDraft();
   installWorkflow();

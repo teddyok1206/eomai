@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-ui-mode="engine">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,15 +13,18 @@
           <span class="brand-seal" aria-hidden="true">E</span>
           <span><strong>EOM</strong><small>Scientific Studio</small></span>
         </div>
-        <div class="mode-label"><span class="mode-dot" aria-hidden="true"></span> 일반 문항 제작 모드</div>
+        <div class="mode-label"><span class="mode-dot" aria-hidden="true"></span><span id="sidebar-mode-label">운영·근거 화면</span></div>
         <nav class="navigation">
+          <p class="nav-group-label">문항 제작</p>
           <button type="button" class="nav-item active" data-view-target="workflow"><span aria-hidden="true">▤</span> 문항 제작 진행</button>
           <button type="button" class="nav-item" data-view-target="request"><span aria-hidden="true">＋</span> 새 문항 요청</button>
           <button type="button" class="nav-item" data-view-target="item"><span aria-hidden="true">▧</span> 완성 문항</button>
           <button type="button" class="nav-item" data-view-target="approval"><span aria-hidden="true">◆</span> 승인 대기</button>
           <button type="button" class="nav-item" data-view-target="hwpx"><span aria-hidden="true">▱</span> HWPX</button>
+          <p class="nav-group-label admin-only">운영 도구</p>
           <button type="button" class="nav-item admin-only" data-view-target="control"><span aria-hidden="true">⚙</span> Codex 실행 관리</button>
           <button type="button" class="nav-item admin-only" data-view-target="explorer"><span aria-hidden="true">⌘</span> DB Explorer</button>
+          <p class="nav-group-label">시스템</p>
           <button type="button" class="nav-item" data-view-target="dashboard"><span aria-hidden="true">⌂</span> 대시보드</button>
         </nav>
         <div class="sidebar-footer">
@@ -38,6 +41,7 @@
             <button class="button quiet" id="global-load" type="button">열기</button>
           </div>
           <div class="topbar-status" aria-live="polite">
+            <span id="surface-mode-label" class="surface-mode-badge"><span aria-hidden="true">◫</span> 운영·근거 화면</span>
             <span id="api-health" class="status-badge tone-neutral"><span class="status-icon" aria-hidden="true">●</span> API 확인 중</span>
             <span id="observe-health" class="status-badge tone-neutral"><span class="status-icon" aria-hidden="true">●</span> Observe 확인 중</span>
             <span class="user-block"><span><strong id="current-user">-</strong><small id="current-role">-</small></span><span class="avatar" aria-hidden="true">EO</span></span>
@@ -51,6 +55,23 @@
               <div><p class="eyebrow">ITEM PRODUCTION</p><h1 id="workflow-title">문항 제작 진행</h1><p>문항이 만들어지고 검토·등록되는 과정을 확인합니다.</p></div>
               <div class="heading-actions"><input id="workflow-id" class="id-input" placeholder="workflow_…"><button id="workflow-load" class="button primary" type="button">제작 진행 불러오기</button></div>
             </div>
+            <section class="workbench-context" aria-labelledby="production-map-title">
+              <div class="workbench-context-heading">
+                <div><p class="eyebrow">SCIENTIFIC WORKBENCH</p><h2 id="production-map-title">근거에서 출판 문서까지</h2></div>
+                <p>요구사항과 교육 근거를 고정하고, 각 검증 단계를 통과한 결과만 완성 문항과 HWPX로 이어집니다.</p>
+              </div>
+              <ol id="production-map" class="production-map" aria-label="문항 제작 흐름">
+                <li data-flow-stage="request"><span>01</span><strong>요구 정리</strong><small>문항 목표</small></li>
+                <li data-flow-stage="authoring"><span>02</span><strong>문항 구성</strong><small>자료·수식·선택지</small></li>
+                <li data-flow-stage="review"><span>03</span><strong>품질 검토</strong><small>과학·형식 검증</small></li>
+                <li data-flow-stage="approval"><span>04</span><strong>검토 승인</strong><small>사람의 결정</small></li>
+                <li data-flow-stage="registration"><span>05</span><strong>버전 등록</strong><small>고정된 문항</small></li>
+                <li data-flow-stage="hwpx"><span>06</span><strong>문서 제작</strong><small>EOM HWPX</small></li>
+              </ol>
+              <div id="workflow-evidence" class="evidence-strip" aria-label="고정된 제작 근거">
+                <span class="evidence-label">제작 근거</span><span class="evidence-empty">문항 제작 진행을 불러오면 고정된 근거가 표시됩니다.</span>
+              </div>
+            </section>
             <div class="three-column-workspace">
               <aside class="stage-rail panel">
                 <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h2>제작 단계</h2></div><span id="workflow-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div>
@@ -77,9 +98,9 @@
 
               <aside class="inspector panel">
                 <div class="panel-heading"><div><p class="eyebrow">DETAILS</p><h2>문항 제작 정보</h2></div></div>
-                <dl id="workflow-inspector" class="inspector-list"><dt>문항 제작 진행 ID</dt><dd>-</dd><dt>진행 상태</dt><dd>-</dd><dt>현재 단계</dt><dd>-</dd><dt>ETag</dt><dd>-</dd></dl>
                 <div class="inspector-section"><h3>실행 정책</h3><p>일반 문항 제작 · 균형형</p></div>
                 <div class="inspector-section"><h3>HWPX 상태</h3><span id="hwpx-inspector-badge" class="status-badge tone-warning"><span class="status-icon">◆</span> 확인 중</span></div>
+                <details class="technical-details"><summary>기술 정보</summary><dl id="workflow-inspector" class="inspector-list"><dt>문항 제작 진행 ID</dt><dd>-</dd><dt>진행 상태</dt><dd>-</dd><dt>현재 단계</dt><dd>-</dd><dt>ETag</dt><dd>-</dd></dl></details>
               </aside>
             </div>
           </section>
@@ -129,7 +150,7 @@
                   <div class="answer-rule"></div><section class="answer-section"><h3>정답</h3><p id="preview-answer"></p><h3>해설</h3><p id="preview-explanation"></p></section>
                 </div>
               </article>
-              <aside class="inspector panel"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE</p><h2>문항 버전 정보</h2></div><span id="revision-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div><dl id="item-inspector" class="inspector-list"><dt>문항 ID</dt><dd>-</dd><dt>문항 버전 ID</dt><dd>-</dd><dt>문항 제작 진행 ID</dt><dd>-</dd><dt>콘텐츠 팩 버전</dt><dd>-</dd></dl><div class="inspector-section"><h3>HWPX 문서 제작</h3><p>검증된 EOM 문항 템플릿을 통해서만 제작합니다.</p><button class="button secondary view-link" data-view-target="hwpx" type="button">HWPX 제작 화면</button></div></aside>
+              <aside class="inspector panel"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE</p><h2>문항 버전 정보</h2></div><span id="revision-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div><div class="inspector-section"><h3>HWPX 문서 제작</h3><p>검증된 EOM 문항 템플릿을 통해서만 제작합니다.</p><button class="button secondary view-link" data-view-target="hwpx" type="button">HWPX 제작 화면</button></div><details class="technical-details"><summary>고정 버전·출처 정보</summary><dl id="item-inspector" class="inspector-list"><dt>문항 ID</dt><dd>-</dd><dt>문항 버전 ID</dt><dd>-</dd><dt>문항 제작 진행 ID</dt><dd>-</dd><dt>콘텐츠 팩 버전</dt><dd>-</dd></dl></details></aside>
             </div>
             <section class="panel structured-import-panel admin-only"><div class="panel-heading"><div><p class="eyebrow">ADMIN · REVIEWED IMPORT</p><h2>구조화 문항 등록</h2><p>승인된 Intake member를 정확히 pin하고 새 immutable Item Revision을 만듭니다.</p></div></div><div class="panel-body"><div class="structured-import-grid"><label>Base Item Revision<input id="structured-base-revision" placeholder="itemrev_…"></label><label>Revision ETag<input id="structured-revision-etag" placeholder='"v1"' readonly></label><label>Accepted Source Intake<select id="structured-intake"><option value="">ACCEPTED intake 선택</option></select></label><div class="form-actions source-actions"><button id="structured-load-sources" class="button secondary" type="button">이미지 pointer 불러오기</button></div><label class="wide">검토 사유<textarea id="structured-review-reason" rows="3" maxlength="2000" placeholder="본문·정답·해설·artifact pointer를 검토한 근거"></textarea></label><label class="wide">Assessment Item Content JSON<textarea id="structured-content-json" rows="18" spellcheck="false" placeholder="assessment-item-content/1.0 JSON"></textarea></label><label class="check wide"><input id="structured-reviewed" type="checkbox"> 이 구조화 콘텐츠와 모든 pinned pointer를 검토했습니다.</label><pre id="structured-source-pointer" class="pointer-preview wide">선택된 source pointer 없음</pre><p id="structured-import-message" class="form-message wide" aria-live="polite"></p><div class="form-actions wide"><button id="structured-import-submit" class="button primary" type="button">새 Item Revision 등록</button></div></div></div></section>
           </section>

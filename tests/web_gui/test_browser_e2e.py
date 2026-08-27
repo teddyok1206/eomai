@@ -23,7 +23,8 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "기존 제작 결과 불러오기",
             "최근 HWPX 제작 결과",
             "DB Explorer Lite",
-            "일반 문항 제작 모드",
+            "운영·근거 화면",
+            "근거에서 출판 문서까지",
             "eom-cdx가 문항에 맞춰 생성하는 자료 그림",
             "참고 자료 묶음 없이 구조화된 요구사항과 작업자의 일반 과학 지식",
         ):
