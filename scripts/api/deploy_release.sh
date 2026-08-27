@@ -6,6 +6,12 @@ EXPECTED_BRANCHES=("main" "feat/application-api-v0" "feat/hwpx-application-api-v
 API_PYTHON="/srv/eom/conda/envs/eom-api/bin/python"
 API_PIP="${API_PYTHON} -m pip"
 SERVICE="eom-api.service"
+PLATFORM_CONSUMER_SERVICES=(
+  "eom-catalog-application-runner.service"
+  "eom-workflow-runner.service"
+  "eom-hwpx-application-runner.service"
+  "eom-api.service"
+)
 UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-api.service"
 UNIT_TARGET="/etc/systemd/system/eom-api.service"
 METADATA_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_deployment_metadata.sh"
@@ -856,6 +862,7 @@ for root in sorted(runtime_package_roots):
 for name in (
     "eom-api",
     "eom-api-runtime-isolation",
+    "eom-workflow-runner",
     "eom-hwpx-application-runner",
     "eom-catalog-application-runner",
 ):
@@ -933,6 +940,22 @@ wait_for_health() {
   fail "Application API did not become healthy within 15 seconds"
 }
 
+restart_platform_consumers() {
+  local consumer main_pid
+  for consumer in "${PLATFORM_CONSUMER_SERVICES[@]}"; do
+    systemctl is-enabled --quiet "${consumer}" || \
+      fail "${consumer} must already be enabled before shared-platform deployment"
+  done
+  for consumer in "${PLATFORM_CONSUMER_SERVICES[@]}"; do
+    sudo -n systemctl restart "${consumer}"
+    systemctl is-active --quiet "${consumer}" || \
+      fail "${consumer} did not become active after shared-platform deployment"
+    main_pid="$(systemctl show --property=MainPID --value "${consumer}")"
+    [[ "${main_pid}" =~ ^[1-9][0-9]*$ ]] || \
+      fail "${consumer} did not expose a fresh main process"
+  done
+}
+
 install_service() {
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
   systemd-analyze verify "${UNIT_SOURCE}"
@@ -945,7 +968,7 @@ install_service() {
   sudo -n "${METADATA_VERIFIER_TARGET}"
   sudo -n systemctl daemon-reload
   sudo -n systemctl enable "${SERVICE}" >/dev/null
-  sudo -n systemctl restart "${SERVICE}"
+  restart_platform_consumers
   wait_for_health
   printf 'runtime_isolation_verifier_invocation=START\n'
   sudo -n "${RUNTIME_VERIFIER_TARGET}"
@@ -959,13 +982,16 @@ install_service() {
 }
 
 verify_service() {
+  local consumer
   verify_install_mode
   cmp --silent "${METADATA_VERIFIER_SOURCE}" "${METADATA_VERIFIER_TARGET}" || \
     fail "installed metadata verifier source drift"
   cmp --silent "${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}" || \
     fail "installed runtime verifier source drift"
-  systemctl is-active --quiet "${SERVICE}" || fail "eom-api.service is not active"
-  systemctl is-enabled --quiet "${SERVICE}" || fail "eom-api.service is not enabled"
+  for consumer in "${PLATFORM_CONSUMER_SERVICES[@]}"; do
+    systemctl is-active --quiet "${consumer}" || fail "${consumer} is not active"
+    systemctl is-enabled --quiet "${consumer}" || fail "${consumer} is not enabled"
+  done
   wait_for_health
   "${REPOSITORY_ROOT}/scripts/api/smoke_test.sh" --health-only
   printf 'Installed EOM Application API release verified.\n'

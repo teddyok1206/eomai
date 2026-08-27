@@ -368,6 +368,25 @@ def test_release_install_normalizes_restrictive_operator_umask() -> None:
     assert 'path.parent == installed_root / "bin"' in deployment
 
 
+def test_shared_platform_release_restarts_every_long_lived_consumer() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+    consumers = (
+        "eom-catalog-application-runner.service",
+        "eom-workflow-runner.service",
+        "eom-hwpx-application-runner.service",
+        "eom-api.service",
+    )
+
+    for consumer in consumers:
+        assert f'"{consumer}"' in deployment
+    assert 'for consumer in "${PLATFORM_CONSUMER_SERVICES[@]}"' in deployment
+    assert 'sudo -n systemctl restart "${consumer}"' in deployment
+    assert 'systemctl is-active --quiet "${consumer}"' in deployment
+    assert 'systemctl is-enabled --quiet "${consumer}"' in deployment
+    assert 'systemctl show --property=MainPID --value "${consumer}"' in deployment
+    assert '"eom-workflow-runner",' in deployment
+
+
 @pytest.mark.parametrize(
     "relative",
     [
