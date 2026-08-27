@@ -122,3 +122,10 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert 'api("/admin/knowledge-analysis-batches")' in javascript
     assert "analysisBatchPollTimer" in javascript
     assert "10000" in javascript
+    assert 'data-view-target="knowledge"' in html
+    assert 'id="knowledge-quality-load"' in html
+    assert "공개된 canonical Graph Snapshot이 아닙니다." in html
+    assert "/admin/knowledge-analysis-batches/${encodeURIComponent(batchId)}/quality" in javascript
+    assert "document.createElement" in javascript
+    assert "analysisBatchEta" in javascript
+    assert 'id="hwpx-delivery-guide"' in html

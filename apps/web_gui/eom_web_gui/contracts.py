@@ -16,6 +16,16 @@ def _utc(value: datetime) -> datetime:
 
 
 UtcDatetime = Annotated[datetime, AfterValidator(_utc)]
+AnalysisRangeId = Annotated[str, Field(pattern=r"^analysisrange_[0-9a-f]{32}$")]
+CurriculumUnitKey = Annotated[
+    str,
+    Field(
+        pattern=(
+            r"^(1-\([1-4]\)|2-\([1-6]\)|3-\([1-7]\)|4-\([1-7]\)|"
+            r"5-\([1-7]\)|6-\([1-4]\))$"
+        )
+    ),
+]
 
 
 class WebModel(BaseModel):
@@ -69,6 +79,144 @@ class KnowledgeAnalysisBatchStatus(WebModel):
             self.accepted_range_count != self.total_range_count or self.failed_range_count != 0
         ):
             raise ValueError("succeeded analysis batch must accept every range")
+        return self
+
+
+class KnowledgeAnalysisBatchRangeStatus(WebModel):
+    """Minimum immutable range projection needed by the quality observer."""
+
+    range_id: str = Field(pattern=r"^analysisrange_[0-9a-f]{32}$")
+    batch_id: str = Field(pattern=r"^analysisbatch_[0-9a-f]{32}$")
+    ordinal: int = Field(ge=0, le=999)
+    document_id: str = Field(pattern=r"^edudoc_[0-9a-f]{32}$")
+    document_revision_id: str = Field(pattern=r"^edudocrev_[0-9a-f]{32}$")
+    first_physical_page: int = Field(ge=1, le=10000)
+    last_physical_page: int = Field(ge=1, le=10000)
+    curriculum_unit_keys: tuple[CurriculumUnitKey, ...] = Field(max_length=32)
+    source_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    source_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    analysis_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    analysis_schema_ref: Literal[
+        "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0",
+        "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0",
+    ]
+    analysis_run_id: str | None = Field(default=None, pattern=r"^analysisrun_[0-9a-f]{32}$")
+    state: Literal["PENDING", "CLAIMED", "SUBMITTED", "ACCEPTED", "FAILED", "CANCELLED"]
+    updated_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def ordered_page_interval(self) -> KnowledgeAnalysisBatchRangeStatus:
+        if self.last_physical_page < self.first_physical_page:
+            raise ValueError("analysis range page interval is reversed")
+        if self.last_physical_page - self.first_physical_page + 1 > 32:
+            raise ValueError("analysis range page interval exceeds 32 pages")
+        if self.curriculum_unit_keys != tuple(sorted(set(self.curriculum_unit_keys))):
+            raise ValueError("analysis range curriculum unit keys must be sorted and unique")
+        return self
+
+
+class KnowledgeQualityFindingCode(StrEnum):
+    ANALYSIS_REVISION_REUSED = "ANALYSIS_REVISION_REUSED"
+    ANALYSIS_RUN_REUSED = "ANALYSIS_RUN_REUSED"
+    BATCH_RANGE_COUNT_MISMATCH = "BATCH_RANGE_COUNT_MISMATCH"
+    PAGE_COVERAGE_GAP = "PAGE_COVERAGE_GAP"
+    PAGE_COVERAGE_OVERLAP = "PAGE_COVERAGE_OVERLAP"
+    RANGE_BATCH_POINTER_MISMATCH = "RANGE_BATCH_POINTER_MISMATCH"
+    RANGE_ORDINAL_SEQUENCE_INVALID = "RANGE_ORDINAL_SEQUENCE_INVALID"
+    SOURCE_POINTER_DRIFT = "SOURCE_POINTER_DRIFT"
+
+
+class KnowledgeQualityFinding(WebModel):
+    code: KnowledgeQualityFindingCode
+    severity: Literal["WARNING", "ERROR"]
+    document_revision_id: str | None = Field(default=None, pattern=r"^edudocrev_[0-9a-f]{32}$")
+    first_physical_page: int | None = Field(default=None, ge=1, le=10000)
+    last_physical_page: int | None = Field(default=None, ge=1, le=10000)
+    range_ids: tuple[AnalysisRangeId, ...] = Field(max_length=20)
+
+    @model_validator(mode="after")
+    def coherent_page_interval(self) -> KnowledgeQualityFinding:
+        if (self.first_physical_page is None) != (self.last_physical_page is None):
+            raise ValueError("quality finding page interval must be complete")
+        if (
+            self.first_physical_page is not None
+            and self.last_physical_page is not None
+            and self.last_physical_page < self.first_physical_page
+        ):
+            raise ValueError("quality finding page interval is reversed")
+        if len(self.range_ids) != len(set(self.range_ids)):
+            raise ValueError("quality finding range IDs must be unique")
+        return self
+
+
+class KnowledgeDocumentCoverage(WebModel):
+    document_id: str = Field(pattern=r"^edudoc_[0-9a-f]{32}$")
+    document_revision_id: str = Field(pattern=r"^edudocrev_[0-9a-f]{32}$")
+    source_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    source_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    first_physical_page: int = Field(ge=1, le=10000)
+    last_physical_page: int = Field(ge=1, le=10000)
+    range_count: int = Field(ge=1, le=1000)
+    unique_page_count: int = Field(ge=1, le=32000)
+    accepted_page_count: int = Field(ge=0, le=32000)
+    cancelled_page_count: int = Field(ge=0, le=32000)
+    failed_page_count: int = Field(ge=0, le=32000)
+    in_progress_page_count: int = Field(ge=0, le=32000)
+    gap_page_count: int = Field(ge=0, le=32000)
+    overlap_page_count: int = Field(ge=0, le=32000)
+    curriculum_unit_keys: tuple[CurriculumUnitKey, ...] = Field(max_length=32)
+
+
+class KnowledgeAnalysisQualityReport(WebModel):
+    """Derived, non-persisted quality observation over one batch projection."""
+
+    schema_version: Literal["knowledge-analysis-quality-report/1.0"] = (
+        "knowledge-analysis-quality-report/1.0"
+    )
+    batch_id: str = Field(pattern=r"^analysisbatch_[0-9a-f]{32}$")
+    resource_version: int = Field(ge=1)
+    quality_state: Literal["PASS", "WARN", "FAIL"]
+    total_range_count: int = Field(ge=1, le=1000)
+    observed_range_count: int = Field(ge=0, le=1000)
+    selected_page_count: int = Field(ge=0, le=32000)
+    unique_page_count: int = Field(ge=0, le=32000)
+    accepted_page_count: int = Field(ge=0, le=32000)
+    cancelled_page_count: int = Field(ge=0, le=32000)
+    failed_page_count: int = Field(ge=0, le=32000)
+    in_progress_page_count: int = Field(ge=0, le=32000)
+    visual_input_range_count: int = Field(ge=0, le=1000)
+    visual_input_page_count: int = Field(ge=0, le=32000)
+    gap_page_count: int = Field(ge=0, le=32000)
+    overlap_page_count: int = Field(ge=0, le=32000)
+    duplicate_analysis_revision_count: int = Field(ge=0, le=1000)
+    duplicate_analysis_run_count: int = Field(ge=0, le=1000)
+    document_count: int = Field(ge=0, le=1000)
+    curriculum_unit_count: int = Field(ge=0, le=32000)
+    documents: tuple[KnowledgeDocumentCoverage, ...] = Field(max_length=1000)
+    findings: tuple[KnowledgeQualityFinding, ...] = Field(max_length=5008)
+    observed_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def coherent_report(self) -> KnowledgeAnalysisQualityReport:
+        if self.document_count != len(self.documents):
+            raise ValueError("quality report document count is inconsistent")
+        if self.selected_page_count != (
+            self.accepted_page_count
+            + self.failed_page_count
+            + self.cancelled_page_count
+            + self.in_progress_page_count
+        ):
+            raise ValueError("quality report state page counts are inconsistent")
+        if self.unique_page_count > self.selected_page_count:
+            raise ValueError("quality report unique pages exceed selected pages")
+        if self.visual_input_range_count > self.observed_range_count:
+            raise ValueError("quality report visual ranges exceed observed ranges")
+        if self.visual_input_page_count > self.selected_page_count:
+            raise ValueError("quality report visual pages exceed selected pages")
+        severities = {finding.severity for finding in self.findings}
+        expected = "FAIL" if "ERROR" in severities else "WARN" if severities else "PASS"
+        if self.quality_state != expected:
+            raise ValueError("quality report state does not match its findings")
         return self
 
 

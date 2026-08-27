@@ -355,6 +355,13 @@ def create_app(
             for value in await actual.knowledge_analysis_batches(session)
         )
 
+    @app.get(f"{API_PREFIX}/admin/knowledge-analysis-batches/{{batch_id}}/quality")
+    async def knowledge_analysis_quality(
+        batch_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (await actual.knowledge_analysis_quality(session, batch_id)).model_dump(mode="json")
+
     @app.post(f"{API_PREFIX}/admin/codex-accounts/{{binding_id}}/commands", status_code=202)
     async def codex_account_command(
         binding_id: str,

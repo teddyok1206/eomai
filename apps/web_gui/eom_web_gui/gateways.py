@@ -19,6 +19,7 @@ from eom_web_gui.contracts import (
     HwpxBuildView,
     HwpxCapability,
     ItemPreview,
+    KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
     PreviewChoice,
     PreviewTable,
@@ -48,6 +49,13 @@ class HwpxDownload:
     content: bytes
     content_type: str
     content_disposition: str
+
+
+@dataclass(frozen=True)
+class KnowledgeAnalysisRangePage:
+    values: tuple[KnowledgeAnalysisBatchRangeStatus, ...]
+    next_cursor: str | None
+    has_more: bool
 
 
 class ApplicationGateway(Protocol):
@@ -104,6 +112,14 @@ class ApplicationGateway(Protocol):
     async def knowledge_analysis_batches(
         self, session: WebSession
     ) -> tuple[KnowledgeAnalysisBatchStatus, ...]: ...
+
+    async def knowledge_analysis_batch(
+        self, session: WebSession, batch_id: str
+    ) -> KnowledgeAnalysisBatchStatus: ...
+
+    async def knowledge_analysis_batch_ranges(
+        self, session: WebSession, batch_id: str, *, cursor: str | None
+    ) -> KnowledgeAnalysisRangePage: ...
 
     async def codex_account_command(
         self,
@@ -363,19 +379,73 @@ class HttpApplicationGateway:
             params={"limit": 20},
         )
         try:
-            return tuple(
-                KnowledgeAnalysisBatchStatus.model_validate(
+            return tuple(_knowledge_analysis_batch(value) for value in self._list_data(response))
+        except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def knowledge_analysis_batch(
+        self, session: WebSession, batch_id: str
+    ) -> KnowledgeAnalysisBatchStatus:
+        _require_id(batch_id, "analysisbatch_")
+        response = await self._authorized(
+            session, "GET", f"/api/v1/knowledge-analysis-batches/{batch_id}"
+        )
+        try:
+            return _knowledge_analysis_batch(self._data(response))
+        except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def knowledge_analysis_batch_ranges(
+        self, session: WebSession, batch_id: str, *, cursor: str | None
+    ) -> KnowledgeAnalysisRangePage:
+        _require_id(batch_id, "analysisbatch_")
+        if cursor is not None and (not cursor or len(cursor) > 1024):
+            raise GatewayError(status=400, code="WEB_REQUEST_INVALID")
+        params: dict[str, str | int | float | bool | None] = {"limit": 200}
+        if cursor is not None:
+            params["cursor"] = cursor
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/knowledge-analysis-batches/{batch_id}/ranges",
+            params=params,
+        )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+        page = payload.get("page") if isinstance(payload, dict) else None
+        if not isinstance(page, dict):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        next_cursor = page.get("next_cursor")
+        has_more = page.get("has_more")
+        if (
+            (
+                next_cursor is not None
+                and (not isinstance(next_cursor, str) or not next_cursor or len(next_cursor) > 1024)
+            )
+            or not isinstance(has_more, bool)
+            or has_more != (next_cursor is not None)
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        try:
+            values = tuple(
+                KnowledgeAnalysisBatchRangeStatus.model_validate(
                     {
+                        "range_id": value["range_id"],
                         "batch_id": value["batch_id"],
+                        "ordinal": value["ordinal"],
+                        "document_id": value["document_id"],
+                        "document_revision_id": value["document_revision_id"],
+                        "first_physical_page": value["first_physical_page"],
+                        "last_physical_page": value["last_physical_page"],
+                        "curriculum_unit_keys": value["curriculum_unit_keys"],
+                        "source_artifact_revision_id": value["source_artifact_revision_id"],
+                        "source_sha256": value["source_sha256"],
+                        "analysis_artifact_revision_id": value["analysis_artifact_revision_id"],
+                        "analysis_schema_ref": value["analysis_schema_ref"],
+                        "analysis_run_id": value.get("analysis_run_id"),
                         "state": value["state"],
-                        "total_range_count": value["total_range_count"],
-                        "accepted_range_count": value["accepted_range_count"],
-                        "failed_range_count": value["failed_range_count"],
-                        "failure_code": value.get("failure_code"),
-                        "resource_version": value["resource_version"],
-                        "created_at": value["created_at"],
-                        "started_at": value.get("started_at"),
-                        "completed_at": value.get("completed_at"),
                         "updated_at": value["updated_at"],
                     }
                 )
@@ -383,6 +453,11 @@ class HttpApplicationGateway:
             )
         except (KeyError, ValueError) as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+        return KnowledgeAnalysisRangePage(
+            values=values,
+            next_cursor=next_cursor,
+            has_more=has_more,
+        )
 
     async def codex_account_command(
         self,
@@ -1090,6 +1165,24 @@ def _operator_view(value: dict[str, Any]) -> dict[str, Any]:
 def _require_id(value: str, prefix: str) -> None:
     if not value.startswith(prefix) or ID_PATTERN.fullmatch(value) is None:
         raise GatewayError(status=422, code="RESOURCE_ID_INVALID")
+
+
+def _knowledge_analysis_batch(value: dict[str, Any]) -> KnowledgeAnalysisBatchStatus:
+    return KnowledgeAnalysisBatchStatus.model_validate(
+        {
+            "batch_id": value["batch_id"],
+            "state": value["state"],
+            "total_range_count": value["total_range_count"],
+            "accepted_range_count": value["accepted_range_count"],
+            "failed_range_count": value["failed_range_count"],
+            "failure_code": value.get("failure_code"),
+            "resource_version": value["resource_version"],
+            "created_at": value["created_at"],
+            "started_at": value.get("started_at"),
+            "completed_at": value.get("completed_at"),
+            "updated_at": value["updated_at"],
+        }
+    )
 
 
 def _require_generic_id(value: str) -> None:

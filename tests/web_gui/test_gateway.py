@@ -366,6 +366,85 @@ async def test_gateway_projects_bounded_knowledge_analysis_batch_progress() -> N
 
 
 @pytest.mark.anyio
+async def test_gateway_projects_exact_analysis_range_page_and_opaque_cursor() -> None:
+    batch_id = "analysisbatch_" + "a" * 32
+    next_cursor = "opaque-range-cursor"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == f"/api/v1/knowledge-analysis-batches/{batch_id}/ranges"
+        assert request.url.params["limit"] == "200"
+        assert "cursor" not in request.url.params
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "range_id": "analysisrange_" + "1" * 32,
+                        "batch_id": batch_id,
+                        "ordinal": 0,
+                        "document_id": "edudoc_" + "2" * 32,
+                        "document_revision_id": "edudocrev_" + "3" * 32,
+                        "first_physical_page": 1,
+                        "last_physical_page": 4,
+                        "curriculum_unit_keys": ["1-(1)"],
+                        "source_artifact_revision_id": "rev_" + "4" * 32,
+                        "source_sha256": "sha256:" + "5" * 64,
+                        "analysis_artifact_revision_id": "rev_" + "6" * 32,
+                        "analysis_schema_ref": (
+                            "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0"
+                        ),
+                        "analysis_run_id": "analysisrun_" + "7" * 32,
+                        "state": "ACCEPTED",
+                        "updated_at": NOW.isoformat(),
+                    }
+                ],
+                "page": {"next_cursor": next_cursor, "has_more": True, "limit": 200},
+                "meta": {"request_id": "req_test", "api_version": "1"},
+            },
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    page = await gateway.knowledge_analysis_batch_ranges(_session(), batch_id, cursor=None)
+    assert page.has_more is True
+    assert page.next_cursor == next_cursor
+    assert page.values[0].analysis_schema_ref.endswith("/2.0")
+    assert page.values[0].curriculum_unit_keys == ("1-(1)",)
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_gateway_rejects_incoherent_analysis_range_pagination() -> None:
+    batch_id = "analysisbatch_" + "a" * 32
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": [],
+                "page": {"next_cursor": None, "has_more": True, "limit": 200},
+                "meta": {"request_id": "req_test", "api_version": "1"},
+            },
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(GatewayError, match="APPLICATION_API_RESPONSE_INVALID"):
+        await gateway.knowledge_analysis_batch_ranges(_session(), batch_id, cursor=None)
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_item_preview_fails_on_revision_pointer_mismatch() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.startswith("/api/v1/items/"):

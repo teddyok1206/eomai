@@ -1,5 +1,6 @@
 const API = "/studio/api/v1";
 const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/;
+const ANALYSIS_BATCH_PATTERN = /^analysisbatch_[a-f0-9]{32}$/;
 const state = {
   csrf: "",
   operator: null,
@@ -19,6 +20,7 @@ const state = {
   codexAccounts: [],
   executionPresets: [],
   knowledgeAnalysisBatches: [],
+  knowledgeQualityReport: null,
   analysisBatchPollTimer: null,
   presentationVocabulary: null,
 };
@@ -32,6 +34,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
   approval: "human",
   hwpx: "human",
   control: "engine",
+  knowledge: "engine",
   explorer: "engine",
   dashboard: "human",
 });
@@ -228,8 +231,12 @@ function loadGlobalId() {
     selectHwpxBuild(value);
     showView("hwpx");
     loadHwpxBuild();
+  } else if (ANALYSIS_BATCH_PATTERN.test(value)) {
+    $("#knowledge-batch-id").value = value;
+    showView("knowledge");
+    loadKnowledgeQuality();
   } else {
-    toast("지원되는 문항 제작 진행, 문항 또는 HWPX 제작 ID를 입력하세요.");
+    toast("지원되는 문항 제작 진행, 문항, HWPX 제작 또는 분석 배치 ID를 입력하세요.");
   }
 }
 
@@ -637,6 +644,7 @@ function renderItemPreview(preview) {
   $("#structured-base-revision").value = preview.item_revision_id;
   $("#structured-revision-etag").value = preview.revision_etag;
   if (preview.template_delivery_available) $("#hwpx-revision-id").value = preview.item_revision_id;
+  updateHwpxDeliveryGuide();
   $("#preview-page-state").textContent = statePresentation("generic", preview.preview_state).label;
   if (preview.preview_state !== "AVAILABLE") {
     $("#preview-content").hidden = true;
@@ -795,7 +803,11 @@ function installHwpx() {
   });
   $("#hwpx-recent-builds").addEventListener("change", loadRecentHwpxBuild);
   $("#hwpx-recent-refresh").addEventListener("click", loadRecentHwpxBuilds);
-  $("#hwpx-revision-id").addEventListener("input", renderRecentHwpxBuilds);
+  $("#hwpx-revision-id").addEventListener("input", () => {
+    renderRecentHwpxBuilds();
+    updateHwpxDeliveryGuide();
+  });
+  updateHwpxDeliveryGuide();
 }
 
 function selectHwpxBuild(buildId) {
@@ -818,6 +830,7 @@ function resetHwpxBuildResult() {
   download.hidden = true;
   download.href = "#";
   $("#hwpx-download").textContent = "아직 이용 불가";
+  updateHwpxDeliveryGuide();
 }
 
 function loadSelectedHwpxBuild() {
@@ -881,6 +894,7 @@ async function loadHwpxBuild() {
     download.hidden = !value.download_available;
     download.href = value.download_available ? `${API}/hwpx/builds/${encodeURIComponent(value.build_id)}/download` : "#";
     $("#hwpx-download").textContent = value.download_available ? "다운로드 가능" : "아직 이용 불가";
+    updateHwpxDeliveryGuide(value);
     window.clearTimeout(state.hwpxPollTimer);
     if (["REQUESTED", "RUNNING", "VALIDATING"].includes(value.state)) {
       state.hwpxPollTimer = window.setTimeout(loadHwpxBuild, 2000);
@@ -969,6 +983,7 @@ function renderAnalysisBatches(batches) {
     addControlDetail(details, "Accepted", `${batch.accepted_range_count} / ${batch.total_range_count}`);
     addControlDetail(details, "Failed", batch.failed_range_count);
     addControlDetail(details, "Progress", `${percent}%`);
+    addControlDetail(details, "ETA", analysisBatchEta(batch, completed));
     addControlDetail(details, "Failure", batch.failure_code);
     addControlDetail(details, "Updated", batch.updated_at);
     const progress = document.createElement("progress");
@@ -977,10 +992,178 @@ function renderAnalysisBatches(batches) {
     progress.value = completed;
     progress.setAttribute("aria-label", `${batch.batch_id} 진행률`);
     card.append(progress);
+    const actions = document.createElement("div");
+    actions.className = "form-actions";
+    actions.append(actionButton("범위·품질 보기", () => {
+      $("#knowledge-batch-id").value = batch.batch_id;
+      showView("knowledge");
+      loadKnowledgeQuality();
+    }, true));
+    card.append(actions);
     root.append(card);
   }
   const active = batches.filter((value) => ["QUEUED", "RUNNING"].includes(value.state)).length;
   showMessage($("#analysis-batch-message"), `${batches.length}개 최근 배치 · 실행 중 ${active}개 · 10초 자동 갱신`, "success");
+}
+
+function analysisBatchEta(batch, completed) {
+  if (batch.state === "SUCCEEDED") return "완료";
+  if (batch.state !== "RUNNING" || completed === 0 || !batch.started_at || !batch.updated_at) return "산출 대기";
+  const started = Date.parse(batch.started_at);
+  const observed = Date.parse(batch.updated_at);
+  if (!Number.isFinite(started) || !Number.isFinite(observed) || observed <= started) return "계산 불가";
+  const remaining = batch.total_range_count - completed;
+  if (remaining <= 0) return "마무리 중";
+  const seconds = Math.ceil(((observed - started) / 1000 / completed) * remaining);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.max(1, Math.ceil((seconds % 3600) / 60));
+  return `단순 추정 약 ${hours ? `${hours}시간 ` : ""}${minutes}분`;
+}
+
+function installKnowledgeQuality() {
+  $("#knowledge-quality-load").addEventListener("click", loadKnowledgeQuality);
+  $("#knowledge-batch-id").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") loadKnowledgeQuality();
+  });
+}
+
+async function loadKnowledgeQuality() {
+  const batchId = $("#knowledge-batch-id").value.trim();
+  const message = $("#knowledge-quality-message");
+  if (!ANALYSIS_BATCH_PATTERN.test(batchId)) {
+    return showMessage(message, "정확한 analysisbatch_ ID를 입력하세요.", "error");
+  }
+  showMessage(message, "기존 read-only 범위를 확인하고 있습니다.");
+  try {
+    const report = await api(`/admin/knowledge-analysis-batches/${encodeURIComponent(batchId)}/quality`);
+    state.knowledgeQualityReport = report;
+    renderKnowledgeQuality(report);
+    showMessage(message, `resource v${report.resource_version} · ${report.observed_range_count}개 범위 관찰`, "success");
+  } catch (failure) {
+    state.knowledgeQualityReport = null;
+    setStatus($("#knowledge-quality-badge"), "danger", "!", "조회 실패");
+    showMessage(message, `분석 품질 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+function renderKnowledgeQuality(report) {
+  const tones = {PASS: ["success", "✓", "구조 점검 통과"], WARN: ["warning", "◆", "검토 항목 있음"], FAIL: ["danger", "!", "구조 불일치"]};
+  setStatus($("#knowledge-quality-badge"), ...(tones[report.quality_state] || ["neutral", "■", "알 수 없음"]));
+  $("#quality-ranges").textContent = `${report.observed_range_count} / ${report.total_range_count}`;
+  $("#quality-pages").textContent = `${report.unique_page_count} (${report.selected_page_count})`;
+  $("#quality-visual-pages").textContent = `${report.visual_input_page_count}`;
+  $("#quality-accepted-pages").textContent = `${report.accepted_page_count}`;
+  $("#quality-gaps").textContent = `${report.gap_page_count}`;
+  $("#quality-overlaps").textContent = `${report.overlap_page_count}`;
+  $("#knowledge-observed-at").textContent = `Observed ${report.observed_at}`;
+  renderKnowledgeMap(report.documents || []);
+  renderKnowledgeFindings(report.findings || []);
+  renderKnowledgeDocuments(report.documents || []);
+}
+
+function renderKnowledgeMap(documents) {
+  const root = $("#knowledge-map");
+  root.replaceChildren();
+  let edgeCount = 0;
+  for (const documentCoverage of documents) {
+    const unitKeys = documentCoverage.curriculum_unit_keys || [];
+    edgeCount += unitKeys.length;
+    const row = document.createElement("div");
+    row.className = "knowledge-map-row";
+    const unit = document.createElement("code");
+    unit.textContent = unitKeys.join(" · ") || "미분류";
+    const arrow = document.createElement("span");
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.textContent = "→";
+    const target = document.createElement("div");
+    const revision = document.createElement("strong");
+    revision.textContent = documentCoverage.document_revision_id;
+    const pages = document.createElement("small");
+    pages.textContent = `physical pages ${documentCoverage.first_physical_page}–${documentCoverage.last_physical_page}`;
+    target.append(revision, pages);
+    row.append(unit, arrow, target);
+    root.append(row);
+  }
+  if (!documents.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "관찰된 교육과정 연결이 없습니다.";
+    root.append(empty);
+  }
+  $("#knowledge-edge-count").textContent = `${edgeCount} observed edges`;
+}
+
+function renderKnowledgeFindings(findings) {
+  const root = $("#knowledge-findings");
+  root.replaceChildren();
+  if (!findings.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "범위·pointer 구조에서 이상을 찾지 못했습니다.";
+    root.append(empty);
+    return;
+  }
+  for (const finding of findings) {
+    const item = document.createElement("article");
+    item.className = `quality-finding${finding.severity === "ERROR" ? " error" : ""}`;
+    const code = document.createElement("strong");
+    code.textContent = finding.code;
+    const context = document.createElement("small");
+    const pageScope = finding.first_physical_page === null ? "" : ` · pages ${finding.first_physical_page}–${finding.last_physical_page}`;
+    context.textContent = `${finding.severity}${finding.document_revision_id ? ` · ${finding.document_revision_id}` : ""}${pageScope}`;
+    item.append(code, context);
+    root.append(item);
+  }
+}
+
+function renderKnowledgeDocuments(documents) {
+  const root = $("#knowledge-document-list");
+  root.replaceChildren();
+  for (const documentCoverage of documents) {
+    const card = document.createElement("article");
+    card.className = "document-coverage-card";
+    const identity = document.createElement("div");
+    const revision = document.createElement("code");
+    revision.textContent = documentCoverage.document_revision_id;
+    const scope = document.createElement("small");
+    scope.textContent = `pages ${documentCoverage.first_physical_page}–${documentCoverage.last_physical_page} · ${documentCoverage.curriculum_unit_keys.join(", ") || "미분류"}`;
+    identity.append(revision, scope);
+    card.append(identity);
+    for (const [label, value] of [["Ranges", documentCoverage.range_count], ["Unique", documentCoverage.unique_page_count], ["Accepted", documentCoverage.accepted_page_count], ["Cancelled", documentCoverage.cancelled_page_count], ["Gaps", documentCoverage.gap_page_count], ["Overlaps", documentCoverage.overlap_page_count]]) {
+      const stat = document.createElement("div");
+      stat.className = "coverage-stat";
+      const title = document.createElement("span");
+      title.textContent = label;
+      const count = document.createElement("strong");
+      count.textContent = String(value);
+      stat.append(title, count);
+      card.append(stat);
+    }
+    root.append(card);
+  }
+  if (!documents.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "관찰된 문서 버전이 없습니다.";
+    root.append(empty);
+  }
+}
+
+function updateHwpxDeliveryGuide(build = null) {
+  const stages = Object.fromEntries($$("#hwpx-delivery-guide li").map((element) => [element.dataset.deliveryStage, element]));
+  Object.values(stages).forEach((element) => element.classList.remove("complete", "current"));
+  const hasRevision = $("#hwpx-revision-id").value.trim().startsWith("itemrev_");
+  if (!hasRevision) {
+    stages.revision.classList.add("current");
+    return;
+  }
+  stages.revision.classList.add("complete");
+  if (!build || !["SUCCEEDED"].includes(build.state)) {
+    stages.build.classList.add("current");
+    return;
+  }
+  stages.build.classList.add("complete");
+  stages.download.classList.add(build.download_available ? "complete" : "current");
 }
 
 function controlCard(title, stateValue, domain = "generic") {
@@ -1282,6 +1465,7 @@ async function boot() {
   installStructuredImport();
   installHwpx();
   installControlPlane();
+  installKnowledgeQuality();
   installExplorer();
   $("#logout").addEventListener("click", logout);
   await initializeSession();

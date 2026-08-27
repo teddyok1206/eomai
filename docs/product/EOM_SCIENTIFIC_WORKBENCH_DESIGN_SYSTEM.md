@@ -52,7 +52,7 @@ preference.
 | Mode | Views | Purpose |
 | --- | --- | --- |
 | 사용자 작업면 (`human`) | 새 문항 요청, 완성 문항, 승인, HWPX, 대시보드 | Goals, content, decisions, and delivery use plain Korean and calm sans-serif hierarchy. |
-| 운영·근거 화면 (`engine`) | 문항 제작 진행, Codex 실행 관리, DB Explorer | Provenance, execution state, timings, immutable IDs, and diagnostics may use compact mono accents. |
+| 운영·근거 화면 (`engine`) | 문항 제작 진행, Codex 실행 관리, 교육 지식 맵, DB Explorer | Provenance, execution state, timings, immutable IDs, and diagnostics may use compact mono accents. |
 
 Both modes expose the same authorized capabilities. Mode changes density and emphasis only; it never
 changes requests, permissions, fields, state transitions, or error handling. The current mode is
@@ -111,6 +111,18 @@ controls that require an ID, such as opening a known HWPX build, remain directly
 The completed item preview remains typographically distinct from application chrome. It represents a
 publication artifact and therefore retains its serif, page-like surface. Presentation metadata must
 not be mistaken for rendered item content.
+
+### Knowledge analysis quality surface
+
+The education knowledge view observes existing batch and range projections. It may derive page
+coverage, progress estimates, structural findings, and curriculum-key-to-document-revision
+relationships, but it must not present these as a published Graph Snapshot. It has no accept, retry,
+cancel, or publication action. Structural warnings are separate from scientific-content review, and
+the derived report is never persisted as canonical evidence.
+
+The one-item and HWPX views use the same three-part handoff language—fixed requirements, validated
+production, secure delivery—without creating another state machine. Their visual steps are derived
+from the existing Item Revision, HWPX build, validation, and download-availability values.
 
 ## 6. Typography, density, and motion
 

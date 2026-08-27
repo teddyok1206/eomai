@@ -13,12 +13,18 @@ from eom_web_gui.contracts import (
     HwpxBuildView,
     HwpxCapability,
     ItemPreview,
+    KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
     PreviewChoice,
     PreviewTable,
     StructuredItemImportRequest,
 )
-from eom_web_gui.gateways import GatewayError, HwpxDownload, LoginResult
+from eom_web_gui.gateways import (
+    GatewayError,
+    HwpxDownload,
+    KnowledgeAnalysisRangePage,
+    LoginResult,
+)
 from eom_web_gui.services import WebServices, build_services
 from eom_web_gui.sessions import ApiTokens, WebSession
 from eom_web_gui.settings import ServerSettings, WebSettings
@@ -455,6 +461,48 @@ class FakeGateway:
                 completed_at=None,
                 updated_at=NOW + timedelta(minutes=3),
             ),
+        )
+
+    async def knowledge_analysis_batch(
+        self, session: WebSession, batch_id: str
+    ) -> KnowledgeAnalysisBatchStatus:
+        values = await self.knowledge_analysis_batches(session)
+        assert batch_id == values[0].batch_id
+        return values[0]
+
+    async def knowledge_analysis_batch_ranges(
+        self, session: WebSession, batch_id: str, *, cursor: str | None
+    ) -> KnowledgeAnalysisRangePage:
+        del session
+        assert batch_id == "analysisbatch_" + "7" * 32
+        offset = int(cursor.removeprefix("offset:")) if cursor else 0
+        stop = min(offset + 200, 495)
+        values = tuple(
+            KnowledgeAnalysisBatchRangeStatus(
+                range_id=f"analysisrange_{index:032x}",
+                batch_id=batch_id,
+                ordinal=index,
+                document_id="edudoc_" + "8" * 32,
+                document_revision_id="edudocrev_" + "9" * 32,
+                first_physical_page=index + 1,
+                last_physical_page=index + 1,
+                curriculum_unit_keys=("1-(1)",),
+                source_artifact_revision_id="rev_" + "a" * 32,
+                source_sha256="sha256:" + "b" * 64,
+                analysis_artifact_revision_id=f"rev_{index:032x}",
+                analysis_schema_ref=(
+                    "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0"
+                ),
+                analysis_run_id=(f"analysisrun_{index:032x}" if index < 12 else None),
+                state="ACCEPTED" if index < 12 else "PENDING",
+                updated_at=NOW + timedelta(minutes=3),
+            )
+            for index in range(offset, stop)
+        )
+        return KnowledgeAnalysisRangePage(
+            values=values,
+            next_cursor=f"offset:{stop}" if stop < 495 else None,
+            has_more=stop < 495,
         )
 
     async def codex_account_command(

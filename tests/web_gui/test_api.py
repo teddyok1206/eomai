@@ -344,6 +344,14 @@ def test_codex_control_plane_is_admin_only_and_never_accepts_credentials() -> No
         assert batches.status_code == 200
         assert batches.json()[0]["total_range_count"] == 495
         assert batches.json()[0]["accepted_range_count"] == 12
+        quality = client.get(
+            "/studio/api/v1/admin/knowledge-analysis-batches/"
+            + batches.json()[0]["batch_id"]
+            + "/quality"
+        )
+        assert quality.status_code == 200
+        assert quality.json()["quality_state"] == "PASS"
+        assert quality.json()["visual_input_page_count"] == 495
 
 
 def test_codex_control_plane_rejects_non_admin_and_credential_fields() -> None:
@@ -352,6 +360,14 @@ def test_codex_control_plane_rejects_non_admin_and_credential_fields() -> None:
         session = login(client)
         assert client.get("/studio/api/v1/admin/codex-accounts").status_code == 403
         assert client.get("/studio/api/v1/admin/knowledge-analysis-batches").status_code == 403
+        assert (
+            client.get(
+                "/studio/api/v1/admin/knowledge-analysis-batches/analysisbatch_"
+                + "7" * 32
+                + "/quality"
+            ).status_code
+            == 403
+        )
         response = client.post(
             "/studio/api/v1/admin/codex-accounts/authbinding_" + "1" * 32 + "/commands",
             headers={"X-CSRF-Token": session["csrf_token"]},

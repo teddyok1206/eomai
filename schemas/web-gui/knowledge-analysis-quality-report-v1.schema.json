@@ -1,0 +1,156 @@
+{
+  "$id": "https://eom.local/schemas/web-gui/knowledge-analysis-quality-report-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "documentCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+        "cancelled_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+        "curriculum_unit_keys": {
+          "items": {
+            "pattern": "^(1-\\([1-4]\\)|2-\\([1-6]\\)|3-\\([1-7]\\)|4-\\([1-7]\\)|5-\\([1-7]\\)|6-\\([1-4]\\))$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "document_id": {"pattern": "^edudoc_[0-9a-f]{32}$", "type": "string"},
+        "document_revision_id": {"pattern": "^edudocrev_[0-9a-f]{32}$", "type": "string"},
+        "failed_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+        "first_physical_page": {"maximum": 10000, "minimum": 1, "type": "integer"},
+        "gap_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+        "in_progress_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+        "last_physical_page": {"maximum": 10000, "minimum": 1, "type": "integer"},
+        "overlap_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+        "range_count": {"maximum": 1000, "minimum": 1, "type": "integer"},
+        "source_artifact_revision_id": {"pattern": "^rev_[0-9a-f]{32}$", "type": "string"},
+        "source_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        "unique_page_count": {"maximum": 32000, "minimum": 1, "type": "integer"}
+      },
+      "required": [
+        "document_id",
+        "document_revision_id",
+        "source_artifact_revision_id",
+        "source_sha256",
+        "first_physical_page",
+        "last_physical_page",
+        "range_count",
+        "unique_page_count",
+        "accepted_page_count",
+        "cancelled_page_count",
+        "failed_page_count",
+        "in_progress_page_count",
+        "gap_page_count",
+        "overlap_page_count",
+        "curriculum_unit_keys"
+      ],
+      "type": "object"
+    },
+    "finding": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "ANALYSIS_REVISION_REUSED",
+            "ANALYSIS_RUN_REUSED",
+            "BATCH_RANGE_COUNT_MISMATCH",
+            "PAGE_COVERAGE_GAP",
+            "PAGE_COVERAGE_OVERLAP",
+            "RANGE_BATCH_POINTER_MISMATCH",
+            "RANGE_ORDINAL_SEQUENCE_INVALID",
+            "SOURCE_POINTER_DRIFT"
+          ]
+        },
+        "document_revision_id": {
+          "pattern": "^edudocrev_[0-9a-f]{32}$",
+          "type": ["string", "null"]
+        },
+        "first_physical_page": {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": ["integer", "null"]
+        },
+        "last_physical_page": {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": ["integer", "null"]
+        },
+        "range_ids": {
+          "items": {"pattern": "^analysisrange_[0-9a-f]{32}$", "type": "string"},
+          "maxItems": 20,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "severity": {"enum": ["WARNING", "ERROR"]}
+      },
+      "required": [
+        "code",
+        "severity",
+        "document_revision_id",
+        "first_physical_page",
+        "last_physical_page",
+        "range_ids"
+      ],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "accepted_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+    "cancelled_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+    "batch_id": {"pattern": "^analysisbatch_[0-9a-f]{32}$", "type": "string"},
+    "curriculum_unit_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+    "document_count": {"maximum": 1000, "minimum": 0, "type": "integer"},
+    "documents": {
+      "items": {"$ref": "#/$defs/documentCoverage"},
+      "maxItems": 1000,
+      "type": "array"
+    },
+    "duplicate_analysis_revision_count": {"maximum": 1000, "minimum": 0, "type": "integer"},
+    "duplicate_analysis_run_count": {"maximum": 1000, "minimum": 0, "type": "integer"},
+    "failed_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+    "findings": {"items": {"$ref": "#/$defs/finding"}, "maxItems": 5008, "type": "array"},
+    "gap_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+    "in_progress_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+    "observed_at": {"format": "date-time", "type": "string"},
+    "observed_range_count": {"maximum": 1000, "minimum": 0, "type": "integer"},
+    "overlap_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+    "quality_state": {"enum": ["PASS", "WARN", "FAIL"]},
+    "resource_version": {"minimum": 1, "type": "integer"},
+    "schema_version": {"const": "knowledge-analysis-quality-report/1.0"},
+    "selected_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+    "total_range_count": {"maximum": 1000, "minimum": 1, "type": "integer"},
+    "unique_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+    "visual_input_page_count": {"maximum": 32000, "minimum": 0, "type": "integer"},
+    "visual_input_range_count": {"maximum": 1000, "minimum": 0, "type": "integer"}
+  },
+  "required": [
+    "schema_version",
+    "batch_id",
+    "resource_version",
+    "quality_state",
+    "total_range_count",
+    "observed_range_count",
+    "selected_page_count",
+    "unique_page_count",
+    "visual_input_range_count",
+    "visual_input_page_count",
+    "accepted_page_count",
+    "cancelled_page_count",
+    "failed_page_count",
+    "in_progress_page_count",
+    "gap_page_count",
+    "overlap_page_count",
+    "duplicate_analysis_revision_count",
+    "duplicate_analysis_run_count",
+    "document_count",
+    "curriculum_unit_count",
+    "documents",
+    "findings",
+    "observed_at"
+  ],
+  "title": "EOM Web GUI Knowledge Analysis Quality Report V1",
+  "type": "object"
+}

@@ -19,7 +19,9 @@ from eom_web_gui.contracts import (
     HwpxBuildView,
     HwpxCapability,
     ItemPreview,
+    KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
+    KnowledgeAnalysisQualityReport,
     RequestDraft,
     RequestDraftInput,
     RequestDraftUpdate,
@@ -27,6 +29,7 @@ from eom_web_gui.contracts import (
     WorkflowApproval,
 )
 from eom_web_gui.gateways import ApplicationGateway, GatewayError, LoginResult
+from eom_web_gui.knowledge_quality import build_knowledge_quality_report
 from eom_web_gui.request_drafts import normalize_request, update_draft, workflow_start_payload
 from eom_web_gui.sessions import SessionStore, WebSession, utc_now
 from eom_web_gui.settings import WebSettings
@@ -157,6 +160,32 @@ class WebServices:
     ) -> tuple[KnowledgeAnalysisBatchStatus, ...]:
         _require_admin(session)
         return await self.gateway.knowledge_analysis_batches(session)
+
+    async def knowledge_analysis_quality(
+        self, session: WebSession, batch_id: str
+    ) -> KnowledgeAnalysisQualityReport:
+        _require_admin(session)
+        batch = await self.gateway.knowledge_analysis_batch(session, batch_id)
+        ranges: list[KnowledgeAnalysisBatchRangeStatus] = []
+        cursor: str | None = None
+        seen_cursors: set[str] = set()
+        for _ in range(5):
+            page = await self.gateway.knowledge_analysis_batch_ranges(
+                session, batch_id, cursor=cursor
+            )
+            ranges.extend(page.values)
+            if len(ranges) > 1000:
+                raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+            if not page.has_more:
+                break
+            next_cursor = page.next_cursor
+            if next_cursor is None or next_cursor in seen_cursors:
+                raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
+        else:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return build_knowledge_quality_report(batch, ranges)
 
     async def codex_account_command(
         self,
