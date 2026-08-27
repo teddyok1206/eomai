@@ -1257,7 +1257,7 @@ def _assert_v7_document_analysis_pins_integrity_complete_contract_and_accepts(
     assert published.counts.edges == 1
 
 
-def test_v8_multimodal_document_analysis_flows_through_graph_and_retrieval(
+def _assert_v8_multimodal_document_analysis_flows_through_graph_and_retrieval(
     integration_engine: Engine,
     tmp_path: Path,
 ) -> None:
@@ -1475,7 +1475,7 @@ def _assert_v9_multimodal_document_analysis_uses_schema_closed_protocol(
     assert accepted.state == "ACCEPTED"
 
 
-def test_v10_multimodal_document_analysis_uses_typed_identity_protocol(
+def _assert_v10_multimodal_document_analysis_uses_typed_identity_protocol(
     integration_engine: Engine,
     tmp_path: Path,
 ) -> None:

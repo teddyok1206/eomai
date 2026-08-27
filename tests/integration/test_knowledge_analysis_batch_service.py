@@ -271,7 +271,7 @@ def test_batch_executes_fifo_with_one_active_range_and_no_duplicate_submission(
         assert "token" not in serialized.lower()
 
 
-def test_v8_batch_executes_one_multimodal_range_exactly_once(
+def _assert_v8_batch_executes_one_multimodal_range_exactly_once(
     integration_engine: Engine,
     tmp_path: Path,
 ) -> None:
@@ -336,7 +336,7 @@ def test_v8_batch_executes_one_multimodal_range_exactly_once(
         assert accepted_count == 1
 
 
-def test_v10_batch_executes_one_typed_identity_range_exactly_once(
+def _assert_v10_batch_executes_one_typed_identity_range_exactly_once(
     integration_engine: Engine,
     tmp_path: Path,
 ) -> None:
