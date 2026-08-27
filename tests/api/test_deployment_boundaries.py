@@ -330,6 +330,14 @@ def test_release_verifies_educational_document_schema_resources() -> None:
         assert f'"schemas/educational-document/{resource}"' in deployment
 
 
+def test_release_verifies_curriculum_schema_resources() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+    resource = "integrated-science-editorial-outline-v1.schema.json"
+
+    assert f'"curriculum/{resource}": ' in deployment
+    assert f'"schemas/curriculum/{resource}"' in deployment
+
+
 def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 

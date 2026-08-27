@@ -407,6 +407,7 @@ catalog_resources = {
     "content-pack/content-pack-v2.schema.json": "schemas/content-pack/content-pack-v2.schema.json",
     "content-pack/profile-v1.schema.json": "schemas/content-pack/profile-v1.schema.json",
     "content-pack/prompt-envelope-v1.schema.json": "schemas/content-pack/prompt-envelope-v1.schema.json",
+    "curriculum/integrated-science-editorial-outline-v1.schema.json": "schemas/curriculum/integrated-science-editorial-outline-v1.schema.json",
     "educational-document/educational-document-registration-receipt-v1.schema.json": "schemas/educational-document/educational-document-registration-receipt-v1.schema.json",
     "educational-document/educational-document-registration-receipt-v2.schema.json": "schemas/educational-document/educational-document-registration-receipt-v2.schema.json",
     "educational-document/educational-document-registration-request-v1.schema.json": "schemas/educational-document/educational-document-registration-request-v1.schema.json",
