@@ -493,6 +493,16 @@ class ItemPreview(WebModel):
     tables: tuple[PreviewTable, ...] = Field(default=(), max_length=20)
 
 
+class RecentItemOption(WebModel):
+    """Bounded pointer projection for selecting a current immutable Item Revision."""
+
+    item_id: str = Field(pattern=r"^item_[a-z0-9]{8,55}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
+    lifecycle_state: Literal["ACTIVE"] = "ACTIVE"
+    human_reference_code: str | None = Field(default=None, max_length=128)
+    created_at: UtcDatetime
+
+
 class StructuredItemImportRequest(WebModel):
     base_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
     revision_etag: str = Field(pattern=r'^"v[1-9][0-9]*"$')

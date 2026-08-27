@@ -22,6 +22,7 @@ const state = {
   hwpxBuildId: null,
   hwpxPollTimer: null,
   hwpxRecentBuilds: [],
+  recentItems: [],
   acceptedIntakes: [],
   structuredSource: null,
   codexAccounts: [],
@@ -754,6 +755,34 @@ async function approveWorkflow() {
 
 function installItemPreview() {
   $("#item-load").addEventListener("click", loadItemPreview);
+  $("#recent-items-refresh").addEventListener("click", loadRecentItems);
+  $("#recent-items").addEventListener("change", loadSelectedRecentItem);
+}
+
+async function loadRecentItems() {
+  const select = $("#recent-items");
+  try {
+    state.recentItems = await api("/items/recent");
+    select.replaceChildren(new Option(
+      state.recentItems.length ? "최근 완성 문항 선택" : "현재 선택 가능한 완성 문항 없음",
+      "",
+    ));
+    for (const item of state.recentItems) {
+      const reference = item.human_reference_code ? `${item.human_reference_code} · ` : "";
+      const when = item.created_at || "시각 미상";
+      select.append(new Option(`${reference}${item.item_id} · ${when}`, item.item_id));
+    }
+  } catch (failure) {
+    select.replaceChildren(new Option(`목록 조회 실패: ${failure.message}`, ""));
+  }
+}
+
+async function loadSelectedRecentItem() {
+  const selected = state.recentItems.find((item) => item.item_id === $("#recent-items").value);
+  if (!selected) return;
+  $("#item-id").value = selected.item_id;
+  $("#revision-id").value = selected.item_revision_id;
+  await loadItemPreview();
 }
 
 async function loadItemPreview() {
@@ -1601,7 +1630,7 @@ async function boot() {
   await loadCurriculumOutline();
   const restoredHwpx = restoreHwpxBuild();
   if (restoredHwpx) showView("hwpx");
-  await Promise.all([loadHealth(), loadHwpx(), loadRecentHwpxBuilds()]);
+  await Promise.all([loadHealth(), loadHwpx(), loadRecentHwpxBuilds(), loadRecentItems()]);
   if (restoredHwpx) await loadHwpxBuild();
 }
 

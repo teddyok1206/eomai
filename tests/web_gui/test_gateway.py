@@ -344,6 +344,56 @@ async def test_gateway_projects_bounded_recent_hwpx_builds_for_admin_ui() -> Non
 
 
 @pytest.mark.anyio
+async def test_gateway_projects_recent_items_with_current_revision_in_one_query() -> None:
+    requests: list[httpx.Request] = []
+    item_id = "item_" + "1" * 32
+    revision_id = "itemrev_" + "2" * 32
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.url.path == "/api/v1/items"
+        assert request.url.params["state"] == "ACTIVE"
+        assert request.url.params["limit"] == "20"
+        return httpx.Response(
+            200,
+            json=_list(
+                [
+                    {
+                        "item_id": item_id,
+                        "human_reference_code": "EOM-SAMPLE-001",
+                        "lifecycle_state": "ACTIVE",
+                        "current_revision_id": revision_id,
+                        "resource_version": 1,
+                        "created_at": NOW.isoformat(),
+                    },
+                    {
+                        "item_id": "item_" + "3" * 32,
+                        "human_reference_code": None,
+                        "lifecycle_state": "ACTIVE",
+                        "current_revision_id": None,
+                        "resource_version": 1,
+                        "created_at": NOW.isoformat(),
+                    },
+                ]
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    result = await gateway.recent_items(_session())
+    assert len(requests) == 1
+    assert len(result) == 1
+    assert result[0].item_id == item_id
+    assert result[0].item_revision_id == revision_id
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_gateway_projects_bounded_knowledge_analysis_batch_progress() -> None:
     batch_id = "analysisbatch_" + "a" * 32
 

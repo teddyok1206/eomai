@@ -306,6 +306,12 @@ def create_app(
         value = await actual.preview(session, item_id, item_revision_id)
         return value.model_dump(mode="json")
 
+    @app.get(f"{API_PREFIX}/items/recent")
+    async def recent_items(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> tuple[dict[str, object], ...]:
+        return await actual.recent_items(session)
+
     @app.post(f"{API_PREFIX}/items/structured-content-imports")
     async def structured_item_import(
         value: StructuredItemImportRequest,

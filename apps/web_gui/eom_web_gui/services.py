@@ -145,6 +145,10 @@ class WebServices:
     ) -> ItemPreview:
         return await self.gateway.item_preview(session, item_id, item_revision_id)
 
+    async def recent_items(self, session: WebSession) -> tuple[dict[str, object], ...]:
+        values = await self.gateway.recent_items(session)
+        return tuple(value.model_dump(mode="json") for value in values)
+
     async def import_structured_item(
         self,
         session: WebSession,

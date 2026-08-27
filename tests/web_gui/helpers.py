@@ -18,6 +18,7 @@ from eom_web_gui.contracts import (
     KnowledgeAnalysisBatchStatus,
     PreviewChoice,
     PreviewTable,
+    RecentItemOption,
     StructuredItemImportRequest,
 )
 from eom_web_gui.gateways import (
@@ -368,6 +369,18 @@ class FakeGateway:
                     headers=("물리량", "값"),
                     rows=(("시간", "2 s"), ("수평 속도", "10 m/s")),
                 ),
+            ),
+        )
+
+    async def recent_items(self, session: WebSession) -> tuple[RecentItemOption, ...]:
+        del session
+        return (
+            RecentItemOption(
+                item_id=ITEM_ID,
+                item_revision_id=REVISION_ID,
+                lifecycle_state="ACTIVE",
+                human_reference_code="EOM-SAMPLE-001",
+                created_at=NOW,
             ),
         )
 

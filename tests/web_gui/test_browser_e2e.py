@@ -110,6 +110,10 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
 def test_browser_assets_are_offline_and_xss_safe() -> None:
     html = Path("apps/web_gui/eom_web_gui/static/index.html").read_text(encoding="utf-8")
     javascript = Path("apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
+    assert 'id="recent-items"' in html
+    assert 'id="recent-items-refresh"' in html
+    assert 'api("/items/recent")' in javascript
+    assert "selected.item_revision_id" in javascript
     vocabulary = Path(
         "apps/web_gui/eom_web_gui/static/presentation-vocabulary.ko-KR.json"
     ).read_text(encoding="utf-8")

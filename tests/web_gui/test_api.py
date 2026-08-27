@@ -267,6 +267,23 @@ def test_workflow_timeline_approval_etag_and_item_preview() -> None:
         assert len(preview.json()["tables"]) == 1
 
 
+def test_recent_items_returns_current_revision_pointers() -> None:
+    client, _ = make_client()
+    with client:
+        login(client)
+        response = client.get("/studio/api/v1/items/recent")
+        assert response.status_code == 200
+        assert response.json() == [
+            {
+                "item_id": ITEM_ID,
+                "item_revision_id": REVISION_ID,
+                "lifecycle_state": "ACTIVE",
+                "human_reference_code": "EOM-SAMPLE-001",
+                "created_at": "2026-08-21T07:00:00Z",
+            }
+        ]
+
+
 def test_reviewed_structured_item_import_uses_pinned_intake_member_and_revision() -> None:
     client, gateway = make_client()
     with client:

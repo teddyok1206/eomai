@@ -24,6 +24,7 @@ from eom_web_gui.contracts import (
     KnowledgeAnalysisBatchStatus,
     PreviewChoice,
     PreviewTable,
+    RecentItemOption,
     StructuredItemImportRequest,
 )
 from eom_web_gui.redaction import sanitize_mapping
@@ -95,6 +96,8 @@ class ApplicationGateway(Protocol):
     async def item_preview(
         self, session: WebSession, item_id: str, item_revision_id: str
     ) -> ItemPreview: ...
+
+    async def recent_items(self, session: WebSession) -> tuple[RecentItemOption, ...]: ...
 
     async def import_structured_item(
         self, session: WebSession, value: StructuredItemImportRequest
@@ -725,6 +728,31 @@ class HttpApplicationGateway:
             equations=equations,
             tables=tables,
         )
+
+    async def recent_items(self, session: WebSession) -> tuple[RecentItemOption, ...]:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/items",
+            params={"state": "ACTIVE", "limit": 20},
+        )
+        values = self._list_data(response)
+        try:
+            return tuple(
+                RecentItemOption.model_validate(
+                    {
+                        "item_id": value["item_id"],
+                        "item_revision_id": value["current_revision_id"],
+                        "lifecycle_state": value["lifecycle_state"],
+                        "human_reference_code": value.get("human_reference_code"),
+                        "created_at": value["created_at"],
+                    }
+                )
+                for value in values
+                if isinstance(value, dict) and value.get("current_revision_id") is not None
+            )
+        except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def import_structured_item(
         self, session: WebSession, value: StructuredItemImportRequest
