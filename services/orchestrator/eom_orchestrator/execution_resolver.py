@@ -7,13 +7,16 @@ from datetime import UTC, datetime
 
 from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV3,
+    EducationalDocumentKnowledgeSourceV4,
     EducationalRetrievalRequirement,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
+    EvidenceBundlePublicationResultV4,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
+    KnowledgeAnalysisRequestV6,
 )
 from eom_identifiers import content_sha256, new_execution_plan_id
 from eom_workflow.control_plane import (
@@ -23,6 +26,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV2,
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV4,
+    ResolvedExecutionPlanV5,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     WorkerRole,
@@ -114,7 +118,11 @@ def resolve_knowledge_backed_execution_plan(
     *,
     preset_revision_id: str,
     requirement: EducationalRetrievalRequirement,
-    evidence: EvidenceBundlePublicationResultV2 | EvidenceBundlePublicationResultV3,
+    evidence: (
+        EvidenceBundlePublicationResultV2
+        | EvidenceBundlePublicationResultV3
+        | EvidenceBundlePublicationResultV4
+    ),
     dependencies: ResolvedPlanDependencyEvidence,
     steps: tuple[ExecutionStepRequirement, ...],
     resolved_at: datetime | None = None,
@@ -348,9 +356,10 @@ def resolve_knowledge_analysis_plan(
         | KnowledgeAnalysisRequestV3
         | KnowledgeAnalysisRequestV4
         | KnowledgeAnalysisRequestV5
+        | KnowledgeAnalysisRequestV6
     ),
     resolved_at: datetime | None = None,
-) -> ResolvedExecutionPlanV2 | ResolvedExecutionPlanV4:
+) -> ResolvedExecutionPlanV2 | ResolvedExecutionPlanV4 | ResolvedExecutionPlanV5:
     """Resolve one exact released support policy without consulting a mutable latest pointer."""
 
     existing = session.scalar(
@@ -359,6 +368,8 @@ def resolve_knowledge_analysis_plan(
         )
     )
     if existing is not None:
+        if isinstance(request.source, EducationalDocumentKnowledgeSourceV4):
+            return ResolvedExecutionPlanV5.model_validate(existing.canonical_document)
         if isinstance(request.source, EducationalDocumentKnowledgeSourceV3):
             return ResolvedExecutionPlanV4.model_validate(existing.canonical_document)
         return ResolvedExecutionPlanV2.model_validate(existing.canonical_document)
@@ -424,7 +435,15 @@ def resolve_knowledge_analysis_plan(
         "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
-    if isinstance(request.source, EducationalDocumentKnowledgeSourceV3):
+    if isinstance(request.source, EducationalDocumentKnowledgeSourceV4):
+        document.update(
+            {
+                "schema_version": "resolved-execution-plan/5.0",
+                "document_source": request.source.model_dump(mode="json"),
+                "resolver_version": "5.0.0",
+            }
+        )
+    elif isinstance(request.source, EducationalDocumentKnowledgeSourceV3):
         document.update(
             {
                 "schema_version": "resolved-execution-plan/4.0",
@@ -449,8 +468,11 @@ def resolve_knowledge_analysis_plan(
             }
         )
     document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
-    model: ResolvedExecutionPlanV2 | ResolvedExecutionPlanV4
-    if document["schema_version"] == "resolved-execution-plan/4.0":
+    model: ResolvedExecutionPlanV2 | ResolvedExecutionPlanV4 | ResolvedExecutionPlanV5
+    if document["schema_version"] == "resolved-execution-plan/5.0":
+        validate_control_contract("resolved-execution-plan-v5", document)
+        model = ResolvedExecutionPlanV5.model_validate(document)
+    elif document["schema_version"] == "resolved-execution-plan/4.0":
         validate_control_contract("resolved-execution-plan-v4", document)
         model = ResolvedExecutionPlanV4.model_validate(document)
     else:

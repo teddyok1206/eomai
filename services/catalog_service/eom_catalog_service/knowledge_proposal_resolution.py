@@ -10,9 +10,11 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
     KnowledgeAnalysisProposalReceiptV4,
+    KnowledgeAnalysisProposalReceiptV5,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
+    KnowledgeAnalysisWorkerProposalV4,
 )
 from pydantic import ValidationError
 
@@ -23,6 +25,7 @@ type KnowledgeAnalysisReceipt = (
     | KnowledgeAnalysisProposalReceiptV2
     | KnowledgeAnalysisProposalReceiptV3
     | KnowledgeAnalysisProposalReceiptV4
+    | KnowledgeAnalysisProposalReceiptV5
 )
 
 
@@ -41,6 +44,7 @@ def resolve_knowledge_analysis_proposal(
     KnowledgeAnalysisWorkerProposal
     | KnowledgeAnalysisWorkerProposalV2
     | KnowledgeAnalysisWorkerProposalV3
+    | KnowledgeAnalysisWorkerProposalV4
 ):
     """Dereference every pinned member once and reconstruct the typed proposal."""
 
@@ -88,12 +92,16 @@ def resolve_knowledge_analysis_proposal(
 
     proposal_value = {
         "schema_version": (
-            "knowledge-analysis-worker-proposal/3.0"
-            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV4)
+            "knowledge-analysis-worker-proposal/4.0"
+            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV5)
             else (
-                "knowledge-analysis-worker-proposal/2.0"
-                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
-                else "knowledge-analysis-worker-proposal/1.0"
+                "knowledge-analysis-worker-proposal/3.0"
+                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV4)
+                else (
+                    "knowledge-analysis-worker-proposal/2.0"
+                    if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
+                    else "knowledge-analysis-worker-proposal/1.0"
+                )
             )
         ),
         "analysis_request_id": receipt.analysis_request_id,
@@ -106,8 +114,11 @@ def resolve_knowledge_analysis_proposal(
             KnowledgeAnalysisWorkerProposal
             | KnowledgeAnalysisWorkerProposalV2
             | KnowledgeAnalysisWorkerProposalV3
+            | KnowledgeAnalysisWorkerProposalV4
         )
-        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV4):
+        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV5):
+            proposal = KnowledgeAnalysisWorkerProposalV4.model_validate(proposal_value)
+        elif isinstance(receipt, KnowledgeAnalysisProposalReceiptV4):
             proposal = KnowledgeAnalysisWorkerProposalV3.model_validate(proposal_value)
         elif isinstance(receipt, KnowledgeAnalysisProposalReceiptV3):
             proposal = KnowledgeAnalysisWorkerProposalV2.model_validate(proposal_value)
@@ -117,7 +128,7 @@ def resolve_knowledge_analysis_proposal(
         raise KnowledgeProposalResolutionError(
             "CONTENT_INVALID", "analysis proposal is structurally invalid"
         ) from exc
-    actual_counts = (
+    actual_counts: tuple[int, ...] = (
         len(proposal.anchors),
         len(proposal.nodes),
         len(proposal.edges),
@@ -125,7 +136,7 @@ def resolve_knowledge_analysis_proposal(
         len(proposal.component_observations),
         len(proposal.unresolved_ambiguities),
     )
-    expected_counts = (
+    expected_counts: tuple[int, ...] = (
         receipt.counts.anchors,
         receipt.counts.nodes,
         receipt.counts.edges,
@@ -133,6 +144,11 @@ def resolve_knowledge_analysis_proposal(
         receipt.counts.component_observations,
         receipt.counts.ambiguities,
     )
+    if isinstance(proposal, KnowledgeAnalysisWorkerProposalV4) and isinstance(
+        receipt, KnowledgeAnalysisProposalReceiptV5
+    ):
+        actual_counts = (*actual_counts, len(proposal.page_image_observations))
+        expected_counts = (*expected_counts, receipt.counts.page_image_observations)
     if actual_counts != expected_counts:
         raise KnowledgeProposalResolutionError("CONTENT_INVALID", "analysis proposal counts differ")
     return proposal

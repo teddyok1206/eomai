@@ -1865,7 +1865,7 @@ def test_knowledge_analysis_bootstrap_is_idempotent_and_support_only(
         assert protocol.schema_sha256 == role_schema_bundle_hash("workflow-role/1.4.0")
 
 
-def test_knowledge_analysis_v2_through_v7_bootstraps_add_immutable_revisions(
+def test_knowledge_analysis_v2_through_v8_bootstraps_add_immutable_revisions(
     integration_engine: Engine,
     tmp_path: Path,
 ) -> None:
@@ -2003,6 +2003,22 @@ def test_knowledge_analysis_v2_through_v7_bootstraps_add_immutable_revisions(
         evaluation_cases_total=3,
         settings=settings,
     )
+    eighth = bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v8").resolve(),
+        source_commit="8" * 40,
+        actor_id="phase7-integration",
+        evaluation_cases_total=3,
+        settings=settings,
+    )
+    assert eighth == bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v8").resolve(),
+        source_commit="8" * 40,
+        actor_id="phase7-integration",
+        evaluation_cases_total=3,
+        settings=settings,
+    )
     assert (
         len(
             {
@@ -2013,9 +2029,10 @@ def test_knowledge_analysis_v2_through_v7_bootstraps_add_immutable_revisions(
                 fifth.instruction_bundle_revision_id,
                 sixth.instruction_bundle_revision_id,
                 seventh.instruction_bundle_revision_id,
+                eighth.instruction_bundle_revision_id,
             }
         )
-        == 7
+        == 8
     )
     with sessions() as session:
         logical = session.scalar(
@@ -2024,7 +2041,7 @@ def test_knowledge_analysis_v2_through_v7_bootstraps_add_immutable_revisions(
             )
         )
         assert logical is not None
-        assert logical.current_revision_id == seventh.preset_revision_id
+        assert logical.current_revision_id == eighth.preset_revision_id
         revisions = tuple(
             session.scalars(
                 select(ExecutionPresetRevisionRecord)
@@ -2032,8 +2049,10 @@ def test_knowledge_analysis_v2_through_v7_bootstraps_add_immutable_revisions(
                 .order_by(ExecutionPresetRevisionRecord.revision_number)
             )
         )
-        assert [revision.revision_number for revision in revisions] == list(range(1, 15))
+        assert [revision.revision_number for revision in revisions] == list(range(1, 17))
         assert [revision.state for revision in revisions] == [
+            "DRAFT",
+            "RELEASED",
             "DRAFT",
             "RELEASED",
             "DRAFT",
@@ -2056,6 +2075,7 @@ def test_knowledge_analysis_v2_through_v7_bootstraps_add_immutable_revisions(
         assert revisions[9].preset_revision_id == fifth.preset_revision_id
         assert revisions[11].preset_revision_id == sixth.preset_revision_id
         assert revisions[13].preset_revision_id == seventh.preset_revision_id
+        assert revisions[15].preset_revision_id == eighth.preset_revision_id
         assert revisions[1].canonical_document["compatible_workflow_protocols"] == [
             "workflow-role/1.4.0"
         ]
@@ -2078,6 +2098,17 @@ def test_knowledge_analysis_v2_through_v7_bootstraps_add_immutable_revisions(
             "workflow-role/1.6.0",
             "workflow-role/1.7.0",
         ]
+        assert revisions[15].canonical_document["compatible_workflow_protocols"] == [
+            "workflow-role/1.4.0",
+            "workflow-role/1.5.0",
+            "workflow-role/1.6.0",
+            "workflow-role/1.7.0",
+            "workflow-role/1.8.0",
+        ]
+        assert revisions[15].canonical_document["role_policies"][0]["model_candidates"] == [
+            {"model": "gpt-5.6-terra", "reasoning_effort": "xhigh"}
+        ]
+        assert revisions[15].canonical_document["role_policies"][0]["timeout_seconds"] == 7200
 
 
 def test_historical_protocol_rows_remain_byte_identical(db_session: Session) -> None:

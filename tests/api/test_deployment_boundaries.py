@@ -115,17 +115,22 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "knowledge/knowledge-analysis-review-decision-v1.schema.json",
         "knowledge/knowledge-analysis-result-v2.schema.json",
         "knowledge/knowledge-analysis-types-v3.schema.json",
+        "knowledge/knowledge-analysis-types-v4.schema.json",
         "knowledge/knowledge-analysis-request-v3.schema.json",
         "knowledge/knowledge-analysis-request-v4.schema.json",
         "knowledge/knowledge-analysis-request-v5.schema.json",
+        "knowledge/knowledge-analysis-request-v6.schema.json",
         "knowledge/knowledge-analysis-worker-proposal-v2.schema.json",
         "knowledge/knowledge-analysis-worker-proposal-v3.schema.json",
+        "knowledge/knowledge-analysis-worker-proposal-v4.schema.json",
         "knowledge/knowledge-analysis-proposal-receipt-v2.schema.json",
         "knowledge/knowledge-analysis-proposal-receipt-v3.schema.json",
         "knowledge/knowledge-analysis-proposal-receipt-v4.schema.json",
+        "knowledge/knowledge-analysis-proposal-receipt-v5.schema.json",
         "knowledge/knowledge-analysis-result-v3.schema.json",
         "knowledge/knowledge-analysis-result-v4.schema.json",
         "knowledge/knowledge-analysis-result-v5.schema.json",
+        "knowledge/knowledge-analysis-result-v6.schema.json",
         "knowledge/knowledge-graph-projection-v1.schema.json",
         "knowledge/knowledge-graph-projection-v2.schema.json",
         "knowledge/knowledge-graph-publication-result-v1.schema.json",
@@ -133,6 +138,7 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
         "knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
         "knowledge/knowledge-graph-snapshot-manifest-v3.schema.json",
+        "knowledge/knowledge-graph-snapshot-manifest-v4.schema.json",
         "knowledge/knowledge-graph-structure-manifest-v1.schema.json",
         "knowledge/education-retrieval-access-policy-v1.schema.json",
         "knowledge/education-retrieval-request-v1.schema.json",
@@ -140,10 +146,12 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "knowledge/evidence-bundle-manifest-v1.schema.json",
         "knowledge/evidence-bundle-manifest-v2.schema.json",
         "knowledge/evidence-bundle-manifest-v3.schema.json",
+        "knowledge/evidence-bundle-manifest-v4.schema.json",
         "knowledge/evidence-bundle-publication-result-v1.schema.json",
         "knowledge/educational-retrieval-requirement-v1.schema.json",
         "knowledge/evidence-bundle-publication-result-v2.schema.json",
         "knowledge/evidence-bundle-publication-result-v3.schema.json",
+        "knowledge/evidence-bundle-publication-result-v4.schema.json",
         "legacy-knowledge/legacy-source-inventory-v1.schema.json",
         "legacy-knowledge/legacy-source-inventory-policy-v1.schema.json",
         "legacy-knowledge/legacy-source-inventory-v2.schema.json",
@@ -154,6 +162,10 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "legacy-knowledge/legacy-source-selection-v2.schema.json",
         "legacy-knowledge/pdf-page-range-materialization-manifest-v1.schema.json",
         "legacy-knowledge/textbook-analysis-bundle-manifest-v1.schema.json",
+        "legacy-knowledge/textbook-analysis-bundle-manifest-v2.schema.json",
+        "educational-document/educational-document-registration-request-v2.schema.json",
+        "educational-document/educational-document-revision-manifest-v2.schema.json",
+        "educational-document/educational-document-registration-receipt-v2.schema.json",
         "catalog-application/catalog-application-request-v2.schema.json",
         "catalog-application/catalog-application-response-v2.schema.json",
         "catalog-application/catalog-application-request-v3.schema.json",
@@ -166,6 +178,8 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "catalog-application/catalog-application-request-v6.schema.json",
         "catalog-application/catalog-application-request-v7.schema.json",
         "catalog-application/catalog-application-response-v7.schema.json",
+        "catalog-application/catalog-application-response-v8.schema.json",
+        "catalog-application/catalog-application-response-v9.schema.json",
         "knowledge/knowledge-analysis-batch-request-v1.schema.json",
         "knowledge/knowledge-analysis-batch-request-v2.schema.json",
         "legacy-usage/assessment-assembly-manifest-v1.schema.json",
@@ -319,9 +333,12 @@ def test_release_verifies_educational_document_schema_resources() -> None:
 def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
-    assert "analysis_v1, analysis_v2, analysis_v3, analysis_v4" in deployment
-    assert "for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4)" in deployment
-    assert 'analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0"}' in deployment
+    assert "analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5" in deployment
+    assert (
+        "for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5)"
+        in deployment
+    )
+    assert 'analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0"}' in deployment
 
 
 def test_release_install_normalizes_restrictive_operator_umask() -> None:

@@ -7,15 +7,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from eom_catalog_contracts import TextbookAnalysisBundleManifest, validate_contract
+from eom_catalog_contracts import (
+    TextbookAnalysisBundleManifest,
+    TextbookAnalysisBundleManifestV2,
+    validate_contract,
+)
 from eom_textbook_analysis.bundle import (
     CurriculumMappingSpec,
+    ExtractedMultimodalPage,
     PdfInspection,
     TextbookBundleBuildError,
     TextbookBundleBuildRequest,
     _assert_ocr_image,
     _requires_ocr,
     build_textbook_analysis_bundle,
+    build_textbook_multimodal_analysis_bundle,
 )
 
 
@@ -48,6 +54,37 @@ class FakeExtractor:
         assert source_path.is_file()
         assert (first_physical_page, last_physical_page) == (16, 19)
         return self._pages
+
+
+def _png(width: int, height: int, marker: int) -> bytes:
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + (13).to_bytes(4, "big")
+        + b"IHDR"
+        + width.to_bytes(4, "big")
+        + height.to_bytes(4, "big")
+        + bytes((8, 0, 0, 0, 0))
+        + b"fixture"
+        + bytes((marker,))
+    )
+
+
+class FakeMultimodalExtractor(FakeExtractor):
+    def __init__(
+        self,
+        pages: tuple[ExtractedMultimodalPage, ...],
+        *,
+        source_page_count: int = 20,
+    ) -> None:
+        super().__init__(tuple(page.text for page in pages), source_page_count=source_page_count)
+        self._multimodal_pages = pages
+
+    def extract_multimodal(
+        self, source_path: Path, first_physical_page: int, last_physical_page: int
+    ) -> tuple[ExtractedMultimodalPage, ...]:
+        assert source_path.is_file()
+        assert (first_physical_page, last_physical_page) == (16, 19)
+        return self._multimodal_pages
 
 
 def _request(
@@ -97,6 +134,11 @@ def _make_writable_for_cleanup(output: Path) -> None:
     if pages.exists():
         pages.chmod(0o700)
         for child in pages.iterdir():
+            child.chmod(0o600)
+    images = output / "images"
+    if images.exists():
+        images.chmod(0o700)
+        for child in images.iterdir():
             child.chmod(0o600)
     for child in output.iterdir():
         if child.is_file():
@@ -149,6 +191,100 @@ def test_build_textbook_analysis_bundle_is_deterministic_and_hash_verified(
     finally:
         _make_writable_for_cleanup(first_output)
         _make_writable_for_cleanup(second_output)
+
+
+def test_multimodal_bundle_has_one_exact_png_for_every_page(tmp_path: Path) -> None:
+    source = _make_source(tmp_path)
+    first_output = tmp_path / "multimodal-one"
+    second_output = tmp_path / "multimodal-two"
+    pages = tuple(
+        ExtractedMultimodalPage(
+            text=f"page {physical_page}\n",
+            png_bytes=_png(1200, 1800, physical_page),
+            width_pixels=1200,
+            height_pixels=1800,
+            render_dpi=180,
+        )
+        for physical_page in range(16, 20)
+    )
+    try:
+        first = build_textbook_multimodal_analysis_bundle(
+            _request(tmp_path, source, "multimodal-one"), FakeMultimodalExtractor(pages)
+        )
+        second = build_textbook_multimodal_analysis_bundle(
+            _request(tmp_path, source, "multimodal-two"), FakeMultimodalExtractor(pages)
+        )
+
+        assert first == second
+        assert first.schema_version == "textbook-analysis-bundle-manifest/2.0"
+        assert len(first.pages) == 4
+        assert tuple(page.physical_page for page in first.pages) == (16, 17, 18, 19)
+        manifest_value = json.loads((first_output / "manifest.json").read_text())
+        validate_contract("textbook-analysis-bundle-manifest-v2", manifest_value)
+        assert TextbookAnalysisBundleManifestV2.model_validate(manifest_value) == first
+        for page in first.pages:
+            image = first_output / page.image_member_path
+            assert image.is_file() and not image.is_symlink()
+            assert page.image_member_path == f"images/page-{page.physical_page:06d}.png"
+            assert _sha256(image.read_bytes()) == page.image_sha256
+            assert (page.image_width_pixels, page.image_height_pixels) == (1200, 1800)
+        assert stat_mode(first_output / "images") == 0o500
+        assert stat_mode(first_output / "images/page-000016.png") == 0o400
+        assert (
+            first.bundle_id
+            != build_textbook_analysis_bundle(
+                _request(tmp_path, source, "historical-text"),
+                FakeExtractor(tuple(page.text for page in pages)),
+            ).bundle_id
+        )
+    finally:
+        _make_writable_for_cleanup(first_output)
+        _make_writable_for_cleanup(second_output)
+        _make_writable_for_cleanup(tmp_path / "historical-text")
+
+
+def _sha256(value: bytes) -> str:
+    return "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+def test_multimodal_bundle_rejects_missing_or_inconsistent_page_image(tmp_path: Path) -> None:
+    source = _make_source(tmp_path)
+    short_output = tmp_path / "multimodal-short"
+    bad_output = tmp_path / "multimodal-bad"
+    valid_pages = tuple(
+        ExtractedMultimodalPage(
+            text=f"page {physical_page}\n",
+            png_bytes=_png(1200, 1800, physical_page),
+            width_pixels=1200,
+            height_pixels=1800,
+            render_dpi=180,
+        )
+        for physical_page in range(16, 20)
+    )
+    try:
+        with pytest.raises(TextbookBundleBuildError, match="PAGE_BOUNDARY_INVALID"):
+            build_textbook_multimodal_analysis_bundle(
+                _request(tmp_path, source, "multimodal-short"),
+                FakeMultimodalExtractor(valid_pages[:-1]),
+            )
+        bad_pages = (
+            ExtractedMultimodalPage(
+                text=valid_pages[0].text,
+                png_bytes=valid_pages[0].png_bytes,
+                width_pixels=999,
+                height_pixels=1800,
+                render_dpi=180,
+            ),
+            *valid_pages[1:],
+        )
+        with pytest.raises(TextbookBundleBuildError, match="MULTIMODAL_PAGE_INVALID"):
+            build_textbook_multimodal_analysis_bundle(
+                _request(tmp_path, source, "multimodal-bad"),
+                FakeMultimodalExtractor(bad_pages),
+            )
+    finally:
+        _make_writable_for_cleanup(short_output)
+        _make_writable_for_cleanup(bad_output)
 
 
 def stat_mode(path: Path) -> int:

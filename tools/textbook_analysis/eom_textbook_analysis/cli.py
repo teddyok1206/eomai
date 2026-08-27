@@ -6,12 +6,18 @@ import argparse
 import json
 from pathlib import Path
 
+from eom_catalog_contracts import (
+    TextbookAnalysisBundleManifest,
+    TextbookAnalysisBundleManifestV2,
+)
+
 from eom_textbook_analysis.bundle import (
     PdfTextExtractor,
     PopplerTesseractTextExtractor,
     PopplerTextExtractor,
     TextbookBundleBuildRequest,
     build_textbook_analysis_bundle,
+    build_textbook_multimodal_analysis_bundle,
     load_mapping_specs,
     utc_now,
 )
@@ -41,6 +47,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--tessdata-directory", type=Path)
     parser.add_argument("--ocr-language", default="kor+eng")
     parser.add_argument("--ocr-dpi", type=int, default=180)
+    parser.add_argument("--bundle-version", choices=("1", "2"), default="1")
     parser.add_argument("--minimum-text-characters", type=int, default=100)
     parser.add_argument("--minimum-hangul-characters", type=int, default=20)
     return parser
@@ -103,7 +110,13 @@ def main() -> int:
             minimum_text_characters=arguments.minimum_text_characters,
             minimum_hangul_characters=arguments.minimum_hangul_characters,
         )
-    manifest = build_textbook_analysis_bundle(request, extractor)
+    manifest: TextbookAnalysisBundleManifest | TextbookAnalysisBundleManifestV2
+    if arguments.bundle_version == "2":
+        if not isinstance(extractor, PopplerTesseractTextExtractor):
+            raise SystemExit("multimodal bundle version 2 requires a configured page renderer")
+        manifest = build_textbook_multimodal_analysis_bundle(request, extractor)
+    else:
+        manifest = build_textbook_analysis_bundle(request, extractor)
     print(
         json.dumps(
             {

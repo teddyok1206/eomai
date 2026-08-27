@@ -346,6 +346,15 @@ def create_app(
     ) -> tuple[dict[str, Any], ...]:
         return await actual.codex_accounts(session)
 
+    @app.get(f"{API_PREFIX}/admin/knowledge-analysis-batches")
+    async def knowledge_analysis_batches(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> tuple[dict[str, Any], ...]:
+        return tuple(
+            value.model_dump(mode="json")
+            for value in await actual.knowledge_analysis_batches(session)
+        )
+
     @app.post(f"{API_PREFIX}/admin/codex-accounts/{{binding_id}}/commands", status_code=202)
     async def codex_account_command(
         binding_id: str,

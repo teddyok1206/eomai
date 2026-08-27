@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 
 from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV3,
+    EducationalDocumentKnowledgeSourceV4,
     EducationalRetrievalRequirement,
     EvidenceBudget,
     KnowledgeArtifactMemberPointer,
@@ -514,6 +515,13 @@ class ResolvedExecutionPlanV4(FrozenModel):
         return self
 
 
+class ResolvedExecutionPlanV5(ResolvedExecutionPlanV4):
+    """Multimodal document analysis plan with mandatory page-image pointers."""
+
+    schema_version: Literal["resolved-execution-plan/5.0"] = "resolved-execution-plan/5.0"  # type: ignore[assignment]
+    document_source: EducationalDocumentKnowledgeSourceV4  # type: ignore[assignment]
+
+
 class CodexInvocation(FrozenModel):
     """Bounded job-local CLI selection derived from one resolved plan step."""
 
@@ -529,6 +537,45 @@ class CodexInvocation(FrozenModel):
         body = self.model_dump(mode="json", exclude={"invocation_sha256"})
         if content_sha256(body) != self.invocation_sha256:
             raise ValueError("Codex invocation hash does not match its canonical content")
+        return self
+
+
+class CodexImageInput(FrozenModel):
+    """One bounded, hash-pinned page image attached to a Codex invocation."""
+
+    physical_page: int = Field(ge=1, le=100000)
+    relative_path: str = Field(
+        pattern=r"^source/document/images/page-[0-9]{6}\.png$", max_length=64
+    )
+    media_type: Literal["image/png"] = "image/png"
+    sha256: Sha256
+    bytes: int = Field(ge=1, le=16 * 1024 * 1024)
+    width_pixels: int = Field(ge=1, le=10000)
+    height_pixels: int = Field(ge=1, le=10000)
+
+    @model_validator(mode="after")
+    def path_matches_physical_page(self) -> CodexImageInput:
+        if self.relative_path != (f"source/document/images/page-{self.physical_page:06d}.png"):
+            raise ValueError("Codex image-input path must match its physical page")
+        return self
+
+
+class CodexImageInputManifest(FrozenModel):
+    """Exact ordered PNG set crossing the worker's multimodal input boundary."""
+
+    schema_version: Literal["codex-image-input-manifest/1.0"] = "codex-image-input-manifest/1.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    images: tuple[CodexImageInput, ...] = Field(min_length=1, max_length=32)
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_order_coverage_and_hash(self) -> CodexImageInputManifest:
+        pages = tuple(image.physical_page for image in self.images)
+        if pages != tuple(range(pages[0], pages[-1] + 1)):
+            raise ValueError("Codex image inputs must be unique, contiguous, and ordered")
+        body = self.model_dump(mode="json", exclude={"manifest_sha256"})
+        if content_sha256(body) != self.manifest_sha256:
+            raise ValueError("Codex image-input manifest hash does not match canonical content")
         return self
 
 

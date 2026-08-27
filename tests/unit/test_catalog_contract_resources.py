@@ -96,15 +96,18 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 86
+    assert len(entries) == 100
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {
         "educational-document-types",
         "educational-document-rights-attestation",
         "educational-document-registration-request",
+        "educational-document-registration-request-v2",
         "educational-document-revision-manifest",
+        "educational-document-revision-manifest-v2",
         "educational-document-registration-receipt",
+        "educational-document-registration-receipt-v2",
         "educational-retrieval-requirement",
         "evidence-bundle-publication-result-v2",
         "catalog-application-request-v4",
@@ -115,27 +118,38 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         "catalog-application-request-v6",
         "catalog-application-request-v7",
         "catalog-application-response-v7",
+        "catalog-application-response-v8",
+        "catalog-application-response-v9",
         "knowledge-analysis-batch-request",
         "knowledge-analysis-batch-request-v2",
         "knowledge-analysis-types-v3",
+        "knowledge-analysis-types-v4",
         "knowledge-analysis-request-v3",
         "knowledge-analysis-request-v4",
         "knowledge-analysis-request-v5",
+        "knowledge-analysis-request-v6",
         "knowledge-analysis-worker-proposal-v2",
         "knowledge-analysis-worker-proposal-v3",
+        "knowledge-analysis-worker-proposal-v4",
         "knowledge-analysis-proposal-receipt-v2",
         "knowledge-analysis-proposal-receipt-v3",
         "knowledge-analysis-proposal-receipt-v4",
+        "knowledge-analysis-proposal-receipt-v5",
         "knowledge-analysis-result-v3",
         "knowledge-analysis-result-v4",
         "knowledge-analysis-result-v5",
+        "knowledge-analysis-result-v6",
         "knowledge-graph-projection-v2",
         "knowledge-graph-snapshot-manifest-v3",
+        "knowledge-graph-snapshot-manifest-v4",
         "evidence-bundle-manifest-v3",
+        "evidence-bundle-manifest-v4",
         "evidence-bundle-publication-result-v3",
+        "evidence-bundle-publication-result-v4",
         "legacy-source-rights-review-v2",
         "legacy-source-selection-v2",
         "textbook-analysis-bundle-manifest",
+        "textbook-analysis-bundle-manifest-v2",
         *PHASE11_SCHEMA_SHA256,
     }.issubset({name for name, _ in entries})
     for name, entry in entries:

@@ -16,6 +16,7 @@ from typing import Protocol
 
 from eom_catalog_contracts import (
     TextbookAnalysisBundleManifest,
+    TextbookAnalysisBundleManifestV2,
     validate_contract,
 )
 from eom_identifiers import content_sha256
@@ -72,6 +73,15 @@ class PdfInspection:
     encrypted: bool
 
 
+@dataclass(frozen=True)
+class ExtractedMultimodalPage:
+    text: str
+    png_bytes: bytes
+    width_pixels: int
+    height_pixels: int
+    render_dpi: int
+
+
 class PdfTextExtractor(Protocol):
     implementation: str
     version: str
@@ -83,6 +93,12 @@ class PdfTextExtractor(Protocol):
     def extract(
         self, source_path: Path, first_physical_page: int, last_physical_page: int
     ) -> tuple[str, ...]: ...
+
+
+class PdfMultimodalExtractor(PdfTextExtractor, Protocol):
+    def extract_multimodal(
+        self, source_path: Path, first_physical_page: int, last_physical_page: int
+    ) -> tuple[ExtractedMultimodalPage, ...]: ...
 
 
 class PopplerTextExtractor:
@@ -260,6 +276,39 @@ class PopplerTesseractTextExtractor:
         return tuple(selected_pages)
 
     def _ocr_page(self, source_path: Path, physical_page: int) -> str:
+        return self._render_page(
+            source_path, physical_page, require_ocr=True, embedded_text=""
+        ).text
+
+    def extract_multimodal(
+        self, source_path: Path, first_physical_page: int, last_physical_page: int
+    ) -> tuple[ExtractedMultimodalPage, ...]:
+        embedded_pages = self._poppler.extract(source_path, first_physical_page, last_physical_page)
+        return tuple(
+            self._render_page(
+                source_path,
+                first_physical_page + offset,
+                require_ocr=(
+                    self._ocr_mode == "all"
+                    or _requires_ocr(
+                        embedded_text,
+                        minimum_text_characters=self._minimum_text_characters,
+                        minimum_hangul_characters=self._minimum_hangul_characters,
+                    )
+                ),
+                embedded_text=embedded_text,
+            )
+            for offset, embedded_text in enumerate(embedded_pages)
+        )
+
+    def _render_page(
+        self,
+        source_path: Path,
+        physical_page: int,
+        *,
+        require_ocr: bool,
+        embedded_text: str,
+    ) -> ExtractedMultimodalPage:
         with tempfile.TemporaryDirectory(prefix="eom-textbook-ocr-") as temporary:
             temporary_directory = Path(temporary)
             temporary_directory.chmod(0o700)
@@ -282,29 +331,42 @@ class PopplerTesseractTextExtractor:
             )
             image_path = image_stem.with_suffix(".png")
             _assert_ocr_image(image_path)
-            completed = _run_bounded(
-                [
-                    str(self._tesseract),
-                    str(image_path),
-                    "stdout",
-                    "--tessdata-dir",
-                    str(self._tessdata_directory),
-                    "-l",
-                    self._ocr_language,
-                    "--psm",
-                    "3",
-                    "--dpi",
-                    str(self._ocr_dpi),
-                    "-c",
-                    "preserve_interword_spaces=1",
-                ],
-                max_output_bytes=8 * 1024 * 1024,
+            image_bytes = image_path.read_bytes()
+            width, height = _png_dimensions(image_bytes)
+            text = embedded_text
+            if require_ocr:
+                completed = _run_bounded(
+                    [
+                        str(self._tesseract),
+                        str(image_path),
+                        "stdout",
+                        "--tessdata-dir",
+                        str(self._tessdata_directory),
+                        "-l",
+                        self._ocr_language,
+                        "--psm",
+                        "3",
+                        "--dpi",
+                        str(self._ocr_dpi),
+                        "-c",
+                        "preserve_interword_spaces=1",
+                    ],
+                    max_output_bytes=8 * 1024 * 1024,
+                )
+                try:
+                    value = completed.stdout.decode("utf-8", errors="strict")
+                except UnicodeDecodeError as exc:
+                    raise TextbookBundleBuildError("TEXTBOOK_EXTRACTED_TEXT_INVALID") from exc
+                normalized = _normalize_extracted_text(value)
+                if normalized:
+                    text = normalized
+            return ExtractedMultimodalPage(
+                text=text,
+                png_bytes=image_bytes,
+                width_pixels=width,
+                height_pixels=height,
+                render_dpi=self._ocr_dpi,
             )
-            try:
-                value = completed.stdout.decode("utf-8", errors="strict")
-            except UnicodeDecodeError as exc:
-                raise TextbookBundleBuildError("TEXTBOOK_EXTRACTED_TEXT_INVALID") from exc
-            return _normalize_extracted_text(value)
 
 
 def _requires_ocr(
@@ -398,6 +460,16 @@ def _assert_ocr_image(path: Path) -> None:
         raise TextbookBundleBuildError("TEXTBOOK_OCR_IMAGE_INVALID") from exc
     if signature != b"\x89PNG\r\n\x1a\n":
         raise TextbookBundleBuildError("TEXTBOOK_OCR_IMAGE_INVALID")
+
+
+def _png_dimensions(value: bytes) -> tuple[int, int]:
+    if len(value) < 24 or value[:8] != b"\x89PNG\r\n\x1a\n" or value[12:16] != b"IHDR":
+        raise TextbookBundleBuildError("TEXTBOOK_OCR_IMAGE_INVALID")
+    width = int.from_bytes(value[16:20], "big")
+    height = int.from_bytes(value[20:24], "big")
+    if not 1 <= width <= 10000 or not 1 <= height <= 10000:
+        raise TextbookBundleBuildError("TEXTBOOK_OCR_IMAGE_INVALID")
+    return width, height
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -575,6 +647,12 @@ def _index_markdown(
         lines.append(
             f"- [{page['member_path']}]({page['member_path']}): printed page {printed_page}"
         )
+        image_member_path = page.get("image_member_path")
+        if isinstance(image_member_path, str):
+            lines.append(
+                f"  - [lossless page image]({image_member_path}): "
+                f"`{page['image_width_pixels']}x{page['image_height_pixels']}` PNG"
+            )
     lines.append("")
     return "\n".join(lines).encode("utf-8")
 
@@ -582,6 +660,31 @@ def _index_markdown(
 def build_textbook_analysis_bundle(
     request: TextbookBundleBuildRequest, extractor: PdfTextExtractor
 ) -> TextbookAnalysisBundleManifest:
+    """Build the immutable historical text-only bundle contract."""
+
+    manifest = _build_textbook_analysis_bundle(request, extractor, multimodal=False)
+    if not isinstance(manifest, TextbookAnalysisBundleManifest):
+        raise AssertionError("textbook text bundle returned the wrong manifest type")
+    return manifest
+
+
+def build_textbook_multimodal_analysis_bundle(
+    request: TextbookBundleBuildRequest, extractor: PdfMultimodalExtractor
+) -> TextbookAnalysisBundleManifestV2:
+    """Build a bundle in which every selected page has an exact PNG visual input."""
+
+    manifest = _build_textbook_analysis_bundle(request, extractor, multimodal=True)
+    if not isinstance(manifest, TextbookAnalysisBundleManifestV2):
+        raise AssertionError("textbook multimodal bundle returned the wrong manifest type")
+    return manifest
+
+
+def _build_textbook_analysis_bundle(
+    request: TextbookBundleBuildRequest,
+    extractor: PdfTextExtractor | PdfMultimodalExtractor,
+    *,
+    multimodal: bool,
+) -> TextbookAnalysisBundleManifest | TextbookAnalysisBundleManifestV2:
     _validate_request(request)
     inspection = extractor.inspect(request.source_path)
     if inspection.encrypted:
@@ -602,8 +705,7 @@ def build_textbook_analysis_bundle(
         }
         for mapping in request.mappings
     ]
-    bundle_id = _stable_id(
-        "textbookbundle_",
+    bundle_identity = (
         request.expected_source_sha256,
         request.first_physical_page,
         request.last_physical_page,
@@ -615,6 +717,15 @@ def build_textbook_analysis_bundle(
         options_sha256,
         content_sha256(mapping_identity),
     )
+    bundle_id = (
+        _stable_id(
+            "textbookbundle_",
+            *bundle_identity,
+            "textbook-analysis-bundle-manifest/2.0",
+        )
+        if multimodal
+        else _stable_id("textbookbundle_", *bundle_identity)
+    )
 
     output = request.output_directory
     if not output.is_absolute() or output.exists() or output.is_symlink():
@@ -624,17 +735,51 @@ def build_textbook_analysis_bundle(
     pages_directory = output / "pages"
     pages_directory.mkdir(mode=0o700)
     pages_directory.chmod(0o700)
+    images_directory: Path | None = None
+    if multimodal:
+        images_directory = output / "images"
+        images_directory.mkdir(mode=0o700)
+        images_directory.chmod(0o700)
 
-    extracted_pages = extractor.extract(
-        request.source_path, request.first_physical_page, request.last_physical_page
-    )
+    if multimodal:
+        extract_multimodal = getattr(extractor, "extract_multimodal", None)
+        if not callable(extract_multimodal):
+            raise TextbookBundleBuildError("TEXTBOOK_MULTIMODAL_EXTRACTOR_REQUIRED")
+        extracted_pages: tuple[str, ...] | tuple[ExtractedMultimodalPage, ...] = extract_multimodal(
+            request.source_path,
+            request.first_physical_page,
+            request.last_physical_page,
+        )
+    else:
+        extracted_pages = extractor.extract(
+            request.source_path, request.first_physical_page, request.last_physical_page
+        )
     expected_extracted_pages = request.last_physical_page - request.first_physical_page + 1
     if len(extracted_pages) != expected_extracted_pages:
         raise TextbookBundleBuildError("TEXTBOOK_EXTRACTOR_PAGE_BOUNDARY_INVALID")
     page_values: list[dict[str, object]] = []
     anchor_by_page: dict[int, str] = {}
-    for index, text in enumerate(extracted_pages):
+    for index, extracted_page in enumerate(extracted_pages):
         physical_page = request.first_physical_page + index
+        image_render_dpi: int | None = None
+        if multimodal:
+            if not isinstance(extracted_page, ExtractedMultimodalPage):
+                raise TextbookBundleBuildError("TEXTBOOK_MULTIMODAL_PAGE_INVALID")
+            text = extracted_page.text
+            image_bytes = extracted_page.png_bytes
+            image_render_dpi = extracted_page.render_dpi
+            detected_width, detected_height = _png_dimensions(image_bytes)
+            if (
+                detected_width != extracted_page.width_pixels
+                or detected_height != extracted_page.height_pixels
+                or not 120 <= extracted_page.render_dpi <= 400
+                or len(image_bytes) > 16 * 1024 * 1024
+            ):
+                raise TextbookBundleBuildError("TEXTBOOK_MULTIMODAL_PAGE_INVALID")
+        else:
+            if not isinstance(extracted_page, str):
+                raise TextbookBundleBuildError("TEXTBOOK_EXTRACTED_TEXT_INVALID")
+            text = extracted_page
         printed_page = _printed_page(physical_page, request.printed_page_offset)
         anchor_id = _stable_id("textbookanchor_", request.expected_source_sha256, physical_page)
         anchor_by_page[physical_page] = anchor_id
@@ -648,26 +793,39 @@ def build_textbook_analysis_bundle(
         )
         _write_exclusive(output / member_path, member_bytes)
         replacement_character_count = text.count("\ufffd")
-        page_values.append(
-            {
-                "physical_page": physical_page,
-                "printed_page": printed_page,
-                "anchor_id": anchor_id,
-                "member_path": member_path,
-                "media_type": "text/markdown; charset=utf-8",
-                "extraction_state": (
-                    "TEXT_WITH_WARNINGS"
-                    if replacement_character_count
-                    else "TEXT"
-                    if text
-                    else "EMPTY"
-                ),
-                "character_count": len(text),
-                "replacement_character_count": replacement_character_count,
-                "text_sha256": _sha256_bytes(text.encode("utf-8")),
-                "member_sha256": _sha256_bytes(member_bytes),
-            }
-        )
+        page_value: dict[str, object] = {
+            "physical_page": physical_page,
+            "printed_page": printed_page,
+            "anchor_id": anchor_id,
+            "member_path": member_path,
+            "media_type": "text/markdown; charset=utf-8",
+            "extraction_state": (
+                "TEXT_WITH_WARNINGS" if replacement_character_count else "TEXT" if text else "EMPTY"
+            ),
+            "character_count": len(text),
+            "replacement_character_count": replacement_character_count,
+            "text_sha256": _sha256_bytes(text.encode("utf-8")),
+            "member_sha256": _sha256_bytes(member_bytes),
+        }
+        if multimodal:
+            if images_directory is None:
+                raise AssertionError("multimodal image directory was not created")
+            if image_render_dpi is None:
+                raise AssertionError("multimodal image DPI was not recorded")
+            image_member_path = f"images/page-{physical_page:06d}.png"
+            _write_exclusive(output / image_member_path, image_bytes)
+            page_value.update(
+                {
+                    "image_member_path": image_member_path,
+                    "image_media_type": "image/png",
+                    "image_sha256": _sha256_bytes(image_bytes),
+                    "image_bytes": len(image_bytes),
+                    "image_width_pixels": detected_width,
+                    "image_height_pixels": detected_height,
+                    "image_render_dpi": image_render_dpi,
+                }
+            )
+        page_values.append(page_value)
 
     mapping_values: list[dict[str, object]] = []
     for mapping in request.mappings:
@@ -706,7 +864,11 @@ def build_textbook_analysis_bundle(
     _write_exclusive(output / "index.md", index_bytes)
 
     manifest_value: dict[str, object] = {
-        "schema_version": "textbook-analysis-bundle-manifest/1.0",
+        "schema_version": (
+            "textbook-analysis-bundle-manifest/2.0"
+            if multimodal
+            else "textbook-analysis-bundle-manifest/1.0"
+        ),
         "bundle_id": bundle_id,
         "bundle_state": "PRE_CANONICAL_REVIEW_ONLY",
         "source": {
@@ -747,16 +909,33 @@ def build_textbook_analysis_bundle(
     manifest_value["manifest_sha256"] = content_sha256(
         {key: value for key, value in manifest_value.items() if key != "manifest_sha256"}
     )
-    validate_contract("textbook-analysis-bundle-manifest", manifest_value)
-    manifest = TextbookAnalysisBundleManifest.model_validate(manifest_value)
+    contract_name = (
+        "textbook-analysis-bundle-manifest-v2"
+        if multimodal
+        else "textbook-analysis-bundle-manifest"
+    )
+    validate_contract(contract_name, manifest_value)
+    manifest_type = (
+        TextbookAnalysisBundleManifestV2 if multimodal else TextbookAnalysisBundleManifest
+    )
+    manifest = manifest_type.model_validate(manifest_value)
     manifest_bytes = (
         json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n"
     ).encode("utf-8")
     _write_exclusive(output / "manifest.json", manifest_bytes)
 
-    for member in [output / "index.md", output / "manifest.json", *pages_directory.iterdir()]:
+    immutable_members = [
+        output / "index.md",
+        output / "manifest.json",
+        *pages_directory.iterdir(),
+    ]
+    if images_directory is not None:
+        immutable_members.extend(images_directory.iterdir())
+    for member in immutable_members:
         member.chmod(0o400)
     pages_directory.chmod(0o500)
+    if images_directory is not None:
+        images_directory.chmod(0o500)
     output.chmod(0o500)
     return manifest
 

@@ -19,6 +19,7 @@ from eom_web_gui.contracts import (
     HwpxBuildView,
     HwpxCapability,
     ItemPreview,
+    KnowledgeAnalysisBatchStatus,
     RequestDraft,
     RequestDraftInput,
     RequestDraftUpdate,
@@ -150,6 +151,12 @@ class WebServices:
     async def codex_accounts(self, session: WebSession) -> tuple[dict[str, Any], ...]:
         _require_admin(session)
         return await self.gateway.codex_accounts(session)
+
+    async def knowledge_analysis_batches(
+        self, session: WebSession
+    ) -> tuple[KnowledgeAnalysisBatchStatus, ...]:
+        _require_admin(session)
+        return await self.gateway.knowledge_analysis_batches(session)
 
     async def codex_account_command(
         self,

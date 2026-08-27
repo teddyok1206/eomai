@@ -13,6 +13,7 @@ from eom_web_gui.contracts import (
     HwpxBuildView,
     HwpxCapability,
     ItemPreview,
+    KnowledgeAnalysisBatchStatus,
     PreviewChoice,
     PreviewTable,
     StructuredItemImportRequest,
@@ -434,6 +435,26 @@ class FakeGateway:
                 "active_lease_count": 0,
                 "last_successful_job_id": "job_" + "2" * 32,
             },
+        )
+
+    async def knowledge_analysis_batches(
+        self, session: WebSession
+    ) -> tuple[KnowledgeAnalysisBatchStatus, ...]:
+        del session
+        return (
+            KnowledgeAnalysisBatchStatus(
+                batch_id="analysisbatch_" + "7" * 32,
+                state="RUNNING",
+                total_range_count=495,
+                accepted_range_count=12,
+                failed_range_count=0,
+                failure_code=None,
+                resource_version=4,
+                created_at=NOW,
+                started_at=NOW,
+                completed_at=None,
+                updated_at=NOW + timedelta(minutes=3),
+            ),
         )
 
     async def codex_account_command(

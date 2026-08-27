@@ -25,6 +25,7 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
+    EvidenceBundlePublicationResultV4,
     ItemContentQuery,
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisBatchApplicationResult,
@@ -110,7 +111,11 @@ class CatalogApplicationClient:
 
     def create_evidence_bundle(
         self, command: CreateEvidenceBundleCommand
-    ) -> EvidenceBundlePublicationResult | EvidenceBundlePublicationResultV3:
+    ) -> (
+        EvidenceBundlePublicationResult
+        | EvidenceBundlePublicationResultV3
+        | EvidenceBundlePublicationResultV4
+    ):
         response = self._request(command)
         if response.operation != command.operation or response.evidence is None:
             raise CatalogApplicationClientError(
@@ -121,7 +126,11 @@ class CatalogApplicationClient:
 
     def create_item_production_evidence(
         self, command: CreateItemProductionEvidenceCommand
-    ) -> EvidenceBundlePublicationResultV2 | EvidenceBundlePublicationResultV3:
+    ) -> (
+        EvidenceBundlePublicationResultV2
+        | EvidenceBundlePublicationResultV3
+        | EvidenceBundlePublicationResultV4
+    ):
         response = self._request(command)
         if response.operation != command.operation or response.item_production_evidence is None:
             raise CatalogApplicationClientError(
@@ -170,10 +179,10 @@ class CatalogApplicationClient:
         response_schema = (
             "catalog-application-response-v7"
             if command.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
-            else "catalog-application-response-v6"
+            else "catalog-application-response-v8"
             if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
             else (
-                "catalog-application-response-v5"
+                "catalog-application-response-v9"
                 if command.operation == "CREATE_EVIDENCE_BUNDLE"
                 else "catalog-application-response-v3"
             )

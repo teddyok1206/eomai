@@ -13,6 +13,7 @@ from eom_catalog_contracts import EvidenceBundleManifestV2, KnowledgeArtifactMem
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_workflow import (
+    CodexImageInputManifest,
     CodexInvocation,
     InstructionBundleManifest,
     ReferenceBundleManifest,
@@ -20,6 +21,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV2,
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV4,
+    ResolvedExecutionPlanV5,
     ResolvedStepExecutionV3,
     validate_control_contract,
 )
@@ -65,6 +67,7 @@ class MaterializedExecution:
     reference_manifest_sha256: str | None
     agents_sha256: str
     invocation_sha256: str
+    image_input_manifest_sha256: str | None
     materialized_member_count: int
     materialized_bytes: int
     invocation_path: Path
@@ -89,6 +92,7 @@ class MaterializedExecution:
             "reference_manifest_sha256": self.reference_manifest_sha256,
             "agents_sha256": self.agents_sha256,
             "invocation_sha256": self.invocation_sha256,
+            "image_input_manifest_sha256": self.image_input_manifest_sha256,
             "materialized_member_count": self.materialized_member_count,
             "materialized_bytes": self.materialized_bytes,
             "source_artifact_revision_id": self.source_artifact_revision_id,
@@ -120,12 +124,14 @@ def materialize_execution_step(
     is_analysis = plan_schema_version in {
         "resolved-execution-plan/2.0",
         "resolved-execution-plan/4.0",
+        "resolved-execution-plan/5.0",
     }
     plan: (
         ResolvedExecutionPlan
         | ResolvedExecutionPlanV2
         | ResolvedExecutionPlanV3
         | ResolvedExecutionPlanV4
+        | ResolvedExecutionPlanV5
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -133,6 +139,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/4.0":
         plan = ResolvedExecutionPlanV4.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/5.0":
+        plan = ResolvedExecutionPlanV5.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -213,7 +221,7 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.source_artifact_revision_id
         source_sha256 = plan.source_sha256
-    elif isinstance(plan, ResolvedExecutionPlanV4):
+    elif isinstance(plan, (ResolvedExecutionPlanV4, ResolvedExecutionPlanV5)):
         document_bytes, document_members = _materialize_analysis_document_source(
             session,
             plan=plan,
@@ -250,6 +258,46 @@ def materialize_execution_step(
     _require_total_size(total_bytes, analysis=is_analysis)
     agents_path = workspace / "AGENTS.md"
     _write_exclusive(agents_path, agents_bytes, group_id=worker_group_id)
+
+    image_input_manifest_sha256: str | None = None
+    if isinstance(plan, ResolvedExecutionPlanV5):
+        image_manifest_document: dict[str, object] = {
+            "schema_version": "codex-image-input-manifest/1.0",
+            "plan_id": plan.plan_id,
+            "images": [
+                {
+                    "physical_page": member.physical_page,
+                    "relative_path": member.materialized_path,
+                    "media_type": "image/png",
+                    "sha256": member.sha256,
+                    "bytes": member.bytes,
+                    "width_pixels": member.width_pixels,
+                    "height_pixels": member.height_pixels,
+                }
+                for member in plan.document_source.materialization_members
+                if member.member_kind == "PAGE_IMAGE"
+            ],
+            "manifest_sha256": "sha256:" + "0" * 64,
+        }
+        image_manifest_document["manifest_sha256"] = content_sha256(
+            {
+                key: value
+                for key, value in image_manifest_document.items()
+                if key != "manifest_sha256"
+            }
+        )
+        validate_control_contract("codex-image-input-manifest", image_manifest_document)
+        image_manifest = CodexImageInputManifest.model_validate(image_manifest_document)
+        image_manifest_bytes = canonical_json_bytes(image_manifest) + b"\n"
+        total_bytes += len(image_manifest_bytes)
+        member_count += 1
+        _require_total_size(total_bytes, analysis=True)
+        _write_exclusive(
+            workspace / "codex-image-inputs.json",
+            image_manifest_bytes,
+            group_id=worker_group_id,
+        )
+        image_input_manifest_sha256 = image_manifest.manifest_sha256
 
     invocation_document: dict[str, object] = {
         "schema_version": "codex-invocation/1.0",
@@ -289,6 +337,7 @@ def materialize_execution_step(
         ),
         agents_sha256=sha256_bytes(agents_bytes),
         invocation_sha256=invocation.invocation_sha256,
+        image_input_manifest_sha256=image_input_manifest_sha256,
         materialized_member_count=member_count,
         materialized_bytes=total_bytes,
         invocation_path=invocation_path,
@@ -314,11 +363,14 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV2
             | ResolvedExecutionPlanV3
             | ResolvedExecutionPlanV4
+            | ResolvedExecutionPlanV5
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/4.0":
         plan = ResolvedExecutionPlanV4.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/5.0":
+        plan = ResolvedExecutionPlanV5.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -334,10 +386,11 @@ def authorized_execution_artifact_revisions(
     revision_ids: set[str] = set()
     if isinstance(plan, ResolvedExecutionPlanV2):
         revision_ids.add(plan.source_artifact_revision_id)
-    elif isinstance(plan, ResolvedExecutionPlanV4):
+    elif isinstance(plan, (ResolvedExecutionPlanV4, ResolvedExecutionPlanV5)):
         # The original PDF, bundle manifest, and rights attestation are pinned
         # provenance. Only the selected Markdown members cross the explicit
-        # materialization boundary into the worker workspace.
+        # materialization boundary into the worker workspace. V5 also carries
+        # every selected immutable page PNG through this same allowlist.
         revision_ids.update(
             member.artifact_revision_id for member in plan.document_source.materialization_members
         )
@@ -590,7 +643,7 @@ def _materialize_analysis_source(
 def _materialize_analysis_document_source(
     session: Session,
     *,
-    plan: ResolvedExecutionPlanV4,
+    plan: ResolvedExecutionPlanV4 | ResolvedExecutionPlanV5,
     workspace: Path,
     artifact_root: Path,
     worker_group_id: int,
@@ -643,13 +696,20 @@ def _materialize_analysis_document_source(
             expected_sha256=member.sha256,
             expected_bytes=member.bytes,
         )
-        try:
-            payload.decode("utf-8")
-        except UnicodeError as exc:
-            raise ControlPlaneError(
-                "CONTROL_POINTER_ENCODING_INVALID",
-                "document analysis member is not UTF-8 Markdown",
-            ) from exc
+        if member.media_type == "image/png":
+            _validate_png_payload(
+                payload,
+                expected_width=member.width_pixels,
+                expected_height=member.height_pixels,
+            )
+        else:
+            try:
+                payload.decode("utf-8")
+            except UnicodeError as exc:
+                raise ControlPlaneError(
+                    "CONTROL_POINTER_ENCODING_INVALID",
+                    "document analysis member is not UTF-8 Markdown",
+                ) from exc
         relative = PurePosixPath(member.materialized_path)
         if (
             relative.is_absolute()
@@ -670,6 +730,27 @@ def _materialize_analysis_document_source(
             "document analysis materialized byte count differs from the plan",
         )
     return total_bytes, len(source.materialization_members)
+
+
+def _validate_png_payload(
+    payload: bytes,
+    *,
+    expected_width: int | None,
+    expected_height: int | None,
+) -> None:
+    if (
+        len(payload) < 24
+        or payload[:8] != b"\x89PNG\r\n\x1a\n"
+        or payload[12:16] != b"IHDR"
+        or expected_width is None
+        or expected_height is None
+        or int.from_bytes(payload[16:20], "big") != expected_width
+        or int.from_bytes(payload[20:24], "big") != expected_height
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_MEDIA_MISMATCH",
+            "document analysis page image is not the pinned PNG",
+        )
 
 
 def _materialize_evidence_context(

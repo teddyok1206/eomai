@@ -8,8 +8,10 @@ does not let a worker enumerate Catalog data, read NAS, publish an Education Gra
 with another worker. Every page range is a normal Knowledge Analysis request routed through the
 Application API, Catalog application boundary, orchestrator, and fixed support slot 05.
 
-The canonical source remains the approved Educational Document Revision. The extracted Markdown
-page is a validated workspace materialization; it is not a new canonical source. Every request pins
+The canonical source remains the approved Educational Document Revision. V8 requires the exact
+lossless PNG for every selected physical page; extracted Markdown is only auxiliary OCR/text-layer
+evidence and is not a substitute for the page image. Both are validated workspace materializations,
+not new canonical sources. Every request pins
 the document logical ID, document revision ID, source Artifact and Artifact Revision, SHA-256,
 analysis-bundle and rights pointers, released Execution Preset Revision, risk-policy revision, and
 workflow/protocol identities resolved by the existing application service.
@@ -37,14 +39,18 @@ For each included current approved document revision:
 
 The historical pilot used a conservative four-page maximum. Current range size is frozen in the
 reviewed batch request and must satisfy the existing 32-page API bound and the released preset's
-7,200-second execution window. Operators must not change range boundaries after creation or extend
-a worker/systemd timeout as an ad hoc recovery. V7 pins `workflow-role/1.7.0` and the integrity-
-complete worker proposal `/3.0`; historical V4/V5/V6 batches remain immutable evidence.
+7,200-second execution window. The fixed runtime contract keeps slots 01--04 at 600 seconds and
+pins only support slot 05 to 7,200 seconds; the resolved plan value must reach the launcher exactly.
+Operators must not change range boundaries or timeouts after creation. V8 pins
+`workflow-role/1.8.0`, request `/6.0`, and multimodal worker proposal `/4.0`. V4--V7 batches remain
+immutable historical evidence and are not published as the current multimodal textbook corpus.
 
 For `n` pages, planning is O(n + m log m), where `m` is the number of curriculum boundaries, and the
-manifest is O(n / 4). Each request materializes at most four Markdown pages plus the pinned index,
-well below the 32-page and 2 MiB source contracts. One support lease is active at a time; excess work
-must queue rather than add slots or concurrent Codex processes.
+manifest is O(n / r) for frozen range size `r`. Each request materializes its bounded ordered PNG
+set, the matching Markdown aids, and the pinned index. The measured 32-page upper-bound fixture used
+21,232,796 image bytes (15.82% of the 128 MiB aggregate limit), with a largest image of 1,868,693
+bytes (11.14% of the 16 MiB per-image limit). One support lease is active at a time; excess work must
+queue rather than add slots or concurrent Codex processes.
 
 ## Transaction, failure, and review behavior
 
@@ -60,6 +66,9 @@ Workflow completion is reconciled through the existing Knowledge Analysis applic
 Low-risk proposals may become `ACCEPTED` according to the pinned released risk policy. Any
 `NEEDS_REVIEW` run remains pending for a human decision; the batch must never synthesize approval.
 Graph publication and Evidence Bundle generation are separate, explicitly authorized boundaries.
+V8 content acceptance has no minimum extraction quota: `NO_RELEVANT_CONTENT` and `UNCLEAR` are
+valid page observations. Exact image delivery, one observation per page, hashes, safe pointers, and
+internally valid references remain hard requirements.
 
 Batch creation must stop if the preset pointer, support capability, source revision, rights
 contract, page coverage, or curriculum mapping differs from the reviewed manifest. After that
@@ -80,5 +89,7 @@ would add schema, migration, and lifecycle complexity before a second real use c
 
 Completion requires every included document revision to have gap-free terminal range accounting,
 no Science Inquiry Experiment document, immutable source/preset/risk pointers, no automatic retry,
-and no worker access to DB or NAS. Accepted results may later be published only through a separately
-authorized deterministic graph-snapshot operation.
+exactly one PNG observation per physical page, and no worker access to DB or NAS. The background
+batch may occupy only slot 05; slots 01--04 remain available for one-item workflows and GUI-backed
+product work. Accepted results may later be published only through a separately authorized,
+overlap-rejecting deterministic graph-snapshot operation.

@@ -10,11 +10,13 @@ from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     CurriculumUnitBinding,
     EducationalDocumentKnowledgeSourceV3,
+    EducationalDocumentKnowledgeSourceV4,
     ItemElementBinding,
     KnowledgeAnalysisSourceV3,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
+    KnowledgeAnalysisWorkerProposalV4,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphStructureManifest,
     KnowledgeNodeType,
@@ -81,12 +83,13 @@ class GraphSourcePointer:
 @dataclass(frozen=True)
 class AcceptedAnalysisProposal:
     analysis_run_id: str
-    source: KnowledgeAnalysisSourceV3
+    source: KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4
     accepted_result: KnowledgeArtifactMemberPointer
     proposal: (
         KnowledgeAnalysisWorkerProposal
         | KnowledgeAnalysisWorkerProposalV2
         | KnowledgeAnalysisWorkerProposalV3
+        | KnowledgeAnalysisWorkerProposalV4
     )
 
 
@@ -202,12 +205,45 @@ def _stable_id(prefix: str, value: dict[str, object]) -> str:
     return f"{prefix}{digest}"
 
 
-def _source_revision_id(source: KnowledgeAnalysisSourceV3) -> str:
+def _source_revision_id(
+    source: KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4,
+) -> str:
     if isinstance(source, ApprovedItemKnowledgeSourceV2):
         return source.item_revision_id
-    if isinstance(source, EducationalDocumentKnowledgeSourceV3):
+    if isinstance(
+        source, (EducationalDocumentKnowledgeSourceV3, EducationalDocumentKnowledgeSourceV4)
+    ):
         return source.document_revision_id
     return source.source_file_id
+
+
+def _validate_document_page_coverage(analyses: tuple[AcceptedAnalysisProposal, ...]) -> None:
+    """Reject page overlap within one immutable Document Revision publication source set.
+
+    Historical runs remain immutable and may overlap in storage, but one canonical snapshot may
+    select at most one accepted observation for a physical page.  Sorting each sparse adjacency
+    bucket gives O(n log n) validation without a quadratic pairwise scan.
+    """
+
+    by_revision: dict[str, list[tuple[int, int, str]]] = {}
+    for analysis in analyses:
+        source = analysis.source
+        if not isinstance(
+            source, EducationalDocumentKnowledgeSourceV3 | EducationalDocumentKnowledgeSourceV4
+        ):
+            continue
+        by_revision.setdefault(source.document_revision_id, []).append(
+            (source.first_physical_page, source.last_physical_page, analysis.analysis_run_id)
+        )
+    for ranges in by_revision.values():
+        previous: tuple[int, int, str] | None = None
+        for current in sorted(ranges):
+            if previous is not None and current[0] <= previous[1]:
+                raise KnowledgeGraphProjectionError(
+                    "KNOWLEDGE_GRAPH_DOCUMENT_PAGE_OVERLAP",
+                    "one graph snapshot cannot select the same document page more than once",
+                )
+            previous = current
 
 
 def _source_pointer(
@@ -292,6 +328,7 @@ def build_education_graph_projection(
             "KNOWLEDGE_GRAPH_SOURCE_ORDER_INVALID",
             "accepted analysis runs must be sorted and unique",
         )
+    _validate_document_page_coverage(analyses)
     if structure is not None and structure.source_analysis_run_ids != run_ids:
         raise KnowledgeGraphProjectionError(
             "KNOWLEDGE_GRAPH_STRUCTURE_SOURCE_MISMATCH",

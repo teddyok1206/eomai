@@ -13,6 +13,7 @@ from eom_workflow import (
     CodexCapabilitySnapshot,
     CodexControlCommand,
     CodexControlCommandResult,
+    CodexImageInputManifest,
     CodexInvocation,
     ExecutionPresetEvaluationReport,
     ExecutionPresetRevision,
@@ -275,12 +276,13 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 17
+    assert len(entries) == 19
     assert len({name for name, _ in entries}) == len(entries)
     assert {
         "execution-preset-revision-v2",
         "resolved-execution-plan-v3",
         "resolved-execution-plan-v4",
+        "resolved-execution-plan-v5",
     }.issubset({name for name, _ in entries})
     for name, entry in entries:
         canonical = REPOSITORY_ROOT / entry.canonical_path
@@ -482,6 +484,43 @@ def test_codex_invocation_rejects_hash_drift_at_typed_boundary() -> None:
     value["model"] = "gpt-5.6-luna"
     with pytest.raises(PydanticValidationError, match="hash does not match"):
         CodexInvocation.model_validate(value)
+
+
+def test_codex_image_manifest_requires_complete_ordered_page_set_and_exact_hash() -> None:
+    value: dict[str, object] = {
+        "schema_version": "codex-image-input-manifest/1.0",
+        "plan_id": "execplan_" + "8" * 32,
+        "images": [
+            {
+                "physical_page": page,
+                "relative_path": f"source/document/images/page-{page:06d}.png",
+                "media_type": "image/png",
+                "sha256": "sha256:" + str(page % 10) * 64,
+                "bytes": 1024,
+                "width_pixels": 1200,
+                "height_pixels": 1800,
+            }
+            for page in (5, 6)
+        ],
+        "manifest_sha256": ZERO_SHA,
+    }
+    value["manifest_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "manifest_sha256"}
+    )
+    validate_control_contract("codex-image-input-manifest", value)
+    parsed = CodexImageInputManifest.model_validate(value)
+    assert tuple(image.physical_page for image in parsed.images) == (5, 6)
+
+    missing = deepcopy(value)
+    images = missing["images"]
+    assert isinstance(images, list)
+    images[1]["physical_page"] = 7
+    images[1]["relative_path"] = "source/document/images/page-000007.png"
+    missing["manifest_sha256"] = content_sha256(
+        {key: item for key, item in missing.items() if key != "manifest_sha256"}
+    )
+    with pytest.raises(PydanticValidationError, match="contiguous"):
+        CodexImageInputManifest.model_validate(missing)
 
 
 def test_analysis_plan_is_support_only_and_hash_pinned() -> None:

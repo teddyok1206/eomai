@@ -155,6 +155,17 @@ class EducationalDocumentRegistrationRequest(FrozenModel):
         return self
 
 
+class EducationalDocumentRegistrationRequestV2(EducationalDocumentRegistrationRequest):
+    """Registration request for an analysis bundle with complete page-image coverage."""
+
+    schema_version: Literal["educational-document-registration-request/2.0"] = (
+        "educational-document-registration-request/2.0"  # type: ignore[assignment]
+    )
+    expected_analysis_schema_ref: Literal[
+        "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0"
+    ] = "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0"
+
+
 class EducationalDocumentRevisionManifest(FrozenModel):
     schema_version: Literal["educational-document-revision-manifest/1.0"] = (
         "educational-document-revision-manifest/1.0"
@@ -181,12 +192,16 @@ class EducationalDocumentRevisionManifest(FrozenModel):
             raise ValueError("first document revision cannot have a predecessor")
         if self.revision_number > 1 and self.previous_revision_id is None:
             raise ValueError("later document revision requires a predecessor")
+        expected_analysis_schema = (
+            "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0"
+            if isinstance(self, EducationalDocumentRevisionManifestV2)
+            else "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0"
+        )
         if (
             self.source.media_type != "application/pdf"
             or self.source.schema_ref != "eom://schemas/educational-document/pdf-source/1.0"
             or self.analysis_bundle_manifest.media_type != "application/json"
-            or self.analysis_bundle_manifest.schema_ref
-            != "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0"
+            or self.analysis_bundle_manifest.schema_ref != expected_analysis_schema
             or self.rights_attestation.media_type != "application/json"
             or self.rights_attestation.schema_ref
             != "eom://schemas/educational-document/rights-attestation/1.0"
@@ -194,6 +209,12 @@ class EducationalDocumentRevisionManifest(FrozenModel):
             raise ValueError("document revision Artifact member contract is invalid")
         _require_self_hash(self, "document_revision_sha256")
         return self
+
+
+class EducationalDocumentRevisionManifestV2(EducationalDocumentRevisionManifest):
+    schema_version: Literal["educational-document-revision-manifest/2.0"] = (
+        "educational-document-revision-manifest/2.0"  # type: ignore[assignment]
+    )
 
 
 class EducationalDocumentRegistrationReceipt(FrozenModel):
@@ -208,3 +229,20 @@ class EducationalDocumentRegistrationReceipt(FrozenModel):
     source: LegacyArtifactMemberPointer
     analysis_bundle_manifest: LegacyArtifactMemberPointer
     rights_attestation: LegacyArtifactMemberPointer
+
+
+class EducationalDocumentRegistrationReceiptV2(EducationalDocumentRegistrationReceipt):
+    schema_version: Literal["educational-document-registration-receipt/2.0"] = (
+        "educational-document-registration-receipt/2.0"  # type: ignore[assignment]
+    )
+
+    @model_validator(mode="after")
+    def exact_multimodal_pointer_versions(self) -> EducationalDocumentRegistrationReceiptV2:
+        if (
+            self.analysis_bundle_manifest.schema_ref
+            != "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0"
+            or self.revision_manifest.schema_ref
+            != "eom://schemas/educational-document/revision-manifest/2.0"
+        ):
+            raise ValueError("multimodal document receipt pointer schema is inconsistent")
+        return self

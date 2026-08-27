@@ -9,6 +9,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
     KnowledgeAnalysisProposalReceiptV4,
+    KnowledgeAnalysisProposalReceiptV5,
     KnowledgeAnalysisRiskPolicy,
 )
 
@@ -25,6 +26,7 @@ def evaluate_knowledge_analysis_risk(
         | KnowledgeAnalysisProposalReceiptV2
         | KnowledgeAnalysisProposalReceiptV3
         | KnowledgeAnalysisProposalReceiptV4
+        | KnowledgeAnalysisProposalReceiptV5
     ),
     policy: KnowledgeAnalysisRiskPolicy,
 ) -> KnowledgeAnalysisRiskEvaluation:

@@ -46,6 +46,32 @@ class ContentIntakeSourcePointer(WebModel):
     media_type: Literal["image/png", "image/jpeg"]
 
 
+class KnowledgeAnalysisBatchStatus(WebModel):
+    """Bounded read-only projection for the long-running analysis lane."""
+
+    batch_id: str = Field(pattern=r"^analysisbatch_[0-9a-f]{32}$")
+    state: Literal["QUEUED", "RUNNING", "BLOCKED", "SUCCEEDED", "CANCELLED"]
+    total_range_count: int = Field(ge=1, le=1000)
+    accepted_range_count: int = Field(ge=0, le=1000)
+    failed_range_count: int = Field(ge=0, le=1000)
+    failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    resource_version: int = Field(ge=1)
+    created_at: UtcDatetime
+    started_at: UtcDatetime | None
+    completed_at: UtcDatetime | None
+    updated_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def coherent_progress(self) -> KnowledgeAnalysisBatchStatus:
+        if self.accepted_range_count + self.failed_range_count > self.total_range_count:
+            raise ValueError("analysis batch terminal counts exceed total ranges")
+        if self.state == "SUCCEEDED" and (
+            self.accepted_range_count != self.total_range_count or self.failed_range_count != 0
+        ):
+            raise ValueError("succeeded analysis batch must accept every range")
+        return self
+
+
 class RequestDraftInput(WebModel):
     original_request_text: str = Field(min_length=10, max_length=2000)
 

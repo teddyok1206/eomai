@@ -23,6 +23,7 @@ ANALYSIS_CONFIG_V4 = ROOT / "config/control-plane/knowledge-analysis-v4"
 ANALYSIS_CONFIG_V5 = ROOT / "config/control-plane/knowledge-analysis-v5"
 ANALYSIS_CONFIG_V6 = ROOT / "config/control-plane/knowledge-analysis-v6"
 ANALYSIS_CONFIG_V7 = ROOT / "config/control-plane/knowledge-analysis-v7"
+ANALYSIS_CONFIG_V8 = ROOT / "config/control-plane/knowledge-analysis-v8"
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:
@@ -301,6 +302,49 @@ def test_knowledge_analysis_v7_adds_integrity_protocol_without_mutating_v6() -> 
     }
     for relative_path, expected in expected_v7_sha256.items():
         assert hashlib.sha256((ANALYSIS_CONFIG_V7 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+
+
+def test_knowledge_analysis_v8_requires_every_page_image_without_content_quotas() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V8)
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/8.0"
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    assert manifest.timeout_seconds == 7200
+    assert manifest.slot_key == "slot05"
+    assert manifest.worker_pool_key == "support"
+    assert manifest.compatible_workflow_protocols == (
+        "workflow-role/1.4.0",
+        "workflow-role/1.5.0",
+        "workflow-role/1.6.0",
+        "workflow-role/1.7.0",
+        "workflow-role/1.8.0",
+    )
+    platform = (ANALYSIS_CONFIG_V8 / manifest.platform_instruction_path).read_text(encoding="utf-8")
+    instruction = (ANALYSIS_CONFIG_V8 / manifest.role_instruction_path).read_text(encoding="utf-8")
+    for required in (
+        "visually",
+        "page_image_observations",
+        "OBSERVED",
+        "NO_RELEVANT_CONTENT",
+        "UNCLEAR",
+        "Zero content records",
+    ):
+        assert required in instruction
+    assert "never replace the mandatory page-image observation" in platform
+    assert "quota" in instruction
+    expected_v8_sha256 = {
+        "bootstrap.yaml": "86801d777714b57fadaddd3c118997febfaeb3d591bb0d502e7655016d12b11b",
+        "instructions/platform.md": (
+            "d89ba7eaffda1580178d215ad510e5401ed268473140cf3c3d53bb7195b9df91"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "a01e69bfb6714087ce8eb55b031e71838f5640a8773f23385e5f59f77ee3f345"
+        ),
+    }
+    for relative_path, expected in expected_v8_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V8 / relative_path).read_bytes()).hexdigest() == (
             expected
         )
 

@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-types/4.0",
+  "title": "EOM Knowledge Analysis Shared Types V4",
+  "$defs": {
+    "pageImageObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["physical_page", "image_sha256", "observation_state", "anchor_ids"],
+      "properties": {
+        "physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "image_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+        },
+        "observation_state": {
+          "enum": ["OBSERVED", "NO_RELEVANT_CONTENT", "UNCLEAR"]
+        },
+        "anchor_ids": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "proposalCountsV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "anchors", "nodes", "edges", "claims", "component_observations",
+        "page_image_observations", "ambiguities"
+      ],
+      "properties": {
+        "anchors": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "nodes": {"type": "integer", "minimum": 0, "maximum": 512},
+        "edges": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "claims": {"type": "integer", "minimum": 0, "maximum": 512},
+        "component_observations": {"type": "integer", "minimum": 0, "maximum": 512},
+        "page_image_observations": {"type": "integer", "minimum": 1, "maximum": 32},
+        "ambiguities": {"type": "integer", "minimum": 0, "maximum": 128}
+      }
+    },
+    "documentMaterializationMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member_kind", "physical_page", "artifact_id", "artifact_revision_id", "member_path",
+        "materialized_path", "sha256", "bytes", "schema_ref", "media_type", "logical_name",
+        "width_pixels", "height_pixels"
+      ],
+      "properties": {
+        "member_kind": {"enum": ["INDEX", "PAGE_TEXT", "PAGE_IMAGE"]},
+        "physical_page": {
+          "oneOf": [
+            {"type": "integer", "minimum": 1, "maximum": 100000},
+            {"type": "null"}
+          ]
+        },
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {
+          "type": "string",
+          "pattern": "^analysis/(index\\.md|pages/page-[0-9]{6}\\.md|images/page-[0-9]{6}\\.png)$",
+          "maxLength": 64
+        },
+        "materialized_path": {
+          "type": "string",
+          "pattern": "^source/document/(index\\.md|pages/page-[0-9]{6}\\.md|images/page-[0-9]{6}\\.png)$",
+          "maxLength": 80
+        },
+        "sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+        },
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "schema_ref": {
+          "enum": [
+            "eom://schemas/educational-document/extracted-markdown/1.0",
+            "eom://schemas/educational-document/page-image/1.0"
+          ]
+        },
+        "media_type": {
+          "enum": ["text/markdown; charset=utf-8", "image/png"]
+        },
+        "logical_name": {
+          "type": "string",
+          "pattern": "^(index|page-[0-9]{6})\\.(md|png)$",
+          "maxLength": 32
+        },
+        "width_pixels": {
+          "oneOf": [
+            {"type": "integer", "minimum": 1, "maximum": 10000},
+            {"type": "null"}
+          ]
+        },
+        "height_pixels": {
+          "oneOf": [
+            {"type": "integer", "minimum": 1, "maximum": 10000},
+            {"type": "null"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"member_kind": {"const": "INDEX"}}},
+          "then": {
+            "properties": {
+              "physical_page": {"type": "null"},
+              "member_path": {"const": "analysis/index.md"},
+              "materialized_path": {"const": "source/document/index.md"},
+              "schema_ref": {
+                "const": "eom://schemas/educational-document/extracted-markdown/1.0"
+              },
+              "media_type": {"const": "text/markdown; charset=utf-8"},
+              "logical_name": {"const": "index.md"},
+              "width_pixels": {"type": "null"},
+              "height_pixels": {"type": "null"},
+              "bytes": {"maximum": 2097152}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"member_kind": {"const": "PAGE_TEXT"}}},
+          "then": {
+            "properties": {
+              "physical_page": {"type": "integer"},
+              "member_path": {"pattern": "^analysis/pages/page-[0-9]{6}\\.md$"},
+              "materialized_path": {
+                "pattern": "^source/document/pages/page-[0-9]{6}\\.md$"
+              },
+              "schema_ref": {
+                "const": "eom://schemas/educational-document/extracted-markdown/1.0"
+              },
+              "media_type": {"const": "text/markdown; charset=utf-8"},
+              "logical_name": {"pattern": "^page-[0-9]{6}\\.md$"},
+              "width_pixels": {"type": "null"},
+              "height_pixels": {"type": "null"},
+              "bytes": {"maximum": 2097152}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"member_kind": {"const": "PAGE_IMAGE"}}},
+          "then": {
+            "properties": {
+              "physical_page": {"type": "integer"},
+              "member_path": {"pattern": "^analysis/images/page-[0-9]{6}\\.png$"},
+              "materialized_path": {
+                "pattern": "^source/document/images/page-[0-9]{6}\\.png$"
+              },
+              "schema_ref": {"const": "eom://schemas/educational-document/page-image/1.0"},
+              "media_type": {"const": "image/png"},
+              "logical_name": {"pattern": "^page-[0-9]{6}\\.png$"},
+              "width_pixels": {"type": "integer", "minimum": 1, "maximum": 10000},
+              "height_pixels": {"type": "integer", "minimum": 1, "maximum": 10000}
+            }
+          }
+        }
+      ]
+    },
+    "documentRevisionSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind", "source_class", "document_id", "document_revision_id",
+        "lifecycle_state", "artifact_member", "analysis_bundle_manifest", "rights_attestation",
+        "first_physical_page", "last_physical_page", "curriculum_unit_keys",
+        "materialization_members", "materialization_bytes", "page_image_count"
+      ],
+      "properties": {
+        "source_kind": {"const": "DOCUMENT_REVISION"},
+        "source_class": {"enum": ["TEXTBOOK", "CURRICULUM", "INTERNAL_GUIDE"]},
+        "document_id": {"type": "string", "pattern": "^edudoc_[0-9a-f]{32}$"},
+        "document_revision_id": {"type": "string", "pattern": "^edudocrev_[0-9a-f]{32}$"},
+        "lifecycle_state": {"const": "APPROVED"},
+        "artifact_member": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/3.0#/$defs/originalSourceMember"
+        },
+        "analysis_bundle_manifest": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/3.0#/$defs/documentDependencyPointer"
+        },
+        "rights_attestation": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/3.0#/$defs/documentDependencyPointer"
+        },
+        "first_physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "last_physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "curriculum_unit_keys": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^(1-\\([1-4]\\)|2-\\([1-6]\\)|3-\\([1-7]\\)|4-\\([1-7]\\)|5-\\([1-7]\\)|6-\\([1-4]\\))$"
+          }
+        },
+        "materialization_members": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 65,
+          "items": {"$ref": "#/$defs/documentMaterializationMember"}
+        },
+        "materialization_bytes": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 134217728
+        },
+        "page_image_count": {"type": "integer", "minimum": 1, "maximum": 32}
+      }
+    }
+  }
+}

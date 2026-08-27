@@ -25,7 +25,14 @@ from eom_orchestrator.worker_auth import CLI_ENVIRONMENT, CODEX_BINARY, observe_
 
 MAX_POLICY_BYTES = 64 * 1024
 REQUIRED_EXEC_HELP_FLAGS = frozenset(
-    {"--model", "--config", "--ephemeral", "--ignore-user-config", "--output-schema"}
+    {
+        "--model",
+        "--config",
+        "--ephemeral",
+        "--ignore-user-config",
+        "--output-schema",
+        "--image",
+    }
 )
 
 

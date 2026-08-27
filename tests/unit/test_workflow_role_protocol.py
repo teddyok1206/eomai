@@ -112,6 +112,7 @@ def test_all_workflow_schemas_are_valid_draft_2020_12() -> None:
         Draft202012Validator.check_schema(load_role_input_schema(role))
     Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.4.0"))
     Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.7.0"))
+    Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.8.0"))
     for schema_id in RESULT_SCHEMA_FILES:
         Draft202012Validator.check_schema(load_role_result_schema(schema_id))
 
@@ -268,6 +269,9 @@ def test_role_schema_bundle_hash_is_canonical() -> None:
     )
     assert role_schema_bundle_hash("workflow-role/1.7.0") == (
         "sha256:c3c13aef2f797fe255d7ca141ad374069b0e2c000314292ba68b99479f525058"
+    )
+    assert role_schema_bundle_hash("workflow-role/1.8.0") == (
+        "sha256:1b99d22abf59081d8843934571d33346d0d0083fcfb9a000c5683577dc8827cc"
     )
 
 
@@ -448,6 +452,19 @@ def test_integrity_knowledge_analysis_workflow_is_additive_and_immutable() -> No
     analyze = compiled.definition.steps[0]
     assert analyze.type == "agent"
     assert analyze.result_schema == "knowledge-analysis-proposal-result@4.0"
+    assert compiled.definition.limits.max_rework_cycles == 0
+    assert compiled.definition.limits.max_step_attempts == 1
+
+
+def test_multimodal_knowledge_analysis_workflow_is_additive_and_immutable() -> None:
+    compiled = compile_definition(ROOT / "config/workflows/knowledge-analysis.v5.yaml", {"support"})
+    assert compiled.sha256 == (
+        "sha256:eeeae223ae7496f5a8d1489bab7c18737bf4c428ae7edbd5fafc4a9f9c8aa489"
+    )
+    assert compiled.definition.definition_version == "5.0.0"
+    analyze = compiled.definition.steps[0]
+    assert analyze.type == "agent"
+    assert analyze.result_schema == "knowledge-analysis-proposal-result@5.0"
     assert compiled.definition.limits.max_rework_cycles == 0
     assert compiled.definition.limits.max_step_attempts == 1
 

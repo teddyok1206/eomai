@@ -16,6 +16,7 @@ from eom_catalog_contracts.knowledge import (
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
+    EvidenceBundlePublicationResultV4,
     KnowledgeSourceClass,
     PermissionKeyValue,
 )
@@ -290,9 +291,17 @@ class CatalogApplicationResponse(FrozenModel):
     result: ReviewedItemContentImportResult | None = None
     analysis: KnowledgeAnalysisApplicationResult | None = None
     analysis_batch: KnowledgeAnalysisBatchApplicationResult | None = None
-    evidence: EvidenceBundlePublicationResult | EvidenceBundlePublicationResultV3 | None = None
+    evidence: (
+        EvidenceBundlePublicationResult
+        | EvidenceBundlePublicationResultV3
+        | EvidenceBundlePublicationResultV4
+        | None
+    ) = None
     item_production_evidence: (
-        EvidenceBundlePublicationResultV2 | EvidenceBundlePublicationResultV3 | None
+        EvidenceBundlePublicationResultV2
+        | EvidenceBundlePublicationResultV3
+        | EvidenceBundlePublicationResultV4
+        | None
     ) = None
     content: AssessmentItemContent | None = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")

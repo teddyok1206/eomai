@@ -13,12 +13,17 @@ from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     ContentIntakeKnowledgeSourceV2,
     EducationalDocumentKnowledgeSourceV3,
+    EducationalDocumentKnowledgeSourceV4,
     EducationalDocumentRightsAttestation,
     KnowledgeAnalysisDocumentDependencyV3,
     KnowledgeAnalysisDocumentMaterializationMemberV3,
+    KnowledgeAnalysisDocumentMaterializationMemberV4,
     KnowledgeAnalysisOriginalSourceMemberV3,
     KnowledgeAnalysisSourceArtifactMemberV2,
     TextbookAnalysisBundleManifest,
+    TextbookAnalysisBundleManifestV2,
+    TextbookPageAnalysisV2,
+    validate_contract,
 )
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from sqlalchemy import select
@@ -53,12 +58,28 @@ ANALYSIS_MEDIA_SUFFIXES = {
     "text/markdown": ".md",
     "text/plain": ".txt",
 }
-DOCUMENT_MARKDOWN_MEDIA_TYPE = "text/markdown; charset=utf-8"
-DOCUMENT_MARKDOWN_SCHEMA_REF = "eom://schemas/educational-document/extracted-markdown/1.0"
-DOCUMENT_BUNDLE_SCHEMA_REF = "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0"
+DOCUMENT_MARKDOWN_MEDIA_TYPE: Literal["text/markdown; charset=utf-8"] = (
+    "text/markdown; charset=utf-8"
+)
+DOCUMENT_MARKDOWN_SCHEMA_REF: Literal[
+    "eom://schemas/educational-document/extracted-markdown/1.0"
+] = "eom://schemas/educational-document/extracted-markdown/1.0"
+DOCUMENT_BUNDLE_SCHEMA_REF: Literal[
+    "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0"
+] = "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0"
+DOCUMENT_BUNDLE_SCHEMA_REF_V2: Literal[
+    "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0"
+] = "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0"
 DOCUMENT_RIGHTS_SCHEMA_REF = "eom://schemas/educational-document/rights-attestation/1.0"
-DOCUMENT_PDF_SCHEMA_REF = "eom://schemas/educational-document/pdf-source/1.0"
+DOCUMENT_PDF_SCHEMA_REF: Literal["eom://schemas/educational-document/pdf-source/1.0"] = (
+    "eom://schemas/educational-document/pdf-source/1.0"
+)
+DOCUMENT_PAGE_IMAGE_MEDIA_TYPE: Literal["image/png"] = "image/png"
+DOCUMENT_PAGE_IMAGE_SCHEMA_REF: Literal["eom://schemas/educational-document/page-image/1.0"] = (
+    "eom://schemas/educational-document/page-image/1.0"
+)
 MAX_DOCUMENT_MATERIALIZATION_BYTES = 2 * 1024 * 1024
+MAX_DOCUMENT_MULTIMODAL_MATERIALIZATION_BYTES = 128 * 1024 * 1024
 MAX_DOCUMENT_SELECTION_PAGES = 32
 MAX_DOCUMENT_JSON_BYTES = 8 * 1024 * 1024
 
@@ -82,8 +103,11 @@ class EducationalDocumentSourceResolutionCache:
 
     artifact_indexes: dict[tuple[str, str], _ArtifactMemberIndex] = field(default_factory=dict)
     dependency_documents: dict[
-        tuple[str, str, str, str, str, str],
-        tuple[TextbookAnalysisBundleManifest, EducationalDocumentRightsAttestation],
+        tuple[str, str, str, str, str, str, str],
+        tuple[
+            TextbookAnalysisBundleManifest | TextbookAnalysisBundleManifestV2,
+            EducationalDocumentRightsAttestation,
+        ],
     ] = field(default_factory=dict)
 
 
@@ -236,7 +260,7 @@ def resolve_educational_document_source(
     last_physical_page: int,
     curriculum_unit_keys: tuple[str, ...],
     cache: EducationalDocumentSourceResolutionCache | None = None,
-) -> EducationalDocumentKnowledgeSourceV3:
+) -> EducationalDocumentKnowledgeSourceV3 | EducationalDocumentKnowledgeSourceV4:
     revision = session.get(EducationalDocumentRevisionRecord, document_revision_id)
     document = (
         session.get(EducationalDocumentRecord, revision.document_id)
@@ -308,14 +332,20 @@ def resolve_educational_document_source(
         media_type="application/pdf",
         schema_ref=DOCUMENT_PDF_SCHEMA_REF,
     )
-    _exact_artifact_member(
+    analysis_manifest_member = _exact_artifact_member(
         analysis_index,
         member_path="analysis/manifest.json",
         sha256=revision.analysis_manifest_sha256,
         size_bytes=None,
         media_type="application/json",
-        schema_ref=DOCUMENT_BUNDLE_SCHEMA_REF,
+        schema_ref=None,
     )
+    analysis_schema_ref = analysis_manifest_member.get("schema_ref")
+    if analysis_schema_ref not in {DOCUMENT_BUNDLE_SCHEMA_REF, DOCUMENT_BUNDLE_SCHEMA_REF_V2}:
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_POINTER_INVALID",
+            "Educational Document analysis schema is unsupported",
+        )
     _exact_artifact_member(
         rights_index,
         member_path="rights/attestation.json",
@@ -331,6 +361,7 @@ def resolve_educational_document_source(
         revision.rights_artifact_id,
         revision.rights_artifact_revision_id,
         revision.rights_attestation_sha256,
+        str(analysis_schema_ref),
     )
     dependencies = cache.dependency_documents.get(dependency_key) if cache is not None else None
     if dependencies is None:
@@ -342,7 +373,7 @@ def resolve_educational_document_source(
                     member_path="analysis/manifest.json",
                     sha256=revision.analysis_manifest_sha256,
                     media_type="application/json",
-                    schema_ref=DOCUMENT_BUNDLE_SCHEMA_REF,
+                    schema_ref=str(analysis_schema_ref),
                     max_bytes=MAX_DOCUMENT_JSON_BYTES,
                 )
             )
@@ -357,7 +388,20 @@ def resolve_educational_document_source(
                     max_bytes=MAX_DOCUMENT_JSON_BYTES,
                 )
             )
-            bundle = TextbookAnalysisBundleManifest.model_validate(bundle_value)
+            is_multimodal = analysis_schema_ref == DOCUMENT_BUNDLE_SCHEMA_REF_V2
+            validate_contract(
+                "textbook-analysis-bundle-manifest-v2"
+                if is_multimodal
+                else "textbook-analysis-bundle-manifest",
+                bundle_value,
+            )
+            bundle_model = (
+                TextbookAnalysisBundleManifestV2
+                if is_multimodal
+                else TextbookAnalysisBundleManifest
+            )
+            bundle = bundle_model.model_validate(bundle_value)
+            validate_contract("educational-document-rights-attestation", rights_value)
             rights = EducationalDocumentRightsAttestation.model_validate(rights_value)
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
             raise KnowledgeAnalysisSourceError(
@@ -404,6 +448,141 @@ def resolve_educational_document_source(
             "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
             "Educational Document analysis bundle has a page gap",
         )
+    if isinstance(bundle, TextbookAnalysisBundleManifestV2):
+        multimodal_pages_by_number: dict[int, TextbookPageAnalysisV2] = {
+            page.physical_page: page for page in bundle.pages
+        }
+        materialization_v4: list[KnowledgeAnalysisDocumentMaterializationMemberV4] = []
+        index_path = f"analysis/{bundle.index_member.member_path}"
+        index_member = _exact_artifact_member(
+            analysis_index,
+            member_path=index_path,
+            sha256=bundle.index_member.member_sha256,
+            size_bytes=None,
+            media_type=DOCUMENT_MARKDOWN_MEDIA_TYPE,
+            schema_ref=DOCUMENT_MARKDOWN_SCHEMA_REF,
+        )
+        materialization_v4.append(
+            KnowledgeAnalysisDocumentMaterializationMemberV4(
+                member_kind="INDEX",
+                physical_page=None,
+                artifact_id=revision.analysis_artifact_id,
+                artifact_revision_id=revision.analysis_artifact_revision_id,
+                member_path=index_path,
+                materialized_path="source/document/index.md",
+                sha256=bundle.index_member.member_sha256,
+                bytes=_member_bytes(index_member),
+                schema_ref=DOCUMENT_MARKDOWN_SCHEMA_REF,
+                media_type=DOCUMENT_MARKDOWN_MEDIA_TYPE,
+                logical_name="index.md",
+                width_pixels=None,
+                height_pixels=None,
+            )
+        )
+        for physical_page in expected_pages:
+            page = multimodal_pages_by_number[physical_page]
+            text_path = f"analysis/{page.member_path}"
+            text_member = _exact_artifact_member(
+                analysis_index,
+                member_path=text_path,
+                sha256=page.member_sha256,
+                size_bytes=None,
+                media_type=DOCUMENT_MARKDOWN_MEDIA_TYPE,
+                schema_ref=DOCUMENT_MARKDOWN_SCHEMA_REF,
+            )
+            materialization_v4.append(
+                KnowledgeAnalysisDocumentMaterializationMemberV4(
+                    member_kind="PAGE_TEXT",
+                    physical_page=physical_page,
+                    artifact_id=revision.analysis_artifact_id,
+                    artifact_revision_id=revision.analysis_artifact_revision_id,
+                    member_path=text_path,
+                    materialized_path=f"source/document/pages/page-{physical_page:06d}.md",
+                    sha256=page.member_sha256,
+                    bytes=_member_bytes(text_member),
+                    schema_ref=DOCUMENT_MARKDOWN_SCHEMA_REF,
+                    media_type=DOCUMENT_MARKDOWN_MEDIA_TYPE,
+                    logical_name=f"page-{physical_page:06d}.md",
+                    width_pixels=None,
+                    height_pixels=None,
+                )
+            )
+        for physical_page in expected_pages:
+            page = multimodal_pages_by_number[physical_page]
+            image_path = f"analysis/{page.image_member_path}"
+            image_member = _exact_artifact_member(
+                analysis_index,
+                member_path=image_path,
+                sha256=page.image_sha256,
+                size_bytes=page.image_bytes,
+                media_type=DOCUMENT_PAGE_IMAGE_MEDIA_TYPE,
+                schema_ref=DOCUMENT_PAGE_IMAGE_SCHEMA_REF,
+            )
+            materialization_v4.append(
+                KnowledgeAnalysisDocumentMaterializationMemberV4(
+                    member_kind="PAGE_IMAGE",
+                    physical_page=physical_page,
+                    artifact_id=revision.analysis_artifact_id,
+                    artifact_revision_id=revision.analysis_artifact_revision_id,
+                    member_path=image_path,
+                    materialized_path=f"source/document/images/page-{physical_page:06d}.png",
+                    sha256=page.image_sha256,
+                    bytes=_member_bytes(image_member),
+                    schema_ref=DOCUMENT_PAGE_IMAGE_SCHEMA_REF,
+                    media_type=DOCUMENT_PAGE_IMAGE_MEDIA_TYPE,
+                    logical_name=f"page-{physical_page:06d}.png",
+                    width_pixels=page.image_width_pixels,
+                    height_pixels=page.image_height_pixels,
+                )
+            )
+        total_bytes = sum(member.bytes for member in materialization_v4)
+        if total_bytes > MAX_DOCUMENT_MULTIMODAL_MATERIALIZATION_BYTES:
+            raise KnowledgeAnalysisSourceError(
+                "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
+                "Educational Document multimodal materialization exceeds the byte budget",
+            )
+        try:
+            return EducationalDocumentKnowledgeSourceV4(
+                source_class=source_class,
+                document_id=document.document_id,
+                document_revision_id=revision.document_revision_id,
+                artifact_member=KnowledgeAnalysisOriginalSourceMemberV3(
+                    artifact_id=revision.source_artifact_id,
+                    artifact_revision_id=revision.source_artifact_revision_id,
+                    member_path="source/original.pdf",
+                    sha256=revision.source_sha256,
+                    bytes=_member_bytes(source_pointer),
+                    schema_ref=DOCUMENT_PDF_SCHEMA_REF,
+                    logical_name="original.pdf",
+                ),
+                analysis_bundle_manifest=KnowledgeAnalysisDocumentDependencyV3(
+                    artifact_id=revision.analysis_artifact_id,
+                    artifact_revision_id=revision.analysis_artifact_revision_id,
+                    member_path="analysis/manifest.json",
+                    sha256=revision.analysis_manifest_sha256,
+                    schema_ref=DOCUMENT_BUNDLE_SCHEMA_REF_V2,
+                    logical_name="manifest.json",
+                ),
+                rights_attestation=KnowledgeAnalysisDocumentDependencyV3(
+                    artifact_id=revision.rights_artifact_id,
+                    artifact_revision_id=revision.rights_artifact_revision_id,
+                    member_path="rights/attestation.json",
+                    sha256=revision.rights_attestation_sha256,
+                    schema_ref=DOCUMENT_RIGHTS_SCHEMA_REF,
+                    logical_name="attestation.json",
+                ),
+                first_physical_page=first_physical_page,
+                last_physical_page=last_physical_page,
+                curriculum_unit_keys=curriculum_unit_keys,
+                materialization_members=tuple(materialization_v4),
+                materialization_bytes=total_bytes,
+                page_image_count=len(expected_pages),
+            )
+        except ValueError as exc:
+            raise KnowledgeAnalysisSourceError(
+                "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
+                "Educational Document multimodal source contract is invalid",
+            ) from exc
     materialization: list[KnowledgeAnalysisDocumentMaterializationMemberV3] = []
     index_path = f"analysis/{bundle.index_member.member_path}"
     index_member = _exact_artifact_member(
@@ -429,12 +608,12 @@ def resolve_educational_document_source(
         )
     )
     for physical_page in expected_pages:
-        page = pages_by_number[physical_page]
-        member_path = f"analysis/{page.member_path}"
+        text_page = pages_by_number[physical_page]
+        member_path = f"analysis/{text_page.member_path}"
         member = _exact_artifact_member(
             analysis_index,
             member_path=member_path,
-            sha256=page.member_sha256,
+            sha256=text_page.member_sha256,
             size_bytes=None,
             media_type=DOCUMENT_MARKDOWN_MEDIA_TYPE,
             schema_ref=DOCUMENT_MARKDOWN_SCHEMA_REF,
@@ -447,7 +626,7 @@ def resolve_educational_document_source(
                 artifact_revision_id=revision.analysis_artifact_revision_id,
                 member_path=member_path,
                 materialized_path=f"source/document/pages/page-{physical_page:06d}.md",
-                sha256=page.member_sha256,
+                sha256=text_page.member_sha256,
                 bytes=_member_bytes(member),
                 schema_ref="eom://schemas/educational-document/extracted-markdown/1.0",
                 logical_name=f"page-{physical_page:06d}.md",

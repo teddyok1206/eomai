@@ -1,0 +1,529 @@
+{
+  "$defs": {
+    "LegacyArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 3,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "pointer_type": {
+          "const": "ARTIFACT_MEMBER",
+          "default": "ARTIFACT_MEMBER",
+          "title": "Pointer Type",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "LegacyArtifactMemberPointer",
+      "type": "object"
+    },
+    "TextbookBundleIndexMember": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "const": "text/markdown; charset=utf-8",
+          "default": "text/markdown; charset=utf-8",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "const": "index.md",
+          "default": "index.md",
+          "title": "Member Path",
+          "type": "string"
+        },
+        "member_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Member Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "member_sha256"
+      ],
+      "title": "TextbookBundleIndexMember",
+      "type": "object"
+    },
+    "TextbookCurriculumMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence_milli": {
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Confidence Milli",
+          "type": "integer"
+        },
+        "eom_unit_key": {
+          "pattern": "^(1-\\([1-4]\\)|2-\\([1-6]\\)|3-\\([1-7]\\)|4-\\([1-7]\\)|5-\\([1-7]\\)|6-\\([1-4]\\))$",
+          "title": "Eom Unit Key",
+          "type": "string"
+        },
+        "eom_unit_label": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Eom Unit Label",
+          "type": "string"
+        },
+        "evidence_anchor_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10000,
+          "minItems": 1,
+          "title": "Evidence Anchor Ids",
+          "type": "array"
+        },
+        "first_physical_page": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "First Physical Page",
+          "type": "integer"
+        },
+        "last_physical_page": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Last Physical Page",
+          "type": "integer"
+        },
+        "mapping_id": {
+          "pattern": "^textbookmapping_[0-9a-f]{32}$",
+          "title": "Mapping Id",
+          "type": "string"
+        },
+        "mapping_kind": {
+          "enum": [
+            "PRIMARY",
+            "RELATED"
+          ],
+          "title": "Mapping Kind",
+          "type": "string"
+        },
+        "review_state": {
+          "enum": [
+            "PROPOSED",
+            "CONFIRMED"
+          ],
+          "title": "Review State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mapping_id",
+        "eom_unit_key",
+        "eom_unit_label",
+        "first_physical_page",
+        "last_physical_page",
+        "evidence_anchor_ids",
+        "mapping_kind",
+        "confidence_milli",
+        "review_state"
+      ],
+      "title": "TextbookCurriculumMapping",
+      "type": "object"
+    },
+    "TextbookDocumentIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "curriculum_volume": {
+          "enum": [
+            "I",
+            "II"
+          ],
+          "title": "Curriculum Volume",
+          "type": "string"
+        },
+        "language": {
+          "const": "ko-KR",
+          "default": "ko-KR",
+          "title": "Language",
+          "type": "string"
+        },
+        "publisher_key": {
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "title": "Publisher Key",
+          "type": "string"
+        },
+        "publisher_label": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Publisher Label",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "publisher_key",
+        "publisher_label",
+        "title",
+        "curriculum_volume"
+      ],
+      "title": "TextbookDocumentIdentity",
+      "type": "object"
+    },
+    "TextbookExtractorDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "implementation": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Implementation",
+          "type": "string"
+        },
+        "implementation_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Implementation Sha256",
+          "type": "string"
+        },
+        "options_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Options Sha256",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "implementation",
+        "version",
+        "implementation_sha256",
+        "options_sha256"
+      ],
+      "title": "TextbookExtractorDescriptor",
+      "type": "object"
+    },
+    "TextbookPageAnalysisV2": {
+      "additionalProperties": false,
+      "description": "Extracted page text plus the exact lossless visual input for that page.",
+      "properties": {
+        "anchor_id": {
+          "pattern": "^textbookanchor_[0-9a-f]{32}$",
+          "title": "Anchor Id",
+          "type": "string"
+        },
+        "character_count": {
+          "maximum": 2000000,
+          "minimum": 0,
+          "title": "Character Count",
+          "type": "integer"
+        },
+        "extraction_state": {
+          "enum": [
+            "TEXT",
+            "TEXT_WITH_WARNINGS",
+            "EMPTY"
+          ],
+          "title": "Extraction State",
+          "type": "string"
+        },
+        "image_bytes": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "title": "Image Bytes",
+          "type": "integer"
+        },
+        "image_height_pixels": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Image Height Pixels",
+          "type": "integer"
+        },
+        "image_media_type": {
+          "const": "image/png",
+          "default": "image/png",
+          "title": "Image Media Type",
+          "type": "string"
+        },
+        "image_member_path": {
+          "maxLength": 64,
+          "pattern": "^images/page-[0-9]{6}\\.png$",
+          "title": "Image Member Path",
+          "type": "string"
+        },
+        "image_render_dpi": {
+          "maximum": 400,
+          "minimum": 120,
+          "title": "Image Render Dpi",
+          "type": "integer"
+        },
+        "image_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Image Sha256",
+          "type": "string"
+        },
+        "image_width_pixels": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Image Width Pixels",
+          "type": "integer"
+        },
+        "media_type": {
+          "const": "text/markdown; charset=utf-8",
+          "default": "text/markdown; charset=utf-8",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 64,
+          "pattern": "^pages/page-[0-9]{6}\\.md$",
+          "title": "Member Path",
+          "type": "string"
+        },
+        "member_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Member Sha256",
+          "type": "string"
+        },
+        "physical_page": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Physical Page",
+          "type": "integer"
+        },
+        "printed_page": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Page"
+        },
+        "replacement_character_count": {
+          "maximum": 2000000,
+          "minimum": 0,
+          "title": "Replacement Character Count",
+          "type": "integer"
+        },
+        "text_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Text Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "physical_page",
+        "anchor_id",
+        "member_path",
+        "extraction_state",
+        "character_count",
+        "replacement_character_count",
+        "text_sha256",
+        "member_sha256",
+        "image_member_path",
+        "image_sha256",
+        "image_bytes",
+        "image_width_pixels",
+        "image_height_pixels",
+        "image_render_dpi"
+      ],
+      "title": "TextbookPageAnalysisV2",
+      "type": "object"
+    },
+    "TextbookPageScope": {
+      "additionalProperties": false,
+      "properties": {
+        "first_physical_page": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "First Physical Page",
+          "type": "integer"
+        },
+        "last_physical_page": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Last Physical Page",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "first_physical_page",
+        "last_physical_page"
+      ],
+      "title": "TextbookPageScope",
+      "type": "object"
+    },
+    "TextbookSourceObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "const": "application/pdf",
+          "default": "application/pdf",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "page_count": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Page Count",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 1125899906842624,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sha256",
+        "size_bytes",
+        "page_count"
+      ],
+      "title": "TextbookSourceObservation",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Immutable textbook bundle with complete page-image coverage.",
+  "properties": {
+    "bundle_id": {
+      "pattern": "^textbookbundle_[0-9a-f]{32}$",
+      "title": "Bundle Id",
+      "type": "string"
+    },
+    "bundle_state": {
+      "enum": [
+        "PRE_CANONICAL_REVIEW_ONLY",
+        "CANONICAL"
+      ],
+      "title": "Bundle State",
+      "type": "string"
+    },
+    "canonical_source": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LegacyArtifactMemberPointer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "curriculum_mappings": {
+      "items": {
+        "$ref": "#/$defs/TextbookCurriculumMapping"
+      },
+      "maxItems": 1000,
+      "minItems": 1,
+      "title": "Curriculum Mappings",
+      "type": "array"
+    },
+    "document": {
+      "$ref": "#/$defs/TextbookDocumentIdentity"
+    },
+    "extractor": {
+      "$ref": "#/$defs/TextbookExtractorDescriptor"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "generated_by": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+      "title": "Generated By",
+      "type": "string"
+    },
+    "index_member": {
+      "$ref": "#/$defs/TextbookBundleIndexMember"
+    },
+    "manifest_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "pages": {
+      "items": {
+        "$ref": "#/$defs/TextbookPageAnalysisV2"
+      },
+      "maxItems": 10000,
+      "minItems": 1,
+      "title": "Pages",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "textbook-analysis-bundle-manifest/2.0",
+      "default": "textbook-analysis-bundle-manifest/2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/TextbookPageScope"
+    },
+    "source": {
+      "$ref": "#/$defs/TextbookSourceObservation"
+    }
+  },
+  "required": [
+    "bundle_id",
+    "bundle_state",
+    "source",
+    "canonical_source",
+    "document",
+    "scope",
+    "extractor",
+    "index_member",
+    "pages",
+    "curriculum_mappings",
+    "generated_at",
+    "generated_by",
+    "manifest_sha256"
+  ],
+  "title": "TextbookAnalysisBundleManifestV2",
+  "type": "object"
+}

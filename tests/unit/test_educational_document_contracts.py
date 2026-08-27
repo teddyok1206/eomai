@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import os
+from base64 import b64decode
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from eom_catalog_contracts import (
     EducationalDocumentRegistrationRequest,
+    EducationalDocumentRegistrationRequestV2,
     EducationalDocumentRevisionManifest,
     EducationalDocumentRightsAttestation,
     TextbookAnalysisBundleManifest,
+    TextbookAnalysisBundleManifestV2,
     validate_contract,
 )
 from eom_catalog_service.educational_document_service import (
@@ -130,6 +133,59 @@ def _prepare(tmp_path: Path) -> EducationalDocumentRegistrationRequest:
     )
 
 
+def _prepare_multimodal(tmp_path: Path) -> EducationalDocumentRegistrationRequestV2:
+    source, bundle = _write_textbook_fixture(tmp_path)
+    bundle.chmod(0o700)
+    manifest_path = bundle / "manifest.json"
+    manifest_path.chmod(0o600)
+    value = TextbookAnalysisBundleManifest.model_validate_json(
+        manifest_path.read_bytes()
+    ).model_dump(mode="json")
+    png_payload = b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+    images_root = bundle / "images"
+    images_root.mkdir(mode=0o700)
+    image_path = images_root / "page-000001.png"
+    image_path.write_bytes(png_payload)
+    image_path.chmod(0o400)
+    images_root.chmod(0o500)
+    value["schema_version"] = "textbook-analysis-bundle-manifest/2.0"
+    pages = value["pages"]
+    assert isinstance(pages, list) and isinstance(pages[0], dict)
+    pages[0].update(
+        {
+            "image_member_path": "images/page-000001.png",
+            "image_media_type": "image/png",
+            "image_sha256": sha256_bytes(png_payload),
+            "image_bytes": len(png_payload),
+            "image_width_pixels": 1,
+            "image_height_pixels": 1,
+            "image_render_dpi": 180,
+        }
+    )
+    value["manifest_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "manifest_sha256"}
+    )
+    manifest = TextbookAnalysisBundleManifestV2.model_validate(value)
+    validate_contract("textbook-analysis-bundle-manifest-v2", manifest.model_dump(mode="json"))
+    manifest_path.write_bytes(canonical_json_bytes(manifest))
+    manifest_path.chmod(0o400)
+    bundle.chmod(0o500)
+    request = prepare_textbook_registration_request(
+        source_path=source,
+        analysis_bundle_root=bundle,
+        document_key="textbook-miraen-integrated-science-i",
+        edition_label="purchased-2026-multimodal",
+        registered_by="operator_test",
+        registration_key="educational-document:test:miraen:i:multimodal:0001",
+        confirmation_reference="operator-confirmation:2026-08-27:purchased-and-negotiated",
+        registered_at=datetime(2026, 8, 27, tzinfo=UTC),
+    )
+    assert isinstance(request, EducationalDocumentRegistrationRequestV2)
+    return request
+
+
 def test_registration_request_is_schema_and_type_valid_and_source_bound(tmp_path: Path) -> None:
     request = _prepare(tmp_path)
     validate_contract(
@@ -143,6 +199,20 @@ def test_registration_request_is_schema_and_type_valid_and_source_bound(tmp_path
     assert request.request_sha256 == content_sha256(
         request.model_dump(mode="json", exclude={"request_sha256"})
     )
+
+
+def test_multimodal_registration_request_pins_complete_page_images(tmp_path: Path) -> None:
+    request = _prepare_multimodal(tmp_path)
+    validate_contract(
+        "educational-document-registration-request-v2", request.model_dump(mode="json")
+    )
+    assert request.expected_analysis_schema_ref.endswith("textbook-analysis-bundle-manifest/2.0")
+
+    state = tmp_path / "multimodal-state"
+    state.mkdir(mode=0o700)
+    output = state / "registration-v2.json"
+    write_educational_document_registration_request(output, request)
+    assert load_educational_document_registration_request(output) == request
 
 
 def test_protected_request_round_trip_never_persists_source_path(tmp_path: Path) -> None:

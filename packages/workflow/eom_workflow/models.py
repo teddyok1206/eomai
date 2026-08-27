@@ -17,9 +17,11 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
+    KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
+    KnowledgeAnalysisWorkerProposalV4,
     ParagraphBlock,
     SingleChoiceInteraction,
     StatementSetBlock,
@@ -136,6 +138,7 @@ class KnowledgeAnalysisWorkerRequest(FrozenModel):
         | KnowledgeAnalysisRequestV3
         | KnowledgeAnalysisRequestV4
         | KnowledgeAnalysisRequestV5
+        | KnowledgeAnalysisRequestV6
     )
 
 
@@ -209,6 +212,7 @@ class WorkflowRequest(FrozenModel):
         | KnowledgeAnalysisRequestV3
         | KnowledgeAnalysisRequestV4
         | KnowledgeAnalysisRequestV5
+        | KnowledgeAnalysisRequestV6
         | None
     ) = None
 
@@ -318,6 +322,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.5.0",
         "workflow-role/1.6.0",
         "workflow-role/1.7.0",
+        "workflow-role/1.8.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -397,6 +402,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.5.0",
         "workflow-role/1.6.0",
         "workflow-role/1.7.0",
+        "workflow-role/1.8.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -684,6 +690,16 @@ class KnowledgeAnalysisProposalRoleResultV4(RoleResultBase):
     output: KnowledgeAnalysisProposalOutputV3
 
 
+class KnowledgeAnalysisProposalOutputV4(FrozenModel):
+    proposal: KnowledgeAnalysisWorkerProposalV4
+
+
+class KnowledgeAnalysisProposalRoleResultV5(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.8.0"] = "workflow-role/1.8.0"
+    role: Literal["support"] = "support"
+    output: KnowledgeAnalysisProposalOutputV4
+
+
 RoleResult = (
     AuthoringRoleResult
     | ImageRoleResult
@@ -705,4 +721,5 @@ RoleResult = (
     | KnowledgeAnalysisProposalRoleResultV2
     | KnowledgeAnalysisProposalRoleResultV3
     | KnowledgeAnalysisProposalRoleResultV4
+    | KnowledgeAnalysisProposalRoleResultV5
 )

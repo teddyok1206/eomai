@@ -10,13 +10,16 @@ from eom_catalog_contracts import (
     CreateKnowledgeAnalysisCommand,
     EducationalDocumentKnowledgeAnalysisSelection,
     EducationalDocumentKnowledgeSourceV3,
+    EducationalDocumentKnowledgeSourceV4,
     KnowledgeAnalysisBatchApplicationResult,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
+    KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
     KnowledgeAnalysisResultV5,
+    KnowledgeAnalysisResultV6,
     ReconcileKnowledgeAnalysisCommand,
     ReuseAcceptedKnowledgeAnalysisRange,
     ReviewKnowledgeAnalysisCommand,
@@ -569,7 +572,7 @@ class KnowledgeAnalysisBatchService:
         self,
         session: Session,
         row: KnowledgeAnalysisBatchRangeRecord,
-    ) -> EducationalDocumentKnowledgeSourceV3:
+    ) -> EducationalDocumentKnowledgeSourceV3 | EducationalDocumentKnowledgeSourceV4:
         source = resolve_educational_document_source(
             session,
             self.artifacts,
@@ -588,7 +591,7 @@ class KnowledgeAnalysisBatchService:
 
     @staticmethod
     def _source_matches_row(
-        source: EducationalDocumentKnowledgeSourceV3,
+        source: EducationalDocumentKnowledgeSourceV3 | EducationalDocumentKnowledgeSourceV4,
         row: KnowledgeAnalysisBatchRangeRecord,
     ) -> bool:
         return (
@@ -620,7 +623,7 @@ class KnowledgeAnalysisBatchService:
         *,
         batch: KnowledgeAnalysisBatchRecord,
         range_id: str,
-        source: EducationalDocumentKnowledgeSourceV3,
+        source: EducationalDocumentKnowledgeSourceV3 | EducationalDocumentKnowledgeSourceV4,
         predecessor_analysis_run_id: str | None,
     ) -> CreateKnowledgeAnalysisCommand:
         return CreateKnowledgeAnalysisCommand(
@@ -647,7 +650,7 @@ class KnowledgeAnalysisBatchService:
         session: Session,
         *,
         run_id: str,
-        source: EducationalDocumentKnowledgeSourceV3,
+        source: EducationalDocumentKnowledgeSourceV3 | EducationalDocumentKnowledgeSourceV4,
         preset_id: str,
         preset_revision_id: str,
         risk_policy_revision_id: str,
@@ -662,9 +665,14 @@ class KnowledgeAnalysisBatchService:
         try:
             request_version = run.canonical_request.get("schema_version")
             request: (
-                KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4 | KnowledgeAnalysisRequestV5
+                KnowledgeAnalysisRequestV3
+                | KnowledgeAnalysisRequestV4
+                | KnowledgeAnalysisRequestV5
+                | KnowledgeAnalysisRequestV6
             )
-            if request_version == "knowledge-analysis-request/5.0":
+            if request_version == "knowledge-analysis-request/6.0":
+                request = KnowledgeAnalysisRequestV6.model_validate(run.canonical_request)
+            elif request_version == "knowledge-analysis-request/5.0":
                 request = KnowledgeAnalysisRequestV5.model_validate(run.canonical_request)
             elif request_version == "knowledge-analysis-request/4.0":
                 request = KnowledgeAnalysisRequestV4.model_validate(run.canonical_request)
@@ -679,9 +687,16 @@ class KnowledgeAnalysisBatchService:
         revision = session.get(ArtifactRevisionRecord, run.accepted_result_artifact_revision_id)
         try:
             accepted_result: (
-                KnowledgeAnalysisResultV3 | KnowledgeAnalysisResultV4 | KnowledgeAnalysisResultV5
+                KnowledgeAnalysisResultV3
+                | KnowledgeAnalysisResultV4
+                | KnowledgeAnalysisResultV5
+                | KnowledgeAnalysisResultV6
             )
-            if isinstance(request, KnowledgeAnalysisRequestV5):
+            if isinstance(request, KnowledgeAnalysisRequestV6):
+                accepted_result = KnowledgeAnalysisResultV6.model_validate(
+                    revision.result if revision is not None else None
+                )
+            elif isinstance(request, KnowledgeAnalysisRequestV5):
                 accepted_result = KnowledgeAnalysisResultV5.model_validate(
                     revision.result if revision is not None else None
                 )

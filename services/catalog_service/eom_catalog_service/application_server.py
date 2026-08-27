@@ -285,10 +285,10 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             (
                 "catalog-application-response-v7"
                 if response.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
-                else "catalog-application-response-v6"
+                else "catalog-application-response-v8"
                 if response.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
                 else (
-                    "catalog-application-response-v5"
+                    "catalog-application-response-v9"
                     if response.operation == "CREATE_EVIDENCE_BUNDLE"
                     else "catalog-application-response-v3"
                 )

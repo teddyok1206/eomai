@@ -313,6 +313,59 @@ async def test_gateway_projects_bounded_recent_hwpx_builds_for_admin_ui() -> Non
 
 
 @pytest.mark.anyio
+async def test_gateway_projects_bounded_knowledge_analysis_batch_progress() -> None:
+    batch_id = "analysisbatch_" + "a" * 32
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/knowledge-analysis-batches"
+        assert request.url.params["limit"] == "20"
+        return httpx.Response(
+            200,
+            json=_list(
+                [
+                    {
+                        "batch_id": batch_id,
+                        "request_sha256": "sha256:" + "1" * 64,
+                        "preset_id": "execpreset_" + "2" * 32,
+                        "preset_revision_id": "execpresetrev_" + "3" * 32,
+                        "preset_sha256": "sha256:" + "4" * 64,
+                        "risk_policy_revision_id": "analysisriskrev_" + "5" * 32,
+                        "risk_policy_sha256": "sha256:" + "6" * 64,
+                        "general_knowledge_mode": "AUXILIARY_UNATTRIBUTED",
+                        "review_policy": "PREAUTHORIZED_APPROVE_VALIDATED",
+                        "authorized_by_operator_id": "operator_" + "7" * 32,
+                        "authorized_at": NOW.isoformat(),
+                        "state": "RUNNING",
+                        "total_range_count": 495,
+                        "accepted_range_count": 17,
+                        "failed_range_count": 0,
+                        "failure_code": None,
+                        "resource_version": 6,
+                        "created_at": NOW.isoformat(),
+                        "started_at": NOW.isoformat(),
+                        "completed_at": None,
+                        "updated_at": (NOW + timedelta(minutes=2)).isoformat(),
+                    }
+                ]
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    values = await gateway.knowledge_analysis_batches(_session())
+    assert len(values) == 1
+    assert values[0].batch_id == batch_id
+    assert values[0].accepted_range_count == 17
+    assert values[0].total_range_count == 495
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_item_preview_fails_on_revision_pointer_mismatch() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.startswith("/api/v1/items/"):

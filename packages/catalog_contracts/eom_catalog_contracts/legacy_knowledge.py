@@ -897,6 +897,24 @@ class TextbookPageAnalysis(FrozenModel):
         return self
 
 
+class TextbookPageAnalysisV2(TextbookPageAnalysis):
+    """Extracted page text plus the exact lossless visual input for that page."""
+
+    image_member_path: str = Field(pattern=r"^images/page-[0-9]{6}\.png$", max_length=64)
+    image_media_type: Literal["image/png"] = "image/png"
+    image_sha256: Sha256
+    image_bytes: int = Field(ge=1, le=16 * 1024 * 1024)
+    image_width_pixels: int = Field(ge=1, le=10000)
+    image_height_pixels: int = Field(ge=1, le=10000)
+    image_render_dpi: int = Field(ge=120, le=400)
+
+    @model_validator(mode="after")
+    def exact_image_member(self) -> TextbookPageAnalysisV2:
+        if self.image_member_path != f"images/page-{self.physical_page:06d}.png":
+            raise ValueError("textbook page image path must match its physical page")
+        return self
+
+
 class TextbookCurriculumMapping(FrozenModel):
     mapping_id: str = Field(pattern=r"^textbookmapping_[0-9a-f]{32}$")
     eom_unit_key: str = Field(
@@ -1011,4 +1029,25 @@ class TextbookAnalysisBundleManifest(FrozenModel):
                 raise ValueError("textbook curriculum mappings must be unique")
             mapping_keys.add(mapping_key)
         _require_self_hash(self, "manifest_sha256")
+        return self
+
+
+class TextbookAnalysisBundleManifestV2(TextbookAnalysisBundleManifest):
+    """Immutable textbook bundle with complete page-image coverage."""
+
+    schema_version: Literal["textbook-analysis-bundle-manifest/2.0"] = (
+        "textbook-analysis-bundle-manifest/2.0"  # type: ignore[assignment]
+    )
+    pages: tuple[TextbookPageAnalysisV2, ...] = Field(min_length=1, max_length=10000)
+
+    @model_validator(mode="after")
+    def complete_unique_visual_coverage(self) -> TextbookAnalysisBundleManifestV2:
+        expected_pages = tuple(
+            range(self.scope.first_physical_page, self.scope.last_physical_page + 1)
+        )
+        if tuple(page.physical_page for page in self.pages) != expected_pages:
+            raise ValueError("textbook visual pages must cover the ordered scope exactly")
+        image_paths = tuple(page.image_member_path for page in self.pages)
+        if len(image_paths) != len(set(image_paths)):
+            raise ValueError("textbook page image identities must be unique")
         return self

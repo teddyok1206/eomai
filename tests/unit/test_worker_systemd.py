@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.worker_exec import (
+    _load_image_inputs,
     _load_invocation,
     codex_command,
     expected_workspace,
@@ -318,6 +319,29 @@ def test_launcher_rejects_timeout_outside_fixed_unit_contract() -> None:
     assert captured.value.code is ErrorCode.WORKER_UNAVAILABLE
 
 
+def test_analysis_slot_requires_the_reviewed_two_hour_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    slot = _slot(5)
+    unit = worker_unit_name(slot, JOB_ID)
+    observed: list[int] = []
+
+    def start(_unit_name: str, *, timeout_seconds: int) -> FixedUnitRun:
+        observed.append(timeout_seconds)
+        return FixedUnitRun(unit, 0, b"", b"", _status(), 3)
+
+    monkeypatch.setattr("eom_orchestrator.worker_systemd._start_unit", start)
+
+    run = launch_worker_unit(slot, JOB_ID, timeout_seconds=7200)
+
+    assert run.exit_code == 0
+    assert observed == [7230]
+    for invalid in (600, 7199):
+        with pytest.raises(PlatformError) as captured:
+            launch_worker_unit(slot, JOB_ID, timeout_seconds=invalid)
+        assert captured.value.code is ErrorCode.WORKER_UNAVAILABLE
+
+
 def test_collected_probe_status_is_not_a_lingering_process() -> None:
     collected = FixedUnitStatus(
         load_state="not-found",
@@ -503,6 +527,116 @@ def test_worker_exec_rejects_invocation_hash_drift(tmp_path: Path) -> None:
         _load_invocation(path, workspace=tmp_path, group_id=os.getgid())
 
 
+def _png_header(width: int, height: int) -> bytes:
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + (13).to_bytes(4, "big")
+        + b"IHDR"
+        + width.to_bytes(4, "big")
+        + height.to_bytes(4, "big")
+        + b"\x08\x02\x00\x00\x00"
+    )
+
+
+def test_worker_exec_attaches_every_hash_verified_page_image(tmp_path: Path) -> None:
+    image_directory = tmp_path / "source" / "document" / "images"
+    image_directory.mkdir(parents=True)
+    images: list[dict[str, object]] = []
+    for page in (5, 6):
+        payload = _png_header(800, 1200) + bytes([page])
+        relative = f"source/document/images/page-{page:06d}.png"
+        path = tmp_path / relative
+        path.write_bytes(payload)
+        path.chmod(0o640)
+        images.append(
+            {
+                "physical_page": page,
+                "relative_path": relative,
+                "media_type": "image/png",
+                "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+                "bytes": len(payload),
+                "width_pixels": 800,
+                "height_pixels": 1200,
+            }
+        )
+    document: dict[str, object] = {
+        "schema_version": "codex-image-input-manifest/1.0",
+        "plan_id": "execplan_" + "1" * 32,
+        "images": images,
+        "manifest_sha256": "sha256:" + "0" * 64,
+    }
+    canonical = json.dumps(
+        {key: value for key, value in document.items() if key != "manifest_sha256"},
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    document["manifest_sha256"] = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    manifest_path = tmp_path / "codex-image-inputs.json"
+    manifest_path.write_text(json.dumps(document), encoding="utf-8")
+    manifest_path.chmod(0o640)
+
+    paths = _load_image_inputs(
+        manifest_path,
+        workspace=tmp_path,
+        group_id=os.getgid(),
+        expected_plan_id="execplan_" + "1" * 32,
+    )
+    command = codex_command(tmp_path, image_paths=paths)
+
+    image_index = command.index("--image")
+    assert command[image_index + 1 : image_index + 3] == tuple(str(path) for path in paths)
+    assert command[image_index + 3] == "--sandbox"
+
+
+def test_worker_exec_rejects_missing_or_mutated_page_image(tmp_path: Path) -> None:
+    image_directory = tmp_path / "source" / "document" / "images"
+    image_directory.mkdir(parents=True)
+    relative = "source/document/images/page-000005.png"
+    image = tmp_path / relative
+    payload = _png_header(800, 1200)
+    image.write_bytes(payload)
+    image.chmod(0o640)
+    document: dict[str, object] = {
+        "schema_version": "codex-image-input-manifest/1.0",
+        "plan_id": "execplan_" + "1" * 32,
+        "images": [
+            {
+                "physical_page": 5,
+                "relative_path": relative,
+                "media_type": "image/png",
+                "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+                "bytes": len(payload),
+                "width_pixels": 800,
+                "height_pixels": 1200,
+            }
+        ],
+        "manifest_sha256": "sha256:" + "0" * 64,
+    }
+    canonical = json.dumps(
+        {key: value for key, value in document.items() if key != "manifest_sha256"},
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    document["manifest_sha256"] = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    manifest_path = tmp_path / "codex-image-inputs.json"
+    manifest_path.write_text(json.dumps(document), encoding="utf-8")
+    manifest_path.chmod(0o640)
+    image.write_bytes(payload + b"mutated")
+    image.chmod(0o640)
+
+    with pytest.raises(ValueError, match="file contract"):
+        _load_image_inputs(
+            manifest_path,
+            workspace=tmp_path,
+            group_id=os.getgid(),
+            expected_plan_id="execplan_" + "1" * 32,
+        )
+
+
 def test_canonical_unit_and_helper_hashes_match_runtime_contract() -> None:
     for slot_id in sorted(WORKER_TEMPLATE_SHA256):
         worker = ROOT / "infra/systemd" / f"eom-worker-{slot_id}@.service"
@@ -515,6 +649,16 @@ def test_canonical_unit_and_helper_hashes_match_runtime_contract() -> None:
     assert hashlib.sha256(executable.read_bytes()).hexdigest() == WORKER_EXECUTABLE_SHA256
     auth_executable = ROOT / "services/orchestrator/eom_orchestrator/worker_auth_exec.py"
     assert hashlib.sha256(auth_executable.read_bytes()).hexdigest() == WORKER_AUTH_EXECUTABLE_SHA256
+
+
+def test_only_analysis_slot_has_the_two_hour_systemd_ceiling() -> None:
+    for index in range(1, 5):
+        unit = ROOT / "infra/systemd" / f"eom-worker-{index:02d}@.service"
+        assert "TimeoutStartSec=600\n" in unit.read_text(encoding="utf-8")
+    analysis_unit = ROOT / "infra/systemd/eom-worker-05@.service"
+    analysis_text = analysis_unit.read_text(encoding="utf-8")
+    assert "TimeoutStartSec=7200\n" in analysis_text
+    assert "TimeoutStartSec=600\n" not in analysis_text
 
 
 def test_collect_mode_is_only_in_probe_unit_sections() -> None:

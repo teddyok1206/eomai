@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/workflow/roles/knowledge-analysis-proposal-result-v5.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "job_id",
+    "workflow_id",
+    "step_run_id",
+    "status",
+    "artifact",
+    "completed_at",
+    "role",
+    "output"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "protocol_version": {
+      "type": "string",
+      "const": "workflow-role/1.8.0"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[0-9a-f]{32}$"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "step_run_id": {
+      "type": "string",
+      "pattern": "^steprun_[0-9a-f]{32}$"
+    },
+    "status": {
+      "type": "string",
+      "const": "ok"
+    },
+    "artifact": {
+      "$ref": "#/$defs/artifact"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "role": {
+      "type": "string",
+      "const": "support"
+    },
+    "output": {
+      "$ref": "#/$defs/output"
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "file_name",
+        "media_type"
+      ],
+      "properties": {
+        "logical_artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "file_name": {
+          "type": "string",
+          "const": "result.json"
+        },
+        "media_type": {
+          "type": "string",
+          "const": "application/json"
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposal"
+      ],
+      "properties": {
+        "proposal": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-worker-proposal/4.0"
+        }
+      }
+    }
+  }
+}

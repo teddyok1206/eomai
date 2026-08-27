@@ -247,7 +247,8 @@ class KnowledgeAnalysisBatchRangeView(ApiModel):
     analysis_manifest_sha256: Sha256
     analysis_media_type: Literal["application/json"]
     analysis_schema_ref: Literal[
-        "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0"
+        "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0",
+        "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0",
     ]
     rights_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
     rights_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")

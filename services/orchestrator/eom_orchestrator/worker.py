@@ -225,6 +225,7 @@ class CodexWorkerAdapter:
         prepared: PreparedWorkerWorkspace,
         slot: WorkerSlot,
         staging: Path,
+        timeout_seconds: int | None = None,
     ) -> WorkerRun:
         """Start the fixed unit only after all application-side materialization succeeds."""
 
@@ -235,6 +236,7 @@ class CodexWorkerAdapter:
             prompt_path=prepared.prompt_path,
             slot=slot,
             staging=staging,
+            timeout_seconds=timeout_seconds,
         )
 
     def run_resolved_structured(
@@ -247,6 +249,7 @@ class CodexWorkerAdapter:
         slot: WorkerSlot,
         staging: Path,
         materialize: Callable[[Path], MaterializedExecution],
+        timeout_seconds: int,
     ) -> ResolvedWorkerRun:
         """Materialize a resolved plan before starting the fixed worker unit."""
 
@@ -258,7 +261,12 @@ class CodexWorkerAdapter:
             slot=slot,
         )
         materialization = materialize(prepared.workspace)
-        run = self.run_prepared(prepared=prepared, slot=slot, staging=staging)
+        run = self.run_prepared(
+            prepared=prepared,
+            slot=slot,
+            staging=staging,
+            timeout_seconds=timeout_seconds,
+        )
         return ResolvedWorkerRun(run=run, materialization=materialization)
 
     def _execute(
@@ -270,6 +278,7 @@ class CodexWorkerAdapter:
         prompt_path: Path,
         slot: WorkerSlot,
         staging: Path,
+        timeout_seconds: int | None = None,
     ) -> WorkerRun:
         del schema_path, prompt_path
         unit_name = worker_unit_name(slot, job_id)
@@ -279,7 +288,11 @@ class CodexWorkerAdapter:
             completed = launch_worker_unit(
                 slot,
                 job_id,
-                timeout_seconds=self.settings.worker_timeout_seconds,
+                timeout_seconds=(
+                    self.settings.worker_timeout_seconds
+                    if timeout_seconds is None
+                    else timeout_seconds
+                ),
             )
         except OSError as exc:
             raise PlatformError(ErrorCode.WORKER_UNAVAILABLE, "failed to start worker") from exc

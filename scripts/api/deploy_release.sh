@@ -395,6 +395,8 @@ catalog_resources = {
     "catalog-application/catalog-application-request-v6.schema.json": "schemas/catalog-application/catalog-application-request-v6.schema.json",
     "catalog-application/catalog-application-request-v7.schema.json": "schemas/catalog-application/catalog-application-request-v7.schema.json",
     "catalog-application/catalog-application-response-v7.schema.json": "schemas/catalog-application/catalog-application-response-v7.schema.json",
+    "catalog-application/catalog-application-response-v8.schema.json": "schemas/catalog-application/catalog-application-response-v8.schema.json",
+    "catalog-application/catalog-application-response-v9.schema.json": "schemas/catalog-application/catalog-application-response-v9.schema.json",
     "knowledge/knowledge-analysis-batch-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
     "knowledge/knowledge-analysis-batch-request-v2.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v2.schema.json",
     "content-intake/intake-manifest-v1.schema.json": "schemas/content-intake/intake-manifest-v1.schema.json",
@@ -406,8 +408,11 @@ catalog_resources = {
     "content-pack/profile-v1.schema.json": "schemas/content-pack/profile-v1.schema.json",
     "content-pack/prompt-envelope-v1.schema.json": "schemas/content-pack/prompt-envelope-v1.schema.json",
     "educational-document/educational-document-registration-receipt-v1.schema.json": "schemas/educational-document/educational-document-registration-receipt-v1.schema.json",
+    "educational-document/educational-document-registration-receipt-v2.schema.json": "schemas/educational-document/educational-document-registration-receipt-v2.schema.json",
     "educational-document/educational-document-registration-request-v1.schema.json": "schemas/educational-document/educational-document-registration-request-v1.schema.json",
+    "educational-document/educational-document-registration-request-v2.schema.json": "schemas/educational-document/educational-document-registration-request-v2.schema.json",
     "educational-document/educational-document-revision-manifest-v1.schema.json": "schemas/educational-document/educational-document-revision-manifest-v1.schema.json",
+    "educational-document/educational-document-revision-manifest-v2.schema.json": "schemas/educational-document/educational-document-revision-manifest-v2.schema.json",
     "educational-document/educational-document-rights-attestation-v1.schema.json": "schemas/educational-document/educational-document-rights-attestation-v1.schema.json",
     "educational-document/educational-document-types-v1.schema.json": "schemas/educational-document/educational-document-types-v1.schema.json",
     "item-registry/assessment-item-content-v1.schema.json": "schemas/item-registry/assessment-item-content-v1.schema.json",
@@ -423,17 +428,22 @@ catalog_resources = {
     "knowledge/knowledge-analysis-review-decision-v1.schema.json": "schemas/knowledge/knowledge-analysis-review-decision-v1.schema.json",
     "knowledge/knowledge-analysis-result-v2.schema.json": "schemas/knowledge/knowledge-analysis-result-v2.schema.json",
     "knowledge/knowledge-analysis-types-v3.schema.json": "schemas/knowledge/knowledge-analysis-types-v3.schema.json",
+    "knowledge/knowledge-analysis-types-v4.schema.json": "schemas/knowledge/knowledge-analysis-types-v4.schema.json",
     "knowledge/knowledge-analysis-request-v3.schema.json": "schemas/knowledge/knowledge-analysis-request-v3.schema.json",
     "knowledge/knowledge-analysis-request-v4.schema.json": "schemas/knowledge/knowledge-analysis-request-v4.schema.json",
     "knowledge/knowledge-analysis-request-v5.schema.json": "schemas/knowledge/knowledge-analysis-request-v5.schema.json",
+    "knowledge/knowledge-analysis-request-v6.schema.json": "schemas/knowledge/knowledge-analysis-request-v6.schema.json",
     "knowledge/knowledge-analysis-proposal-receipt-v2.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v2.schema.json",
     "knowledge/knowledge-analysis-proposal-receipt-v3.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v3.schema.json",
     "knowledge/knowledge-analysis-proposal-receipt-v4.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v4.schema.json",
+    "knowledge/knowledge-analysis-proposal-receipt-v5.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v5.schema.json",
     "knowledge/knowledge-analysis-result-v3.schema.json": "schemas/knowledge/knowledge-analysis-result-v3.schema.json",
     "knowledge/knowledge-analysis-result-v4.schema.json": "schemas/knowledge/knowledge-analysis-result-v4.schema.json",
     "knowledge/knowledge-analysis-result-v5.schema.json": "schemas/knowledge/knowledge-analysis-result-v5.schema.json",
+    "knowledge/knowledge-analysis-result-v6.schema.json": "schemas/knowledge/knowledge-analysis-result-v6.schema.json",
     "knowledge/knowledge-analysis-worker-proposal-v2.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v2.schema.json",
     "knowledge/knowledge-analysis-worker-proposal-v3.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v3.schema.json",
+    "knowledge/knowledge-analysis-worker-proposal-v4.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v4.schema.json",
     "knowledge/knowledge-graph-projection-v1.schema.json": "schemas/knowledge/knowledge-graph-projection-v1.schema.json",
     "knowledge/knowledge-graph-projection-v2.schema.json": "schemas/knowledge/knowledge-graph-projection-v2.schema.json",
     "knowledge/knowledge-graph-publication-result-v1.schema.json": "schemas/knowledge/knowledge-graph-publication-result-v1.schema.json",
@@ -441,6 +451,7 @@ catalog_resources = {
     "knowledge/knowledge-graph-snapshot-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
     "knowledge/knowledge-graph-snapshot-manifest-v2.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
     "knowledge/knowledge-graph-snapshot-manifest-v3.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v3.schema.json",
+    "knowledge/knowledge-graph-snapshot-manifest-v4.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v4.schema.json",
     "knowledge/knowledge-graph-structure-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v1.schema.json",
     "knowledge/education-retrieval-access-policy-v1.schema.json": "schemas/knowledge/education-retrieval-access-policy-v1.schema.json",
     "knowledge/education-retrieval-request-v1.schema.json": "schemas/knowledge/education-retrieval-request-v1.schema.json",
@@ -448,10 +459,12 @@ catalog_resources = {
     "knowledge/evidence-bundle-manifest-v1.schema.json": "schemas/knowledge/evidence-bundle-manifest-v1.schema.json",
     "knowledge/evidence-bundle-manifest-v2.schema.json": "schemas/knowledge/evidence-bundle-manifest-v2.schema.json",
     "knowledge/evidence-bundle-manifest-v3.schema.json": "schemas/knowledge/evidence-bundle-manifest-v3.schema.json",
+    "knowledge/evidence-bundle-manifest-v4.schema.json": "schemas/knowledge/evidence-bundle-manifest-v4.schema.json",
     "knowledge/evidence-bundle-publication-result-v1.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v1.schema.json",
     "knowledge/educational-retrieval-requirement-v1.schema.json": "schemas/knowledge/educational-retrieval-requirement-v1.schema.json",
     "knowledge/evidence-bundle-publication-result-v2.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v2.schema.json",
     "knowledge/evidence-bundle-publication-result-v3.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v3.schema.json",
+    "knowledge/evidence-bundle-publication-result-v4.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v4.schema.json",
     "legacy-knowledge/legacy-source-inventory-v1.schema.json": "schemas/legacy-knowledge/legacy-source-inventory-v1.schema.json",
     "legacy-knowledge/legacy-source-inventory-policy-v1.schema.json": "schemas/legacy-knowledge/legacy-source-inventory-policy-v1.schema.json",
     "legacy-knowledge/legacy-source-inventory-v2.schema.json": "schemas/legacy-knowledge/legacy-source-inventory-v2.schema.json",
@@ -462,6 +475,7 @@ catalog_resources = {
     "legacy-knowledge/legacy-source-selection-v2.schema.json": "schemas/legacy-knowledge/legacy-source-selection-v2.schema.json",
     "legacy-knowledge/pdf-page-range-materialization-manifest-v1.schema.json": "schemas/legacy-knowledge/pdf-page-range-materialization-manifest-v1.schema.json",
     "legacy-knowledge/textbook-analysis-bundle-manifest-v1.schema.json": "schemas/legacy-knowledge/textbook-analysis-bundle-manifest-v1.schema.json",
+    "legacy-knowledge/textbook-analysis-bundle-manifest-v2.schema.json": "schemas/legacy-knowledge/textbook-analysis-bundle-manifest-v2.schema.json",
     "legacy-usage/assessment-assembly-manifest-v1.schema.json": "schemas/legacy-usage/assessment-assembly-manifest-v1.schema.json",
     "legacy-usage/legacy-usage-import-manifest-v1.schema.json": "schemas/legacy-usage/legacy-usage-import-manifest-v1.schema.json",
     "legacy-usage/legacy-usage-mapping-contract-v1.schema.json": "schemas/legacy-usage/legacy-usage-mapping-contract-v1.schema.json",
@@ -505,7 +519,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
         )
         definitions.append(definition)
     analysis_definitions = []
-    for version in ("1", "2", "3", "4"):
+    for version in ("1", "2", "3", "4", "5"):
         definition = root / f"knowledge-analysis.v{version}.yaml"
         definition.write_bytes(
             (
@@ -560,7 +574,7 @@ import sys
 from pathlib import Path
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, analysis_v1, analysis_v2, analysis_v3, analysis_v4, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -632,6 +646,7 @@ load_role_input_schema("support", "workflow-role/1.4.0")
 load_role_input_schema("support", "workflow-role/1.5.0")
 load_role_input_schema("support", "workflow-role/1.6.0")
 load_role_input_schema("support", "workflow-role/1.7.0")
+load_role_input_schema("support", "workflow-role/1.8.0")
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
     load_codex_result_schema(schema_id)
@@ -645,9 +660,9 @@ if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0"}:
     raise SystemExit("generic workflow definition versions mismatch")
 analysis_versions = {
     compile_definition(Path(path), {"support"}).definition.definition_version
-    for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4)
+    for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5)
 }
-if analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0"}:
+if analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0"}:
     raise SystemExit("knowledge analysis workflow definition mismatch")
 for name, _ in catalog_schema_inventory():
     load_schema(name)

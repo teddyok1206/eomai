@@ -211,6 +211,32 @@ def _analysis(seed: str, *, confidence: int = 900) -> AcceptedAnalysisProposal:
     )
 
 
+def _document_analysis(run_seed: str, source_seed: str) -> AcceptedAnalysisProposal:
+    proposal = _proposal(run_seed)
+    anchor = proposal.anchors[0].model_copy(
+        update={
+            "artifact_revision_id": "rev_" + source_seed * 32,
+            "member_path": "source/original.pdf",
+            "anchor_kind": "PAGE",
+            "locator": "physical_page=1",
+        }
+    )
+    return AcceptedAnalysisProposal(
+        analysis_run_id="analysisrun_" + run_seed * 32,
+        source=_document_source(source_seed),
+        accepted_result=KnowledgeArtifactMemberPointer(
+            artifact_id="artifact_" + run_seed * 32,
+            artifact_revision_id="rev_" + run_seed * 32,
+            sha256="sha256:" + run_seed * 64,
+            schema_ref="eom://schemas/knowledge/knowledge-analysis-result/3.0",
+            media_type="application/json",
+            logical_name="accepted-result.json",
+            member_path="evidence/accepted-result.json",
+        ),
+        proposal=proposal.model_copy(update={"anchors": (anchor,)}),
+    )
+
+
 def _structure() -> KnowledgeGraphStructureManifest:
     value = {
         "schema_version": "knowledge-graph-structure-manifest/1.0",
@@ -324,6 +350,15 @@ def test_projection_fails_closed_on_conflicts_incompatible_edges_and_source_set(
     with pytest.raises(KnowledgeGraphProjectionError) as source_info:
         build_education_graph_projection((_analysis("1"),), _structure())
     assert source_info.value.code == "KNOWLEDGE_GRAPH_STRUCTURE_SOURCE_MISMATCH"
+
+
+def test_projection_rejects_duplicate_document_page_coverage() -> None:
+    with pytest.raises(KnowledgeGraphProjectionError) as captured:
+        build_education_graph_projection(
+            (_document_analysis("4", "4"), _document_analysis("5", "4")),
+            None,
+        )
+    assert captured.value.code == "KNOWLEDGE_GRAPH_DOCUMENT_PAGE_OVERLAP"
 
 
 def test_document_revision_projection_uses_additive_v2_schema_and_original_pdf_anchor() -> None:

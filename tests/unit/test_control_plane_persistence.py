@@ -133,7 +133,7 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260826_0018"
+    assert CURRENT_MIGRATION_REVISION == "20260827_0019"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -149,6 +149,18 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         "execution_preset:manage",
     ):
         assert permission in source
+
+
+def test_multimodal_batch_migration_is_additive_and_keeps_legacy_pointers() -> None:
+    source = Path("migrations/versions/20260827_0019_multimodal_knowledge_analysis.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'down_revision: str | None = "20260826_0018"' in source
+    assert CURRENT_MIGRATION_REVISION == "20260827_0019"
+    assert "textbook-analysis-bundle-manifest/1.0" in source
+    assert "textbook-analysis-bundle-manifest/2.0" in source
+    assert "drop_table" not in source
+    assert "DELETE FROM" not in source
 
 
 def test_knowledge_analysis_rbac_migration_is_additive_and_exact() -> None:

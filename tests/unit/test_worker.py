@@ -9,6 +9,7 @@ from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker import (
     CodexWorkerAdapter,
     PreparedWorkerWorkspace,
+    WorkerRun,
     load_worker_result,
     worker_output_schema,
 )
@@ -204,5 +205,66 @@ def test_resolved_materialization_failure_never_starts_fixed_unit(
             slot=WorkerSlot(slot_id="01", linux_user="eom-cdx-01", role="authoring", enabled=True),
             staging=tmp_path / "staging",
             materialize=reject,
+            timeout_seconds=600,
         )
     assert not started
+
+
+def test_resolved_plan_timeout_reaches_prepared_launcher(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / JOB_ID
+    workspace.mkdir()
+    prepared = PreparedWorkerWorkspace(
+        job_id=JOB_ID,
+        workspace=workspace,
+        schema_path=workspace / "worker-result.schema.json",
+        prompt_path=workspace / "prompt.txt",
+    )
+    materialized = MaterializedExecution(
+        plan_id="execplan_" + "1" * 32,
+        plan_sha256="sha256:" + "1" * 64,
+        step_key="analyze",
+        model="gpt-5.6-terra",
+        reasoning_effort="xhigh",
+        instruction_bundle_revision_id="bundlerev_" + "1" * 32,
+        instruction_manifest_sha256="sha256:" + "2" * 64,
+        reference_bundle_revision_id=None,
+        reference_manifest_sha256=None,
+        agents_sha256="sha256:" + "3" * 64,
+        invocation_sha256="sha256:" + "4" * 64,
+        image_input_manifest_sha256="sha256:" + "5" * 64,
+        materialized_member_count=8,
+        materialized_bytes=1024,
+        invocation_path=workspace / "codex-invocation.json",
+    )
+    adapter = CodexWorkerAdapter(Settings())
+    monkeypatch.setattr(adapter, "prepare_structured_workspace", lambda **_kwargs: prepared)
+    observed: list[int | None] = []
+
+    def run_prepared(**kwargs: object) -> WorkerRun:
+        timeout_seconds = kwargs.get("timeout_seconds")
+        assert isinstance(timeout_seconds, int)
+        observed.append(timeout_seconds)
+        return WorkerRun(
+            exit_code=0,
+            result_path=workspace / "result.json",
+            stdout_path=tmp_path / "stdout.log",
+            stderr_path=tmp_path / "stderr.log",
+            unit_name=f"eom-worker-05@{JOB_ID}.service",
+        )
+
+    monkeypatch.setattr(adapter, "run_prepared", run_prepared)
+    result = adapter.run_resolved_structured(
+        job_id=JOB_ID,
+        input_document={},
+        output_schema={"type": "object"},
+        prompt_text="prompt",
+        slot=WorkerSlot(slot_id="05", linux_user="eom-cdx-05", role="support", enabled=True),
+        staging=tmp_path / "staging",
+        materialize=lambda _workspace: materialized,
+        timeout_seconds=7200,
+    )
+
+    assert result.materialization is materialized
+    assert observed == [7200]

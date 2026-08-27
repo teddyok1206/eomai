@@ -129,8 +129,9 @@ class KnowledgeAnalysisBatchRangeRecord(Base):
             "source_media_type = 'application/pdf' AND "
             "source_schema_ref = 'eom://schemas/educational-document/pdf-source/1.0' AND "
             "analysis_media_type = 'application/json' AND "
-            "analysis_schema_ref = "
-            "'eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0' AND "
+            "analysis_schema_ref IN ("
+            "'eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/1.0',"
+            "'eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0') AND "
             "rights_media_type = 'application/json' AND "
             "rights_schema_ref = "
             "'eom://schemas/educational-document/rights-attestation/1.0'",

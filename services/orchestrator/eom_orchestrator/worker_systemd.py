@@ -33,6 +33,18 @@ AUTHORIZATION_DENIED_MARKERS = (
     b"permission denied",
 )
 FIXED_WORKER_TIMEOUT_SECONDS = 600
+FIXED_ANALYSIS_WORKER_TIMEOUT_SECONDS = 7200
+
+
+def fixed_worker_timeout_seconds(slot: WorkerSlot) -> int:
+    """Return the reviewed execution ceiling for one fixed worker identity."""
+
+    return (
+        FIXED_ANALYSIS_WORKER_TIMEOUT_SECONDS
+        if validate_slot(slot) == "05"
+        else FIXED_WORKER_TIMEOUT_SECONDS
+    )
+
 
 # These hashes are the installed contract. Tests compare them with the canonical repository
 # sources, and runtime readiness compares them with root-owned installed artifacts.
@@ -41,7 +53,7 @@ WORKER_TEMPLATE_SHA256 = {
     "02": "f028faf6adbcd6285a686b3bf3c2524db20f86cdb55a92fdffd8b3a11357d8f3",
     "03": "01f88dcea971c8738a0b190596329195aa18e26f2697c735eeaf258c1b494365",
     "04": "7e3f42342b3e800fa354e57160027ff29f8ac13b7936c02613c9dcdcdb786c5a",
-    "05": "efdc3dbe46725f40ecb7b3fed7121ba5885979b7297b1a9f628997cabf79931b",
+    "05": "b992622ee6c718a60ca3d9601ac56646213ab59703e6670a7b6edbf3484b4672",
 }
 PROBE_TEMPLATE_SHA256 = {
     "01": "6d74599b84b8ac243656fb1cef1ffb459261ff23195428cd47be4da86134d4e4",
@@ -57,7 +69,7 @@ AUTH_TEMPLATE_SHA256 = {
     "04": "a46f8d4c4b5f7b2bfdf1993e0cb7694bef348e85d56fcb858471d8ba8bbcf142",
     "05": "98dbc3e1b1907912a71b8f2b7b2c7a7c224cd19b927084bfde2de5037ead29e3",
 }
-WORKER_EXECUTABLE_SHA256 = "c9bf3ee19f192f1b09cba84cac334fa74ed4ed4edc502b2a047bf5523789e259"
+WORKER_EXECUTABLE_SHA256 = "aab4b92a04caffd7a6864db0a703093c98e50b27ed084a122479b69c64e6b038"
 WORKER_AUTH_EXECUTABLE_SHA256 = "a4d0cb8655507d69c85ba7f12b8674f4b0ffef123af68190c36b95b67ea18b42"
 AUTH_REQUIRED_EXIT = 20
 AUTH_PROBE_INVALID_EXIT = 21
@@ -267,7 +279,7 @@ def _start_unit(unit_name: str, *, timeout_seconds: int) -> FixedUnitRun:
 
 
 def launch_worker_unit(slot: WorkerSlot, job_id: str, *, timeout_seconds: int) -> FixedUnitRun:
-    if timeout_seconds != FIXED_WORKER_TIMEOUT_SECONDS:
+    if timeout_seconds != fixed_worker_timeout_seconds(slot):
         raise PlatformError(
             ErrorCode.WORKER_UNAVAILABLE, "worker timeout does not match fixed unit contract"
         )

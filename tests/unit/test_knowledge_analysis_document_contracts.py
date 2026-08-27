@@ -10,8 +10,11 @@ from eom_catalog_contracts import (
     KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY,
     CatalogApplicationResponse,
     EducationalDocumentKnowledgeSourceV3,
+    EducationalDocumentKnowledgeSourceV4,
     EvidenceBundleManifestV3,
+    EvidenceBundleManifestV4,
     EvidenceBundlePublicationResultV3,
+    EvidenceBundlePublicationResultV4,
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
     KnowledgeAnalysisProposalReceiptV4,
@@ -25,6 +28,8 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
+    KnowledgeAnalysisWorkerProposalV4,
+    KnowledgeProposalCountsV2,
     load_schema,
     validate_contract,
 )
@@ -115,6 +120,47 @@ def document_source() -> dict[str, object]:
         "materialization_members": members,
         "materialization_bytes": 40,
     }
+
+
+def multimodal_document_source() -> dict[str, object]:
+    value = deepcopy(document_source())
+    members = value["materialization_members"]
+    assert isinstance(members, list)
+    multimodal_members: list[dict[str, object]] = []
+    for member in members:
+        assert isinstance(member, dict)
+        converted = deepcopy(member)
+        converted["member_kind"] = "INDEX" if member["member_kind"] == "INDEX" else "PAGE_TEXT"
+        converted["width_pixels"] = None
+        converted["height_pixels"] = None
+        multimodal_members.append(converted)
+    for page in (1, 2):
+        multimodal_members.append(
+            {
+                "member_kind": "PAGE_IMAGE",
+                "physical_page": page,
+                "artifact_id": "artifact_" + "2" * 32,
+                "artifact_revision_id": "rev_" + "2" * 32,
+                "member_path": f"analysis/images/page-{page:06d}.png",
+                "materialized_path": f"source/document/images/page-{page:06d}.png",
+                "sha256": "sha256:" + str(page + 2) * 64,
+                "bytes": 100,
+                "schema_ref": "eom://schemas/educational-document/page-image/1.0",
+                "media_type": "image/png",
+                "logical_name": f"page-{page:06d}.png",
+                "width_pixels": 1600,
+                "height_pixels": 2200,
+            }
+        )
+    value["materialization_members"] = multimodal_members
+    value["materialization_bytes"] = 240
+    value["page_image_count"] = 2
+    dependency = value["analysis_bundle_manifest"]
+    assert isinstance(dependency, dict)
+    dependency["schema_ref"] = (
+        "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0"
+    )
+    return value
 
 
 def request_v3() -> dict[str, object]:
@@ -281,6 +327,57 @@ def proposal_v5(request: KnowledgeAnalysisRequestV5) -> dict[str, object]:
         },
     ]
     return value
+
+
+def test_multimodal_proposal_accepts_honest_empty_content_without_relaxing_delivery() -> None:
+    value = {
+        "schema_version": "knowledge-analysis-worker-proposal/4.0",
+        "analysis_request_id": "knowledgeanalysis_" + "4" * 32,
+        "normalized_markdown": (
+            "# 분석 결과\n\n선택 범위에서 그래프화할 수 있는 관련 과학 내용을 확인하지 못했다.\n"
+        ),
+        "anchors": [],
+        "nodes": [],
+        "edges": [],
+        "claims": [],
+        "component_observations": [],
+        "page_image_observations": [
+            {
+                "physical_page": page,
+                "image_sha256": "sha256:" + str(page) * 64,
+                "observation_state": state,
+                "anchor_ids": [],
+            }
+            for page, state in ((1, "NO_RELEVANT_CONTENT"), (2, "UNCLEAR"))
+        ],
+        "unresolved_ambiguities": [],
+        "general_knowledge_used": False,
+        "completed_at": NOW,
+    }
+
+    validate_contract("knowledge-analysis-worker-proposal-v4", value)
+    proposal = KnowledgeAnalysisWorkerProposalV4.model_validate(value)
+    assert proposal.anchors == ()
+    assert proposal.nodes == ()
+    assert (
+        KnowledgeProposalCountsV2(
+            anchors=0,
+            nodes=0,
+            edges=0,
+            claims=0,
+            component_observations=0,
+            page_image_observations=2,
+            ambiguities=0,
+        ).page_image_observations
+        == 2
+    )
+
+    incomplete = deepcopy(value)
+    incomplete["page_image_observations"] = []
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("knowledge-analysis-worker-proposal-v4", incomplete)
+    with pytest.raises(PydanticValidationError):
+        KnowledgeAnalysisWorkerProposalV4.model_validate(incomplete)
 
 
 def _member(name: str, seed: str, media_type: str) -> dict[str, object]:
@@ -611,6 +708,114 @@ def test_document_source_is_preserved_in_v3_evidence_manifest_and_publication() 
         item_production_evidence=result,
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-application-response-v6", response)
+
+
+def test_multimodal_document_source_is_preserved_in_v4_evidence_contracts() -> None:
+    source = multimodal_document_source()
+    assert EducationalDocumentKnowledgeSourceV4.model_validate(source).page_image_count == 2
+    graph_pointer = {
+        "graph_id": "graph_" + "7" * 32,
+        "graph_snapshot_revision_id": "graphrev_" + "7" * 32,
+        "manifest_artifact": {
+            "artifact_id": "artifact_" + "7" * 32,
+            "artifact_revision_id": "rev_" + "7" * 32,
+            "sha256": "sha256:" + "7" * 64,
+            "schema_ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/3.0",
+            "media_type": "application/json",
+            "logical_name": "manifest.json",
+            "member_path": "projections/manifest.json",
+        },
+        "manifest_sha256": "sha256:" + "7" * 64,
+    }
+    context_pointer = {
+        "artifact_id": "artifact_" + "8" * 32,
+        "artifact_revision_id": "rev_" + "8" * 32,
+        "sha256": "sha256:" + "8" * 64,
+        "schema_ref": "eom://schemas/knowledge/evidence-bundle-context/1.0",
+        "media_type": "text/markdown",
+        "logical_name": "context.md",
+        "member_path": "evidence/context.md",
+    }
+    budget = {
+        "document_count": 1,
+        "item_revision_count": 0,
+        "graph_node_count": 1,
+        "claim_count": 0,
+        "estimated_context_tokens": 1000,
+    }
+    manifest_value: dict[str, object] = {
+        "schema_version": "evidence-bundle-manifest/4.0",
+        "evidence_bundle_id": "evidence_" + "9" * 32,
+        "evidence_bundle_revision_id": "evidencerev_" + "9" * 32,
+        "revision_number": 1,
+        "retrieval_request_id": "retrieval_" + "9" * 32,
+        "retrieval_request_sha256": "sha256:" + "9" * 64,
+        "graph_snapshot": graph_pointer,
+        "access_policy_revision_id": "accessrev_" + "9" * 32,
+        "access_policy_sha256": "sha256:" + "9" * 64,
+        "requester_permissions_sha256": "sha256:" + "9" * 64,
+        "materials": {"context_markdown": context_pointer},
+        "entries": [
+            {
+                "evidence_id": "evidenceitem_" + "9" * 32,
+                "evidence_kind": "DOCUMENT",
+                "use": "GROUNDING",
+                "source": source,
+                "graph_node_ids": ["knode_document"],
+                "anchor_ids": ["anchor_document"],
+                "relevance_milli": 1000,
+                "answer_bearing": False,
+            }
+        ],
+        "budget": budget,
+        "created_at": NOW,
+    }
+    manifest_value["manifest_sha256"] = content_sha256(manifest_value)
+    validate_contract("evidence-bundle-manifest-v4", manifest_value)
+    manifest = EvidenceBundleManifestV4.model_validate(manifest_value)
+    assert manifest.entries[0].source.document_revision_id == "edudocrev_" + "1" * 32
+
+    result_value: dict[str, object] = {
+        "schema_version": "evidence-bundle-publication-result/4.0",
+        "evidence_bundle_id": manifest.evidence_bundle_id,
+        "evidence_bundle_revision_id": manifest.evidence_bundle_revision_id,
+        "revision_number": 1,
+        "state": "PUBLISHED",
+        "retrieval_request_id": manifest.retrieval_request_id,
+        "retrieval_request_sha256": manifest.retrieval_request_sha256,
+        "graph_snapshot": graph_pointer,
+        "access_policy_revision_id": manifest.access_policy_revision_id,
+        "access_policy_sha256": manifest.access_policy_sha256,
+        "requester_permissions_sha256": manifest.requester_permissions_sha256,
+        "manifest_artifact": {
+            "artifact_id": "artifact_" + "a" * 32,
+            "artifact_revision_id": "rev_" + "a" * 32,
+            "sha256": manifest.manifest_sha256,
+            "schema_ref": "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
+            "media_type": "application/json",
+            "logical_name": "manifest.json",
+            "member_path": "evidence/manifest.json",
+        },
+        "manifest_sha256": manifest.manifest_sha256,
+        "context_artifact": context_pointer,
+        "budget": budget,
+        "published_at": NOW,
+    }
+    result_value["result_sha256"] = content_sha256(result_value)
+    validate_contract("evidence-bundle-publication-result-v4", result_value)
+    result = EvidenceBundlePublicationResultV4.model_validate(result_value)
+    response = CatalogApplicationResponse(
+        status="OK",
+        operation="CREATE_ITEM_PRODUCTION_EVIDENCE",
+        item_production_evidence=result,
+    ).model_dump(mode="json", exclude_none=True)
+    validate_contract("catalog-application-response-v8", response)
+    retrieval_response = CatalogApplicationResponse(
+        status="OK",
+        operation="CREATE_EVIDENCE_BUNDLE",
+        evidence=result,
+    ).model_dump(mode="json", exclude_none=True)
+    validate_contract("catalog-application-response-v9", retrieval_response)
 
 
 def test_v3_schema_family_rejects_historical_v2_source() -> None:
@@ -1037,6 +1242,47 @@ def test_integrity_protocol_schema_bytes_are_pinned_and_packaged() -> None:
         assert sha256(canonical).hexdigest() == digest
 
 
+def test_multimodal_protocol_schema_bytes_are_pinned_and_packaged() -> None:
+    expected = {
+        "knowledge-analysis-types-v4.schema.json": (
+            "02584fb9edb61c32a904c5ec5878f9f96ffe300f32796fab3cfe730ae531935f"
+        ),
+        "knowledge-analysis-request-v6.schema.json": (
+            "8107f1e55d46901fb7ff6619872fbc5600b27c6e068cffb486155e627728e9d0"
+        ),
+        "knowledge-analysis-worker-proposal-v4.schema.json": (
+            "1fd771c15c02d675bab6a8c73d7385814749633d02f12f7662c7cdd5f5851d79"
+        ),
+        "knowledge-analysis-proposal-receipt-v5.schema.json": (
+            "e9a57008f855db5425651bafa98347f9868f7941f56e706dac46b6cf69da754f"
+        ),
+        "knowledge-analysis-result-v6.schema.json": (
+            "6d019621da271e3ed286e113b277346475b2a166afa103b2b6fe85bbf101d9c5"
+        ),
+    }
+    for name, digest in expected.items():
+        canonical = (ROOT / "schemas/knowledge" / name).read_bytes()
+        packaged = (
+            ROOT / "packages/catalog_contracts/eom_catalog_contracts/resources/knowledge" / name
+        ).read_bytes()
+        assert canonical == packaged
+        assert sha256(canonical).hexdigest() == digest
+
+    workflow_expected = {
+        "knowledge-analysis-input-v5.schema.json": (
+            "1f806aa2befb65a79073abe3998102a3b4e3a16bd3817577abfb61f4cf413f2b"
+        ),
+        "knowledge-analysis-proposal-result-v5.schema.json": (
+            "dda775b76b62f2c3b0caff136cd02543cdcf95869e1045e763feffdecb89e0a8"
+        ),
+    }
+    for name, digest in workflow_expected.items():
+        canonical = (ROOT / "schemas/workflow/roles" / name).read_bytes()
+        packaged = (ROOT / "packages/workflow/eom_workflow/resources/roles" / name).read_bytes()
+        assert canonical == packaged
+        assert sha256(canonical).hexdigest() == digest
+
+
 def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> None:
     assert role_schema_bundle_hash("workflow-role/1.4.0") == (
         "sha256:c385885dc445cee96ae8f0c2a122678c3db68f9b10d8162c7695108fbcc47b4b"
@@ -1050,6 +1296,9 @@ def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> Non
     assert role_schema_bundle_hash("workflow-role/1.7.0") == (
         "sha256:c3c13aef2f797fe255d7ca141ad374069b0e2c000314292ba68b99479f525058"
     )
+    assert role_schema_bundle_hash("workflow-role/1.8.0") == (
+        "sha256:1b99d22abf59081d8843934571d33346d0d0083fcfb9a000c5683577dc8827cc"
+    )
     expected_definitions = {
         "knowledge-analysis.v1.yaml": (
             "75d2a750632a8ddbd5d350d00f28ecbfd79aa6527f1fb26436f664eb47b810d8"
@@ -1062,6 +1311,9 @@ def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> Non
         ),
         "knowledge-analysis.v4.yaml": (
             "a805042ff2f7c110e016d97dfaf56fd22300ce22003956ec0613c44145b6ddef"
+        ),
+        "knowledge-analysis.v5.yaml": (
+            "953b68dc48baebc504651c5b9ea2662f54d2a7d57798abb10bbc3d26cf7204f3"
         ),
     }
     for name, digest in expected_definitions.items():

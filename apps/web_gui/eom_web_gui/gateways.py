@@ -19,6 +19,7 @@ from eom_web_gui.contracts import (
     HwpxBuildView,
     HwpxCapability,
     ItemPreview,
+    KnowledgeAnalysisBatchStatus,
     PreviewChoice,
     PreviewTable,
     StructuredItemImportRequest,
@@ -99,6 +100,10 @@ class ApplicationGateway(Protocol):
     async def hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload: ...
 
     async def codex_accounts(self, session: WebSession) -> tuple[dict[str, Any], ...]: ...
+
+    async def knowledge_analysis_batches(
+        self, session: WebSession
+    ) -> tuple[KnowledgeAnalysisBatchStatus, ...]: ...
 
     async def codex_account_command(
         self,
@@ -347,6 +352,37 @@ class HttpApplicationGateway:
     async def codex_accounts(self, session: WebSession) -> tuple[dict[str, Any], ...]:
         response = await self._authorized(session, "GET", "/api/v1/codex-accounts")
         return tuple(sanitize_mapping(item) for item in self._list_data(response))
+
+    async def knowledge_analysis_batches(
+        self, session: WebSession
+    ) -> tuple[KnowledgeAnalysisBatchStatus, ...]:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/knowledge-analysis-batches",
+            params={"limit": 20},
+        )
+        try:
+            return tuple(
+                KnowledgeAnalysisBatchStatus.model_validate(
+                    {
+                        "batch_id": value["batch_id"],
+                        "state": value["state"],
+                        "total_range_count": value["total_range_count"],
+                        "accepted_range_count": value["accepted_range_count"],
+                        "failed_range_count": value["failed_range_count"],
+                        "failure_code": value.get("failure_code"),
+                        "resource_version": value["resource_version"],
+                        "created_at": value["created_at"],
+                        "started_at": value.get("started_at"),
+                        "completed_at": value.get("completed_at"),
+                        "updated_at": value["updated_at"],
+                    }
+                )
+                for value in self._list_data(response)
+            )
+        except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def codex_account_command(
         self,

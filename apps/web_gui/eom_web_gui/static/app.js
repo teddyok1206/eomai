@@ -18,6 +18,8 @@ const state = {
   structuredSource: null,
   codexAccounts: [],
   executionPresets: [],
+  knowledgeAnalysisBatches: [],
+  analysisBatchPollTimer: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -87,6 +89,7 @@ function showView(name) {
   $$(".nav-item").forEach((element) => element.classList.toggle("active", element.dataset.viewTarget === name));
   $(".sidebar").classList.remove("open");
   if (name === "hwpx") loadHwpx();
+  if (name !== "control") window.clearTimeout(state.analysisBatchPollTimer);
   if (name === "control" && hasAdminRole()) loadControlPlane();
   if (name === "dashboard" && state.health) renderDashboard(state.health);
   window.scrollTo({top: 0, behavior: "smooth"});
@@ -757,19 +760,74 @@ function installControlPlane() {
 async function loadControlPlane() {
   if (!hasAdminRole()) return;
   try {
-    const [accounts, presets] = await Promise.all([
+    const [accounts, presets, batches] = await Promise.all([
       api("/admin/codex-accounts"),
       api("/admin/execution-presets"),
+      api("/admin/knowledge-analysis-batches"),
     ]);
     state.codexAccounts = accounts;
     state.executionPresets = presets;
+    state.knowledgeAnalysisBatches = batches;
     renderCodexAccounts(accounts);
     renderExecutionPresets(presets);
+    renderAnalysisBatches(batches);
     showMessage($("#codex-account-message"), `${accounts.length}개 fixed binding · credential 비노출`, "success");
     showMessage($("#execution-preset-message"), `${presets.length}개 logical preset · immutable revision`, "success");
+    scheduleAnalysisBatchRefresh(batches);
   } catch (failure) {
     showMessage($("#codex-account-message"), `Control Plane 조회 실패: ${failure.message}`, "error");
   }
+}
+
+function scheduleAnalysisBatchRefresh(batches) {
+  window.clearTimeout(state.analysisBatchPollTimer);
+  if (batches.some((value) => ["QUEUED", "RUNNING"].includes(value.state))) {
+    state.analysisBatchPollTimer = window.setTimeout(loadAnalysisBatches, 10000);
+  }
+}
+
+async function loadAnalysisBatches() {
+  if (!hasAdminRole() || !$('[data-view="control"].active')) return;
+  try {
+    const batches = await api("/admin/knowledge-analysis-batches");
+    state.knowledgeAnalysisBatches = batches;
+    renderAnalysisBatches(batches);
+    scheduleAnalysisBatchRefresh(batches);
+  } catch (failure) {
+    showMessage($("#analysis-batch-message"), `배치 상태 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+function renderAnalysisBatches(batches) {
+  const root = $("#analysis-batch-list");
+  root.replaceChildren();
+  if (!batches.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "등록된 분석 배치가 없습니다.";
+    root.append(empty);
+    showMessage($("#analysis-batch-message"), "배치 0개 · 제품 기능과 독립된 읽기 전용 상태");
+    return;
+  }
+  for (const batch of batches) {
+    const {card, details} = controlCard(batch.batch_id, batch.state);
+    const completed = batch.accepted_range_count + batch.failed_range_count;
+    const percent = Math.floor((completed * 100) / batch.total_range_count);
+    addControlDetail(details, "Accepted", `${batch.accepted_range_count} / ${batch.total_range_count}`);
+    addControlDetail(details, "Failed", batch.failed_range_count);
+    addControlDetail(details, "Progress", `${percent}%`);
+    addControlDetail(details, "Failure", batch.failure_code);
+    addControlDetail(details, "Updated", batch.updated_at);
+    const progress = document.createElement("progress");
+    progress.className = "analysis-progress";
+    progress.max = batch.total_range_count;
+    progress.value = completed;
+    progress.setAttribute("aria-label", `${batch.batch_id} 진행률`);
+    card.append(progress);
+    root.append(card);
+  }
+  const active = batches.filter((value) => ["QUEUED", "RUNNING"].includes(value.state)).length;
+  showMessage($("#analysis-batch-message"), `${batches.length}개 최근 배치 · 실행 중 ${active}개 · 10초 자동 갱신`, "success");
 }
 
 function controlCard(title, stateValue) {

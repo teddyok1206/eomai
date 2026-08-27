@@ -83,11 +83,23 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "4.0",
             "sha256:3ea326016ebba09cd221b0108cb9cd70262ae6e447e484357234b14109529220",
         ),
+        "resolved-execution-plan-v5": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v5.schema.json",
+            "resources/control-plane/resolved-execution-plan-v5.schema.json",
+            "5.0",
+            "sha256:78e648052b9837a2ae5ae9d0d99b910f559c7188f274485b56f7c667ae8b7a7f",
+        ),
         "codex-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-invocation-v1.schema.json",
             "resources/control-plane/codex-invocation-v1.schema.json",
             "1.0",
             "sha256:639f448062f265d4bfe82af6e02237891109827071f701b8825bc556a4b0b7eb",
+        ),
+        "codex-image-input-manifest": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-image-input-manifest-v1.schema.json",
+            "resources/control-plane/codex-image-input-manifest-v1.schema.json",
+            "1.0",
+            "sha256:40ce920b7e5719b9d0cc56c3034a5e8f24d43e2d5a73e797f294d98be7dcb9dc",
         ),
         "codex-auth-health-view": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-auth-health-view-v1.schema.json",
@@ -212,6 +224,7 @@ def _control_schema_registry() -> Registry[Any]:
         "knowledge-types",
         "knowledge-analysis-types-v2",
         "knowledge-analysis-types-v3",
+        "knowledge-analysis-types-v4",
     ):
         schema = load_schema(name)
         identifier = schema.get("$id")

@@ -18,7 +18,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisBatchRequestV2,
     KnowledgeAnalysisBatchSourceRange,
     KnowledgeAnalysisBatchSourceRangeV2,
-    KnowledgeAnalysisRequestV5,
+    KnowledgeAnalysisRequestV6,
     ReconcileKnowledgeAnalysisCommand,
     ReuseAcceptedKnowledgeAnalysisRange,
     ReviewKnowledgeAnalysisCommand,
@@ -270,7 +270,7 @@ def test_batch_executes_fifo_with_one_active_range_and_no_duplicate_submission(
         assert "token" not in serialized.lower()
 
 
-def _assert_v7_batch_executes_one_integrity_contract_range_without_session_state(
+def test_v8_batch_executes_one_multimodal_range_exactly_once(
     integration_engine: Engine,
     tmp_path: Path,
 ) -> None:
@@ -278,17 +278,22 @@ def _assert_v7_batch_executes_one_integrity_contract_range_without_session_state
     _ensure_dependencies(integration_engine, orchestrator_settings)
     bootstrap_knowledge_analysis_control_plane(
         integration_engine,
-        config_directory=Path("config/control-plane/knowledge-analysis-v7").resolve(),
-        source_commit="7" * 40,
+        config_directory=Path("config/control-plane/knowledge-analysis-v8").resolve(),
+        source_commit="8" * 40,
         actor_id="phase7-integration",
         evaluation_cases_total=3,
         settings=orchestrator_settings,
     )
-    document_revision_id = _document_source(integration_engine, catalog_settings, tmp_path)[1]
+    document_revision_id = _document_source(
+        integration_engine,
+        catalog_settings,
+        tmp_path,
+        multimodal=True,
+    )[1]
     service = KnowledgeAnalysisBatchService(integration_engine, catalog_settings)
     created = service.create(_batch_command(document_revision_id, range_count=1))
 
-    assert service.advance_once(runner_id="v7-batch-runner")
+    assert service.advance_once(runner_id="v8-batch-runner")
     sessions = build_session_factory(integration_engine)
     with sessions() as session:
         range_row = session.scalar(
@@ -297,27 +302,37 @@ def _assert_v7_batch_executes_one_integrity_contract_range_without_session_state
             )
         )
         assert range_row is not None and range_row.state == "SUBMITTED"
+        assert range_row.analysis_schema_ref.endswith("bundle-manifest/2.0")
         assert range_row.submission_attempts == 1
         assert range_row.analysis_run_id is not None
         range_id = range_row.range_id
         run_id = range_row.analysis_run_id
         run = session.get(KnowledgeAnalysisRunRecord, run_id)
         assert run is not None
-        request = KnowledgeAnalysisRequestV5.model_validate(run.canonical_request)
-        assert request.worker_proposal_schema_ref.endswith("worker-proposal/3.0")
+        request = KnowledgeAnalysisRequestV6.model_validate(run.canonical_request)
+        assert request.source.page_image_count == 1
+        assert request.worker_proposal_schema_ref.endswith("worker-proposal/4.0")
 
     _complete_proposal(
         integration_engine,
         catalog_settings,
         run_id=run_id,
-        staging_root=tmp_path / "v7-batch-proposal",
+        staging_root=tmp_path / "v8-batch-proposal",
     )
     _make_submitted_range_due(integration_engine, range_id=range_id)
-    assert service.advance_once(runner_id="v7-batch-runner")
+    assert service.advance_once(runner_id="v8-batch-runner")
+    assert not service.advance_once(runner_id="v8-batch-runner")
     with sessions() as session:
         batch = session.get(KnowledgeAnalysisBatchRecord, created.batch_id)
         range_row = session.get(KnowledgeAnalysisBatchRangeRecord, range_id)
         assert batch is not None and batch.state == "SUCCEEDED"
+        accepted_count = session.scalar(
+            select(func.count()).where(
+                KnowledgeAnalysisBatchRangeRecord.batch_id == created.batch_id,
+                KnowledgeAnalysisBatchRangeRecord.state == "ACCEPTED",
+            )
+        )
+        assert accepted_count == 1
         assert range_row is not None and range_row.state == "ACCEPTED"
         assert range_row.submission_attempts == 1
 

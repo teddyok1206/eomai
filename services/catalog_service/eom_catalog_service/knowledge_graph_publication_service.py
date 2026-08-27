@@ -13,27 +13,33 @@ from eom_catalog_contracts import (
     AssessmentItemContent,
     ContentIntakeKnowledgeSourceV2,
     EducationalDocumentKnowledgeSourceV3,
+    EducationalDocumentKnowledgeSourceV4,
     KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
     KnowledgeAnalysisProposalReceiptV4,
+    KnowledgeAnalysisProposalReceiptV5,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
+    KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisResultV2,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
     KnowledgeAnalysisResultV5,
+    KnowledgeAnalysisResultV6,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
+    KnowledgeAnalysisWorkerProposalV4,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphCounts,
     KnowledgeGraphProjections,
     KnowledgeGraphPublicationResult,
     KnowledgeGraphSnapshotManifestV2,
     KnowledgeGraphSnapshotManifestV3,
+    KnowledgeGraphSnapshotManifestV4,
     KnowledgeGraphSnapshotPointer,
     KnowledgeGraphStructureManifest,
     PublishKnowledgeGraphSnapshotCommand,
@@ -118,20 +124,37 @@ KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+KNOWLEDGE_GRAPH_MULTIMODAL_DOCUMENT_CATALOG_PROTOCOL = "catalog-knowledge-graph/1.2"
+KNOWLEDGE_GRAPH_MULTIMODAL_DOCUMENT_CATALOG_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": KNOWLEDGE_GRAPH_MULTIMODAL_DOCUMENT_CATALOG_PROTOCOL,
+        "contracts": [
+            "knowledge-graph-publication/1.0",
+            "knowledge-graph-structure-manifest/1.0",
+            "knowledge-graph-snapshot-manifest/4.0",
+            "knowledge-graph-publication-result/1.0",
+            "knowledge-graph-projection/2.0",
+        ],
+    }
+)
 type KnowledgeAnalysisRequestContract = (
     KnowledgeAnalysisRequestV2
     | KnowledgeAnalysisRequestV3
     | KnowledgeAnalysisRequestV4
     | KnowledgeAnalysisRequestV5
+    | KnowledgeAnalysisRequestV6
 )
 type KnowledgeAnalysisReceiptContract = (
     KnowledgeAnalysisProposalReceipt
     | KnowledgeAnalysisProposalReceiptV2
     | KnowledgeAnalysisProposalReceiptV3
     | KnowledgeAnalysisProposalReceiptV4
+    | KnowledgeAnalysisProposalReceiptV5
 )
 type KnowledgeGraphSnapshotContract = (
-    KnowledgeGraphSnapshotManifestV2 | KnowledgeGraphSnapshotManifestV3
+    KnowledgeGraphSnapshotManifestV2
+    | KnowledgeGraphSnapshotManifestV3
+    | KnowledgeGraphSnapshotManifestV4
 )
 
 
@@ -160,6 +183,7 @@ def _manifest_member_schema_ref(revision: ArtifactRevisionRecord) -> str:
     allowed = {
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/2.0",
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/3.0",
+        "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/4.0",
     }
     if len(matches) != 1 or matches[0].get("schema_ref") not in allowed:
         raise KnowledgeGraphPublicationError(
@@ -172,11 +196,14 @@ def _manifest_member_schema_ref(revision: ArtifactRevisionRecord) -> str:
 def _source_revision_id(
     source: ContentIntakeKnowledgeSourceV2
     | ApprovedItemKnowledgeSourceV2
-    | EducationalDocumentKnowledgeSourceV3,
+    | EducationalDocumentKnowledgeSourceV3
+    | EducationalDocumentKnowledgeSourceV4,
 ) -> str:
     if isinstance(source, ApprovedItemKnowledgeSourceV2):
         return source.item_revision_id
-    if isinstance(source, EducationalDocumentKnowledgeSourceV3):
+    if isinstance(
+        source, (EducationalDocumentKnowledgeSourceV3, EducationalDocumentKnowledgeSourceV4)
+    ):
         return source.document_revision_id
     return source.source_file_id
 
@@ -295,6 +322,14 @@ class KnowledgeGraphPublicationService:
         }
         manifest: KnowledgeGraphSnapshotContract
         if any(
+            isinstance(item.source, EducationalDocumentKnowledgeSourceV4)
+            for item in projection.analyses
+        ):
+            manifest = KnowledgeGraphSnapshotManifestV4.model_validate(manifest_value)
+            validate_contract(
+                "knowledge-graph-snapshot-manifest-v4", manifest.model_dump(mode="json")
+            )
+        elif any(
             isinstance(item.source, EducationalDocumentKnowledgeSourceV3)
             for item in projection.analyses
         ):
@@ -356,7 +391,9 @@ class KnowledgeGraphPublicationService:
         try:
             request_version = run.canonical_request.get("schema_version")
             request: KnowledgeAnalysisRequestContract
-            if request_version == "knowledge-analysis-request/5.0":
+            if request_version == "knowledge-analysis-request/6.0":
+                request = KnowledgeAnalysisRequestV6.model_validate(run.canonical_request)
+            elif request_version == "knowledge-analysis-request/5.0":
                 request = KnowledgeAnalysisRequestV5.model_validate(run.canonical_request)
             elif request_version == "knowledge-analysis-request/4.0":
                 request = KnowledgeAnalysisRequestV4.model_validate(run.canonical_request)
@@ -394,15 +431,26 @@ class KnowledgeGraphPublicationService:
             manifest_artifact_type="knowledge-analysis-accepted-result",
             primary_file="evidence/accepted-result.json",
         )
-        integrity_document = isinstance(request, KnowledgeAnalysisRequestV5)
+        multimodal_document = isinstance(request, KnowledgeAnalysisRequestV6)
+        integrity_document = isinstance(
+            request, (KnowledgeAnalysisRequestV5, KnowledgeAnalysisRequestV6)
+        )
         endpoint_typed_document = isinstance(
-            request, (KnowledgeAnalysisRequestV4, KnowledgeAnalysisRequestV5)
+            request,
+            (KnowledgeAnalysisRequestV4, KnowledgeAnalysisRequestV5, KnowledgeAnalysisRequestV6),
         )
         document_source = isinstance(
             request,
-            (KnowledgeAnalysisRequestV3, KnowledgeAnalysisRequestV4, KnowledgeAnalysisRequestV5),
+            (
+                KnowledgeAnalysisRequestV3,
+                KnowledgeAnalysisRequestV4,
+                KnowledgeAnalysisRequestV5,
+                KnowledgeAnalysisRequestV6,
+            ),
         )
-        if integrity_document:
+        if multimodal_document:
+            accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/6.0"
+        elif integrity_document:
             accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/5.0"
         elif endpoint_typed_document:
             accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/4.0"
@@ -428,15 +476,24 @@ class KnowledgeGraphPublicationService:
             | KnowledgeAnalysisResultV3
             | KnowledgeAnalysisResultV4
             | KnowledgeAnalysisResultV5
+            | KnowledgeAnalysisResultV6
         )
         database_accepted: (
             KnowledgeAnalysisResultV2
             | KnowledgeAnalysisResultV3
             | KnowledgeAnalysisResultV4
             | KnowledgeAnalysisResultV5
+            | KnowledgeAnalysisResultV6
         )
         try:
-            if integrity_document:
+            if multimodal_document:
+                validate_contract("knowledge-analysis-result-v6", accepted_value)
+                accepted = KnowledgeAnalysisResultV6.model_validate(accepted_value)
+                validate_contract("knowledge-analysis-result-v6", accepted_revision.result)
+                database_accepted = KnowledgeAnalysisResultV6.model_validate(
+                    accepted_revision.result
+                )
+            elif integrity_document:
                 validate_contract("knowledge-analysis-result-v5", accepted_value)
                 accepted = KnowledgeAnalysisResultV5.model_validate(accepted_value)
                 validate_contract("knowledge-analysis-result-v5", accepted_revision.result)
@@ -499,7 +556,16 @@ class KnowledgeGraphPublicationService:
         receipt: KnowledgeAnalysisReceiptContract
         database_receipt: KnowledgeAnalysisReceiptContract
         try:
-            if integrity_document:
+            if multimodal_document:
+                validate_contract("knowledge-analysis-proposal-receipt-v5", proposal_receipt_value)
+                receipt = KnowledgeAnalysisProposalReceiptV5.model_validate(proposal_receipt_value)
+                validate_contract(
+                    "knowledge-analysis-proposal-receipt-v5", proposal_revision.result
+                )
+                database_receipt = KnowledgeAnalysisProposalReceiptV5.model_validate(
+                    proposal_revision.result
+                )
+            elif integrity_document:
                 validate_contract("knowledge-analysis-proposal-receipt-v4", proposal_receipt_value)
                 receipt = KnowledgeAnalysisProposalReceiptV4.model_validate(proposal_receipt_value)
                 validate_contract(
@@ -591,6 +657,7 @@ class KnowledgeGraphPublicationService:
         ContentIntakeKnowledgeSourceV2
         | ApprovedItemKnowledgeSourceV2
         | EducationalDocumentKnowledgeSourceV3
+        | EducationalDocumentKnowledgeSourceV4
     ):
         source = request.source
         if isinstance(source, ContentIntakeKnowledgeSourceV2):
@@ -690,6 +757,7 @@ class KnowledgeGraphPublicationService:
         KnowledgeAnalysisWorkerProposal
         | KnowledgeAnalysisWorkerProposalV2
         | KnowledgeAnalysisWorkerProposalV3
+        | KnowledgeAnalysisWorkerProposalV4
     ):
         try:
             return resolve_knowledge_analysis_proposal(self.artifacts, receipt)
@@ -912,6 +980,18 @@ class KnowledgeGraphPublicationService:
                 source = Path(raw_directory) / "manifest.json"
                 source.write_bytes(canonical_json_bytes(manifest))
                 source.chmod(0o640)
+                if isinstance(manifest, KnowledgeGraphSnapshotManifestV4):
+                    schema_ref = "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/4.0"
+                    protocol_version = KNOWLEDGE_GRAPH_MULTIMODAL_DOCUMENT_CATALOG_PROTOCOL
+                    protocol_schema_hash = KNOWLEDGE_GRAPH_MULTIMODAL_DOCUMENT_CATALOG_SCHEMA_HASH
+                elif isinstance(manifest, KnowledgeGraphSnapshotManifestV3):
+                    schema_ref = "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/3.0"
+                    protocol_version = KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL
+                    protocol_schema_hash = KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH
+                else:
+                    schema_ref = "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/2.0"
+                    protocol_version = KNOWLEDGE_GRAPH_CATALOG_PROTOCOL
+                    protocol_schema_hash = KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH
                 return self.artifacts.commit_file_set(
                     files={"projections/manifest.json": source},
                     primary_file="projections/manifest.json",
@@ -925,25 +1005,13 @@ class KnowledgeGraphPublicationService:
                     },
                     file_metadata={
                         "projections/manifest.json": {
-                            "schema_ref": (
-                                "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/3.0"
-                                if isinstance(manifest, KnowledgeGraphSnapshotManifestV3)
-                                else "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/2.0"
-                            ),
+                            "schema_ref": schema_ref,
                             "media_type": "application/json",
                         }
                     },
                     manifest_version="knowledge-graph-snapshot-manifest-file-set/1.0",
-                    protocol_version=(
-                        KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL
-                        if isinstance(manifest, KnowledgeGraphSnapshotManifestV3)
-                        else KNOWLEDGE_GRAPH_CATALOG_PROTOCOL
-                    ),
-                    protocol_schema_hash=(
-                        KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH
-                        if isinstance(manifest, KnowledgeGraphSnapshotManifestV3)
-                        else KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH
-                    ),
+                    protocol_version=protocol_version,
+                    protocol_schema_hash=protocol_schema_hash,
                 )
         except (OSError, RuntimeError, ValueError) as exc:
             raise KnowledgeGraphPublicationError(

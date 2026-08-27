@@ -22,6 +22,9 @@ from typing import BinaryIO
 
 MAX_INPUT_BYTES = 4 * 1024 * 1024
 MAX_RESULT_BYTES = 1024 * 1024
+MAX_IMAGE_INPUTS = 32
+MAX_IMAGE_BYTES = 16 * 1024 * 1024
+MAX_IMAGE_TOTAL_BYTES = 128 * 1024 * 1024
 FINALIZATION_ERROR_EXIT = 74
 WORKSPACE_ERROR_EXIT = 78
 CODEX_BINARY = Path("/usr/local/bin/codex")
@@ -31,6 +34,7 @@ PLAN_ID_PATTERN = re.compile(r"\Aexecplan_[0-9a-f]{32}\Z", re.ASCII)
 STEP_KEY_PATTERN = re.compile(r"\A[a-z][a-z0-9_]{1,63}\Z", re.ASCII)
 MODEL_PATTERN = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z", re.ASCII)
 SHA256_PATTERN = re.compile(r"\Asha256:[0-9a-f]{64}\Z", re.ASCII)
+IMAGE_PATH_PATTERN = re.compile(r"\Asource/document/images/page-([0-9]{6})\.png\Z", re.ASCII)
 REASONING_EFFORTS = frozenset({"minimal", "low", "medium", "high", "xhigh"})
 SLOT_USERS = {
     "01": "eom-cdx-01",
@@ -184,7 +188,154 @@ def _load_invocation(path: Path, *, workspace: Path, group_id: int) -> dict[str,
     return invocation
 
 
-def codex_command(workspace: Path, invocation: dict[str, str] | None = None) -> tuple[str, ...]:
+def _load_image_inputs(
+    path: Path,
+    *,
+    workspace: Path,
+    group_id: int,
+    expected_plan_id: str,
+) -> tuple[Path, ...]:
+    """Load and re-hash one exact ordered set of job-local PNG inputs."""
+
+    with _open_input(path, workspace=workspace, group_id=group_id) as stream:
+        try:
+            raw = stream.read(MAX_INPUT_BYTES + 1)
+            if len(raw) > MAX_INPUT_BYTES:
+                raise ValueError("Codex image-input manifest exceeds size limit")
+            document = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Codex image-input manifest is malformed") from exc
+    required = {"schema_version", "plan_id", "images", "manifest_sha256"}
+    if not isinstance(document, dict) or set(document) != required:
+        raise ValueError("Codex image-input manifest shape is invalid")
+    if (
+        document.get("schema_version") != "codex-image-input-manifest/1.0"
+        or document.get("plan_id") != expected_plan_id
+        or SHA256_PATTERN.fullmatch(str(document.get("manifest_sha256"))) is None
+    ):
+        raise ValueError("Codex image-input manifest identity is invalid")
+    images = document.get("images")
+    if not isinstance(images, list) or not 1 <= len(images) <= MAX_IMAGE_INPUTS:
+        raise ValueError("Codex image-input manifest count is invalid")
+    canonical = json.dumps(
+        {key: value for key, value in document.items() if key != "manifest_sha256"},
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    if "sha256:" + hashlib.sha256(canonical).hexdigest() != document["manifest_sha256"]:
+        raise ValueError("Codex image-input manifest hash differs")
+
+    paths: list[Path] = []
+    pages: list[int] = []
+    total_bytes = 0
+    image_keys = {
+        "physical_page",
+        "relative_path",
+        "media_type",
+        "sha256",
+        "bytes",
+        "width_pixels",
+        "height_pixels",
+    }
+    for item in images:
+        if not isinstance(item, dict) or set(item) != image_keys:
+            raise ValueError("Codex image-input entry shape is invalid")
+        page = item.get("physical_page")
+        relative_path = item.get("relative_path")
+        byte_count = item.get("bytes")
+        width = item.get("width_pixels")
+        height = item.get("height_pixels")
+        if (
+            not isinstance(page, int)
+            or not isinstance(relative_path, str)
+            or not isinstance(byte_count, int)
+            or not isinstance(width, int)
+            or not isinstance(height, int)
+            or item.get("media_type") != "image/png"
+            or SHA256_PATTERN.fullmatch(str(item.get("sha256"))) is None
+            or not 1 <= byte_count <= MAX_IMAGE_BYTES
+            or not 1 <= width <= 10000
+            or not 1 <= height <= 10000
+        ):
+            raise ValueError("Codex image-input entry values are invalid")
+        match = IMAGE_PATH_PATTERN.fullmatch(relative_path)
+        if match is None or int(match.group(1)) != page:
+            raise ValueError("Codex image-input page path is inconsistent")
+        image_path = workspace.joinpath(*Path(relative_path).parts)
+        _verify_png_input(
+            image_path,
+            workspace=workspace,
+            group_id=group_id,
+            expected_bytes=byte_count,
+            expected_sha256=str(item["sha256"]),
+            expected_width=width,
+            expected_height=height,
+        )
+        pages.append(page)
+        paths.append(image_path)
+        total_bytes += byte_count
+    if pages != sorted(set(pages)) or total_bytes > MAX_IMAGE_TOTAL_BYTES:
+        raise ValueError("Codex image inputs are duplicated, unordered, or oversized")
+    return tuple(paths)
+
+
+def _verify_png_input(
+    path: Path,
+    *,
+    workspace: Path,
+    group_id: int,
+    expected_bytes: int,
+    expected_sha256: str,
+    expected_width: int,
+    expected_height: int,
+) -> None:
+    try:
+        relative = path.relative_to(workspace)
+    except ValueError as exc:
+        raise ValueError("Codex image input escaped workspace") from exc
+    current = workspace
+    for part in relative.parts[:-1]:
+        current /= part
+        metadata = current.lstat()
+        if current.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
+            raise ValueError("Codex image input parent is unsafe")
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_gid != group_id
+            or stat.S_IMODE(metadata.st_mode) != 0o640
+            or metadata.st_size != expected_bytes
+        ):
+            raise ValueError("Codex image input violates the file contract")
+        digest = hashlib.sha256()
+        header = b""
+        while chunk := os.read(descriptor, 1024 * 1024):
+            if len(header) < 24:
+                header += chunk[: 24 - len(header)]
+            digest.update(chunk)
+        if (
+            "sha256:" + digest.hexdigest() != expected_sha256
+            or len(header) < 24
+            or header[:8] != b"\x89PNG\r\n\x1a\n"
+            or header[12:16] != b"IHDR"
+            or int.from_bytes(header[16:20], "big") != expected_width
+            or int.from_bytes(header[20:24], "big") != expected_height
+        ):
+            raise ValueError("Codex image input content differs from its manifest")
+    finally:
+        os.close(descriptor)
+
+
+def codex_command(
+    workspace: Path,
+    invocation: dict[str, str] | None = None,
+    image_paths: tuple[Path, ...] = (),
+) -> tuple[str, ...]:
     command = [
         str(CODEX_BINARY),
         "exec",
@@ -199,6 +350,9 @@ def codex_command(workspace: Path, invocation: dict[str, str] | None = None) -> 
                 f'model_reasoning_effort="{invocation["reasoning_effort"]}"',
             )
         )
+    if image_paths:
+        command.append("--image")
+        command.extend(str(path) for path in image_paths)
     command.extend(
         (
             "--sandbox",
@@ -251,13 +405,22 @@ def execute(slot_id: str, job_id: str) -> int:
         pass
     invocation_path = workspace / "codex-invocation.json"
     invocation: dict[str, str] | None = None
+    image_paths: tuple[Path, ...] = ()
     if invocation_path.exists() or invocation_path.is_symlink():
         invocation = _load_invocation(invocation_path, workspace=workspace, group_id=group_id)
         with _open_input(workspace / "AGENTS.md", workspace=workspace, group_id=group_id):
             pass
+        image_manifest_path = workspace / "codex-image-inputs.json"
+        if image_manifest_path.exists() or image_manifest_path.is_symlink():
+            image_paths = _load_image_inputs(
+                image_manifest_path,
+                workspace=workspace,
+                group_id=group_id,
+                expected_plan_id=invocation["plan_id"],
+            )
     with _open_input(workspace / "prompt.txt", workspace=workspace, group_id=group_id) as prompt:
         completed = subprocess.run(
-            codex_command(workspace, invocation),
+            codex_command(workspace, invocation, image_paths),
             stdin=prompt,
             capture_output=True,
             check=False,

@@ -51,6 +51,7 @@ def test_role_protocol_versions_coexist_without_reinterpreting_history(
     analysis_old_hash = role_schema_bundle_hash("workflow-role/1.5.0")
     analysis_new_hash = role_schema_bundle_hash("workflow-role/1.6.0")
     analysis_integrity_hash = role_schema_bundle_hash("workflow-role/1.7.0")
+    analysis_multimodal_hash = role_schema_bundle_hash("workflow-role/1.8.0")
     ensure_protocol_version(db_session, "workflow-role/1.2.0", old_hash)
     ensure_protocol_version(db_session, "workflow-role/1.3.0", new_hash)
     ensure_protocol_version(db_session, "workflow-role/1.5.0", analysis_old_hash)
@@ -58,6 +59,8 @@ def test_role_protocol_versions_coexist_without_reinterpreting_history(
     ensure_protocol_version(db_session, "workflow-role/1.6.0", analysis_new_hash)
     ensure_protocol_version(db_session, "workflow-role/1.7.0", analysis_integrity_hash)
     ensure_protocol_version(db_session, "workflow-role/1.7.0", analysis_integrity_hash)
+    ensure_protocol_version(db_session, "workflow-role/1.8.0", analysis_multimodal_hash)
+    ensure_protocol_version(db_session, "workflow-role/1.8.0", analysis_multimodal_hash)
     ensure_protocol_version(db_session, "workflow-role/1.3.0", new_hash)
     db_session.flush()
 
@@ -66,6 +69,7 @@ def test_role_protocol_versions_coexist_without_reinterpreting_history(
     analysis_old_record = db_session.get(ProtocolVersionRecord, "workflow-role/1.5.0")
     analysis_new_record = db_session.get(ProtocolVersionRecord, "workflow-role/1.6.0")
     analysis_integrity_record = db_session.get(ProtocolVersionRecord, "workflow-role/1.7.0")
+    analysis_multimodal_record = db_session.get(ProtocolVersionRecord, "workflow-role/1.8.0")
     assert old_record is not None and old_record.schema_sha256 == old_hash
     assert new_record is not None and new_record.schema_sha256 == new_hash
     assert (
@@ -76,6 +80,8 @@ def test_role_protocol_versions_coexist_without_reinterpreting_history(
     )
     assert analysis_integrity_record is not None
     assert analysis_integrity_record.schema_sha256 == analysis_integrity_hash
+    assert analysis_multimodal_record is not None
+    assert analysis_multimodal_record.schema_sha256 == analysis_multimodal_hash
     with pytest.raises(RuntimeError, match="schema hash mismatch"):
         ensure_protocol_version(db_session, "workflow-role/1.6.0", analysis_integrity_hash)
     with pytest.raises(RuntimeError, match="schema hash mismatch"):

@@ -340,6 +340,10 @@ def test_codex_control_plane_is_admin_only_and_never_accepts_credentials() -> No
         presets = client.get("/studio/api/v1/admin/execution-presets")
         assert presets.status_code == 200
         assert presets.json()[0]["preset_key"] == "standard-item"
+        batches = client.get("/studio/api/v1/admin/knowledge-analysis-batches")
+        assert batches.status_code == 200
+        assert batches.json()[0]["total_range_count"] == 495
+        assert batches.json()[0]["accepted_range_count"] == 12
 
 
 def test_codex_control_plane_rejects_non_admin_and_credential_fields() -> None:
@@ -347,6 +351,7 @@ def test_codex_control_plane_rejects_non_admin_and_credential_fields() -> None:
     with client:
         session = login(client)
         assert client.get("/studio/api/v1/admin/codex-accounts").status_code == 403
+        assert client.get("/studio/api/v1/admin/knowledge-analysis-batches").status_code == 403
         response = client.post(
             "/studio/api/v1/admin/codex-accounts/authbinding_" + "1" * 32 + "/commands",
             headers={"X-CSRF-Token": session["csrf_token"]},
