@@ -1,0 +1,2884 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-worker-proposal/5.0",
+  "title": "EOM Typed-Identity Multimodal Knowledge Analysis Worker Proposal V5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "analysis_request_id",
+    "normalized_markdown",
+    "anchors",
+    "nodes",
+    "edges",
+    "claims",
+    "component_observations",
+    "page_image_observations",
+    "unresolved_ambiguities",
+    "general_knowledge_used",
+    "completed_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-analysis-worker-proposal/5.0"
+    },
+    "analysis_request_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+    },
+    "normalized_markdown": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 262144
+    },
+    "anchors": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sourceAnchor"
+      },
+      "uniqueItems": true
+    },
+    "nodes": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "$ref": "#/$defs/typedNode"
+      },
+      "uniqueItems": true
+    },
+    "edges": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "$ref": "#/$defs/typedEdge"
+      },
+      "uniqueItems": true
+    },
+    "claims": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposedClaim"
+      },
+      "uniqueItems": true
+    },
+    "component_observations": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/componentObservation"
+      },
+      "uniqueItems": true
+    },
+    "page_image_observations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "eom://schemas/knowledge/knowledge-analysis-types/4.0#/$defs/pageImageObservation"
+      },
+      "uniqueItems": true
+    },
+    "unresolved_ambiguities": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/ambiguityV3"
+      },
+      "uniqueItems": true
+    },
+    "general_knowledge_used": {
+      "type": "boolean"
+    },
+    "completed_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/utcTimestamp"
+    }
+  },
+  "$defs": {
+    "edgeEndpointContract": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "CONTAINS_CURRICULUM_UNIT"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CURRICULUM_FRAMEWORK_REVISION",
+                "CURRICULUM_UNIT"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CURRICULUM_UNIT"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "PRECEDES_CURRICULUM_UNIT"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CURRICULUM_UNIT"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CURRICULUM_UNIT"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "DEFINES_ACHIEVEMENT_STANDARD"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CURRICULUM_UNIT"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ACHIEVEMENT_STANDARD"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "DEFINES"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "DOCUMENT_REVISION",
+                "DOCUMENT_SECTION",
+                "EQUATION",
+                "FIGURE",
+                "TABLE"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "EXPLAINS"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "DOCUMENT_REVISION",
+                "DOCUMENT_SECTION",
+                "EQUATION",
+                "FIGURE",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS",
+                "TABLE"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "DATA_REPRESENTATION",
+                "EQUATION",
+                "FIGURE",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS",
+                "TABLE"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "IS_A"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "PART_OF"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ACHIEVEMENT_STANDARD",
+                "ASSESSMENT_PATTERN",
+                "CLAIM",
+                "CONCEPT",
+                "CURRICULUM_FRAMEWORK_REVISION",
+                "CURRICULUM_UNIT",
+                "DOCUMENT_REVISION",
+                "DOCUMENT_SECTION",
+                "EQUATION",
+                "FIGURE",
+                "FORMULA",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS",
+                "TABLE"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ACHIEVEMENT_STANDARD",
+                "ASSESSMENT_PATTERN",
+                "CLAIM",
+                "CONCEPT",
+                "CURRICULUM_FRAMEWORK_REVISION",
+                "CURRICULUM_UNIT",
+                "DOCUMENT_REVISION",
+                "DOCUMENT_SECTION",
+                "EQUATION",
+                "FIGURE",
+                "FORMULA",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS",
+                "TABLE"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "CAUSES"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "AFFECTS"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "DEPENDS_ON"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "CONTRASTS_WITH"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ASSESSMENT_PATTERN",
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ASSESSMENT_PATTERN",
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "REQUIRES_PREREQUISITE"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ACHIEVEMENT_STANDARD",
+                "ASSESSMENT_PATTERN",
+                "CLAIM",
+                "CONCEPT",
+                "CURRICULUM_FRAMEWORK_REVISION",
+                "CURRICULUM_UNIT",
+                "FORMULA",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ACHIEVEMENT_STANDARD",
+                "CLAIM",
+                "CONCEPT",
+                "CURRICULUM_FRAMEWORK_REVISION",
+                "CURRICULUM_UNIT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "SUPPORTS_CLAIM"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ASSESSMENT_PATTERN",
+                "CLAIM",
+                "CONCEPT",
+                "DOCUMENT_REVISION",
+                "DOCUMENT_SECTION",
+                "EQUATION",
+                "FIGURE",
+                "FORMULA",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS",
+                "TABLE"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "CONTRADICTS_CLAIM"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "ILLUSTRATES"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "DATA_REPRESENTATION",
+                "EQUATION",
+                "FIGURE",
+                "TABLE"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "TABULATES"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "DATA_REPRESENTATION",
+                "TABLE"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "EXPRESSES_AS_EQUATION"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "EQUATION",
+                "FORMULA"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "DERIVED_FROM"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ACHIEVEMENT_STANDARD",
+                "ASSESSMENT_PATTERN",
+                "CLAIM",
+                "CONCEPT",
+                "CURRICULUM_FRAMEWORK_REVISION",
+                "CURRICULUM_UNIT",
+                "DATA_REPRESENTATION",
+                "DOCUMENT_REVISION",
+                "DOCUMENT_SECTION",
+                "EQUATION",
+                "FIGURE",
+                "FORMULA",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS",
+                "TABLE"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ASSESSMENT_PATTERN",
+                "DOCUMENT_REVISION",
+                "DOCUMENT_SECTION",
+                "EQUATION",
+                "FIGURE",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION",
+                "TABLE"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "CITES_SOURCE"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ACHIEVEMENT_STANDARD",
+                "ASSESSMENT_PATTERN",
+                "CLAIM",
+                "CONCEPT",
+                "CURRICULUM_FRAMEWORK_REVISION",
+                "CURRICULUM_UNIT",
+                "DATA_REPRESENTATION",
+                "DOCUMENT_REVISION",
+                "DOCUMENT_SECTION",
+                "EQUATION",
+                "FIGURE",
+                "FORMULA",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS",
+                "TABLE"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "DOCUMENT_REVISION",
+                "DOCUMENT_SECTION"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "ALIGNS_WITH_CURRICULUM"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ASSESSMENT_PATTERN",
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ACHIEVEMENT_STANDARD",
+                "CURRICULUM_UNIT"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "HAS_ITEM_ELEMENT"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ITEM_REVISION"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ITEM_ELEMENT"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "ASSESSES_CONCEPT"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ITEM_ELEMENT",
+                "ITEM_REVISION"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CONCEPT"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "REQUIRES_CONCEPT"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ASSESSMENT_PATTERN",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CONCEPT"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "USES_SOURCE_EVIDENCE"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ASSESSMENT_PATTERN",
+                "ITEM_ELEMENT",
+                "ITEM_REVISION"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "DOCUMENT_REVISION",
+                "DOCUMENT_SECTION",
+                "EQUATION",
+                "FIGURE",
+                "TABLE"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "REPRESENTS_CONCEPT"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "DATA_REPRESENTATION",
+                "EQUATION",
+                "FIGURE",
+                "TABLE"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "CONCEPT"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "SUPPORTS_STATEMENT"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "DOCUMENT_REVISION",
+                "DOCUMENT_SECTION",
+                "EQUATION",
+                "FIGURE",
+                "FORMULA",
+                "ITEM_ELEMENT",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS",
+                "TABLE"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ITEM_ELEMENT"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "CONTRADICTS_STATEMENT"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "CLAIM",
+                "CONCEPT",
+                "FORMULA",
+                "ITEM_ELEMENT",
+                "OBSERVABLE_PROPERTY",
+                "PROCESS"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ITEM_ELEMENT"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "PART_OF_INTERACTION"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ITEM_ELEMENT"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ITEM_ELEMENT",
+                "ITEM_REVISION"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "USES_ASSESSMENT_PATTERN"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ITEM_REVISION"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ASSESSMENT_PATTERN"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "edge_type",
+            "from_node_type",
+            "to_node_type"
+          ],
+          "properties": {
+            "edge_type": {
+              "type": "string",
+              "const": "SIMILAR_TO_ITEM"
+            },
+            "from_node_type": {
+              "type": "string",
+              "enum": [
+                "ITEM_REVISION"
+              ]
+            },
+            "to_node_type": {
+              "type": "string",
+              "enum": [
+                "ITEM_REVISION"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "proposedEdgeV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edge_id",
+        "relationship",
+        "from_node_id",
+        "to_node_id",
+        "confidence_milli",
+        "anchor_ids"
+      ],
+      "properties": {
+        "edge_id": {
+          "type": "string",
+          "pattern": "^kedge_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "relationship": {
+          "$ref": "#/$defs/edgeEndpointContract"
+        },
+        "from_node_id": {
+          "type": "string",
+          "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "to_node_id": {
+          "type": "string",
+          "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "confidence_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "ambiguityV3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category_code",
+        "description",
+        "blocking",
+        "anchor_ids"
+      ],
+      "properties": {
+        "category_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "blocking": {
+          "type": "boolean"
+        },
+        "anchor_ids": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "typedNode": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposedNode"
+        },
+        {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:curriculum_framework_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "CURRICULUM_FRAMEWORK_REVISION"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:curriculum_unit)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "CURRICULUM_UNIT"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:achievement_standard)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "ACHIEVEMENT_STANDARD"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:concept)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "CONCEPT"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "CLAIM"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "PROCESS"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:observable_property)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "OBSERVABLE_PROPERTY"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:formula)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "FORMULA"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:data_representation)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "DATA_REPRESENTATION"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:document_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "DOCUMENT_REVISION"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:document_section)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "DOCUMENT_SECTION"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:figure)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "FIGURE"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "TABLE"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:equation)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "EQUATION"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "ITEM_REVISION"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_element)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "ITEM_ELEMENT"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "node_type": {
+                  "type": "string",
+                  "const": "ASSESSMENT_PATTERN"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "typedEdge": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/proposedEdgeV2"
+        },
+        {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "CONTAINS_CURRICULUM_UNIT"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CURRICULUM_FRAMEWORK_REVISION",
+                        "CURRICULUM_UNIT"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CURRICULUM_UNIT"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:curriculum_framework_revision|curriculum_unit)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:curriculum_unit)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "PRECEDES_CURRICULUM_UNIT"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CURRICULUM_UNIT"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CURRICULUM_UNIT"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:curriculum_unit)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:curriculum_unit)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "DEFINES_ACHIEVEMENT_STANDARD"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CURRICULUM_UNIT"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ACHIEVEMENT_STANDARD"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:curriculum_unit)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:achievement_standard)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "DEFINES"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "DOCUMENT_REVISION",
+                        "DOCUMENT_SECTION",
+                        "EQUATION",
+                        "FIGURE",
+                        "TABLE"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|document_revision|document_section|equation|figure|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "EXPLAINS"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "DOCUMENT_REVISION",
+                        "DOCUMENT_SECTION",
+                        "EQUATION",
+                        "FIGURE",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS",
+                        "TABLE"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "DATA_REPRESENTATION",
+                        "EQUATION",
+                        "FIGURE",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS",
+                        "TABLE"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|document_revision|document_section|equation|figure|formula|observable_property|process|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|data_representation|equation|figure|formula|observable_property|process|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "IS_A"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "PART_OF"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ACHIEVEMENT_STANDARD",
+                        "ASSESSMENT_PATTERN",
+                        "CLAIM",
+                        "CONCEPT",
+                        "CURRICULUM_FRAMEWORK_REVISION",
+                        "CURRICULUM_UNIT",
+                        "DOCUMENT_REVISION",
+                        "DOCUMENT_SECTION",
+                        "EQUATION",
+                        "FIGURE",
+                        "FORMULA",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS",
+                        "TABLE"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ACHIEVEMENT_STANDARD",
+                        "ASSESSMENT_PATTERN",
+                        "CLAIM",
+                        "CONCEPT",
+                        "CURRICULUM_FRAMEWORK_REVISION",
+                        "CURRICULUM_UNIT",
+                        "DOCUMENT_REVISION",
+                        "DOCUMENT_SECTION",
+                        "EQUATION",
+                        "FIGURE",
+                        "FORMULA",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS",
+                        "TABLE"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:achievement_standard|assessment_pattern|claim|concept|curriculum_framework_revision|curriculum_unit|document_revision|document_section|equation|figure|formula|item_element|item_revision|observable_property|process|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:achievement_standard|assessment_pattern|claim|concept|curriculum_framework_revision|curriculum_unit|document_revision|document_section|equation|figure|formula|item_element|item_revision|observable_property|process|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "CAUSES"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "AFFECTS"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "DEPENDS_ON"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "CONTRASTS_WITH"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ASSESSMENT_PATTERN",
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ASSESSMENT_PATTERN",
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:assessment_pattern|claim|concept|formula|item_element|item_revision|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:assessment_pattern|claim|concept|formula|item_element|item_revision|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "REQUIRES_PREREQUISITE"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ACHIEVEMENT_STANDARD",
+                        "ASSESSMENT_PATTERN",
+                        "CLAIM",
+                        "CONCEPT",
+                        "CURRICULUM_FRAMEWORK_REVISION",
+                        "CURRICULUM_UNIT",
+                        "FORMULA",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ACHIEVEMENT_STANDARD",
+                        "CLAIM",
+                        "CONCEPT",
+                        "CURRICULUM_FRAMEWORK_REVISION",
+                        "CURRICULUM_UNIT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:achievement_standard|assessment_pattern|claim|concept|curriculum_framework_revision|curriculum_unit|formula|item_element|item_revision|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:achievement_standard|claim|concept|curriculum_framework_revision|curriculum_unit|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "SUPPORTS_CLAIM"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ASSESSMENT_PATTERN",
+                        "CLAIM",
+                        "CONCEPT",
+                        "DOCUMENT_REVISION",
+                        "DOCUMENT_SECTION",
+                        "EQUATION",
+                        "FIGURE",
+                        "FORMULA",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS",
+                        "TABLE"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:assessment_pattern|claim|concept|document_revision|document_section|equation|figure|formula|item_element|item_revision|observable_property|process|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "CONTRADICTS_CLAIM"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "ILLUSTRATES"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "DATA_REPRESENTATION",
+                        "EQUATION",
+                        "FIGURE",
+                        "TABLE"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:data_representation|equation|figure|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "TABULATES"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "DATA_REPRESENTATION",
+                        "TABLE"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:data_representation|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "EXPRESSES_AS_EQUATION"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "EQUATION",
+                        "FORMULA"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:equation|formula)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "DERIVED_FROM"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ACHIEVEMENT_STANDARD",
+                        "ASSESSMENT_PATTERN",
+                        "CLAIM",
+                        "CONCEPT",
+                        "CURRICULUM_FRAMEWORK_REVISION",
+                        "CURRICULUM_UNIT",
+                        "DATA_REPRESENTATION",
+                        "DOCUMENT_REVISION",
+                        "DOCUMENT_SECTION",
+                        "EQUATION",
+                        "FIGURE",
+                        "FORMULA",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS",
+                        "TABLE"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ASSESSMENT_PATTERN",
+                        "DOCUMENT_REVISION",
+                        "DOCUMENT_SECTION",
+                        "EQUATION",
+                        "FIGURE",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION",
+                        "TABLE"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:achievement_standard|assessment_pattern|claim|concept|curriculum_framework_revision|curriculum_unit|data_representation|document_revision|document_section|equation|figure|formula|item_element|item_revision|observable_property|process|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:assessment_pattern|document_revision|document_section|equation|figure|item_element|item_revision|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "CITES_SOURCE"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ACHIEVEMENT_STANDARD",
+                        "ASSESSMENT_PATTERN",
+                        "CLAIM",
+                        "CONCEPT",
+                        "CURRICULUM_FRAMEWORK_REVISION",
+                        "CURRICULUM_UNIT",
+                        "DATA_REPRESENTATION",
+                        "DOCUMENT_REVISION",
+                        "DOCUMENT_SECTION",
+                        "EQUATION",
+                        "FIGURE",
+                        "FORMULA",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS",
+                        "TABLE"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "DOCUMENT_REVISION",
+                        "DOCUMENT_SECTION"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:achievement_standard|assessment_pattern|claim|concept|curriculum_framework_revision|curriculum_unit|data_representation|document_revision|document_section|equation|figure|formula|item_element|item_revision|observable_property|process|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:document_revision|document_section)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "ALIGNS_WITH_CURRICULUM"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ASSESSMENT_PATTERN",
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ACHIEVEMENT_STANDARD",
+                        "CURRICULUM_UNIT"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:assessment_pattern|claim|concept|formula|item_element|item_revision|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:achievement_standard|curriculum_unit)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "HAS_ITEM_ELEMENT"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ITEM_REVISION"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ITEM_ELEMENT"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_element)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "ASSESSES_CONCEPT"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CONCEPT"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_element|item_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:concept)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "REQUIRES_CONCEPT"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ASSESSMENT_PATTERN",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CONCEPT"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:assessment_pattern|item_element|item_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:concept)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "USES_SOURCE_EVIDENCE"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ASSESSMENT_PATTERN",
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "DOCUMENT_REVISION",
+                        "DOCUMENT_SECTION",
+                        "EQUATION",
+                        "FIGURE",
+                        "TABLE"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:assessment_pattern|item_element|item_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:document_revision|document_section|equation|figure|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "REPRESENTS_CONCEPT"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "DATA_REPRESENTATION",
+                        "EQUATION",
+                        "FIGURE",
+                        "TABLE"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CONCEPT"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:data_representation|equation|figure|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:concept)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "SUPPORTS_STATEMENT"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "DOCUMENT_REVISION",
+                        "DOCUMENT_SECTION",
+                        "EQUATION",
+                        "FIGURE",
+                        "FORMULA",
+                        "ITEM_ELEMENT",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS",
+                        "TABLE"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ITEM_ELEMENT"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|document_revision|document_section|equation|figure|formula|item_element|observable_property|process|table)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_element)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "CONTRADICTS_STATEMENT"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "CLAIM",
+                        "CONCEPT",
+                        "FORMULA",
+                        "ITEM_ELEMENT",
+                        "OBSERVABLE_PROPERTY",
+                        "PROCESS"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ITEM_ELEMENT"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:claim|concept|formula|item_element|observable_property|process)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_element)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "PART_OF_INTERACTION"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ITEM_ELEMENT"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ITEM_ELEMENT",
+                        "ITEM_REVISION"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_element)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_element|item_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "USES_ASSESSMENT_PATTERN"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ITEM_REVISION"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ASSESSMENT_PATTERN"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "relationship": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "edge_type",
+                    "from_node_type",
+                    "to_node_type"
+                  ],
+                  "properties": {
+                    "edge_type": {
+                      "type": "string",
+                      "const": "SIMILAR_TO_ITEM"
+                    },
+                    "from_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ITEM_REVISION"
+                      ]
+                    },
+                    "to_node_type": {
+                      "type": "string",
+                      "enum": [
+                        "ITEM_REVISION"
+                      ]
+                    }
+                  }
+                },
+                "from_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+                },
+                "to_node_id": {
+                  "type": "string",
+                  "pattern": "^knode_(?:item_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

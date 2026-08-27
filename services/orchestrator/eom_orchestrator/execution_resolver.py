@@ -17,6 +17,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisRequestV6,
+    KnowledgeAnalysisRequestV7,
 )
 from eom_identifiers import content_sha256, new_execution_plan_id
 from eom_workflow.control_plane import (
@@ -357,6 +358,7 @@ def resolve_knowledge_analysis_plan(
         | KnowledgeAnalysisRequestV4
         | KnowledgeAnalysisRequestV5
         | KnowledgeAnalysisRequestV6
+        | KnowledgeAnalysisRequestV7
     ),
     resolved_at: datetime | None = None,
 ) -> ResolvedExecutionPlanV2 | ResolvedExecutionPlanV4 | ResolvedExecutionPlanV5:

@@ -18,11 +18,13 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
     KnowledgeAnalysisProposalReceiptV4,
+    KnowledgeAnalysisProposalReceiptV6,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisRequestV6,
+    KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
     KnowledgeAnalysisResultV5,
@@ -30,6 +32,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
     KnowledgeAnalysisWorkerProposalV4,
+    KnowledgeAnalysisWorkerProposalV5,
     KnowledgeProposalCountsV2,
     load_schema,
     validate_contract,
@@ -312,6 +315,19 @@ def request_v6() -> dict[str, object]:
     return value
 
 
+def request_v7() -> dict[str, object]:
+    value = request_v6()
+    value["schema_version"] = "knowledge-analysis-request/7.0"
+    value["worker_proposal_schema_ref"] = (
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/5.0"
+    )
+    value["accepted_result_schema_ref"] = "eom://schemas/knowledge/knowledge-analysis-result/7.0"
+    value["request_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "request_sha256"}
+    )
+    return value
+
+
 def proposal_v5(request: KnowledgeAnalysisRequestV5) -> dict[str, object]:
     historical_request = KnowledgeAnalysisRequestV4.model_validate(request_v4())
     value = proposal_v4(historical_request)
@@ -349,6 +365,130 @@ def proposal_v5(request: KnowledgeAnalysisRequestV5) -> dict[str, object]:
         },
     ]
     return value
+
+
+def typed_identity_proposal(request: KnowledgeAnalysisRequestV7) -> dict[str, object]:
+    historical_request = KnowledgeAnalysisRequestV5.model_validate(request_v5())
+    value = proposal_v5(historical_request)
+    value["schema_version"] = "knowledge-analysis-worker-proposal/5.0"
+    value["analysis_request_id"] = request.analysis_request_id
+    value["nodes"] = [
+        {
+            "node_id": "knode_assessment_pattern_data_interpretation",
+            "node_type": "ASSESSMENT_PATTERN",
+            "stable_key": "assessment.pattern.data_interpretation",
+            "label": "자료 해석 유형",
+            "anchor_ids": ["anchor_page_1"],
+        },
+        {
+            "node_id": "knode_concept_spacetime",
+            "node_type": "CONCEPT",
+            "stable_key": "science.spacetime",
+            "label": "시간과 공간",
+            "anchor_ids": ["anchor_page_1"],
+        },
+    ]
+    value["edges"] = [
+        {
+            "edge_id": "kedge_pattern_requires_concept",
+            "relationship": {
+                "edge_type": "REQUIRES_CONCEPT",
+                "from_node_type": "ASSESSMENT_PATTERN",
+                "to_node_type": "CONCEPT",
+            },
+            "from_node_id": "knode_assessment_pattern_data_interpretation",
+            "to_node_id": "knode_concept_spacetime",
+            "confidence_milli": 900,
+            "anchor_ids": ["anchor_page_1"],
+        }
+    ]
+    value["page_image_observations"] = [
+        {
+            "physical_page": page,
+            "image_sha256": "sha256:" + str(page + 2) * 64,
+            "observation_state": "OBSERVED",
+            "anchor_ids": ["anchor_page_1"],
+        }
+        for page in (1, 2)
+    ]
+    return value
+
+
+def test_typed_identity_protocol_rejects_declared_endpoint_drift_in_json_schema() -> None:
+    request = KnowledgeAnalysisRequestV7.model_validate(request_v7())
+    valid = typed_identity_proposal(request)
+
+    validate_contract("knowledge-analysis-worker-proposal-v5", valid)
+    KnowledgeAnalysisWorkerProposalV5.model_validate(valid)
+
+    for edge_type, source_type in (
+        ("REQUIRES_CONCEPT", "ASSESSMENT_PATTERN"),
+        ("ASSESSES_CONCEPT", "ITEM_ELEMENT"),
+    ):
+        invalid = deepcopy(valid)
+        invalid["nodes"] = [
+            {
+                "node_id": f"knode_{source_type.lower()}_source",
+                "node_type": source_type,
+                "stable_key": "source.node",
+                "label": "출발 노드",
+                "anchor_ids": ["anchor_page_1"],
+            },
+            {
+                "node_id": "knode_process_water_cycle",
+                "node_type": "PROCESS",
+                "stable_key": "science.process.water_cycle",
+                "label": "물의 순환",
+                "anchor_ids": ["anchor_page_1"],
+            },
+        ]
+        invalid["edges"] = [
+            {
+                "edge_id": "kedge_source_to_water_cycle",
+                "relationship": {
+                    "edge_type": edge_type,
+                    "from_node_type": source_type,
+                    "to_node_type": "CONCEPT",
+                },
+                "from_node_id": f"knode_{source_type.lower()}_source",
+                "to_node_id": "knode_process_water_cycle",
+                "confidence_milli": 900,
+                "anchor_ids": ["anchor_page_1"],
+            }
+        ]
+        with pytest.raises(JsonSchemaValidationError):
+            validate_contract("knowledge-analysis-worker-proposal-v5", invalid)
+
+
+def test_typed_identity_protocol_rejects_node_id_type_drift() -> None:
+    request = KnowledgeAnalysisRequestV7.model_validate(request_v7())
+    invalid = typed_identity_proposal(request)
+    node = invalid["nodes"][1]  # type: ignore[index]
+    node["node_id"] = "knode_process_spacetime"  # type: ignore[index]
+
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("knowledge-analysis-worker-proposal-v5", invalid)
+    with pytest.raises(PydanticValidationError):
+        KnowledgeAnalysisWorkerProposalV5.model_validate(invalid)
+
+
+def test_typed_identity_proposal_stages_exact_v6_receipt(tmp_path: Path) -> None:
+    request = KnowledgeAnalysisRequestV7.model_validate(request_v7())
+    proposal = KnowledgeAnalysisWorkerProposalV5.model_validate(typed_identity_proposal(request))
+
+    _, receipt = stage_knowledge_analysis_proposal(
+        proposal=proposal,
+        request=request,
+        job_id="job_" + "a" * 32,
+        logical_artifact_id="artifact_" + "b" * 32,
+        revision_id="rev_" + "c" * 32,
+        staging=tmp_path,
+    )
+
+    assert isinstance(receipt, KnowledgeAnalysisProposalReceiptV6)
+    assert receipt.members.nodes.schema_ref == "eom://schemas/knowledge/proposed-node/3.0"
+    assert receipt.members.edges.schema_ref == "eom://schemas/knowledge/proposed-edge/4.0"
+    validate_contract("knowledge-analysis-proposal-receipt-v6", receipt.model_dump(mode="json"))
 
 
 def test_v1_9_role_input_validates_a_production_shaped_multimodal_request() -> None:
@@ -1192,6 +1332,36 @@ def test_endpoint_contract_schema_exactly_matches_the_domain_compatibility_table
     assert projected == canonical
 
 
+def test_typed_identity_schema_is_generated_from_the_closed_ontology() -> None:
+    schema = load_schema("knowledge-analysis-worker-proposal-v5")
+    node_alternatives = schema["$defs"]["typedNode"]["allOf"][1]["anyOf"]
+    schema_node_types = {
+        alternative["properties"]["node_type"]["const"] for alternative in node_alternatives
+    }
+    canonical_node_types = {
+        str(source)
+        for pairs in KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.values()
+        for pair in pairs
+        for source in pair
+    }
+    assert schema_node_types == canonical_node_types
+
+    edge_alternatives = schema["$defs"]["typedEdge"]["allOf"][1]["anyOf"]
+    projected: dict[str, set[tuple[str, str]]] = {}
+    for alternative in edge_alternatives:
+        relationship = alternative["properties"]["relationship"]["properties"]
+        projected[relationship["edge_type"]["const"]] = {
+            (source, target)
+            for source in relationship["from_node_type"]["enum"]
+            for target in relationship["to_node_type"]["enum"]
+        }
+    canonical = {
+        str(edge_type): {(str(source), str(target)) for source, target in pairs}
+        for edge_type, pairs in KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.items()
+    }
+    assert projected == canonical
+
+
 def test_v3_constrained_result_rejects_v5_invalid_edge_and_stages_v3_receipt(
     tmp_path: Path,
 ) -> None:
@@ -1319,6 +1489,50 @@ def test_multimodal_protocol_schema_bytes_are_pinned_and_packaged() -> None:
         assert canonical == packaged
         assert sha256(canonical).hexdigest() == digest
 
+
+def test_typed_identity_protocol_schema_bytes_are_pinned_and_packaged() -> None:
+    expected = {
+        "knowledge-analysis-worker-proposal-v5.schema.json": (
+            "3067ea18275478c07f8adb3792a7e99897252506379fd4f4ba0c9a05d9a9a878"
+        ),
+        "knowledge-analysis-proposed-node-v3.schema.json": (
+            "e08650c9fc853f130814c778073db50d396d1a0239ce3638d18ba8bda30916b4"
+        ),
+        "knowledge-analysis-proposed-edge-v4.schema.json": (
+            "521582690b2098e3366453a630da52d9828be81220aed42556f78531a8e7fb4e"
+        ),
+        "knowledge-analysis-request-v7.schema.json": (
+            "fbbdb51000a710c279fccfba990ac700d64993ccf538b4c7bc3739dcbefddcf7"
+        ),
+        "knowledge-analysis-proposal-receipt-v6.schema.json": (
+            "2e324fe040cb8c48e4549c56d654c6a690d40ae699fed7195460e9646037e30f"
+        ),
+        "knowledge-analysis-result-v7.schema.json": (
+            "1725be6c3a9b01643f23df351c002a8816df839b7f6c61a4db8d7f4f0a426282"
+        ),
+    }
+    for name, digest in expected.items():
+        canonical = (ROOT / "schemas/knowledge" / name).read_bytes()
+        packaged = (
+            ROOT / "packages/catalog_contracts/eom_catalog_contracts/resources/knowledge" / name
+        ).read_bytes()
+        assert canonical == packaged
+        assert sha256(canonical).hexdigest() == digest
+
+    workflow_expected = {
+        "knowledge-analysis-input-v7.schema.json": (
+            "4e0aa21cca2d389611a791c3c3704e6d9f0b856fd4885e3cbee89aa631de6e15"
+        ),
+        "knowledge-analysis-proposal-result-v7.schema.json": (
+            "ef0a37c6c8c7a15358961b3e9cb443d8146afa7004d2174f63a742028f41db3c"
+        ),
+    }
+    for name, digest in workflow_expected.items():
+        canonical = (ROOT / "schemas/workflow/roles" / name).read_bytes()
+        packaged = (ROOT / "packages/workflow/eom_workflow/resources/roles" / name).read_bytes()
+        assert canonical == packaged
+        assert sha256(canonical).hexdigest() == digest
+
     workflow_expected = {
         "knowledge-analysis-input-v5.schema.json": (
             "1f806aa2befb65a79073abe3998102a3b4e3a16bd3817577abfb61f4cf413f2b"
@@ -1359,6 +1573,9 @@ def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> Non
     assert role_schema_bundle_hash("workflow-role/1.9.0") == (
         "sha256:e70c0dbd4856aeabbbedac97552933d5edbd44221f0cb5e7f8763d315d14e207"
     )
+    assert role_schema_bundle_hash("workflow-role/1.10.0") == (
+        "sha256:3a224f960ae01574e25b44bd9a187ba60a98f0638ecb8c30d11de4fe8111ab43"
+    )
     expected_definitions = {
         "knowledge-analysis.v1.yaml": (
             "75d2a750632a8ddbd5d350d00f28ecbfd79aa6527f1fb26436f664eb47b810d8"
@@ -1377,6 +1594,9 @@ def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> Non
         ),
         "knowledge-analysis.v6.yaml": (
             "1262ee13be0ffc423e58fdebe8447435d92104015c9863d0e47d829d3dfd9c88"
+        ),
+        "knowledge-analysis.v7.yaml": (
+            "e0e80105f120ae5acdbee90eab7513619b87c66c4165c043b40f186f6e30901a"
         ),
     }
     for name, digest in expected_definitions.items():

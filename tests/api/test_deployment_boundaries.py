@@ -345,11 +345,12 @@ def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions()
         "analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6" in deployment
     )
     assert (
-        "for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6)"
-        in deployment
+        "for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, "
+        "analysis_v5, analysis_v6, analysis_v7)" in deployment
     )
     assert (
-        'analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0", "6.0.0"}' in deployment
+        'analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0", "6.0.0", "7.0.0"}'
+        in deployment
     )
 
 

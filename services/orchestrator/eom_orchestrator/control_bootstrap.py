@@ -122,6 +122,7 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
         "knowledge-analysis-control-bootstrap/7.0",
         "knowledge-analysis-control-bootstrap/8.0",
         "knowledge-analysis-control-bootstrap/9.0",
+        "knowledge-analysis-control-bootstrap/10.0",
     ]
     preset_key: Literal["knowledge-analysis"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -138,9 +139,10 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
             "workflow-role/1.7.0",
             "workflow-role/1.8.0",
             "workflow-role/1.9.0",
+            "workflow-role/1.10.0",
         ],
         ...,
-    ] = Field(min_length=1, max_length=6)
+    ] = Field(min_length=1, max_length=7)
     platform_instruction_path: Literal["instructions/platform.md"]
     role_instruction_path: Literal["instructions/knowledge-analysis.md"]
     slot_key: Literal["slot05"]
@@ -154,6 +156,16 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
         expected_protocols: tuple[str, ...]
         if self.schema_version == "knowledge-analysis-control-bootstrap/1.0":
             expected_protocols = ("workflow-role/1.4.0",)
+        elif self.schema_version == "knowledge-analysis-control-bootstrap/10.0":
+            expected_protocols = (
+                "workflow-role/1.4.0",
+                "workflow-role/1.5.0",
+                "workflow-role/1.6.0",
+                "workflow-role/1.7.0",
+                "workflow-role/1.8.0",
+                "workflow-role/1.9.0",
+                "workflow-role/1.10.0",
+            )
         elif self.schema_version == "knowledge-analysis-control-bootstrap/9.0":
             expected_protocols = (
                 "workflow-role/1.4.0",
@@ -462,6 +474,7 @@ def bootstrap_knowledge_analysis_control_plane(
         "knowledge-analysis-control-bootstrap/7.0": 7,
         "knowledge-analysis-control-bootstrap/8.0": 8,
         "knowledge-analysis-control-bootstrap/9.0": 9,
+        "knowledge-analysis-control-bootstrap/10.0": 10,
     }[manifest.schema_version]
     platform_artifact = _publish_markdown(
         publisher,

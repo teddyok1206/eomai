@@ -391,6 +391,23 @@ class ProposedKnowledgeNode(FrozenModel):
     _text = field_validator("label")(_safe_text)
 
 
+def knowledge_node_id_prefix(node_type: KnowledgeNodeType) -> str:
+    """Return the immutable proposal-local ID prefix for one ontology node type."""
+
+    return f"knode_{str(node_type).lower()}_"
+
+
+class ProposedKnowledgeNodeV2(ProposedKnowledgeNode):
+    """A proposal node whose identity carries its declared ontology type."""
+
+    @model_validator(mode="after")
+    def node_id_matches_type(self) -> ProposedKnowledgeNodeV2:
+        prefix = knowledge_node_id_prefix(self.node_type)
+        if not self.node_id.startswith(prefix) or len(self.node_id) == len(prefix):
+            raise ValueError("knowledge proposal node ID does not encode its node type")
+        return self
+
+
 class ProposedKnowledgeEdge(FrozenModel):
     edge_id: str = Field(pattern=r"^kedge_[a-z0-9][a-z0-9_-]{0,63}$")
     edge_type: KnowledgeEdgeType
@@ -424,6 +441,10 @@ class ProposedKnowledgeEdgeV2(FrozenModel):
     to_node_id: NodeId
     confidence_milli: int = Field(ge=0, le=1000)
     anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=32)
+
+
+class ProposedKnowledgeEdgeV3(ProposedKnowledgeEdgeV2):
+    """Endpoint-typed edge coupled to type-prefixed proposal node identities."""
 
 
 class ProposedKnowledgeClaim(FrozenModel):
@@ -897,6 +918,7 @@ class _KnowledgeAnalysisRequestBase(FrozenModel):
         "eom://schemas/knowledge/knowledge-analysis-worker-proposal/2.0",
         "eom://schemas/knowledge/knowledge-analysis-worker-proposal/3.0",
         "eom://schemas/knowledge/knowledge-analysis-worker-proposal/4.0",
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/5.0",
     ]
     predecessor_analysis_run_id: str | None = Field(
         default=None, pattern=r"^analysisrun_[0-9a-f]{32}$"
@@ -924,7 +946,8 @@ class _KnowledgeAnalysisRequestBase(FrozenModel):
     def exact_outputs_and_hash(self) -> _KnowledgeAnalysisRequestBase:
         expected_outputs = (
             KNOWLEDGE_ANALYSIS_OUTPUTS_V3
-            if getattr(self, "schema_version", None) == "knowledge-analysis-request/6.0"
+            if getattr(self, "schema_version", None)
+            in {"knowledge-analysis-request/6.0", "knowledge-analysis-request/7.0"}
             else KNOWLEDGE_ANALYSIS_OUTPUTS_V2
         )
         if set(self.requested_outputs) != expected_outputs:
@@ -1013,6 +1036,38 @@ class KnowledgeAnalysisRequestV6(_KnowledgeAnalysisRequestBase):
 
     @model_validator(mode="after")
     def complete_multimodal_outputs(self) -> KnowledgeAnalysisRequestV6:
+        if set(self.requested_outputs) != KNOWLEDGE_ANALYSIS_OUTPUTS_V3:
+            raise ValueError("multimodal analysis requires the complete bounded output set")
+        return self
+
+
+class KnowledgeAnalysisRequestV7(_KnowledgeAnalysisRequestBase):
+    """Multimodal request pinned to typed node and edge endpoint identities."""
+
+    schema_version: Literal["knowledge-analysis-request/7.0"] = "knowledge-analysis-request/7.0"
+    worker_proposal_schema_ref: Literal[
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/5.0"
+    ] = "eom://schemas/knowledge/knowledge-analysis-worker-proposal/5.0"
+    accepted_result_schema_ref: Literal["eom://schemas/knowledge/knowledge-analysis-result/7.0"] = (
+        "eom://schemas/knowledge/knowledge-analysis-result/7.0"
+    )
+    source: EducationalDocumentKnowledgeSourceV4
+    requested_outputs: tuple[
+        Literal[
+            "NORMALIZED_MARKDOWN",
+            "SOURCE_ANCHORS",
+            "NODES",
+            "EDGES",
+            "CLAIMS",
+            "COMPONENT_OBSERVATIONS",
+            "PAGE_IMAGE_OBSERVATIONS",
+            "UNRESOLVED_AMBIGUITIES",
+        ],
+        ...,
+    ] = Field(min_length=8, max_length=8)
+
+    @model_validator(mode="after")
+    def complete_multimodal_outputs(self) -> KnowledgeAnalysisRequestV7:
         if set(self.requested_outputs) != KNOWLEDGE_ANALYSIS_OUTPUTS_V3:
             raise ValueError("multimodal analysis requires the complete bounded output set")
         return self
@@ -1291,12 +1346,23 @@ class KnowledgeAnalysisWorkerProposalV4(KnowledgeAnalysisWorkerProposalV3):
         return self
 
 
+class KnowledgeAnalysisWorkerProposalV5(KnowledgeAnalysisWorkerProposalV4):
+    """Multimodal proposal with schema-enforced endpoint identity consistency."""
+
+    schema_version: Literal["knowledge-analysis-worker-proposal/5.0"] = (
+        "knowledge-analysis-worker-proposal/5.0"  # type: ignore[assignment]
+    )
+    nodes: tuple[ProposedKnowledgeNodeV2, ...] = Field(max_length=512)
+    edges: tuple[ProposedKnowledgeEdgeV3, ...] = Field(max_length=1024)
+
+
 def validate_knowledge_analysis_proposal_ontology(
     proposal: (
         KnowledgeAnalysisWorkerProposal
         | KnowledgeAnalysisWorkerProposalV2
         | KnowledgeAnalysisWorkerProposalV3
         | KnowledgeAnalysisWorkerProposalV4
+        | KnowledgeAnalysisWorkerProposalV5
     ),
 ) -> None:
     """Validate proposal edges against the closed education-graph ontology.
@@ -1524,11 +1590,22 @@ class KnowledgeAnalysisProposalReceiptV5(_KnowledgeAnalysisProposalReceiptBase):
 
     @model_validator(mode="after")
     def multimodal_member_contract(self) -> KnowledgeAnalysisProposalReceiptV5:
+        typed_identities = getattr(self, "schema_version", None) == (
+            "knowledge-analysis-proposal-receipt/6.0"
+        )
         expected_schema_refs = {
             "normalized_markdown": "eom://schemas/knowledge/normalized-markdown/1.0",
             "anchors": "eom://schemas/knowledge/source-anchor/2.0",
-            "nodes": "eom://schemas/knowledge/proposed-node/2.0",
-            "edges": "eom://schemas/knowledge/proposed-edge/3.0",
+            "nodes": (
+                "eom://schemas/knowledge/proposed-node/3.0"
+                if typed_identities
+                else "eom://schemas/knowledge/proposed-node/2.0"
+            ),
+            "edges": (
+                "eom://schemas/knowledge/proposed-edge/4.0"
+                if typed_identities
+                else "eom://schemas/knowledge/proposed-edge/3.0"
+            ),
             "claims": "eom://schemas/knowledge/proposed-claim/2.0",
             "component_observations": "eom://schemas/knowledge/component-observation/2.0",
             "page_image_observations": "eom://schemas/knowledge/page-image-observation/1.0",
@@ -1542,6 +1619,12 @@ class KnowledgeAnalysisProposalReceiptV5(_KnowledgeAnalysisProposalReceiptBase):
         if self.counts.page_image_observations != self.source.page_image_count:
             raise ValueError("multimodal proposal receipt page count differs from its source")
         return self
+
+
+class KnowledgeAnalysisProposalReceiptV6(KnowledgeAnalysisProposalReceiptV5):
+    schema_version: Literal["knowledge-analysis-proposal-receipt/6.0"] = (
+        "knowledge-analysis-proposal-receipt/6.0"  # type: ignore[assignment]
+    )
 
 
 class KnowledgeAnalysisReviewDecision(FrozenModel):
@@ -1659,13 +1742,22 @@ class KnowledgeAnalysisResultV6(_KnowledgeAnalysisResultBase):
 
     @model_validator(mode="after")
     def v6_receipt_pointer(self) -> KnowledgeAnalysisResultV6:
+        receipt_version = (
+            "6.0"
+            if getattr(self, "schema_version", None) == "knowledge-analysis-result/7.0"
+            else "5.0"
+        )
         if self.proposal_receipt.schema_ref != (
-            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/5.0"
+            f"eom://schemas/knowledge/knowledge-analysis-proposal-receipt/{receipt_version}"
         ):
-            raise ValueError("knowledge analysis V6 requires a proposal receipt V5 pointer")
+            raise ValueError("accepted multimodal result requires its exact proposal receipt")
         if self.counts.page_image_observations != self.source.page_image_count:
             raise ValueError("accepted multimodal result page count differs from its source")
         return self
+
+
+class KnowledgeAnalysisResultV7(KnowledgeAnalysisResultV6):
+    schema_version: Literal["knowledge-analysis-result/7.0"] = "knowledge-analysis-result/7.0"  # type: ignore[assignment]
 
 
 class KnowledgeGraphProjections(FrozenModel):

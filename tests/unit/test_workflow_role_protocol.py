@@ -114,6 +114,7 @@ def test_all_workflow_schemas_are_valid_draft_2020_12() -> None:
     Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.7.0"))
     Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.8.0"))
     Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.9.0"))
+    Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.10.0"))
     for schema_id in RESULT_SCHEMA_FILES:
         Draft202012Validator.check_schema(load_role_result_schema(schema_id))
 
@@ -277,6 +278,9 @@ def test_role_schema_bundle_hash_is_canonical() -> None:
     assert role_schema_bundle_hash("workflow-role/1.9.0") == (
         "sha256:e70c0dbd4856aeabbbedac97552933d5edbd44221f0cb5e7f8763d315d14e207"
     )
+    assert role_schema_bundle_hash("workflow-role/1.10.0") == (
+        "sha256:3a224f960ae01574e25b44bd9a187ba60a98f0638ecb8c30d11de4fe8111ab43"
+    )
 
 
 def _unresolved_schema_references(schema: dict[str, object]) -> set[str]:
@@ -326,6 +330,11 @@ def test_multimodal_protocol_v1_9_closes_historical_transitive_references() -> N
     corrected_result = load_role_result_schema("knowledge-analysis-proposal-result@6.0")
     assert _unresolved_schema_references(corrected_input) == set()
     assert _unresolved_schema_references(corrected_result) == set()
+
+    typed_input = load_role_input_schema("support", "workflow-role/1.10.0")
+    typed_result = load_role_result_schema("knowledge-analysis-proposal-result@7.0")
+    assert _unresolved_schema_references(typed_input) == set()
+    assert _unresolved_schema_references(typed_result) == set()
 
 
 def _knowledge_analysis_request() -> dict[str, object]:
@@ -531,6 +540,19 @@ def test_schema_closed_multimodal_workflow_is_additive_and_immutable() -> None:
     analyze = compiled.definition.steps[0]
     assert analyze.type == "agent"
     assert analyze.result_schema == "knowledge-analysis-proposal-result@6.0"
+    assert compiled.definition.limits.max_rework_cycles == 0
+    assert compiled.definition.limits.max_step_attempts == 1
+
+
+def test_typed_identity_multimodal_workflow_is_additive_and_immutable() -> None:
+    compiled = compile_definition(ROOT / "config/workflows/knowledge-analysis.v7.yaml", {"support"})
+    assert compiled.sha256 == (
+        "sha256:8d02cea6befe17d8d93e89429f536545ffb4a483990f828132c6a82231531618"
+    )
+    assert compiled.definition.definition_version == "7.0.0"
+    analyze = compiled.definition.steps[0]
+    assert analyze.type == "agent"
+    assert analyze.result_schema == "knowledge-analysis-proposal-result@7.0"
     assert compiled.definition.limits.max_rework_cycles == 0
     assert compiled.definition.limits.max_step_attempts == 1
 

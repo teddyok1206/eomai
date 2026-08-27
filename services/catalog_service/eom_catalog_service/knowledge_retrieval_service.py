@@ -35,6 +35,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisRequestV6,
+    KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisSourceV3,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphSnapshotPointer,
@@ -973,7 +974,11 @@ class KnowledgeRetrievalApplicationService:
             document_source: (
                 EducationalDocumentKnowledgeSourceV3 | EducationalDocumentKnowledgeSourceV4 | None
             )
-            if schema_version == "knowledge-analysis-request/6.0":
+            if schema_version == "knowledge-analysis-request/7.0":
+                document_source = KnowledgeAnalysisRequestV7.model_validate(
+                    run.canonical_request
+                ).source
+            elif schema_version == "knowledge-analysis-request/6.0":
                 document_source = KnowledgeAnalysisRequestV6.model_validate(
                     run.canonical_request
                 ).source

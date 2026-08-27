@@ -16,10 +16,12 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisRequestV6,
+    KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
     KnowledgeAnalysisResultV5,
     KnowledgeAnalysisResultV6,
+    KnowledgeAnalysisResultV7,
     ReconcileKnowledgeAnalysisCommand,
     ReuseAcceptedKnowledgeAnalysisRange,
     ReviewKnowledgeAnalysisCommand,
@@ -669,8 +671,11 @@ class KnowledgeAnalysisBatchService:
                 | KnowledgeAnalysisRequestV4
                 | KnowledgeAnalysisRequestV5
                 | KnowledgeAnalysisRequestV6
+                | KnowledgeAnalysisRequestV7
             )
-            if request_version == "knowledge-analysis-request/6.0":
+            if request_version == "knowledge-analysis-request/7.0":
+                request = KnowledgeAnalysisRequestV7.model_validate(run.canonical_request)
+            elif request_version == "knowledge-analysis-request/6.0":
                 request = KnowledgeAnalysisRequestV6.model_validate(run.canonical_request)
             elif request_version == "knowledge-analysis-request/5.0":
                 request = KnowledgeAnalysisRequestV5.model_validate(run.canonical_request)
@@ -691,8 +696,13 @@ class KnowledgeAnalysisBatchService:
                 | KnowledgeAnalysisResultV4
                 | KnowledgeAnalysisResultV5
                 | KnowledgeAnalysisResultV6
+                | KnowledgeAnalysisResultV7
             )
-            if isinstance(request, KnowledgeAnalysisRequestV6):
+            if isinstance(request, KnowledgeAnalysisRequestV7):
+                accepted_result = KnowledgeAnalysisResultV7.model_validate(
+                    revision.result if revision is not None else None
+                )
+            elif isinstance(request, KnowledgeAnalysisRequestV6):
                 accepted_result = KnowledgeAnalysisResultV6.model_validate(
                     revision.result if revision is not None else None
                 )

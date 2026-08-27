@@ -13,6 +13,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisRequestV6,
+    KnowledgeAnalysisRequestV7,
 )
 from eom_identifiers import content_sha256
 from jsonschema import Draft202012Validator, FormatChecker
@@ -36,6 +37,7 @@ from eom_workflow.models import (
     KnowledgeAnalysisProposalRoleResultV4,
     KnowledgeAnalysisProposalRoleResultV5,
     KnowledgeAnalysisProposalRoleResultV6,
+    KnowledgeAnalysisProposalRoleResultV7,
     KnowledgeAnalysisWorkerRequest,
     KnowledgeAuthoringRoleResult,
     KnowledgeImageRoleResult,
@@ -91,6 +93,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "knowledge-analysis-proposal-result@4.0",
             "knowledge-analysis-proposal-result@5.0",
             "knowledge-analysis-proposal-result@6.0",
+            "knowledge-analysis-proposal-result@7.0",
         }
     ),
 }
@@ -117,6 +120,7 @@ RESULT_SCHEMA_FILES = {
     "knowledge-analysis-proposal-result@4.0": ("knowledge-analysis-proposal-result-v4.schema.json"),
     "knowledge-analysis-proposal-result@5.0": ("knowledge-analysis-proposal-result-v5.schema.json"),
     "knowledge-analysis-proposal-result@6.0": ("knowledge-analysis-proposal-result-v6.schema.json"),
+    "knowledge-analysis-proposal-result@7.0": ("knowledge-analysis-proposal-result-v7.schema.json"),
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -131,6 +135,7 @@ INPUT_SCHEMA_FILES_V1_6 = {"support": "knowledge-analysis-input-v3.schema.json"}
 INPUT_SCHEMA_FILES_V1_7 = {"support": "knowledge-analysis-input-v4.schema.json"}
 INPUT_SCHEMA_FILES_V1_8 = {"support": "knowledge-analysis-input-v5.schema.json"}
 INPUT_SCHEMA_FILES_V1_9 = {"support": "knowledge-analysis-input-v6.schema.json"}
+INPUT_SCHEMA_FILES_V1_10 = {"support": "knowledge-analysis-input-v7.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -154,6 +159,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "knowledge-analysis-proposal-result@4.0": "workflow-role/1.7.0",
     "knowledge-analysis-proposal-result@5.0": "workflow-role/1.8.0",
     "knowledge-analysis-proposal-result@6.0": "workflow-role/1.9.0",
+    "knowledge-analysis-proposal-result@7.0": "workflow-role/1.10.0",
 }
 PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.0.1": INPUT_SCHEMA_FILES,
@@ -166,6 +172,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.7.0": INPUT_SCHEMA_FILES_V1_7,
     "workflow-role/1.8.0": INPUT_SCHEMA_FILES_V1_8,
     "workflow-role/1.9.0": INPUT_SCHEMA_FILES_V1_9,
+    "workflow-role/1.10.0": INPUT_SCHEMA_FILES_V1_10,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -178,6 +185,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.7.0",
     "workflow-role/1.8.0",
     "workflow-role/1.9.0",
+    "workflow-role/1.10.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -191,6 +199,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_7.values(),
             *INPUT_SCHEMA_FILES_V1_8.values(),
             *INPUT_SCHEMA_FILES_V1_9.values(),
+            *INPUT_SCHEMA_FILES_V1_10.values(),
         }
     )
 )
@@ -257,7 +266,8 @@ def load_role_input_schema(
         )
     return _inline_catalog_schema(
         schema,
-        require_reference_closure=protocol_version == "workflow-role/1.9.0",
+        require_reference_closure=protocol_version
+        in {"workflow-role/1.9.0", "workflow-role/1.10.0"},
     )
 
 
@@ -270,7 +280,11 @@ def load_role_result_schema(schema_id: str) -> dict[str, Any]:
     schema = load_json_schema(ROLE_RESOURCE_ROOT.joinpath(file_name), logical_name)
     return _inline_catalog_schema(
         schema,
-        require_reference_closure=schema_id == "knowledge-analysis-proposal-result@6.0",
+        require_reference_closure=schema_id
+        in {
+            "knowledge-analysis-proposal-result@6.0",
+            "knowledge-analysis-proposal-result@7.0",
+        },
     )
 
 
@@ -319,6 +333,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return KnowledgeAnalysisProposalRoleResultV5.model_validate(value)
         if schema_id == "knowledge-analysis-proposal-result@6.0" and role == "support":
             return KnowledgeAnalysisProposalRoleResultV6.model_validate(value)
+        if schema_id == "knowledge-analysis-proposal-result@7.0" and role == "support":
+            return KnowledgeAnalysisProposalRoleResultV7.model_validate(value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":
@@ -373,6 +389,7 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
         "knowledge-analysis-proposal-result@4.0",
         "knowledge-analysis-proposal-result@5.0",
         "knowledge-analysis-proposal-result@6.0",
+        "knowledge-analysis-proposal-result@7.0",
     }:
         if not isinstance(worker_input.request, KnowledgeAnalysisWorkerRequest):
             raise WorkflowSchemaError("knowledge analysis result requires its typed worker request")
@@ -388,6 +405,7 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
             "knowledge-analysis-proposal-result@4.0": "KnowledgeAnalysisWorkerProposalV3",
             "knowledge-analysis-proposal-result@5.0": "KnowledgeAnalysisWorkerProposalV4",
             "knowledge-analysis-proposal-result@6.0": "KnowledgeAnalysisWorkerProposalV4",
+            "knowledge-analysis-proposal-result@7.0": "KnowledgeAnalysisWorkerProposalV5",
         }[schema_id]
         if proposal_ref.get("$ref") != f"#/$defs/{proposal_definition_name}":
             raise WorkflowSchemaError("knowledge analysis proposal reference is not projectable")
@@ -411,6 +429,7 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
                 KnowledgeAnalysisRequestV4,
                 KnowledgeAnalysisRequestV5,
                 KnowledgeAnalysisRequestV6,
+                KnowledgeAnalysisRequestV7,
             ),
         ):
             document_source = analysis_request.source
@@ -478,11 +497,13 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         "knowledge-analysis-proposal-result@4.0",
         "knowledge-analysis-proposal-result@5.0",
         "knowledge-analysis-proposal-result@6.0",
+        "knowledge-analysis-proposal-result@7.0",
     }:
         _project_knowledge_analysis_codex_contract(schema, schema_id=schema_id)
     if schema_id in {
         "knowledge-analysis-proposal-result@5.0",
         "knowledge-analysis-proposal-result@6.0",
+        "knowledge-analysis-proposal-result@7.0",
     }:
         _prune_unreferenced_definitions(schema)
     _normalize_codex_schema(schema)
@@ -493,6 +514,8 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
 def _project_knowledge_analysis_codex_contract(schema: dict[str, Any], *, schema_id: str) -> None:
     """Retain essential text presence while projecting unsupported canonical guards."""
 
+    if schema_id == "knowledge-analysis-proposal-result@7.0":
+        _project_typed_endpoint_identities(schema)
     _strip_knowledge_analysis_codex_guards(schema)
     properties = _mapping(schema, "properties")
     definitions = _mapping(schema, "$defs")
@@ -507,6 +530,7 @@ def _project_knowledge_analysis_codex_contract(schema: dict[str, Any], *, schema
         "knowledge-analysis-proposal-result@4.0": "KnowledgeAnalysisWorkerProposalV3",
         "knowledge-analysis-proposal-result@5.0": "KnowledgeAnalysisWorkerProposalV4",
         "knowledge-analysis-proposal-result@6.0": "KnowledgeAnalysisWorkerProposalV4",
+        "knowledge-analysis-proposal-result@7.0": "KnowledgeAnalysisWorkerProposalV5",
     }[schema_id]
     if proposal_reference != {"$ref": f"#/$defs/{proposal_definition_name}"}:
         raise WorkflowSchemaError("knowledge analysis proposal reference is not projectable")
@@ -523,6 +547,51 @@ def _project_knowledge_analysis_codex_contract(schema: dict[str, Any], *, schema
     # Codex strict output does not accept minLength. This equivalent lower-bound pattern prevents
     # an empty proposal from passing worker-side validation only to fail the canonical boundary.
     normalized_markdown["pattern"] = r"[\s\S]+"
+
+
+def _project_typed_endpoint_identities(schema: dict[str, Any]) -> None:
+    """Expand canonical all-of refinements into Codex-compatible strict any-of branches."""
+
+    definitions = _mapping(schema, "$defs")
+    proposal = _mapping(definitions, "KnowledgeAnalysisWorkerProposalV5")
+    proposal_properties = _mapping(proposal, "properties")
+    for property_name in ("nodes", "edges"):
+        collection = _mapping(proposal_properties, property_name)
+        items = _mapping(collection, "items")
+        reference = items.get("$ref")
+        prefix = "#/$defs/"
+        if not isinstance(reference, str) or not reference.startswith(prefix):
+            raise WorkflowSchemaError("typed identity collection is not projectable")
+        definition_name = reference.removeprefix(prefix)
+        typed_definition = _mapping(definitions, definition_name)
+        composition = typed_definition.get("allOf")
+        if not isinstance(composition, list) or len(composition) != 2:
+            raise WorkflowSchemaError("typed identity contract composition is invalid")
+        base_reference = composition[0]
+        refinements = composition[1]
+        if not isinstance(base_reference, dict) or set(base_reference) != {"$ref"}:
+            raise WorkflowSchemaError("typed identity base reference is invalid")
+        base_name = base_reference["$ref"]
+        if not isinstance(base_name, str) or not base_name.startswith(prefix):
+            raise WorkflowSchemaError("typed identity base reference is not local")
+        base = _mapping(definitions, base_name.removeprefix(prefix))
+        alternatives = refinements.get("anyOf")
+        if not isinstance(alternatives, list) or not alternatives:
+            raise WorkflowSchemaError("typed identity refinements are empty")
+        projected: list[dict[str, Any]] = []
+        for refinement in alternatives:
+            if not isinstance(refinement, dict) or refinement.get("type") != "object":
+                raise WorkflowSchemaError("typed identity refinement is invalid")
+            branch = copy.deepcopy(base)
+            branch_properties = _mapping(branch, "properties")
+            refinement_properties = _mapping(refinement, "properties")
+            for name, value in refinement_properties.items():
+                if not isinstance(value, dict) or name not in branch_properties:
+                    raise WorkflowSchemaError("typed identity field refinement is invalid")
+                branch_properties[name] = copy.deepcopy(value)
+            projected.append(branch)
+        typed_definition.clear()
+        typed_definition["anyOf"] = projected
 
 
 def _strip_knowledge_analysis_codex_guards(value: object) -> None:
@@ -733,6 +802,11 @@ def _inline_catalog_schema(
             "KnowledgeAnalysisRequestV6",
         ),
         (
+            "eom://schemas/knowledge/knowledge-analysis-request/7.0",
+            "knowledge-analysis-request-v7",
+            "KnowledgeAnalysisRequestV7",
+        ),
+        (
             "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0",
             "knowledge-analysis-worker-proposal",
             "KnowledgeAnalysisWorkerProposal",
@@ -751,6 +825,11 @@ def _inline_catalog_schema(
             "eom://schemas/knowledge/knowledge-analysis-worker-proposal/4.0",
             "knowledge-analysis-worker-proposal-v4",
             "KnowledgeAnalysisWorkerProposalV4",
+        ),
+        (
+            "eom://schemas/knowledge/knowledge-analysis-worker-proposal/5.0",
+            "knowledge-analysis-worker-proposal-v5",
+            "KnowledgeAnalysisWorkerProposalV5",
         ),
     )
     for contract_reference, catalog_name, definition_name in knowledge_contracts:

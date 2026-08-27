@@ -96,7 +96,7 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 101
+    assert len(entries) == 107
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {
@@ -129,17 +129,23 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         "knowledge-analysis-request-v4",
         "knowledge-analysis-request-v5",
         "knowledge-analysis-request-v6",
+        "knowledge-analysis-request-v7",
         "knowledge-analysis-worker-proposal-v2",
         "knowledge-analysis-worker-proposal-v3",
         "knowledge-analysis-worker-proposal-v4",
+        "knowledge-analysis-worker-proposal-v5",
         "knowledge-analysis-proposal-receipt-v2",
         "knowledge-analysis-proposal-receipt-v3",
         "knowledge-analysis-proposal-receipt-v4",
         "knowledge-analysis-proposal-receipt-v5",
+        "knowledge-analysis-proposal-receipt-v6",
         "knowledge-analysis-result-v3",
         "knowledge-analysis-result-v4",
         "knowledge-analysis-result-v5",
         "knowledge-analysis-result-v6",
+        "knowledge-analysis-result-v7",
+        "knowledge-analysis-proposed-node-v3",
+        "knowledge-analysis-proposed-edge-v4",
         "knowledge-graph-projection-v2",
         "knowledge-graph-snapshot-manifest-v3",
         "knowledge-graph-snapshot-manifest-v4",
