@@ -34,6 +34,7 @@ AUTHORIZATION_DENIED_MARKERS = (
 )
 FIXED_WORKER_TIMEOUT_SECONDS = 1800
 FIXED_ANALYSIS_WORKER_TIMEOUT_SECONDS = 7200
+FIXED_WORKER_CLIENT_GUARD_SECONDS = 30
 
 
 def fixed_worker_timeout_seconds(slot: WorkerSlot) -> int:
@@ -285,7 +286,10 @@ def launch_worker_unit(slot: WorkerSlot, job_id: str, *, timeout_seconds: int) -
         )
     unit_name = worker_unit_name(slot, job_id)
     try:
-        run = _start_unit(unit_name, timeout_seconds=timeout_seconds + 30)
+        run = _start_unit(
+            unit_name,
+            timeout_seconds=timeout_seconds + FIXED_WORKER_CLIENT_GUARD_SECONDS,
+        )
     except subprocess.TimeoutExpired as exc:
         raise PlatformError(ErrorCode.WORKER_TIMEOUT, "fixed worker unit timed out") from exc
     except (OSError, ValueError) as exc:

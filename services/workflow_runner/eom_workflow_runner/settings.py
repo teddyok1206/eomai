@@ -15,6 +15,7 @@ DEFAULT_HUMAN_ACTOR_CONFIG = Path("/etc/eom/human-actors.yaml")
 DEFAULT_WORKFLOW_RUNNER_CONFIG = Path("/etc/eom/workflow-runner.yaml")
 DEFAULT_WORKFLOW_PROMPT_ROOT = Path("/etc/eom/workflow-prompts")
 MAX_WORKFLOW_CONFIGURATION_BYTES = 1_048_576
+MAX_WORKFLOW_COMMAND_LEASE_SECONDS = 14_400
 
 
 class HumanActor(BaseModel):
@@ -50,7 +51,7 @@ class RunnerConfig(BaseModel):
 
     version: int = Field(ge=1)
     poll_interval_seconds: int = Field(ge=1, le=60)
-    command_lease_seconds: int = Field(ge=10, le=3600)
+    command_lease_seconds: int = Field(ge=10, le=MAX_WORKFLOW_COMMAND_LEASE_SECONDS)
     max_commands_per_run: int = Field(ge=1, le=1000)
 
 

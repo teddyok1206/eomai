@@ -9,6 +9,7 @@ from eom_workflow_runner.settings import (
     DEFAULT_WORKFLOW_DEFINITION,
     DEFAULT_WORKFLOW_PROMPT_ROOT,
     DEFAULT_WORKFLOW_RUNNER_CONFIG,
+    MAX_WORKFLOW_COMMAND_LEASE_SECONDS,
     WorkflowSettings,
 )
 
@@ -78,6 +79,29 @@ def test_operator_yaml_size_is_bounded(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="invalid workflow configuration"):
         WorkflowSettings(actor_config_path=actors).load_actors()
+
+
+def test_runner_lease_bound_covers_long_analysis_without_becoming_unbounded(
+    tmp_path: Path,
+) -> None:
+    runner = tmp_path / "runner.yaml"
+    runner.write_text(
+        "version: 1\npoll_interval_seconds: 2\n"
+        "command_lease_seconds: 7500\nmax_commands_per_run: 100\n",
+        encoding="utf-8",
+    )
+    settings = WorkflowSettings(runner_config_path=runner)
+
+    assert settings.load_runner().command_lease_seconds == 7500
+
+    runner.write_text(
+        "version: 1\npoll_interval_seconds: 2\n"
+        f"command_lease_seconds: {MAX_WORKFLOW_COMMAND_LEASE_SECONDS + 1}\n"
+        "max_commands_per_run: 100\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="invalid workflow configuration"):
+        settings.load_runner()
 
 
 def test_runner_configuration_installer_has_narrow_operator_scope() -> None:

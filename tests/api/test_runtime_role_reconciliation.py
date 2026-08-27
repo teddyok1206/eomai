@@ -230,10 +230,15 @@ def test_disposable_database_runs_workflow_preclaim_integration() -> None:
     assert "tests/integration/test_control_plane_persistence.py" in source
     assert "tests/integration/test_knowledge_analysis_service.py" in source
     assert "tests/integration/test_knowledge_analysis_batch_service.py" in source
-    assert "tests/integration/test_knowledge_analysis_v7.py" in source
-    v7_index = source.index("tests/integration/test_knowledge_analysis_v7.py")
-    assert source.index("tests/integration/test_knowledge_analysis_service.py") < v7_index
-    assert source.index("tests/integration/test_knowledge_analysis_batch_service.py") < v7_index
+    lineage = "tests/integration/test_knowledge_analysis_protocol_lineage.py"
+    assert lineage in source
+    lineage_index = source.index(lineage)
+    assert source.index("tests/integration/test_knowledge_analysis_service.py") < lineage_index
+    assert (
+        source.index("tests/integration/test_knowledge_analysis_batch_service.py") < lineage_index
+    )
+    assert "tests/integration/test_knowledge_analysis_v7.py" not in source
+    assert "tests/integration/test_knowledge_analysis_v9.py" not in source
 
 
 def test_disposable_migration_verifies_head_and_migration_0006_objects() -> None:

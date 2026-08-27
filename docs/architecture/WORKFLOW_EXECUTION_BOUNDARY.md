@@ -118,6 +118,17 @@ root-owned Codex executable before invoking the fixed Codex CLI.
 | `--collect` | oneshot process ends; status remains queryable | changed; no process lingers and exit metadata remains available |
 | implicit capability/address policy | empty capabilities, kernel-module/control-group/SUID/personality/realtime/device/host/clock guards, fixed address families, nested-sandbox-owned proc/sys boundary | strengthened without blocking Codex sandbox construction or network access |
 
+### Command lease versus worker wall clock
+
+A workflow command remains the exclusive owner of one synchronous role execution. The command
+lease therefore has to outlive the longest fixed worker wall clock, including the client-side
+`systemctl --wait` guard. Slot 05 has the largest reviewed ceiling: 7,200 seconds plus a 30-second
+client guard. The operator configuration uses a 7,500-second lease, leaving bounded completion and
+transaction headroom while preserving expired-lease recovery after runner failure. Runtime doctor
+fails closed unless the configured lease is strictly greater than that maximum wall clock. This
+prevents a second runner from reclaiming a still-executing command and relying on downstream
+idempotency to mask concurrent ownership.
+
 The fixed worker address-family allowlist includes `AF_NETLINK` solely because Bubblewrap uses a
 route netlink socket to configure loopback inside the worker's private sandbox network namespace.
 It does not include `AF_PACKET` or grant host-network access; the resolved Codex sandbox remains

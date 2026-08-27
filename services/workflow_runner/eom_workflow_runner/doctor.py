@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from alembic.runtime.migration import MigrationContext
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.settings import Settings
+from eom_orchestrator.worker_systemd import (
+    FIXED_ANALYSIS_WORKER_TIMEOUT_SECONDS,
+    FIXED_WORKER_CLIENT_GUARD_SECONDS,
+)
 from sqlalchemy import Engine, text
 
 from eom_workflow_runner.readiness import (
@@ -82,6 +86,13 @@ def run_workflow_doctor(
 
     try:
         runner = settings.load_runner()
+        maximum_worker_wall_clock_seconds = (
+            max(
+                platform_settings.worker_timeout_seconds,
+                FIXED_ANALYSIS_WORKER_TIMEOUT_SECONDS,
+            )
+            + FIXED_WORKER_CLIENT_GUARD_SECONDS
+        )
         checks.append(
             _check(
                 "workflow_runner_config",
@@ -93,10 +104,10 @@ def run_workflow_doctor(
         checks.append(
             _check(
                 "workflow_command_lease",
-                runner.command_lease_seconds > platform_settings.worker_timeout_seconds,
+                runner.command_lease_seconds > maximum_worker_wall_clock_seconds,
                 (
                     f"lease={runner.command_lease_seconds}s,"
-                    f"worker_timeout={platform_settings.worker_timeout_seconds}s"
+                    f"max_worker_wall_clock={maximum_worker_wall_clock_seconds}s"
                 ),
                 "WORKFLOW_COMMAND_LEASE_INVALID",
             )

@@ -316,7 +316,7 @@ assert settings.actor_config_path == actors
 assert settings.runner_config_path == runner
 assert settings.prompt_root == prompts
 assert settings.load_actors().role_for("reviewer_01") == "reviewer"
-assert settings.load_runner().command_lease_seconds == 900
+assert settings.load_runner().command_lease_seconds == 7500
 compiled = compile_definition_data(
     load_workflow_yaml(settings.definition_path),
     str(settings.definition_path),
