@@ -545,7 +545,7 @@ class FakeGateway:
                 curriculum_unit_keys=("1-(1)",),
                 source_artifact_revision_id="rev_" + "a" * 32,
                 source_sha256="sha256:" + "b" * 64,
-                analysis_artifact_revision_id=f"rev_{index:032x}",
+                analysis_artifact_revision_id="rev_" + "c" * 32,
                 analysis_schema_ref=(
                     "eom://schemas/legacy-knowledge/textbook-analysis-bundle-manifest/2.0"
                 ),

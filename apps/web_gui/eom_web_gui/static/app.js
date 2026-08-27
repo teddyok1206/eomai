@@ -1281,11 +1281,21 @@ function renderKnowledgeFindings(findings) {
     root.append(empty);
     return;
   }
+  const labels = {
+    ANALYSIS_REVISION_REUSED: "서로 다른 문서가 동일한 입력 분석 자료를 참조함",
+    ANALYSIS_RUN_REUSED: "동일한 분석 결과가 여러 페이지 범위에 연결됨",
+    BATCH_RANGE_COUNT_MISMATCH: "배치의 예상 범위 수와 관찰된 범위 수가 다름",
+    PAGE_COVERAGE_GAP: "분석 대상 페이지 범위에 누락이 있음",
+    PAGE_COVERAGE_OVERLAP: "분석 대상 페이지 범위가 겹침",
+    RANGE_BATCH_POINTER_MISMATCH: "페이지 범위가 다른 배치를 가리킴",
+    RANGE_ORDINAL_SEQUENCE_INVALID: "페이지 범위 처리 순서가 연속적이지 않음",
+    SOURCE_POINTER_DRIFT: "한 문서 안에서 원본 자료 포인터가 일치하지 않음",
+  };
   for (const finding of findings) {
     const item = document.createElement("article");
     item.className = `quality-finding${finding.severity === "ERROR" ? " error" : ""}`;
     const code = document.createElement("strong");
-    code.textContent = finding.code;
+    code.textContent = labels[finding.code] || finding.code;
     const context = document.createElement("small");
     const pageScope = finding.first_physical_page === null ? "" : ` · pages ${finding.first_physical_page}–${finding.last_physical_page}`;
     context.textContent = `${finding.severity}${finding.document_revision_id ? ` · ${finding.document_revision_id}` : ""}${pageScope}`;

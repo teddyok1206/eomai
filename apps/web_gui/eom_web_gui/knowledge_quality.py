@@ -54,7 +54,7 @@ def build_knowledge_quality_report(
             )
         )
 
-    _append_duplicate_pointer_findings(
+    _append_cross_document_pointer_findings(
         findings,
         ordered,
         code=KnowledgeQualityFindingCode.ANALYSIS_REVISION_REUSED,
@@ -163,6 +163,8 @@ def build_knowledge_quality_report(
                 value.document_id,
                 value.source_artifact_revision_id,
                 value.source_sha256,
+                value.analysis_artifact_revision_id,
+                value.analysis_schema_ref,
             )
             for value in document_ranges
         }
@@ -225,8 +227,9 @@ def build_knowledge_quality_report(
         visual_input_page_count=visual_input_page_count,
         gap_page_count=gap_page_count,
         overlap_page_count=overlap_page_count,
-        duplicate_analysis_revision_count=_duplicate_pointer_count(
-            value.analysis_artifact_revision_id for value in ordered
+        duplicate_analysis_revision_count=_cross_document_pointer_count(
+            ordered,
+            (value.analysis_artifact_revision_id for value in ordered),
         ),
         duplicate_analysis_run_count=_duplicate_pointer_count(
             value.analysis_run_id for value in ordered
@@ -256,9 +259,45 @@ def _append_duplicate_pointer_findings(
             findings.append(_finding(code, "ERROR", matching))
 
 
+def _append_cross_document_pointer_findings(
+    findings: list[KnowledgeQualityFinding],
+    ranges: tuple[KnowledgeAnalysisBatchRangeStatus, ...],
+    *,
+    code: KnowledgeQualityFindingCode,
+    pointers: Iterable[str | None],
+) -> None:
+    """Reject pointer sharing across documents while allowing normal range sharing.
+
+    ``analysis_artifact_revision_id`` identifies the immutable input analysis
+    manifest attached to an educational-document revision. Every page range of
+    that document is therefore expected to reference the same revision.
+    """
+
+    by_pointer: dict[str, list[KnowledgeAnalysisBatchRangeStatus]] = defaultdict(list)
+    for value, pointer in zip(ranges, pointers, strict=True):
+        if pointer is not None:
+            by_pointer[pointer].append(value)
+    for pointer in sorted(by_pointer):
+        matching = tuple(by_pointer[pointer])
+        document_revisions = {value.document_revision_id for value in matching}
+        if len(document_revisions) > 1:
+            findings.append(_finding(code, "ERROR", matching))
+
+
 def _duplicate_pointer_count(pointers: Iterable[str | None]) -> int:
     counts = Counter(pointer for pointer in pointers if pointer is not None)
     return sum(1 for count in counts.values() if count > 1)
+
+
+def _cross_document_pointer_count(
+    ranges: tuple[KnowledgeAnalysisBatchRangeStatus, ...],
+    pointers: Iterable[str | None],
+) -> int:
+    documents_by_pointer: dict[str, set[str]] = defaultdict(set)
+    for value, pointer in zip(ranges, pointers, strict=True):
+        if pointer is not None:
+            documents_by_pointer[pointer].add(value.document_revision_id)
+    return sum(1 for documents in documents_by_pointer.values() if len(documents) > 1)
 
 
 def _finding(

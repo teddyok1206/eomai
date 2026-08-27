@@ -64,7 +64,8 @@ def _range(
             "curriculum_unit_keys": ("1-(1)",),
             "source_artifact_revision_id": source_revision or "rev_" + "4" * 32,
             "source_sha256": "sha256:" + "5" * 64,
-            "analysis_artifact_revision_id": analysis_revision or f"rev_{ordinal + 20:032x}",
+            "analysis_artifact_revision_id": analysis_revision
+            or f"rev_{document_revision_id[-32:]}",
             "analysis_schema_ref": analysis_schema,
             "analysis_run_id": analysis_run,
             "state": state,
@@ -74,9 +75,17 @@ def _range(
 
 
 def test_quality_report_is_deterministic_schema_valid_and_counts_visual_pages() -> None:
+    shared_analysis_revision = "rev_" + "9" * 32
     ranges = (
-        _range(0, 1, 4, state="ACCEPTED", analysis_run="analysisrun_" + "6" * 32),
-        _range(1, 5, 8),
+        _range(
+            0,
+            1,
+            4,
+            state="ACCEPTED",
+            analysis_revision=shared_analysis_revision,
+            analysis_run="analysisrun_" + "6" * 32,
+        ),
+        _range(1, 5, 8, analysis_revision=shared_analysis_revision),
     )
     first = build_knowledge_quality_report(_batch(), reversed(ranges))
     second = build_knowledge_quality_report(_batch(), ranges)
@@ -154,8 +163,43 @@ def test_quality_report_fails_closed_on_overlap_ordinal_and_batch_pointer_drift(
     }
 
 
-def test_quality_report_fails_on_duplicate_result_pointers() -> None:
+def test_quality_report_allows_one_document_ranges_to_share_input_analysis_revision() -> None:
     shared_revision = "rev_" + "a" * 32
+    report = build_knowledge_quality_report(
+        _batch(),
+        (
+            _range(0, 1, 2, state="ACCEPTED", analysis_revision=shared_revision),
+            _range(1, 3, 4, analysis_revision=shared_revision),
+        ),
+    )
+
+    assert report.duplicate_analysis_revision_count == 0
+    assert report.quality_state == "PASS"
+    assert report.findings == ()
+
+
+def test_quality_report_fails_on_cross_document_analysis_revision_reuse() -> None:
+    shared_revision = "rev_" + "a" * 32
+    report = build_knowledge_quality_report(
+        _batch(),
+        (
+            _range(0, 1, 2, state="ACCEPTED", analysis_revision=shared_revision),
+            _range(
+                1,
+                3,
+                4,
+                document_revision_id="edudocrev_" + "c" * 32,
+                analysis_revision=shared_revision,
+            ),
+        ),
+    )
+
+    assert report.duplicate_analysis_revision_count == 1
+    assert report.quality_state == "FAIL"
+    assert [finding.code.value for finding in report.findings] == ["ANALYSIS_REVISION_REUSED"]
+
+
+def test_quality_report_fails_on_duplicate_result_run_pointer() -> None:
     shared_run = "analysisrun_" + "b" * 32
     report = build_knowledge_quality_report(
         _batch(),
@@ -165,26 +209,34 @@ def test_quality_report_fails_on_duplicate_result_pointers() -> None:
                 1,
                 2,
                 state="ACCEPTED",
-                analysis_revision=shared_revision,
                 analysis_run=shared_run,
             ),
             _range(
                 1,
                 3,
                 4,
-                analysis_revision=shared_revision,
                 analysis_run=shared_run,
             ),
         ),
     )
 
-    assert report.duplicate_analysis_revision_count == 1
+    assert report.duplicate_analysis_revision_count == 0
     assert report.duplicate_analysis_run_count == 1
     assert report.quality_state == "FAIL"
-    assert {finding.code.value for finding in report.findings} == {
-        "ANALYSIS_REVISION_REUSED",
-        "ANALYSIS_RUN_REUSED",
-    }
+    assert [finding.code.value for finding in report.findings] == ["ANALYSIS_RUN_REUSED"]
+
+
+def test_quality_report_fails_on_analysis_manifest_pointer_drift_within_document() -> None:
+    report = build_knowledge_quality_report(
+        _batch(),
+        (
+            _range(0, 1, 2, state="ACCEPTED", analysis_revision="rev_" + "a" * 32),
+            _range(1, 3, 4, analysis_revision="rev_" + "b" * 32),
+        ),
+    )
+
+    assert report.quality_state == "FAIL"
+    assert [finding.code.value for finding in report.findings] == ["SOURCE_POINTER_DRIFT"]
 
 
 def test_quality_report_fails_on_source_pointer_drift() -> None:
