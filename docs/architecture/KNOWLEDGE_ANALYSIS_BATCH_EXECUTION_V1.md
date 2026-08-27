@@ -66,6 +66,13 @@ identity, description, creation timestamp, and range timeout to the existing val
 7,200 seconds. New analysis requests may pin V5; historical V4 plans and failed batches retain their
 original revision and cannot be reinterpreted. The batch aggregate itself has no wall-clock expiry.
 
+V6 added endpoint-typed edges under `workflow-role/1.6.0`. V7 is another additive immutable preset
+revision under `workflow-role/1.7.0`: it selects proposal `/3.0`, separates reusable ambiguity
+`category_code` from record identity, and performs the complete ID/reference/provenance integrity
+pass before Artifact commit. V4, V5, and V6 rows and result bytes remain historical. A V7 batch
+cannot `REUSE_ACCEPTED` a range produced by an older preset revision; full-corpus V7 execution uses
+fresh range/run/job identities and still permits only one attempt per range.
+
 Dominant access remains indexed binding-expiry selection followed by deterministic slot order;
 there is no new scan, queue, cache, table, migration, or dependency. Observation persistence remains
 one short transaction per binding. Simply extending an already-persisted V4 revision was rejected

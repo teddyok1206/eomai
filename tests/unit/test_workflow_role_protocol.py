@@ -111,6 +111,7 @@ def test_all_workflow_schemas_are_valid_draft_2020_12() -> None:
     for role in ("authoring", "image", "review", "item_management"):
         Draft202012Validator.check_schema(load_role_input_schema(role))
     Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.4.0"))
+    Draft202012Validator.check_schema(load_role_input_schema("support", "workflow-role/1.7.0"))
     for schema_id in RESULT_SCHEMA_FILES:
         Draft202012Validator.check_schema(load_role_result_schema(schema_id))
 
@@ -258,6 +259,15 @@ def test_role_schema_bundle_hash_is_canonical() -> None:
     )
     assert role_schema_bundle_hash("workflow-role/1.4.0") == (
         "sha256:c385885dc445cee96ae8f0c2a122678c3db68f9b10d8162c7695108fbcc47b4b"
+    )
+    assert role_schema_bundle_hash("workflow-role/1.5.0") == (
+        "sha256:92bfb56d96282e622a008ce4216d7dc03badea391e33dd3fd9a89c1f6d3255c9"
+    )
+    assert role_schema_bundle_hash("workflow-role/1.6.0") == (
+        "sha256:089f00931b2e32a39d472f9481bd50d1d641255c0bce9e9dd1c74a5c13df9878"
+    )
+    assert role_schema_bundle_hash("workflow-role/1.7.0") == (
+        "sha256:c3c13aef2f797fe255d7ca141ad374069b0e2c000314292ba68b99479f525058"
     )
 
 
@@ -425,6 +435,19 @@ def test_knowledge_analysis_workflow_is_single_support_step_and_immutable() -> N
         "sha256:786c7e7d2a65fc5dd30b47faff87c363646c2c1d9a44956e66deb46564accedf"
     )
     assert [step.key for step in compiled.definition.steps] == ["analyze", "complete"]
+    assert compiled.definition.limits.max_rework_cycles == 0
+    assert compiled.definition.limits.max_step_attempts == 1
+
+
+def test_integrity_knowledge_analysis_workflow_is_additive_and_immutable() -> None:
+    compiled = compile_definition(ROOT / "config/workflows/knowledge-analysis.v4.yaml", {"support"})
+    assert compiled.sha256 == (
+        "sha256:448a0ea91c17a074e3ee03af79534a1d94865a04d88c2da2da3d1ce0e2e90fba"
+    )
+    assert compiled.definition.definition_version == "4.0.0"
+    analyze = compiled.definition.steps[0]
+    assert analyze.type == "agent"
+    assert analyze.result_schema == "knowledge-analysis-proposal-result@4.0"
     assert compiled.definition.limits.max_rework_cycles == 0
     assert compiled.definition.limits.max_step_attempts == 1
 

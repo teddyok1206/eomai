@@ -16,14 +16,18 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
+    KnowledgeAnalysisProposalReceiptV4,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
+    KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisResultV2,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
+    KnowledgeAnalysisResultV5,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
+    KnowledgeAnalysisWorkerProposalV3,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphCounts,
     KnowledgeGraphProjections,
@@ -115,12 +119,16 @@ KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH = content_sha256(
     }
 )
 type KnowledgeAnalysisRequestContract = (
-    KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4
+    KnowledgeAnalysisRequestV2
+    | KnowledgeAnalysisRequestV3
+    | KnowledgeAnalysisRequestV4
+    | KnowledgeAnalysisRequestV5
 )
 type KnowledgeAnalysisReceiptContract = (
     KnowledgeAnalysisProposalReceipt
     | KnowledgeAnalysisProposalReceiptV2
     | KnowledgeAnalysisProposalReceiptV3
+    | KnowledgeAnalysisProposalReceiptV4
 )
 type KnowledgeGraphSnapshotContract = (
     KnowledgeGraphSnapshotManifestV2 | KnowledgeGraphSnapshotManifestV3
@@ -348,7 +356,9 @@ class KnowledgeGraphPublicationService:
         try:
             request_version = run.canonical_request.get("schema_version")
             request: KnowledgeAnalysisRequestContract
-            if request_version == "knowledge-analysis-request/4.0":
+            if request_version == "knowledge-analysis-request/5.0":
+                request = KnowledgeAnalysisRequestV5.model_validate(run.canonical_request)
+            elif request_version == "knowledge-analysis-request/4.0":
                 request = KnowledgeAnalysisRequestV4.model_validate(run.canonical_request)
             elif request_version == "knowledge-analysis-request/3.0":
                 request = KnowledgeAnalysisRequestV3.model_validate(run.canonical_request)
@@ -384,11 +394,17 @@ class KnowledgeGraphPublicationService:
             manifest_artifact_type="knowledge-analysis-accepted-result",
             primary_file="evidence/accepted-result.json",
         )
-        endpoint_typed_document = isinstance(request, KnowledgeAnalysisRequestV4)
-        document_source = isinstance(
-            request, (KnowledgeAnalysisRequestV3, KnowledgeAnalysisRequestV4)
+        integrity_document = isinstance(request, KnowledgeAnalysisRequestV5)
+        endpoint_typed_document = isinstance(
+            request, (KnowledgeAnalysisRequestV4, KnowledgeAnalysisRequestV5)
         )
-        if endpoint_typed_document:
+        document_source = isinstance(
+            request,
+            (KnowledgeAnalysisRequestV3, KnowledgeAnalysisRequestV4, KnowledgeAnalysisRequestV5),
+        )
+        if integrity_document:
+            accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/5.0"
+        elif endpoint_typed_document:
             accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/4.0"
         elif document_source:
             accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/3.0"
@@ -407,12 +423,27 @@ class KnowledgeGraphPublicationService:
             max_bytes=1_048_576,
             expected_bytes=accepted_revision.content_bytes,
         )
-        accepted: KnowledgeAnalysisResultV2 | KnowledgeAnalysisResultV3 | KnowledgeAnalysisResultV4
+        accepted: (
+            KnowledgeAnalysisResultV2
+            | KnowledgeAnalysisResultV3
+            | KnowledgeAnalysisResultV4
+            | KnowledgeAnalysisResultV5
+        )
         database_accepted: (
-            KnowledgeAnalysisResultV2 | KnowledgeAnalysisResultV3 | KnowledgeAnalysisResultV4
+            KnowledgeAnalysisResultV2
+            | KnowledgeAnalysisResultV3
+            | KnowledgeAnalysisResultV4
+            | KnowledgeAnalysisResultV5
         )
         try:
-            if endpoint_typed_document:
+            if integrity_document:
+                validate_contract("knowledge-analysis-result-v5", accepted_value)
+                accepted = KnowledgeAnalysisResultV5.model_validate(accepted_value)
+                validate_contract("knowledge-analysis-result-v5", accepted_revision.result)
+                database_accepted = KnowledgeAnalysisResultV5.model_validate(
+                    accepted_revision.result
+                )
+            elif endpoint_typed_document:
                 validate_contract("knowledge-analysis-result-v4", accepted_value)
                 accepted = KnowledgeAnalysisResultV4.model_validate(accepted_value)
                 validate_contract("knowledge-analysis-result-v4", accepted_revision.result)
@@ -468,7 +499,16 @@ class KnowledgeGraphPublicationService:
         receipt: KnowledgeAnalysisReceiptContract
         database_receipt: KnowledgeAnalysisReceiptContract
         try:
-            if endpoint_typed_document:
+            if integrity_document:
+                validate_contract("knowledge-analysis-proposal-receipt-v4", proposal_receipt_value)
+                receipt = KnowledgeAnalysisProposalReceiptV4.model_validate(proposal_receipt_value)
+                validate_contract(
+                    "knowledge-analysis-proposal-receipt-v4", proposal_revision.result
+                )
+                database_receipt = KnowledgeAnalysisProposalReceiptV4.model_validate(
+                    proposal_revision.result
+                )
+            elif endpoint_typed_document:
                 validate_contract("knowledge-analysis-proposal-receipt-v3", proposal_receipt_value)
                 receipt = KnowledgeAnalysisProposalReceiptV3.model_validate(proposal_receipt_value)
                 validate_contract(
@@ -646,7 +686,11 @@ class KnowledgeGraphPublicationService:
 
     def _load_proposal(
         self, receipt: KnowledgeAnalysisReceiptContract
-    ) -> KnowledgeAnalysisWorkerProposal | KnowledgeAnalysisWorkerProposalV2:
+    ) -> (
+        KnowledgeAnalysisWorkerProposal
+        | KnowledgeAnalysisWorkerProposalV2
+        | KnowledgeAnalysisWorkerProposalV3
+    ):
         try:
             return resolve_knowledge_analysis_proposal(self.artifacts, receipt)
         except KnowledgeProposalResolutionError as exc:

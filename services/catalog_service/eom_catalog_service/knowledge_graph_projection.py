@@ -14,6 +14,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisSourceV3,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
+    KnowledgeAnalysisWorkerProposalV3,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphStructureManifest,
     KnowledgeNodeType,
@@ -82,7 +83,11 @@ class AcceptedAnalysisProposal:
     analysis_run_id: str
     source: KnowledgeAnalysisSourceV3
     accepted_result: KnowledgeArtifactMemberPointer
-    proposal: KnowledgeAnalysisWorkerProposal | KnowledgeAnalysisWorkerProposalV2
+    proposal: (
+        KnowledgeAnalysisWorkerProposal
+        | KnowledgeAnalysisWorkerProposalV2
+        | KnowledgeAnalysisWorkerProposalV3
+    )
 
 
 def _proposal_edge_type(edge: object) -> str:

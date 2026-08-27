@@ -18,10 +18,10 @@ workflow/protocol identities resolved by the existing application service.
 
 The dominant operations are ordered page traversal, range overlap with curriculum mappings,
 idempotent request creation, FIFO processing under one support-slot capacity, and append-only status
-accounting. A protected batch manifest therefore stores an ordered immutable tuple of page ranges
-and a map keyed by the stable range key for O(1) status lookup. PostgreSQL remains authoritative for
-each Knowledge Analysis run and its lifecycle; the batch manifest is operator evidence, not a new
-domain registry or a copy of worker output.
+accounting. The durable Catalog batch aggregate stores normalized ordered range rows and immutable
+pointers in PostgreSQL; it does not store page text or worker output. A protected operator manifest
+is submission evidence, while PostgreSQL remains authoritative for batch, range, analysis-run, and
+workflow lifecycles.
 
 For each included current approved document revision:
 
@@ -35,10 +35,11 @@ For each included current approved document revision:
 6. derive one distinct idempotency key per pinned document revision and range; and
 7. never substitute a newer revision after the manifest is frozen.
 
-The initial production batch uses a conservative four-page maximum, matching the successful pilot
-scale under the fixed 600-second worker sandbox. The Execution Preset may declare a larger policy
-timeout, but that value does not override the systemd hard stop. Increasing the fixed worker timeout
-is a separate infrastructure/security review and is not hidden inside this batch.
+The historical pilot used a conservative four-page maximum. Current range size is frozen in the
+reviewed batch request and must satisfy the existing 32-page API bound and the released preset's
+7,200-second execution window. Operators must not change range boundaries after creation or extend
+a worker/systemd timeout as an ad hoc recovery. V7 pins `workflow-role/1.7.0` and the integrity-
+complete worker proposal `/3.0`; historical V4/V5/V6 batches remain immutable evidence.
 
 For `n` pages, planning is O(n + m log m), where `m` is the number of curriculum boundaries, and the
 manifest is O(n / 4). Each request materializes at most four Markdown pages plus the pinned index,
@@ -47,21 +48,24 @@ must queue rather than add slots or concurrent Codex processes.
 
 ## Transaction, failure, and review behavior
 
-Each API create is its own idempotent transaction. A range is considered submitted only after the
-API returns its canonical `analysis_run_id`; a lost response may be recovered only with the same
-idempotency key and identical body. No failed worker run is automatically retried. Independent later
-ranges may continue, while the failed range and evidence remain visible for explicit remediation.
+One fresh-auth API operation authorizes and creates the complete durable batch. The Catalog-owned
+runner subsequently claims one range at a time with its persisted lease and advances it through the
+ordinary Knowledge Analysis service; it neither retains nor manufactures a browser session. A lost
+internal response is recovered only by the existing immutable idempotency key and identical body.
+No failed worker run is automatically retried. A failed range is preserved and blocks that batch;
+recovery requires a separately reviewed new batch or explicit domain operation, never mutation of
+the failed row.
 
 Workflow completion is reconciled through the existing Knowledge Analysis application operation.
 Low-risk proposals may become `ACCEPTED` according to the pinned released risk policy. Any
 `NEEDS_REVIEW` run remains pending for a human decision; the batch must never synthesize approval.
 Graph publication and Evidence Bundle generation are separate, explicitly authorized boundaries.
 
-The batch coordinator must stop before creating work if the preset pointer, support capability,
-auth binding, source revision, rights contract, page coverage, or curriculum mapping differs from
-the reviewed manifest. It must also stop submitting new ranges when its authenticated operator
-session is no longer fresh. It may resume only from its protected journal and immutable idempotency
-keys; it may not guess missing state or resolve an implicit latest revision.
+Batch creation must stop if the preset pointer, support capability, source revision, rights
+contract, page coverage, or curriculum mapping differs from the reviewed manifest. After that
+single authorization transaction commits, ordinary progress is intentionally independent of the
+browser session lifetime. The runner resumes only from indexed PostgreSQL state, leases, and
+immutable idempotency keys; it may not guess missing state or resolve an implicit latest revision.
 
 ## Alternatives and trade-offs
 

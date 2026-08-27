@@ -18,12 +18,15 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
+    KnowledgeAnalysisProposalReceiptV4,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
+    KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisResultV2,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
+    KnowledgeAnalysisResultV5,
     KnowledgeAnalysisReviewDecision,
     KnowledgeAnalysisRiskPolicy,
     KnowledgeAnalysisSourceV3,
@@ -87,6 +90,7 @@ from eom_catalog_service.settings import CatalogSettings
 KNOWLEDGE_ANALYSIS_WORKFLOW_VERSION = "1.0.0"
 KNOWLEDGE_ANALYSIS_DOCUMENT_WORKFLOW_VERSION = "2.0.0"
 KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_WORKFLOW_VERSION = "3.0.0"
+KNOWLEDGE_ANALYSIS_INTEGRITY_DOCUMENT_WORKFLOW_VERSION = "4.0.0"
 KNOWLEDGE_ANALYSIS_CATALOG_PROTOCOL = "catalog/1.2"
 KNOWLEDGE_ANALYSIS_CATALOG_SCHEMA_HASH = content_sha256(
     {
@@ -127,6 +131,20 @@ KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_CATALOG_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+KNOWLEDGE_ANALYSIS_INTEGRITY_DOCUMENT_CATALOG_PROTOCOL = "catalog/1.5"
+KNOWLEDGE_ANALYSIS_INTEGRITY_DOCUMENT_CATALOG_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": KNOWLEDGE_ANALYSIS_INTEGRITY_DOCUMENT_CATALOG_PROTOCOL,
+        "contracts": [
+            "knowledge-analysis-request/5.0",
+            "knowledge-analysis-worker-proposal/3.0",
+            "knowledge-analysis-proposal-receipt/4.0",
+            "knowledge-analysis-risk-policy/1.0",
+            "knowledge-analysis-review-decision/1.0",
+            "knowledge-analysis-result/5.0",
+        ],
+    }
+)
 REQUESTED_OUTPUTS = (
     "NORMALIZED_MARKDOWN",
     "SOURCE_ANCHORS",
@@ -138,15 +156,22 @@ REQUESTED_OUTPUTS = (
 )
 TERMINAL_RUN_STATES = frozenset({"ACCEPTED", "REJECTED", "FAILED", "CANCELLED"})
 type KnowledgeAnalysisRequestContract = (
-    KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4
+    KnowledgeAnalysisRequestV2
+    | KnowledgeAnalysisRequestV3
+    | KnowledgeAnalysisRequestV4
+    | KnowledgeAnalysisRequestV5
 )
 type KnowledgeAnalysisReceiptContract = (
     KnowledgeAnalysisProposalReceipt
     | KnowledgeAnalysisProposalReceiptV2
     | KnowledgeAnalysisProposalReceiptV3
+    | KnowledgeAnalysisProposalReceiptV4
 )
 type KnowledgeAnalysisResultContract = (
-    KnowledgeAnalysisResultV2 | KnowledgeAnalysisResultV3 | KnowledgeAnalysisResultV4
+    KnowledgeAnalysisResultV2
+    | KnowledgeAnalysisResultV3
+    | KnowledgeAnalysisResultV4
+    | KnowledgeAnalysisResultV5
 )
 
 
@@ -166,6 +191,8 @@ def _analysis_request(value: dict[str, Any]) -> KnowledgeAnalysisRequestContract
         return KnowledgeAnalysisRequestV3.model_validate(value)
     if version == "knowledge-analysis-request/4.0":
         return KnowledgeAnalysisRequestV4.model_validate(value)
+    if version == "knowledge-analysis-request/5.0":
+        return KnowledgeAnalysisRequestV5.model_validate(value)
     raise KnowledgeAnalysisServiceError(
         "KNOWLEDGE_ANALYSIS_REQUEST_INVALID", "knowledge analysis request schema is unsupported"
     )
@@ -173,15 +200,21 @@ def _analysis_request(value: dict[str, Any]) -> KnowledgeAnalysisRequestContract
 
 def _document_contract(value: KnowledgeAnalysisRequestContract) -> bool:
     return isinstance(
-        value, (KnowledgeAnalysisRequestV3, KnowledgeAnalysisRequestV4)
+        value, (KnowledgeAnalysisRequestV3, KnowledgeAnalysisRequestV4, KnowledgeAnalysisRequestV5)
     ) and isinstance(value.source, EducationalDocumentKnowledgeSourceV3)
 
 
 def _endpoint_typed_document_contract(value: KnowledgeAnalysisRequestContract) -> bool:
-    return isinstance(value, KnowledgeAnalysisRequestV4)
+    return isinstance(value, (KnowledgeAnalysisRequestV4, KnowledgeAnalysisRequestV5))
+
+
+def _integrity_document_contract(value: KnowledgeAnalysisRequestContract) -> bool:
+    return isinstance(value, KnowledgeAnalysisRequestV5)
 
 
 def _proposal_result_schema(value: KnowledgeAnalysisRequestContract) -> str:
+    if _integrity_document_contract(value):
+        return "knowledge-analysis-proposal-result@4.0"
     if _endpoint_typed_document_contract(value):
         return "knowledge-analysis-proposal-result@3.0"
     if _document_contract(value):
@@ -190,6 +223,11 @@ def _proposal_result_schema(value: KnowledgeAnalysisRequestContract) -> str:
 
 
 def _proposal_receipt_schema(value: KnowledgeAnalysisRequestContract) -> tuple[str, str]:
+    if _integrity_document_contract(value):
+        return (
+            "knowledge-analysis-proposal-receipt-v4",
+            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/4.0",
+        )
     if _endpoint_typed_document_contract(value):
         return (
             "knowledge-analysis-proposal-receipt-v3",
@@ -209,6 +247,9 @@ def _proposal_receipt_schema(value: KnowledgeAnalysisRequestContract) -> tuple[s
 def _receipt_contract(
     value: dict[str, Any], request: KnowledgeAnalysisRequestContract
 ) -> KnowledgeAnalysisReceiptContract:
+    if _integrity_document_contract(request):
+        validate_contract("knowledge-analysis-proposal-receipt-v4", value)
+        return KnowledgeAnalysisProposalReceiptV4.model_validate(value)
     if _endpoint_typed_document_contract(request):
         validate_contract("knowledge-analysis-proposal-receipt-v3", value)
         return KnowledgeAnalysisProposalReceiptV3.model_validate(value)
@@ -220,6 +261,11 @@ def _receipt_contract(
 
 
 def _catalog_protocol(request: KnowledgeAnalysisRequestContract) -> tuple[str, str]:
+    if _integrity_document_contract(request):
+        return (
+            KNOWLEDGE_ANALYSIS_INTEGRITY_DOCUMENT_CATALOG_PROTOCOL,
+            KNOWLEDGE_ANALYSIS_INTEGRITY_DOCUMENT_CATALOG_SCHEMA_HASH,
+        )
     if _endpoint_typed_document_contract(request):
         return (
             KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_CATALOG_PROTOCOL,
@@ -317,10 +363,15 @@ class KnowledgeAnalysisApplicationService:
                         preset_revision_id=predecessor.preset_revision_id,
                     )
                 is_document_source = isinstance(source, EducationalDocumentKnowledgeSourceV3)
+                integrity_document = is_document_source and (
+                    "workflow-role/1.7.0" in preset_revision.compatible_workflow_protocols
+                )
                 endpoint_typed_document = is_document_source and (
                     "workflow-role/1.6.0" in preset_revision.compatible_workflow_protocols
                 )
-                if endpoint_typed_document:
+                if integrity_document:
+                    workflow_version = KNOWLEDGE_ANALYSIS_INTEGRITY_DOCUMENT_WORKFLOW_VERSION
+                elif endpoint_typed_document:
                     workflow_version = KNOWLEDGE_ANALYSIS_ENDPOINT_TYPED_DOCUMENT_WORKFLOW_VERSION
                 elif is_document_source:
                     workflow_version = KNOWLEDGE_ANALYSIS_DOCUMENT_WORKFLOW_VERSION
@@ -341,12 +392,16 @@ class KnowledgeAnalysisApplicationService:
                 created_at = datetime.now(UTC)
                 request_document: dict[str, Any] = {
                     "schema_version": (
-                        "knowledge-analysis-request/4.0"
-                        if endpoint_typed_document
+                        "knowledge-analysis-request/5.0"
+                        if integrity_document
                         else (
-                            "knowledge-analysis-request/3.0"
-                            if is_document_source
-                            else "knowledge-analysis-request/2.0"
+                            "knowledge-analysis-request/4.0"
+                            if endpoint_typed_document
+                            else (
+                                "knowledge-analysis-request/3.0"
+                                if is_document_source
+                                else "knowledge-analysis-request/2.0"
+                            )
                         )
                     ),
                     "analysis_request_id": new_knowledge_analysis_request_id(),
@@ -355,17 +410,25 @@ class KnowledgeAnalysisApplicationService:
                     "execution_preset_revision_id": preset_revision.preset_revision_id,
                     "execution_preset_sha256": preset_revision.content_sha256,
                     "worker_proposal_schema_ref": (
-                        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/2.0"
-                        if endpoint_typed_document
-                        else "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+                        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/3.0"
+                        if integrity_document
+                        else (
+                            "eom://schemas/knowledge/knowledge-analysis-worker-proposal/2.0"
+                            if endpoint_typed_document
+                            else "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+                        )
                     ),
                     "accepted_result_schema_ref": (
-                        "eom://schemas/knowledge/knowledge-analysis-result/4.0"
-                        if endpoint_typed_document
+                        "eom://schemas/knowledge/knowledge-analysis-result/5.0"
+                        if integrity_document
                         else (
-                            "eom://schemas/knowledge/knowledge-analysis-result/3.0"
-                            if is_document_source
-                            else "eom://schemas/knowledge/knowledge-analysis-result/2.0"
+                            "eom://schemas/knowledge/knowledge-analysis-result/4.0"
+                            if endpoint_typed_document
+                            else (
+                                "eom://schemas/knowledge/knowledge-analysis-result/3.0"
+                                if is_document_source
+                                else "eom://schemas/knowledge/knowledge-analysis-result/2.0"
+                            )
                         )
                     ),
                     "predecessor_analysis_run_id": command.predecessor_analysis_run_id,
@@ -384,7 +447,10 @@ class KnowledgeAnalysisApplicationService:
                     }
                 )
                 request: KnowledgeAnalysisRequestContract
-                if endpoint_typed_document:
+                if integrity_document:
+                    validate_contract("knowledge-analysis-request-v5", request_document)
+                    request = KnowledgeAnalysisRequestV5.model_validate(request_document)
+                elif endpoint_typed_document:
                     validate_contract("knowledge-analysis-request-v4", request_document)
                     request = KnowledgeAnalysisRequestV4.model_validate(request_document)
                 elif is_document_source:
@@ -939,14 +1005,19 @@ class KnowledgeAnalysisApplicationService:
         ).removeprefix("sha256:")[:32]
         document_contract = _document_contract(request)
         endpoint_typed_document = _endpoint_typed_document_contract(request)
+        integrity_document = _integrity_document_contract(request)
         result_data: dict[str, Any] = {
             "schema_version": (
-                "knowledge-analysis-result/4.0"
-                if endpoint_typed_document
+                "knowledge-analysis-result/5.0"
+                if integrity_document
                 else (
-                    "knowledge-analysis-result/3.0"
-                    if document_contract
-                    else "knowledge-analysis-result/2.0"
+                    "knowledge-analysis-result/4.0"
+                    if endpoint_typed_document
+                    else (
+                        "knowledge-analysis-result/3.0"
+                        if document_contract
+                        else "knowledge-analysis-result/2.0"
+                    )
                 )
             ),
             "analysis_result_id": f"knowledgeanalysisresult_{stable_result_seed}",
@@ -971,7 +1042,10 @@ class KnowledgeAnalysisApplicationService:
         result_data["result_sha256"] = content_sha256(
             {key: value for key, value in result_data.items() if key != "result_sha256"}
         )
-        if endpoint_typed_document:
+        if integrity_document:
+            result_schema_name = "knowledge-analysis-result-v5"
+            result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/5.0"
+        elif endpoint_typed_document:
             result_schema_name = "knowledge-analysis-result-v4"
             result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/4.0"
         elif document_contract:
@@ -982,7 +1056,9 @@ class KnowledgeAnalysisApplicationService:
             result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/2.0"
         validate_contract(result_schema_name, result_data)
         result: KnowledgeAnalysisResultContract
-        if endpoint_typed_document:
+        if integrity_document:
+            result = KnowledgeAnalysisResultV5.model_validate(result_data)
+        elif endpoint_typed_document:
             result = KnowledgeAnalysisResultV4.model_validate(result_data)
         elif document_contract:
             result = KnowledgeAnalysisResultV3.model_validate(result_data)
@@ -1009,8 +1085,11 @@ class KnowledgeAnalysisApplicationService:
             type[KnowledgeAnalysisResultV2]
             | type[KnowledgeAnalysisResultV3]
             | type[KnowledgeAnalysisResultV4]
+            | type[KnowledgeAnalysisResultV5]
         )
-        if endpoint_typed_document:
+        if integrity_document:
+            result_model = KnowledgeAnalysisResultV5
+        elif endpoint_typed_document:
             result_model = KnowledgeAnalysisResultV4
         elif document_contract:
             result_model = KnowledgeAnalysisResultV3
@@ -1019,7 +1098,12 @@ class KnowledgeAnalysisApplicationService:
         stored_result = self._artifact_result(artifact, result_model, result_schema_name)
         assert isinstance(
             stored_result,
-            (KnowledgeAnalysisResultV2, KnowledgeAnalysisResultV3, KnowledgeAnalysisResultV4),
+            (
+                KnowledgeAnalysisResultV2,
+                KnowledgeAnalysisResultV3,
+                KnowledgeAnalysisResultV4,
+                KnowledgeAnalysisResultV5,
+            ),
         )
         if (
             stored_result.analysis_request_sha256 != request.request_sha256
@@ -1118,6 +1202,7 @@ class KnowledgeAnalysisApplicationService:
             | KnowledgeAnalysisResultV2
             | KnowledgeAnalysisResultV3
             | KnowledgeAnalysisResultV4
+            | KnowledgeAnalysisResultV5
         ],
         schema_name: str,
     ) -> (
@@ -1125,6 +1210,7 @@ class KnowledgeAnalysisApplicationService:
         | KnowledgeAnalysisResultV2
         | KnowledgeAnalysisResultV3
         | KnowledgeAnalysisResultV4
+        | KnowledgeAnalysisResultV5
     ):
         with self.sessions() as session:
             revision = session.get(ArtifactRevisionRecord, artifact.revision_id)

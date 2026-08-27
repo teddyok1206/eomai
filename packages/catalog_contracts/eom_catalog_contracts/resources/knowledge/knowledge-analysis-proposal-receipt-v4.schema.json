@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/4.0",
+  "title": "EOM Knowledge Analysis Proposal Receipt V4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "analysis_request_id",
+    "source",
+    "status",
+    "members",
+    "counts",
+    "general_knowledge_used",
+    "minimum_confidence_milli",
+    "blocking_ambiguity_count",
+    "content_set_sha256",
+    "completed_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-analysis-proposal-receipt/4.0"
+    },
+    "analysis_request_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+    },
+    "source": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/3.0#/$defs/documentRevisionSource"
+    },
+    "status": {
+      "const": "PROPOSED_VALIDATED"
+    },
+    "members": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "normalized_markdown",
+        "anchors",
+        "nodes",
+        "edges",
+        "claims",
+        "component_observations",
+        "unresolved_ambiguities"
+      ],
+      "properties": {
+        "normalized_markdown": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+        },
+        "anchors": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+        },
+        "nodes": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+        },
+        "edges": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+        },
+        "claims": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+        },
+        "component_observations": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+        },
+        "unresolved_ambiguities": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+        }
+      }
+    },
+    "counts": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalCounts"
+    },
+    "general_knowledge_used": {
+      "type": "boolean"
+    },
+    "minimum_confidence_milli": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "blocking_ambiguity_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 128
+    },
+    "content_set_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+    },
+    "completed_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/utcTimestamp"
+    }
+  }
+}

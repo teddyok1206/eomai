@@ -15,10 +15,12 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
+    KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisSourceV2,
     KnowledgeAnalysisSourceV3,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
+    KnowledgeAnalysisWorkerProposalV3,
     KnowledgeGraphPublicationResult,
     PublishKnowledgeGraphSnapshotCommand,
     ReconcileKnowledgeAnalysisCommand,
@@ -77,6 +79,7 @@ from eom_orchestrator.control_bootstrap import (
 )
 from eom_orchestrator.control_models import (
     ExecutionPresetRecord,
+    ExecutionPresetRevisionRecord,
     ResolvedExecutionPlanRecord,
     WorkerCapacityPolicyRecord,
 )
@@ -145,6 +148,7 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
             "workflow-role/1.4.0",
             "workflow-role/1.5.0",
             "workflow-role/1.6.0",
+            "workflow-role/1.7.0",
         ):
             ensure_protocol_version(
                 session,
@@ -165,7 +169,7 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
                     lock_version=1,
                 )
             )
-        for version in ("1", "2", "3"):
+        for version in ("1", "2", "3", "4"):
             compiled = compile_definition(
                 Path(f"config/workflows/knowledge-analysis.v{version}.yaml").resolve(),
                 {"support"},
@@ -191,6 +195,11 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
                 ExecutionPresetRecord.preset_key == "knowledge-analysis"
             )
         )
+        current_revision = (
+            session.get(ExecutionPresetRevisionRecord, analysis_preset.current_revision_id)
+            if analysis_preset is not None and analysis_preset.current_revision_id is not None
+            else None
+        )
     if analysis_preset is None:
         bootstrap_knowledge_analysis_control_plane(
             engine,
@@ -200,14 +209,40 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
             evaluation_cases_total=3,
             settings=settings,
         )
-    bootstrap_knowledge_analysis_control_plane(
-        engine,
-        config_directory=Path("config/control-plane/knowledge-analysis-v6").resolve(),
-        source_commit="6" * 40,
-        actor_id="phase7-integration",
-        evaluation_cases_total=3,
-        settings=settings,
-    )
+        current_revision = None
+    if current_revision is None or current_revision.revision_number < 12:
+        bootstrap_knowledge_analysis_control_plane(
+            engine,
+            config_directory=Path("config/control-plane/knowledge-analysis-v6").resolve(),
+            source_commit="6" * 40,
+            actor_id="phase7-integration",
+            evaluation_cases_total=3,
+            settings=settings,
+        )
+
+
+def _released_analysis_preset_revision(
+    engine: Engine,
+    *,
+    revision_number: int,
+) -> tuple[str, str]:
+    sessions = build_session_factory(engine)
+    with sessions() as session:
+        logical = session.scalar(
+            select(ExecutionPresetRecord).where(
+                ExecutionPresetRecord.preset_key == "knowledge-analysis"
+            )
+        )
+        assert logical is not None
+        revision = session.scalar(
+            select(ExecutionPresetRevisionRecord).where(
+                ExecutionPresetRevisionRecord.preset_id == logical.preset_id,
+                ExecutionPresetRevisionRecord.revision_number == revision_number,
+                ExecutionPresetRevisionRecord.state == "RELEASED",
+            )
+        )
+        assert revision is not None
+        return logical.preset_id, revision.preset_revision_id
 
 
 def _source(engine: Engine, settings: CatalogSettings, tmp_path: Path) -> tuple[str, str]:
@@ -415,12 +450,22 @@ def _command(
 
 
 def _proposal(
-    request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4,
-) -> KnowledgeAnalysisWorkerProposal | KnowledgeAnalysisWorkerProposalV2:
+    request: KnowledgeAnalysisRequestV2
+    | KnowledgeAnalysisRequestV3
+    | KnowledgeAnalysisRequestV4
+    | KnowledgeAnalysisRequestV5,
+) -> (
+    KnowledgeAnalysisWorkerProposal
+    | KnowledgeAnalysisWorkerProposalV2
+    | KnowledgeAnalysisWorkerProposalV3
+):
     source = request.source.artifact_member
     locator = (
         f"physical_page={request.source.first_physical_page};paragraph=1"
-        if isinstance(request, (KnowledgeAnalysisRequestV3, KnowledgeAnalysisRequestV4))
+        if isinstance(
+            request,
+            (KnowledgeAnalysisRequestV3, KnowledgeAnalysisRequestV4, KnowledgeAnalysisRequestV5),
+        )
         else "paragraph=1"
     )
     value = {
@@ -452,6 +497,9 @@ def _proposal(
         "general_knowledge_used": False,
         "completed_at": NOW + timedelta(hours=1),
     }
+    if isinstance(request, KnowledgeAnalysisRequestV5):
+        value["schema_version"] = "knowledge-analysis-worker-proposal/3.0"
+        return KnowledgeAnalysisWorkerProposalV3.model_validate(value)
     if isinstance(request, KnowledgeAnalysisRequestV4):
         value["schema_version"] = "knowledge-analysis-worker-proposal/2.0"
         return KnowledgeAnalysisWorkerProposalV2.model_validate(value)
@@ -459,8 +507,15 @@ def _proposal(
 
 
 def _proposal_with_edge(
-    request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4,
-) -> KnowledgeAnalysisWorkerProposal | KnowledgeAnalysisWorkerProposalV2:
+    request: KnowledgeAnalysisRequestV2
+    | KnowledgeAnalysisRequestV3
+    | KnowledgeAnalysisRequestV4
+    | KnowledgeAnalysisRequestV5,
+) -> (
+    KnowledgeAnalysisWorkerProposal
+    | KnowledgeAnalysisWorkerProposalV2
+    | KnowledgeAnalysisWorkerProposalV3
+):
     value = _proposal(request).model_dump(mode="json")
     value["nodes"].append(
         {
@@ -478,7 +533,7 @@ def _proposal_with_edge(
         "confidence_milli": 900,
         "anchor_ids": ["anchor_source_1"],
     }
-    if isinstance(request, KnowledgeAnalysisRequestV4):
+    if isinstance(request, (KnowledgeAnalysisRequestV4, KnowledgeAnalysisRequestV5)):
         edge["relationship"] = {
             "edge_type": "REQUIRES_PREREQUISITE",
             "from_node_type": "CONCEPT",
@@ -487,6 +542,8 @@ def _proposal_with_edge(
     else:
         edge["edge_type"] = "REQUIRES_PREREQUISITE"
     value["edges"] = [edge]
+    if isinstance(request, KnowledgeAnalysisRequestV5):
+        return KnowledgeAnalysisWorkerProposalV3.model_validate(value)
     if isinstance(request, KnowledgeAnalysisRequestV4):
         return KnowledgeAnalysisWorkerProposalV2.model_validate(value)
     return KnowledgeAnalysisWorkerProposal.model_validate(value)
@@ -500,6 +557,7 @@ def _complete_proposal(
     staging_root: Path,
     proposal_override: KnowledgeAnalysisWorkerProposal
     | KnowledgeAnalysisWorkerProposalV2
+    | KnowledgeAnalysisWorkerProposalV3
     | None = None,
 ) -> ArtifactPointer:
     sessions = build_session_factory(engine)
@@ -507,7 +565,9 @@ def _complete_proposal(
         run = session.get(KnowledgeAnalysisRunRecord, run_id)
         assert run is not None
         request_version = run.canonical_request.get("schema_version")
-        if request_version == "knowledge-analysis-request/4.0":
+        if request_version == "knowledge-analysis-request/5.0":
+            request = KnowledgeAnalysisRequestV5.model_validate(run.canonical_request)
+        elif request_version == "knowledge-analysis-request/4.0":
             request = KnowledgeAnalysisRequestV4.model_validate(run.canonical_request)
         elif request_version == "knowledge-analysis-request/3.0":
             request = KnowledgeAnalysisRequestV3.model_validate(run.canonical_request)
@@ -532,9 +592,17 @@ def _complete_proposal(
     )
     with transaction(sessions) as session:
         protocol_version = (
-            "workflow-role/1.6.0"
-            if isinstance(request, KnowledgeAnalysisRequestV4)
-            else "workflow-role/1.4.0"
+            "workflow-role/1.7.0"
+            if isinstance(request, KnowledgeAnalysisRequestV5)
+            else (
+                "workflow-role/1.6.0"
+                if isinstance(request, KnowledgeAnalysisRequestV4)
+                else (
+                    "workflow-role/1.5.0"
+                    if isinstance(request, KnowledgeAnalysisRequestV3)
+                    else "workflow-role/1.4.0"
+                )
+            )
         )
         ensure_protocol_version(
             session, protocol_version, role_schema_bundle_hash(protocol_version)
@@ -586,12 +654,16 @@ def _complete_proposal(
             revision_id=revision_id,
             content_hash=staged.primary_hash,
             result_schema=(
-                "knowledge-analysis-proposal-result@3.0"
-                if isinstance(request, KnowledgeAnalysisRequestV4)
+                "knowledge-analysis-proposal-result@4.0"
+                if isinstance(request, KnowledgeAnalysisRequestV5)
                 else (
-                    "knowledge-analysis-proposal-result@2.0"
-                    if isinstance(request, KnowledgeAnalysisRequestV3)
-                    else "knowledge-analysis-proposal-result@1.0"
+                    "knowledge-analysis-proposal-result@3.0"
+                    if isinstance(request, KnowledgeAnalysisRequestV4)
+                    else (
+                        "knowledge-analysis-proposal-result@2.0"
+                        if isinstance(request, KnowledgeAnalysisRequestV3)
+                        else "knowledge-analysis-proposal-result@1.0"
+                    )
                 )
             ),
         )
@@ -720,9 +792,24 @@ def test_document_revision_analysis_create_pins_v4_source_and_v6_plan(
         requested_by=OPERATOR_ID,
         idempotency_key=f"document-analysis:{uuid4().hex}",
     )
-    created = service.create(command)
+    preset_id, preset_revision_id = _released_analysis_preset_revision(
+        integration_engine,
+        revision_number=12,
+    )
+    created = service.create_with_pinned_preset(
+        command,
+        preset_id=preset_id,
+        preset_revision_id=preset_revision_id,
+    )
     assert created.state == "QUEUED"
-    assert service.create(command) == created
+    assert (
+        service.create_with_pinned_preset(
+            command,
+            preset_id=preset_id,
+            preset_revision_id=preset_revision_id,
+        )
+        == created
+    )
 
     sessions = build_session_factory(integration_engine)
     with sessions() as session:
@@ -758,32 +845,31 @@ def test_v6_document_analysis_pins_endpoint_typed_request_and_workflow(
 ) -> None:
     orchestrator_settings, catalog_settings = _settings(tmp_path)
     _ensure_dependencies(integration_engine, orchestrator_settings)
-    bootstrap_knowledge_analysis_control_plane(
-        integration_engine,
-        config_directory=Path("config/control-plane/knowledge-analysis-v6").resolve(),
-        source_commit="6" * 40,
-        actor_id="phase7-integration",
-        evaluation_cases_total=3,
-        settings=orchestrator_settings,
-    )
     _, document_revision_id = _document_source(integration_engine, catalog_settings, tmp_path)
     service = KnowledgeAnalysisApplicationService(integration_engine, catalog_settings)
-    created = service.create(
-        CreateKnowledgeAnalysisCommand(
-            source=EducationalDocumentKnowledgeAnalysisSelection(
-                source_class="TEXTBOOK",
-                document_revision_id=document_revision_id,
-                first_physical_page=1,
-                last_physical_page=1,
-                curriculum_unit_keys=("1-(1)",),
-            ),
-            preset_key="knowledge-analysis",
-            general_knowledge_mode="DISABLED",
-            risk_policy_revision_id=POLICY_ID,
-            predecessor_analysis_run_id=None,
-            requested_by=OPERATOR_ID,
-            idempotency_key=f"document-analysis-v6:{uuid4().hex}",
-        )
+    command = CreateKnowledgeAnalysisCommand(
+        source=EducationalDocumentKnowledgeAnalysisSelection(
+            source_class="TEXTBOOK",
+            document_revision_id=document_revision_id,
+            first_physical_page=1,
+            last_physical_page=1,
+            curriculum_unit_keys=("1-(1)",),
+        ),
+        preset_key="knowledge-analysis",
+        general_knowledge_mode="DISABLED",
+        risk_policy_revision_id=POLICY_ID,
+        predecessor_analysis_run_id=None,
+        requested_by=OPERATOR_ID,
+        idempotency_key=f"document-analysis-v6:{uuid4().hex}",
+    )
+    preset_id, preset_revision_id = _released_analysis_preset_revision(
+        integration_engine,
+        revision_number=12,
+    )
+    created = service.create_with_pinned_preset(
+        command,
+        preset_id=preset_id,
+        preset_revision_id=preset_revision_id,
     )
 
     sessions = build_session_factory(integration_engine)
@@ -845,6 +931,110 @@ def test_v6_document_analysis_pins_endpoint_typed_request_and_workflow(
         "publisher_version": "1.0.0",
         "published_by_operator_id": OPERATOR_ID,
         "idempotency_key": f"v6-endpoint-publication:{uuid4().hex}",
+        "requested_at": NOW.isoformat().replace("+00:00", "Z"),
+        "request_sha256": "sha256:" + "0" * 64,
+    }
+    publication_value["request_sha256"] = content_sha256(
+        {key: value for key, value in publication_value.items() if key != "request_sha256"}
+    )
+    published = KnowledgeGraphPublicationService(
+        integration_engine,
+        catalog_settings,
+    ).publish(PublishKnowledgeGraphSnapshotCommand.model_validate(publication_value))
+    assert published.state == "PUBLISHED"
+    assert published.counts.nodes == 2
+    assert published.counts.edges == 1
+
+
+def _assert_v7_document_analysis_pins_integrity_complete_contract_and_accepts(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    orchestrator_settings, catalog_settings = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, orchestrator_settings)
+    bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v7").resolve(),
+        source_commit="7" * 40,
+        actor_id="phase7-integration",
+        evaluation_cases_total=3,
+        settings=orchestrator_settings,
+    )
+    _, document_revision_id = _document_source(integration_engine, catalog_settings, tmp_path)
+    service = KnowledgeAnalysisApplicationService(integration_engine, catalog_settings)
+    command = CreateKnowledgeAnalysisCommand(
+        source=EducationalDocumentKnowledgeAnalysisSelection(
+            source_class="TEXTBOOK",
+            document_revision_id=document_revision_id,
+            first_physical_page=1,
+            last_physical_page=1,
+            curriculum_unit_keys=("1-(1)",),
+        ),
+        preset_key="knowledge-analysis",
+        general_knowledge_mode="DISABLED",
+        risk_policy_revision_id=POLICY_ID,
+        predecessor_analysis_run_id=None,
+        requested_by=OPERATOR_ID,
+        idempotency_key=f"document-analysis-v7:{uuid4().hex}",
+    )
+    created = service.create(command)
+    assert service.create(command) == created
+
+    sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        run = session.get(KnowledgeAnalysisRunRecord, created.analysis_run_id)
+        assert run is not None
+        request = KnowledgeAnalysisRequestV5.model_validate(run.canonical_request)
+        workflow = session.get(WorkflowInstanceRecord, run.workflow_id)
+        assert workflow is not None
+        assert request.worker_proposal_schema_ref.endswith("worker-proposal/3.0")
+        assert request.accepted_result_schema_ref.endswith("analysis-result/5.0")
+        assert workflow.definition_version == "4.0.0"
+        assert workflow.role_schema_version == "workflow-role/1.7.0"
+
+    _complete_proposal(
+        integration_engine,
+        catalog_settings,
+        run_id=created.analysis_run_id,
+        staging_root=tmp_path / "proposal-v7",
+        proposal_override=_proposal_with_edge(request),
+    )
+    accepted = service.reconcile(
+        ReconcileKnowledgeAnalysisCommand(
+            analysis_run_id=created.analysis_run_id,
+            requested_by=OPERATOR_ID,
+        )
+    )
+    assert accepted.state == "ACCEPTED"
+    assert accepted.accepted_result_artifact_revision_id is not None
+    with sessions() as session:
+        run = session.get(KnowledgeAnalysisRunRecord, created.analysis_run_id)
+        assert run is not None and run.proposal_artifact_revision_id is not None
+        proposal_revision = session.get(ArtifactRevisionRecord, run.proposal_artifact_revision_id)
+        assert proposal_revision is not None
+        assert proposal_revision.result["schema_version"] == (
+            "knowledge-analysis-proposal-receipt/4.0"
+        )
+        assert proposal_revision.result["members"]["unresolved_ambiguities"]["schema_ref"].endswith(
+            "ambiguity/3.0"
+        )
+        result_revision = session.get(
+            ArtifactRevisionRecord,
+            accepted.accepted_result_artifact_revision_id,
+        )
+        assert result_revision is not None
+        assert result_revision.result["schema_version"] == "knowledge-analysis-result/5.0"
+
+    publication_value: dict[str, object] = {
+        "schema_version": "knowledge-graph-publication/1.0",
+        "corpus_key": f"v7-integrity-contract-{uuid4().hex[:12]}",
+        "display_name": "V7 integrity-complete graph",
+        "accepted_analysis_run_ids": [created.analysis_run_id],
+        "structure_manifest": None,
+        "expected_current_snapshot_revision_id": None,
+        "publisher_version": "1.0.0",
+        "published_by_operator_id": OPERATOR_ID,
+        "idempotency_key": f"v7-integrity-publication:{uuid4().hex}",
         "requested_at": NOW.isoformat().replace("+00:00", "Z"),
         "request_sha256": "sha256:" + "0" * 64,
     }

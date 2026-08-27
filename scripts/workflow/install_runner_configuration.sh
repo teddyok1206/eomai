@@ -19,7 +19,7 @@ fail() {
 
 declare -A FILES=(
   ["${REPOSITORY_ROOT}/config/workflows/generic-item-development.v1.4.yaml"]="${WORKFLOW_ROOT}/generic-item-development.yaml"
-  ["${REPOSITORY_ROOT}/config/workflows/knowledge-analysis.v3.yaml"]="${WORKFLOW_ROOT}/knowledge-analysis.yaml"
+  ["${REPOSITORY_ROOT}/config/workflows/knowledge-analysis.v4.yaml"]="${WORKFLOW_ROOT}/knowledge-analysis.yaml"
   ["${REPOSITORY_ROOT}/config/human-actors.example.yaml"]="${CONFIG_ROOT}/human-actors.yaml"
   ["${REPOSITORY_ROOT}/config/workflow-runner.example.yaml"]="${CONFIG_ROOT}/workflow-runner.yaml"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/authoring.txt"]="${PROMPT_ROOT}/authoring.txt"

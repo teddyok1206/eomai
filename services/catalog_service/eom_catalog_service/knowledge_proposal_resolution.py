@@ -9,8 +9,10 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
+    KnowledgeAnalysisProposalReceiptV4,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
+    KnowledgeAnalysisWorkerProposalV3,
 )
 from pydantic import ValidationError
 
@@ -20,6 +22,7 @@ type KnowledgeAnalysisReceipt = (
     KnowledgeAnalysisProposalReceipt
     | KnowledgeAnalysisProposalReceiptV2
     | KnowledgeAnalysisProposalReceiptV3
+    | KnowledgeAnalysisProposalReceiptV4
 )
 
 
@@ -34,7 +37,11 @@ class KnowledgeProposalResolutionError(ValueError):
 def resolve_knowledge_analysis_proposal(
     artifacts: CatalogArtifactService,
     receipt: KnowledgeAnalysisReceipt,
-) -> KnowledgeAnalysisWorkerProposal | KnowledgeAnalysisWorkerProposalV2:
+) -> (
+    KnowledgeAnalysisWorkerProposal
+    | KnowledgeAnalysisWorkerProposalV2
+    | KnowledgeAnalysisWorkerProposalV3
+):
     """Dereference every pinned member once and reconstruct the typed proposal."""
 
     values: dict[str, Any] = {}
@@ -81,9 +88,13 @@ def resolve_knowledge_analysis_proposal(
 
     proposal_value = {
         "schema_version": (
-            "knowledge-analysis-worker-proposal/2.0"
-            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
-            else "knowledge-analysis-worker-proposal/1.0"
+            "knowledge-analysis-worker-proposal/3.0"
+            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV4)
+            else (
+                "knowledge-analysis-worker-proposal/2.0"
+                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
+                else "knowledge-analysis-worker-proposal/1.0"
+            )
         ),
         "analysis_request_id": receipt.analysis_request_id,
         **values,
@@ -91,11 +102,17 @@ def resolve_knowledge_analysis_proposal(
         "completed_at": receipt.completed_at,
     }
     try:
-        proposal = (
-            KnowledgeAnalysisWorkerProposalV2.model_validate(proposal_value)
-            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
-            else KnowledgeAnalysisWorkerProposal.model_validate(proposal_value)
+        proposal: (
+            KnowledgeAnalysisWorkerProposal
+            | KnowledgeAnalysisWorkerProposalV2
+            | KnowledgeAnalysisWorkerProposalV3
         )
+        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV4):
+            proposal = KnowledgeAnalysisWorkerProposalV3.model_validate(proposal_value)
+        elif isinstance(receipt, KnowledgeAnalysisProposalReceiptV3):
+            proposal = KnowledgeAnalysisWorkerProposalV2.model_validate(proposal_value)
+        else:
+            proposal = KnowledgeAnalysisWorkerProposal.model_validate(proposal_value)
     except ValidationError as exc:
         raise KnowledgeProposalResolutionError(
             "CONTENT_INVALID", "analysis proposal is structurally invalid"

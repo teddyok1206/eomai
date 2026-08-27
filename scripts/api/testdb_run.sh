@@ -163,6 +163,7 @@ export EOM_RUN_INTEGRATION=1
 # The approval test writes immutable workflow history and append-only API audit
 # rows. It must remain last; guarded database cleanup owns those records.
 "${PYTHON}" -m pytest -q \
+  tests/integration/test_persistence.py \
   tests/api/test_runtime_role_live.py \
   tests/api/test_identity_integration.py \
   tests/api/test_api_integration.py \
@@ -172,5 +173,7 @@ export EOM_RUN_INTEGRATION=1
   tests/integration/test_workflow_submission_idempotency.py \
   tests/integration/test_control_plane_persistence.py \
   tests/integration/test_knowledge_analysis_service.py \
+  tests/integration/test_knowledge_analysis_batch_service.py \
+  tests/integration/test_knowledge_analysis_v7.py \
   tests/api/test_workflow_approval_runtime_role.py
 printf 'Disposable Application API and workflow integration tests passed.\n'

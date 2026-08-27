@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-request/5.0",
+  "title": "EOM Knowledge Analysis Request V5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "analysis_request_id",
+    "source",
+    "execution_preset_id",
+    "execution_preset_revision_id",
+    "execution_preset_sha256",
+    "worker_proposal_schema_ref",
+    "accepted_result_schema_ref",
+    "predecessor_analysis_run_id",
+    "prior_graph_snapshot",
+    "requested_outputs",
+    "general_knowledge_mode",
+    "risk_policy_revision_id",
+    "created_at",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-analysis-request/5.0"
+    },
+    "analysis_request_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+    },
+    "source": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/3.0#/$defs/documentRevisionSource"
+    },
+    "execution_preset_id": {
+      "type": "string",
+      "pattern": "^execpreset_[0-9a-f]{32}$"
+    },
+    "execution_preset_revision_id": {
+      "type": "string",
+      "pattern": "^execpresetrev_[0-9a-f]{32}$"
+    },
+    "execution_preset_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+    },
+    "worker_proposal_schema_ref": {
+      "const": "eom://schemas/knowledge/knowledge-analysis-worker-proposal/3.0"
+    },
+    "accepted_result_schema_ref": {
+      "const": "eom://schemas/knowledge/knowledge-analysis-result/5.0"
+    },
+    "predecessor_analysis_run_id": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "prior_graph_snapshot": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requested_outputs": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "NORMALIZED_MARKDOWN",
+          "SOURCE_ANCHORS",
+          "NODES",
+          "EDGES",
+          "CLAIMS",
+          "COMPONENT_OBSERVATIONS",
+          "UNRESOLVED_AMBIGUITIES"
+        ]
+      }
+    },
+    "general_knowledge_mode": {
+      "enum": [
+        "DISABLED",
+        "AUXILIARY_UNATTRIBUTED"
+      ]
+    },
+    "risk_policy_revision_id": {
+      "type": "string",
+      "pattern": "^analysisriskrev_[0-9a-f]{32}$"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/utcTimestamp"
+    },
+    "request_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+    }
+  }
+}

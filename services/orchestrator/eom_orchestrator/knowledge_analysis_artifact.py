@@ -10,11 +10,14 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
+    KnowledgeAnalysisProposalReceiptV4,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
+    KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
+    KnowledgeAnalysisWorkerProposalV3,
     KnowledgeProposalArtifactMember,
     KnowledgeProposalCounts,
     KnowledgeProposalMembers,
@@ -76,8 +79,17 @@ _DOCUMENT_ANCHOR_LOCATOR = re.compile(r"^physical_page=([1-9][0-9]{0,5})(?:;.{1,
 
 def stage_knowledge_analysis_proposal(
     *,
-    proposal: KnowledgeAnalysisWorkerProposal | KnowledgeAnalysisWorkerProposalV2,
-    request: KnowledgeAnalysisRequestV2 | KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4,
+    proposal: (
+        KnowledgeAnalysisWorkerProposal
+        | KnowledgeAnalysisWorkerProposalV2
+        | KnowledgeAnalysisWorkerProposalV3
+    ),
+    request: (
+        KnowledgeAnalysisRequestV2
+        | KnowledgeAnalysisRequestV3
+        | KnowledgeAnalysisRequestV4
+        | KnowledgeAnalysisRequestV5
+    ),
     job_id: str,
     logical_artifact_id: str,
     revision_id: str,
@@ -86,7 +98,8 @@ def stage_knowledge_analysis_proposal(
     StagedFileSet,
     KnowledgeAnalysisProposalReceipt
     | KnowledgeAnalysisProposalReceiptV2
-    | KnowledgeAnalysisProposalReceiptV3,
+    | KnowledgeAnalysisProposalReceiptV3
+    | KnowledgeAnalysisProposalReceiptV4,
 ]:
     """Split one bounded worker value into deterministic immutable Artifact members."""
 
@@ -105,7 +118,10 @@ def stage_knowledge_analysis_proposal(
             ErrorCode.WORKER_RESULT_INVALID,
             "knowledge proposal source anchor does not match the pinned source",
         )
-    if isinstance(request, (KnowledgeAnalysisRequestV3, KnowledgeAnalysisRequestV4)):
+    if isinstance(
+        request,
+        (KnowledgeAnalysisRequestV3, KnowledgeAnalysisRequestV4, KnowledgeAnalysisRequestV5),
+    ):
         first_page = request.source.first_physical_page
         last_page = request.source.last_physical_page
         for anchor in proposal.anchors:
@@ -130,8 +146,14 @@ def stage_knowledge_analysis_proposal(
     try:
         for field_name, member_path, media_type, schema_ref in PROPOSAL_MEMBERS:
             value = getattr(proposal, field_name)
-            if field_name == "edges" and isinstance(proposal, KnowledgeAnalysisWorkerProposalV2):
+            if field_name == "edges" and isinstance(
+                proposal, (KnowledgeAnalysisWorkerProposalV2, KnowledgeAnalysisWorkerProposalV3)
+            ):
                 schema_ref = "eom://schemas/knowledge/proposed-edge/3.0"
+            if field_name == "unresolved_ambiguities" and isinstance(
+                proposal, KnowledgeAnalysisWorkerProposalV3
+            ):
+                schema_ref = "eom://schemas/knowledge/ambiguity/3.0"
             if field_name == "normalized_markdown":
                 payload = value.encode("utf-8")
             else:
@@ -195,8 +217,11 @@ def stage_knowledge_analysis_proposal(
             KnowledgeAnalysisProposalReceipt
             | KnowledgeAnalysisProposalReceiptV2
             | KnowledgeAnalysisProposalReceiptV3
+            | KnowledgeAnalysisProposalReceiptV4
         )
-        if isinstance(request, KnowledgeAnalysisRequestV4):
+        if isinstance(request, KnowledgeAnalysisRequestV5):
+            receipt = KnowledgeAnalysisProposalReceiptV4.model_validate(receipt_value)
+        elif isinstance(request, KnowledgeAnalysisRequestV4):
             receipt = KnowledgeAnalysisProposalReceiptV3.model_validate(receipt_value)
         elif isinstance(request, KnowledgeAnalysisRequestV3):
             receipt = KnowledgeAnalysisProposalReceiptV2.model_validate(receipt_value)
@@ -209,12 +234,16 @@ def stage_knowledge_analysis_proposal(
         files[receipt_member] = receipt_path
         metadata[receipt_member] = {
             "schema_ref": (
-                "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/3.0"
-                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
+                "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/4.0"
+                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV4)
                 else (
-                    "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/2.0"
-                    if isinstance(receipt, KnowledgeAnalysisProposalReceiptV2)
-                    else "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/1.0"
+                    "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/3.0"
+                    if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
+                    else (
+                        "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/2.0"
+                        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV2)
+                        else "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/1.0"
+                    )
                 )
             ),
             "media_type": "application/json",

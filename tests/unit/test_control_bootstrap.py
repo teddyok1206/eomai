@@ -22,6 +22,7 @@ ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
 ANALYSIS_CONFIG_V4 = ROOT / "config/control-plane/knowledge-analysis-v4"
 ANALYSIS_CONFIG_V5 = ROOT / "config/control-plane/knowledge-analysis-v5"
 ANALYSIS_CONFIG_V6 = ROOT / "config/control-plane/knowledge-analysis-v6"
+ANALYSIS_CONFIG_V7 = ROOT / "config/control-plane/knowledge-analysis-v7"
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:
@@ -244,6 +245,62 @@ def test_knowledge_analysis_v6_adds_endpoint_typed_protocol_without_dropping_leg
     }
     for relative_path, expected in expected_v6_sha256.items():
         assert hashlib.sha256((ANALYSIS_CONFIG_V6 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+
+
+def test_knowledge_analysis_v7_adds_integrity_protocol_without_mutating_v6() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V7)
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/7.0"
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    assert manifest.timeout_seconds == 7200
+    assert manifest.slot_key == "slot05"
+    assert manifest.worker_pool_key == "support"
+    assert manifest.compatible_workflow_protocols == (
+        "workflow-role/1.4.0",
+        "workflow-role/1.5.0",
+        "workflow-role/1.6.0",
+        "workflow-role/1.7.0",
+    )
+    instruction = (ANALYSIS_CONFIG_V7 / manifest.role_instruction_path).read_text(encoding="utf-8")
+    for required in (
+        "category_code",
+        "anchor_id",
+        "node_id",
+        "stable_key",
+        "edge_id",
+        "claim_id",
+        "component_id",
+        "self-edge",
+        "general_knowledge_used",
+    ):
+        assert required in instruction
+
+    expected_v6_sha256 = {
+        "bootstrap.yaml": "1e988b5d67c792268a97d12e57a2d0b195ab9e8b86e363cce4ad5256f7471a1f",
+        "instructions/platform.md": (
+            "43d44eaa7ff40594490da50e03c4dbec885593963b704d9751ba9bf89a789d9e"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "62321ad1f3b268e20377aaf0663bcbcc3ef8265549ca6b597043e8aa3610c312"
+        ),
+    }
+    for relative_path, expected in expected_v6_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V6 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+    expected_v7_sha256 = {
+        "bootstrap.yaml": "fa9153c4174ba60c1de49e1e0bbf0f5fbc20ffc0756119d3e7f75fcd29d637d5",
+        "instructions/platform.md": (
+            "43d44eaa7ff40594490da50e03c4dbec885593963b704d9751ba9bf89a789d9e"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "eb65b46e3de26f459c9bd749960678aa3a69a66c705bc347f4915678d4a78538"
+        ),
+    }
+    for relative_path, expected in expected_v7_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V7 / relative_path).read_bytes()).hexdigest() == (
             expected
         )
 

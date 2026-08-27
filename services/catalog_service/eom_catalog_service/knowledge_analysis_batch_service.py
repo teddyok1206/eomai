@@ -13,8 +13,10 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisBatchApplicationResult,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
+    KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
+    KnowledgeAnalysisResultV5,
     ReconcileKnowledgeAnalysisCommand,
     ReuseAcceptedKnowledgeAnalysisRange,
     ReviewKnowledgeAnalysisCommand,
@@ -658,11 +660,16 @@ class KnowledgeAnalysisBatchService:
                 "Reused Knowledge Analysis run is absent or not accepted",
             )
         try:
-            request = (
-                KnowledgeAnalysisRequestV4.model_validate(run.canonical_request)
-                if run.canonical_request.get("schema_version") == "knowledge-analysis-request/4.0"
-                else KnowledgeAnalysisRequestV3.model_validate(run.canonical_request)
+            request_version = run.canonical_request.get("schema_version")
+            request: (
+                KnowledgeAnalysisRequestV3 | KnowledgeAnalysisRequestV4 | KnowledgeAnalysisRequestV5
             )
+            if request_version == "knowledge-analysis-request/5.0":
+                request = KnowledgeAnalysisRequestV5.model_validate(run.canonical_request)
+            elif request_version == "knowledge-analysis-request/4.0":
+                request = KnowledgeAnalysisRequestV4.model_validate(run.canonical_request)
+            else:
+                request = KnowledgeAnalysisRequestV3.model_validate(run.canonical_request)
         except ValueError as exc:
             raise KnowledgeAnalysisBatchServiceError(
                 "KNOWLEDGE_ANALYSIS_BATCH_REUSE_INVALID",
@@ -671,15 +678,21 @@ class KnowledgeAnalysisBatchService:
         logical = session.get(ArtifactRecord, run.accepted_result_artifact_id)
         revision = session.get(ArtifactRevisionRecord, run.accepted_result_artifact_revision_id)
         try:
-            accepted_result = (
-                KnowledgeAnalysisResultV4.model_validate(
-                    revision.result if revision is not None else None
-                )
-                if isinstance(request, KnowledgeAnalysisRequestV4)
-                else KnowledgeAnalysisResultV3.model_validate(
-                    revision.result if revision is not None else None
-                )
+            accepted_result: (
+                KnowledgeAnalysisResultV3 | KnowledgeAnalysisResultV4 | KnowledgeAnalysisResultV5
             )
+            if isinstance(request, KnowledgeAnalysisRequestV5):
+                accepted_result = KnowledgeAnalysisResultV5.model_validate(
+                    revision.result if revision is not None else None
+                )
+            elif isinstance(request, KnowledgeAnalysisRequestV4):
+                accepted_result = KnowledgeAnalysisResultV4.model_validate(
+                    revision.result if revision is not None else None
+                )
+            else:
+                accepted_result = KnowledgeAnalysisResultV3.model_validate(
+                    revision.result if revision is not None else None
+                )
         except ValueError as exc:
             raise KnowledgeAnalysisBatchServiceError(
                 "KNOWLEDGE_ANALYSIS_BATCH_REUSE_INVALID",

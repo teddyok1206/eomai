@@ -123,7 +123,7 @@ def test_worker_runtime_deployer_installs_and_smokes_bubblewrap_profile() -> Non
 def test_runner_configuration_installs_root_owned_capability_policy() -> None:
     source = (ROOT / "scripts/workflow/install_runner_configuration.sh").read_text(encoding="utf-8")
 
-    assert "config/workflows/knowledge-analysis.v3.yaml" in source
+    assert "config/workflows/knowledge-analysis.v4.yaml" in source
     assert (ROOT / "config/workflows/knowledge-analysis.v2.yaml").is_file()
     assert (ROOT / "config/workflows/knowledge-analysis.v1.yaml").is_file()
     assert "/knowledge-analysis.yaml" in source

@@ -425,11 +425,15 @@ catalog_resources = {
     "knowledge/knowledge-analysis-types-v3.schema.json": "schemas/knowledge/knowledge-analysis-types-v3.schema.json",
     "knowledge/knowledge-analysis-request-v3.schema.json": "schemas/knowledge/knowledge-analysis-request-v3.schema.json",
     "knowledge/knowledge-analysis-request-v4.schema.json": "schemas/knowledge/knowledge-analysis-request-v4.schema.json",
+    "knowledge/knowledge-analysis-request-v5.schema.json": "schemas/knowledge/knowledge-analysis-request-v5.schema.json",
     "knowledge/knowledge-analysis-proposal-receipt-v2.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v2.schema.json",
     "knowledge/knowledge-analysis-proposal-receipt-v3.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v3.schema.json",
+    "knowledge/knowledge-analysis-proposal-receipt-v4.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v4.schema.json",
     "knowledge/knowledge-analysis-result-v3.schema.json": "schemas/knowledge/knowledge-analysis-result-v3.schema.json",
     "knowledge/knowledge-analysis-result-v4.schema.json": "schemas/knowledge/knowledge-analysis-result-v4.schema.json",
+    "knowledge/knowledge-analysis-result-v5.schema.json": "schemas/knowledge/knowledge-analysis-result-v5.schema.json",
     "knowledge/knowledge-analysis-worker-proposal-v2.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v2.schema.json",
+    "knowledge/knowledge-analysis-worker-proposal-v3.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v3.schema.json",
     "knowledge/knowledge-graph-projection-v1.schema.json": "schemas/knowledge/knowledge-graph-projection-v1.schema.json",
     "knowledge/knowledge-graph-projection-v2.schema.json": "schemas/knowledge/knowledge-graph-projection-v2.schema.json",
     "knowledge/knowledge-graph-publication-result-v1.schema.json": "schemas/knowledge/knowledge-graph-publication-result-v1.schema.json",
@@ -501,7 +505,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
         )
         definitions.append(definition)
     analysis_definitions = []
-    for version in ("1", "2", "3"):
+    for version in ("1", "2", "3", "4"):
         definition = root / f"knowledge-analysis.v{version}.yaml"
         definition.write_bytes(
             (
@@ -556,7 +560,7 @@ import sys
 from pathlib import Path
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, analysis_v1, analysis_v2, analysis_v3, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, analysis_v1, analysis_v2, analysis_v3, analysis_v4, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -627,6 +631,7 @@ for role in INPUT_SCHEMA_FILES:
 load_role_input_schema("support", "workflow-role/1.4.0")
 load_role_input_schema("support", "workflow-role/1.5.0")
 load_role_input_schema("support", "workflow-role/1.6.0")
+load_role_input_schema("support", "workflow-role/1.7.0")
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
     load_codex_result_schema(schema_id)
@@ -640,9 +645,9 @@ if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0"}:
     raise SystemExit("generic workflow definition versions mismatch")
 analysis_versions = {
     compile_definition(Path(path), {"support"}).definition.definition_version
-    for path in (analysis_v1, analysis_v2, analysis_v3)
+    for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4)
 }
-if analysis_versions != {"1.0.0", "2.0.0", "3.0.0"}:
+if analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0"}:
     raise SystemExit("knowledge analysis workflow definition mismatch")
 for name, _ in catalog_schema_inventory():
     load_schema(name)

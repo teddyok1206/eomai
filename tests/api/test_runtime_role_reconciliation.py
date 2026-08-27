@@ -229,6 +229,14 @@ def test_disposable_database_runs_workflow_preclaim_integration() -> None:
     assert "tests/integration/test_workflow_submission_idempotency.py" in source
     assert "tests/integration/test_control_plane_persistence.py" in source
     assert "tests/integration/test_knowledge_analysis_service.py" in source
+    assert "tests/integration/test_knowledge_analysis_batch_service.py" in source
+    assert "tests/integration/test_knowledge_analysis_v7.py" in source
+    assert source.index("tests/integration/test_knowledge_analysis_service.py") < source.index(
+        "tests/integration/test_knowledge_analysis_v7.py"
+    )
+    assert source.index(
+        "tests/integration/test_knowledge_analysis_batch_service.py"
+    ) < source.index("tests/integration/test_knowledge_analysis_v7.py")
 
 
 def test_disposable_migration_verifies_head_and_migration_0006_objects() -> None:

@@ -29,6 +29,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
+    KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisSourceV3,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphSnapshotPointer,
@@ -936,16 +937,21 @@ class KnowledgeRetrievalApplicationService:
             )
         try:
             schema_version = run.canonical_request.get("schema_version")
-            if schema_version in {
-                "knowledge-analysis-request/3.0",
-                "knowledge-analysis-request/4.0",
-            }:
-                request_model = (
-                    KnowledgeAnalysisRequestV4
-                    if schema_version == "knowledge-analysis-request/4.0"
-                    else KnowledgeAnalysisRequestV3
-                )
-                document_source = request_model.model_validate(run.canonical_request).source
+            if schema_version == "knowledge-analysis-request/5.0":
+                document_source = KnowledgeAnalysisRequestV5.model_validate(
+                    run.canonical_request
+                ).source
+            elif schema_version == "knowledge-analysis-request/4.0":
+                document_source = KnowledgeAnalysisRequestV4.model_validate(
+                    run.canonical_request
+                ).source
+            elif schema_version == "knowledge-analysis-request/3.0":
+                document_source = KnowledgeAnalysisRequestV3.model_validate(
+                    run.canonical_request
+                ).source
+            else:
+                document_source = None
+            if document_source is not None:
                 source: KnowledgeAnalysisSourceV3 = document_source
                 actual: KnowledgeAnalysisSourceV3 = resolve_educational_document_source(
                     session,

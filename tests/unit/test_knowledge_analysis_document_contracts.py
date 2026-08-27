@@ -14,13 +14,17 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV3,
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
+    KnowledgeAnalysisProposalReceiptV4,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
+    KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
+    KnowledgeAnalysisResultV5,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
+    KnowledgeAnalysisWorkerProposalV3,
     load_schema,
     validate_contract,
 )
@@ -227,6 +231,58 @@ def proposal_v4(request: KnowledgeAnalysisRequestV4) -> dict[str, object]:
     return value
 
 
+def request_v5() -> dict[str, object]:
+    value = request_v4()
+    value["schema_version"] = "knowledge-analysis-request/5.0"
+    value["worker_proposal_schema_ref"] = (
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/3.0"
+    )
+    value["accepted_result_schema_ref"] = "eom://schemas/knowledge/knowledge-analysis-result/5.0"
+    value["request_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "request_sha256"}
+    )
+    return value
+
+
+def proposal_v5(request: KnowledgeAnalysisRequestV5) -> dict[str, object]:
+    historical_request = KnowledgeAnalysisRequestV4.model_validate(request_v4())
+    value = proposal_v4(historical_request)
+    value["schema_version"] = "knowledge-analysis-worker-proposal/3.0"
+    value["analysis_request_id"] = request.analysis_request_id
+    value["claims"] = [
+        {
+            "claim_id": "claim_spacetime_scope",
+            "text": "시간과 공간의 범위가 제시된다.",
+            "confidence_milli": 880,
+            "anchor_ids": ["anchor_page_1"],
+            "general_knowledge_influenced": False,
+        }
+    ]
+    value["component_observations"] = [
+        {
+            "component_id": "component_paragraph_1",
+            "kind": "PARAGRAPH",
+            "anchor_id": "anchor_page_1",
+            "confidence_milli": 850,
+        }
+    ]
+    value["unresolved_ambiguities"] = [
+        {
+            "category_code": "SOURCE_SCOPE_UNCLEAR",
+            "description": "첫 번째 범위 경계가 명시되지 않았다.",
+            "blocking": False,
+            "anchor_ids": ["anchor_page_1"],
+        },
+        {
+            "category_code": "SOURCE_SCOPE_UNCLEAR",
+            "description": "두 번째 범위 경계가 명시되지 않았다.",
+            "blocking": False,
+            "anchor_ids": ["anchor_page_1"],
+        },
+    ]
+    return value
+
+
 def _member(name: str, seed: str, media_type: str) -> dict[str, object]:
     return {
         "artifact_id": "artifact_" + "5" * 32,
@@ -361,11 +417,53 @@ def result_v4() -> dict[str, object]:
     return value
 
 
+def receipt_v4() -> dict[str, object]:
+    value = receipt_v3()
+    value["schema_version"] = "knowledge-analysis-proposal-receipt/4.0"
+    members = value["members"]
+    assert isinstance(members, dict)
+    ambiguity = members["unresolved_ambiguities"]
+    assert isinstance(ambiguity, dict)
+    ambiguity["schema_ref"] = "eom://schemas/knowledge/ambiguity/3.0"
+    descriptors = [
+        {
+            "member_path": member["member_path"],
+            "sha256": member["sha256"],
+            "bytes": member["bytes"],
+            "schema_ref": member["schema_ref"],
+            "media_type": member["media_type"],
+        }
+        for member in sorted(members.values(), key=lambda item: str(item["member_path"]))
+        if isinstance(member, dict)
+    ]
+    value["content_set_sha256"] = content_sha256(descriptors)
+    return value
+
+
+def result_v5() -> dict[str, object]:
+    request = request_v5()
+    receipt = receipt_v4()
+    value = result_v4()
+    value["schema_version"] = "knowledge-analysis-result/5.0"
+    value["analysis_request_id"] = request["analysis_request_id"]
+    value["analysis_request_sha256"] = request["request_sha256"]
+    value["source"] = request["source"]
+    pointer = value["proposal_receipt"]
+    assert isinstance(pointer, dict)
+    pointer["schema_ref"] = "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/4.0"
+    value["proposal_content_set_sha256"] = receipt["content_set_sha256"]
+    value["result_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "result_sha256"}
+    )
+    return value
+
+
 @pytest.mark.parametrize(
     ("schema", "value", "model"),
     [
         ("knowledge-analysis-request-v3", request_v3(), KnowledgeAnalysisRequestV3),
         ("knowledge-analysis-request-v4", request_v4(), KnowledgeAnalysisRequestV4),
+        ("knowledge-analysis-request-v5", request_v5(), KnowledgeAnalysisRequestV5),
         (
             "knowledge-analysis-proposal-receipt-v2",
             receipt_v2(),
@@ -376,8 +474,14 @@ def result_v4() -> dict[str, object]:
             receipt_v3(),
             KnowledgeAnalysisProposalReceiptV3,
         ),
+        (
+            "knowledge-analysis-proposal-receipt-v4",
+            receipt_v4(),
+            KnowledgeAnalysisProposalReceiptV4,
+        ),
         ("knowledge-analysis-result-v3", result_v3(), KnowledgeAnalysisResultV3),
         ("knowledge-analysis-result-v4", result_v4(), KnowledgeAnalysisResultV4),
+        ("knowledge-analysis-result-v5", result_v5(), KnowledgeAnalysisResultV5),
     ],
 )
 def test_document_analysis_contracts_validate_at_schema_and_typed_boundaries(
@@ -678,6 +782,141 @@ def test_endpoint_typed_proposal_resolves_declared_types_to_exact_node_ids() -> 
         KnowledgeAnalysisWorkerProposalV2.model_validate(mismatch)
 
 
+def test_integrity_proposal_allows_repeated_ambiguity_categories_not_duplicate_values() -> None:
+    request = KnowledgeAnalysisRequestV5.model_validate(request_v5())
+    valid = proposal_v5(request)
+    validate_contract("knowledge-analysis-worker-proposal-v3", valid)
+    parsed = KnowledgeAnalysisWorkerProposalV3.model_validate(valid)
+    assert [item.category_code for item in parsed.unresolved_ambiguities] == [
+        "SOURCE_SCOPE_UNCLEAR",
+        "SOURCE_SCOPE_UNCLEAR",
+    ]
+
+    exact_duplicate = deepcopy(valid)
+    exact_duplicate["unresolved_ambiguities"][1] = deepcopy(  # type: ignore[index]
+        exact_duplicate["unresolved_ambiguities"][0]  # type: ignore[index]
+    )
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("knowledge-analysis-worker-proposal-v3", exact_duplicate)
+    with pytest.raises(PydanticValidationError, match="ambiguity observations must be unique"):
+        KnowledgeAnalysisWorkerProposalV3.model_validate(exact_duplicate)
+
+
+def test_historical_endpoint_typed_proposal_keeps_ambiguity_code_identity() -> None:
+    request = KnowledgeAnalysisRequestV4.model_validate(request_v4())
+    historical = proposal_v4(request)
+    historical["unresolved_ambiguities"] = [
+        {
+            "code": "SOURCE_SCOPE_UNCLEAR",
+            "description": "첫 번째 범위 경계가 명시되지 않았다.",
+            "blocking": False,
+            "anchor_ids": ["anchor_page_1"],
+        },
+        {
+            "code": "SOURCE_SCOPE_UNCLEAR",
+            "description": "두 번째 범위 경계가 명시되지 않았다.",
+            "blocking": False,
+            "anchor_ids": ["anchor_page_1"],
+        },
+    ]
+    validate_contract("knowledge-analysis-worker-proposal-v2", historical)
+    with pytest.raises(PydanticValidationError, match="ambiguity code identities must be unique"):
+        KnowledgeAnalysisWorkerProposalV2.model_validate(historical)
+
+
+def test_integrity_proposal_stages_v4_receipt_and_v3_ambiguity_members(tmp_path: Path) -> None:
+    request = KnowledgeAnalysisRequestV5.model_validate(request_v5())
+    proposal = KnowledgeAnalysisWorkerProposalV3.model_validate(proposal_v5(request))
+    staged, receipt = stage_knowledge_analysis_proposal(
+        proposal=proposal,
+        request=request,
+        job_id="job_" + "8" * 32,
+        logical_artifact_id="artifact_" + "9" * 32,
+        revision_id="rev_" + "9" * 32,
+        staging=tmp_path,
+    )
+
+    assert isinstance(receipt, KnowledgeAnalysisProposalReceiptV4)
+    assert receipt.counts.ambiguities == 2
+    assert receipt.members.unresolved_ambiguities.schema_ref == (
+        "eom://schemas/knowledge/ambiguity/3.0"
+    )
+    files = {member.relative_path: member.path for member in staged.files}
+    assert staged.primary_hash == (
+        "sha256:" + sha256(files["normalized/proposal-receipt.json"].read_bytes()).hexdigest()
+    )
+    ambiguity_lines = files["normalized/ambiguities.jsonl"].read_text(encoding="utf-8").splitlines()
+    assert len(ambiguity_lines) == 2
+
+
+@pytest.mark.parametrize(
+    ("collection", "identity", "replacement"),
+    [
+        ("anchors", "anchor_id", "anchor_page_1"),
+        ("nodes", "node_id", "knode_pattern"),
+        ("nodes", "stable_key", "assessment.pattern.data_interpretation"),
+        ("edges", "edge_id", "kedge_pattern_requires_concept"),
+        ("claims", "claim_id", "claim_spacetime_scope"),
+        ("component_observations", "component_id", "component_paragraph_1"),
+    ],
+)
+def test_integrity_proposal_rejects_every_duplicate_explicit_identity(
+    collection: str, identity: str, replacement: str
+) -> None:
+    request = KnowledgeAnalysisRequestV5.model_validate(request_v5())
+    invalid = proposal_v5(request)
+    values = invalid[collection]
+    assert isinstance(values, list) and values
+    duplicate = deepcopy(values[0])
+    assert isinstance(duplicate, dict)
+    duplicate[identity] = replacement
+    if identity != "stable_key":
+        if "stable_key" in duplicate:
+            duplicate["stable_key"] = f"{duplicate['stable_key']}.duplicate"
+        if "label" in duplicate:
+            duplicate["label"] = f"{duplicate['label']} 별도 관측"
+        if "confidence_milli" in duplicate:
+            duplicate["confidence_milli"] = int(duplicate["confidence_milli"]) - 1
+        if "locator" in duplicate:
+            duplicate["locator"] = "physical_page=1;paragraph=2"
+    else:
+        duplicate["node_id"] = "knode_distinct_identity"
+    values.append(duplicate)
+    validate_contract("knowledge-analysis-worker-proposal-v3", invalid)
+    with pytest.raises(PydanticValidationError, match="identities must be unique"):
+        KnowledgeAnalysisWorkerProposalV3.model_validate(invalid)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("duplicate_local_anchor", "local anchor pointers must be unique"),
+        ("dangling_anchor", "anchor pointer does not resolve"),
+        ("dangling_edge", "edge endpoint does not resolve"),
+        ("self_edge", "self-edges are not allowed"),
+        ("endpoint_type", "endpoint type does not match its node"),
+        ("general_knowledge", "claim provenance requires general_knowledge_used"),
+    ],
+)
+def test_integrity_proposal_rejects_cross_record_failures(mutation: str, message: str) -> None:
+    request = KnowledgeAnalysisRequestV5.model_validate(request_v5())
+    invalid = proposal_v5(request)
+    if mutation == "duplicate_local_anchor":
+        invalid["claims"][0]["anchor_ids"] = ["anchor_page_1", "anchor_page_1"]  # type: ignore[index]
+    elif mutation == "dangling_anchor":
+        invalid["claims"][0]["anchor_ids"] = ["anchor_missing"]  # type: ignore[index]
+    elif mutation == "dangling_edge":
+        invalid["edges"][0]["to_node_id"] = "knode_missing"  # type: ignore[index]
+    elif mutation == "self_edge":
+        invalid["edges"][0]["to_node_id"] = "knode_pattern"  # type: ignore[index]
+    elif mutation == "endpoint_type":
+        invalid["edges"][0]["relationship"]["from_node_type"] = "ITEM_REVISION"  # type: ignore[index]
+    else:
+        invalid["claims"][0]["general_knowledge_influenced"] = True  # type: ignore[index]
+    with pytest.raises(PydanticValidationError, match=message):
+        KnowledgeAnalysisWorkerProposalV3.model_validate(invalid)
+
+
 def test_endpoint_contract_schema_exactly_matches_the_domain_compatibility_table() -> None:
     schema = load_schema("knowledge-analysis-worker-proposal-v2")
     alternatives = schema["$defs"]["edgeEndpointContract"]["anyOf"]
@@ -774,6 +1013,30 @@ def test_historical_v2_schema_bytes_are_pinned_and_packaged() -> None:
         assert sha256(canonical).hexdigest() == digest
 
 
+def test_integrity_protocol_schema_bytes_are_pinned_and_packaged() -> None:
+    expected = {
+        "knowledge-analysis-worker-proposal-v3.schema.json": (
+            "48353e07147aa97aff2b27c503a9c626d640a70bf728d77f1d7e166e88b07cf3"
+        ),
+        "knowledge-analysis-request-v5.schema.json": (
+            "b5354e230d8c93061c6854ce8c74ab5b7fa289bb9c595f205c44f6edecdbbf70"
+        ),
+        "knowledge-analysis-proposal-receipt-v4.schema.json": (
+            "e760b89bf97fcfa90c099b60b6bfa1c19628deaf950bd7a1a8dbaacdd055312d"
+        ),
+        "knowledge-analysis-result-v5.schema.json": (
+            "bebe839c267ebb7e82bec5c21059e27e3b96135b8e68815beb49b42377c7fb44"
+        ),
+    }
+    for name, digest in expected.items():
+        canonical = (ROOT / "schemas/knowledge" / name).read_bytes()
+        packaged = (
+            ROOT / "packages/catalog_contracts/eom_catalog_contracts/resources/knowledge" / name
+        ).read_bytes()
+        assert canonical == packaged
+        assert sha256(canonical).hexdigest() == digest
+
+
 def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> None:
     assert role_schema_bundle_hash("workflow-role/1.4.0") == (
         "sha256:c385885dc445cee96ae8f0c2a122678c3db68f9b10d8162c7695108fbcc47b4b"
@@ -784,6 +1047,9 @@ def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> Non
     assert role_schema_bundle_hash("workflow-role/1.6.0") == (
         "sha256:089f00931b2e32a39d472f9481bd50d1d641255c0bce9e9dd1c74a5c13df9878"
     )
+    assert role_schema_bundle_hash("workflow-role/1.7.0") == (
+        "sha256:c3c13aef2f797fe255d7ca141ad374069b0e2c000314292ba68b99479f525058"
+    )
     expected_definitions = {
         "knowledge-analysis.v1.yaml": (
             "75d2a750632a8ddbd5d350d00f28ecbfd79aa6527f1fb26436f664eb47b810d8"
@@ -793,6 +1059,9 @@ def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> Non
         ),
         "knowledge-analysis.v3.yaml": (
             "115c25e27fd5e130fb8758963d3a52e90e5576a486dcc74088a7f1f0990fc8bf"
+        ),
+        "knowledge-analysis.v4.yaml": (
+            "a805042ff2f7c110e016d97dfaf56fd22300ce22003956ec0613c44145b6ddef"
         ),
     }
     for name, digest in expected_definitions.items():
