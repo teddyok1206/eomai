@@ -245,6 +245,7 @@ def test_runner_returns_sanitized_failure_without_traceback(
 
     monkeypatch.setattr(runner, "build_engine", FakeEngine)
     monkeypatch.setattr(runner, "_runtime_privileges_ready", lambda _engine: True)
+    monkeypatch.setattr(runner, "_runtime_staging_ready", lambda _path: True)
     monkeypatch.setattr(runner, "RegistryService", lambda _engine: object())
     monkeypatch.setattr(runner, "HwpxApplicationService", FailingService)
 
@@ -276,6 +277,32 @@ def test_runner_fails_closed_before_queue_access_when_manager_privileges_are_mis
     assert runner.run_once() == 1
     captured = capsys.readouterr()
     assert "HWPX_MANAGER_DATABASE_PRIVILEGES_UNAVAILABLE" in captured.err
+    assert "Traceback" not in captured.err
+    assert not called
+
+
+def test_runner_fails_closed_before_queue_access_when_private_staging_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class FakeEngine:
+        def dispose(self) -> None:
+            pass
+
+    called = False
+
+    class UnexpectedService:
+        def __init__(self, _engine: object, **_kwargs: object) -> None:
+            nonlocal called
+            called = True
+
+    monkeypatch.setattr(runner, "build_engine", FakeEngine)
+    monkeypatch.setattr(runner, "_runtime_privileges_ready", lambda _engine: True)
+    monkeypatch.setattr(runner, "_runtime_staging_ready", lambda _path: False)
+    monkeypatch.setattr(runner, "HwpxApplicationService", UnexpectedService)
+
+    assert runner.run_once() == 1
+    captured = capsys.readouterr()
+    assert "HWPX_MANAGER_STAGING_UNAVAILABLE" in captured.err
     assert "Traceback" not in captured.err
     assert not called
 
@@ -416,9 +443,26 @@ def test_application_runner_separates_manager_state_from_builder_home() -> None:
     assert "StateDirectoryMode=0700" in unit
     assert "WorkingDirectory=/var/lib/eom-hwpx-api" in unit
     assert "Environment=HOME=/var/lib/eom-hwpx-api" in unit
+    assert "Environment=EOM_STAGING_ROOT=/var/lib/eom-hwpx-api/staging" in unit
     assert "ReadWritePaths=/var/lib/eom-hwpx-api" in unit
+    assert "ReadWritePaths=/srv/eom/staging" not in unit
     assert "InaccessiblePaths=/var/lib/eom-hwpx" in unit
     assert "WorkingDirectory=/var/lib/eom-hwpx\n" not in unit
+
+
+def test_runner_private_staging_preflight_fails_closed(tmp_path: Path) -> None:
+    staging = tmp_path / "staging"
+
+    assert runner._runtime_staging_ready(staging)
+    assert stat.S_IMODE(staging.stat().st_mode) == 0o700
+
+    staging.chmod(0o750)
+    assert not runner._runtime_staging_ready(staging)
+
+    staging.chmod(0o700)
+    staging.rmdir()
+    staging.symlink_to(tmp_path)
+    assert not runner._runtime_staging_ready(staging)
 
 
 def test_builder_bootstrap_group_matcher_uses_closed_exact_names() -> None:

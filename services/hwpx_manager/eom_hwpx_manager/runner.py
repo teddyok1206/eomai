@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import os
 import signal
+import stat
 import sys
 import threading
 import time
+from pathlib import Path
 
 from eom_catalog_service.registry_service import RegistryService
 from eom_identity_service.models import OperatorRecord
@@ -17,6 +20,7 @@ from eom_hwpx_manager.application_service import HwpxApplicationService
 from eom_hwpx_manager.download_server import HwpxDownloadServer
 from eom_hwpx_manager.errors import HwpxManagerError
 from eom_hwpx_manager.runtime_privileges import manager_runtime_privileges_ready
+from eom_hwpx_manager.settings import HwpxSettings
 
 # The standalone runner composes a narrower module graph than the Application API.
 # Register the identity-owned FK target explicitly so SQLAlchemy can flush state
@@ -32,6 +36,22 @@ def _runtime_privileges_ready(engine: Engine) -> bool:
         return False
 
 
+def _runtime_staging_ready(path: Path) -> bool:
+    """Create and verify the Manager-private staging root before queue claim."""
+    try:
+        path.mkdir(mode=0o700, parents=False, exist_ok=True)
+        metadata = path.lstat()
+    except OSError:
+        return False
+    return bool(
+        stat.S_ISDIR(metadata.st_mode)
+        and not path.is_symlink()
+        and metadata.st_uid == os.geteuid()
+        and stat.S_IMODE(metadata.st_mode) == 0o700
+        and os.access(path, os.W_OK | os.X_OK)
+    )
+
+
 def run_once(*, verify_privileges: bool = True) -> int:
     engine = build_engine()
     try:
@@ -39,6 +59,12 @@ def run_once(*, verify_privileges: bool = True) -> int:
             print(
                 "hwpx_application_build=FAILED "
                 "error_code=HWPX_MANAGER_DATABASE_PRIVILEGES_UNAVAILABLE",
+                file=sys.stderr,
+            )
+            return 1
+        if not _runtime_staging_ready(HwpxSettings.from_environment().staging_root):
+            print(
+                "hwpx_application_build=FAILED error_code=HWPX_MANAGER_STAGING_UNAVAILABLE",
                 file=sys.stderr,
             )
             return 1

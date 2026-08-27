@@ -59,6 +59,7 @@ REQUIRED_RUNNER_DIRECTIVES = frozenset(
         "StateDirectoryMode=0700",
         "WorkingDirectory=/var/lib/eom-hwpx-api",
         "Environment=HOME=/var/lib/eom-hwpx-api",
+        "Environment=EOM_STAGING_ROOT=/var/lib/eom-hwpx-api/staging",
         "NoNewPrivileges=true",
         "CapabilityBoundingSet=",
         "ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-hwpx-application-runner serve",

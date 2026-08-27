@@ -655,7 +655,16 @@ def test_question_template_service_resolves_canonical_content_and_commits_output
         "question-template-content",
         nas_path=str(content_root),
         content_hash=content_sha,
-        manifest={"primary_file": content_path.name},
+        manifest={
+            "primary_file": content_path.name,
+            "files": [
+                {
+                    "file_name": content_path.name,
+                    "sha256": content_sha,
+                    "bytes": content_path.stat().st_size,
+                }
+            ],
+        },
     )
 
     template_id = "hwpxtpl_" + "1" * 32
