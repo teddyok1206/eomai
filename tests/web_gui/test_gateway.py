@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
@@ -12,6 +14,7 @@ from tests.web_gui.helpers import structured_item_content
 
 NOW = datetime(2026, 8, 21, 9, 0, tzinfo=UTC)
 TEST_REFRESH = "eom_rt_TEST_ONLY_REFRESH_" + "0" * 48
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
@@ -256,6 +259,34 @@ async def test_gateway_lists_only_accepted_content_intakes() -> None:
     assert len(values) == 1
     assert values[0].intake_batch_id == intake_id
     assert values[0].state == "ACCEPTED"
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_gateway_projects_reviewed_curriculum_outline_without_graph_internals() -> None:
+    source = json.loads(
+        (ROOT / "content/curriculum/eom-integrated-science-editorial-outline-v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/curriculum/integrated-science-editorial-outline"
+        assert request.headers["authorization"].startswith("Bearer ")
+        return httpx.Response(200, json=_single(source))
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    outline = await gateway.curriculum_editorial_outline(_session())
+    assert len(outline.units) == 41
+    assert outline.graph_grounding_available is False
+    assert outline.units[14].key == "eom.is.middle.3-2"
+    assert "graph_stable_key" not in outline.model_dump(mode="json")["units"][14]
     await gateway.close()
 
 

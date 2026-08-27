@@ -16,6 +16,7 @@ from eom_workflow.schemas import (
     load_definition_schema,
     load_json_schema,
     load_knowledge_item_brief_schema,
+    load_knowledge_item_brief_v2_schema,
     load_role_input_schema,
     load_role_result_schema,
 )
@@ -39,6 +40,7 @@ def test_workflow_schema_resources_match_canonical_sources() -> None:
     assert {
         "workflow-definition.schema.json",
         "knowledge-item-brief-v1.schema.json",
+        "knowledge-item-brief-v2.schema.json",
         *(f"roles/{name}" for name in mapped_names),
     } <= EXPECTED_RESOURCES
     actual = {
@@ -56,6 +58,7 @@ def test_workflow_schema_resources_match_canonical_sources() -> None:
 def test_workflow_schemas_load_from_package_resources() -> None:
     assert load_definition_schema()["$id"].endswith("/workflow-definition.schema.json")
     assert load_knowledge_item_brief_schema()["$id"].endswith("knowledge-item-brief-v1")
+    assert load_knowledge_item_brief_v2_schema()["$id"].endswith("knowledge-item-brief-v2")
     for role in INPUT_SCHEMA_FILES:
         assert load_role_input_schema(role)["$id"].endswith("-input.schema.json")
     for role in INPUT_SCHEMA_FILES_V1_4:

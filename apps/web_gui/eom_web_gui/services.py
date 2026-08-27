@@ -11,6 +11,7 @@ from eom_web_gui.contracts import (
     CodexAccountAdminCommand,
     ContentIntakeOption,
     ContentIntakeSourcePointer,
+    CurriculumEditorialOutline,
     ExecutionPresetDraftSubmission,
     ExecutionPresetLifecycleCommand,
     ExplorerQuery,
@@ -68,6 +69,10 @@ class WebServices:
         self.sessions.save_draft(session, draft)
         return draft
 
+    async def curriculum_editorial_outline(self, session: WebSession) -> CurriculumEditorialOutline:
+        """Proxy the reviewed hierarchy; Graph revisions remain API-owned."""
+        return await self.gateway.curriculum_editorial_outline(session)
+
     def update_draft(
         self,
         session: WebSession,
@@ -91,11 +96,13 @@ class WebServices:
     async def submit_draft(
         self, session: WebSession, draft_id: str, idempotency_key: str
     ) -> dict[str, Any]:
+        draft = self.draft(session, draft_id)
         replay_key = (draft_id, idempotency_key)
         existing = session.replay_results.get(replay_key)
         if existing is not None:
+            if existing.get("draft_spec_sha256") != draft.draft_spec_sha256:
+                raise GatewayError(status=409, code="REQUEST_DRAFT_IDEMPOTENCY_CONFLICT")
             return {**existing, "replayed": True}
-        draft = self.draft(session, draft_id)
         command = await self.gateway.start_workflow(
             session, workflow_start_payload(draft), idempotency_key
         )
@@ -103,6 +110,7 @@ class WebServices:
             "mode": "KNOWLEDGE_ITEM",
             "request_draft_id": draft.request_draft_id,
             "request_sha256": draft.original_request_sha256,
+            "draft_spec_sha256": draft.draft_spec_sha256,
             "command": command,
             "replayed": False,
         }

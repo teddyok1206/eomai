@@ -27,10 +27,17 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "근거에서 출판 문서까지",
             "eom-cdx가 문항에 맞춰 생성하는 자료 그림",
             "참고 자료 묶음 없이 구조화된 요구사항과 작업자의 일반 과학 지식",
+            "교육과정 범위",
+            "대단원 선택",
+            "중단원 선택",
+            "소단원 목록 준비 중",
+            "자연어 출제 요구",
+            "Graph 매핑 준비 중",
         ):
             assert marker in shell.text
         assert client.get("/studio/assets/styles.css").status_code == 200
         assert client.get("/studio/assets/app.js").status_code == 200
+        assert client.get("/studio/assets/curriculum-selector.js").status_code == 200
         assert client.get("/studio/assets/presentation-vocabulary.ko-KR.json").status_code == 200
 
         draft = client.post(
@@ -53,8 +60,9 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
                 "image_required": draft["image_required"],
                 "quality_profile": draft["quality_profile"],
                 "source_intake_batch_id": INTAKE_ID,
+                "authoring_guidance": draft["authoring_guidance"],
                 "knowledge_grounding": False,
-                "curriculum_root_key": None,
+                "curriculum_selected_unit_key": "eom.is.middle.3-3",
             },
             headers=csrf,
         ).json()
@@ -127,5 +135,13 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "공개된 canonical Graph Snapshot이 아닙니다." in html
     assert "/admin/knowledge-analysis-batches/${encodeURIComponent(batchId)}/quality" in javascript
     assert "document.createElement" in javascript
+    assert 'select name="curriculum_large_unit_key" disabled' in html
+    assert 'select name="curriculum_middle_unit_key" disabled' in html
+    assert 'input name="knowledge_grounding" type="checkbox" disabled' in html
+    assert "graph_grounding_available === true" in javascript
+    assert "state.draft === null" in javascript
+    assert "curriculum_selected_unit_key: selectedUnitKey" in javascript
+    assert "state.draft.draft_spec_sha256}`" in javascript
+    assert "draft_spec_sha256.slice" not in javascript
     assert "analysisBatchEta" in javascript
     assert 'id="hwpx-delivery-guide"' in html

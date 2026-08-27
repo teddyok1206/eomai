@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/integrated-science-editorial-outline/1.0",
+  "title": "EOM Integrated Science Editorial Outline V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "outline_key",
+    "outline_revision",
+    "locale",
+    "subject_key",
+    "subject_label",
+    "graph_mapping_status",
+    "supported_product_levels",
+    "unsupported_product_levels",
+    "volumes",
+    "units"
+  ],
+  "properties": {
+    "schema_version": {"const": "integrated-science-editorial-outline/1.0"},
+    "outline_key": {"const": "eom-integrated-science-editorial-outline"},
+    "outline_revision": {"const": "1.0"},
+    "locale": {"const": "ko-KR"},
+    "subject_key": {"const": "integrated-science"},
+    "subject_label": {"const": "통합과학"},
+    "graph_mapping_status": {"const": "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF"},
+    "supported_product_levels": {
+      "type": "array",
+      "const": ["LARGE", "MIDDLE"]
+    },
+    "unsupported_product_levels": {
+      "type": "array",
+      "const": ["SMALL"]
+    },
+    "volumes": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/volume"}
+    },
+    "units": {
+      "type": "array",
+      "minItems": 41,
+      "maxItems": 41,
+      "items": {"$ref": "#/$defs/unit"},
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "required": ["level"],
+            "properties": {"level": {"const": "LARGE"}}
+          },
+          "minContains": 6,
+          "maxContains": 6
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["level"],
+            "properties": {"level": {"const": "MIDDLE"}}
+          },
+          "minContains": 35,
+          "maxContains": 35
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "volume": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "code", "label", "ordinal", "graph_level", "graph_stable_key"],
+      "properties": {
+        "key": {"type": "string", "pattern": "^eom\\.is\\.volume\\.(i|ii)$"},
+        "code": {"enum": ["I", "II"]},
+        "label": {"enum": ["I권", "II권"]},
+        "ordinal": {"type": "integer", "minimum": 1, "maximum": 2},
+        "graph_level": {"const": "MAJOR"},
+        "graph_stable_key": {
+          "type": "string",
+          "pattern": "^curriculum\\.eom\\.editorial\\.integrated-science\\.volume-(i|ii)$"
+        }
+      }
+    },
+    "unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "level",
+        "code",
+        "label",
+        "parent_key",
+        "ordinal",
+        "graph_level",
+        "graph_stable_key"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^eom\\.is\\.(large\\.[1-6]|middle\\.[1-6]-[1-7])$"
+        },
+        "level": {"enum": ["LARGE", "MIDDLE"]},
+        "code": {"type": "string", "pattern": "^[1-6](?:-\\([1-7]\\))?$"},
+        "label": {"type": "string", "minLength": 1, "maxLength": 80},
+        "parent_key": {
+          "type": "string",
+          "pattern": "^eom\\.is\\.(volume\\.(i|ii)|large\\.[1-6])$"
+        },
+        "ordinal": {"type": "integer", "minimum": 1, "maximum": 7},
+        "graph_level": {"enum": ["MIDDLE", "MINOR"]},
+        "graph_stable_key": {
+          "type": "string",
+          "pattern": "^curriculum\\.eom\\.editorial\\.integrated-science\\.volume-(i|ii)\\.large-[1-6](?:\\.middle-[1-7])?$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"level": {"const": "LARGE"}}, "required": ["level"]},
+          "then": {
+            "properties": {
+              "key": {"pattern": "^eom\\.is\\.large\\.[1-6]$"},
+              "code": {"pattern": "^[1-6]$"},
+              "parent_key": {"pattern": "^eom\\.is\\.volume\\.(i|ii)$"},
+              "graph_level": {"const": "MIDDLE"},
+              "graph_stable_key": {
+                "pattern": "^curriculum\\.eom\\.editorial\\.integrated-science\\.volume-(i|ii)\\.large-[1-6]$"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "key": {"pattern": "^eom\\.is\\.middle\\.[1-6]-[1-7]$"},
+              "code": {"pattern": "^[1-6]-\\([1-7]\\)$"},
+              "parent_key": {"pattern": "^eom\\.is\\.large\\.[1-6]$"},
+              "graph_level": {"const": "MINOR"},
+              "graph_stable_key": {
+                "pattern": "^curriculum\\.eom\\.editorial\\.integrated-science\\.volume-(i|ii)\\.large-[1-6]\\.middle-[1-7]$"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

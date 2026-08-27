@@ -1,0 +1,81 @@
+{
+  "$id": "https://eom.local/schemas/web-gui/request-draft-v3.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {"knowledge_grounding": {"const": true}},
+        "required": ["knowledge_grounding"]
+      },
+      "then": {
+        "properties": {"curriculum_selected_unit_key": {"type": "string"}}
+      }
+    }
+  ],
+  "properties": {
+    "authoring_guidance": {"maxLength": 2000, "minLength": 10, "type": "string"},
+    "authoring_guidance_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "choice_count": {"const": 5, "type": "integer"},
+    "created_at": {"format": "date-time", "type": "string"},
+    "curriculum_selected_unit_key": {
+      "anyOf": [
+        {
+          "pattern": "^eom\\.is\\.(large\\.[1-6]|middle\\.[1-6]-[1-7])$",
+          "type": "string"
+        },
+        {"type": "null"}
+      ]
+    },
+    "difficulty": {"enum": ["easy", "medium", "hard"]},
+    "draft_spec_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "equation_required": {"const": true, "type": "boolean"},
+    "image_required": {"const": true, "type": "boolean"},
+    "item_format": {"enum": ["multiple_choice"]},
+    "knowledge_grounding": {"type": "boolean"},
+    "language": {"enum": ["ko"]},
+    "original_request_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "original_request_text": {"maxLength": 2000, "minLength": 10, "type": "string"},
+    "quality_profile": {"enum": ["fast", "balanced", "deep"]},
+    "request_draft_id": {"pattern": "^requestdraft_[0-9a-f]{32}$", "type": "string"},
+    "schema_version": {"const": "3.0"},
+    "source_intake_batch_id": {
+      "anyOf": [
+        {"pattern": "^intake_[0-9a-f]{32}$", "type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "status": {"const": "DRAFT"},
+    "subject": {"maxLength": 80, "minLength": 1, "type": "string"},
+    "task_type": {"enum": ["calculation", "conceptual", "data_interpretation"]},
+    "topic": {"maxLength": 160, "minLength": 1, "type": "string"},
+    "updated_at": {"format": "date-time", "type": "string"}
+  },
+  "required": [
+    "schema_version",
+    "request_draft_id",
+    "status",
+    "language",
+    "subject",
+    "topic",
+    "item_format",
+    "task_type",
+    "difficulty",
+    "choice_count",
+    "equation_required",
+    "image_required",
+    "quality_profile",
+    "source_intake_batch_id",
+    "authoring_guidance",
+    "authoring_guidance_sha256",
+    "knowledge_grounding",
+    "curriculum_selected_unit_key",
+    "original_request_text",
+    "original_request_sha256",
+    "draft_spec_sha256",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "EOM Web GUI Request Draft V3",
+  "type": "object"
+}

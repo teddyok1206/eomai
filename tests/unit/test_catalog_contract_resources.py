@@ -96,7 +96,7 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 100
+    assert len(entries) == 101
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {
@@ -109,6 +109,7 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         "educational-document-registration-receipt",
         "educational-document-registration-receipt-v2",
         "educational-retrieval-requirement",
+        "integrated-science-editorial-outline",
         "evidence-bundle-publication-result-v2",
         "catalog-application-request-v4",
         "catalog-application-response-v4",
@@ -240,6 +241,16 @@ def test_built_wheel_contains_catalog_schemas_and_record(platform_wheel: Path) -
             member = prefix + entry.resource_path.removeprefix("resources/")
             assert member in record
             assert archive.read(member) == (REPOSITORY_ROOT / entry.canonical_path).read_bytes()
+        outline_member = prefix + "curriculum/eom-integrated-science-editorial-outline-v1.json"
+        assert outline_member in names
+        assert outline_member in record
+        assert (
+            archive.read(outline_member)
+            == (
+                REPOSITORY_ROOT
+                / "content/curriculum/eom-integrated-science-editorial-outline-v1.json"
+            ).read_bytes()
+        )
 
 
 def test_installed_wheel_loads_catalog_schemas_without_source_checkout(
@@ -270,7 +281,13 @@ from pathlib import Path
 
 installed, repository = map(Path, sys.argv[1:])
 sys.path.insert(0, str(installed))
-from eom_catalog_contracts import catalog_schema_inventory, load_schema, validate_contract
+from eom_catalog_contracts import (
+    INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
+    catalog_schema_inventory,
+    load_integrated_science_editorial_outline,
+    load_schema,
+    validate_contract,
+)
 
 spec = importlib.util.find_spec("eom_catalog_contracts")
 assert spec is not None and spec.origin is not None
@@ -278,6 +295,12 @@ assert Path(spec.origin).resolve().is_relative_to(installed.resolve())
 assert str(repository.resolve()) not in str(Path(spec.origin).resolve())
 for name, _ in catalog_schema_inventory():
     load_schema(name)
+outline = load_integrated_science_editorial_outline()
+assert len(outline.volumes) == 2
+assert len(outline.units) == 41
+assert INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256 == (
+    "sha256:f11389c8ab26c2bd5b93acf66fe92d30fea9c1d0bc7e6b91a6b6751fdccb5108"
+)
 value = {
     "schema_version": "1.0",
     "pack_release_id": "packrel_" + "0" * 32,

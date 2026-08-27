@@ -12,6 +12,7 @@ import httpx
 from eom_web_gui.contracts import (
     ContentIntakeOption,
     ContentIntakeSourcePointer,
+    CurriculumEditorialOutline,
     ExplorerEntity,
     ExplorerQuery,
     ExplorerResult,
@@ -70,6 +71,10 @@ class ApplicationGateway(Protocol):
     async def intake_sources(
         self, session: WebSession, intake_id: str
     ) -> tuple[ContentIntakeSourcePointer, ...]: ...
+
+    async def curriculum_editorial_outline(
+        self, session: WebSession
+    ) -> CurriculumEditorialOutline: ...
 
     async def start_workflow(
         self, session: WebSession, payload: dict[str, object], idempotency_key: str
@@ -349,6 +354,45 @@ class HttpApplicationGateway:
                 if isinstance(source, dict)
                 and isinstance(source.get("artifact"), dict)
                 and source.get("media_type") in {"image/png", "image/jpeg"}
+            )
+        except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def curriculum_editorial_outline(self, session: WebSession) -> CurriculumEditorialOutline:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/curriculum/integrated-science-editorial-outline",
+        )
+        value = self._data(response)
+        units = value.get("units")
+        if not isinstance(units, list):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        try:
+            return CurriculumEditorialOutline.model_validate(
+                {
+                    "schema_version": value["schema_version"],
+                    "outline_key": value["outline_key"],
+                    "outline_revision": value["outline_revision"],
+                    "subject_key": value["subject_key"],
+                    "subject_label": value["subject_label"],
+                    "graph_mapping_status": value["graph_mapping_status"],
+                    "graph_grounding_available": False,
+                    "supported_product_levels": value["supported_product_levels"],
+                    "unsupported_product_levels": value["unsupported_product_levels"],
+                    "units": [
+                        {
+                            "key": unit["key"],
+                            "level": unit["level"],
+                            "code": unit["code"],
+                            "label": unit["label"],
+                            "parent_key": unit["parent_key"],
+                            "ordinal": unit["ordinal"],
+                        }
+                        for unit in units
+                        if isinstance(unit, dict)
+                    ],
+                }
             )
         except (KeyError, ValueError) as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc

@@ -214,6 +214,12 @@ def create_app(
         draft = actual.create_draft(session, value)
         return draft.model_dump(mode="json")
 
+    @app.get(f"{API_PREFIX}/curriculum/editorial-outline")
+    async def curriculum_editorial_outline(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (await actual.curriculum_editorial_outline(session)).model_dump(mode="json")
+
     @app.get(f"{API_PREFIX}/content-intakes/accepted")
     async def accepted_content_intakes(
         session: Annotated[WebSession, Depends(require_session)],

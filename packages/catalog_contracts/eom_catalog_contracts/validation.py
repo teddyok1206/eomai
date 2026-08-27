@@ -162,6 +162,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.1",
             "sha256:c2f7e5456ac15eaa2526a33ba9de8bef81e9640925a05b1531e9abf80744a664",
         ),
+        "integrated-science-editorial-outline": CatalogSchemaResource(
+            "schemas/curriculum/integrated-science-editorial-outline-v1.schema.json",
+            "resources/curriculum/integrated-science-editorial-outline-v1.schema.json",
+            "1.0",
+            "sha256:6b3e0bff6435827b322337f5c8a48e920c3fffc149e4e047e71374ededb28745",
+        ),
         "educational-document-types": CatalogSchemaResource(
             "schemas/educational-document/educational-document-types-v1.schema.json",
             "resources/educational-document/educational-document-types-v1.schema.json",

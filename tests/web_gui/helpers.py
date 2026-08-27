@@ -7,6 +7,7 @@ from eom_web_gui.app import create_app
 from eom_web_gui.contracts import (
     ContentIntakeOption,
     ContentIntakeSourcePointer,
+    CurriculumEditorialOutline,
     ExplorerQuery,
     ExplorerResult,
     HwpxBuildRequest,
@@ -181,6 +182,48 @@ class FakeGateway:
                 sha256="sha256:" + "4" * 64,
                 media_type="image/png",
             ),
+        )
+
+    async def curriculum_editorial_outline(self, session: WebSession) -> CurriculumEditorialOutline:
+        del session
+        counts = (4, 6, 7, 7, 7, 4)
+        units: list[dict[str, object]] = []
+        for large_number, middle_count in enumerate(counts, start=1):
+            volume = "i" if large_number <= 3 else "ii"
+            units.append(
+                {
+                    "key": f"eom.is.large.{large_number}",
+                    "level": "LARGE",
+                    "code": str(large_number),
+                    "label": f"테스트 대단원 {large_number}",
+                    "parent_key": f"eom.is.volume.{volume}",
+                    "ordinal": large_number if large_number <= 3 else large_number - 3,
+                }
+            )
+            units.extend(
+                {
+                    "key": f"eom.is.middle.{large_number}-{middle_number}",
+                    "level": "MIDDLE",
+                    "code": f"{large_number}-({middle_number})",
+                    "label": f"테스트 중단원 {large_number}-({middle_number})",
+                    "parent_key": f"eom.is.large.{large_number}",
+                    "ordinal": middle_number,
+                }
+                for middle_number in range(1, middle_count + 1)
+            )
+        return CurriculumEditorialOutline.model_validate(
+            {
+                "schema_version": "integrated-science-editorial-outline/1.0",
+                "outline_key": "eom-integrated-science-editorial-outline",
+                "outline_revision": "1.0",
+                "subject_key": "integrated-science",
+                "subject_label": "통합과학",
+                "graph_mapping_status": "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF",
+                "graph_grounding_available": False,
+                "supported_product_levels": ["LARGE", "MIDDLE"],
+                "unsupported_product_levels": ["SMALL"],
+                "units": units,
+            }
         )
 
     async def start_workflow(

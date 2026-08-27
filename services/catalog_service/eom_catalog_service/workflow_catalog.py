@@ -19,7 +19,7 @@ from eom_content_pack import ContentPackError, ContentPackErrorCode, render_prom
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_item_registry import ComponentPointer, RegistrationRequest
 from eom_orchestrator.database import build_session_factory
-from eom_workflow import ArtifactPointer, WorkflowRequest
+from eom_workflow import ArtifactPointer, ItemBriefV2, WorkflowRequest
 from eom_workflow.models import (
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
@@ -107,6 +107,8 @@ GENERATED_RESULT_SCHEMA_PAIRS = frozenset(
 )
 GENERATED_AUTHORING_SCHEMAS = frozenset(pair[0] for pair in GENERATED_RESULT_SCHEMA_PAIRS)
 GENERATED_IMAGE_SCHEMAS = frozenset(pair[1] for pair in GENERATED_RESULT_SCHEMA_PAIRS)
+GENERAL_KNOWLEDGE_SOURCE_MODE: Literal["general_model_knowledge"] = "general_model_knowledge"
+GRAPH_GROUNDED_KNOWLEDGE_SOURCE_MODE: Literal["graph_grounded"] = "graph_grounded"
 
 
 def _generated_result_pointers(
@@ -211,6 +213,7 @@ class WorkflowCatalogService:
                     "active released Content Pack does not resolve",
                 )
             self._require_compatibility(release, definition_key, definition_version)
+            self._require_item_brief_release(pack.pack_key, release.version, request)
             profile_keys = request.profiles.model_dump(mode="json")
             profiles = self._profile_snapshots(session, release, profile_keys)
             intake_ids = request.source_intake.batch_ids if request.source_intake else ()
@@ -454,8 +457,9 @@ class WorkflowCatalogService:
             item_type_key = "eom-template-multiple-choice"
             taxonomy = "GENERAL_SCIENCE"
             tags = ("EOM_QUESTION_TEMPLATE", "GENERAL_KNOWLEDGE_GENERATED")
+            source_mode = self._knowledge_source_mode(request)
             metadata_schema = "eom://metadata/general-knowledge-item@1.0"
-            metadata = {
+            metadata: dict[str, Any] = {
                 "item_type_key": item_type_key,
                 "primary_taxonomy_ref": taxonomy,
                 "difficulty_band": brief.difficulty,
@@ -463,9 +467,21 @@ class WorkflowCatalogService:
                 "subject": brief.subject,
                 "topic": brief.topic,
                 "task_type": brief.task_type,
-                "knowledge_source_mode": "general_model_knowledge",
+                "knowledge_source_mode": source_mode,
                 "request_sha256": brief.original_request_sha256,
             }
+            if isinstance(brief, ItemBriefV2):
+                metadata_schema = "eom://metadata/general-knowledge-item@2.0"
+                metadata.update(
+                    {
+                        "authoring_guidance_sha256": brief.authoring_guidance_sha256,
+                        "curriculum_scope": (
+                            brief.curriculum_scope.model_dump(mode="json")
+                            if brief.curriculum_scope is not None
+                            else None
+                        ),
+                    }
+                )
         else:
             item_type_key = "generic-multiple-choice"
             taxonomy = "PLACEHOLDER_TAXONOMY"
@@ -525,6 +541,20 @@ class WorkflowCatalogService:
             raise ContentPackError(
                 ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                 "Content Pack does not allow the workflow definition snapshot",
+            )
+
+    @staticmethod
+    def _require_item_brief_release(
+        pack_key: str, release_version: str, request: WorkflowRequest
+    ) -> None:
+        if request.item_brief is None:
+            return
+        is_v2 = isinstance(request.item_brief, ItemBriefV2)
+        expects_v2 = pack_key == "generated-knowledge-item" and release_version == "1.2.0"
+        if expects_v2 != is_v2:
+            raise ContentPackError(
+                ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                "item brief version does not match the immutable Content Pack release",
             )
 
     @staticmethod
@@ -610,7 +640,14 @@ class WorkflowCatalogService:
             "pack": {"release_id": release_id},
         }
         if request.item_brief is not None:
-            context["brief"] = request.item_brief.model_dump(mode="json")
+            brief = request.item_brief.model_dump(mode="json")
+            if isinstance(request.item_brief, ItemBriefV2):
+                reviewed_brief = request.item_brief.model_dump(mode="json")
+                reviewed_brief["knowledge_source_mode"] = self._knowledge_source_mode(request)
+                brief["reviewed_item_brief_json"] = canonical_json_bytes(reviewed_brief).decode(
+                    "utf-8"
+                )
+            context["brief"] = brief
         stimulus = workflow.runtime_context.get("stimulus_asset")
         if isinstance(stimulus, dict):
             context["stimulus"] = stimulus
@@ -690,13 +727,7 @@ class WorkflowCatalogService:
             logical_name=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             metadata={
                 "authoring_artifact_revision_id": authoring.revision_id,
-                "knowledge_source_mode": "general_model_knowledge",
-                "delivery_profile": "eom-question-template-v1",
-                "request_sha256": (
-                    request.item_brief.original_request_sha256
-                    if request.item_brief is not None
-                    else ""
-                ),
+                **self._brief_provenance_metadata(request),
             },
         )
 
@@ -794,15 +825,40 @@ class WorkflowCatalogService:
                 "authoring_artifact_revision_id": authoring.revision_id,
                 "image_artifact_revision_id": pointer.artifact_revision_id,
                 "image_result_revision_id": image_result.revision_id,
-                "knowledge_source_mode": "general_model_knowledge",
-                "delivery_profile": "eom-question-template-v1",
-                "request_sha256": (
-                    request.item_brief.original_request_sha256
-                    if request.item_brief is not None
-                    else ""
-                ),
+                **self._brief_provenance_metadata(request),
             },
         )
+
+    def _brief_provenance_metadata(self, request: WorkflowRequest) -> dict[str, Any]:
+        brief = request.item_brief
+        metadata: dict[str, Any] = {
+            "knowledge_source_mode": self._knowledge_source_mode(request),
+            "delivery_profile": "eom-question-template-v1",
+            "request_sha256": brief.original_request_sha256 if brief is not None else "",
+        }
+        if isinstance(brief, ItemBriefV2):
+            metadata.update(
+                {
+                    "authoring_guidance_sha256": brief.authoring_guidance_sha256,
+                    "curriculum_scope": (
+                        brief.curriculum_scope.model_dump(mode="json")
+                        if brief.curriculum_scope is not None
+                        else None
+                    ),
+                }
+            )
+        return metadata
+
+    @staticmethod
+    def _knowledge_source_mode(
+        request: WorkflowRequest,
+    ) -> Literal["general_model_knowledge", "graph_grounded"]:
+        if (
+            isinstance(request.item_brief, ItemBriefV2)
+            and request.educational_retrieval is not None
+        ):
+            return GRAPH_GROUNDED_KNOWLEDGE_SOURCE_MODE
+        return GENERAL_KNOWLEDGE_SOURCE_MODE
 
     def _load_upstream_result(
         self,

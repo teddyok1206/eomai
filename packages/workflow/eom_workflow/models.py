@@ -11,6 +11,7 @@ from eom_catalog_contracts import (
     AssessmentItemContent,
     EducationalRetrievalRequirement,
     EquationBlock,
+    IntegratedScienceCurriculumScope,
     ItemScore,
     ItemSolution,
     KnowledgeAnalysisRequestV2,
@@ -26,7 +27,10 @@ from eom_catalog_contracts import (
     SingleChoiceInteraction,
     StatementSetBlock,
     TableBlock,
+    normalize_reviewed_authoring_guidance,
+    validate_integrated_science_curriculum_scope,
     validate_item_reference_contract,
+    validate_reviewed_authoring_guidance,
 )
 from pydantic import (
     AfterValidator,
@@ -154,6 +158,29 @@ class ItemBrief(FrozenModel):
     original_request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class ItemBriefV2(ItemBrief):
+    """Reviewed authoring intent plus an optional immutable curriculum breadcrumb."""
+
+    schema_version: Literal["2.0"] = "2.0"
+    authoring_guidance: str = Field(min_length=10, max_length=2000)
+    authoring_guidance_sha256: Sha256
+    curriculum_scope: IntegratedScienceCurriculumScope | None = None
+
+    @field_validator("authoring_guidance")
+    @classmethod
+    def normalize_authoring_guidance(cls, value: str) -> str:
+        return normalize_reviewed_authoring_guidance(value)
+
+    @model_validator(mode="after")
+    def validate_authoring_guidance_hash(self) -> ItemBriefV2:
+        validate_reviewed_authoring_guidance(
+            self.authoring_guidance, self.authoring_guidance_sha256
+        )
+        if self.curriculum_scope is not None:
+            validate_integrated_science_curriculum_scope(self.curriculum_scope)
+        return self
+
+
 class StimulusAssetSelection(FrozenModel):
     asset_key: Literal["eom-question-template-reference-v1"]
 
@@ -203,7 +230,7 @@ class WorkflowRequest(FrozenModel):
     profiles: WorkflowProfiles | None = None
     source_intake: SourceIntakeSelection | None = None
     registry_intent: RegistryIntent | None = None
-    item_brief: ItemBrief | None = None
+    item_brief: ItemBrief | ItemBriefV2 | None = None
     stimulus_asset: StimulusAssetSelection | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     educational_retrieval: EducationalRetrievalRequirement | None = None
@@ -234,6 +261,16 @@ class WorkflowRequest(FrozenModel):
             raise ValueError(
                 "educational retrieval requires a generated item request and execution preset"
             )
+        if self.educational_retrieval is not None and isinstance(self.item_brief, ItemBriefV2):
+            scope = self.item_brief.curriculum_scope
+            if (
+                scope is None
+                or self.educational_retrieval.curriculum_root_key != scope.graph_root_stable_key
+                or self.educational_retrieval.topic_keys
+            ):
+                raise ValueError(
+                    "V2 grounded item requests require only the selected curriculum graph root"
+                )
         if self.request_name == "KNOWLEDGE_ITEM_REQUEST":
             if (
                 self.content_pack is None

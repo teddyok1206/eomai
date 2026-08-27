@@ -53,8 +53,10 @@ def test_request_draft_workflow_submission_and_replay() -> None:
         )
         assert draft.status_code == 201
         value = draft.json()
+        assert value["schema_version"] == "3.0"
         assert value["topic"] == "2차원 포물선 운동"
         assert value["source_intake_batch_id"] is None
+        assert value["authoring_guidance_sha256"].startswith("sha256:")
         intakes = client.get("/studio/api/v1/content-intakes/accepted")
         assert intakes.status_code == 200
         assert intakes.json()[0]["intake_batch_id"] == INTAKE_ID
@@ -71,8 +73,9 @@ def test_request_draft_workflow_submission_and_replay() -> None:
                 "image_required": True,
                 "quality_profile": "deep",
                 "source_intake_batch_id": INTAKE_ID,
+                "authoring_guidance": "포물체 운동의 두 성분을 함께 해석하는 계산 문항을 출제한다.",
                 "knowledge_grounding": False,
-                "curriculum_root_key": None,
+                "curriculum_selected_unit_key": None,
             },
             headers=headers,
         )
@@ -91,6 +94,55 @@ def test_request_draft_workflow_submission_and_replay() -> None:
         assert first.status_code == second.status_code == 202
         assert first.json()["replayed"] is False
         assert second.json()["replayed"] is True
+        assert first.json()["draft_spec_sha256"] == updated.json()["draft_spec_sha256"]
+        assert gateway.start_calls == 1
+
+
+def test_request_draft_replay_fails_closed_after_spec_change() -> None:
+    client, gateway = make_client()
+    with client:
+        session = login(client)
+        headers = {"X-CSRF-Token": session["csrf_token"]}
+        draft = client.post(
+            "/studio/api/v1/request-drafts",
+            json={"original_request_text": "충분히 긴 통합과학 개념 문항 생성 요청입니다."},
+            headers=headers,
+        ).json()
+        replay_key = "studio:changed-draft-conflict-0001"
+        first = client.post(
+            f"/studio/api/v1/request-drafts/{draft['request_draft_id']}/submissions",
+            json={"idempotency_key": replay_key},
+            headers=headers,
+        )
+        assert first.status_code == 202
+        updated = client.put(
+            f"/studio/api/v1/request-drafts/{draft['request_draft_id']}",
+            json={
+                "subject": draft["subject"],
+                "topic": "변경된 통합과학 주제",
+                "item_format": draft["item_format"],
+                "task_type": draft["task_type"],
+                "difficulty": draft["difficulty"],
+                "choice_count": draft["choice_count"],
+                "equation_required": draft["equation_required"],
+                "image_required": draft["image_required"],
+                "quality_profile": draft["quality_profile"],
+                "source_intake_batch_id": None,
+                "authoring_guidance": "변경된 주제를 반영한 통합과학 개념 문항을 출제한다.",
+                "knowledge_grounding": False,
+                "curriculum_selected_unit_key": None,
+            },
+            headers=headers,
+        )
+        assert updated.status_code == 200
+        assert updated.json()["draft_spec_sha256"] != first.json()["draft_spec_sha256"]
+        conflict = client.post(
+            f"/studio/api/v1/request-drafts/{draft['request_draft_id']}/submissions",
+            json={"idempotency_key": replay_key},
+            headers=headers,
+        )
+        assert conflict.status_code == 409
+        assert conflict.json()["error_code"] == "REQUEST_DRAFT_IDEMPOTENCY_CONFLICT"
         assert gateway.start_calls == 1
 
 
@@ -138,8 +190,11 @@ def test_request_draft_submission_can_opt_in_to_bounded_graph_grounding() -> Non
                 "image_required": True,
                 "quality_profile": "deep",
                 "source_intake_batch_id": None,
+                "authoring_guidance": (
+                    "판 경계 자료를 해석하고 지각 변동을 추론하는 문항을 출제한다."
+                ),
                 "knowledge_grounding": True,
-                "curriculum_root_key": "earth.plate-boundary",
+                "curriculum_selected_unit_key": "eom.is.middle.3-2",
             },
             headers=headers,
         )
@@ -154,9 +209,29 @@ def test_request_draft_submission_can_opt_in_to_bounded_graph_grounding() -> Non
         requirement = gateway.last_start_payload["educational_retrieval"]
         assert isinstance(requirement, dict)
         assert requirement["corpus_key"] == "science-core"
-        assert requirement["curriculum_root_key"] == "earth.plate-boundary"
+        assert requirement["curriculum_root_key"] is None
         assert "graph_snapshot_revision_id" not in requirement
         assert gateway.last_start_payload["execution_preset_key"] == "knowledge-grounded-item"
+
+
+def test_curriculum_outline_is_authenticated_and_reviewed() -> None:
+    client, _ = make_client()
+    with client:
+        assert client.get("/studio/api/v1/curriculum/editorial-outline").status_code == 401
+        login(client)
+        response = client.get("/studio/api/v1/curriculum/editorial-outline")
+        assert response.status_code == 200
+        outline = response.json()
+        assert outline["schema_version"] == "integrated-science-editorial-outline/1.0"
+        assert outline["graph_mapping_status"] == "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF"
+        assert outline["graph_grounding_available"] is False
+        units = outline["units"]
+        assert any(unit["key"] == "eom.is.large.3" for unit in units)
+        assert any(
+            unit["key"] == "eom.is.middle.3-2" and unit["parent_key"] == "eom.is.large.3"
+            for unit in units
+        )
+        assert all(unit["level"] != "SMALL" for unit in units)
 
 
 def test_workflow_timeline_approval_etag_and_item_preview() -> None:

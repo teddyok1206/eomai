@@ -8,6 +8,13 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from eom_web_gui.draft_integrity import (
+    REQUEST_DRAFT_EDITABLE_FIELDS,
+    authoring_guidance_sha256,
+    draft_spec_sha256,
+    normalize_authoring_guidance,
+)
+
 
 def _utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
@@ -231,7 +238,74 @@ class RequestDraftInput(WebModel):
         return value
 
 
-class RequestDraftUpdate(WebModel):
+class CurriculumEditorialUnitOption(WebModel):
+    key: str = Field(pattern=r"^eom\.is\.(large\.[1-6]|middle\.[1-6]-[1-7])$")
+    level: Literal["LARGE", "MIDDLE"]
+    code: str = Field(pattern=r"^[1-6](?:-\([1-7]\))?$")
+    label: str = Field(min_length=1, max_length=80)
+    parent_key: str = Field(pattern=r"^eom\.is\.(volume\.(i|ii)|large\.[1-6])$")
+    ordinal: int = Field(ge=1, le=7)
+
+
+class CurriculumEditorialOutline(WebModel):
+    schema_version: Literal["integrated-science-editorial-outline/1.0"]
+    outline_key: Literal["eom-integrated-science-editorial-outline"]
+    outline_revision: Literal["1.0"]
+    subject_key: Literal["integrated-science"]
+    subject_label: Literal["통합과학"]
+    graph_mapping_status: Literal["RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF"]
+    graph_grounding_available: Literal[False] = False
+    supported_product_levels: tuple[Literal["LARGE", "MIDDLE"], Literal["LARGE", "MIDDLE"]]
+    unsupported_product_levels: tuple[Literal["SMALL"]]
+    units: tuple[CurriculumEditorialUnitOption, ...] = Field(min_length=41, max_length=41)
+
+    @model_validator(mode="after")
+    def coherent_hierarchy(self) -> CurriculumEditorialOutline:
+        if self.supported_product_levels != ("LARGE", "MIDDLE"):
+            raise ValueError("curriculum supported product levels must remain ordered")
+        by_key = {unit.key: unit for unit in self.units}
+        if len(by_key) != len(self.units):
+            raise ValueError("curriculum outline unit keys must be unique")
+        large = tuple(unit for unit in self.units if unit.level == "LARGE")
+        middle = tuple(unit for unit in self.units if unit.level == "MIDDLE")
+        if len(large) != 6 or len(middle) != 35:
+            raise ValueError("curriculum outline must contain 6 large and 35 middle units")
+        if any(unit.parent_key not in by_key for unit in middle):
+            raise ValueError("curriculum middle unit parent is missing")
+        middle_counts = (4, 6, 7, 7, 7, 4)
+        expected_order: list[str] = []
+        for large_number, middle_count in enumerate(middle_counts, start=1):
+            large_key = f"eom.is.large.{large_number}"
+            expected_order.append(large_key)
+            large_unit = by_key.get(large_key)
+            volume = "i" if large_number <= 3 else "ii"
+            expected_ordinal = large_number if large_number <= 3 else large_number - 3
+            if (
+                large_unit is None
+                or large_unit.level != "LARGE"
+                or large_unit.code != str(large_number)
+                or large_unit.parent_key != f"eom.is.volume.{volume}"
+                or large_unit.ordinal != expected_ordinal
+            ):
+                raise ValueError("curriculum large unit identity contract is invalid")
+            for middle_number in range(1, middle_count + 1):
+                middle_key = f"eom.is.middle.{large_number}-{middle_number}"
+                expected_order.append(middle_key)
+                middle_unit = by_key.get(middle_key)
+                if (
+                    middle_unit is None
+                    or middle_unit.level != "MIDDLE"
+                    or middle_unit.code != f"{large_number}-({middle_number})"
+                    or middle_unit.parent_key != large_key
+                    or middle_unit.ordinal != middle_number
+                ):
+                    raise ValueError("curriculum middle unit identity contract is invalid")
+        if tuple(expected_order) != tuple(unit.key for unit in self.units):
+            raise ValueError("curriculum outline preorder is invalid")
+        return self
+
+
+class RequestDraftEditable(WebModel):
     subject: str = Field(min_length=1, max_length=80)
     topic: str = Field(min_length=1, max_length=160)
     item_format: Literal["multiple_choice"] = "multiple_choice"
@@ -242,27 +316,57 @@ class RequestDraftUpdate(WebModel):
     image_required: Literal[True] = True
     quality_profile: QualityProfile
     source_intake_batch_id: str | None = Field(default=None, pattern=r"^intake_[0-9a-f]{32}$")
+    authoring_guidance: str = Field(min_length=10, max_length=2000)
     knowledge_grounding: bool = False
-    curriculum_root_key: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$")
+    curriculum_selected_unit_key: str | None = Field(
+        default=None,
+        pattern=r"^eom\.is\.(large\.[1-6]|middle\.[1-6]-[1-7])$",
+    )
 
+    @field_validator("authoring_guidance")
+    @classmethod
+    def normalized_authoring_guidance(cls, value: str) -> str:
+        normalized = normalize_authoring_guidance(value)
+        if normalized != value:
+            raise ValueError("authoring guidance must be NFC-normalized compact text")
+        return value
+
+
+class RequestDraftUpdate(RequestDraftEditable):
     @model_validator(mode="after")
     def exact_knowledge_grounding_scope(self) -> RequestDraftUpdate:
-        if self.knowledge_grounding != (self.curriculum_root_key is not None):
-            raise ValueError(
-                "knowledge grounding and a stable curriculum root key must be selected together"
-            )
+        if self.knowledge_grounding and self.curriculum_selected_unit_key is None:
+            raise ValueError("knowledge grounding requires a selected curriculum unit")
         return self
 
 
-class RequestDraft(RequestDraftUpdate):
-    schema_version: Literal["2.0"] = "2.0"
+class RequestDraft(RequestDraftEditable):
+    schema_version: Literal["3.0"] = "3.0"
     request_draft_id: str = Field(pattern=r"^requestdraft_[0-9a-f]{32}$")
     status: Literal["DRAFT"] = "DRAFT"
     language: Literal["ko"] = "ko"
     original_request_text: str = Field(min_length=10, max_length=2000)
     original_request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    authoring_guidance_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    draft_spec_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     created_at: UtcDatetime
     updated_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def exact_knowledge_grounding_scope(self) -> RequestDraft:
+        if self.knowledge_grounding and self.curriculum_selected_unit_key is None:
+            raise ValueError("knowledge grounding requires a selected curriculum unit")
+        actual = authoring_guidance_sha256(self.authoring_guidance)
+        if actual != self.authoring_guidance_sha256:
+            raise ValueError("authoring guidance SHA-256 does not match normalized text")
+        editable = {name: getattr(self, name) for name in REQUEST_DRAFT_EDITABLE_FIELDS}
+        expected_spec = draft_spec_sha256(
+            editable=editable,
+            original_request_sha256=self.original_request_sha256,
+        )
+        if expected_spec != self.draft_spec_sha256:
+            raise ValueError("draft spec SHA-256 does not match reviewed request fields")
+        return self
 
 
 class DraftSubmission(WebModel):

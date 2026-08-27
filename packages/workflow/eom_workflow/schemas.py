@@ -224,6 +224,11 @@ def load_knowledge_item_brief_schema() -> dict[str, Any]:
     return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
 
 
+def load_knowledge_item_brief_v2_schema() -> dict[str, Any]:
+    logical_name = "knowledge-item-brief-v2.schema.json"
+    return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
+
+
 def load_role_input_schema(
     role: str, protocol_version: str = "workflow-role/1.0.1"
 ) -> dict[str, Any]:

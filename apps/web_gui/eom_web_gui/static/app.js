@@ -1,3 +1,9 @@
+import {
+  curriculumAncestors,
+  deepestCurriculumUnitKey,
+  reconcileCurriculumSelection,
+} from "./curriculum-selector.js";
+
 const API = "/studio/api/v1";
 const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/;
 const ANALYSIS_BATCH_PATTERN = /^analysisbatch_[a-f0-9]{32}$/;
@@ -23,6 +29,8 @@ const state = {
   knowledgeQualityReport: null,
   analysisBatchPollTimer: null,
   presentationVocabulary: null,
+  curriculumOutline: null,
+  curriculumSelection: {large: "", middle: "", small: ""},
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -270,14 +278,102 @@ function renderDashboard(value) {
   $("#metric-observe").textContent = statePresentation("generic", value.observability).label;
 }
 
+function replaceCurriculumOptions(select, placeholder, units, labelFor) {
+  select.replaceChildren();
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = placeholder;
+  select.append(empty);
+  for (const unit of units) {
+    const option = document.createElement("option");
+    option.value = unit.key;
+    option.textContent = labelFor(unit);
+    select.append(option);
+  }
+}
+
+function renderCurriculumOutline() {
+  const form = $("#draft-form");
+  const units = state.curriculumOutline?.units;
+  if (!Array.isArray(units)) return;
+  const byKey = new Map(units.map((unit) => [unit.key, unit]));
+  replaceCurriculumOptions(
+    form.elements.curriculum_large_unit_key,
+    "대단원 선택",
+    units.filter((unit) => unit.level === "LARGE"),
+    (unit) => `${unit.code} ${unit.label}`,
+  );
+  replaceCurriculumOptions(
+    form.elements.curriculum_middle_unit_key,
+    "중단원 선택",
+    units.filter((unit) => unit.level === "MIDDLE"),
+    (unit) => {
+      const parent = byKey.get(unit.parent_key);
+      return `${unit.code} ${unit.label}${parent ? ` · ${parent.label}` : ""}`;
+    },
+  );
+  setCurriculumSelection(state.curriculumSelection);
+}
+
+function setCurriculumSelection(selection) {
+  state.curriculumSelection = {
+    large: selection.large || "",
+    middle: selection.middle || "",
+    small: selection.small || "",
+  };
+  const form = $("#draft-form");
+  form.elements.curriculum_large_unit_key.value = state.curriculumSelection.large;
+  form.elements.curriculum_middle_unit_key.value = state.curriculumSelection.middle;
+  form.elements.curriculum_small_unit_key.value = state.curriculumSelection.small;
+}
+
+function changeCurriculumSelection(level, value) {
+  if (!state.curriculumOutline) return;
+  const selection = {...state.curriculumSelection, [level.toLowerCase()]: value};
+  setCurriculumSelection(
+    reconcileCurriculumSelection(state.curriculumOutline.units, selection, level),
+  );
+}
+
+function syncGraphGroundingCapability() {
+  const input = $("#draft-form").elements.knowledge_grounding;
+  const available = state.curriculumOutline?.graph_grounding_available === true;
+  input.disabled = !available;
+  if (!available) input.checked = false;
+  $("#graph-grounding-status").textContent = available
+    ? "공개된 Graph 매핑을 선택한 교육과정 범위에 적용합니다."
+    : "Graph 매핑 준비 중 · 교육과정 분류는 지금 사용할 수 있습니다.";
+}
+
+async function loadCurriculumOutline() {
+  const form = $("#draft-form");
+  try {
+    state.curriculumOutline = await api("/curriculum/editorial-outline");
+    renderCurriculumOutline();
+    syncGraphGroundingCapability();
+    form.elements.curriculum_large_unit_key.disabled = state.draft === null;
+    form.elements.curriculum_middle_unit_key.disabled = state.draft === null;
+  } catch (failure) {
+    form.elements.curriculum_large_unit_key.disabled = true;
+    form.elements.curriculum_middle_unit_key.disabled = true;
+    syncGraphGroundingCapability();
+    showMessage($("#draft-message"), `교육과정 목록 조회 실패: ${failure.message}`, "error");
+  }
+}
+
 function installRequestDraft() {
   $("#draft-analyze").addEventListener("click", analyzeDraft);
   $("#draft-save").addEventListener("click", saveDraft);
   $("#draft-submit").addEventListener("click", submitDraft);
-  $("#draft-form").elements.knowledge_grounding.addEventListener("change", (event) => {
-    const input = $("#draft-form").elements.curriculum_root_key;
-    input.disabled = !event.target.checked;
-    if (!event.target.checked) input.value = "";
+  const form = $("#draft-form");
+  form.elements.curriculum_large_unit_key.addEventListener("change", (event) => {
+    changeCurriculumSelection("LARGE", event.target.value);
+  });
+  form.elements.curriculum_middle_unit_key.addEventListener("change", (event) => {
+    changeCurriculumSelection("MIDDLE", event.target.value);
+  });
+  form.elements.curriculum_small_unit_key.addEventListener("change", (event) => {
+    changeCurriculumSelection("SMALL", event.target.value);
   });
 }
 
@@ -310,15 +406,32 @@ function fillDraft(draft) {
   form.elements.image_required.checked = draft.image_required;
   form.elements.quality_profile.value = draft.quality_profile;
   form.elements.source_intake_batch_id.value = draft.source_intake_batch_id || "";
-  form.elements.knowledge_grounding.checked = draft.knowledge_grounding;
-  form.elements.curriculum_root_key.value = draft.curriculum_root_key || "";
-  form.elements.curriculum_root_key.disabled = !draft.knowledge_grounding;
+  form.elements.authoring_guidance.value = draft.authoring_guidance;
+  const graphGroundingAvailable = state.curriculumOutline?.graph_grounding_available === true;
+  form.elements.knowledge_grounding.checked = draft.knowledge_grounding && graphGroundingAvailable;
+  form.elements.knowledge_grounding.disabled = !graphGroundingAvailable;
+  form.elements.curriculum_large_unit_key.disabled = state.curriculumOutline === null;
+  form.elements.curriculum_middle_unit_key.disabled = state.curriculumOutline === null;
+  const selectedKey = draft.curriculum_selected_unit_key || "";
+  setCurriculumSelection(
+    state.curriculumOutline && selectedKey
+      ? curriculumAncestors(state.curriculumOutline.units, selectedKey)
+      : {large: "", middle: "", small: ""},
+  );
   $("#draft-id").textContent = draft.request_draft_id;
-  $("#draft-sha").textContent = draft.original_request_sha256;
+  $("#draft-sha").textContent = draft.draft_spec_sha256;
+}
+
+function normalizeAuthoringGuidance(value) {
+  return value.normalize("NFC").replace(/\s+/gu, " ").trim();
 }
 
 function draftUpdateBody() {
   const form = $("#draft-form");
+  const selectedUnitKey = deepestCurriculumUnitKey(state.curriculumSelection) || null;
+  if (form.elements.knowledge_grounding.checked && selectedUnitKey === null) {
+    throw new Error("Graph 근거를 사용하려면 대단원 또는 중단원을 선택하세요.");
+  }
   return {
     subject: form.elements.subject.value.trim(),
     topic: form.elements.topic.value.trim(),
@@ -330,10 +443,9 @@ function draftUpdateBody() {
     image_required: form.elements.image_required.checked,
     quality_profile: form.elements.quality_profile.value,
     source_intake_batch_id: form.elements.source_intake_batch_id.value || null,
+    authoring_guidance: normalizeAuthoringGuidance(form.elements.authoring_guidance.value),
     knowledge_grounding: form.elements.knowledge_grounding.checked,
-    curriculum_root_key: form.elements.knowledge_grounding.checked
-      ? form.elements.curriculum_root_key.value.trim()
-      : null,
+    curriculum_selected_unit_key: selectedUnitKey,
   };
 }
 
@@ -356,7 +468,7 @@ async function saveDraft() {
 async function submitDraft() {
   if (!state.draft) return;
   if (!(await saveDraft())) return;
-  const key = `studio:${state.draft.request_draft_id}:${state.draft.original_request_sha256.slice(0, 16)}`;
+  const key = `studio:${state.draft.request_draft_id}:${state.draft.draft_spec_sha256}`;
   try {
     const result = await api(`/request-drafts/${encodeURIComponent(state.draft.request_draft_id)}/submissions`, {
       method: "POST", mutation: true, body: {idempotency_key: key},
@@ -1469,6 +1581,7 @@ async function boot() {
   installExplorer();
   $("#logout").addEventListener("click", logout);
   await initializeSession();
+  await loadCurriculumOutline();
   const restoredHwpx = restoreHwpxBuild();
   if (restoredHwpx) showView("hwpx");
   await Promise.all([loadHealth(), loadHwpx(), loadRecentHwpxBuilds()]);

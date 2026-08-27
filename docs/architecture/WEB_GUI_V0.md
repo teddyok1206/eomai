@@ -37,12 +37,28 @@ output pointer.
 
 ## Request Draft protocol
 
-`schemas/web-gui/request-draft-v1.schema.json` remains the immutable historical Request Draft wire
-contract. New drafts use `request-draft-v2.schema.json`, which adds only an explicit knowledge
-grounding opt-in and one stable curriculum root key. The two values must be selected together. The
-browser cannot choose graph snapshots, traversal, paths, policies, budgets, model names, raw
-reasoning values, or worker slots. The three user-facing quality profiles and the grounding choice
-resolve through closed mappings owned by the BFF.
+`schemas/web-gui/request-draft-v1.schema.json` and `request-draft-v2.schema.json` remain immutable
+historical Request Draft wire contracts. New drafts use `request-draft-v3.schema.json`. V3 carries
+bounded NFC-normalized authoring guidance and its SHA-256, a server-resolved Integrated Science
+editorial scope, and a composite `draft_spec_sha256` over the complete reviewed request. The
+browser submits only a reviewed editorial unit key; it cannot manufacture a breadcrumb or Graph
+root. The Application API resolves that key through the source-controlled outline contract before
+constructing the internal workflow command. Scientific Studio proxies the authenticated read-only
+outline projection and does not acquire Catalog or database dependencies.
+
+The visible hierarchy is `대단원 -> 중단원 -> 소단원`. A middle unit may be selected first and
+deterministically fills its large-unit parent. A future small-unit selection will fill both parents,
+but V3 deliberately exposes a disabled placeholder until a reviewed small-unit vocabulary exists.
+An editorial selection may be recorded without Graph grounding. Enabling grounding requires a
+selection and uses the deepest selected unit's mapped stable key; Graph revision, traversal,
+policies, and storage paths remain server-owned. Natural-language guidance is treated as explicit
+reviewed data and remains delimited from system instructions.
+
+Outline V1 marks its Graph mapping as reserved candidates rather than publication proof. The BFF
+therefore projects `graph_grounding_available=false`, and the Studio keeps the grounding control
+disabled with a visible “Graph 매핑 준비 중” state. Editors may still classify a standard item by
+대단원/중단원. A later published mapping requires an explicit successor capability contract; the
+browser never infers readiness from the presence of candidate keys.
 
 The accepted Application API currently supports `PLACEHOLDER_REQUEST`. V0 labels this path
 `Generic Demo Mode` and maps a reviewed draft to the existing `generic-item-development` workflow.
@@ -60,6 +76,8 @@ rendered with `textContent`; the browser receives no artifact bytes or storage p
 
 - session and draft lookup: bounded dictionaries keyed by cryptographically random IDs, expected
   O(1) lookup;
+- curriculum hierarchy: one ordered immutable outline plus a key-indexed map, O(1) parent lookup
+  and O(depth) reconciliation where the reviewed depth is at most four;
 - idempotent replay: dictionary keyed by `(draft ID, idempotency key)`, O(1) membership;
 - timeline: ordered immutable tuple, sorted once by timestamp, O(n log n) for at most 500 events;
 - DB Explorer: closed entity-to-route mapping, O(1) dispatch, with API cursor pagination;

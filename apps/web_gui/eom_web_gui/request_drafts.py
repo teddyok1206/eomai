@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 import secrets
 from datetime import UTC, datetime
@@ -13,6 +12,12 @@ from eom_web_gui.contracts import (
     RequestDraft,
     RequestDraftInput,
     RequestDraftUpdate,
+)
+from eom_web_gui.draft_integrity import (
+    authoring_guidance_sha256,
+    draft_spec_sha256,
+    normalize_authoring_guidance,
+    text_sha256,
 )
 
 DEMO_REQUEST = "물리학에서 2차원 포물선 운동에 관한 계산 문항을 출제해줘."
@@ -27,7 +32,7 @@ QUALITY_POLICY = {
 
 
 def _compact(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()
+    return normalize_authoring_guidance(re.sub(r"\s+", " ", value))
 
 
 def normalize_request(
@@ -43,32 +48,57 @@ def normalize_request(
         "calculation" if any(word in lowered for word in ("계산", "구하", "값")) else "conceptual"
     )
     current = now or datetime.now(UTC)
-    return RequestDraft(
-        request_draft_id=f"requestdraft_{token or secrets.token_hex(16)}",
-        subject=subject,
-        topic=topic,
-        item_format="multiple_choice",
-        task_type=task_type,
-        difficulty="medium",
-        choice_count=5,
-        equation_required=True,
-        image_required=True,
-        quality_profile=QualityProfile.BALANCED,
-        original_request_text=text,
-        original_request_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-        created_at=current,
-        updated_at=current,
+    guidance_sha256 = authoring_guidance_sha256(text)
+    editable: dict[str, object] = {
+        "subject": subject,
+        "topic": topic,
+        "item_format": "multiple_choice",
+        "task_type": task_type,
+        "difficulty": "medium",
+        "choice_count": 5,
+        "equation_required": True,
+        "image_required": True,
+        "quality_profile": QualityProfile.BALANCED,
+        "source_intake_batch_id": None,
+        "authoring_guidance": text,
+        "knowledge_grounding": False,
+        "curriculum_selected_unit_key": None,
+    }
+    original_sha256 = text_sha256(text)
+    return RequestDraft.model_validate(
+        {
+            **editable,
+            "request_draft_id": f"requestdraft_{token or secrets.token_hex(16)}",
+            "original_request_text": text,
+            "original_request_sha256": original_sha256,
+            "authoring_guidance_sha256": guidance_sha256,
+            "draft_spec_sha256": draft_spec_sha256(
+                editable=editable,
+                original_request_sha256=original_sha256,
+            ),
+            "created_at": current,
+            "updated_at": current,
+        }
     )
 
 
 def update_draft(draft: RequestDraft, value: RequestDraftUpdate, *, now: datetime) -> RequestDraft:
-    return RequestDraft(
-        **value.model_dump(),
-        request_draft_id=draft.request_draft_id,
-        original_request_text=draft.original_request_text,
-        original_request_sha256=draft.original_request_sha256,
-        created_at=draft.created_at,
-        updated_at=now,
+    editable = value.model_dump()
+    guidance_sha256 = authoring_guidance_sha256(value.authoring_guidance)
+    return RequestDraft.model_validate(
+        {
+            **editable,
+            "request_draft_id": draft.request_draft_id,
+            "original_request_text": draft.original_request_text,
+            "original_request_sha256": draft.original_request_sha256,
+            "authoring_guidance_sha256": guidance_sha256,
+            "draft_spec_sha256": draft_spec_sha256(
+                editable=editable,
+                original_request_sha256=draft.original_request_sha256,
+            ),
+            "created_at": draft.created_at,
+            "updated_at": now,
+        }
     )
 
 
@@ -98,6 +128,7 @@ def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
         "item_id": None,
         "base_revision_id": None,
         "item_brief": {
+            "schema_version": "2.0",
             "subject": draft.subject,
             "topic": draft.topic,
             "task_type": draft.task_type,
@@ -107,16 +138,19 @@ def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
             "image_required": True,
             "quality_profile": draft.quality_profile,
             "original_request_sha256": draft.original_request_sha256,
+            "authoring_guidance": draft.authoring_guidance,
+            "authoring_guidance_sha256": draft.authoring_guidance_sha256,
+            "curriculum_selected_unit_key": draft.curriculum_selected_unit_key,
         },
         "stimulus_asset_key": None,
     }
     if draft.knowledge_grounding:
-        assert draft.curriculum_root_key is not None
+        assert draft.curriculum_selected_unit_key is not None
         payload["educational_retrieval"] = {
             "schema_version": "educational-retrieval-requirement/1.0",
             "corpus_key": KNOWLEDGE_CORPUS_KEY,
             "query_kind": "ITEM_PREPARATION",
-            "curriculum_root_key": draft.curriculum_root_key,
+            "curriculum_root_key": None,
             "topic_keys": [],
             "required_item_elements": ["equation", "image", "statement_set", "table"],
             "source_classes": ["APPROVED_ITEM", "TEXTBOOK"],

@@ -1,0 +1,54 @@
+{
+  "$id": "https://eom.local/schemas/web-gui/curriculum-editorial-outline-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "graph_grounding_available": {"const": false},
+    "graph_mapping_status": {"const": "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF"},
+    "outline_key": {"const": "eom-integrated-science-editorial-outline"},
+    "outline_revision": {"const": "1.0"},
+    "schema_version": {"const": "integrated-science-editorial-outline/1.0"},
+    "subject_key": {"const": "integrated-science"},
+    "subject_label": {"const": "통합과학"},
+    "supported_product_levels": {"const": ["LARGE", "MIDDLE"], "type": "array"},
+    "units": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {"pattern": "^[1-6](?:-\\([1-7]\\))?$", "type": "string"},
+          "key": {
+            "pattern": "^eom\\.is\\.(large\\.[1-6]|middle\\.[1-6]-[1-7])$",
+            "type": "string"
+          },
+          "label": {"maxLength": 80, "minLength": 1, "type": "string"},
+          "level": {"enum": ["LARGE", "MIDDLE"]},
+          "ordinal": {"maximum": 7, "minimum": 1, "type": "integer"},
+          "parent_key": {
+            "pattern": "^eom\\.is\\.(volume\\.(i|ii)|large\\.[1-6])$",
+            "type": "string"
+          }
+        },
+        "required": ["key", "level", "code", "label", "parent_key", "ordinal"],
+        "type": "object"
+      },
+      "maxItems": 41,
+      "minItems": 41,
+      "type": "array"
+    },
+    "unsupported_product_levels": {"const": ["SMALL"], "type": "array"}
+  },
+  "required": [
+    "schema_version",
+    "outline_key",
+    "outline_revision",
+    "subject_key",
+    "subject_label",
+    "graph_mapping_status",
+    "graph_grounding_available",
+    "supported_product_levels",
+    "unsupported_product_levels",
+    "units"
+  ],
+  "title": "EOM Web GUI Curriculum Editorial Outline V1",
+  "type": "object"
+}

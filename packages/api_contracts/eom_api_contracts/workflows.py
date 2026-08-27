@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from eom_catalog_contracts import EducationalRetrievalRequirement, KnowledgeSourceClass
-from pydantic import Field, model_validator
+from eom_catalog_contracts import (
+    KnowledgeSourceClass,
+    normalize_reviewed_authoring_guidance,
+    validate_reviewed_authoring_guidance,
+)
+from pydantic import Field, field_validator, model_validator
 
 from eom_api_contracts.common import ApiModel, OpaqueId, Sha256, UtcDatetime
 
@@ -20,6 +24,57 @@ class KnowledgeItemBriefRequest(ApiModel):
     image_required: Literal[True] = True
     quality_profile: Literal["fast", "balanced", "deep"]
     original_request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class KnowledgeItemBriefRequestV2(KnowledgeItemBriefRequest):
+    schema_version: Literal["2.0"] = "2.0"
+    authoring_guidance: str = Field(min_length=10, max_length=2000)
+    authoring_guidance_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    curriculum_selected_unit_key: str | None = Field(
+        default=None,
+        pattern=r"^eom\.is\.(?:large\.[1-6]|middle\.[1-6]-[1-7])$",
+    )
+
+    @field_validator("authoring_guidance")
+    @classmethod
+    def normalize_authoring_guidance(cls, value: str) -> str:
+        return normalize_reviewed_authoring_guidance(value)
+
+    @model_validator(mode="after")
+    def validate_authoring_guidance_hash(self) -> KnowledgeItemBriefRequestV2:
+        validate_reviewed_authoring_guidance(
+            self.authoring_guidance, self.authoring_guidance_sha256
+        )
+        return self
+
+
+class EducationalRetrievalIntentRequest(ApiModel):
+    """Presentation-level intent; V2 curriculum roots are resolved after outer validation."""
+
+    schema_version: Literal["educational-retrieval-requirement/1.0"] = (
+        "educational-retrieval-requirement/1.0"
+    )
+    corpus_key: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")
+    query_kind: Literal["CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE", "ITEM_PREPARATION"]
+    curriculum_root_key: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$")
+    topic_keys: tuple[Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$")], ...] = Field(
+        max_length=20
+    )
+    required_item_elements: tuple[
+        Literal["paragraph", "table", "image", "equation", "statement_set", "choice"], ...
+    ] = Field(min_length=1, max_length=8)
+    source_classes: tuple[KnowledgeSourceClass, ...] = Field(min_length=1, max_length=5)
+
+    @model_validator(mode="after")
+    def require_stable_sorted_filters(self) -> EducationalRetrievalIntentRequest:
+        for values, label in (
+            (self.topic_keys, "topic keys"),
+            (self.required_item_elements, "required item elements"),
+            (self.source_classes, "source classes"),
+        ):
+            if tuple(sorted(values)) != values or len(values) != len(set(values)):
+                raise ValueError(f"educational retrieval {label} must be sorted and unique")
+        return self
 
 
 class WorkflowStartRequest(ApiModel):
@@ -39,10 +94,10 @@ class WorkflowStartRequest(ApiModel):
     registry_mode: Literal["CREATE_ITEM", "REVISE_ITEM"] = "CREATE_ITEM"
     item_id: str | None = Field(default=None, max_length=128)
     base_revision_id: str | None = Field(default=None, max_length=128)
-    item_brief: KnowledgeItemBriefRequest | None = None
+    item_brief: KnowledgeItemBriefRequest | KnowledgeItemBriefRequestV2 | None = None
     stimulus_asset_key: Literal["eom-question-template-reference-v1"] | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
-    educational_retrieval: EducationalRetrievalRequirement | None = None
+    educational_retrieval: EducationalRetrievalIntentRequest | None = None
 
     @model_validator(mode="after")
     def validate_content_pack_pointer(self) -> WorkflowStartRequest:
@@ -57,6 +112,24 @@ class WorkflowStartRequest(ApiModel):
             raise ValueError(
                 "educational retrieval requires a generated item request and execution preset"
             )
+        if self.educational_retrieval is not None and isinstance(
+            self.item_brief, KnowledgeItemBriefRequestV2
+        ):
+            if (
+                self.item_brief.curriculum_selected_unit_key is None
+                or self.educational_retrieval.curriculum_root_key is not None
+                or self.educational_retrieval.topic_keys
+            ):
+                raise ValueError(
+                    "V2 grounded requests require one curriculum selection and forbid client "
+                    "graph roots or topic keys"
+                )
+        elif (
+            self.educational_retrieval is not None
+            and self.educational_retrieval.curriculum_root_key is None
+            and not self.educational_retrieval.topic_keys
+        ):
+            raise ValueError("educational retrieval requires curriculum or topic scope")
         if (
             self.pack_key is not None
             and not self.source_intake_batch_ids

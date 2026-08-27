@@ -184,10 +184,14 @@ html[data-ui-mode="engine"] .main-area { background-image: linear-gradient(rgba(
 .composer-footer small { color: var(--eom-text-muted); }
 .draft-form { padding: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .draft-form label, .approval-form-panel label, .explorer-filters label { display: grid; gap: 5px; color: #465166; font-size: 11px; font-weight: 700; }
-.draft-form input, .draft-form select, .approval-form-panel input, .approval-form-panel textarea, .explorer-filters input, .explorer-filters select { width: 100%; min-height: 38px; border: 1px solid #b9c2d0; border-radius: 5px; padding: 7px 9px; background: white; color: var(--eom-text); }
+.draft-form input, .draft-form select, .draft-form textarea, .approval-form-panel input, .approval-form-panel textarea, .explorer-filters input, .explorer-filters select { width: 100%; min-height: 38px; border: 1px solid #b9c2d0; border-radius: 5px; padding: 7px 9px; background: white; color: var(--eom-text); }
+.draft-form textarea { line-height: 1.55; resize: vertical; }
 .draft-form .wide { grid-column: 1 / -1; }
 .draft-form fieldset { margin: 0; border: 1px solid var(--eom-border); border-radius: 6px; }
 .draft-form legend { color: #465166; font-size: 11px; font-weight: 700; }
+.curriculum-scope { padding: 10px; }
+.curriculum-selector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.curriculum-helper { margin: 8px 0 0; color: var(--eom-text-muted); font-size: 10px; line-height: 1.5; }
 .check { display: inline-flex !important; align-items: center; margin: 4px 18px 4px 0; }
 .check input { width: 16px; min-height: 16px; }
 .quality-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 9px; }
@@ -388,6 +392,7 @@ html[data-ui-mode="engine"] .main-area { background-image: linear-gradient(rgba(
   .id-input { min-width: 0; width: 100%; }
   .draft-form { grid-template-columns: 1fr; }
   .draft-form .wide { grid-column: auto; }
+  .curriculum-selector { grid-template-columns: 1fr; }
   .structured-import-grid { grid-template-columns: 1fr; }
   .structured-import-grid .wide { grid-column: auto; }
   .quality-picker { grid-template-columns: 1fr; }

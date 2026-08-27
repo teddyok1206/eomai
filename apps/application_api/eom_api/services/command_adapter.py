@@ -9,13 +9,21 @@ from eom_api_contracts.content_packs import ActivateContentPackRequest
 from eom_api_contracts.deliverables import CreateDeliverableRequest
 from eom_api_contracts.items import ItemRetirementRequest, StructuredItemContentImportRequest
 from eom_api_contracts.usage import CreateUsagePlanRequest, FulfillUsagePlanRequest
-from eom_api_contracts.workflows import WorkflowActionRequest, WorkflowStartRequest
+from eom_api_contracts.workflows import (
+    KnowledgeItemBriefRequestV2,
+    WorkflowActionRequest,
+    WorkflowStartRequest,
+)
 from eom_catalog_contracts import (
     CreateDeliverable,
     CreateItemProductionEvidenceCommand,
     CreateUsagePlan,
+    EducationalRetrievalRequirement,
     FulfillUsagePlan,
+    IntegratedScienceCurriculumContractError,
+    IntegratedScienceCurriculumScope,
     ReviewedItemContentImportCommand,
+    resolve_integrated_science_curriculum_scope,
 )
 from eom_catalog_service.content_pack_service import ContentPackService
 from eom_catalog_service.registry_service import RegistryService
@@ -59,6 +67,118 @@ def new_api_command_id() -> str:
     return f"apicmd_{secrets.token_hex(16)}"
 
 
+def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest:
+    """Resolve presentation-only curriculum identity before any workflow side effect."""
+
+    item_brief_data: dict[str, Any] | None = None
+    curriculum_scope: IntegratedScienceCurriculumScope | None = None
+    if request.item_brief is not None:
+        item_brief_data = request.item_brief.model_dump(mode="json")
+        if isinstance(request.item_brief, KnowledgeItemBriefRequestV2):
+            item_brief_data.pop("curriculum_selected_unit_key")
+            selected_unit_key = request.item_brief.curriculum_selected_unit_key
+            if selected_unit_key is not None:
+                try:
+                    curriculum_scope = resolve_integrated_science_curriculum_scope(
+                        selected_unit_key
+                    )
+                except IntegratedScienceCurriculumContractError as exc:
+                    raise ApiError(
+                        422,
+                        "WORKFLOW_CURRICULUM_SELECTION_INVALID",
+                        "Curriculum selection is invalid",
+                        "The selected curriculum unit does not exist in the pinned outline.",
+                    ) from exc
+            item_brief_data["curriculum_scope"] = (
+                curriculum_scope.model_dump(mode="json") if curriculum_scope is not None else None
+            )
+    retrieval_data = (
+        request.educational_retrieval.model_dump(mode="json")
+        if request.educational_retrieval is not None
+        else None
+    )
+    if isinstance(request.item_brief, KnowledgeItemBriefRequestV2) and retrieval_data is not None:
+        if curriculum_scope is None:
+            raise ApiError(
+                422,
+                "WORKFLOW_CURRICULUM_SELECTION_INVALID",
+                "Curriculum selection is invalid",
+                "Graph-grounded item authoring requires one curriculum selection.",
+            )
+        retrieval_data["curriculum_root_key"] = curriculum_scope.graph_root_stable_key
+        retrieval_data["topic_keys"] = []
+    if retrieval_data is not None:
+        retrieval_data = EducationalRetrievalRequirement.model_validate(retrieval_data).model_dump(
+            mode="json"
+        )
+    request_data: dict[str, Any] = {
+        "request_name": request.request_name,
+        "image_mode": request.image_mode,
+        "execution_preset_key": request.execution_preset_key,
+        "educational_retrieval": retrieval_data,
+    }
+    if request.pack_key is not None:
+        knowledge_request = request.request_name == "KNOWLEDGE_ITEM_REQUEST"
+        generated_request = request.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
+        request_data.update(
+            {
+                "content_pack": {
+                    "pack_key": request.pack_key,
+                    "environment": request.environment,
+                },
+                "profiles": {
+                    "authoring": (
+                        "knowledge-authoring"
+                        if knowledge_request
+                        else (
+                            "generated-knowledge-authoring"
+                            if generated_request
+                            else "authoring-default"
+                        )
+                    ),
+                    "review": (
+                        "knowledge-review"
+                        if knowledge_request
+                        else (
+                            "generated-knowledge-review" if generated_request else "review-default"
+                        )
+                    ),
+                    "image": (
+                        "fixed-stimulus-review"
+                        if knowledge_request
+                        else (
+                            "generated-stimulus-drawing"
+                            if generated_request
+                            else "image-placeholder"
+                        )
+                    ),
+                    "registration": (
+                        "structured-registration"
+                        if knowledge_request
+                        else (
+                            "generated-structured-registration"
+                            if generated_request
+                            else "registration-default"
+                        )
+                    ),
+                },
+                "source_intake": {"batch_ids": list(request.source_intake_batch_ids)},
+                "registry_intent": {
+                    "mode": request.registry_mode,
+                    "item_id": request.item_id,
+                    "base_revision_id": request.base_revision_id,
+                },
+            }
+        )
+        if knowledge_request or generated_request:
+            assert item_brief_data is not None
+            request_data["item_brief"] = item_brief_data
+        if knowledge_request:
+            assert request.stimulus_asset_key is not None
+            request_data["stimulus_asset"] = {"asset_key": request.stimulus_asset_key}
+    return WorkflowRequest.model_validate(request_data)
+
+
 class CommandAdapter:
     def __init__(
         self,
@@ -81,78 +201,7 @@ class CommandAdapter:
         *,
         idempotency_key: str,
     ) -> tuple[str, str, int]:
-        request_data: dict[str, Any] = {
-            "request_name": request.request_name,
-            "image_mode": request.image_mode,
-            "execution_preset_key": request.execution_preset_key,
-            "educational_retrieval": (
-                request.educational_retrieval.model_dump(mode="json")
-                if request.educational_retrieval is not None
-                else None
-            ),
-        }
-        if request.pack_key is not None:
-            knowledge_request = request.request_name == "KNOWLEDGE_ITEM_REQUEST"
-            generated_request = request.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-            request_data.update(
-                {
-                    "content_pack": {
-                        "pack_key": request.pack_key,
-                        "environment": request.environment,
-                    },
-                    "profiles": {
-                        "authoring": (
-                            "knowledge-authoring"
-                            if knowledge_request
-                            else (
-                                "generated-knowledge-authoring"
-                                if generated_request
-                                else "authoring-default"
-                            )
-                        ),
-                        "review": (
-                            "knowledge-review"
-                            if knowledge_request
-                            else (
-                                "generated-knowledge-review"
-                                if generated_request
-                                else "review-default"
-                            )
-                        ),
-                        "image": (
-                            "fixed-stimulus-review"
-                            if knowledge_request
-                            else (
-                                "generated-stimulus-drawing"
-                                if generated_request
-                                else "image-placeholder"
-                            )
-                        ),
-                        "registration": (
-                            "structured-registration"
-                            if knowledge_request
-                            else (
-                                "generated-structured-registration"
-                                if generated_request
-                                else "registration-default"
-                            )
-                        ),
-                    },
-                    "source_intake": {"batch_ids": list(request.source_intake_batch_ids)},
-                    "registry_intent": {
-                        "mode": request.registry_mode,
-                        "item_id": request.item_id,
-                        "base_revision_id": request.base_revision_id,
-                    },
-                }
-            )
-            if knowledge_request or generated_request:
-                assert request.item_brief is not None
-                request_data["item_brief"] = request.item_brief.model_dump(mode="json")
-            if knowledge_request:
-                assert request.stimulus_asset_key is not None
-                request_data["stimulus_asset"] = {"asset_key": request.stimulus_asset_key}
-        workflow_request = WorkflowRequest.model_validate(request_data)
+        workflow_request = _workflow_request_from_api(request)
         knowledge_preset = None
         knowledge_evidence = None
         preflight_definition_hash: str | None = None

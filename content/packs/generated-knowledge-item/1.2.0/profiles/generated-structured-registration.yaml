@@ -1,0 +1,15 @@
+schema_version: "1.0"
+profile:
+  type: "registration"
+  key: "generated-structured-registration"
+  version: "3.0.0"
+template: "prompt-templates/registration.md"
+input_schema_ref: "eom://workflow/registration-input@1.3"
+output_schema_ref: "registration-result@4.0"
+required_context:
+  - "workflow.id"
+  - "workflow.step_key"
+  - "upstream.authoring.result_json"
+  - "upstream.review.result_json"
+  - "generated_stimulus.artifact_revision_id"
+  - "pack.release_id"
