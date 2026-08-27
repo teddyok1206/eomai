@@ -129,6 +129,14 @@ from the existing Item Revision, HWPX build, validation, and download-availabili
 - Human text uses the existing local/system Korean sans stack.
 - IDs, hashes, timestamps, execution annotations, and engine-mode eyebrows use the existing mono
   stack.
+- Application text follows one readable scale: 14 px body, 13 px labels and messages, and 12 px
+  captions. Ordinary instructions, states, field labels, and table values must not be compressed
+  below the caption size merely to fit more information on screen.
+- The only text below 12 px is compact machine notation such as an ordinal, truncated immutable ID,
+  graph key, or document-preview metadata. It must remain secondary, recoverable at normal size in a
+  detail surface, and never carry the only explanation of an action or state.
+- Human-mode panels use their Korean heading as the primary label and suppress repeated decorative
+  uppercase eyebrow copy. Page-level context and engine-mode evidence labels remain visible.
 - Card radius remains at or below 8 px; control radius remains at or below 6 px.
 - Shadows establish document elevation or overlay ownership, not decoration.
 - Animation is unnecessary for status truth. Any transition must be subtle and is effectively

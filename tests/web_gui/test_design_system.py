@@ -67,6 +67,22 @@ def test_semantic_tokens_and_accessibility_rules_are_part_of_the_css_contract() 
     assert "border-radius: 24px" not in CSS
 
 
+def test_readable_type_scale_keeps_explanatory_text_out_of_micro_sizes() -> None:
+    for token in (
+        "--eom-type-caption: 12px",
+        "--eom-type-label: 13px",
+        "--eom-type-body: 14px",
+    ):
+        assert token in CSS
+    assert (
+        "body { margin: 0; min-width: 320px; background: var(--eom-background); "
+        "font-size: var(--eom-type-body)" in CSS
+    )
+    assert ".curriculum-helper" in CSS and "font-size: var(--eom-type-label)" in CSS
+    assert ".decision-checklist ul" in CSS and "font-size: var(--eom-type-label)" in CSS
+    assert 'html[data-ui-mode="human"] .panel-heading .eyebrow { display: none; }' in CSS
+
+
 def test_technical_details_are_progressively_disclosed_without_hiding_recovery() -> None:
     assert HTML.count('class="technical-details"') >= 2
     assert "<summary>기술 정보</summary>" in HTML
