@@ -1,0 +1,303 @@
+{
+  "allOf": [
+    {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposedNode"
+    },
+    {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:curriculum_framework_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "CURRICULUM_FRAMEWORK_REVISION"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^curriculum_framework_revision:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:curriculum_unit)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "CURRICULUM_UNIT"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^curriculum_unit:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:achievement_standard)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "ACHIEVEMENT_STANDARD"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^achievement_standard:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:concept)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "CONCEPT"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^concept:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:claim)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "CLAIM"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^claim:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:process)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "PROCESS"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^process:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:observable_property)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "OBSERVABLE_PROPERTY"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^observable_property:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:formula)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "FORMULA"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^formula:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:data_representation)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "DATA_REPRESENTATION"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^data_representation:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:document_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "DOCUMENT_REVISION"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^document_revision:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:document_section)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "DOCUMENT_SECTION"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^document_section:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:figure)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "FIGURE"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^figure:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:table)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "TABLE"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^table:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:equation)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "EQUATION"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^equation:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:item_revision)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "ITEM_REVISION"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^item_revision:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:item_element)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "ITEM_ELEMENT"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^item_element:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "pattern": "^knode_(?:assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+            },
+            "node_type": {
+              "type": "string",
+              "const": "ASSESSMENT_PATTERN"
+            },
+            "stable_key": {
+              "type": "string",
+              "pattern": "^assessment_pattern:[a-z0-9][a-z0-9._:-]{0,159}$"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/proposed-node/4.0",
+  "title": "EOM Stable-Identity Proposed Knowledge Node V4"
+}

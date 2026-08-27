@@ -8,12 +8,14 @@ from sqlalchemy import Engine
 from tests.integration.test_knowledge_analysis_batch_service import (
     _assert_v8_batch_executes_one_multimodal_range_exactly_once,
     _assert_v10_batch_executes_one_typed_identity_range_exactly_once,
+    _assert_v11_batch_executes_one_stable_identity_range_exactly_once,
 )
 from tests.integration.test_knowledge_analysis_service import (
     _assert_v7_document_analysis_pins_integrity_complete_contract_and_accepts,
     _assert_v8_multimodal_document_analysis_flows_through_graph_and_retrieval,
     _assert_v9_multimodal_document_analysis_uses_schema_closed_protocol,
     _assert_v10_multimodal_document_analysis_uses_typed_identity_protocol,
+    _assert_v11_multimodal_document_analysis_uses_stable_identity_protocol,
 )
 
 pytestmark = pytest.mark.integration
@@ -53,4 +55,12 @@ def test_knowledge_analysis_protocol_lineage_advances_without_backward_publicati
     _assert_v10_batch_executes_one_typed_identity_range_exactly_once(
         integration_engine,
         case("v10-batch"),
+    )
+    _assert_v11_multimodal_document_analysis_uses_stable_identity_protocol(
+        integration_engine,
+        case("v11-service"),
+    )
+    _assert_v11_batch_executes_one_stable_identity_range_exactly_once(
+        integration_engine,
+        case("v11-batch"),
     )

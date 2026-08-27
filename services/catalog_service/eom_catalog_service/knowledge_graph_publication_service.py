@@ -20,23 +20,27 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV4,
     KnowledgeAnalysisProposalReceiptV5,
     KnowledgeAnalysisProposalReceiptV6,
+    KnowledgeAnalysisProposalReceiptV7,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisRequestV7,
+    KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisResultV2,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
     KnowledgeAnalysisResultV5,
     KnowledgeAnalysisResultV6,
     KnowledgeAnalysisResultV7,
+    KnowledgeAnalysisResultV8,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
     KnowledgeAnalysisWorkerProposalV4,
     KnowledgeAnalysisWorkerProposalV5,
+    KnowledgeAnalysisWorkerProposalV6,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphCounts,
     KnowledgeGraphProjections,
@@ -148,6 +152,7 @@ type KnowledgeAnalysisRequestContract = (
     | KnowledgeAnalysisRequestV5
     | KnowledgeAnalysisRequestV6
     | KnowledgeAnalysisRequestV7
+    | KnowledgeAnalysisRequestV8
 )
 type KnowledgeAnalysisReceiptContract = (
     KnowledgeAnalysisProposalReceipt
@@ -156,6 +161,7 @@ type KnowledgeAnalysisReceiptContract = (
     | KnowledgeAnalysisProposalReceiptV4
     | KnowledgeAnalysisProposalReceiptV5
     | KnowledgeAnalysisProposalReceiptV6
+    | KnowledgeAnalysisProposalReceiptV7
 )
 type KnowledgeGraphSnapshotContract = (
     KnowledgeGraphSnapshotManifestV2
@@ -397,7 +403,9 @@ class KnowledgeGraphPublicationService:
         try:
             request_version = run.canonical_request.get("schema_version")
             request: KnowledgeAnalysisRequestContract
-            if request_version == "knowledge-analysis-request/7.0":
+            if request_version == "knowledge-analysis-request/8.0":
+                request = KnowledgeAnalysisRequestV8.model_validate(run.canonical_request)
+            elif request_version == "knowledge-analysis-request/7.0":
                 request = KnowledgeAnalysisRequestV7.model_validate(run.canonical_request)
             elif request_version == "knowledge-analysis-request/6.0":
                 request = KnowledgeAnalysisRequestV6.model_validate(run.canonical_request)
@@ -439,13 +447,20 @@ class KnowledgeGraphPublicationService:
             manifest_artifact_type="knowledge-analysis-accepted-result",
             primary_file="evidence/accepted-result.json",
         )
+        stable_identity_multimodal = isinstance(request, KnowledgeAnalysisRequestV8)
         typed_identity_multimodal = isinstance(request, KnowledgeAnalysisRequestV7)
         multimodal_document = isinstance(
-            request, (KnowledgeAnalysisRequestV6, KnowledgeAnalysisRequestV7)
+            request,
+            (KnowledgeAnalysisRequestV6, KnowledgeAnalysisRequestV7, KnowledgeAnalysisRequestV8),
         )
         integrity_document = isinstance(
             request,
-            (KnowledgeAnalysisRequestV5, KnowledgeAnalysisRequestV6, KnowledgeAnalysisRequestV7),
+            (
+                KnowledgeAnalysisRequestV5,
+                KnowledgeAnalysisRequestV6,
+                KnowledgeAnalysisRequestV7,
+                KnowledgeAnalysisRequestV8,
+            ),
         )
         endpoint_typed_document = isinstance(
             request,
@@ -454,6 +469,7 @@ class KnowledgeGraphPublicationService:
                 KnowledgeAnalysisRequestV5,
                 KnowledgeAnalysisRequestV6,
                 KnowledgeAnalysisRequestV7,
+                KnowledgeAnalysisRequestV8,
             ),
         )
         document_source = isinstance(
@@ -464,9 +480,12 @@ class KnowledgeGraphPublicationService:
                 KnowledgeAnalysisRequestV5,
                 KnowledgeAnalysisRequestV6,
                 KnowledgeAnalysisRequestV7,
+                KnowledgeAnalysisRequestV8,
             ),
         )
-        if typed_identity_multimodal:
+        if stable_identity_multimodal:
+            accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/8.0"
+        elif typed_identity_multimodal:
             accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/7.0"
         elif multimodal_document:
             accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/6.0"
@@ -498,6 +517,7 @@ class KnowledgeGraphPublicationService:
             | KnowledgeAnalysisResultV5
             | KnowledgeAnalysisResultV6
             | KnowledgeAnalysisResultV7
+            | KnowledgeAnalysisResultV8
         )
         database_accepted: (
             KnowledgeAnalysisResultV2
@@ -506,9 +526,17 @@ class KnowledgeGraphPublicationService:
             | KnowledgeAnalysisResultV5
             | KnowledgeAnalysisResultV6
             | KnowledgeAnalysisResultV7
+            | KnowledgeAnalysisResultV8
         )
         try:
-            if typed_identity_multimodal:
+            if stable_identity_multimodal:
+                validate_contract("knowledge-analysis-result-v8", accepted_value)
+                accepted = KnowledgeAnalysisResultV8.model_validate(accepted_value)
+                validate_contract("knowledge-analysis-result-v8", accepted_revision.result)
+                database_accepted = KnowledgeAnalysisResultV8.model_validate(
+                    accepted_revision.result
+                )
+            elif typed_identity_multimodal:
                 validate_contract("knowledge-analysis-result-v7", accepted_value)
                 accepted = KnowledgeAnalysisResultV7.model_validate(accepted_value)
                 validate_contract("knowledge-analysis-result-v7", accepted_revision.result)
@@ -585,7 +613,16 @@ class KnowledgeGraphPublicationService:
         receipt: KnowledgeAnalysisReceiptContract
         database_receipt: KnowledgeAnalysisReceiptContract
         try:
-            if typed_identity_multimodal:
+            if stable_identity_multimodal:
+                validate_contract("knowledge-analysis-proposal-receipt-v7", proposal_receipt_value)
+                receipt = KnowledgeAnalysisProposalReceiptV7.model_validate(proposal_receipt_value)
+                validate_contract(
+                    "knowledge-analysis-proposal-receipt-v7", proposal_revision.result
+                )
+                database_receipt = KnowledgeAnalysisProposalReceiptV7.model_validate(
+                    proposal_revision.result
+                )
+            elif typed_identity_multimodal:
                 validate_contract("knowledge-analysis-proposal-receipt-v6", proposal_receipt_value)
                 receipt = KnowledgeAnalysisProposalReceiptV6.model_validate(proposal_receipt_value)
                 validate_contract(
@@ -797,6 +834,7 @@ class KnowledgeGraphPublicationService:
         | KnowledgeAnalysisWorkerProposalV3
         | KnowledgeAnalysisWorkerProposalV4
         | KnowledgeAnalysisWorkerProposalV5
+        | KnowledgeAnalysisWorkerProposalV6
     ):
         try:
             return resolve_knowledge_analysis_proposal(self.artifacts, receipt)

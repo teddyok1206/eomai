@@ -336,6 +336,11 @@ def test_multimodal_protocol_v1_9_closes_historical_transitive_references() -> N
     assert _unresolved_schema_references(typed_input) == set()
     assert _unresolved_schema_references(typed_result) == set()
 
+    stable_input = load_role_input_schema("support", "workflow-role/1.11.0")
+    stable_result = load_role_result_schema("knowledge-analysis-proposal-result@8.0")
+    assert _unresolved_schema_references(stable_input) == set()
+    assert _unresolved_schema_references(stable_result) == set()
+
 
 def _knowledge_analysis_request() -> dict[str, object]:
     value: dict[str, object] = {
@@ -553,6 +558,19 @@ def test_typed_identity_multimodal_workflow_is_additive_and_immutable() -> None:
     analyze = compiled.definition.steps[0]
     assert analyze.type == "agent"
     assert analyze.result_schema == "knowledge-analysis-proposal-result@7.0"
+    assert compiled.definition.limits.max_rework_cycles == 0
+    assert compiled.definition.limits.max_step_attempts == 1
+
+
+def test_stable_identity_multimodal_workflow_is_additive_and_immutable() -> None:
+    compiled = compile_definition(ROOT / "config/workflows/knowledge-analysis.v8.yaml", {"support"})
+    assert compiled.sha256 == (
+        "sha256:6a47199314fd59932efd416e016adbde7f1319edbc04591ab1bdc4f3a6bdf06b"
+    )
+    assert compiled.definition.definition_version == "8.0.0"
+    analyze = compiled.definition.steps[0]
+    assert analyze.type == "agent"
+    assert analyze.result_schema == "knowledge-analysis-proposal-result@8.0"
     assert compiled.definition.limits.max_rework_cycles == 0
     assert compiled.definition.limits.max_step_attempts == 1
 

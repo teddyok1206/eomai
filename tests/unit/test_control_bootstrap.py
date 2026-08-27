@@ -26,6 +26,7 @@ ANALYSIS_CONFIG_V7 = ROOT / "config/control-plane/knowledge-analysis-v7"
 ANALYSIS_CONFIG_V8 = ROOT / "config/control-plane/knowledge-analysis-v8"
 ANALYSIS_CONFIG_V9 = ROOT / "config/control-plane/knowledge-analysis-v9"
 ANALYSIS_CONFIG_V10 = ROOT / "config/control-plane/knowledge-analysis-v10"
+ANALYSIS_CONFIG_V11 = ROOT / "config/control-plane/knowledge-analysis-v11"
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:
@@ -430,6 +431,39 @@ def test_knowledge_analysis_v10_adds_typed_identity_protocol_without_mutating_v9
         "relationship.to_node_type",
         "must match",
     ):
+        assert required in role_instruction
+
+
+def test_knowledge_analysis_v11_adds_stable_identity_protocol_without_mutating_v10() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V11)
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/11.0"
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    assert manifest.timeout_seconds == 7200
+    assert manifest.compatible_workflow_protocols[-2:] == (
+        "workflow-role/1.10.0",
+        "workflow-role/1.11.0",
+    )
+    expected_v11_sha256 = {
+        "bootstrap.yaml": "93b3c5f8004c1cdc28e410577846854e004312b5e566c5b7a5035e6e4e2c5378",
+        "instructions/platform.md": (
+            "d89ba7eaffda1580178d215ad510e5401ed268473140cf3c3d53bb7195b9df91"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "f9424697fe7e89ce776e7f0f8b247c74c2337700447e5a069e215fdc9fc1a56b"
+        ),
+    }
+    for relative_path, expected in expected_v11_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V11 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+    assert (ANALYSIS_CONFIG_V11 / "instructions/platform.md").read_bytes() == (
+        ANALYSIS_CONFIG_V10 / "instructions/platform.md"
+    ).read_bytes()
+    role_instruction = (ANALYSIS_CONFIG_V11 / "instructions/knowledge-analysis.md").read_text(
+        encoding="utf-8"
+    )
+    for required in ("stable_key", "<lowercase_node_type>:", "Never reuse a stable key"):
         assert required in role_instruction
 
 

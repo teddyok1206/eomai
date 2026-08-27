@@ -30,6 +30,7 @@ from eom_workflow.models import (
     KnowledgeAnalysisProposalRoleResultV5,
     KnowledgeAnalysisProposalRoleResultV6,
     KnowledgeAnalysisProposalRoleResultV7,
+    KnowledgeAnalysisProposalRoleResultV8,
     KnowledgeAnalysisWorkerRequest,
     RoleWorkerInput,
     WorkerRequest,
@@ -453,6 +454,7 @@ class Orchestrator:
                 "knowledge-analysis-proposal-result@5.0",
                 "knowledge-analysis-proposal-result@6.0",
                 "knowledge-analysis-proposal-result@7.0",
+                "knowledge-analysis-proposal-result@8.0",
             }:
                 expected_result_type = {
                     "knowledge-analysis-proposal-result@1.0": (KnowledgeAnalysisProposalRoleResult),
@@ -473,6 +475,9 @@ class Orchestrator:
                     ),
                     "knowledge-analysis-proposal-result@7.0": (
                         KnowledgeAnalysisProposalRoleResultV7
+                    ),
+                    "knowledge-analysis-proposal-result@8.0": (
+                        KnowledgeAnalysisProposalRoleResultV8
                     ),
                 }[result_schema]
                 if not isinstance(result, expected_result_type) or not isinstance(

@@ -1,0 +1,22 @@
+schema_version: knowledge-analysis-control-bootstrap/11.0
+preset_key: knowledge-analysis
+display_name: 지식 분석
+description: 노드 유형이 local ID와 stable key에 구조적으로 고정된 v1.11 worker protocol로 승인된 교육문서의 모든 선택 페이지 PNG를 Markdown/OCR 보조자료와 함께 xhigh 추론 및 최대 2시간 동안 분석하는 일회성 support-worker 정책입니다.
+created_at: 2026-08-27T18:30:00Z
+model: gpt-5.6-terra
+reasoning_effort: xhigh
+general_knowledge_policy: ALLOW_WITH_PROVENANCE
+compatible_workflow_protocols:
+  - workflow-role/1.4.0
+  - workflow-role/1.5.0
+  - workflow-role/1.6.0
+  - workflow-role/1.7.0
+  - workflow-role/1.8.0
+  - workflow-role/1.9.0
+  - workflow-role/1.10.0
+  - workflow-role/1.11.0
+platform_instruction_path: instructions/platform.md
+role_instruction_path: instructions/knowledge-analysis.md
+slot_key: slot05
+worker_pool_key: support
+timeout_seconds: 7200

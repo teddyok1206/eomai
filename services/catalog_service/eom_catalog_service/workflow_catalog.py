@@ -99,6 +99,7 @@ ROLE_BY_RESULT_SCHEMA = {
     "knowledge-analysis-proposal-result@5.0": "support",
     "knowledge-analysis-proposal-result@6.0": "support",
     "knowledge-analysis-proposal-result@7.0": "support",
+    "knowledge-analysis-proposal-result@8.0": "support",
 }
 GENERATED_RESULT_SCHEMA_PAIRS = frozenset(
     {

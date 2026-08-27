@@ -20,6 +20,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisBatchSourceRangeV2,
     KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisRequestV7,
+    KnowledgeAnalysisRequestV8,
     ReconcileKnowledgeAnalysisCommand,
     ReuseAcceptedKnowledgeAnalysisRange,
     ReviewKnowledgeAnalysisCommand,
@@ -387,6 +388,65 @@ def _assert_v10_batch_executes_one_typed_identity_range_exactly_once(
     _make_submitted_range_due(integration_engine, range_id=range_id)
     assert service.advance_once(runner_id="v10-batch-runner")
     assert not service.advance_once(runner_id="v10-batch-runner")
+    with sessions() as session:
+        batch = session.get(KnowledgeAnalysisBatchRecord, created.batch_id)
+        range_row = session.get(KnowledgeAnalysisBatchRangeRecord, range_id)
+        assert batch is not None and batch.state == "SUCCEEDED"
+        assert range_row is not None and range_row.state == "ACCEPTED"
+        assert range_row.submission_attempts == 1
+
+
+def _assert_v11_batch_executes_one_stable_identity_range_exactly_once(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    orchestrator_settings, catalog_settings = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, orchestrator_settings)
+    bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v11").resolve(),
+        source_commit="b" * 40,
+        actor_id="stable-identity-batch-integration",
+        evaluation_cases_total=3,
+        settings=orchestrator_settings,
+    )
+    document_revision_id = _document_source(
+        integration_engine,
+        catalog_settings,
+        tmp_path,
+        multimodal=True,
+    )[1]
+    service = KnowledgeAnalysisBatchService(integration_engine, catalog_settings)
+    created = service.create(_batch_command(document_revision_id, range_count=1))
+
+    assert service.advance_once(runner_id="v11-batch-runner")
+    sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        range_row = session.scalar(
+            select(KnowledgeAnalysisBatchRangeRecord).where(
+                KnowledgeAnalysisBatchRangeRecord.batch_id == created.batch_id
+            )
+        )
+        assert range_row is not None and range_row.state == "SUBMITTED"
+        assert range_row.submission_attempts == 1
+        assert range_row.analysis_run_id is not None
+        range_id = range_row.range_id
+        run_id = range_row.analysis_run_id
+        run = session.get(KnowledgeAnalysisRunRecord, run_id)
+        assert run is not None
+        request = KnowledgeAnalysisRequestV8.model_validate(run.canonical_request)
+        assert request.source.page_image_count == 1
+        assert request.worker_proposal_schema_ref.endswith("worker-proposal/6.0")
+
+    _complete_proposal(
+        integration_engine,
+        catalog_settings,
+        run_id=run_id,
+        staging_root=tmp_path / "v11-batch-proposal",
+    )
+    _make_submitted_range_due(integration_engine, range_id=range_id)
+    assert service.advance_once(runner_id="v11-batch-runner")
+    assert not service.advance_once(runner_id="v11-batch-runner")
     with sessions() as session:
         batch = session.get(KnowledgeAnalysisBatchRecord, created.batch_id)
         range_row = session.get(KnowledgeAnalysisBatchRangeRecord, range_id)

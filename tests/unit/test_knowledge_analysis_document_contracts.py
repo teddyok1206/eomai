@@ -19,12 +19,14 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV3,
     KnowledgeAnalysisProposalReceiptV4,
     KnowledgeAnalysisProposalReceiptV6,
+    KnowledgeAnalysisProposalReceiptV7,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisRequestV7,
+    KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
     KnowledgeAnalysisResultV5,
@@ -33,6 +35,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV3,
     KnowledgeAnalysisWorkerProposalV4,
     KnowledgeAnalysisWorkerProposalV5,
+    KnowledgeAnalysisWorkerProposalV6,
     KnowledgeProposalCountsV2,
     load_schema,
     validate_contract,
@@ -328,6 +331,19 @@ def request_v7() -> dict[str, object]:
     return value
 
 
+def request_v8() -> dict[str, object]:
+    value = request_v7()
+    value["schema_version"] = "knowledge-analysis-request/8.0"
+    value["worker_proposal_schema_ref"] = (
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/6.0"
+    )
+    value["accepted_result_schema_ref"] = "eom://schemas/knowledge/knowledge-analysis-result/8.0"
+    value["request_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "request_sha256"}
+    )
+    return value
+
+
 def proposal_v5(request: KnowledgeAnalysisRequestV5) -> dict[str, object]:
     historical_request = KnowledgeAnalysisRequestV4.model_validate(request_v4())
     value = proposal_v4(historical_request)
@@ -412,6 +428,41 @@ def typed_identity_proposal(request: KnowledgeAnalysisRequestV7) -> dict[str, ob
         for page in (1, 2)
     ]
     return value
+
+
+def stable_identity_proposal(request: KnowledgeAnalysisRequestV8) -> dict[str, object]:
+    historical_request = KnowledgeAnalysisRequestV7.model_validate(request_v7())
+    value = typed_identity_proposal(historical_request)
+    value["schema_version"] = "knowledge-analysis-worker-proposal/6.0"
+    value["analysis_request_id"] = request.analysis_request_id
+    nodes = value["nodes"]
+    assert isinstance(nodes, list)
+    nodes[0]["stable_key"] = "assessment_pattern:data-interpretation"  # type: ignore[index]
+    nodes[1]["stable_key"] = "concept:spacetime"  # type: ignore[index]
+    return value
+
+
+def test_stable_identity_protocol_rejects_cross_type_stable_key_collision_in_schema() -> None:
+    request = KnowledgeAnalysisRequestV8.model_validate(request_v8())
+    valid = stable_identity_proposal(request)
+    validate_contract("knowledge-analysis-worker-proposal-v6", valid)
+    KnowledgeAnalysisWorkerProposalV6.model_validate(valid)
+
+    invalid = deepcopy(valid)
+    nodes = invalid["nodes"]
+    assert isinstance(nodes, list)
+    nodes[0]["stable_key"] = "concept:spacetime"  # type: ignore[index]
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("knowledge-analysis-worker-proposal-v6", invalid)
+    with pytest.raises(PydanticValidationError):
+        KnowledgeAnalysisWorkerProposalV6.model_validate(invalid)
+
+
+def test_historical_typed_identity_schema_keeps_unprefixed_stable_keys_readable() -> None:
+    request = KnowledgeAnalysisRequestV7.model_validate(request_v7())
+    historical = typed_identity_proposal(request)
+    validate_contract("knowledge-analysis-worker-proposal-v5", historical)
+    KnowledgeAnalysisWorkerProposalV5.model_validate(historical)
 
 
 def test_typed_identity_protocol_rejects_declared_endpoint_drift_in_json_schema() -> None:
@@ -526,6 +577,25 @@ def test_typed_identity_proposal_stages_exact_v6_receipt(tmp_path: Path) -> None
     assert receipt.members.nodes.schema_ref == "eom://schemas/knowledge/proposed-node/3.0"
     assert receipt.members.edges.schema_ref == "eom://schemas/knowledge/proposed-edge/4.0"
     validate_contract("knowledge-analysis-proposal-receipt-v6", receipt.model_dump(mode="json"))
+
+
+def test_stable_identity_proposal_stages_exact_v7_receipt(tmp_path: Path) -> None:
+    request = KnowledgeAnalysisRequestV8.model_validate(request_v8())
+    proposal = KnowledgeAnalysisWorkerProposalV6.model_validate(stable_identity_proposal(request))
+
+    _, receipt = stage_knowledge_analysis_proposal(
+        proposal=proposal,
+        request=request,
+        job_id="job_" + "a" * 32,
+        logical_artifact_id="artifact_" + "b" * 32,
+        revision_id="rev_" + "c" * 32,
+        staging=tmp_path,
+    )
+
+    assert isinstance(receipt, KnowledgeAnalysisProposalReceiptV7)
+    assert receipt.members.nodes.schema_ref == "eom://schemas/knowledge/proposed-node/4.0"
+    assert receipt.members.edges.schema_ref == "eom://schemas/knowledge/proposed-edge/4.0"
+    validate_contract("knowledge-analysis-proposal-receipt-v7", receipt.model_dump(mode="json"))
 
 
 def test_v1_9_role_input_validates_a_production_shaped_multimodal_request() -> None:
@@ -1556,6 +1626,47 @@ def test_typed_identity_protocol_schema_bytes_are_pinned_and_packaged() -> None:
         assert canonical == packaged
         assert sha256(canonical).hexdigest() == digest
 
+
+def test_stable_identity_protocol_schema_bytes_are_pinned_and_packaged() -> None:
+    expected = {
+        "knowledge-analysis-worker-proposal-v6.schema.json": (
+            "a5b0815acd211ce43d0be25ff886c8b2a7c39fa225916da034b8e7ad03b2f01c"
+        ),
+        "knowledge-analysis-proposed-node-v4.schema.json": (
+            "33a6ba163cce388671c85756b78d99234c6a92ec877711b4f3164e871779542c"
+        ),
+        "knowledge-analysis-request-v8.schema.json": (
+            "21629d4417eced251d8596e9d87d94444cc3fe906b50644395c332faea6c50fc"
+        ),
+        "knowledge-analysis-proposal-receipt-v7.schema.json": (
+            "c2aa46be06de9a001d504d7a75750fe6b57a8c148be22211f1e34834aff3fadb"
+        ),
+        "knowledge-analysis-result-v8.schema.json": (
+            "8067c3e1d4907e65aa54f75f82a23f74f227c9c7834d6767a70bd48c1fa1a9e8"
+        ),
+    }
+    for name, digest in expected.items():
+        canonical = (ROOT / "schemas/knowledge" / name).read_bytes()
+        packaged = (
+            ROOT / "packages/catalog_contracts/eom_catalog_contracts/resources/knowledge" / name
+        ).read_bytes()
+        assert canonical == packaged
+        assert sha256(canonical).hexdigest() == digest
+
+    workflow_expected = {
+        "knowledge-analysis-input-v8.schema.json": (
+            "6e7dff9f0c53311fad3ddbf81321052feab98f85ee6ad95fafc60c88f3a5b112"
+        ),
+        "knowledge-analysis-proposal-result-v8.schema.json": (
+            "e97b998974823511e8f148872b27c555690a6937684cd03d358d0438e7780291"
+        ),
+    }
+    for name, digest in workflow_expected.items():
+        canonical = (ROOT / "schemas/workflow/roles" / name).read_bytes()
+        packaged = (ROOT / "packages/workflow/eom_workflow/resources/roles" / name).read_bytes()
+        assert canonical == packaged
+        assert sha256(canonical).hexdigest() == digest
+
     workflow_expected = {
         "knowledge-analysis-input-v7.schema.json": (
             "4e0aa21cca2d389611a791c3c3704e6d9f0b856fd4885e3cbee89aa631de6e15"
@@ -1613,6 +1724,9 @@ def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> Non
     assert role_schema_bundle_hash("workflow-role/1.10.0") == (
         "sha256:3a224f960ae01574e25b44bd9a187ba60a98f0638ecb8c30d11de4fe8111ab43"
     )
+    assert role_schema_bundle_hash("workflow-role/1.11.0") == (
+        "sha256:db929999c19a251e80ae5df7e63f499b1180ed316ed853ab8f36a476b6b06c9f"
+    )
     expected_definitions = {
         "knowledge-analysis.v1.yaml": (
             "75d2a750632a8ddbd5d350d00f28ecbfd79aa6527f1fb26436f664eb47b810d8"
@@ -1634,6 +1748,9 @@ def test_analysis_workflow_protocol_versions_are_immutable_and_distinct() -> Non
         ),
         "knowledge-analysis.v7.yaml": (
             "e0e80105f120ae5acdbee90eab7513619b87c66c4165c043b40f186f6e30901a"
+        ),
+        "knowledge-analysis.v8.yaml": (
+            "56243f617ae9485b48ae2c58b8af4186a535dda1e68ed92d57a72ebfcdc4fbcd"
         ),
     }
     for name, digest in expected_definitions.items():

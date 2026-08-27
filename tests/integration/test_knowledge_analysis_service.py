@@ -20,6 +20,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV5,
     KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisRequestV7,
+    KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisSourceV2,
     KnowledgeAnalysisSourceV3,
     KnowledgeAnalysisWorkerProposal,
@@ -27,6 +28,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV3,
     KnowledgeAnalysisWorkerProposalV4,
     KnowledgeAnalysisWorkerProposalV5,
+    KnowledgeAnalysisWorkerProposalV6,
     KnowledgeGraphPublicationResult,
     PublishKnowledgeGraphSnapshotCommand,
     ReconcileKnowledgeAnalysisCommand,
@@ -159,6 +161,7 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
             "workflow-role/1.8.0",
             "workflow-role/1.9.0",
             "workflow-role/1.10.0",
+            "workflow-role/1.11.0",
         ):
             ensure_protocol_version(
                 session,
@@ -179,7 +182,7 @@ def _ensure_dependencies(engine: Engine, settings: Settings) -> None:
                     lock_version=1,
                 )
             )
-        for version in ("1", "2", "3", "4", "5", "6", "7"):
+        for version in ("1", "2", "3", "4", "5", "6", "7", "8"):
             compiled = compile_definition(
                 Path(f"config/workflows/knowledge-analysis.v{version}.yaml").resolve(),
                 {"support"},
@@ -553,13 +556,15 @@ def _proposal(
     | KnowledgeAnalysisRequestV4
     | KnowledgeAnalysisRequestV5
     | KnowledgeAnalysisRequestV6
-    | KnowledgeAnalysisRequestV7,
+    | KnowledgeAnalysisRequestV7
+    | KnowledgeAnalysisRequestV8,
 ) -> (
     KnowledgeAnalysisWorkerProposal
     | KnowledgeAnalysisWorkerProposalV2
     | KnowledgeAnalysisWorkerProposalV3
     | KnowledgeAnalysisWorkerProposalV4
     | KnowledgeAnalysisWorkerProposalV5
+    | KnowledgeAnalysisWorkerProposalV6
 ):
     source = request.source.artifact_member
     locator = (
@@ -572,6 +577,7 @@ def _proposal(
                 KnowledgeAnalysisRequestV5,
                 KnowledgeAnalysisRequestV6,
                 KnowledgeAnalysisRequestV7,
+                KnowledgeAnalysisRequestV8,
             ),
         )
         else "paragraph=1"
@@ -593,11 +599,15 @@ def _proposal(
             {
                 "node_id": (
                     "knode_concept_plate_boundary"
-                    if isinstance(request, KnowledgeAnalysisRequestV7)
+                    if isinstance(request, (KnowledgeAnalysisRequestV7, KnowledgeAnalysisRequestV8))
                     else "knode_plate_boundary"
                 ),
                 "node_type": "CONCEPT",
-                "stable_key": "earth.plate-boundary",
+                "stable_key": (
+                    "concept:earth.plate-boundary"
+                    if isinstance(request, KnowledgeAnalysisRequestV8)
+                    else "earth.plate-boundary"
+                ),
                 "label": "plate boundary",
                 "anchor_ids": ["anchor_source_1"],
             }
@@ -609,11 +619,16 @@ def _proposal(
         "general_knowledge_used": False,
         "completed_at": NOW + timedelta(hours=1),
     }
-    if isinstance(request, (KnowledgeAnalysisRequestV6, KnowledgeAnalysisRequestV7)):
+    if isinstance(
+        request,
+        (KnowledgeAnalysisRequestV6, KnowledgeAnalysisRequestV7, KnowledgeAnalysisRequestV8),
+    ):
         value["schema_version"] = (
-            "knowledge-analysis-worker-proposal/5.0"
-            if isinstance(request, KnowledgeAnalysisRequestV7)
+            "knowledge-analysis-worker-proposal/6.0"
+            if isinstance(request, KnowledgeAnalysisRequestV8)
             else "knowledge-analysis-worker-proposal/4.0"
+            if isinstance(request, KnowledgeAnalysisRequestV6)
+            else "knowledge-analysis-worker-proposal/5.0"
         )
         image_members = tuple(
             member
@@ -633,6 +648,8 @@ def _proposal(
             }
             for member in image_members
         ]
+        if isinstance(request, KnowledgeAnalysisRequestV8):
+            return KnowledgeAnalysisWorkerProposalV6.model_validate(value)
         if isinstance(request, KnowledgeAnalysisRequestV7):
             return KnowledgeAnalysisWorkerProposalV5.model_validate(value)
         return KnowledgeAnalysisWorkerProposalV4.model_validate(value)
@@ -651,24 +668,30 @@ def _proposal_with_edge(
     | KnowledgeAnalysisRequestV4
     | KnowledgeAnalysisRequestV5
     | KnowledgeAnalysisRequestV6
-    | KnowledgeAnalysisRequestV7,
+    | KnowledgeAnalysisRequestV7
+    | KnowledgeAnalysisRequestV8,
 ) -> (
     KnowledgeAnalysisWorkerProposal
     | KnowledgeAnalysisWorkerProposalV2
     | KnowledgeAnalysisWorkerProposalV3
     | KnowledgeAnalysisWorkerProposalV4
     | KnowledgeAnalysisWorkerProposalV5
+    | KnowledgeAnalysisWorkerProposalV6
 ):
     value = _proposal(request).model_dump(mode="json")
     value["nodes"].append(
         {
             "node_id": (
                 "knode_concept_tectonic_plate"
-                if isinstance(request, KnowledgeAnalysisRequestV7)
+                if isinstance(request, (KnowledgeAnalysisRequestV7, KnowledgeAnalysisRequestV8))
                 else "knode_tectonic_plate"
             ),
             "node_type": "CONCEPT",
-            "stable_key": "earth.tectonic-plate",
+            "stable_key": (
+                "concept:earth.tectonic-plate"
+                if isinstance(request, KnowledgeAnalysisRequestV8)
+                else "earth.tectonic-plate"
+            ),
             "label": "tectonic plate",
             "anchor_ids": ["anchor_source_1"],
         }
@@ -677,12 +700,12 @@ def _proposal_with_edge(
         "edge_id": "kedge_plate_boundary_prerequisite",
         "from_node_id": (
             "knode_concept_plate_boundary"
-            if isinstance(request, KnowledgeAnalysisRequestV7)
+            if isinstance(request, (KnowledgeAnalysisRequestV7, KnowledgeAnalysisRequestV8))
             else "knode_plate_boundary"
         ),
         "to_node_id": (
             "knode_concept_tectonic_plate"
-            if isinstance(request, KnowledgeAnalysisRequestV7)
+            if isinstance(request, (KnowledgeAnalysisRequestV7, KnowledgeAnalysisRequestV8))
             else "knode_tectonic_plate"
         ),
         "confidence_milli": 900,
@@ -695,6 +718,7 @@ def _proposal_with_edge(
             KnowledgeAnalysisRequestV5,
             KnowledgeAnalysisRequestV6,
             KnowledgeAnalysisRequestV7,
+            KnowledgeAnalysisRequestV8,
         ),
     ):
         edge["relationship"] = {
@@ -705,6 +729,8 @@ def _proposal_with_edge(
     else:
         edge["edge_type"] = "REQUIRES_PREREQUISITE"
     value["edges"] = [edge]
+    if isinstance(request, KnowledgeAnalysisRequestV8):
+        return KnowledgeAnalysisWorkerProposalV6.model_validate(value)
     if isinstance(request, KnowledgeAnalysisRequestV7):
         return KnowledgeAnalysisWorkerProposalV5.model_validate(value)
     if isinstance(request, KnowledgeAnalysisRequestV6):
@@ -727,6 +753,7 @@ def _complete_proposal(
     | KnowledgeAnalysisWorkerProposalV3
     | KnowledgeAnalysisWorkerProposalV4
     | KnowledgeAnalysisWorkerProposalV5
+    | KnowledgeAnalysisWorkerProposalV6
     | None = None,
 ) -> ArtifactPointer:
     sessions = build_session_factory(engine)
@@ -741,8 +768,11 @@ def _complete_proposal(
             | KnowledgeAnalysisRequestV5
             | KnowledgeAnalysisRequestV6
             | KnowledgeAnalysisRequestV7
+            | KnowledgeAnalysisRequestV8
         )
-        if request_version == "knowledge-analysis-request/7.0":
+        if request_version == "knowledge-analysis-request/8.0":
+            request = KnowledgeAnalysisRequestV8.model_validate(run.canonical_request)
+        elif request_version == "knowledge-analysis-request/7.0":
             request = KnowledgeAnalysisRequestV7.model_validate(run.canonical_request)
         elif request_version == "knowledge-analysis-request/6.0":
             request = KnowledgeAnalysisRequestV6.model_validate(run.canonical_request)
@@ -776,7 +806,9 @@ def _complete_proposal(
     )
     with transaction(sessions) as session:
         protocol_version = (
-            "workflow-role/1.10.0"
+            "workflow-role/1.11.0"
+            if isinstance(request, KnowledgeAnalysisRequestV8)
+            else "workflow-role/1.10.0"
             if isinstance(request, KnowledgeAnalysisRequestV7)
             else "workflow-role/1.9.0"
             if isinstance(request, KnowledgeAnalysisRequestV6) and workflow_version == "6.0.0"
@@ -846,7 +878,9 @@ def _complete_proposal(
             revision_id=revision_id,
             content_hash=staged.primary_hash,
             result_schema=(
-                "knowledge-analysis-proposal-result@7.0"
+                "knowledge-analysis-proposal-result@8.0"
+                if isinstance(request, KnowledgeAnalysisRequestV8)
+                else "knowledge-analysis-proposal-result@7.0"
                 if isinstance(request, KnowledgeAnalysisRequestV7)
                 else "knowledge-analysis-proposal-result@6.0"
                 if isinstance(request, KnowledgeAnalysisRequestV6) and workflow_version == "6.0.0"
@@ -1532,6 +1566,73 @@ def _assert_v10_multimodal_document_analysis_uses_typed_identity_protocol(
         proposal_override=_proposal_with_edge(request),
     )
     assert pointer.result_schema == "knowledge-analysis-proposal-result@7.0"
+    accepted = service.reconcile(
+        ReconcileKnowledgeAnalysisCommand(
+            analysis_run_id=created.analysis_run_id,
+            requested_by=OPERATOR_ID,
+        )
+    )
+    assert accepted.state == "ACCEPTED"
+    assert accepted.accepted_result_artifact_revision_id is not None
+
+
+def _assert_v11_multimodal_document_analysis_uses_stable_identity_protocol(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    orchestrator_settings, catalog_settings = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, orchestrator_settings)
+    bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v11").resolve(),
+        source_commit="b" * 40,
+        actor_id="stable-identity-integration",
+        evaluation_cases_total=3,
+        settings=orchestrator_settings,
+    )
+    _, document_revision_id = _document_source(
+        integration_engine,
+        catalog_settings,
+        tmp_path,
+        multimodal=True,
+    )
+    service = KnowledgeAnalysisApplicationService(integration_engine, catalog_settings)
+    created = service.create(
+        CreateKnowledgeAnalysisCommand(
+            source=EducationalDocumentKnowledgeAnalysisSelection(
+                source_class="TEXTBOOK",
+                document_revision_id=document_revision_id,
+                first_physical_page=1,
+                last_physical_page=2,
+                curriculum_unit_keys=("1-(1)",),
+            ),
+            preset_key="knowledge-analysis",
+            general_knowledge_mode="AUXILIARY_UNATTRIBUTED",
+            risk_policy_revision_id=POLICY_ID,
+            predecessor_analysis_run_id=None,
+            requested_by=OPERATOR_ID,
+            idempotency_key=f"document-analysis-v11:{uuid4().hex}",
+        )
+    )
+
+    sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        run = session.get(KnowledgeAnalysisRunRecord, created.analysis_run_id)
+        assert run is not None
+        request = KnowledgeAnalysisRequestV8.model_validate(run.canonical_request)
+        workflow = session.get(WorkflowInstanceRecord, run.workflow_id)
+        assert workflow is not None
+        assert workflow.definition_version == "8.0.0"
+        assert workflow.role_schema_version == "workflow-role/1.11.0"
+
+    pointer = _complete_proposal(
+        integration_engine,
+        catalog_settings,
+        run_id=created.analysis_run_id,
+        staging_root=tmp_path / "proposal-v11",
+        proposal_override=_proposal_with_edge(request),
+    )
+    assert pointer.result_schema == "knowledge-analysis-proposal-result@8.0"
     accepted = service.reconcile(
         ReconcileKnowledgeAnalysisCommand(
             analysis_run_id=created.analysis_run_id,
