@@ -17,6 +17,7 @@ from eom_api.runtime_isolation_verifier import (
     API_BIN,
     API_ENTRYPOINT,
     API_PYTHON,
+    AUTH_BROKER_GROUP,
     EXPECTED_INACCESSIBLE_PATHS,
     EXPECTED_READ_ONLY_PATHS,
     FIXED_CHILD_ARGUMENT,
@@ -47,6 +48,8 @@ from eom_api.runtime_isolation_verifier import (
 def _valid_snapshot() -> ServiceSnapshot:
     uid = pwd.getpwnam("eom-api").pw_uid
     gid = grp.getgrnam("eom-api").gr_gid
+    auth_broker_gid = grp.getgrnam(AUTH_BROKER_GROUP).gr_gid
+    supplementary_gids = tuple(sorted({gid, auth_broker_gid}))
     return ServiceSnapshot(
         active_state="active",
         sub_state="running",
@@ -54,7 +57,7 @@ def _valid_snapshot() -> ServiceSnapshot:
         start_time_ticks=100,
         unit_user="eom-api",
         unit_group="eom-api",
-        unit_supplementary_groups=(),
+        unit_supplementary_groups=(AUTH_BROKER_GROUP,),
         exec_start=(
             f"{{ path={API_ENTRYPOINT} ; argv[]={API_ENTRYPOINT} serve ; ignore_errors=no ; }}}}"
         ),
@@ -63,7 +66,7 @@ def _valid_snapshot() -> ServiceSnapshot:
         unit_root_image="",
         uid=(uid, uid, uid, uid),
         gid=(gid, gid, gid, gid),
-        supplementary_gids=(gid,),
+        supplementary_gids=supplementary_gids,
         command_line=(str(API_PYTHON), str(API_ENTRYPOINT), "serve"),
         executable=str(API_BIN / "python3.12"),
         process_working_directory="/var/lib/eom-api",
@@ -104,10 +107,11 @@ def _valid_snapshot() -> ServiceSnapshot:
 def _valid_execution(snapshot: ServiceSnapshot) -> ProbeExecution:
     uid = pwd.getpwnam("eom-api").pw_uid
     gid = grp.getgrnam("eom-api").gr_gid
+    auth_broker_gid = grp.getgrnam(AUTH_BROKER_GROUP).gr_gid
     context = ProbeContext(
         uid=uid,
         gid=gid,
-        supplementary_gids=(gid,),
+        supplementary_gids=tuple(sorted({gid, auth_broker_gid})),
         mount_namespace=snapshot.mount_namespace,
         no_new_privileges=True,
         capabilities=(0, 0, 0, 0, 0),
@@ -285,6 +289,23 @@ def test_denied_probe_unexpectedly_allowed_fails() -> None:
             ResultCode.FAIL_PROCESS_IDENTITY_MISMATCH,
         ),
         (
+            replace(_valid_snapshot(), unit_supplementary_groups=()),
+            ResultCode.FAIL_PROCESS_IDENTITY_MISMATCH,
+        ),
+        (
+            replace(
+                _valid_snapshot(),
+                unit_supplementary_groups=(AUTH_BROKER_GROUP, "eom"),
+            ),
+            ResultCode.FAIL_PROCESS_IDENTITY_MISMATCH,
+        ),
+        (
+            replace(
+                _valid_snapshot(), supplementary_gids=(*_valid_snapshot().supplementary_gids, 0)
+            ),
+            ResultCode.FAIL_PROCESS_IDENTITY_MISMATCH,
+        ),
+        (
             replace(
                 _valid_snapshot(),
                 mount_namespace=_valid_snapshot().host_mount_namespace,
@@ -308,6 +329,22 @@ def test_probe_identity_mismatch_fails() -> None:
     snapshot = _valid_snapshot()
     execution = _valid_execution(snapshot)
     execution = replace(execution, context=replace(execution.context, uid=0))
+
+    _assert_error(
+        ResultCode.FAIL_IDENTITY_MISMATCH,
+        lambda: validate_probe_execution(snapshot, execution),
+    )
+
+
+def test_probe_rejects_an_unexpected_supplementary_group() -> None:
+    snapshot = _valid_snapshot()
+    execution = _valid_execution(snapshot)
+    execution = replace(
+        execution,
+        context=replace(
+            execution.context, supplementary_gids=(*execution.context.supplementary_gids, 0)
+        ),
+    )
 
     _assert_error(
         ResultCode.FAIL_IDENTITY_MISMATCH,

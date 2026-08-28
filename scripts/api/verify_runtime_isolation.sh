@@ -3,6 +3,7 @@ set -euo pipefail
 
 SERVICE="eom-api.service"
 SERVICE_CONTEXT_VERIFIER="/srv/eom/conda/envs/eom-api/bin/eom-api-runtime-isolation"
+EXPECTED_SUPPLEMENTARY_GROUPS="eom-codex-auth"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -29,8 +30,9 @@ mapfile -t listeners < <(ss -H -lnt 'sport = :8765')
   fail "service user mismatch"
 [[ "$(systemctl show --property=Group --value "${SERVICE}")" == "eom-api" ]] || \
   fail "service group mismatch"
-[[ -z "$(systemctl show --property=SupplementaryGroups --value "${SERVICE}")" ]] || \
-  fail "service supplementary groups are not empty"
+[[ "$(systemctl show --property=SupplementaryGroups --value "${SERVICE}")" == \
+  "${EXPECTED_SUPPLEMENTARY_GROUPS}" ]] || \
+  fail "service supplementary groups mismatch"
 [[ "$(systemctl show --property=WorkingDirectory --value "${SERVICE}")" == \
   "/var/lib/eom-api" ]] || fail "service working directory mismatch"
 [[ "$(systemctl show --property=NoNewPrivileges --value "${SERVICE}")" == "yes" ]] || \

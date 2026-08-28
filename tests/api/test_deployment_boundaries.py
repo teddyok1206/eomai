@@ -276,6 +276,8 @@ def test_runtime_verifier_separates_host_metadata_from_service_access() -> None:
     assert "runuser -u eom-api" not in source
     assert 'systemctl show --property=InaccessiblePaths --value "${SERVICE}"' in source
     assert 'systemctl show --property=CapabilityBoundingSet --value "${SERVICE}"' in source
+    assert 'EXPECTED_SUPPLEMENTARY_GROUPS="eom-codex-auth"' in source
+    assert "service supplementary groups mismatch" in source
 
 
 def test_service_context_helper_has_fixed_command_and_probe_inventory() -> None:

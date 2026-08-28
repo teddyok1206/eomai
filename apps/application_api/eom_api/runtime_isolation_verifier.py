@@ -36,6 +36,7 @@ from eom_api.runtime_isolation_pidfd import (
 SERVICE: Final = "eom-api.service"
 SERVICE_USER: Final = "eom-api"
 SERVICE_GROUP: Final = "eom-api"
+AUTH_BROKER_GROUP: Final = "eom-codex-auth"
 SERVICE_HOME: Final = Path("/var/lib/eom-api")
 API_ENV_ROOT: Final = Path("/srv/eom/conda/envs/eom-api")
 API_BIN: Final = API_ENV_ROOT / "bin"
@@ -322,15 +323,17 @@ def validate_service_snapshot(snapshot: ServiceSnapshot) -> None:
         raise IsolationVerificationError(ResultCode.FAIL_SERVICE_CONTEXT_UNAVAILABLE, "main_pid")
     account = pwd.getpwnam(SERVICE_USER)
     group = grp.getgrnam(SERVICE_GROUP)
+    auth_broker_group = grp.getgrnam(AUTH_BROKER_GROUP)
     expected_uid = account.pw_uid
     expected_gid = group.gr_gid
+    expected_supplementary_gids = tuple(sorted({expected_gid, auth_broker_group.gr_gid}))
     if (
         snapshot.unit_user != SERVICE_USER
         or snapshot.unit_group != SERVICE_GROUP
-        or snapshot.unit_supplementary_groups
+        or snapshot.unit_supplementary_groups != (AUTH_BROKER_GROUP,)
         or any(value != expected_uid for value in snapshot.uid)
         or any(value != expected_gid for value in snapshot.gid)
-        or snapshot.supplementary_gids != (expected_gid,)
+        or tuple(sorted(snapshot.supplementary_gids)) != expected_supplementary_gids
     ):
         raise IsolationVerificationError(
             ResultCode.FAIL_PROCESS_IDENTITY_MISMATCH, "service_identity"
@@ -383,10 +386,12 @@ def validate_probe_execution(
     context = execution.context
     expected_uid = pwd.getpwnam(SERVICE_USER).pw_uid
     expected_gid = grp.getgrnam(SERVICE_GROUP).gr_gid
+    auth_broker_gid = grp.getgrnam(AUTH_BROKER_GROUP).gr_gid
+    expected_supplementary_gids = tuple(sorted({expected_gid, auth_broker_gid}))
     if (
         context.uid != expected_uid
         or context.gid != expected_gid
-        or context.supplementary_gids != (expected_gid,)
+        or tuple(sorted(context.supplementary_gids)) != expected_supplementary_gids
         or not context.no_new_privileges
         or any(context.capabilities)
         or context.working_directory != str(SERVICE_HOME)
@@ -567,6 +572,8 @@ class LinuxRuntimeIsolationAdapter:
     def run_fixed_probe(self, process: ServiceProcessHandle) -> ProbeExecution:
         uid = pwd.getpwnam(SERVICE_USER).pw_uid
         gid = grp.getgrnam(SERVICE_GROUP).gr_gid
+        auth_broker_gid = grp.getgrnam(AUTH_BROKER_GROUP).gr_gid
+        supplementary_gids = ",".join(str(value) for value in sorted({gid, auth_broker_gid}))
         mount_reference = f"/proc/self/fd/{process.mount_namespace_fd}"
         command = (
             "/usr/bin/nsenter",
@@ -575,7 +582,7 @@ class LinuxRuntimeIsolationAdapter:
             "--",
             "/usr/bin/setpriv",
             f"--regid={gid}",
-            f"--groups={gid}",
+            f"--groups={supplementary_gids}",
             f"--reuid={uid}",
             "--inh-caps=-all",
             "--ambient-caps=-all",
