@@ -2043,6 +2043,197 @@ def test_standard_bootstrap_is_idempotent_and_materializes_only_pinned_markdown(
     assert (workspace / "instructions/authoring.md").is_file()
     assert (workspace / "references/general-knowledge-provenance.md").is_file()
 
+    successor = bootstrap_standard_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/standard-item-v2").resolve(),
+        content_directory=Path("content").resolve(),
+        source_commit="b" * 40,
+        actor_id="phase5-integration",
+        evaluation_cases_total=4,
+        settings=settings,
+    )
+    assert successor.preset_id == first.preset_id
+    assert successor.preset_revision_id != first.preset_revision_id
+    assert successor.capacity_policy_revision_id == first.capacity_policy_revision_id
+    assert successor.reference_bundle_revision_id is None
+    assert len(successor.role_reference_bundle_revision_ids) == 4
+    assert len(set(successor.role_reference_bundle_revision_ids)) == 4
+    assert successor == bootstrap_standard_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/standard-item-v2").resolve(),
+        content_directory=Path("content").resolve(),
+        source_commit="b" * 40,
+        actor_id="phase5-integration",
+        evaluation_cases_total=4,
+        settings=settings,
+    )
+
+    with transaction(sessions) as session:
+        logical = session.get(ExecutionPresetRecord, first.preset_id)
+        historical = session.get(ExecutionPresetRevisionRecord, first.preset_revision_id)
+        successor_revision = session.get(
+            ExecutionPresetRevisionRecord, successor.preset_revision_id
+        )
+        successor_evaluation = session.get(ExecutionPresetEvaluationRecord, successor.evaluation_id)
+        assert logical is not None
+        assert historical is not None
+        assert successor_revision is not None
+        assert successor_evaluation is not None
+        assert logical.current_revision_id == successor.preset_revision_id
+        assert historical.state == "RELEASED"
+        assert successor_evaluation.cases_total == 4
+        historical_reference_bundle = session.get(
+            ExecutionBundleRevisionRecord, first.reference_bundle_revision_id
+        )
+        assert historical_reference_bundle is not None
+        historical_general_pointer = historical_reference_bundle.canonical_document["entries"][0][
+            "artifact"
+        ]
+        expected_reference_keys = {
+            "authoring": {
+                "general-knowledge-provenance",
+                "integrated-science-single-item-authoring",
+                "kice-integrated-science-illustration",
+            },
+            "image": {
+                "general-knowledge-provenance",
+                "kice-integrated-science-illustration",
+            },
+            "review": {
+                "general-knowledge-provenance",
+                "integrated-science-single-item-authoring",
+                "kice-integrated-science-illustration",
+            },
+            "item_management": {"general-knowledge-provenance"},
+        }
+        for policy in successor_revision.canonical_document["role_policies"]:
+            pointer = policy["reference_bundle"]
+            bundle = session.get(ExecutionBundleRevisionRecord, pointer["bundle_revision_id"])
+            assert bundle is not None
+            assert {entry["reference_key"] for entry in bundle.canonical_document["entries"]} == (
+                expected_reference_keys[policy["role"]]
+            )
+            general_entries = [
+                entry
+                for entry in bundle.canonical_document["entries"]
+                if entry["reference_key"] == "general-knowledge-provenance"
+            ]
+            assert len(general_entries) == 1
+            assert general_entries[0]["artifact"] == historical_general_pointer
+        workflow = _workflow(session)
+        plan = resolve_execution_plan(
+            session,
+            preset_key="standard-item",
+            dependencies=ResolvedPlanDependencyEvidence(
+                workflow_id=workflow.workflow_id,
+                workflow_definition_key=workflow.definition_key,
+                workflow_definition_version=workflow.definition_version,
+                workflow_definition_sha256=workflow.definition_hash,
+                workflow_role_schema_version=workflow.role_schema_version,
+                content_pack_release_id="packrel_" + uuid4().hex,
+                content_pack_sha256="sha256:" + uuid4().hex * 2,
+            ),
+            steps=(
+                ExecutionStepRequirement("authoring", WorkerRole.AUTHORING),
+                ExecutionStepRequirement("image", WorkerRole.IMAGE),
+                ExecutionStepRequirement("review", WorkerRole.REVIEW),
+                ExecutionStepRequirement("item_management", WorkerRole.ITEM_MANAGEMENT),
+            ),
+            resolved_at=NOW + timedelta(hours=2),
+        )
+        authoring_allowed = authorized_execution_artifact_revisions(
+            session, plan_id=plan.plan_id, step_key="authoring"
+        )
+        item_management_allowed = authorized_execution_artifact_revisions(
+            session, plan_id=plan.plan_id, step_key="item_management"
+        )
+        image_allowed = authorized_execution_artifact_revisions(
+            session, plan_id=plan.plan_id, step_key="image"
+        )
+        review_allowed = authorized_execution_artifact_revisions(
+            session, plan_id=plan.plan_id, step_key="review"
+        )
+        authoring_workspace = tmp_path / "materialized-guided-authoring"
+        authoring_workspace.mkdir(mode=0o2770)
+        authoring_workspace.chmod(0o2770)
+        guided_authoring = materialize_execution_step(
+            session,
+            plan_id=plan.plan_id,
+            step_key="authoring",
+            workspace=authoring_workspace,
+            canonical_artifact_root=nas_root.resolve(),
+            worker_group_id=os.getgid(),
+            authorized_artifact_revision_ids=authoring_allowed,
+        )
+        image_workspace = tmp_path / "materialized-guided-image"
+        image_workspace.mkdir(mode=0o2770)
+        image_workspace.chmod(0o2770)
+        guided_image = materialize_execution_step(
+            session,
+            plan_id=plan.plan_id,
+            step_key="image",
+            workspace=image_workspace,
+            canonical_artifact_root=nas_root.resolve(),
+            worker_group_id=os.getgid(),
+            authorized_artifact_revision_ids=image_allowed,
+        )
+        review_workspace = tmp_path / "materialized-guided-review"
+        review_workspace.mkdir(mode=0o2770)
+        review_workspace.chmod(0o2770)
+        guided_review = materialize_execution_step(
+            session,
+            plan_id=plan.plan_id,
+            step_key="review",
+            workspace=review_workspace,
+            canonical_artifact_root=nas_root.resolve(),
+            worker_group_id=os.getgid(),
+            authorized_artifact_revision_ids=review_allowed,
+        )
+        item_management_workspace = tmp_path / "materialized-guided-registration"
+        item_management_workspace.mkdir(mode=0o2770)
+        item_management_workspace.chmod(0o2770)
+        guided_item_management = materialize_execution_step(
+            session,
+            plan_id=plan.plan_id,
+            step_key="item_management",
+            workspace=item_management_workspace,
+            canonical_artifact_root=nas_root.resolve(),
+            worker_group_id=os.getgid(),
+            authorized_artifact_revision_ids=item_management_allowed,
+        )
+    assert guided_authoring.materialized_member_count == 5
+    assert guided_image.materialized_member_count == 4
+    assert guided_review.materialized_member_count == 5
+    assert guided_item_management.materialized_member_count == 3
+    assert (
+        authoring_workspace / "references/guidance/integrated-science-single-item-authoring-v1.md"
+    ).read_bytes() == Path(
+        "content/authoring-rules/integrated-science-single-item-authoring-v1.md"
+    ).read_bytes()
+    assert (
+        authoring_workspace / "references/guidance/kice-integrated-science-illustration-v1.md"
+    ).read_bytes() == Path(
+        "content/image-specs/kice-integrated-science-illustration-v1.md"
+    ).read_bytes()
+    agents = (authoring_workspace / "AGENTS.md").read_text(encoding="utf-8")
+    assert "integrated-science-single-item-authoring-v1.md" in agents
+    assert "kice-integrated-science-illustration-v1.md" in agents
+    assert "SIA-MUST-001" not in agents
+    assert "VIS-MUST-001" not in agents
+    assert not (
+        image_workspace / "references/guidance/integrated-science-single-item-authoring-v1.md"
+    ).exists()
+    assert (
+        image_workspace / "references/guidance/kice-integrated-science-illustration-v1.md"
+    ).is_file()
+    assert (
+        review_workspace / "references/guidance/integrated-science-single-item-authoring-v1.md"
+    ).is_file()
+    assert (
+        review_workspace / "references/guidance/kice-integrated-science-illustration-v1.md"
+    ).is_file()
+    assert not (item_management_workspace / "references/guidance").exists()
+
 
 def test_knowledge_analysis_bootstrap_is_idempotent_and_support_only(
     integration_engine: Engine,

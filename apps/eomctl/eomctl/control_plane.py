@@ -33,6 +33,15 @@ KNOWLEDGE_ANALYSIS_CONFIG_DIRECTORY_OPTION = typer.Option(
     resolve_path=True,
     help="Reviewed absolute knowledge-analysis bootstrap directory",
 )
+STANDARD_CONTENT_DIRECTORY_OPTION = typer.Option(
+    None,
+    "--content-directory",
+    exists=True,
+    file_okay=False,
+    dir_okay=True,
+    resolve_path=True,
+    help="Reviewed canonical content directory required by standard-item V2",
+)
 
 
 @control_plane_app.command("bootstrap-standard")
@@ -41,6 +50,7 @@ def bootstrap_standard(
     actor_id: str = typer.Option(..., "--actor-id"),
     evaluation_cases_total: int = typer.Option(..., "--evaluation-cases-total", min=1, max=10000),
     config_directory: Path = STANDARD_CONFIG_DIRECTORY_OPTION,
+    content_directory: Path | None = STANDARD_CONTENT_DIRECTORY_OPTION,
 ) -> None:
     """Publish the reviewed standard preset and stale-by-default fixed account bindings."""
 
@@ -49,6 +59,7 @@ def bootstrap_standard(
         result = bootstrap_standard_control_plane(
             engine,
             config_directory=config_directory,
+            content_directory=content_directory,
             source_commit=source_commit,
             actor_id=actor_id,
             evaluation_cases_total=evaluation_cases_total,

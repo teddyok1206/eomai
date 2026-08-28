@@ -86,6 +86,17 @@ class ControlArtifactPublisher:
             "bytes": len(payload),
             "source_commit": source_commit,
         }
+        # The idempotency key is content-addressed. A later reviewed release may
+        # pin the same immutable bytes from a different source commit; reuse the
+        # already-approved Artifact Revision after validating its full member
+        # contract instead of asking the repository to reinterpret provenance
+        # as a different publication request.
+        with self.sessions() as session:
+            existing_job_id = session.scalar(
+                select(JobRecord.job_id).where(JobRecord.idempotency_key == idempotency_key)
+            )
+        if existing_job_id is not None:
+            return self._existing(job_id=existing_job_id, request=request)
         with transaction(self.sessions) as session:
             ensure_protocol_version(
                 session, CONTROL_ARTIFACT_PROTOCOL, CONTROL_ARTIFACT_SCHEMA_HASH
@@ -187,6 +198,7 @@ class ControlArtifactPublisher:
             if (
                 job is None
                 or job.status != "SUCCEEDED"
+                or job.task_type != request["artifact_type"]
                 or revision is None
                 or not revision.approved
             ):
@@ -205,7 +217,9 @@ class ControlArtifactPublisher:
                 or matching[0].get("sha256") != request["sha256"]
                 or matching[0].get("schema_ref") != request["schema_ref"]
                 or matching[0].get("media_type") != request["media_type"]
+                or matching[0].get("bytes") != request["bytes"]
                 or revision.content_hash != request["sha256"]
+                or revision.content_bytes != request["bytes"]
             ):
                 raise ControlPlaneError(
                     "CONTROL_ARTIFACT_CONFLICT", "control artifact replay differs"

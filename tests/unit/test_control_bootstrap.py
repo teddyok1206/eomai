@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
 from pathlib import Path
 from typing import get_args
 
 import pytest
 from eom_orchestrator.control_bootstrap import (
     EXPECTED_ROLE_SLOTS,
+    EXPECTED_STANDARD_V2_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     KnowledgeAnalysisBootstrapManifest,
     StandardBootstrapManifest,
+    bootstrap_standard_control_plane,
     load_knowledge_analysis_bootstrap_manifest,
     load_standard_bootstrap_manifest,
 )
@@ -18,6 +21,7 @@ from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "config/control-plane/standard-item-v1"
+CONFIG_V2 = ROOT / "config/control-plane/standard-item-v2"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -49,6 +53,27 @@ def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:
     assert manifest.general_knowledge_policy == "ALLOW_WITH_PROVENANCE"
     assert manifest.model == "gpt-5.6-terra"
     assert manifest.reasoning_effort == "high"
+    tracked_v2 = tuple(path for path in CONFIG_V2.rglob("*") if path.is_file())
+    assert tracked_v2 and all(path.is_file() and not path.is_symlink() for path in tracked_v2)
+    source_v2 = "\n".join(path.read_text(encoding="utf-8") for path in tracked_v2).casefold()
+    assert all(
+        forbidden not in source_v2
+        for forbidden in ("auth.json", "bearer ", "password=", "token=", "api_key")
+    )
+    assert (CONFIG_V2 / "references/general-knowledge-provenance.md").read_bytes() == (
+        CONFIG / "references/general-knowledge-provenance.md"
+    ).read_bytes()
+    assert "integrated-science-single-item-authoring-v1.md" in (
+        CONFIG_V2 / "instructions/authoring.md"
+    ).read_text(encoding="utf-8")
+    assert "kice-integrated-science-illustration-v1.md" in (
+        CONFIG_V2 / "instructions/image.md"
+    ).read_text(encoding="utf-8")
+    item_management_instruction = (CONFIG_V2 / "instructions/item-management.md").read_text(
+        encoding="utf-8"
+    )
+    assert "single-item-authoring" not in item_management_instruction
+    assert "illustration" not in item_management_instruction
     tracked = tuple(path for path in CONFIG.rglob("*") if path.is_file())
     assert all(path.is_file() and not path.is_symlink() for path in tracked)
     source = "\n".join(path.read_text(encoding="utf-8") for path in tracked).casefold()
@@ -58,10 +83,98 @@ def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:
     )
 
 
+def test_standard_bootstrap_v2_is_role_scoped_and_preserves_v1_bytes() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V2)
+
+    assert manifest.schema_version == "standard-control-bootstrap/2.0"
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V2_REFERENCE_KEYS
+    )
+    assert tuple(reference.reference_key for reference in manifest.references) == (
+        "general-knowledge-provenance",
+        "integrated-science-single-item-authoring",
+        "kice-integrated-science-illustration",
+    )
+    assert {reference.reference_key: reference.sha256 for reference in manifest.references} == {
+        "general-knowledge-provenance": (
+            "sha256:ff3859cb40aa66e37bbac632b0b35df3e314cc6d56aca0145dfedbea847d51f7"
+        ),
+        "integrated-science-single-item-authoring": (
+            "sha256:00e3334573b120bf7f6f5c05aba28e58c4b2f0421a34705d15641cd5737accbc"
+        ),
+        "kice-integrated-science-illustration": (
+            "sha256:9acdb63cfbc69583d852b386fddb205dfc6efc493a6b68195375b222139396ed"
+        ),
+    }
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "high"
+    expected_v1_sha256 = {
+        "bootstrap.yaml": "24f02d4dc88d5974fca1052430d9bbfdadaf0e003cc318aba43149e983cab83d",
+        "instructions/authoring.md": (
+            "dbbb746250ad56dec4ef10c9c6484d2b202553e6d8a5fddd2304076604aef25d"
+        ),
+        "instructions/image.md": (
+            "71407504e92d908f8c2a34e2d7dcdcfbdf55824fcb80cc06018abd368fa26de5"
+        ),
+        "instructions/item-management.md": (
+            "f283532321af9421b9afcbf951a7ac62f8fe17d232f2789e92d8ee22e20acb2a"
+        ),
+        "instructions/platform.md": (
+            "0d91c68be0c5f61441c8b0481e093187bcd91a8586369c0c28b751819ac6ca25"
+        ),
+        "instructions/review.md": (
+            "03047f8a0efb82c91d22691e3389959db310dcfd1b2efb10d87f44dc424d2647"
+        ),
+        "references/general-knowledge-provenance.md": (
+            "ff3859cb40aa66e37bbac632b0b35df3e314cc6d56aca0145dfedbea847d51f7"
+        ),
+    }
+    for relative_path, expected in expected_v1_sha256.items():
+        assert hashlib.sha256((CONFIG / relative_path).read_bytes()).hexdigest() == expected
+
+
+def test_standard_bootstrap_v2_rejects_forged_role_reference_selection() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V2)
+    forged = manifest.model_dump(mode="json")
+    forged["roles"][1]["reference_keys"] = ["general-knowledge-provenance"]
+
+    with pytest.raises(ValidationError, match="role reference map differs"):
+        StandardBootstrapManifest.model_validate(forged)
+
+    forged_path = manifest.model_dump(mode="json")
+    forged_path["references"][1]["source_path"] = "authoring-rules/../secrets.md"
+    with pytest.raises(ValidationError, match="reference path is unsafe"):
+        StandardBootstrapManifest.model_validate(forged_path)
+
+
+def test_standard_bootstrap_v2_rejects_changed_guidance_before_runtime_access(
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "config"
+    content = tmp_path / "content"
+    shutil.copytree(CONFIG_V2, config)
+    shutil.copytree(ROOT / "content/authoring-rules", content / "authoring-rules")
+    shutil.copytree(ROOT / "content/image-specs", content / "image-specs")
+    guide = content / "authoring-rules/integrated-science-single-item-authoring-v1.md"
+    guide.write_bytes(guide.read_bytes() + b"\n")
+
+    with pytest.raises(ControlPlaneError) as raised:
+        bootstrap_standard_control_plane(
+            object(),  # type: ignore[arg-type]
+            config_directory=config.resolve(),
+            content_directory=content.resolve(),
+            source_commit="a" * 40,
+            actor_id="unit-reviewer",
+            evaluation_cases_total=1,
+        )
+    assert raised.value.code == "CONTROL_BOOTSTRAP_REFERENCE_HASH_MISMATCH"
+
+
 def test_bootstrap_cli_requires_an_explicit_reviewed_source_directory() -> None:
     source = (ROOT / "apps/eomctl/eomctl/control_plane.py").read_text(encoding="utf-8")
 
     assert "STANDARD_CONFIG_DIRECTORY_OPTION = typer.Option(\n    ...," in source
+    assert "STANDARD_CONTENT_DIRECTORY_OPTION = typer.Option(\n    None," in source
     assert "KNOWLEDGE_ANALYSIS_CONFIG_DIRECTORY_OPTION = typer.Option(\n    ...," in source
     assert "/home/eom/EOM" not in source
 

@@ -11,6 +11,7 @@ from types import MappingProxyType
 from typing import Literal
 
 import yaml
+from eom_catalog_contracts import GuidanceMarkdownDocument, parse_guidance_markdown
 from eom_identifiers import canonical_json_bytes
 from eom_workflow import BundleRevisionPointer, ControlArtifactPointer, WorkerCapacityPolicy
 from eom_workflow.schemas import role_schema_bundle_hash
@@ -56,6 +57,25 @@ EXPECTED_ROLE_SLOTS = {
     "review": "slot02",
     "item_management": "slot04",
 }
+EXPECTED_STANDARD_V2_REFERENCE_KEYS = MappingProxyType(
+    {
+        "authoring": (
+            "general-knowledge-provenance",
+            "integrated-science-single-item-authoring",
+            "kice-integrated-science-illustration",
+        ),
+        "image": (
+            "general-knowledge-provenance",
+            "kice-integrated-science-illustration",
+        ),
+        "review": (
+            "general-knowledge-provenance",
+            "integrated-science-single-item-authoring",
+            "kice-integrated-science-illustration",
+        ),
+        "item_management": ("general-knowledge-provenance",),
+    }
+)
 KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(
     {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 13)}
 )
@@ -68,13 +88,60 @@ class BootstrapRole(BaseModel):
     slot_key: str = Field(pattern=r"^slot0[1-5]$")
     worker_pool_key: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")
     instruction_path: str = Field(pattern=r"^instructions/[a-z0-9-]+\.md$")
+    reference_keys: tuple[str, ...] = Field(default=(), max_length=16)
     timeout_seconds: int = Field(ge=30, le=7200)
+
+    @model_validator(mode="after")
+    def safe_unique_reference_keys(self) -> BootstrapRole:
+        if len(self.reference_keys) != len(set(self.reference_keys)) or any(
+            re.fullmatch(r"[a-z][a-z0-9_-]{1,127}", key) is None for key in self.reference_keys
+        ):
+            raise ValueError("bootstrap role reference keys must be safe and unique")
+        return self
+
+
+class StandardBootstrapReference(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    reference_key: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,127}$")
+    source_root: Literal["CONFIG", "CONTENT"]
+    source_path: str = Field(min_length=3, max_length=240)
+    materialized_path: str = Field(min_length=3, max_length=240)
+    reference_format: Literal["REFERENCE_MARKDOWN", "EOM_GUIDANCE_MARKDOWN_V1"]
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def safe_reference_paths(self) -> StandardBootstrapReference:
+        for value in (self.source_path, self.materialized_path):
+            relative = PurePosixPath(value)
+            if (
+                relative.is_absolute()
+                or not relative.parts
+                or "." in relative.parts
+                or ".." in relative.parts
+                or "\\" in value
+                or relative.as_posix() != value
+                or not value.endswith(".md")
+                or re.fullmatch(r"[a-z0-9][a-z0-9._/-]*\.md", value) is None
+            ):
+                raise ValueError("bootstrap reference path is unsafe")
+        if not self.materialized_path.startswith("references/"):
+            raise ValueError("bootstrap reference must materialize under references/")
+        if self.source_root == "CONFIG" and not self.source_path.startswith("references/"):
+            raise ValueError("config reference source must be under references/")
+        if self.source_root == "CONTENT" and not self.source_path.startswith(
+            ("authoring-rules/", "image-specs/", "review-rules/")
+        ):
+            raise ValueError("content reference source is outside the reviewed guidance roots")
+        if self.reference_format == "EOM_GUIDANCE_MARKDOWN_V1" and self.source_root != "CONTENT":
+            raise ValueError("reviewed guidance must come from the canonical content root")
+        return self
 
 
 class StandardBootstrapManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["standard-control-bootstrap/1.0"]
+    schema_version: Literal["standard-control-bootstrap/1.0", "standard-control-bootstrap/2.0"]
     preset_key: Literal["standard-item"]
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=1000)
@@ -83,7 +150,8 @@ class StandardBootstrapManifest(BaseModel):
     reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"]
     general_knowledge_policy: Literal["ALLOW_WITH_PROVENANCE"]
     compatible_workflow_protocols: tuple[str, ...] = Field(min_length=1, max_length=16)
-    reference_path: str = Field(pattern=r"^references/[a-z0-9-]+\.md$")
+    reference_path: str | None = Field(default=None, pattern=r"^references/[a-z0-9-]+\.md$")
+    references: tuple[StandardBootstrapReference, ...] = Field(default=(), max_length=32)
     roles: tuple[BootstrapRole, ...] = Field(min_length=4, max_length=4)
     support_slot_key: Literal["slot05"]
 
@@ -96,6 +164,25 @@ class StandardBootstrapManifest(BaseModel):
             raise ValueError("bootstrap role and slot map must match fixed identities")
         if len(set(self.compatible_workflow_protocols)) != len(self.compatible_workflow_protocols):
             raise ValueError("bootstrap workflow protocols must be unique")
+        if self.schema_version == "standard-control-bootstrap/1.0":
+            if (
+                self.reference_path is None
+                or self.references
+                or any(role.reference_keys for role in self.roles)
+            ):
+                raise ValueError("standard bootstrap V1 reference contract differs")
+            return self
+        if self.reference_path is not None or len(self.references) != 3:
+            raise ValueError("standard bootstrap V2 requires exactly three reference definitions")
+        reference_keys = tuple(reference.reference_key for reference in self.references)
+        if len(reference_keys) != len(set(reference_keys)):
+            raise ValueError("standard bootstrap reference definitions must be unique")
+        if {role.role: role.reference_keys for role in self.roles} != dict(
+            EXPECTED_STANDARD_V2_REFERENCE_KEYS
+        ):
+            raise ValueError("standard bootstrap V2 role reference map differs")
+        if set(reference_keys) != set().union(*EXPECTED_STANDARD_V2_REFERENCE_KEYS.values()):
+            raise ValueError("standard bootstrap V2 has missing or unused references")
         return self
 
 
@@ -107,7 +194,8 @@ class StandardBootstrapResult(BaseModel):
     preset_policy_sha256: str
     capacity_policy_revision_id: str
     instruction_bundle_revision_ids: tuple[str, ...]
-    reference_bundle_revision_id: str
+    reference_bundle_revision_id: str | None
+    role_reference_bundle_revision_ids: tuple[str, ...] = ()
     auth_binding_ids: tuple[str, ...]
     evaluation_id: str
     source_commit: str
@@ -240,6 +328,7 @@ def bootstrap_standard_control_plane(
     engine: Engine,
     *,
     config_directory: Path,
+    content_directory: Path | None = None,
     source_commit: str,
     actor_id: str,
     evaluation_cases_total: int,
@@ -252,6 +341,79 @@ def bootstrap_standard_control_plane(
     if not actor_id or len(actor_id) > 128 or not 1 <= evaluation_cases_total <= 10000:
         raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "bootstrap operator input is invalid")
     manifest = load_standard_bootstrap_manifest(config_directory)
+    config_root = _safe_root(config_directory)
+    content_root = (
+        _safe_root(content_directory)
+        if manifest.schema_version == "standard-control-bootstrap/2.0"
+        and content_directory is not None
+        else None
+    )
+    if manifest.schema_version == "standard-control-bootstrap/2.0" and content_root is None:
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_INVALID",
+            "standard bootstrap V2 requires the reviewed content directory",
+        )
+    platform_payload = _read_member(config_root, "instructions/platform.md")
+    role_payloads = {
+        role.role: _read_member(config_root, role.instruction_path) for role in manifest.roles
+    }
+    reference_payloads: dict[str, bytes] = {}
+    reference_schema_refs: dict[str, str] = {}
+    guidance_documents: dict[str, GuidanceMarkdownDocument] = {}
+    if manifest.schema_version == "standard-control-bootstrap/1.0":
+        if manifest.reference_path is None:
+            raise AssertionError("validated V1 standard manifest lacks its reference")
+        reference_payloads["general-knowledge-provenance"] = _read_member(
+            config_root, manifest.reference_path
+        )
+        reference_schema_refs["general-knowledge-provenance"] = (
+            "eom://schemas/knowledge/reference-markdown/1.0"
+        )
+    else:
+        assert content_root is not None
+        for reference in manifest.references:
+            source_root = config_root if reference.source_root == "CONFIG" else content_root
+            payload = _read_member(source_root, reference.source_path)
+            if "sha256:" + hashlib.sha256(payload).hexdigest() != reference.sha256:
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_REFERENCE_HASH_MISMATCH",
+                    "reviewed standard reference differs from its pinned hash",
+                )
+            reference_payloads[reference.reference_key] = payload
+            if reference.reference_format == "EOM_GUIDANCE_MARKDOWN_V1":
+                try:
+                    guidance = parse_guidance_markdown(payload)
+                except ValueError as exc:
+                    raise ControlPlaneError(
+                        "CONTROL_BOOTSTRAP_GUIDANCE_INVALID",
+                        "reviewed standard guidance is invalid",
+                    ) from exc
+                if (
+                    guidance.control.status != "REVIEWED"
+                    or guidance.control.guidance_key != reference.reference_key
+                ):
+                    raise ControlPlaneError(
+                        "CONTROL_BOOTSTRAP_GUIDANCE_INVALID",
+                        "reviewed guidance identity or lifecycle differs",
+                    )
+                guidance_documents[reference.reference_key] = guidance
+                reference_schema_refs[reference.reference_key] = (
+                    "eom://schemas/guidance/eom-guidance-markdown/1.0"
+                )
+            else:
+                reference_schema_refs[reference.reference_key] = (
+                    "eom://schemas/knowledge/reference-markdown/1.0"
+                )
+        for role in manifest.roles:
+            for reference_key in role.reference_keys:
+                selected_guidance = guidance_documents.get(reference_key)
+                if selected_guidance is not None and role.role.upper() not in set(
+                    selected_guidance.control.applicable_roles
+                ):
+                    raise ControlPlaneError(
+                        "CONTROL_BOOTSTRAP_GUIDANCE_INVALID",
+                        "reviewed guidance does not apply to the assigned role",
+                    )
     actual_settings = settings or Settings.from_environment()
     sessions = build_session_factory(engine)
     publisher = ControlArtifactPublisher(engine, actual_settings)
@@ -267,8 +429,6 @@ def bootstrap_standard_control_plane(
                 enabled=slot.enabled,
                 gpu=slot.gpu,
             )
-
-    platform_payload = _read_member(config_directory, "instructions/platform.md")
     platform_artifact = _publish_markdown(
         publisher,
         payload=platform_payload,
@@ -278,22 +438,42 @@ def bootstrap_standard_control_plane(
         source_commit=source_commit,
         created_at=manifest.created_at,
     )
-    reference_payload = _read_member(config_directory, manifest.reference_path)
-    reference_artifact = _publish_markdown(
-        publisher,
-        payload=reference_payload,
-        logical_name=PurePosixPath(manifest.reference_path).name,
-        schema_ref="eom://schemas/knowledge/reference-markdown/1.0",
-        key="reference-general-knowledge",
-        source_commit=source_commit,
-        created_at=manifest.created_at,
-    )
+    reference_artifacts: dict[str, ControlArtifactPointer] = {}
+    if manifest.schema_version == "standard-control-bootstrap/1.0":
+        if manifest.reference_path is None:
+            raise AssertionError("validated V1 standard manifest lacks its reference")
+        reference_artifacts["general-knowledge-provenance"] = _publish_markdown(
+            publisher,
+            payload=reference_payloads["general-knowledge-provenance"],
+            logical_name=PurePosixPath(manifest.reference_path).name,
+            schema_ref="eom://schemas/knowledge/reference-markdown/1.0",
+            key="reference-general-knowledge",
+            source_commit=source_commit,
+            created_at=manifest.created_at,
+        )
+    else:
+        for reference in manifest.references:
+            artifact_key = (
+                "reference-general-knowledge"
+                if reference.reference_key == "general-knowledge-provenance"
+                else "reference-guide-"
+                + hashlib.sha256(reference.reference_key.encode()).hexdigest()[:16]
+            )
+            reference_artifacts[reference.reference_key] = _publish_markdown(
+                publisher,
+                payload=reference_payloads[reference.reference_key],
+                logical_name=PurePosixPath(reference.materialized_path).name,
+                schema_ref=reference_schema_refs[reference.reference_key],
+                key=artifact_key,
+                source_commit=source_commit,
+                created_at=manifest.created_at,
+            )
 
     instruction_pointers: dict[str, BundleRevisionPointer] = {}
     for role in manifest.roles:
         role_artifact = _publish_markdown(
             publisher,
-            payload=_read_member(config_directory, role.instruction_path),
+            payload=role_payloads[role.role],
             logical_name=PurePosixPath(role.instruction_path).name,
             schema_ref="eom://schemas/workflow/instruction-member/1.0",
             key=f"instruction-{role.role}",
@@ -312,15 +492,61 @@ def bootstrap_standard_control_plane(
             source_commit=source_commit,
             actor_id=actor_id,
             created_at=manifest.created_at,
+            revision_number=(
+                1 if manifest.schema_version == "standard-control-bootstrap/1.0" else 2
+            ),
         )
-    reference_pointer = _publish_reference_bundle(
-        publisher,
-        sessions,
-        reference_artifact=reference_artifact,
-        source_commit=source_commit,
-        actor_id=actor_id,
-        created_at=manifest.created_at,
-    )
+    reference_pointers: dict[str, BundleRevisionPointer] = {}
+    if manifest.schema_version == "standard-control-bootstrap/1.0":
+        reference_pointer = _publish_reference_bundle(
+            publisher,
+            sessions,
+            reference_artifact=reference_artifacts["general-knowledge-provenance"],
+            source_commit=source_commit,
+            actor_id=actor_id,
+            created_at=manifest.created_at,
+        )
+        reference_pointers = {role.role: reference_pointer for role in manifest.roles}
+    else:
+        definitions = {reference.reference_key: reference for reference in manifest.references}
+        for role in manifest.roles:
+            selected_entries: list[dict[str, object]] = []
+            for reference_key in role.reference_keys:
+                definition = definitions[reference_key]
+                selected_guidance = guidance_documents.get(reference_key)
+                provenance_key = (
+                    selected_guidance.control.guidance_key
+                    if selected_guidance is not None
+                    else reference_key
+                )
+                provenance_revision = (
+                    selected_guidance.control.revision if selected_guidance is not None else 1
+                )
+                selected_entries.append(
+                    {
+                        "reference_key": reference_key,
+                        "source_class": "INTERNAL_GUIDE",
+                        "relative_path": definition.materialized_path,
+                        "source_logical_id": _stable_id("internalguide_", provenance_key),
+                        "source_revision_id": _stable_id(
+                            "internalguiderev_",
+                            f"{provenance_key}:v{provenance_revision}",
+                        ),
+                        "rights_policy_revision_id": _stable_id(
+                            "rightsrev_", "internal-guidance:v1"
+                        ),
+                        "artifact": reference_artifacts[reference_key].model_dump(mode="json"),
+                    }
+                )
+            reference_pointers[role.role] = _publish_role_reference_bundle(
+                publisher,
+                sessions,
+                role=role.role,
+                entries=tuple(selected_entries),
+                source_commit=source_commit,
+                actor_id=actor_id,
+                created_at=manifest.created_at,
+            )
     capacity_revision_id = _publish_capacity_policy(
         sessions,
         manifest=manifest,
@@ -341,7 +567,7 @@ def bootstrap_standard_control_plane(
                     {"model": manifest.model, "reasoning_effort": manifest.reasoning_effort}
                 ],
                 "instruction_bundle": instruction_pointers[role.role].model_dump(mode="json"),
-                "reference_bundle": reference_pointer.model_dump(mode="json"),
+                "reference_bundle": reference_pointers[role.role].model_dump(mode="json"),
                 "worker_pool_key": role.worker_pool_key,
                 "timeout_seconds": role.timeout_seconds,
                 "sandbox": "read-only",
@@ -384,7 +610,14 @@ def bootstrap_standard_control_plane(
                 instruction_bundle_revision_ids=tuple(
                     instruction_pointers[role.role].bundle_revision_id for role in manifest.roles
                 ),
-                reference_bundle_revision_id=reference_pointer.bundle_revision_id,
+                reference_bundle_revision_id=(
+                    reference_pointers[manifest.roles[0].role].bundle_revision_id
+                    if manifest.schema_version == "standard-control-bootstrap/1.0"
+                    else None
+                ),
+                role_reference_bundle_revision_ids=tuple(
+                    reference_pointers[role.role].bundle_revision_id for role in manifest.roles
+                ),
                 auth_binding_ids=binding_ids,
                 evaluation_id=existing_evaluation.evaluation_id,
                 source_commit=source_commit,
@@ -438,7 +671,14 @@ def bootstrap_standard_control_plane(
         instruction_bundle_revision_ids=tuple(
             instruction_pointers[role.role].bundle_revision_id for role in manifest.roles
         ),
-        reference_bundle_revision_id=reference_pointer.bundle_revision_id,
+        reference_bundle_revision_id=(
+            reference_pointers[manifest.roles[0].role].bundle_revision_id
+            if manifest.schema_version == "standard-control-bootstrap/1.0"
+            else None
+        ),
+        role_reference_bundle_revision_ids=tuple(
+            reference_pointers[role.role].bundle_revision_id for role in manifest.roles
+        ),
         auth_binding_ids=binding_ids,
         evaluation_id=evaluation.evaluation_id,
         source_commit=source_commit,
@@ -810,6 +1050,70 @@ def _publish_reference_bundle(
     )
 
 
+def _publish_role_reference_bundle(
+    publisher: ControlArtifactPublisher,
+    sessions: sessionmaker[Session],
+    *,
+    role: str,
+    entries: tuple[dict[str, object], ...],
+    source_commit: str,
+    actor_id: str,
+    created_at: datetime,
+) -> BundleRevisionPointer:
+    """Publish one immutable role-specific guidance view without duplicating source artifacts."""
+
+    if role not in EXPECTED_ROLE_SLOTS or not entries:
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_INVALID", "role-specific reference bundle input is invalid"
+        )
+    identity_key = f"standard-item:{role}:guidance"
+    bundle_id = _stable_id("refbundle_", identity_key)
+    revision_id = _stable_id("refrev_", f"{identity_key}:v1")
+    document: dict[str, object] = {
+        "schema_version": "reference-bundle-manifest/1.0",
+        "bundle_id": bundle_id,
+        "bundle_revision_id": revision_id,
+        "revision_number": 1,
+        "state": "RELEASED",
+        "entries": list(entries),
+        "content_sha256": "sha256:" + "0" * 64,
+        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+    }
+    document["content_sha256"] = compute_control_document_hash(document, "content_sha256")
+    payload = canonical_json_bytes(document) + b"\n"
+    manifest = publisher.publish_bytes(
+        payload=payload,
+        logical_name="reference-bundle.json",
+        schema_ref="eom://schemas/workflow/reference-bundle-manifest/1.0",
+        media_type="application/json",
+        artifact_type="control_reference_bundle",
+        idempotency_key=(
+            f"control-bootstrap:reference-bundle:{hashlib.sha256(payload).hexdigest()}"
+        ),
+        created_at=created_at,
+        source_commit=source_commit,
+    ).pointer
+    with transaction(sessions) as session:
+        revision = record_bundle_revision(
+            session,
+            bundle_key=f"standard-item-{role}-guidance",
+            manifest_artifact=manifest,
+            document=document,
+            created_by=actor_id,
+        )
+        publish_bundle_revision(
+            session,
+            bundle_id=revision.bundle_id,
+            bundle_revision_id=revision.bundle_revision_id,
+        )
+    return BundleRevisionPointer(
+        bundle_id=bundle_id,
+        bundle_revision_id=revision_id,
+        manifest_artifact=manifest,
+        manifest_sha256=manifest.sha256,
+    )
+
+
 def _publish_capacity_policy(
     sessions: sessionmaker[Session], *, manifest: StandardBootstrapManifest, actor_id: str
 ) -> str:
@@ -832,6 +1136,45 @@ def _publish_capacity_policy(
             "max_active": 1,
         }
     )
+    with sessions() as session:
+        logical = session.get(WorkerCapacityPolicyRecord, policy_id)
+        existing = session.get(WorkerCapacityPolicyRevisionRecord, revision_id)
+        if existing is not None:
+            try:
+                existing_model = WorkerCapacityPolicy.model_validate(existing.canonical_document)
+            except ValueError as exc:
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_HISTORY_INVALID",
+                    "fixed-host capacity policy history is invalid",
+                ) from exc
+            expected_pools = tuple(pools)
+            actual_pools = tuple(pool.model_dump(mode="json") for pool in existing_model.pools)
+            if (
+                logical is None
+                or logical.policy_key != "fixed-host"
+                or logical.current_revision_id != revision_id
+                or logical.state != "ACTIVE"
+                or existing.capacity_policy_id != policy_id
+                or existing.state != "RELEASED"
+                or existing_model.capacity_policy_id != policy_id
+                or existing_model.capacity_policy_revision_id != revision_id
+                or existing_model.revision_number != 1
+                or existing_model.state != "RELEASED"
+                or existing_model.max_configured_slots != 5
+                or existing_model.max_active_codex != 3
+                or existing_model.max_active_per_slot != 1
+                or existing_model.max_active_gpu != 1
+                or existing_model.max_active_knowledge_analysis != 1
+                or actual_pools != expected_pools
+                or existing.content_sha256 != existing_model.content_sha256
+                or existing.content_sha256
+                != compute_control_document_hash(existing.canonical_document, "content_sha256")
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_HISTORY_INVALID",
+                    "fixed-host capacity policy differs from the reviewed invariant",
+                )
+            return revision_id
     document: dict[str, object] = {
         "schema_version": "worker-capacity-policy/1.0",
         "capacity_policy_id": policy_id,
@@ -945,16 +1288,31 @@ def _find_or_create_draft(
             raise ControlPlaneError("CONTROL_PRESET_RETIRED", "standard preset is retired")
         if logical is not None and logical.current_revision_id is not None:
             current = session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
-            if (
-                current is None
-                or current.state != "RELEASED"
-                or execution_preset_policy_sha256(current.canonical_document)
-                != expected_policy_sha256
-            ):
+            if current is None or current.state != "RELEASED":
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_CONFLICT",
+                    "released standard preset pointer differs",
+                )
+            if execution_preset_policy_sha256(current.canonical_document) == expected_policy_sha256:
+                return current
+            if manifest.schema_version == "standard-control-bootstrap/1.0":
                 raise ControlPlaneError(
                     "CONTROL_BOOTSTRAP_CONFLICT", "released standard preset policy differs"
                 )
-            return current
+        released_matching = [
+            revision
+            for revision in revisions
+            if revision.state == "RELEASED"
+            and execution_preset_policy_sha256(revision.canonical_document)
+            == expected_policy_sha256
+        ]
+        if len(released_matching) > 1:
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_CONFLICT",
+                "standard preset has duplicate released policy revisions",
+            )
+        if released_matching:
+            return released_matching[0]
         matching = [
             revision
             for revision in revisions
@@ -962,7 +1320,19 @@ def _find_or_create_draft(
             and execution_preset_policy_sha256(revision.canonical_document)
             == expected_policy_sha256
         ]
-        if len(matching) > 1 or (revisions and not matching):
+        other_drafts = [revision for revision in revisions if revision.state == "DRAFT"]
+        released_policy_hashes = {
+            execution_preset_policy_sha256(revision.canonical_document)
+            for revision in revisions
+            if revision.state == "RELEASED"
+        }
+        unresolved_other_drafts = [
+            revision
+            for revision in other_drafts
+            if execution_preset_policy_sha256(revision.canonical_document)
+            not in released_policy_hashes
+        ]
+        if len(matching) > 1 or (unresolved_other_drafts and not matching):
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_CONFLICT", "standard preset draft history differs"
             )

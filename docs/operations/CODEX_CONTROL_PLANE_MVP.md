@@ -125,7 +125,9 @@ directory is an operator-time publication input, not a runtime path stored as id
 
 Before execution, validate the case count against the recorded fake-adapter acceptance report. Do
 not estimate or inflate it. Bootstrap is idempotent only for the same reviewed logical keys,
-canonical bytes, hashes, and source commit; a conflicting replay must fail closed.
+canonical bytes and hashes; a conflicting replay must fail closed. When two reviewed source commits
+pin identical content-addressed bytes, the already-approved Artifact Revision is reused after its
+complete member contract is revalidated. Its first-publication provenance is not rewritten.
 
 The bootstrap publishes one approved Artifact Revision for every instruction/reference/evaluation
 member. PostgreSQL stores only typed identities, immutable revision pointers, schema/media types,
@@ -137,6 +139,28 @@ bytes.
 
 The five bindings are intentionally created stale. Bootstrap never reads credentials and never
 claims they are ready.
+
+### 5.1 Standard-item guidance successor
+
+The historical V1 command and bytes above remain valid evidence. New one-item workflows use the
+reviewed role-scoped successor only after its source gates and publication plan pass:
+
+```bash
+/srv/eom/conda/envs/eom-api/bin/eomctl control-plane bootstrap-standard \
+  --config-directory /home/eom/EOM/config/control-plane/standard-item-v2 \
+  --content-directory /home/eom/EOM/content \
+  --source-commit "${SOURCE_COMMIT}" \
+  --actor-id <VALID_OPERATOR_ID> \
+  --evaluation-cases-total 4
+```
+
+V2 reads canonical reviewed guidance from the explicit content directory, validates EOM Guidance
+Markdown V1 and `REVIEWED` role applicability, publishes each source once as an immutable Artifact
+Revision, and creates separate Reference Bundle views for authoring, image, review and registration.
+The reviewed non-live report has exactly four cases, one for each materialized role boundary; the
+count above must not be changed without a new reviewed evaluation.
+The command does not launch Codex. It must not run from a dirty/unpushed source tree or while its
+deployment would restart a service participating in an active slot05 batch.
 
 ## 6. Non-generating observation and fake smoke
 

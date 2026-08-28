@@ -1,7 +1,7 @@
 # Role Guidance and Graph Integration V1
 
-Status: source design; runtime activation intentionally deferred while the current slot05 batch is
-active.
+Status: source design implemented for standard-item V2; runtime activation remains isolated from
+the current slot05 batch.
 
 Decision date: 2026-08-28 UTC
 
@@ -90,12 +90,15 @@ provenance-pinned derivatives now use the separately specified EOM Guidance Mark
 
 | Intake document | Initial canonical class | Intended use | Explicit non-use |
 | --- | --- | --- | --- |
-| 통합과학 모의고사 1회차 배치 방식 | `GUIDANCE` / `INTERNAL_GUIDE` | future assessment-form assembly constraints, coverage and score validation, product usage planning | not a one-item authoring prompt; not attached to current item jobs |
+| 통합과학 모의고사 1회차 배치 방식 | `GUIDANCE` / `INTERNAL_GUIDE` | future assessment-form assembly constraints plus a separately reviewed single-item projection | raw form-level counts are not attached to one-item jobs |
 | 통합과학 일러스트 프롬프트 가이드 통합본 | `GUIDANCE` / `INTERNAL_GUIDE` | image-role visual policy, reusable representation modules, and review-role QA criteria | not copied wholesale into `AGENTS.md`; not automatically trusted because it resembles a prompt |
 
 The mock-exam derivative is
 `content/authoring-rules/integrated-science-mock-exam-assembly-v1.md` and belongs primarily to the
-future assembly layer above “make one item.” The illustration/reference derivative is
+future assembly layer above “make one item.” Its item-applicable projection is
+`content/authoring-rules/integrated-science-single-item-authoring-v1.md`; that distinct guidance
+identity explicitly rejects applying 25-item aggregate constraints to one item. The
+illustration/reference derivative is
 `content/image-specs/kice-integrated-science-illustration-v1.md`. A future compact image-role
 instruction remains a separate artifact; it is not this reference file. Each future registered
 revision must preserve the original source provenance and its own derivative hash.
@@ -252,9 +255,11 @@ workflow protocol, and source topology. This work must not:
 
 Source development and non-live tests are safe because installed services execute the prior clean
 release. Data-analysis guidance activation requires a successor preset/protocol and is deferred
-until the current batch is terminal and its complete coverage evidence is frozen. Authoring/review
-bundle rollout is also kept in one separately reviewed deployment so no shared service restart can
-interrupt slot05.
+until the current batch is terminal and its complete coverage evidence is frozen. Standard-item
+V2 uses only successor Instruction/Reference Bundle and preset revisions; activation must still
+prove that no shared service restart, slot mutation, or source-path runtime dependency can interrupt
+slot05. The concrete publication contract is documented in
+[`STANDARD_ITEM_GUIDANCE_RUNTIME_V2.md`](STANDARD_ITEM_GUIDANCE_RUNTIME_V2.md).
 
 ## 12. Failure and security behavior
 

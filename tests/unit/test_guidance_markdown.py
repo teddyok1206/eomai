@@ -28,6 +28,9 @@ ASSEMBLY_GUIDE = (
 ILLUSTRATION_GUIDE = (
     REPOSITORY_ROOT / "content/image-specs/kice-integrated-science-illustration-v1.md"
 )
+SINGLE_ITEM_GUIDE = (
+    REPOSITORY_ROOT / "content/authoring-rules/integrated-science-single-item-authoring-v1.md"
+)
 
 
 def test_guidance_control_schema_is_canonical_packaged_and_pinned() -> None:
@@ -101,6 +104,34 @@ def test_derivatives_preserve_source_intent_and_do_not_claim_runtime_authority()
     assert "원자 수" in illustration_rules["VIS-MUST-019"].rule
     assert "비요청 변경" in illustration_rules["VIS-MUSTNOT-012"].title
     assert "아직 runtime schema가 아니다" in illustration.text
+
+
+def test_single_item_derivative_uses_both_role_boundaries_without_form_level_leakage() -> None:
+    single_item = parse_guidance_markdown(SINGLE_ITEM_GUIDE.read_bytes())
+
+    assert single_item.control.status == "REVIEWED"
+    assert single_item.control.guidance_type == "AUTHORING_REFERENCE"
+    assert single_item.control.applicable_roles == ("AUTHORING", "REVIEW")
+    assert single_item.control.source_provenance.original_sha256 == (
+        "sha256:f7c4f066429eeb65041c9a12ae7a807df4932a5dde3799eec6f97dabc9e2b610"
+    )
+    assert hashlib.sha256(SINGLE_ITEM_GUIDE.read_bytes()).hexdigest() == (
+        "00e3334573b120bf7f6f5c05aba28e58c4b2f0421a34705d15641cd5737accbc"
+    )
+    rules = {rule.rule_id: rule for rule in single_item.rules}
+    assert len(rules) == 10
+    assert "선택 교육과정" in rules["SIA-MUST-001"].title
+    assert "시각 자료" in rules["SIA-MUST-007"].title
+    assert "평가 행동" in rules["SIA-MUST-008"].title
+    assert "복수 성취기준" in rules["SIA-MUST-009"].title
+    assert "회차 집계" in rules["SIA-MUSTNOT-010"].title
+    assert "25문항" in rules["SIA-MUSTNOT-010"].rule
+    assert "탐구 수행 및 자료 수집" in single_item.text
+    assert "자료 변환 및 해석" in single_item.text
+    assert "결론 도출 및 일반화" in single_item.text
+    assert "의사소통" in single_item.text
+    assert "1.5점 / 2.0점 / 2.5점" in single_item.text
+    assert "assembly" in single_item.text
 
 
 def test_control_schema_rejects_execution_authority_and_unknown_fields() -> None:
