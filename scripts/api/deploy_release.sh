@@ -43,6 +43,14 @@ fail() {
   exit 1
 }
 
+prepare_runtime_dependencies() {
+  getent group eom-codex-auth >/dev/null || \
+    fail "eom-codex-auth identity must be deployed before the API unit"
+  sudo -n /usr/bin/bash "${REPOSITORY_ROOT}/scripts/api/migrate_release.sh" \
+    --verify "${COMMIT}"
+  sudo -n /usr/bin/bash "${REPOSITORY_ROOT}/scripts/api/bootstrap_runtime_role.sh"
+}
+
 cleanup() {
   if [[ -n "${STAGING_ROOT}" && -d "${STAGING_ROOT}" ]]; then
     rm -rf "${STAGING_ROOT}"
@@ -1018,6 +1026,7 @@ case "${ACTION}" in
     ;;
   install)
     sudo -n true || fail "noninteractive privileged access is required before installation"
+    prepare_runtime_dependencies
     build_release
     install_wheels
     install_service

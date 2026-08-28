@@ -74,6 +74,11 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert all(re.search(r"(^|[;&|]\s*)sudo\s+-n(?:\s|$)", command) for command in sudo_commands)
     assert not any("sudo -v" in command for command in commands)
     assert 'EXPECTED_BRANCHES=("main"' in source
+    assert "prepare_runtime_dependencies\n    build_release" in source
+    assert "eom-codex-auth identity must be deployed before the API unit" in source
+    assert 'scripts/api/migrate_release.sh"' in source
+    assert '--verify "${COMMIT}"' in source
+    assert 'scripts/api/bootstrap_runtime_role.sh"' in source
 
 
 def test_all_release_builders_accept_reviewed_main_commits() -> None:
