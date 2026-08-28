@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 import yaml
@@ -12,6 +13,11 @@ from eom_observe.errors import ObserveError, ObserveErrorCode
 
 DEFAULT_CONFIG_PATH = Path("/etc/eom/observe.yaml")
 DEFAULT_SECRET_PATH = Path("/etc/eom/secrets/observe.env")
+_SECRET_ENV_KEYS = (
+    "EOM_OBSERVE_DATABASE_URL",
+    "EOM_OBSERVE_ACCESS_TOKEN_HASH",
+    "EOM_OBSERVE_SESSION_SECRET",
+)
 
 
 class StrictSettingsModel(BaseModel):
@@ -127,8 +133,18 @@ def load_settings(path: Path | None = None) -> ObserveSettings:
 
 
 def load_secrets(path: Path | None = None) -> ObserveSecrets:
-    secret_path = path or Path(os.environ.get("EOM_OBSERVE_SECRET_FILE", DEFAULT_SECRET_PATH))
-    values = parse_environment_file(secret_path)
+    values: Mapping[str, str | None]
+    if path is not None:
+        values = parse_environment_file(path)
+    else:
+        environment_values = {key: os.environ.get(key) for key in _SECRET_ENV_KEYS}
+        if any(value is not None for value in environment_values.values()):
+            # systemd reads the protected EnvironmentFile before dropping privileges.
+            # Never combine a partial process environment with file-backed secrets.
+            values = environment_values
+        else:
+            secret_path = Path(os.environ.get("EOM_OBSERVE_SECRET_FILE", DEFAULT_SECRET_PATH))
+            values = parse_environment_file(secret_path)
     mapped = {
         "database_url": values.get("EOM_OBSERVE_DATABASE_URL"),
         "access_token_hash": values.get("EOM_OBSERVE_ACCESS_TOKEN_HASH"),

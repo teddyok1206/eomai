@@ -14,6 +14,7 @@ pytest.importorskip("eom_observe")
 from eom_observe.auth import LoginRateLimiter
 from eom_observe.build_info import get_build_info
 from eom_observe.cli import rotate_token
+from eom_observe.errors import ObserveError, ObserveErrorCode
 from eom_observe.event_mapper import merge_events, role_node
 from eom_observe.logging import JsonFormatter
 from eom_observe.redaction import (
@@ -28,7 +29,7 @@ from eom_observe.security import (
     hash_access_token,
     verify_access_token,
 )
-from eom_observe.settings import parse_environment_file
+from eom_observe.settings import load_secrets, parse_environment_file
 from eom_observe.snapshot import canonical_snapshot_hash
 from eom_observe.state_derivation import derive_edges, derive_nodes
 from eom_observe.stream import SharedSnapshotPoller, StreamMessage, SubscriptionHub, format_sse
@@ -309,6 +310,38 @@ def test_rotate_token_replaces_hash_and_writes_one_time_file(tmp_path: Path) -> 
     assert verify_access_token(token, rotated["EOM_OBSERVE_ACCESS_TOKEN_HASH"])
     assert output_path.stat().st_mode & 0o777 == 0o600
     assert secret_path.stat().st_mode & 0o777 == 0o640
+
+
+def test_load_secrets_prefers_complete_systemd_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("EOM_OBSERVE_SECRET_FILE", str(tmp_path / "missing.env"))
+    monkeypatch.setenv("EOM_OBSERVE_DATABASE_URL", "postgresql://runtime@example/eom")
+    monkeypatch.setenv("EOM_OBSERVE_ACCESS_TOKEN_HASH", "a" * 64)
+    monkeypatch.setenv("EOM_OBSERVE_SESSION_SECRET", "b" * 43)
+
+    secrets = load_secrets()
+
+    assert secrets.database_url == "postgresql://runtime@example/eom"
+
+
+def test_load_secrets_rejects_partial_systemd_environment_without_file_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    secret_path = tmp_path / "observe.env"
+    secret_path.write_text(
+        "EOM_OBSERVE_DATABASE_URL=postgresql://file@example/eom\n"
+        f"EOM_OBSERVE_ACCESS_TOKEN_HASH={'a' * 64}\n"
+        f"EOM_OBSERVE_SESSION_SECRET={'b' * 43}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("EOM_OBSERVE_SECRET_FILE", str(secret_path))
+    monkeypatch.setenv("EOM_OBSERVE_DATABASE_URL", "postgresql://runtime@example/eom")
+
+    with pytest.raises(ObserveError) as error:
+        load_secrets()
+
+    assert error.value.code is ObserveErrorCode.OBSERVE_SECRET_MISSING
 
 
 def test_signed_session_and_expiration() -> None:
