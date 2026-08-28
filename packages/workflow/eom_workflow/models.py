@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from datetime import datetime, timedelta
 from enum import StrEnum
 from itertools import pairwise
@@ -371,6 +372,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.9.0",
         "workflow-role/1.10.0",
         "workflow-role/1.11.0",
+        "workflow-role/1.12.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -454,6 +456,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.9.0",
         "workflow-role/1.10.0",
         "workflow-role/1.11.0",
+        "workflow-role/1.12.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -579,6 +582,34 @@ class GeneratedImageBrief(FrozenModel):
         return self
 
 
+def _validate_generated_item_template_contract(
+    *,
+    stem: ParagraphBlock,
+    data_table: TableBlock,
+    equation: EquationBlock,
+    prompt: ParagraphBlock,
+    statements: StatementSetBlock,
+    interaction: SingleChoiceInteraction,
+    score: ItemScore,
+) -> None:
+    if stem.purpose != "stem" or data_table.purpose != "data":
+        raise ValueError("generated item stem or data table purpose is invalid")
+    if equation.purpose != "stimulus" or equation.notation != "hancom-equation-script":
+        raise ValueError("generated item equation contract is invalid")
+    if prompt.purpose != "prompt":
+        raise ValueError("generated item prompt purpose is invalid")
+    if len(data_table.headers) != 3 or len(data_table.rows) != 1:
+        raise ValueError("generated item table must be 3 columns by 1 row")
+    if len(statements.statements) != 3 or tuple(item.label for item in statements.statements) != (
+        "ㄱ",
+        "ㄴ",
+        "ㄷ",
+    ):
+        raise ValueError("generated item statements must be ordered ㄱ/ㄴ/ㄷ")
+    if len(interaction.choices) != 5 or score.points not in {2, 3}:
+        raise ValueError("generated item choice or score contract is invalid")
+
+
 class GeneratedItemDraft(FrozenModel):
     schema_version: Literal["1.0"] = "1.0"
     locale: Literal["ko-KR"] = "ko-KR"
@@ -595,22 +626,15 @@ class GeneratedItemDraft(FrozenModel):
 
     @model_validator(mode="after")
     def validate_template_shape(self) -> GeneratedItemDraft:
-        if self.stem.purpose != "stem" or self.data_table.purpose != "data":
-            raise ValueError("generated item stem or data table purpose is invalid")
-        if self.equation.purpose != "stimulus" or self.equation.notation != (
-            "hancom-equation-script"
-        ):
-            raise ValueError("generated item equation contract is invalid")
-        if self.prompt.purpose != "prompt":
-            raise ValueError("generated item prompt purpose is invalid")
-        if len(self.data_table.headers) != 3 or len(self.data_table.rows) != 1:
-            raise ValueError("generated item table must be 3 columns by 1 row")
-        if len(self.statements.statements) != 3 or tuple(
-            item.label for item in self.statements.statements
-        ) != ("ㄱ", "ㄴ", "ㄷ"):
-            raise ValueError("generated item statements must be ordered ㄱ/ㄴ/ㄷ")
-        if len(self.interaction.choices) != 5 or self.score.points not in {2, 3}:
-            raise ValueError("generated item choice or score contract is invalid")
+        _validate_generated_item_template_contract(
+            stem=self.stem,
+            data_table=self.data_table,
+            equation=self.equation,
+            prompt=self.prompt,
+            statements=self.statements,
+            interaction=self.interaction,
+            score=self.score,
+        )
         return self
 
 
@@ -705,6 +729,179 @@ class GeneratedRegistrationRoleResultV4(RoleResultBase):
     output: KnowledgeRegistrationOutput
 
 
+class GeneratedLineGraphImageBriefV5(GeneratedImageBrief):
+    production_route: Literal["DETERMINISTIC_SVG"] = "DETERMINISTIC_SVG"
+    background_style: Literal["WHITE", "GRID", "PAPER"] = "WHITE"
+
+
+class GeneratedVectorImageBriefV5(FrozenModel):
+    kind: Literal["diagram", "apparatus", "map", "particle_model", "natural_scene", "composite"]
+    production_route: Literal[
+        "DETERMINISTIC_SVG", "LOCAL_GENERATIVE_BACKGROUND", "HUMAN_REVIEWED_BACKGROUND"
+    ]
+    background_style: Literal["WHITE", "GRID", "PAPER"]
+    block_id: Literal["block_image"] = "block_image"
+    alt_text: str = Field(min_length=1, max_length=1000)
+    scene_description: str = Field(min_length=1, max_length=4000)
+    scientific_constraints: tuple[str, ...] = Field(min_length=1, max_length=16)
+    required_labels: tuple[str, ...] = Field(max_length=16)
+    generation_prompt: str = Field(min_length=1, max_length=4000)
+    negative_prompt: str | None = Field(default=None, max_length=2000)
+
+    @field_validator(
+        "alt_text",
+        "scene_description",
+        "generation_prompt",
+        "negative_prompt",
+        mode="after",
+    )
+    @classmethod
+    def safe_vector_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not _is_safe_generated_vector_text(value, allow_layout=True):
+            raise ValueError("generated vector text contains unsafe whitespace or controls")
+        return value
+
+    @field_validator("scientific_constraints", mode="after")
+    @classmethod
+    def safe_scientific_constraints(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if len(values) != len(set(values)):
+            raise ValueError("generated vector text values must be unique")
+        for value in values:
+            if (
+                not value
+                or len(value) > 500
+                or not _is_safe_generated_vector_text(value, allow_layout=False)
+            ):
+                raise ValueError("generated vector text value is unsafe")
+        return values
+
+    @field_validator("required_labels", mode="after")
+    @classmethod
+    def safe_required_labels(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if len(values) != len(set(values)):
+            raise ValueError("generated vector labels must be unique")
+        if any(
+            not value
+            or len(value) > 64
+            or not _is_safe_generated_vector_text(value, allow_layout=False)
+            for value in values
+        ):
+            raise ValueError("generated vector label is unsafe")
+        return values
+
+
+def _is_safe_generated_vector_text(value: str, *, allow_layout: bool) -> bool:
+    if value != value.strip() or value != unicodedata.normalize("NFC", value):
+        return False
+    return all(
+        (allow_layout and character in "\n\t")
+        or not unicodedata.category(character).startswith("C")
+        for character in value
+    )
+
+
+GeneratedImageBriefV5 = Annotated[
+    GeneratedLineGraphImageBriefV5 | GeneratedVectorImageBriefV5,
+    Field(discriminator="kind"),
+]
+
+
+class GeneratedItemDraftV5(FrozenModel):
+    schema_version: Literal["1.0"] = "1.0"
+    locale: Literal["ko-KR"] = "ko-KR"
+    title: str = Field(min_length=1, max_length=20_000)
+    stem: ParagraphBlock
+    data_table: TableBlock
+    image_brief: GeneratedImageBriefV5
+    equation: EquationBlock
+    prompt: ParagraphBlock
+    statements: StatementSetBlock
+    interaction: SingleChoiceInteraction
+    solution: ItemSolution
+    score: ItemScore
+
+    @model_validator(mode="after")
+    def validate_template_and_references(self) -> GeneratedItemDraftV5:
+        _validate_generated_item_template_contract(
+            stem=self.stem,
+            data_table=self.data_table,
+            equation=self.equation,
+            prompt=self.prompt,
+            statements=self.statements,
+            interaction=self.interaction,
+            score=self.score,
+        )
+        validate_item_reference_contract(
+            block_ids=(
+                self.stem.block_id,
+                self.data_table.block_id,
+                self.image_brief.block_id,
+                self.equation.block_id,
+                self.prompt.block_id,
+                self.statements.block_id,
+            ),
+            statement_ids=tuple(statement.statement_id for statement in self.statements.statements),
+            interaction=self.interaction,
+            solution=self.solution,
+        )
+        return self
+
+
+class GeneratedAuthoringOutputV5(FrozenModel):
+    draft: GeneratedItemDraftV5
+    metadata: KnowledgeAuthoringMetadata
+
+
+class GeneratedAuthoringRoleResultV5(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.12.0"] = "workflow-role/1.12.0"
+    role: Literal["authoring"]
+    output: GeneratedAuthoringOutputV5
+
+
+class GeneratedLineGraphDrawingV5(GeneratedLineGraphImageBriefV5):
+    width_px: Literal[800] = 800
+    height_px: Literal[500] = 500
+    stroke_color: Literal["blue", "green", "orange"]
+    point_style: Literal["circle", "square"]
+
+
+class GeneratedVectorDrawingV5(GeneratedVectorImageBriefV5):
+    width_px: Literal[800] = 800
+    height_px: Literal[500] = 500
+    svg_overlay: str = Field(min_length=64, max_length=65_536)
+
+
+GeneratedDrawingV5 = Annotated[
+    GeneratedLineGraphDrawingV5 | GeneratedVectorDrawingV5,
+    Field(discriminator="kind"),
+]
+
+
+class GeneratedImageOutputV5(FrozenModel):
+    drawing: GeneratedDrawingV5
+    summary: str = Field(min_length=1, max_length=2000)
+
+
+class GeneratedImageRoleResultV5(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.12.0"] = "workflow-role/1.12.0"
+    role: Literal["image"]
+    output: GeneratedImageOutputV5
+
+
+class GeneratedReviewRoleResultV5(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.12.0"] = "workflow-role/1.12.0"
+    role: Literal["review"]
+    output: KnowledgeReviewOutput
+
+
+class GeneratedRegistrationRoleResultV5(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.12.0"] = "workflow-role/1.12.0"
+    role: Literal["item_management"]
+    output: KnowledgeRegistrationOutput
+
+
 class KnowledgeAnalysisProposalOutput(FrozenModel):
     proposal: KnowledgeAnalysisWorkerProposal
 
@@ -794,6 +991,10 @@ RoleResult = (
     | GeneratedImageRoleResultV4
     | GeneratedReviewRoleResultV4
     | GeneratedRegistrationRoleResultV4
+    | GeneratedAuthoringRoleResultV5
+    | GeneratedImageRoleResultV5
+    | GeneratedReviewRoleResultV5
+    | GeneratedRegistrationRoleResultV5
     | KnowledgeAnalysisProposalRoleResult
     | KnowledgeAnalysisProposalRoleResultV2
     | KnowledgeAnalysisProposalRoleResultV3

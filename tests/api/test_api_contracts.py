@@ -106,7 +106,7 @@ def test_knowledge_item_workflow_is_source_optional_but_template_constrained() -
         WorkflowStartRequest.model_validate(request | {"image_mode": "skip"})
 
 
-@pytest.mark.parametrize("definition_version", ["1.3.0", "1.4.0"])
+@pytest.mark.parametrize("definition_version", ["1.3.0", "1.4.0", "1.5.0"])
 def test_generated_item_workflow_requires_image_role_without_a_prebuilt_stimulus(
     definition_version: str,
 ) -> None:
@@ -146,7 +146,7 @@ def test_generated_item_workflow_requires_image_role_without_a_prebuilt_stimulus
 def test_generated_item_accepts_bounded_educational_intent_not_graph_controls() -> None:
     request = {
         "definition_key": "generic-item-development",
-        "definition_version": "1.4.0",
+        "definition_version": "1.5.0",
         "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
         "image_mode": "required",
         "pack_key": "generated-knowledge-item",

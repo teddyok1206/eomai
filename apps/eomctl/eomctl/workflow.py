@@ -145,7 +145,7 @@ def workflow_start(
         raise typer.BadParameter("workflow 1.1.0 requires --pack-key and Intake input")
     if version == "1.2.0" and request.request_name != "KNOWLEDGE_ITEM_REQUEST":
         raise typer.BadParameter("workflow 1.2.0 requires the knowledge-item request contract")
-    if version in {"1.3.0", "1.4.0"} and request.request_name != (
+    if version in {"1.3.0", "1.4.0", "1.5.0"} and request.request_name != (
         "GENERATED_KNOWLEDGE_ITEM_REQUEST"
     ):
         raise typer.BadParameter("generated-item workflow requires its generated request contract")

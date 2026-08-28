@@ -22,6 +22,7 @@ from pydantic import ValidationError
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "config/control-plane/standard-item-v1"
 CONFIG_V2 = ROOT / "config/control-plane/standard-item-v2"
+CONFIG_V3 = ROOT / "config/control-plane/standard-item-v3"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -131,6 +132,25 @@ def test_standard_bootstrap_v2_is_role_scoped_and_preserves_v1_bytes() -> None:
     }
     for relative_path, expected in expected_v1_sha256.items():
         assert hashlib.sha256((CONFIG / relative_path).read_bytes()).hexdigest() == expected
+
+
+def test_standard_bootstrap_v3_selects_the_svg_first_protocol_without_secrets() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V3)
+
+    assert manifest.preset_key == "standard-item"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.12.0",)
+    assert {role.role: role.slot_key for role in manifest.roles} == EXPECTED_ROLE_SLOTS
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V2_REFERENCE_KEYS
+    )
+    source = "\n".join(
+        path.read_text(encoding="utf-8") for path in CONFIG_V3.rglob("*") if path.is_file()
+    ).casefold()
+    assert "deterministic_svg" in source
+    assert all(
+        forbidden not in source
+        for forbidden in ("auth.json", "bearer ", "password=", "token=", "api_key")
+    )
 
 
 def test_standard_bootstrap_v2_rejects_forged_role_reference_selection() -> None:

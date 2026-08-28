@@ -10,12 +10,26 @@ import struct
 import zlib
 from pathlib import Path
 
-from eom_workflow.models import GeneratedLineGraphDrawing
+from eom_workflow.models import (
+    GeneratedLineGraphDrawing,
+    GeneratedLineGraphDrawingV5,
+    GeneratedVectorDrawingV5,
+)
 
 from eom_catalog_service.settings import CatalogSettings, CatalogStagingArea
 from eom_catalog_service.staging import (
     create_catalog_operation_directory,
     require_fixed_catalog_staging_root,
+)
+from eom_catalog_service.vector_stimulus import (
+    SVG_MEMBER,
+    SVG_RENDERER_CONTRACT,
+    RenderedVectorStimulus,
+    compose_vector_svg,
+    rasterize_vector_svg,
+    svg_renderer_provenance,
+    validate_vector_svg_file,
+    write_vector_svg,
 )
 
 PNG_MEMBER = "generated-stimulus.png"
@@ -70,6 +84,53 @@ def render_generated_stimulus(
         os.close(descriptor)
     validate_generated_png(target)
     return target
+
+
+def render_generated_vector_stimulus(
+    settings: CatalogSettings,
+    *,
+    workflow_id: str,
+    result_revision_id: str,
+    drawing: GeneratedLineGraphDrawingV5 | GeneratedVectorDrawingV5,
+) -> RenderedVectorStimulus:
+    """Materialize one V5 SVG-first stimulus beneath Catalog-owned staging."""
+
+    if not workflow_id.startswith("workflow_") or not result_revision_id.startswith("rev_"):
+        raise ValueError("generated vector stimulus identity is invalid")
+    root = require_fixed_catalog_staging_root(settings, CatalogStagingArea.REGISTRY)
+    operation = create_catalog_operation_directory(
+        root,
+        f"generated-vector-{workflow_id}-{result_revision_id}",
+        message="generated vector stimulus staging directory is unsafe",
+    )
+    svg_path = operation / SVG_MEMBER
+    png_path = operation / PNG_MEMBER
+    payload = compose_vector_svg(drawing)
+    if png_path.exists() or png_path.is_symlink():
+        if not svg_path.exists() or svg_path.is_symlink():
+            raise ValueError("generated vector stimulus members are incomplete")
+        validate_vector_svg_file(svg_path, payload)
+        validate_generated_png(png_path)
+        provenance = svg_renderer_provenance()
+        return RenderedVectorStimulus(
+            svg_path,
+            png_path,
+            SVG_RENDERER_CONTRACT,
+            provenance.renderer_version,
+            provenance.renderer_sha256,
+            provenance.font_sha256,
+        )
+    write_vector_svg(svg_path, payload)
+    provenance = rasterize_vector_svg(svg_path, png_path)
+    validate_generated_png(png_path)
+    return RenderedVectorStimulus(
+        svg_path,
+        png_path,
+        SVG_RENDERER_CONTRACT,
+        provenance.renderer_version,
+        provenance.renderer_sha256,
+        provenance.font_sha256,
+    )
 
 
 def validate_generated_png(path: Path) -> None:

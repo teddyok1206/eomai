@@ -16,15 +16,20 @@ from eom_catalog_contracts import (
     validate_eom_question_template_content,
 )
 from eom_content_pack import ContentPackError, ContentPackErrorCode, render_prompt
-from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_item_registry import ComponentPointer, RegistrationRequest
 from eom_orchestrator.database import build_session_factory
 from eom_workflow import ArtifactPointer, ItemBriefV2, WorkflowRequest
 from eom_workflow.models import (
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
+    GeneratedAuthoringRoleResultV5,
     GeneratedImageRoleResult,
     GeneratedImageRoleResultV4,
+    GeneratedImageRoleResultV5,
+    GeneratedLineGraphDrawing,
+    GeneratedLineGraphDrawingV5,
+    GeneratedVectorDrawingV5,
     KnowledgeAuthoringRoleResult,
     RoleResult,
 )
@@ -44,6 +49,7 @@ from eom_catalog_service.generated_stimulus import (
     PNG_MEMBER,
     PNG_WIDTH,
     render_generated_stimulus,
+    render_generated_vector_stimulus,
 )
 from eom_catalog_service.knowledge_stimulus import KnowledgeStimulusService
 from eom_catalog_service.models import (
@@ -60,6 +66,12 @@ from eom_catalog_service.staging import (
     create_catalog_operation_directory,
     require_catalog_runtime_directory,
     stage_registry_item_content,
+)
+from eom_catalog_service.vector_stimulus import (
+    SVG_FONT_FAMILY,
+    SVG_MEDIA_TYPE,
+    SVG_MEMBER,
+    SVG_RENDERER_CONTRACT,
 )
 
 ROLE_PROFILE_KEYS = {
@@ -92,6 +104,10 @@ ROLE_BY_RESULT_SCHEMA = {
     "image-result@4.0": "image",
     "review-result@4.0": "review",
     "registration-result@4.0": "item_management",
+    "authoring-result@5.0": "authoring",
+    "image-result@5.0": "image",
+    "review-result@5.0": "review",
+    "registration-result@5.0": "item_management",
     "knowledge-analysis-proposal-result@1.0": "support",
     "knowledge-analysis-proposal-result@2.0": "support",
     "knowledge-analysis-proposal-result@3.0": "support",
@@ -105,10 +121,46 @@ GENERATED_RESULT_SCHEMA_PAIRS = frozenset(
     {
         ("authoring-result@3.0", "image-result@3.0"),
         ("authoring-result@4.0", "image-result@4.0"),
+        ("authoring-result@5.0", "image-result@5.0"),
     }
 )
 GENERATED_AUTHORING_SCHEMAS = frozenset(pair[0] for pair in GENERATED_RESULT_SCHEMA_PAIRS)
 GENERATED_IMAGE_SCHEMAS = frozenset(pair[1] for pair in GENERATED_RESULT_SCHEMA_PAIRS)
+
+
+def _validate_generated_vector_artifact_manifest(
+    manifest: dict[str, Any],
+    *,
+    expected_file_sha256: dict[str, str],
+    file_metadata: dict[str, dict[str, str]],
+    content_hash: str,
+) -> None:
+    files = manifest.get("files")
+    entries = (
+        {entry.get("file_name"): entry for entry in files if isinstance(entry, dict)}
+        if isinstance(files, list)
+        else {}
+    )
+    if (
+        manifest.get("manifest_version") != "generated-item-stimulus-file-set/2.0"
+        or manifest.get("primary_file") != PNG_MEMBER
+        or not isinstance(files, list)
+        or len(files) != len(expected_file_sha256)
+        or len(entries) != len(expected_file_sha256)
+        or set(entries) != set(expected_file_sha256)
+        or content_hash != expected_file_sha256[PNG_MEMBER]
+    ):
+        raise ValueError("generated vector stimulus manifest identity is invalid")
+    for member, expected_hash in expected_file_sha256.items():
+        entry = entries[member]
+        if (
+            entry.get("sha256") != expected_hash
+            or entry.get("schema_ref") != file_metadata[member]["schema_ref"]
+            or entry.get("media_type") != file_metadata[member]["media_type"]
+        ):
+            raise ValueError("generated vector stimulus manifest member is invalid")
+
+
 GENERAL_KNOWLEDGE_SOURCE_MODE: Literal["general_model_knowledge"] = "general_model_knowledge"
 GRAPH_GROUNDED_KNOWLEDGE_SOURCE_MODE: Literal["graph_grounded"] = "graph_grounded"
 
@@ -367,42 +419,107 @@ class WorkflowCatalogService:
         _, authoring_result = self._load_upstream_result(workflow, authoring)
         _, image_result = self._load_upstream_result(workflow, image)
         if not isinstance(
-            authoring_result, GeneratedAuthoringRoleResult | GeneratedAuthoringRoleResultV4
-        ) or not isinstance(image_result, GeneratedImageRoleResult | GeneratedImageRoleResultV4):
+            authoring_result,
+            GeneratedAuthoringRoleResult
+            | GeneratedAuthoringRoleResultV4
+            | GeneratedAuthoringRoleResultV5,
+        ) or not isinstance(
+            image_result,
+            GeneratedImageRoleResult | GeneratedImageRoleResultV4 | GeneratedImageRoleResultV5,
+        ):
             raise ValueError("generated stimulus result types are invalid")
         brief = authoring_result.output.draft.image_brief
         drawing = image_result.output.drawing
-        for field in (
-            "kind",
-            "block_id",
-            "alt_text",
-            "x_axis_label",
-            "y_axis_label",
-            "series_label",
-            "x_values",
-            "y_values",
+        drawing_data = drawing.model_dump(mode="json")
+        for output_only in (
+            "width_px",
+            "height_px",
+            "stroke_color",
+            "point_style",
+            "svg_overlay",
         ):
-            if getattr(brief, field) != getattr(drawing, field):
-                raise ValueError("image worker changed the authoring image brief")
-        source = render_generated_stimulus(
-            self.settings,
-            workflow_id=workflow.workflow_id,
-            result_revision_id=image.revision_id,
-            drawing=drawing,
-        )
+            drawing_data.pop(output_only, None)
+        if brief.model_dump(mode="json") != drawing_data:
+            raise ValueError("image worker changed the authoring image brief")
         drawing_hash = content_sha256(drawing.model_dump(mode="json"))
+        if isinstance(image_result, GeneratedImageRoleResultV5):
+            if not isinstance(drawing, GeneratedLineGraphDrawingV5 | GeneratedVectorDrawingV5):
+                raise ValueError("generated vector drawing type is invalid")
+            rendered = render_generated_vector_stimulus(
+                self.settings,
+                workflow_id=workflow.workflow_id,
+                result_revision_id=image.revision_id,
+                drawing=drawing,
+            )
+            files = {PNG_MEMBER: rendered.png_path, SVG_MEMBER: rendered.svg_path}
+            result = {
+                "drawing_sha256": drawing_hash,
+                "renderer_contract": rendered.renderer_contract,
+                "renderer_version": rendered.renderer_version,
+                "renderer_sha256": rendered.renderer_sha256,
+                "font_family": SVG_FONT_FAMILY,
+                "font_sha256": rendered.font_sha256,
+                "production_route": drawing.production_route,
+            }
+            drawing_schema = "eom.generated-vector-stimulus/2.0"
+            file_metadata = {
+                PNG_MEMBER: {
+                    "schema_ref": "eom://schemas/generated-item/stimulus-png/2.0",
+                    "media_type": "image/png",
+                },
+                SVG_MEMBER: {
+                    "schema_ref": "eom://schemas/generated-item/stimulus-svg/2.0",
+                    "media_type": SVG_MEDIA_TYPE,
+                },
+            }
+            expected_file_sha256 = {name: sha256_file(source) for name, source in files.items()}
+            manifest_version = "generated-item-stimulus-file-set/2.0"
+            artifact_idempotency_key = (
+                f"generated-stimulus:{workflow.workflow_id}:{image.revision_id}:"
+                f"{SVG_RENDERER_CONTRACT}:{drawing_hash}"
+            )
+        else:
+            if not isinstance(drawing, GeneratedLineGraphDrawing):
+                raise ValueError("generated legacy drawing type is invalid")
+            source = render_generated_stimulus(
+                self.settings,
+                workflow_id=workflow.workflow_id,
+                result_revision_id=image.revision_id,
+                drawing=drawing,
+            )
+            files = {PNG_MEMBER: source}
+            result = {"drawing_sha256": drawing_hash}
+            file_metadata = None
+            expected_file_sha256 = None
+            manifest_version = "catalog-file-set/1.0"
+            artifact_idempotency_key = (
+                f"generated-stimulus:{workflow.workflow_id}:{image.revision_id}"
+            )
+            drawing_schema = "eom.generated-line-graph/1.0"
         artifact = self.artifacts.commit_file_set(
-            files={PNG_MEMBER: source},
+            files=files,
             primary_file=PNG_MEMBER,
             artifact_type="generated-item-stimulus",
-            idempotency_key=f"generated-stimulus:{workflow.workflow_id}:{image.revision_id}",
+            idempotency_key=artifact_idempotency_key,
             request={
                 "workflow_id": workflow.workflow_id,
                 "source_result_revision_id": image.revision_id,
-                "drawing_schema": "eom.generated-line-graph/1.0",
+                "drawing_schema": drawing_schema,
             },
-            result={"drawing_sha256": drawing_hash},
+            result=result,
+            file_metadata=file_metadata,
+            manifest_version=manifest_version,
+            expected_file_sha256=expected_file_sha256,
         )
+        if expected_file_sha256 is not None:
+            if file_metadata is None:
+                raise ValueError("generated vector stimulus metadata is missing")
+            _validate_generated_vector_artifact_manifest(
+                artifact.manifest,
+                expected_file_sha256=expected_file_sha256,
+                file_metadata=file_metadata,
+                content_hash=artifact.content_hash,
+            )
         return GeneratedStimulusPointer(
             artifact_id=artifact.artifact_id,
             artifact_revision_id=artifact.revision_id,
@@ -741,7 +858,12 @@ class WorkflowCatalogService:
     ) -> ComponentPointer:
         authoring, image_result = _generated_result_pointers(artifacts)
         _, parsed = self._load_upstream_result(workflow, authoring)
-        if not isinstance(parsed, GeneratedAuthoringRoleResult | GeneratedAuthoringRoleResultV4):
+        if not isinstance(
+            parsed,
+            GeneratedAuthoringRoleResult
+            | GeneratedAuthoringRoleResultV4
+            | GeneratedAuthoringRoleResultV5,
+        ):
             raise ValueError("generated authoring result type is invalid")
         stimulus = workflow.runtime_context.get("generated_stimulus")
         if (

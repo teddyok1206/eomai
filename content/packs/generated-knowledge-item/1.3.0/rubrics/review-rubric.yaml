@@ -1,0 +1,9 @@
+schema_version: "1.0"
+rubric_key: "GENERAL_KNOWLEDGE_TEMPLATE_REVIEW"
+checks:
+  - key: "SCIENTIFIC_CORRECTNESS"
+    severity: "BLOCKING"
+    description: "지문, 자료, 진술, 정답 및 해설이 과학적으로 일관되는지 확인한다."
+  - key: "TEMPLATE_COMPATIBILITY"
+    severity: "BLOCKING"
+    description: "고정 EOM 문항 템플릿 구조와 포인터 계약을 확인한다."

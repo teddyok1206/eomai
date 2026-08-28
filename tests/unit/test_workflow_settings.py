@@ -109,7 +109,8 @@ def test_runner_configuration_installer_has_narrow_operator_scope() -> None:
 
     assert 'WORKFLOW_ROOT="${CONFIG_ROOT}/workflows"' in source
     assert 'PROMPT_ROOT="${CONFIG_ROOT}/workflow-prompts"' in source
-    assert "generic-item-development.v1.4.yaml" in source
+    assert "generic-item-development.v1.5.yaml" in source
+    assert "generic-item-development.v1.4.yaml" not in source
     assert "generic-item-development.v1.3.yaml" not in source
     assert 'install -d -o root -g eom -m 0750 "${WORKFLOW_ROOT}"' in source
     assert 'install -o root -g eom -m 0640 "${source}" "${target}"' in source

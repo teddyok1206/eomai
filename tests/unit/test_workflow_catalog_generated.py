@@ -7,7 +7,12 @@ from typing import Any, cast
 
 import pytest
 from eom_catalog_service.settings import CatalogSettings
-from eom_catalog_service.workflow_catalog import ROLE_BY_RESULT_SCHEMA, WorkflowCatalogService
+from eom_catalog_service.vector_stimulus import RenderedVectorStimulus
+from eom_catalog_service.workflow_catalog import (
+    ROLE_BY_RESULT_SCHEMA,
+    WorkflowCatalogService,
+    _validate_generated_vector_artifact_manifest,
+)
 from eom_identifiers import sha256_file
 from eom_workflow import ArtifactPointer, WorkflowRequest
 from eom_workflow.schemas import ROLE_ALLOWED_RESULT_SCHEMAS
@@ -32,6 +37,8 @@ AUTHORING = _pointer("authoring", "a", "authoring-result@3.0")
 IMAGE = _pointer("image", "b", "image-result@3.0")
 AUTHORING_V4 = _pointer("authoring", "e", "authoring-result@4.0")
 IMAGE_V4 = _pointer("image", "f", "image-result@4.0")
+AUTHORING_V5 = _pointer("authoring", "6", "authoring-result@5.0")
+IMAGE_V5 = _pointer("image", "7", "image-result@5.0")
 
 
 def _image_brief() -> dict[str, object]:
@@ -194,6 +201,67 @@ def _image_result_v4() -> dict[str, object]:
     return cast(dict[str, object], result)
 
 
+def _vector_brief_v5() -> dict[str, object]:
+    return {
+        "kind": "apparatus",
+        "production_route": "DETERMINISTIC_SVG",
+        "background_style": "WHITE",
+        "block_id": "block_image",
+        "alt_text": "비커와 온도계를 사용한 가열 실험 장치",
+        "scene_description": "비커 안 액체에 온도계를 담그고 아래에서 가열한다.",
+        "scientific_constraints": ["온도계 구부가 비커 바닥에 닿지 않는다."],
+        "required_labels": ["온도계", "비커"],
+        "generation_prompt": "교과서형 흑백 선화 실험 장치를 그린다.",
+        "negative_prompt": None,
+    }
+
+
+def _authoring_result_v5() -> dict[str, object]:
+    result = json.loads(json.dumps(_authoring_result_v4()))
+    result["protocol_version"] = "workflow-role/1.12.0"
+    result["job_id"] = AUTHORING_V5.job_id
+    result["artifact"]["logical_artifact_id"] = AUTHORING_V5.logical_artifact_id
+    result["artifact"]["revision_id"] = AUTHORING_V5.revision_id
+    result["output"]["draft"]["image_brief"] = _vector_brief_v5()
+    return cast(dict[str, object], result)
+
+
+def _image_result_v5() -> dict[str, object]:
+    drawing = {
+        **_vector_brief_v5(),
+        "width_px": 800,
+        "height_px": 500,
+        "svg_overlay": (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" '
+            'viewBox="0 0 800 500">'
+            '<rect fill="none" height="220" stroke="#000000" stroke-width="4" '
+            'width="280" x="270" y="170"></rect>'
+            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            'x="445" y="100">온도계</text>'
+            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            'x="360" y="430">비커</text>'
+            "</svg>"
+        ),
+    }
+    return {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.12.0",
+        "job_id": IMAGE_V5.job_id,
+        "workflow_id": WORKFLOW_ID,
+        "step_run_id": "steprun_" + "8" * 32,
+        "role": "image",
+        "status": "ok",
+        "artifact": {
+            "logical_artifact_id": IMAGE_V5.logical_artifact_id,
+            "revision_id": IMAGE_V5.revision_id,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+        "output": {"drawing": drawing, "summary": "과학 제약에 맞는 SVG 장치를 설계했다."},
+        "completed_at": "2026-08-28T00:00:01Z",
+    }
+
+
 class _Artifacts:
     def __init__(self, *, changed_y: bool = False) -> None:
         self.values = {
@@ -201,6 +269,8 @@ class _Artifacts:
             IMAGE.revision_id: _image_result(changed_y=changed_y),
             AUTHORING_V4.revision_id: _authoring_result_v4(),
             IMAGE_V4.revision_id: _image_result_v4(),
+            AUTHORING_V5.revision_id: _authoring_result_v5(),
+            IMAGE_V5.revision_id: _image_result_v5(),
         }
         self.commits: list[dict[str, Any]] = []
         self.verified: list[dict[str, str]] = []
@@ -212,10 +282,30 @@ class _Artifacts:
         self.commits.append(values)
         primary = Path(values["files"][values["primary_file"]])
         marker = str(len(self.commits))
+        metadata = values.get("file_metadata") or {}
+        assert set(metadata) in (set(), set(values["files"]))
+        assert all(
+            set(member_metadata) == {"schema_ref", "media_type"}
+            for member_metadata in metadata.values()
+        )
+        manifest = {
+            "manifest_version": values.get("manifest_version", "catalog-file-set/1.0"),
+            "primary_file": values["primary_file"],
+            "files": [
+                {
+                    "file_name": name,
+                    "sha256": sha256_file(Path(source)),
+                    "bytes": Path(source).stat().st_size,
+                    **metadata.get(name, {}),
+                }
+                for name, source in sorted(values["files"].items())
+            ],
+        }
         return SimpleNamespace(
             artifact_id="artifact_" + marker * 32,
             revision_id="rev_" + marker * 32,
             content_hash=sha256_file(primary),
+            manifest=manifest,
         )
 
     def verify_file_pointer(self, **pointer: str) -> None:
@@ -371,6 +461,101 @@ def test_generated_result_schema_families_cannot_be_mixed(tmp_path: Path) -> Non
         )
 
     assert artifacts.commits == []
+
+
+def test_v5_generated_result_commits_svg_and_png_together_before_item_pointer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    svg = tmp_path / "rendered.svg"
+    png = tmp_path / "rendered.png"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"></svg>\n', encoding="utf-8")
+    png.write_bytes(b"bounded-png-fixture")
+
+    def render(*_args: object, **_kwargs: object) -> RenderedVectorStimulus:
+        return RenderedVectorStimulus(
+            svg,
+            png,
+            "eom-safe-svg-compositor/1.0",
+            "rsvg-convert version 2.58.0",
+            "sha256:" + "a" * 64,
+            "sha256:" + "b" * 64,
+        )
+
+    monkeypatch.setattr(
+        "eom_catalog_service.workflow_catalog.render_generated_vector_stimulus",
+        render,
+    )
+    media = service.materialize_generated_stimulus(
+        workflow=_workflow(), artifacts=(AUTHORING_V5, IMAGE_V5)
+    )
+    workflow = _workflow({"generated_stimulus": media.as_dict()})
+    component = service._generated_knowledge_item_content(
+        workflow, _request(), (AUTHORING_V5, IMAGE_V5)
+    )
+
+    assert component.component_type == "ITEM_CONTENT"
+    stimulus = artifacts.commits[0]
+    assert stimulus["primary_file"] == "generated-stimulus.png"
+    assert set(stimulus["files"]) == {"generated-stimulus.png", "generated-stimulus.svg"}
+    assert stimulus["result"]["renderer_contract"] == "eom-safe-svg-compositor/1.0"
+    assert stimulus["result"]["renderer_version"] == "rsvg-convert version 2.58.0"
+    assert stimulus["result"]["renderer_sha256"] == "sha256:" + "a" * 64
+    assert stimulus["result"]["font_family"] == "Droid Sans Fallback"
+    assert stimulus["result"]["font_sha256"] == "sha256:" + "b" * 64
+    assert stimulus["result"]["production_route"] == "DETERMINISTIC_SVG"
+    assert stimulus["manifest_version"] == "generated-item-stimulus-file-set/2.0"
+    assert stimulus["idempotency_key"].startswith(
+        f"generated-stimulus:{WORKFLOW_ID}:{IMAGE_V5.revision_id}:eom-safe-svg-compositor/1.0:"
+    )
+    assert stimulus["expected_file_sha256"] == {
+        name: sha256_file(Path(source)) for name, source in stimulus["files"].items()
+    }
+    assert stimulus["file_metadata"] == {
+        "generated-stimulus.png": {
+            "schema_ref": "eom://schemas/generated-item/stimulus-png/2.0",
+            "media_type": "image/png",
+        },
+        "generated-stimulus.svg": {
+            "schema_ref": "eom://schemas/generated-item/stimulus-svg/2.0",
+            "media_type": "image/svg+xml",
+        },
+    }
+
+
+def test_v5_generated_stimulus_reentry_rejects_a_changed_sidecar_hash() -> None:
+    hashes = {
+        "generated-stimulus.png": "sha256:" + "a" * 64,
+        "generated-stimulus.svg": "sha256:" + "b" * 64,
+    }
+    metadata = {
+        "generated-stimulus.png": {
+            "schema_ref": "eom://schemas/generated-item/stimulus-png/2.0",
+            "media_type": "image/png",
+        },
+        "generated-stimulus.svg": {
+            "schema_ref": "eom://schemas/generated-item/stimulus-svg/2.0",
+            "media_type": "image/svg+xml",
+        },
+    }
+    files = [
+        {"file_name": name, "sha256": value, **metadata[name]} for name, value in hashes.items()
+    ]
+    files[1]["sha256"] = "sha256:" + "c" * 64
+    manifest = {
+        "manifest_version": "generated-item-stimulus-file-set/2.0",
+        "primary_file": "generated-stimulus.png",
+        "files": files,
+    }
+
+    with pytest.raises(ValueError, match="manifest member"):
+        _validate_generated_vector_artifact_manifest(
+            manifest,
+            expected_file_sha256=hashes,
+            file_metadata=metadata,
+            content_hash=hashes["generated-stimulus.png"],
+        )
 
 
 def test_generated_item_content_rejects_mixed_result_schema_families(tmp_path: Path) -> None:

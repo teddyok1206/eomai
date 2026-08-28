@@ -275,6 +275,36 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
         "registration-result@4.0",
     }
 
+    generated_v5_definition = compile_definition(
+        ROOT / "config/workflows/generic-item-development.v1.5.yaml", ROLES
+    )
+    generated_v5_pack = compile_pack(ROOT / "content/packs/generated-knowledge-item/1.3.0")
+    assert generated_v5_definition.definition.definition_version == "1.5.0"
+    assert generated_v5_definition.sha256 == (
+        "sha256:96dc577953fb7af5f14a404aed2e92986e4a3ba36318e54432ae36c113cca65d"
+    )
+    assert [
+        step.result_schema
+        for step in generated_v5_definition.definition.steps
+        if hasattr(step, "result_schema")
+    ] == [
+        "authoring-result@5.0",
+        "image-result@5.0",
+        "review-result@5.0",
+        "registration-result@5.0",
+    ]
+    assert generated_v5_pack.manifest.pack.version == "1.3.0"
+    assert generated_v5_pack.source_tree_sha256 == (
+        "sha256:1a019484e8bbfcfd69f2111c6551ce034e1cd4e811b2b7fe2c710a74dbcd2436"
+    )
+    assert generated_v5_pack.manifest.compatibility.workflow_definitions[0].versions == ("1.5.0",)
+    assert {profile.output_schema_ref for profile in generated_v5_pack.profiles} == {
+        "authoring-result@5.0",
+        "image-result@5.0",
+        "review-result@5.0",
+        "registration-result@5.0",
+    }
+
 
 def test_content_pack_provenance_never_fakes_a_source_pointer() -> None:
     pack_path = ROOT / "content/packs/general-knowledge-item/1.0.0/pack.yaml"

@@ -1,0 +1,751 @@
+{
+  "$defs": {
+    "ArtifactSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "file_name": {
+          "const": "result.json",
+          "type": "string"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "application/json",
+          "type": "string"
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "file_name",
+        "media_type"
+      ],
+      "type": "object"
+    },
+    "Choice": {
+      "additionalProperties": false,
+      "properties": {
+        "choice_id": {
+          "pattern": "^choice_[a-z0-9][a-z0-9_]{0,31}$",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 16,
+          "minLength": 1,
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "choice_id",
+        "label",
+        "text"
+      ],
+      "type": "object"
+    },
+    "EquationBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "type": "string"
+        },
+        "notation": {
+          "const": "hancom-equation-script",
+          "type": "string"
+        },
+        "purpose": {
+          "const": "stimulus",
+          "type": "string"
+        },
+        "source": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9+\\-*/=() ._^]+$",
+          "type": "string"
+        },
+        "type": {
+          "const": "equation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "type",
+        "purpose",
+        "notation",
+        "source"
+      ],
+      "type": "object"
+    },
+    "GeneratedAuthoringOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "draft": {
+          "$ref": "#/$defs/GeneratedItemDraft"
+        },
+        "metadata": {
+          "$ref": "#/$defs/KnowledgeAuthoringMetadata"
+        }
+      },
+      "required": [
+        "draft",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "GeneratedImageBrief": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GeneratedLineGraphImageBriefV5"
+        },
+        {
+          "$ref": "#/$defs/GeneratedVectorImageBriefV5"
+        }
+      ]
+    },
+    "GeneratedItemDraft": {
+      "additionalProperties": false,
+      "properties": {
+        "data_table": {
+          "$ref": "#/$defs/TableBlock"
+        },
+        "equation": {
+          "$ref": "#/$defs/EquationBlock"
+        },
+        "image_brief": {
+          "$ref": "#/$defs/GeneratedImageBrief"
+        },
+        "interaction": {
+          "$ref": "#/$defs/SingleChoiceInteraction"
+        },
+        "locale": {
+          "const": "ko-KR",
+          "type": "string"
+        },
+        "prompt": {
+          "$ref": "#/$defs/PromptParagraph"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "type": "string"
+        },
+        "score": {
+          "$ref": "#/$defs/ItemScore"
+        },
+        "solution": {
+          "$ref": "#/$defs/ItemSolution"
+        },
+        "statements": {
+          "$ref": "#/$defs/StatementSetBlock"
+        },
+        "stem": {
+          "$ref": "#/$defs/StemParagraph"
+        },
+        "title": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "locale",
+        "title",
+        "stem",
+        "data_table",
+        "image_brief",
+        "equation",
+        "prompt",
+        "statements",
+        "interaction",
+        "solution",
+        "score"
+      ],
+      "type": "object"
+    },
+    "GeneratedLineGraphImageBriefV5": {
+      "additionalProperties": false,
+      "properties": {
+        "alt_text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "background_style": {
+          "enum": [
+            "WHITE",
+            "GRID",
+            "PAPER"
+          ],
+          "type": "string"
+        },
+        "block_id": {
+          "const": "block_image",
+          "type": "string"
+        },
+        "kind": {
+          "const": "line_graph",
+          "type": "string"
+        },
+        "production_route": {
+          "const": "DETERMINISTIC_SVG",
+          "type": "string"
+        },
+        "series_label": {
+          "pattern": "^[A-Za-z0-9 ()/_-]{1,24}$",
+          "type": "string"
+        },
+        "x_axis_label": {
+          "pattern": "^[A-Za-z0-9 ()/_-]{1,24}$",
+          "type": "string"
+        },
+        "x_values": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "type": "array"
+        },
+        "y_axis_label": {
+          "pattern": "^[A-Za-z0-9 ()/_-]{1,24}$",
+          "type": "string"
+        },
+        "y_values": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "production_route",
+        "background_style",
+        "block_id",
+        "alt_text",
+        "x_axis_label",
+        "y_axis_label",
+        "series_label",
+        "x_values",
+        "y_values"
+      ],
+      "type": "object"
+    },
+    "GeneratedVectorImageBriefV5": {
+      "additionalProperties": false,
+      "properties": {
+        "alt_text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "background_style": {
+          "enum": [
+            "WHITE",
+            "GRID",
+            "PAPER"
+          ],
+          "type": "string"
+        },
+        "block_id": {
+          "const": "block_image",
+          "type": "string"
+        },
+        "generation_prompt": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "diagram",
+            "apparatus",
+            "map",
+            "particle_model",
+            "natural_scene",
+            "composite"
+          ],
+          "type": "string"
+        },
+        "negative_prompt": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "production_route": {
+          "enum": [
+            "DETERMINISTIC_SVG",
+            "LOCAL_GENERATIVE_BACKGROUND",
+            "HUMAN_REVIEWED_BACKGROUND"
+          ],
+          "type": "string"
+        },
+        "required_labels": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "scene_description": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "scientific_constraints": {
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "kind",
+        "production_route",
+        "background_style",
+        "block_id",
+        "alt_text",
+        "scene_description",
+        "scientific_constraints",
+        "required_labels",
+        "generation_prompt",
+        "negative_prompt"
+      ],
+      "type": "object"
+    },
+    "ItemScore": {
+      "additionalProperties": false,
+      "properties": {
+        "points": {
+          "enum": [
+            2,
+            3
+          ],
+          "type": "integer"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "type": "object"
+    },
+    "ItemSolution": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_answers": {
+          "items": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 0,
+          "type": "array"
+        },
+        "authoring_intent": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "correct_choice_ids": {
+          "items": {
+            "pattern": "^choice_[a-z0-9][a-z0-9_]{0,31}$",
+            "type": "string"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "type": "array"
+        },
+        "explanation": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "statement_explanations": {
+          "items": {
+            "$ref": "#/$defs/StatementExplanation"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "correct_choice_ids",
+        "accepted_answers",
+        "explanation",
+        "authoring_intent",
+        "statement_explanations"
+      ],
+      "type": "object"
+    },
+    "KnowledgeAuthoringMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "difficulty": {
+          "enum": [
+            "easy",
+            "medium",
+            "hard"
+          ],
+          "type": "string"
+        },
+        "knowledge_source_mode": {
+          "const": "general_model_knowledge",
+          "type": "string"
+        },
+        "subject": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "topic": {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "topic",
+        "difficulty",
+        "knowledge_source_mode"
+      ],
+      "type": "object"
+    },
+    "ParagraphBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "type": "string"
+        },
+        "purpose": {
+          "enum": [
+            "stem",
+            "prompt",
+            "context"
+          ],
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "paragraph",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "type",
+        "purpose",
+        "text"
+      ],
+      "type": "object"
+    },
+    "PromptParagraph": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "type": "string"
+        },
+        "purpose": {
+          "const": "prompt",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "paragraph",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "type",
+        "purpose",
+        "text"
+      ],
+      "type": "object"
+    },
+    "SingleChoiceInteraction": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/Choice"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        },
+        "type": {
+          "const": "single_choice",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "choices"
+      ],
+      "type": "object"
+    },
+    "Statement": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "enum": [
+            "ㄱ",
+            "ㄴ",
+            "ㄷ"
+          ],
+          "type": "string"
+        },
+        "statement_id": {
+          "pattern": "^statement_[a-z][a-z0-9_]{0,31}$",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "statement_id",
+        "label",
+        "text"
+      ],
+      "type": "object"
+    },
+    "StatementExplanation": {
+      "additionalProperties": false,
+      "properties": {
+        "statement_id": {
+          "pattern": "^statement_[a-z][a-z0-9_]{0,31}$",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "statement_id",
+        "text"
+      ],
+      "type": "object"
+    },
+    "StatementSetBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "type": "string"
+        },
+        "purpose": {
+          "const": "claims",
+          "type": "string"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/$defs/Statement"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "type": {
+          "const": "statement_set",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "type",
+        "purpose",
+        "statements"
+      ],
+      "type": "object"
+    },
+    "StemParagraph": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "type": "string"
+        },
+        "purpose": {
+          "const": "stem",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "paragraph",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "type",
+        "purpose",
+        "text"
+      ],
+      "type": "object"
+    },
+    "TableBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "type": "string"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "headers": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "purpose": {
+          "const": "data",
+          "type": "string"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "type": "array"
+        },
+        "type": {
+          "const": "table",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "type",
+        "purpose",
+        "caption",
+        "headers",
+        "rows"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/workflow/roles/authoring-result-v5.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact": {
+      "$ref": "#/$defs/ArtifactSpec"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "job_id": {
+      "pattern": "^job_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "output": {
+      "$ref": "#/$defs/GeneratedAuthoringOutput"
+    },
+    "protocol_version": {
+      "const": "workflow-role/1.12.0",
+      "type": "string"
+    },
+    "role": {
+      "const": "authoring",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "type": "string"
+    },
+    "status": {
+      "const": "ok",
+      "type": "string"
+    },
+    "step_run_id": {
+      "pattern": "^steprun_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "job_id",
+    "workflow_id",
+    "step_run_id",
+    "status",
+    "artifact",
+    "completed_at",
+    "role",
+    "output"
+  ],
+  "type": "object"
+}
