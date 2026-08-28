@@ -96,7 +96,7 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 112
+    assert len(entries) == 114
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {
@@ -118,11 +118,13 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         "catalog-application-response-v6",
         "catalog-application-request-v6",
         "catalog-application-request-v7",
+        "catalog-application-request-v8",
         "catalog-application-response-v7",
         "catalog-application-response-v8",
         "catalog-application-response-v9",
         "knowledge-analysis-batch-request",
         "knowledge-analysis-batch-request-v2",
+        "knowledge-analysis-batch-request-v3",
         "knowledge-analysis-types-v3",
         "knowledge-analysis-types-v4",
         "knowledge-analysis-request-v3",

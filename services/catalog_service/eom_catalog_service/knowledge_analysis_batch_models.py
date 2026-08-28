@@ -48,6 +48,10 @@ class KnowledgeAnalysisBatchRecord(Base):
             name="ck_knowledge_analysis_batch_review_policy",
         ),
         CheckConstraint(
+            "range_failure_policy IN ('STOP_ON_FIRST_FAILURE','CONTINUE_AND_COLLECT')",
+            name="ck_knowledge_analysis_batch_range_failure_policy",
+        ),
+        CheckConstraint(
             "total_range_count BETWEEN 1 AND 1000",
             name="ck_knowledge_analysis_batch_range_count",
         ),
@@ -82,6 +86,9 @@ class KnowledgeAnalysisBatchRecord(Base):
     risk_policy_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     general_knowledge_mode: Mapped[str] = mapped_column(String(32), nullable=False)
     review_policy: Mapped[str] = mapped_column(String(48), nullable=False)
+    range_failure_policy: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="STOP_ON_FIRST_FAILURE"
+    )
     authorized_by_operator_id: Mapped[str] = mapped_column(
         ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
     )

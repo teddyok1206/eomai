@@ -8,6 +8,7 @@ from eom_catalog_contracts import (
     CreateKnowledgeAnalysisBatchCommand,
     KnowledgeAnalysisBatchRequest,
     KnowledgeAnalysisBatchRequestV2,
+    KnowledgeAnalysisBatchRequestV3,
     validate_contract,
 )
 from eom_identifiers import content_sha256
@@ -86,6 +87,25 @@ def test_v1_rejects_but_v1_1_preserves_an_explicit_unmapped_range() -> None:
     assert parsed.ranges[1].source.curriculum_unit_keys == ("1-(1)",)
 
 
+def test_v1_2_requires_explicit_continue_and_collect_policy() -> None:
+    current = _request()
+    current["schema_version"] = "knowledge-analysis-batch-request/1.2"
+    current["range_failure_policy"] = "CONTINUE_AND_COLLECT"
+    current["ranges"][0]["source"]["curriculum_unit_keys"] = []
+
+    validate_contract("knowledge-analysis-batch-request-v3", current)
+    parsed = KnowledgeAnalysisBatchRequestV3.model_validate(current)
+    assert parsed.range_failure_policy == "CONTINUE_AND_COLLECT"
+    assert parsed.ranges[0].source.curriculum_unit_keys == ()
+
+    invalid = dict(current)
+    invalid["range_failure_policy"] = "IGNORE_FAILURES"
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("knowledge-analysis-batch-request-v3", invalid)
+    with pytest.raises(ValidationError):
+        KnowledgeAnalysisBatchRequestV3.model_validate(invalid)
+
+
 def test_batch_schema_rejects_unknown_fields_before_typed_validation() -> None:
     value = _request()
     value["secret"] = "forbidden"
@@ -151,6 +171,7 @@ def test_batch_schema_canonical_and_packaged_bytes_are_pinned() -> None:
     expected_by_version = {
         "v1": "6050ea59b635cb50e718e76dd92967ddb88f55dede0e67fed3b55376ec65ce7e",
         "v2": "f64c59baa793738cc09dcc264dd0cae0f9d6da702367af4437ef5be0417892dd",
+        "v3": "d81bdd2cc14b6a8277ef80d7c64184861ba63a98cf6a75426de0a8f2726a13b4",
     }
     for version, expected in expected_by_version.items():
         for path in (

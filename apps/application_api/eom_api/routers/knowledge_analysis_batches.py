@@ -15,7 +15,7 @@ from eom_catalog_contracts import (
     CreateKnowledgeAnalysisBatchCommand,
     ExecuteKnowledgeAnalysisRange,
     KnowledgeAnalysisBatchRangeRequestV2,
-    KnowledgeAnalysisBatchRequestV2,
+    KnowledgeAnalysisBatchRequestV3,
     KnowledgeAnalysisBatchSourceRangeV2,
     ReuseAcceptedKnowledgeAnalysisRange,
 )
@@ -79,11 +79,12 @@ def create_knowledge_analysis_batch(
                     ),
                 )
             )
-        batch_request = KnowledgeAnalysisBatchRequestV2(
+        batch_request = KnowledgeAnalysisBatchRequestV3(
             preset_key=body.preset_key,
             general_knowledge_mode=body.general_knowledge_mode,
             risk_policy_revision_id=body.risk_policy_revision_id,
             review_policy=body.review_policy,
+            range_failure_policy=body.range_failure_policy,
             ranges=tuple(ranges),
         )
         canonical = {

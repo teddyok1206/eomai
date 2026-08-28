@@ -1085,6 +1085,7 @@ class QueryAdapter:
             risk_policy_sha256=row.risk_policy_sha256,
             general_knowledge_mode=row.general_knowledge_mode,  # type: ignore[arg-type]
             review_policy=row.review_policy,  # type: ignore[arg-type]
+            range_failure_policy=row.range_failure_policy,  # type: ignore[arg-type]
             authorized_by_operator_id=row.authorized_by_operator_id,
             authorized_at=row.authorized_at,
             state=row.state,  # type: ignore[arg-type]

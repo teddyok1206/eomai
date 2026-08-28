@@ -66,6 +66,7 @@ def _batch_view() -> KnowledgeAnalysisBatchView:
         risk_policy_sha256="sha256:" + "c" * 64,
         general_knowledge_mode="AUXILIARY_UNATTRIBUTED",
         review_policy="PREAUTHORIZED_APPROVE_VALIDATED",
+        range_failure_policy="CONTINUE_AND_COLLECT",
         authorized_by_operator_id=OPERATOR_ID,
         authorized_at=NOW,
         state="QUEUED",
@@ -187,6 +188,7 @@ def _request_body() -> dict[str, object]:
         "general_knowledge_mode": "AUXILIARY_UNATTRIBUTED",
         "risk_policy_revision_id": "analysisriskrev_" + "b" * 32,
         "review_policy": "PREAUTHORIZED_APPROVE_VALIDATED",
+        "range_failure_policy": "CONTINUE_AND_COLLECT",
         "ranges": [
             {
                 "ordinal": 0,
@@ -230,7 +232,8 @@ def test_fresh_admin_authorizes_one_pointer_only_batch_and_replay_is_idempotent(
         assert serialized["request"]["ranges"][0]["source"]["document_revision_id"] == (
             DOCUMENT_REVISION_ID
         )
-        assert serialized["request"]["schema_version"] == ("knowledge-analysis-batch-request/1.1")
+        assert serialized["request"]["schema_version"] == ("knowledge-analysis-batch-request/1.2")
+        assert serialized["request"]["range_failure_policy"] == "CONTINUE_AND_COLLECT"
         assert not ({"session_id", "token", "password"} & set(serialized))
     finally:
         services.engine.dispose()
@@ -252,7 +255,7 @@ def test_batch_creation_preserves_an_explicit_unmapped_textbook_range() -> None:
         assert response.status_code == 202
         command = services.catalog_application.commands[0]
         assert command.request.ranges[0].source.curriculum_unit_keys == ()
-        assert command.request.schema_version == "knowledge-analysis-batch-request/1.1"
+        assert command.request.schema_version == "knowledge-analysis-batch-request/1.2"
     finally:
         services.engine.dispose()
 

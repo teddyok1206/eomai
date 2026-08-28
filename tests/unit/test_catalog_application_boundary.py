@@ -279,6 +279,16 @@ def _unmapped_batch_command() -> CreateKnowledgeAnalysisBatchCommand:
     return CreateKnowledgeAnalysisBatchCommand.model_validate(value)
 
 
+def _continuing_batch_command() -> CreateKnowledgeAnalysisBatchCommand:
+    value = _unmapped_batch_command().model_dump(mode="json")
+    value["request"]["schema_version"] = "knowledge-analysis-batch-request/1.2"
+    value["request"]["range_failure_policy"] = "CONTINUE_AND_COLLECT"
+    value["submission_sha256"] = content_sha256(
+        {"request": value["request"], "requested_by": value["requested_by"]}
+    )
+    return CreateKnowledgeAnalysisBatchCommand.model_validate(value)
+
+
 def _server(tmp_path: Path, *, allowed_uid: int | None = None) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -373,6 +383,12 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
     validate_contract("catalog-application-request-v7", unmapped_batch_request)
     with pytest.raises(JsonSchemaValidationError):
         validate_contract("catalog-application-request-v6", unmapped_batch_request)
+    continuing_batch_request = CatalogApplicationRequest(
+        root=_continuing_batch_command()
+    ).model_dump(mode="json")
+    validate_contract("catalog-application-request-v8", continuing_batch_request)
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("catalog-application-request-v7", continuing_batch_request)
     batch_response = CatalogApplicationResponse(
         status="OK",
         operation="CREATE_KNOWLEDGE_ANALYSIS_BATCH",

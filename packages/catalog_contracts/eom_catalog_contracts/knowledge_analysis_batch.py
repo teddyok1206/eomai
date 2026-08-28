@@ -121,8 +121,20 @@ class KnowledgeAnalysisBatchRequestV2(_KnowledgeAnalysisBatchRequestBase):
     ranges: tuple[KnowledgeAnalysisBatchRangeRequestV2, ...] = Field(min_length=1, max_length=1000)
 
 
+class KnowledgeAnalysisBatchRequestV3(_KnowledgeAnalysisBatchRequestBase):
+    """Batch request that continues after terminal range failures and collects them."""
+
+    schema_version: Literal["knowledge-analysis-batch-request/1.2"] = (
+        "knowledge-analysis-batch-request/1.2"
+    )
+    range_failure_policy: Literal["CONTINUE_AND_COLLECT"] = "CONTINUE_AND_COLLECT"
+    ranges: tuple[KnowledgeAnalysisBatchRangeRequestV2, ...] = Field(min_length=1, max_length=1000)
+
+
 KnowledgeAnalysisBatchRequestValue = Annotated[
-    KnowledgeAnalysisBatchRequest | KnowledgeAnalysisBatchRequestV2,
+    KnowledgeAnalysisBatchRequest
+    | KnowledgeAnalysisBatchRequestV2
+    | KnowledgeAnalysisBatchRequestV3,
     Field(discriminator="schema_version"),
 ]
 

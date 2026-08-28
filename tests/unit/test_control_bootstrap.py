@@ -29,6 +29,7 @@ ANALYSIS_CONFIG_V8 = ROOT / "config/control-plane/knowledge-analysis-v8"
 ANALYSIS_CONFIG_V9 = ROOT / "config/control-plane/knowledge-analysis-v9"
 ANALYSIS_CONFIG_V10 = ROOT / "config/control-plane/knowledge-analysis-v10"
 ANALYSIS_CONFIG_V11 = ROOT / "config/control-plane/knowledge-analysis-v11"
+ANALYSIS_CONFIG_V12 = ROOT / "config/control-plane/knowledge-analysis-v12"
 
 
 def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version() -> None:
@@ -37,7 +38,7 @@ def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version
     )
 
     assert set(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS) == schema_versions
-    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 12))
+    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 13))
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:
@@ -475,6 +476,44 @@ def test_knowledge_analysis_v11_adds_stable_identity_protocol_without_mutating_v
         encoding="utf-8"
     )
     for required in ("stable_key", "<lowercase_node_type>:", "Never reuse a stable key"):
+        assert required in role_instruction
+
+
+def test_knowledge_analysis_v12_closes_edge_references_without_mutating_v11() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V12)
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/12.0"
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    assert manifest.timeout_seconds == 7200
+    assert manifest.compatible_workflow_protocols[-2:] == (
+        "workflow-role/1.10.0",
+        "workflow-role/1.11.0",
+    )
+    expected_v12_sha256 = {
+        "bootstrap.yaml": "11a3e401bfd353838648d080580876eee192c29dc5e31cebc9e12a04e8eed8a3",
+        "instructions/platform.md": (
+            "d89ba7eaffda1580178d215ad510e5401ed268473140cf3c3d53bb7195b9df91"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "93bf41b30a4520fbbcb0e21dc88be0a0a815f4ac96c9237d0d21758728b1b1ea"
+        ),
+    }
+    for relative_path, expected in expected_v12_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V12 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+    assert (ANALYSIS_CONFIG_V12 / "instructions/platform.md").read_bytes() == (
+        ANALYSIS_CONFIG_V11 / "instructions/platform.md"
+    ).read_bytes()
+    role_instruction = (ANALYSIS_CONFIG_V12 / "instructions/knowledge-analysis.md").read_text(
+        encoding="utf-8"
+    )
+    for required in (
+        "Freeze the complete `nodes` array",
+        "closed node-ID map",
+        "Omit the proposed edge before returning",
+        "Never return a dangling edge endpoint",
+    ):
         assert required in role_instruction
 
 

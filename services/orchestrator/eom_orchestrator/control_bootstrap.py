@@ -57,7 +57,7 @@ EXPECTED_ROLE_SLOTS = {
     "item_management": "slot04",
 }
 KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(
-    {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 12)}
+    {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 13)}
 )
 
 
@@ -128,6 +128,7 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
         "knowledge-analysis-control-bootstrap/9.0",
         "knowledge-analysis-control-bootstrap/10.0",
         "knowledge-analysis-control-bootstrap/11.0",
+        "knowledge-analysis-control-bootstrap/12.0",
     ]
     preset_key: Literal["knowledge-analysis"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -162,7 +163,10 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
         expected_protocols: tuple[str, ...]
         if self.schema_version == "knowledge-analysis-control-bootstrap/1.0":
             expected_protocols = ("workflow-role/1.4.0",)
-        elif self.schema_version == "knowledge-analysis-control-bootstrap/11.0":
+        elif self.schema_version in {
+            "knowledge-analysis-control-bootstrap/11.0",
+            "knowledge-analysis-control-bootstrap/12.0",
+        }:
             expected_protocols = (
                 "workflow-role/1.4.0",
                 "workflow-role/1.5.0",

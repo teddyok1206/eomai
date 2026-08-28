@@ -12,6 +12,7 @@ from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
     KnowledgeAnalysisBatchApplicationResult,
+    KnowledgeAnalysisBatchRequestV3,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
@@ -33,7 +34,7 @@ from eom_identifiers import new_knowledge_analysis_batch_id, new_knowledge_analy
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
-from sqlalchemy import Engine, exists, func, select
+from sqlalchemy import Engine, and_, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
@@ -57,6 +58,9 @@ from eom_catalog_service.settings import CatalogSettings
 BATCH_POLL_INTERVAL = timedelta(seconds=2)
 BATCH_ACTION_LEASE = timedelta(seconds=30)
 TERMINAL_ANALYSIS_STATES = frozenset({"ACCEPTED", "REJECTED", "FAILED", "CANCELLED"})
+STOP_ON_FIRST_FAILURE = "STOP_ON_FIRST_FAILURE"
+CONTINUE_AND_COLLECT = "CONTINUE_AND_COLLECT"
+COLLECTED_FAILURE_CODE = "KNOWLEDGE_ANALYSIS_BATCH_RANGE_FAILURES_COLLECTED"
 
 
 class KnowledgeAnalysisBatchServiceError(RuntimeError):
@@ -87,11 +91,11 @@ class KnowledgeAnalysisBatchService:
     ) -> KnowledgeAnalysisBatchApplicationResult:
         """Validate all immutable dependencies and insert one complete aggregate."""
 
-        request_schema = (
-            "knowledge-analysis-batch-request-v2"
-            if command.request.schema_version == "knowledge-analysis-batch-request/1.1"
-            else "knowledge-analysis-batch-request"
-        )
+        request_schema = {
+            "knowledge-analysis-batch-request/1.0": "knowledge-analysis-batch-request",
+            "knowledge-analysis-batch-request/1.1": "knowledge-analysis-batch-request-v2",
+            "knowledge-analysis-batch-request/1.2": "knowledge-analysis-batch-request-v3",
+        }[command.request.schema_version]
         validate_contract(request_schema, command.request.model_dump(mode="json"))
         try:
             with transaction(self.sessions) as session:
@@ -123,6 +127,11 @@ class KnowledgeAnalysisBatchService:
                     risk_policy_sha256=policy.content_sha256,
                     general_knowledge_mode=command.request.general_knowledge_mode,
                     review_policy=command.request.review_policy,
+                    range_failure_policy=(
+                        command.request.range_failure_policy
+                        if isinstance(command.request, KnowledgeAnalysisBatchRequestV3)
+                        else STOP_ON_FIRST_FAILURE
+                    ),
                     authorized_by_operator_id=command.requested_by,
                     authorized_at=command.authorized_at,
                     state="QUEUED",
@@ -448,12 +457,29 @@ class KnowledgeAnalysisBatchService:
                     KnowledgeAnalysisBatchRangeRecord.state == "PENDING",
                     KnowledgeAnalysisBatchRangeRecord.next_action_at <= now,
                     KnowledgeAnalysisBatchRecord.state.in_(("QUEUED", "RUNNING")),
-                    ~exists(
-                        select(1).where(
-                            earlier.batch_id == KnowledgeAnalysisBatchRangeRecord.batch_id,
-                            earlier.ordinal < KnowledgeAnalysisBatchRangeRecord.ordinal,
-                            earlier.state != "ACCEPTED",
-                        )
+                    or_(
+                        and_(
+                            KnowledgeAnalysisBatchRecord.range_failure_policy
+                            == STOP_ON_FIRST_FAILURE,
+                            ~exists(
+                                select(1).where(
+                                    earlier.batch_id == KnowledgeAnalysisBatchRangeRecord.batch_id,
+                                    earlier.ordinal < KnowledgeAnalysisBatchRangeRecord.ordinal,
+                                    earlier.state != "ACCEPTED",
+                                )
+                            ),
+                        ),
+                        and_(
+                            KnowledgeAnalysisBatchRecord.range_failure_policy
+                            == CONTINUE_AND_COLLECT,
+                            ~exists(
+                                select(1).where(
+                                    earlier.batch_id == KnowledgeAnalysisBatchRangeRecord.batch_id,
+                                    earlier.ordinal < KnowledgeAnalysisBatchRangeRecord.ordinal,
+                                    ~earlier.state.in_(("ACCEPTED", "FAILED")),
+                                )
+                            ),
+                        ),
                     ),
                 )
                 .order_by(
@@ -784,7 +810,6 @@ class KnowledgeAnalysisBatchService:
             row.completed_at = datetime.now(UTC)
             row.next_action_at = datetime.now(UTC)
             row.resource_version += 1
-            accepted = self._count_ranges(session, batch.batch_id, "ACCEPTED")
             self._append_event(
                 session,
                 batch=batch,
@@ -794,20 +819,7 @@ class KnowledgeAnalysisBatchService:
                 new_state="ACCEPTED",
                 payload={"analysis_run_id": analysis_run_id},
             )
-            if accepted == batch.total_range_count:
-                prior = batch.state
-                batch.state = "SUCCEEDED"
-                batch.completed_at = datetime.now(UTC)
-                batch.resource_version += 1
-                self._append_event(
-                    session,
-                    batch=batch,
-                    range_id=None,
-                    event_type="BATCH_SUCCEEDED",
-                    prior_state=prior,
-                    new_state="SUCCEEDED",
-                    payload={"accepted_range_count": accepted},
-                )
+            self._terminalize_completed_batch(session, batch=batch)
 
     def _block_submitted_range(
         self,
@@ -880,17 +892,12 @@ class KnowledgeAnalysisBatchService:
         error_code: str,
     ) -> None:
         range_prior = row.state
-        batch_prior = batch.state
         row.state = "FAILED"
         row.error_code = error_code
         row.lease_owner = None
         row.lease_expires_at = None
         row.completed_at = datetime.now(UTC)
         row.resource_version += 1
-        batch.state = "BLOCKED"
-        batch.failure_code = error_code
-        batch.completed_at = datetime.now(UTC)
-        batch.resource_version += 1
         self._append_event(
             session,
             batch=batch,
@@ -898,16 +905,76 @@ class KnowledgeAnalysisBatchService:
             event_type="RANGE_FAILED",
             prior_state=range_prior,
             new_state="FAILED",
-            payload={"error_code": error_code, "ordinal": row.ordinal},
+            payload={
+                "error_code": error_code,
+                "ordinal": row.ordinal,
+                "range_failure_policy": batch.range_failure_policy,
+            },
         )
+        if batch.range_failure_policy == STOP_ON_FIRST_FAILURE:
+            self._block_batch(
+                session,
+                batch=batch,
+                error_code=error_code,
+                range_id=row.range_id,
+            )
+        else:
+            self._terminalize_completed_batch(session, batch=batch)
+
+    def _terminalize_completed_batch(
+        self,
+        session: Session,
+        *,
+        batch: KnowledgeAnalysisBatchRecord,
+    ) -> None:
+        accepted = self._count_ranges(session, batch.batch_id, "ACCEPTED")
+        failed = self._count_ranges(session, batch.batch_id, "FAILED")
+        if accepted + failed != batch.total_range_count:
+            return
+        if failed:
+            self._block_batch(
+                session,
+                batch=batch,
+                error_code=COLLECTED_FAILURE_CODE,
+                range_id=None,
+            )
+            return
+        prior = batch.state
+        batch.state = "SUCCEEDED"
+        batch.failure_code = None
+        batch.completed_at = datetime.now(UTC)
+        batch.resource_version += 1
+        self._append_event(
+            session,
+            batch=batch,
+            range_id=None,
+            event_type="BATCH_SUCCEEDED",
+            prior_state=prior,
+            new_state="SUCCEEDED",
+            payload={"accepted_range_count": accepted},
+        )
+
+    def _block_batch(
+        self,
+        session: Session,
+        *,
+        batch: KnowledgeAnalysisBatchRecord,
+        error_code: str,
+        range_id: str | None,
+    ) -> None:
+        prior = batch.state
+        batch.state = "BLOCKED"
+        batch.failure_code = error_code
+        batch.completed_at = datetime.now(UTC)
+        batch.resource_version += 1
         self._append_event(
             session,
             batch=batch,
             range_id=None,
             event_type="BATCH_BLOCKED",
-            prior_state=batch_prior,
+            prior_state=prior,
             new_state="BLOCKED",
-            payload={"error_code": error_code, "range_id": row.range_id},
+            payload={"error_code": error_code, "range_id": range_id},
         )
 
     @staticmethod

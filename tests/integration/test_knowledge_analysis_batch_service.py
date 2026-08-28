@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisBatchRangeRequestV2,
     KnowledgeAnalysisBatchRequest,
     KnowledgeAnalysisBatchRequestV2,
+    KnowledgeAnalysisBatchRequestV3,
     KnowledgeAnalysisBatchSourceRange,
     KnowledgeAnalysisBatchSourceRangeV2,
     KnowledgeAnalysisRequestV6,
@@ -119,6 +120,34 @@ def _unmapped_batch_command(document_revision_id: str) -> CreateKnowledgeAnalysi
         requested_by=OPERATOR_ID,
         authorized_at=datetime(2026, 8, 26, 1, tzinfo=UTC),
         idempotency_key=f"knowledge-analysis-batch-unmapped:{uuid4().hex}",
+        submission_sha256=content_sha256(canonical),
+    )
+
+
+def _continuing_batch_command(document_revision_id: str) -> CreateKnowledgeAnalysisBatchCommand:
+    request = KnowledgeAnalysisBatchRequestV3(
+        risk_policy_revision_id=POLICY_ID,
+        range_failure_policy="CONTINUE_AND_COLLECT",
+        ranges=tuple(
+            KnowledgeAnalysisBatchRangeRequestV2(
+                ordinal=ordinal,
+                source=KnowledgeAnalysisBatchSourceRangeV2(
+                    document_revision_id=document_revision_id,
+                    first_physical_page=ordinal + 1,
+                    last_physical_page=ordinal + 1,
+                    curriculum_unit_keys=("1-(1)",),
+                ),
+                execution=ExecuteKnowledgeAnalysisRange(),
+            )
+            for ordinal in range(2)
+        ),
+    )
+    canonical = {"request": request.model_dump(mode="json"), "requested_by": OPERATOR_ID}
+    return CreateKnowledgeAnalysisBatchCommand(
+        request=request,
+        requested_by=OPERATOR_ID,
+        authorized_at=datetime(2026, 8, 28, tzinfo=UTC),
+        idempotency_key=f"knowledge-analysis-batch-continuing:{uuid4().hex}",
         submission_sha256=content_sha256(canonical),
     )
 
@@ -498,6 +527,61 @@ def test_batch_failure_blocks_later_ranges_without_retry(
         assert batch.failure_code == "KNOWLEDGE_ANALYSIS_BATCH_RANGE_FAILED"
         assert tuple(row.state for row in ranges) == ("FAILED", "PENDING")
         assert tuple(row.submission_attempts for row in ranges) == (1, 0)
+
+
+def test_continue_and_collect_attempts_later_ranges_then_blocks_once_complete(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    orchestrator_settings, catalog_settings = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, orchestrator_settings)
+    document_revision_id = _document_source(integration_engine, catalog_settings, tmp_path)[1]
+    service = KnowledgeAnalysisBatchService(integration_engine, catalog_settings)
+    created = service.create(_continuing_batch_command(document_revision_id))
+    sessions = build_session_factory(integration_engine)
+
+    for ordinal in range(2):
+        assert service.advance_once(runner_id="batch-runner-collect")
+        with transaction(sessions) as session:
+            row = session.scalar(
+                select(KnowledgeAnalysisBatchRangeRecord).where(
+                    KnowledgeAnalysisBatchRangeRecord.batch_id == created.batch_id,
+                    KnowledgeAnalysisBatchRangeRecord.ordinal == ordinal,
+                )
+            )
+            assert row is not None and row.state == "SUBMITTED"
+            assert row.analysis_run_id is not None
+            run = session.get(KnowledgeAnalysisRunRecord, row.analysis_run_id)
+            assert run is not None
+            run.state = "FAILED"
+            run.error_code = "KNOWLEDGE_ANALYSIS_WORKER_FAILED"
+            run.completed_at = datetime.now(UTC)
+            run.lock_version += 1
+            row.next_action_at = datetime.now(UTC) - timedelta(seconds=1)
+
+        assert service.advance_once(runner_id="batch-runner-collect")
+        with sessions() as session:
+            batch = session.get(KnowledgeAnalysisBatchRecord, created.batch_id)
+            assert batch is not None
+            assert batch.range_failure_policy == "CONTINUE_AND_COLLECT"
+            if ordinal == 0:
+                assert batch.state == "RUNNING"
+                assert batch.failure_code is None
+            else:
+                assert batch.state == "BLOCKED"
+                assert batch.failure_code == ("KNOWLEDGE_ANALYSIS_BATCH_RANGE_FAILURES_COLLECTED")
+
+    assert not service.advance_once(runner_id="batch-runner-collect")
+    with sessions() as session:
+        ranges = tuple(
+            session.scalars(
+                select(KnowledgeAnalysisBatchRangeRecord)
+                .where(KnowledgeAnalysisBatchRangeRecord.batch_id == created.batch_id)
+                .order_by(KnowledgeAnalysisBatchRangeRecord.ordinal)
+            )
+        )
+        assert tuple(row.state for row in ranges) == ("FAILED", "FAILED")
+        assert tuple(row.submission_attempts for row in ranges) == (1, 1)
 
 
 def test_expired_claim_replays_the_same_analysis_create_once(
