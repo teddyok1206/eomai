@@ -58,9 +58,18 @@ One fresh-auth API operation authorizes and creates the complete durable batch. 
 runner subsequently claims one range at a time with its persisted lease and advances it through the
 ordinary Knowledge Analysis service; it neither retains nor manufactures a browser session. A lost
 internal response is recovered only by the existing immutable idempotency key and identical body.
-No failed worker run is automatically retried. A failed range is preserved and blocks that batch;
-recovery requires a separately reviewed new batch or explicit domain operation, never mutation of
-the failed row.
+No failed worker run is automatically retried. Historical batches using
+`STOP_ON_FIRST_FAILURE` preserve the failed range and block immediately. A reviewed successor may
+instead use `CONTINUE_AND_COLLECT`: each failed range remains terminal and immutable while the
+scheduler continues to later ordinals, and the batch becomes `BLOCKED` only after every range is
+terminal. Neither policy turns a failure into acceptance or consumes a second submission attempt.
+
+Recovery always requires a separately reviewed new batch or explicit domain operation, never
+mutation of a failed row. For full-corpus recovery, reconstruct the complete ordered topology,
+reuse every exact accepted run by immutable pointer, execute only failed ranges with their failed
+run pinned as predecessor evidence, and re-verify page coverage and the frozen topology hash before
+submission. This gives one later aggregate that can prove complete coverage without copying
+accepted artifacts or losing failed intervals.
 
 Workflow completion is reconciled through the existing Knowledge Analysis application operation.
 Low-risk proposals may become `ACCEPTED` according to the pinned released risk policy. Any

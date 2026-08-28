@@ -30,6 +30,10 @@ logical Item
 - 승인된 결과를 `assessment-item-content/1.0` Item Revision으로 등록
 - 승인된 EOM 문항 템플릿과 Kordoc 4.9.0을 이용한 HWPX 생성 및 보안 다운로드
 - Workflow, Item, Revision, Artifact, HWPX build의 운영 상태와 이력 조회
+- 5개 출판사 10권의 교과서를 페이지 PNG와 보조 Markdown으로 고정한 후,
+  Slot 05에서 순차적 Knowledge Analysis 수행
+- 출제·검토·자료 분석 역할에 적용할 버전 고정 Markdown guidance 계약과
+  내용 해시 기반 provenance
 - HTTPS BFF, RBAC, CSRF, HttpOnly/Secure cookie, private Unix socket 경계
 
 현재 기본 생성선은 다음 불변 버전을 사용합니다.
@@ -39,12 +43,35 @@ logical Item
 | Workflow | `generic-item-development@1.4.0` |
 | Role protocol | `workflow-role/1.3.0` |
 | Role results | `authoring/image/review/registration-result@4.0` |
-| Content Pack | `generated-knowledge-item@1.1.0` |
+| Content Pack | `generated-knowledge-item@1.2.0` |
 | Canonical item content | `assessment-item-content/1.0` |
 | HWPX delivery profile | `eom-question-template-v1` |
+| Textbook analysis Workflow | `knowledge-analysis@8.0.0` |
+| Textbook analysis role protocol | `workflow-role/1.11.0` |
+| Textbook analysis role result | `knowledge-analysis-proposal-result@8.0` |
 
 이 버전들은 저장된 실행을 다시 해석하지 않도록 제자리에서 변경하지 않습니다. 계약 변경은
 새 Schema, Protocol, Workflow, Content Pack 버전으로 추가합니다.
+
+## 2026-08-28 개발 체크포인트
+
+현재 교과서 Knowledge Analysis는 미래엔·동아출판·비상교육·지학사·천재교육의 통합과학
+I/II 10권, 1,702페이지를 495개의 빈틈없고 중첩 없는 범위로 고정한 상태입니다. 최종 Graph
+공개가 아닌 제한된 배경 분석 레인이며, 각 범위는 반드시 해당 페이지의 손실 없는 PNG를
+Codex에 전달합니다.
+
+- 이전 batch의 검증된 `ACCEPTED` 59개를 불변 증거로 재사용했습니다.
+- 현재 suffix batch는 436개 범위를 `CONTINUE_AND_COLLECT` 정책으로 순차 처리합니다.
+- 중간 실패는 성공으로 바꾸거나 누락하지 않고, 범위·run·workflow·job 포인터와 안정적 오류
+  코드를 보존합니다.
+- 자동 재시도는 없습니다. batch가 끝나면 성공 run은 정확한 Revision으로 재사용하고, 실패
+  범위만 predecessor를 고정한 새 검토·승인된 continuation으로 회수합니다.
+- 495개 범위·1,702페이지가 모두 검증되기 전에는 현 batch를 Graph로 공개하지 않습니다.
+
+이 숫자는 중간 체크포인트이며 실시간 정보의 정본은 Scientific Studio와 PostgreSQL 배치
+상태입니다. 해당 실행의 검증 결과와 회수 경계는
+[`TEXTBOOK_KNOWLEDGE_ANALYSIS_V12_CHECKPOINT.md`](docs/operations/TEXTBOOK_KNOWLEDGE_ANALYSIS_V12_CHECKPOINT.md)에
+기록했습니다.
 
 ## 한 문항이 만들어지는 과정
 
