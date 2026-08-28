@@ -38,6 +38,8 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "deliverables",
     "education_retrieval_access_policy_revisions",
     "education_retrieval_requests",
+    "educational_document_revisions",
+    "educational_documents",
     "evidence_bundle_entries",
     "evidence_bundle_revisions",
     "evidence_bundles",

@@ -63,6 +63,13 @@ def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
     assert batch_tables <= set(READ_TABLES)
     assert batch_tables.isdisjoint(INSERT_TABLES)
     assert batch_tables.isdisjoint(UPDATE_TABLES)
+    educational_document_tables = {
+        "educational_documents",
+        "educational_document_revisions",
+    }
+    assert educational_document_tables <= set(READ_TABLES)
+    assert educational_document_tables.isdisjoint(INSERT_TABLES)
+    assert educational_document_tables.isdisjoint(UPDATE_TABLES)
     for table in (
         "knowledge_corpora",
         "knowledge_corpus_revisions",
