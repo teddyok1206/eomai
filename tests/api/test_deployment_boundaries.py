@@ -347,6 +347,14 @@ def test_release_verifies_curriculum_schema_resources() -> None:
     assert f'"schemas/curriculum/{resource}"' in deployment
 
 
+def test_release_verifies_guidance_schema_resources() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+    resource = "eom-guidance-markdown-control-v1.schema.json"
+
+    assert f'"guidance/{resource}": ' in deployment
+    assert f'"schemas/guidance/{resource}"' in deployment
+
+
 def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
