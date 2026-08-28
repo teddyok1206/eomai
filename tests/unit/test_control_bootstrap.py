@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from eom_orchestrator.control_bootstrap import (
     EXPECTED_ROLE_SLOTS,
+    KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     KnowledgeAnalysisBootstrapManifest,
     StandardBootstrapManifest,
     load_knowledge_analysis_bootstrap_manifest,
@@ -27,6 +29,15 @@ ANALYSIS_CONFIG_V8 = ROOT / "config/control-plane/knowledge-analysis-v8"
 ANALYSIS_CONFIG_V9 = ROOT / "config/control-plane/knowledge-analysis-v9"
 ANALYSIS_CONFIG_V10 = ROOT / "config/control-plane/knowledge-analysis-v10"
 ANALYSIS_CONFIG_V11 = ROOT / "config/control-plane/knowledge-analysis-v11"
+
+
+def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version() -> None:
+    schema_versions = set(
+        get_args(KnowledgeAnalysisBootstrapManifest.model_fields["schema_version"].annotation)
+    )
+
+    assert set(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS) == schema_versions
+    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 12))
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:

@@ -7,6 +7,7 @@ import re
 import stat
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 from typing import Literal
 
 import yaml
@@ -55,6 +56,9 @@ EXPECTED_ROLE_SLOTS = {
     "review": "slot02",
     "item_management": "slot04",
 }
+KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(
+    {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 12)}
+)
 
 
 class BootstrapRole(BaseModel):
@@ -477,18 +481,7 @@ def bootstrap_knowledge_analysis_control_plane(
                 role_schema_bundle_hash(protocol_version),
             )
     capacity_revision_id = _released_analysis_capacity_policy(sessions)
-    bootstrap_revision = {
-        "knowledge-analysis-control-bootstrap/1.0": 1,
-        "knowledge-analysis-control-bootstrap/2.0": 2,
-        "knowledge-analysis-control-bootstrap/3.0": 3,
-        "knowledge-analysis-control-bootstrap/4.0": 4,
-        "knowledge-analysis-control-bootstrap/5.0": 5,
-        "knowledge-analysis-control-bootstrap/6.0": 6,
-        "knowledge-analysis-control-bootstrap/7.0": 7,
-        "knowledge-analysis-control-bootstrap/8.0": 8,
-        "knowledge-analysis-control-bootstrap/9.0": 9,
-        "knowledge-analysis-control-bootstrap/10.0": 10,
-    }[manifest.schema_version]
+    bootstrap_revision = KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS[manifest.schema_version]
     platform_artifact = _publish_markdown(
         publisher,
         payload=_read_member(config_directory, manifest.platform_instruction_path),
