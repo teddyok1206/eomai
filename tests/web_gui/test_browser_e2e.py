@@ -136,6 +136,8 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert 'entity: "hwpx_builds"' in javascript
     assert "state.hwpxBuildId = buildId" in javascript
     assert 'id="analysis-batch-list"' in html
+    assert "최대 6 slots · 동시 3" in html
+    assert "최대 5 slots" not in html
     assert 'api("/admin/knowledge-analysis-batches")' in javascript
     assert "analysisBatchPollTimer" in javascript
     assert "10000" in javascript
