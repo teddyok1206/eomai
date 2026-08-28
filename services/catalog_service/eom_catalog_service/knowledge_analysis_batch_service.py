@@ -13,6 +13,7 @@ from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV4,
     KnowledgeAnalysisBatchApplicationResult,
     KnowledgeAnalysisBatchRequestV3,
+    KnowledgeAnalysisBatchRequestV4,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
@@ -30,11 +31,21 @@ from eom_catalog_contracts import (
     ReviewKnowledgeAnalysisCommand,
     validate_contract,
 )
-from eom_identifiers import new_knowledge_analysis_batch_id, new_knowledge_analysis_range_id
+from eom_identifiers import (
+    content_sha256,
+    new_knowledge_analysis_batch_id,
+    new_knowledge_analysis_range_id,
+)
+from eom_orchestrator.control_models import (
+    ExecutionBundleRevisionRecord,
+    ExecutionPresetRevisionRecord,
+    WorkerCapacityPolicyRevisionRecord,
+)
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
-from sqlalchemy import Engine, and_, exists, func, or_, select
+from eom_workflow import WorkerCapacityPolicyV2
+from sqlalchemy import Engine, exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
@@ -95,6 +106,7 @@ class KnowledgeAnalysisBatchService:
             "knowledge-analysis-batch-request/1.0": "knowledge-analysis-batch-request",
             "knowledge-analysis-batch-request/1.1": "knowledge-analysis-batch-request-v2",
             "knowledge-analysis-batch-request/1.2": "knowledge-analysis-batch-request-v3",
+            "knowledge-analysis-batch-request/1.3": "knowledge-analysis-batch-request-v4",
         }[command.request.schema_version]
         validate_contract(request_schema, command.request.model_dump(mode="json"))
         try:
@@ -115,6 +127,31 @@ class KnowledgeAnalysisBatchService:
                 preset, preset_revision = self.analysis.published_preset(
                     session, command.request.preset_key
                 )
+                if isinstance(command.request, KnowledgeAnalysisBatchRequestV4):
+                    capacity = session.get(
+                        WorkerCapacityPolicyRevisionRecord,
+                        preset_revision.capacity_policy_revision_id,
+                    )
+                    try:
+                        reviewed_capacity = (
+                            WorkerCapacityPolicyV2.model_validate(capacity.canonical_document)
+                            if capacity is not None and capacity.state == "RELEASED"
+                            else None
+                        )
+                    except ValueError:
+                        reviewed_capacity = None
+                    if (
+                        capacity is None
+                        or reviewed_capacity is None
+                        or capacity.schema_version != reviewed_capacity.schema_version
+                        or capacity.content_sha256 != reviewed_capacity.content_sha256
+                        or capacity.max_active_knowledge_analysis
+                        != reviewed_capacity.max_active_knowledge_analysis
+                    ):
+                        raise KnowledgeAnalysisBatchServiceError(
+                            "KNOWLEDGE_ANALYSIS_BATCH_CAPACITY_INVALID",
+                            "Bounded-parallel batch requires released capacity policy V2",
+                        )
                 policy = self.analysis.risk_policy(session, command.request.risk_policy_revision_id)
                 batch = KnowledgeAnalysisBatchRecord(
                     batch_id=new_knowledge_analysis_batch_id(),
@@ -129,8 +166,21 @@ class KnowledgeAnalysisBatchService:
                     review_policy=command.request.review_policy,
                     range_failure_policy=(
                         command.request.range_failure_policy
-                        if isinstance(command.request, KnowledgeAnalysisBatchRequestV3)
+                        if isinstance(
+                            command.request,
+                            (KnowledgeAnalysisBatchRequestV3, KnowledgeAnalysisBatchRequestV4),
+                        )
                         else STOP_ON_FIRST_FAILURE
+                    ),
+                    scheduling_mode=(
+                        command.request.scheduling_mode
+                        if isinstance(command.request, KnowledgeAnalysisBatchRequestV4)
+                        else "SERIAL"
+                    ),
+                    max_in_flight=(
+                        command.request.max_in_flight
+                        if isinstance(command.request, KnowledgeAnalysisBatchRequestV4)
+                        else 1
                     ),
                     authorized_by_operator_id=command.requested_by,
                     authorized_at=command.authorized_at,
@@ -170,6 +220,9 @@ class KnowledgeAnalysisBatchService:
                             preset_revision_id=preset_revision.preset_revision_id,
                             risk_policy_revision_id=policy.risk_policy_revision_id,
                             general_knowledge_mode=command.request.general_knowledge_mode,
+                            allow_semantic_preset_equivalence=isinstance(
+                                command.request, KnowledgeAnalysisBatchRequestV4
+                            ),
                         )
                         analysis_run_id = reuse_id
                         range_state = "ACCEPTED"
@@ -253,6 +306,8 @@ class KnowledgeAnalysisBatchService:
                             "request_sha256": batch.request_sha256,
                             "total_range_count": batch.total_range_count,
                             "reused_range_count": accepted_count,
+                            "scheduling_mode": batch.scheduling_mode,
+                            "max_in_flight": batch.max_in_flight,
                         },
                     )
                 )
@@ -444,64 +499,90 @@ class KnowledgeAnalysisBatchService:
 
     def _claim_next_range(self, *, runner_id: str) -> tuple[str, str] | None:
         now = datetime.now(UTC)
+        active = aliased(KnowledgeAnalysisBatchRangeRecord)
+        pending = aliased(KnowledgeAnalysisBatchRangeRecord)
         earlier = aliased(KnowledgeAnalysisBatchRangeRecord)
         with transaction(self.sessions) as session:
-            row = session.scalar(
-                select(KnowledgeAnalysisBatchRangeRecord)
-                .join(
-                    KnowledgeAnalysisBatchRecord,
-                    KnowledgeAnalysisBatchRecord.batch_id
-                    == KnowledgeAnalysisBatchRangeRecord.batch_id,
-                )
+            active_count = (
+                select(func.count(active.range_id))
                 .where(
-                    KnowledgeAnalysisBatchRangeRecord.state == "PENDING",
-                    KnowledgeAnalysisBatchRangeRecord.next_action_at <= now,
+                    active.batch_id == KnowledgeAnalysisBatchRecord.batch_id,
+                    active.state.in_(("CLAIMED", "SUBMITTED")),
+                )
+                .correlate(KnowledgeAnalysisBatchRecord)
+                .scalar_subquery()
+            )
+            batch = session.scalar(
+                select(KnowledgeAnalysisBatchRecord)
+                .where(
                     KnowledgeAnalysisBatchRecord.state.in_(("QUEUED", "RUNNING")),
-                    or_(
-                        and_(
-                            KnowledgeAnalysisBatchRecord.range_failure_policy
-                            == STOP_ON_FIRST_FAILURE,
-                            ~exists(
-                                select(1).where(
-                                    earlier.batch_id == KnowledgeAnalysisBatchRangeRecord.batch_id,
-                                    earlier.ordinal < KnowledgeAnalysisBatchRangeRecord.ordinal,
-                                    earlier.state != "ACCEPTED",
-                                )
-                            ),
-                        ),
-                        and_(
-                            KnowledgeAnalysisBatchRecord.range_failure_policy
-                            == CONTINUE_AND_COLLECT,
-                            ~exists(
-                                select(1).where(
-                                    earlier.batch_id == KnowledgeAnalysisBatchRangeRecord.batch_id,
-                                    earlier.ordinal < KnowledgeAnalysisBatchRangeRecord.ordinal,
-                                    ~earlier.state.in_(("ACCEPTED", "FAILED")),
-                                )
-                            ),
-                        ),
+                    active_count < KnowledgeAnalysisBatchRecord.max_in_flight,
+                    exists(
+                        select(1).where(
+                            pending.batch_id == KnowledgeAnalysisBatchRecord.batch_id,
+                            pending.state == "PENDING",
+                            pending.next_action_at <= now,
+                        )
                     ),
                 )
                 .order_by(
                     KnowledgeAnalysisBatchRecord.created_at,
                     KnowledgeAnalysisBatchRecord.batch_id,
-                    KnowledgeAnalysisBatchRangeRecord.ordinal,
                 )
+                .with_for_update(skip_locked=True)
+                .limit(1)
+            )
+            if batch is None:
+                return None
+            held_count = int(
+                session.scalar(
+                    select(func.count(KnowledgeAnalysisBatchRangeRecord.range_id)).where(
+                        KnowledgeAnalysisBatchRangeRecord.batch_id == batch.batch_id,
+                        KnowledgeAnalysisBatchRangeRecord.state.in_(("CLAIMED", "SUBMITTED")),
+                    )
+                )
+                or 0
+            )
+            if held_count >= batch.max_in_flight:
+                return None
+            row_conditions = [
+                KnowledgeAnalysisBatchRangeRecord.batch_id == batch.batch_id,
+                KnowledgeAnalysisBatchRangeRecord.state == "PENDING",
+                KnowledgeAnalysisBatchRangeRecord.next_action_at <= now,
+            ]
+            if batch.scheduling_mode == "SERIAL":
+                predecessor_states = (
+                    ("ACCEPTED",)
+                    if batch.range_failure_policy == STOP_ON_FIRST_FAILURE
+                    else ("ACCEPTED", "FAILED")
+                )
+                row_conditions.append(
+                    ~exists(
+                        select(1).where(
+                            earlier.batch_id == batch.batch_id,
+                            earlier.ordinal < KnowledgeAnalysisBatchRangeRecord.ordinal,
+                            ~earlier.state.in_(predecessor_states),
+                        )
+                    )
+                )
+            elif (
+                batch.scheduling_mode != "BOUNDED_PARALLEL"
+                or batch.range_failure_policy != CONTINUE_AND_COLLECT
+                or batch.max_in_flight != 2
+            ):
+                raise KnowledgeAnalysisBatchServiceError(
+                    "KNOWLEDGE_ANALYSIS_BATCH_POINTER_INVALID",
+                    "Knowledge Analysis batch scheduling contract is invalid",
+                )
+            row = session.scalar(
+                select(KnowledgeAnalysisBatchRangeRecord)
+                .where(*row_conditions)
+                .order_by(KnowledgeAnalysisBatchRangeRecord.ordinal)
                 .with_for_update(skip_locked=True)
                 .limit(1)
             )
             if row is None:
                 return None
-            batch = session.scalar(
-                select(KnowledgeAnalysisBatchRecord)
-                .where(KnowledgeAnalysisBatchRecord.batch_id == row.batch_id)
-                .with_for_update()
-            )
-            if batch is None:
-                raise KnowledgeAnalysisBatchServiceError(
-                    "KNOWLEDGE_ANALYSIS_BATCH_POINTER_INVALID",
-                    "Knowledge Analysis range has no owning batch",
-                )
             row.state = "CLAIMED"
             row.lease_owner = runner_id
             row.lease_expires_at = now + BATCH_ACTION_LEASE
@@ -685,6 +766,7 @@ class KnowledgeAnalysisBatchService:
         preset_revision_id: str,
         risk_policy_revision_id: str,
         general_knowledge_mode: str,
+        allow_semantic_preset_equivalence: bool,
     ) -> None:
         run = session.get(KnowledgeAnalysisRunRecord, run_id)
         if run is None or run.state != "ACCEPTED":
@@ -759,12 +841,22 @@ class KnowledgeAnalysisBatchService:
                 "KNOWLEDGE_ANALYSIS_BATCH_REUSE_INVALID",
                 "Reused Knowledge Analysis result pointer is invalid",
             ) from exc
+        preset_revision_matches = run.preset_revision_id == preset_revision_id
+        if not preset_revision_matches and allow_semantic_preset_equivalence:
+            preset_revision_matches = (
+                KnowledgeAnalysisBatchService._preset_execution_semantics_sha256(
+                    session, run.preset_revision_id
+                )
+                == KnowledgeAnalysisBatchService._preset_execution_semantics_sha256(
+                    session, preset_revision_id
+                )
+            )
         if (
             request.source != source
             or request.general_knowledge_mode != general_knowledge_mode
             or request.risk_policy_revision_id != risk_policy_revision_id
             or run.preset_id != preset_id
-            or run.preset_revision_id != preset_revision_id
+            or not preset_revision_matches
             or logical is None
             or revision is None
             or not logical.approved
@@ -783,6 +875,77 @@ class KnowledgeAnalysisBatchService:
                 "KNOWLEDGE_ANALYSIS_BATCH_REUSE_INVALID",
                 "Reused Knowledge Analysis dependencies are stale or inconsistent",
             )
+
+    @staticmethod
+    def _preset_execution_semantics_sha256(session: Session, preset_revision_id: str) -> str:
+        revision = session.get(ExecutionPresetRevisionRecord, preset_revision_id)
+        if revision is None or revision.state != "RELEASED":
+            raise KnowledgeAnalysisBatchServiceError(
+                "KNOWLEDGE_ANALYSIS_BATCH_REUSE_INVALID",
+                "Reused Knowledge Analysis preset revision is unavailable",
+            )
+        document = revision.canonical_document
+        try:
+            normalized_roles: list[dict[str, object]] = []
+            for raw_policy in document["role_policies"]:
+                if not isinstance(raw_policy, dict):
+                    raise KeyError("role_policies")
+                instruction_pointer = raw_policy["instruction_bundle"]
+                if not isinstance(instruction_pointer, dict):
+                    raise KeyError("instruction_bundle")
+                bundle_revision_id = instruction_pointer["bundle_revision_id"]
+                if not isinstance(bundle_revision_id, str):
+                    raise KeyError("bundle_revision_id")
+                bundle = session.get(ExecutionBundleRevisionRecord, bundle_revision_id)
+                if (
+                    bundle is None
+                    or bundle.state != "RELEASED"
+                    or bundle.bundle_kind != "INSTRUCTION"
+                ):
+                    raise KeyError("instruction_bundle")
+                components = bundle.canonical_document["components"]
+                if not isinstance(components, list):
+                    raise KeyError("components")
+                normalized_components: list[dict[str, object]] = []
+                for component in components:
+                    if not isinstance(component, dict) or not isinstance(
+                        component.get("artifact"), dict
+                    ):
+                        raise KeyError("components")
+                    artifact = component["artifact"]
+                    normalized_components.append(
+                        {
+                            "layer": component["layer"],
+                            "relative_path": component["relative_path"],
+                            "artifact_sha256": artifact["sha256"],
+                            "schema_ref": artifact["schema_ref"],
+                            "media_type": artifact["media_type"],
+                            "logical_name": artifact["logical_name"],
+                        }
+                    )
+                normalized_roles.append(
+                    {
+                        key: value
+                        for key, value in raw_policy.items()
+                        if key not in {"instruction_bundle", "reference_bundle"}
+                    }
+                    | {
+                        "instruction_components": normalized_components,
+                        "reference_bundle": raw_policy.get("reference_bundle"),
+                    }
+                )
+            projection = {
+                "schema_version": document["schema_version"],
+                "role_policies": normalized_roles,
+                "general_knowledge_policy": document["general_knowledge_policy"],
+                "compatible_workflow_protocols": document["compatible_workflow_protocols"],
+            }
+        except (KeyError, TypeError) as exc:
+            raise KnowledgeAnalysisBatchServiceError(
+                "KNOWLEDGE_ANALYSIS_BATCH_REUSE_INVALID",
+                "Reused Knowledge Analysis preset semantics are incomplete",
+            ) from exc
+        return content_sha256(projection)
 
     def _accept_submitted_range(
         self,

@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     ExecuteKnowledgeAnalysisRange,
     KnowledgeAnalysisBatchRangeRequestV2,
     KnowledgeAnalysisBatchRequestV3,
+    KnowledgeAnalysisBatchRequestV4,
     KnowledgeAnalysisBatchSourceRangeV2,
     ReuseAcceptedKnowledgeAnalysisRange,
 )
@@ -79,13 +80,26 @@ def create_knowledge_analysis_batch(
                     ),
                 )
             )
-        batch_request = KnowledgeAnalysisBatchRequestV3(
-            preset_key=body.preset_key,
-            general_knowledge_mode=body.general_knowledge_mode,
-            risk_policy_revision_id=body.risk_policy_revision_id,
-            review_policy=body.review_policy,
-            range_failure_policy=body.range_failure_policy,
-            ranges=tuple(ranges),
+        batch_request = (
+            KnowledgeAnalysisBatchRequestV4(
+                preset_key=body.preset_key,
+                general_knowledge_mode=body.general_knowledge_mode,
+                risk_policy_revision_id=body.risk_policy_revision_id,
+                review_policy=body.review_policy,
+                range_failure_policy=body.range_failure_policy,
+                scheduling_mode="BOUNDED_PARALLEL",
+                max_in_flight=2,
+                ranges=tuple(ranges),
+            )
+            if body.max_in_flight == 2
+            else KnowledgeAnalysisBatchRequestV3(
+                preset_key=body.preset_key,
+                general_knowledge_mode=body.general_knowledge_mode,
+                risk_policy_revision_id=body.risk_policy_revision_id,
+                review_policy=body.review_policy,
+                range_failure_policy=body.range_failure_policy,
+                ranges=tuple(ranges),
+            )
         )
         canonical = {
             "request": batch_request.model_dump(mode="json"),

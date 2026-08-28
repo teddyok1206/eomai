@@ -406,7 +406,7 @@ class CodexAuthChallengeReveal(WebModel):
 class CodexAuthEnrollmentStatusView(WebModel):
     enrollment_id: str = Field(pattern=r"^authflow_[0-9a-f]{32}$")
     binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
-    slot_key: str = Field(pattern=r"^slot0[1-5]$")
+    slot_key: str = Field(pattern=r"^slot0[1-6]$")
     requested_account_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
     state: Literal[
         "REQUESTED",
@@ -450,7 +450,7 @@ class CodexAuthEnrollmentStatusView(WebModel):
 
 class CodexDeviceChallengeView(WebModel):
     enrollment_id: str = Field(pattern=r"^authflow_[0-9a-f]{32}$")
-    slot_key: str = Field(pattern=r"^slot0[1-5]$")
+    slot_key: str = Field(pattern=r"^slot0[1-6]$")
     verification_uri: str = Field(max_length=512)
     user_code: str = Field(pattern=r"^[A-Z0-9]{3,12}(?:-[A-Z0-9]{3,12})?$")
     expires_at: UtcDatetime

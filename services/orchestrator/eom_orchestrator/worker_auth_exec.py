@@ -21,6 +21,7 @@ SLOT_USERS = {
     "03": "eom-cdx-03",
     "04": "eom-cdx-04",
     "05": "eom-cdx-05",
+    "06": "eom-cdx-06",
 }
 AUTH_REQUIRED_EXIT = 20
 PROBE_INVALID_EXIT = 21

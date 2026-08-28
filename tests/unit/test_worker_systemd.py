@@ -680,10 +680,11 @@ def test_standard_and_analysis_slots_have_their_reviewed_systemd_ceilings() -> N
     for index in range(1, 5):
         unit = ROOT / "infra/systemd" / f"eom-worker-{index:02d}@.service"
         assert "TimeoutStartSec=1800\n" in unit.read_text(encoding="utf-8")
-    analysis_unit = ROOT / "infra/systemd/eom-worker-05@.service"
-    analysis_text = analysis_unit.read_text(encoding="utf-8")
-    assert "TimeoutStartSec=7200\n" in analysis_text
-    assert "TimeoutStartSec=1800\n" not in analysis_text
+    for index in (5, 6):
+        analysis_unit = ROOT / "infra/systemd" / f"eom-worker-{index:02d}@.service"
+        analysis_text = analysis_unit.read_text(encoding="utf-8")
+        assert "TimeoutStartSec=7200\n" in analysis_text
+        assert "TimeoutStartSec=1800\n" not in analysis_text
 
 
 def test_standard_preset_timeouts_match_fixed_worker_unit_contract() -> None:
@@ -713,7 +714,7 @@ def test_collect_mode_is_only_in_probe_unit_sections() -> None:
                 matches.append(section)
         return matches
 
-    for index in range(1, 6):
+    for index in range(1, 7):
         slot_id = f"{index:02d}"
         worker = ROOT / "infra/systemd" / f"eom-worker-{slot_id}@.service"
         probe = ROOT / "infra/systemd" / f"eom-worker-probe-{slot_id}@.service"
@@ -736,7 +737,7 @@ def test_all_worker_templates_verify_without_diagnostics(tmp_path: Path) -> None
     shutil.copy2("/usr/bin/true", true_binary)
 
     unit_paths: list[str] = []
-    for index in range(1, 6):
+    for index in range(1, 7):
         slot_id = f"{index:02d}"
         for name in (
             f"eom-worker-{slot_id}@.service",
@@ -788,7 +789,7 @@ def test_worker_templates_fix_identity_command_and_sandbox() -> None:
         "InaccessiblePaths=/home/eom/EOM",
         "InaccessiblePaths=/srv/eom/staging",
     )
-    for index in range(1, 6):
+    for index in range(1, 7):
         slot_id = f"{index:02d}"
         source = (ROOT / "infra/systemd" / f"eom-worker-{slot_id}@.service").read_text(
             encoding="utf-8"
@@ -803,7 +804,7 @@ def test_worker_templates_fix_identity_command_and_sandbox() -> None:
 
 
 def test_worker_templates_allow_only_bubblewrap_control_netlink() -> None:
-    for index in range(1, 6):
+    for index in range(1, 7):
         slot_id = f"{index:02d}"
         source = (ROOT / "infra/systemd" / f"eom-worker-{slot_id}@.service").read_text(
             encoding="utf-8"
@@ -842,7 +843,7 @@ def test_auth_templates_are_non_generating_identity_isolated_probes() -> None:
         "MemoryMax=256M",
         "TasksMax=32",
     )
-    for index in range(1, 6):
+    for index in range(1, 7):
         slot_id = f"{index:02d}"
         source = (ROOT / "infra/systemd" / f"eom-worker-auth-{slot_id}.service").read_text(
             encoding="utf-8"
@@ -1021,6 +1022,13 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             "eom-workflow-runner",
             "org.freedesktop.systemd1.manage-units",
             "eom-worker-auth-06.service",
+            "start",
+            "yes",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            "eom-worker-auth-07.service",
             "start",
             "no",
         ),

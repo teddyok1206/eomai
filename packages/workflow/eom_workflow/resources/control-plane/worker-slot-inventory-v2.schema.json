@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/worker-slot-inventory/2.0",
+  "title": "EOM Fixed Worker Slot Inventory V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "limits", "slots"],
+  "properties": {
+    "version": {"const": 2},
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["global_codex_concurrency", "gpu_concurrency"],
+      "properties": {
+        "global_codex_concurrency": {"const": 3},
+        "gpu_concurrency": {"const": 1}
+      }
+    },
+    "slots": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slot_id", "linux_user", "role", "enabled"],
+        "properties": {
+          "slot_id": {"type": "string", "pattern": "^0[1-6]$"},
+          "linux_user": {"type": "string", "pattern": "^eom-cdx-0[1-6]$"},
+          "role": {
+            "enum": ["authoring", "review", "image", "item_management", "support"]
+          },
+          "enabled": {"type": "boolean"},
+          "gpu": {"type": "boolean"}
+        }
+      },
+      "allOf": [
+        {"contains": {"$ref": "#/$defs/slot01"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/slot02"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/slot03"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/slot04"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/slot05"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/slot06"}, "minContains": 1, "maxContains": 1}
+      ]
+    }
+  },
+  "$defs": {
+    "slot01": {"type": "object", "required": ["slot_id", "linux_user", "role"], "properties": {"slot_id": {"const": "01"}, "linux_user": {"const": "eom-cdx-01"}, "role": {"const": "authoring"}, "gpu": {"const": false}}},
+    "slot02": {"type": "object", "required": ["slot_id", "linux_user", "role"], "properties": {"slot_id": {"const": "02"}, "linux_user": {"const": "eom-cdx-02"}, "role": {"const": "review"}, "gpu": {"const": false}}},
+    "slot03": {"type": "object", "required": ["slot_id", "linux_user", "role", "gpu"], "properties": {"slot_id": {"const": "03"}, "linux_user": {"const": "eom-cdx-03"}, "role": {"const": "image"}, "gpu": {"const": true}}},
+    "slot04": {"type": "object", "required": ["slot_id", "linux_user", "role"], "properties": {"slot_id": {"const": "04"}, "linux_user": {"const": "eom-cdx-04"}, "role": {"const": "item_management"}, "gpu": {"const": false}}},
+    "slot05": {"type": "object", "required": ["slot_id", "linux_user", "role"], "properties": {"slot_id": {"const": "05"}, "linux_user": {"const": "eom-cdx-05"}, "role": {"const": "support"}, "gpu": {"const": false}}},
+    "slot06": {"type": "object", "required": ["slot_id", "linux_user", "role"], "properties": {"slot_id": {"const": "06"}, "linux_user": {"const": "eom-cdx-06"}, "role": {"const": "support"}, "gpu": {"const": false}}}
+  }
+}

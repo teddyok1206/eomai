@@ -339,7 +339,14 @@ class InfrastructureDoctor:
 
     def _workers(self) -> None:
         forbidden_groups = {"sudo", "docker", "eom"}
-        for worker in ("eom-cdx-01", "eom-cdx-02", "eom-cdx-03", "eom-cdx-04", "eom-cdx-05"):
+        for worker in (
+            "eom-cdx-01",
+            "eom-cdx-02",
+            "eom-cdx-03",
+            "eom-cdx-04",
+            "eom-cdx-05",
+            "eom-cdx-06",
+        ):
             try:
                 account = pwd.getpwnam(worker)
             except KeyError:

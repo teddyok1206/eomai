@@ -6,7 +6,7 @@ set -euo pipefail
   exit 1
 }
 
-WORKERS=(eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05)
+WORKERS=(eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-cdx-06)
 CATALOG_STAGING=/srv/eom/staging/catalog
 CATALOG_FIXED_STAGING=(
   /srv/eom/staging/catalog/content-packs
@@ -41,6 +41,9 @@ for worker in "${WORKERS[@]}"; do
   [[ ! -L "${path}" && -d "${path}" ]]
   [[ "$(stat -c '%U:%G:%a' "${path}")" == "${worker}:${worker}:2770" ]]
   [[ -w "${path}" && -x "${path}" ]]
+  home="/srv/eom/worker-homes/${worker}"
+  [[ ! -L "${home}" && -d "${home}" ]]
+  [[ "$(stat -c '%U:%G:%a' "${home}")" == "${worker}:${worker}:700" ]]
 done
 
 printf '%s\n' 'Workflow runtime path verification PASS.'

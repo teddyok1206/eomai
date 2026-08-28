@@ -20,7 +20,12 @@ from eom_orchestrator.codex_auth_broker_client import (
 )
 from eom_orchestrator.codex_auth_broker_server import CodexAuthBrokerServer
 from eom_orchestrator.worker_registry import WorkerSlot
-from eom_workflow import CodexAuthEnrollmentRequest, CodexAuthEnrollmentStatus
+from eom_workflow import (
+    CodexAuthBrokerRequestV2,
+    CodexAuthEnrollmentRequest,
+    CodexAuthEnrollmentRequestV2,
+    CodexAuthEnrollmentStatus,
+)
 from pydantic import ValidationError
 
 NOW = datetime(2026, 8, 27, 12, 0, tzinfo=UTC)
@@ -44,6 +49,21 @@ def test_enrollment_request_is_bounded_hashed_and_credential_free() -> None:
     serialized = json.dumps(document, sort_keys=True)
     for forbidden in ("password", "access_token", "refresh_token", "auth.json", "credential"):
         assert forbidden not in serialized
+
+
+def test_slot06_enrollment_uses_additive_v2_contract() -> None:
+    document = build_codex_auth_enrollment_request(
+        binding_id=BINDING_ID,
+        expected_binding_resource_version=7,
+        slot_key="slot06",
+        requested_account_label="teacher-account-06",
+        requested_by_operator_id="operator_" + "3" * 32,
+        requested_by_api_session_id="apisession_" + "4" * 32,
+        requested_at=NOW,
+    )
+    model = CodexAuthEnrollmentRequestV2.model_validate(document)
+    assert model.schema_version == "codex-auth-enrollment-request/1.1"
+    assert model.slot_key == "slot06"
 
 
 def test_enrollment_status_fails_closed_on_incoherent_challenge_and_terminal_state() -> None:
@@ -173,6 +193,19 @@ def test_broker_client_requires_exact_socket_owner_group_and_mode(tmp_path: Path
         listener.close()
 
 
+def test_broker_unit_reads_all_six_handoffs_without_write_access() -> None:
+    source = (
+        Path(__file__).resolve().parents[2] / "infra/systemd/eom-codex-auth-broker.service"
+    ).read_text(encoding="utf-8")
+    assert (
+        "SupplementaryGroups=eom-cdx-01 eom-cdx-02 eom-cdx-03 "
+        "eom-cdx-04 eom-cdx-05 eom-cdx-06" in source
+    )
+    for slot in range(1, 7):
+        assert f"ReadOnlyPaths=-/run/eom-codex-login-{slot:02d}" in source
+    assert "ReadWritePaths=/run/eom-codex-login-" not in source
+
+
 def test_device_login_log_cleanup_is_explicit_and_symlink_safe(tmp_path: Path) -> None:
     log_directory = tmp_path / "login.logs"
     log_directory.mkdir(mode=0o700)
@@ -229,6 +262,48 @@ def test_broker_reveals_schema_valid_challenge_once_without_mutating_handoff(
         second = server.execute(request)
         assert second.outcome == "FAILED"
         assert second.error_code == "CODEX_AUTH_CHALLENGE_ALREADY_REVEALED"
+    finally:
+        server.server_close()
+
+
+def test_broker_reads_slot06_v2_handoff_without_weakening_v1(tmp_path: Path) -> None:
+    runtime = tmp_path / "broker"
+    runtime.mkdir(mode=0o750)
+    handoff = tmp_path / "eom-codex-login-06"
+    handoff.mkdir(mode=0o750)
+    server = CodexAuthBrokerServer(
+        socket_path=runtime / "broker.sock",
+        allowed_uids=frozenset({os.geteuid()}),
+        reveal_uids=frozenset({os.geteuid()}),
+        expected_gid=os.getegid(),
+        handoff_root=tmp_path,
+        slot_identities={"06": (os.geteuid(), os.getegid())},
+        now=lambda: NOW,
+    )
+    try:
+        status = _status()
+        status.update(
+            schema_version="codex-device-login-status/1.1",
+            slot_key="slot06",
+        )
+        challenge = _challenge()
+        challenge.update(
+            schema_version="codex-device-challenge/1.1",
+            slot_key="slot06",
+        )
+        _write_json(handoff / f"{ENROLLMENT_ID}.status.json", status)
+        _write_json(handoff / f"{ENROLLMENT_ID}.challenge.json", challenge)
+        response = server.execute(
+            CodexAuthBrokerRequestV2(
+                action="REVEAL",
+                enrollment_id=ENROLLMENT_ID,
+                slot_key="slot06",
+            )
+        )
+        assert response.schema_version == "codex-auth-broker-response/1.1"
+        assert response.outcome == "OK"
+        assert response.status is not None and response.status.slot_key == "slot06"
+        assert response.challenge is not None and response.challenge.slot_key == "slot06"
     finally:
         server.server_close()
 
@@ -342,6 +417,31 @@ def test_device_login_parser_materializes_only_typed_handoff(
         assert "Open " not in challenge_path.read_text(encoding="utf-8")
     else:
         assert not challenge_path.exists()
+
+
+def test_slot06_device_login_materializes_only_v2_handoff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binary = tmp_path / "codex"
+    _fake_codex(binary, valid=True)
+    monkeypatch.setattr(login_module, "CODEX_BINARY", binary)
+    status_path = tmp_path / "status.json"
+    challenge_path = tmp_path / "challenge.json"
+    result = login_module._collect_device_login(
+        environment={"PATH": "/usr/bin:/bin"},
+        log_directory=tmp_path,
+        enrollment_id=ENROLLMENT_ID,
+        slot_id="06",
+        status_path=status_path,
+        challenge_path=challenge_path,
+    )
+    assert result == 0
+    status = json.loads(status_path.read_text(encoding="utf-8"))
+    challenge = json.loads(challenge_path.read_text(encoding="utf-8"))
+    assert status["schema_version"] == "codex-device-login-status/1.1"
+    assert challenge["schema_version"] == "codex-device-challenge/1.1"
+    assert status["slot_key"] == challenge["slot_key"] == "slot06"
 
 
 def test_reclaimed_login_start_marker_never_relaunches_fixed_unit(

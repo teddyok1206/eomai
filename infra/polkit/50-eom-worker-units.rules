@@ -1,9 +1,9 @@
 /* EOM fixed worker and HWPX StartUnit boundary. Installed root-owned; no transient units. */
 polkit.addRule(function(action, subject) {
-    var workerUnit = /^eom-worker-(01|02|03|04|05)@job_[0-9a-f]{32}\.service$/;
-    var probeUnit = /^eom-worker-probe-(01|02|03|04|05)@probe_[0-9a-f]{32}\.service$/;
-    var authUnit = /^eom-worker-auth-(01|02|03|04|05)\.service$/;
-    var loginUnit = /^eom-worker-login-(01|02|03|04|05)@authflow_[0-9a-f]{32}\.service$/;
+    var workerUnit = /^eom-worker-(01|02|03|04|05|06)@job_[0-9a-f]{32}\.service$/;
+    var probeUnit = /^eom-worker-probe-(01|02|03|04|05|06)@probe_[0-9a-f]{32}\.service$/;
+    var authUnit = /^eom-worker-auth-(01|02|03|04|05|06)\.service$/;
+    var loginUnit = /^eom-worker-login-(01|02|03|04|05|06)@authflow_[0-9a-f]{32}\.service$/;
     var kordocUnit = /^eom-hwpx-kordoc@hwpxbuild_[0-9a-f]{32}\.service$/;
     var questionTemplateUnit = /^eom-hwpx-builder@hwpxbuild_[0-9a-f]{32}\.service$/;
 

@@ -12,7 +12,9 @@ from typing import Any, Literal
 
 from eom_workflow import (
     CodexAuthBrokerRequest,
+    CodexAuthBrokerRequestV2,
     CodexAuthBrokerResponse,
+    CodexAuthBrokerResponseV2,
     validate_control_contract,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -52,14 +54,19 @@ class CodexAuthBrokerClient:
         action: Literal["STATUS", "REVEAL"],
         enrollment_id: str,
         slot_key: str,
-    ) -> CodexAuthBrokerResponse:
-        request = CodexAuthBrokerRequest(
+    ) -> CodexAuthBrokerResponse | CodexAuthBrokerResponseV2:
+        is_v2 = slot_key == "slot06"
+        request_type = CodexAuthBrokerRequestV2 if is_v2 else CodexAuthBrokerRequest
+        request = request_type(
             action=action,
             enrollment_id=enrollment_id,
             slot_key=slot_key,
         )
         payload = request.model_dump(mode="json")
-        validate_control_contract("codex-auth-broker-request", payload)
+        validate_control_contract(
+            "codex-auth-broker-request-v2" if is_v2 else "codex-auth-broker-request",
+            payload,
+        )
         self._validate_socket()
         connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
@@ -71,8 +78,12 @@ class CodexAuthBrokerClient:
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError
-            validate_control_contract("codex-auth-broker-response", value)
-            response = CodexAuthBrokerResponse.model_validate(value)
+            validate_control_contract(
+                "codex-auth-broker-response-v2" if is_v2 else "codex-auth-broker-response",
+                value,
+            )
+            response_type = CodexAuthBrokerResponseV2 if is_v2 else CodexAuthBrokerResponse
+            response = response_type.model_validate(value)
         except CodexAuthBrokerError:
             raise
         except (

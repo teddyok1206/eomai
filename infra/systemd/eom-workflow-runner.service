@@ -9,7 +9,7 @@ StartLimitBurst=5
 Type=simple
 User=eom-workflow-runner
 Group=eom
-SupplementaryGroups=eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-codex-auth
+SupplementaryGroups=eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-cdx-06 eom-codex-auth
 StateDirectory=eom-workflow-runner
 StateDirectoryMode=0700
 WorkingDirectory=/var/lib/eom-workflow-runner
@@ -87,6 +87,7 @@ InaccessiblePaths=-/srv/eom/worker-homes/eom-cdx-02/.codex
 InaccessiblePaths=-/srv/eom/worker-homes/eom-cdx-03/.codex
 InaccessiblePaths=-/srv/eom/worker-homes/eom-cdx-04/.codex
 InaccessiblePaths=-/srv/eom/worker-homes/eom-cdx-05/.codex
+InaccessiblePaths=-/srv/eom/worker-homes/eom-cdx-06/.codex
 
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 IPAddressDeny=any

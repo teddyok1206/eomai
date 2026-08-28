@@ -13,7 +13,12 @@ from typing import Literal
 import yaml
 from eom_catalog_contracts import GuidanceMarkdownDocument, parse_guidance_markdown
 from eom_identifiers import canonical_json_bytes
-from eom_workflow import BundleRevisionPointer, ControlArtifactPointer, WorkerCapacityPolicy
+from eom_workflow import (
+    BundleRevisionPointer,
+    ControlArtifactPointer,
+    WorkerCapacityPolicy,
+    WorkerCapacityPolicyV2,
+)
 from eom_workflow.schemas import role_schema_bundle_hash
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import Engine, select
@@ -77,7 +82,7 @@ EXPECTED_STANDARD_V2_REFERENCE_KEYS = MappingProxyType(
     }
 )
 KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(
-    {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 13)}
+    {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 14)}
 )
 
 
@@ -217,6 +222,7 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
         "knowledge-analysis-control-bootstrap/10.0",
         "knowledge-analysis-control-bootstrap/11.0",
         "knowledge-analysis-control-bootstrap/12.0",
+        "knowledge-analysis-control-bootstrap/13.0",
     ]
     preset_key: Literal["knowledge-analysis"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -254,6 +260,7 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
         elif self.schema_version in {
             "knowledge-analysis-control-bootstrap/11.0",
             "knowledge-analysis-control-bootstrap/12.0",
+            "knowledge-analysis-control-bootstrap/13.0",
         }:
             expected_protocols = (
                 "workflow-role/1.4.0",
@@ -712,11 +719,37 @@ def bootstrap_knowledge_analysis_control_plane(
         and str(slot.role) == "support"
         and slot.enabled
     ]
-    if len(registry.config.slots) != 5 or len(matching_slots) != 1:
+    parallel_capacity = manifest.schema_version == "knowledge-analysis-control-bootstrap/13.0"
+    support_slots = tuple(
+        slot for slot in registry.config.slots if str(slot.role) == "support" and slot.enabled
+    )
+    expected_support_ids = ("05", "06") if parallel_capacity else None
+    if (
+        len(registry.config.slots) not in ({6} if parallel_capacity else {5, 6})
+        or len(matching_slots) != 1
+        or (
+            expected_support_ids is not None
+            and tuple(slot.slot_id for slot in support_slots) != expected_support_ids
+        )
+        or (
+            not parallel_capacity
+            and tuple(slot.slot_id for slot in support_slots) not in {("05",), ("05", "06")}
+        )
+    ):
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_SLOT_MISMATCH",
-            "knowledge analysis requires the enabled fixed slot05 support identity",
+            "knowledge analysis requires the reviewed fixed support identities",
         )
+    with transaction(sessions) as session:
+        for slot in registry.config.slots:
+            upsert_worker_slot(
+                session,
+                slot_id=slot.slot_id,
+                linux_user=slot.linux_user,
+                role=slot.role,
+                enabled=slot.enabled,
+                gpu=slot.gpu,
+            )
     with transaction(sessions) as session:
         for protocol_version in manifest.compatible_workflow_protocols:
             ensure_protocol_version(
@@ -724,7 +757,22 @@ def bootstrap_knowledge_analysis_control_plane(
                 protocol_version,
                 role_schema_bundle_hash(protocol_version),
             )
-    capacity_revision_id = _released_analysis_capacity_policy(sessions)
+    capacity_revision_id = (
+        _publish_analysis_capacity_policy_v2(
+            sessions,
+            slots=registry.config.slots,
+            actor_id=actor_id,
+            created_at=manifest.created_at,
+        )
+        if parallel_capacity
+        else _released_analysis_capacity_policy(sessions)
+    )
+    if parallel_capacity:
+        _bootstrap_bindings(
+            sessions,
+            slots=registry.config.slots,
+            observed_at=manifest.created_at,
+        )
     bootstrap_revision = KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS[manifest.schema_version]
     platform_artifact = _publish_markdown(
         publisher,
@@ -1119,6 +1167,7 @@ def _publish_capacity_policy(
 ) -> str:
     policy_id = _stable_id("capacity_", "fixed-host")
     revision_id = _stable_id("capacityrev_", "fixed-host:v1")
+    additive_revision_id = _stable_id("capacityrev_", "fixed-host:v2")
     pools = [
         {
             "pool_key": role.worker_pool_key,
@@ -1152,7 +1201,7 @@ def _publish_capacity_policy(
             if (
                 logical is None
                 or logical.policy_key != "fixed-host"
-                or logical.current_revision_id != revision_id
+                or logical.current_revision_id not in {revision_id, additive_revision_id}
                 or logical.state != "ACTIVE"
                 or existing.capacity_policy_id != policy_id
                 or existing.state != "RELEASED"
@@ -1196,6 +1245,106 @@ def _publish_capacity_policy(
             session,
             policy_key="fixed-host",
             document=document,
+            created_by=actor_id,
+        )
+        publish_capacity_policy_revision(
+            session,
+            capacity_policy_id=policy_id,
+            capacity_policy_revision_id=revision_id,
+        )
+    return revision_id
+
+
+def _publish_analysis_capacity_policy_v2(
+    sessions: sessionmaker[Session],
+    *,
+    slots: tuple[WorkerSlot, ...],
+    actor_id: str,
+    created_at: datetime,
+) -> str:
+    """Publish the additive six-slot policy after exact inventory validation."""
+
+    expected_slots = {
+        "01": ("eom-cdx-01", "authoring", False),
+        "02": ("eom-cdx-02", "review", False),
+        "03": ("eom-cdx-03", "image", True),
+        "04": ("eom-cdx-04", "item_management", False),
+        "05": ("eom-cdx-05", "support", False),
+        "06": ("eom-cdx-06", "support", False),
+    }
+    actual_slots = {
+        slot.slot_id: (slot.linux_user, str(slot.role), slot.gpu) for slot in slots if slot.enabled
+    }
+    if actual_slots != expected_slots or len(slots) != len(expected_slots):
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_SLOT_MISMATCH",
+            "parallel knowledge analysis requires the exact six-slot inventory",
+        )
+    policy_id = _stable_id("capacity_", "fixed-host")
+    revision_id = _stable_id("capacityrev_", "fixed-host:v2")
+    pools: list[dict[str, object]] = [
+        {
+            "pool_key": "authoring",
+            "roles": ["authoring"],
+            "slot_keys": ["slot01"],
+            "max_active": 1,
+        },
+        {
+            "pool_key": "review",
+            "roles": ["review"],
+            "slot_keys": ["slot02"],
+            "max_active": 1,
+        },
+        {
+            "pool_key": "image",
+            "roles": ["image"],
+            "slot_keys": ["slot03"],
+            "max_active": 1,
+        },
+        {
+            "pool_key": "item-management",
+            "roles": ["item_management"],
+            "slot_keys": ["slot04"],
+            "max_active": 1,
+        },
+        {
+            "pool_key": "support",
+            "roles": ["support"],
+            "slot_keys": ["slot05", "slot06"],
+            "max_active": 2,
+        },
+    ]
+    document: dict[str, object] = {
+        "schema_version": "worker-capacity-policy/1.1",
+        "capacity_policy_id": policy_id,
+        "capacity_policy_revision_id": revision_id,
+        "revision_number": 2,
+        "state": "RELEASED",
+        "max_configured_slots": 6,
+        "max_active_codex": 3,
+        "max_active_per_slot": 1,
+        "max_active_gpu": 1,
+        "max_active_knowledge_analysis": 2,
+        "pools": pools,
+        "content_sha256": "sha256:" + "0" * 64,
+        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+    }
+    document["content_sha256"] = compute_control_document_hash(document, "content_sha256")
+    reviewed = WorkerCapacityPolicyV2.model_validate(document)
+    with transaction(sessions) as session:
+        existing = session.get(WorkerCapacityPolicyRevisionRecord, revision_id)
+        if existing is not None and (
+            existing.canonical_document != reviewed.model_dump(mode="json")
+            or existing.content_sha256 != reviewed.content_sha256
+        ):
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_HISTORY_INVALID",
+                "parallel fixed-host capacity revision differs",
+            )
+        record_capacity_policy_revision(
+            session,
+            policy_key="fixed-host",
+            document=reviewed.model_dump(mode="json"),
             created_by=actor_id,
         )
         publish_capacity_policy_revision(
@@ -1359,10 +1508,9 @@ def _released_analysis_capacity_policy(sessions: sessionmaker[Session]) -> str:
                 WorkerCapacityPolicyRecord.policy_key == "fixed-host"
             )
         )
-        revision = (
-            session.get(WorkerCapacityPolicyRevisionRecord, logical.current_revision_id)
-            if logical is not None and logical.current_revision_id is not None
-            else None
+        revision = session.get(
+            WorkerCapacityPolicyRevisionRecord,
+            _stable_id("capacityrev_", "fixed-host:v1"),
         )
         if (
             logical is None
@@ -1507,7 +1655,8 @@ def _require_registry(manifest: StandardBootstrapManifest, slots: tuple[WorkerSl
     actual = {f"slot{slot.slot_id}": (str(slot.role), slot.enabled) for slot in slots}
     expected = {**EXPECTED_ROLE_SLOTS, "support": manifest.support_slot_key}
     mismatched = any(actual.get(slot_key) != (role, True) for role, slot_key in expected.items())
-    if len(actual) != 5 or mismatched:
+    extra_support_valid = len(actual) == 6 and actual.get("slot06") == ("support", True)
+    if len(actual) not in {5, 6} or (len(actual) == 6 and not extra_support_valid) or mismatched:
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_SLOT_MISMATCH", "fixed worker inventory differs from bootstrap"
         )

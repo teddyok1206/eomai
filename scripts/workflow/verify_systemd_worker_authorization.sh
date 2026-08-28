@@ -26,7 +26,7 @@ cmp --silent "${HELPER_SOURCE}" "${HELPER_INSTALLED}" || fail "worker executable
 cmp --silent "${AUTH_HELPER_SOURCE}" "${AUTH_HELPER_INSTALLED}" || \
   fail "worker auth executable source drift"
 
-for slot in 01 02 03 04 05; do
+for slot in 01 02 03 04 05 06; do
   worker_source="${REPOSITORY_ROOT}/infra/systemd/eom-worker-${slot}@.service"
   worker_installed="${UNIT_ROOT}/eom-worker-${slot}@.service"
   probe_source="${REPOSITORY_ROOT}/infra/systemd/eom-worker-probe-${slot}@.service"

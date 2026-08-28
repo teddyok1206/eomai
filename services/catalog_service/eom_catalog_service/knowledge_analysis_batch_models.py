@@ -52,6 +52,12 @@ class KnowledgeAnalysisBatchRecord(Base):
             name="ck_knowledge_analysis_batch_range_failure_policy",
         ),
         CheckConstraint(
+            "(scheduling_mode = 'SERIAL' AND max_in_flight = 1) OR "
+            "(scheduling_mode = 'BOUNDED_PARALLEL' AND max_in_flight = 2 "
+            "AND range_failure_policy = 'CONTINUE_AND_COLLECT')",
+            name="ck_knowledge_analysis_batch_scheduling",
+        ),
+        CheckConstraint(
             "total_range_count BETWEEN 1 AND 1000",
             name="ck_knowledge_analysis_batch_range_count",
         ),
@@ -89,6 +95,8 @@ class KnowledgeAnalysisBatchRecord(Base):
     range_failure_policy: Mapped[str] = mapped_column(
         String(32), nullable=False, default="STOP_ON_FIRST_FAILURE"
     )
+    scheduling_mode: Mapped[str] = mapped_column(String(24), nullable=False, default="SERIAL")
+    max_in_flight: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     authorized_by_operator_id: Mapped[str] = mapped_column(
         ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
     )
@@ -179,9 +187,10 @@ class KnowledgeAnalysisBatchRangeRecord(Base):
         UniqueConstraint("batch_id", "ordinal", name="uq_knowledge_analysis_batch_range_ordinal"),
         UniqueConstraint("batch_id", "range_id", name="uq_knowledge_analysis_batch_range_identity"),
         Index(
-            "uq_knowledge_analysis_batch_active_range",
+            "ix_knowledge_analysis_batch_active_range",
             "batch_id",
-            unique=True,
+            "state",
+            "ordinal",
             postgresql_where=text("state IN ('CLAIMED','SUBMITTED')"),
         ),
         Index(

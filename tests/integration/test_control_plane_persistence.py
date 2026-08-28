@@ -829,6 +829,138 @@ def test_global_capacity_never_exceeds_three_active_leases(db_session: Session) 
     )
 
 
+def test_global_capacity_counts_held_leases_across_policy_revisions(
+    db_session: Session,
+) -> None:
+    plans: list[tuple[str, str, WorkerRole]] = []
+    for role in (
+        WorkerRole.AUTHORING,
+        WorkerRole.REVIEW,
+        WorkerRole.ITEM_MANAGEMENT,
+        WorkerRole.SUPPORT,
+    ):
+        plan_id, workflow_id, _ = _complete_control_plane(db_session, roles=(role,))
+        plans.append((plan_id, workflow_id, role))
+
+    for offset, (plan_id, workflow_id, role) in enumerate(plans[:3], start=1):
+        job = _job(db_session, workflow_id=workflow_id, role=role.value)
+        acquire_worker_lease(
+            db_session,
+            plan_id=plan_id,
+            step_key=role.value,
+            job_id=job.job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=offset),
+            ttl=timedelta(minutes=30),
+        )
+
+    plan_id, workflow_id, role = plans[3]
+    fourth_job = _job(db_session, workflow_id=workflow_id, role=role.value)
+    with pytest.raises(ControlPlaneError) as captured:
+        acquire_worker_lease(
+            db_session,
+            plan_id=plan_id,
+            step_key=role.value,
+            job_id=fourth_job.job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=4),
+            ttl=timedelta(minutes=30),
+        )
+    assert captured.value.code == "CONTROL_CAPACITY_EXHAUSTED"
+
+
+def test_concurrent_cross_policy_claims_share_one_host_capacity_lock(
+    integration_engine: Engine,
+) -> None:
+    sessions = build_session_factory(integration_engine)
+    plans: list[tuple[str, str, WorkerRole]] = []
+    disposable_slots = {
+        WorkerRole.AUTHORING: "21",
+        WorkerRole.REVIEW: "22",
+        WorkerRole.ITEM_MANAGEMENT: "24",
+        WorkerRole.SUPPORT: "25",
+    }
+    with transaction(sessions) as session:
+        for role in (
+            WorkerRole.AUTHORING,
+            WorkerRole.REVIEW,
+            WorkerRole.ITEM_MANAGEMENT,
+            WorkerRole.SUPPORT,
+        ):
+            plan_id, workflow_id, _ = _complete_control_plane(
+                session,
+                roles=(role,),
+                slot_id_by_role={role: disposable_slots[role]},
+            )
+            plans.append((plan_id, workflow_id, role))
+        jobs = [
+            _job(session, workflow_id=workflow_id, role=role.value)
+            for _, workflow_id, role in plans
+        ]
+
+    for offset in range(2):
+        plan_id, _, role = plans[offset]
+        with transaction(sessions) as session:
+            acquire_worker_lease(
+                session,
+                plan_id=plan_id,
+                step_key=role.value,
+                job_id=jobs[offset].job_id,
+                attempt=1,
+                workload_class="CODEX",
+                acquired_at=NOW + timedelta(minutes=offset + 1),
+                ttl=timedelta(minutes=30),
+            )
+
+    barrier = Barrier(2)
+
+    def claim(index: int) -> str:
+        plan_id, _, role = plans[index]
+        barrier.wait(timeout=5)
+        try:
+            with transaction(sessions) as session:
+                lease = acquire_worker_lease(
+                    session,
+                    plan_id=plan_id,
+                    step_key=role.value,
+                    job_id=jobs[index].job_id,
+                    attempt=1,
+                    workload_class="CODEX",
+                    acquired_at=NOW + timedelta(minutes=3),
+                    ttl=timedelta(minutes=30),
+                )
+                return lease.lease_id
+        except ControlPlaneError as exc:
+            return exc.code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(claim, (2, 3)))
+    assert sum(value.startswith("workerlease_") for value in outcomes) == 1
+    assert outcomes.count("CONTROL_CAPACITY_EXHAUSTED") == 1
+    workflow_ids = tuple(workflow_id for _, workflow_id, _ in plans)
+    with sessions() as session:
+        held = tuple(
+            session.scalars(
+                select(WorkerLeaseRecord).where(
+                    WorkerLeaseRecord.workflow_id.in_(workflow_ids),
+                    WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING")),
+                )
+            )
+        )
+    assert len(held) == 3
+    with transaction(sessions) as session:
+        for lease in held:
+            terminalize_worker_lease(
+                session,
+                lease_id=lease.lease_id,
+                terminal_state="RELEASED",
+                reason_code="TEST_CLEANUP",
+                released_at=NOW + timedelta(minutes=4),
+            )
+
+
 def test_knowledge_analysis_capacity_is_one_across_pools(db_session: Session) -> None:
     roles = (WorkerRole.AUTHORING, WorkerRole.REVIEW)
     plan_id, workflow_id, _ = _complete_control_plane(db_session, roles=roles)
@@ -851,6 +983,44 @@ def test_knowledge_analysis_capacity_is_one_across_pools(db_session: Session) ->
             plan_id=plan_id,
             step_key="review",
             job_id=review_job.job_id,
+            attempt=1,
+            workload_class="KNOWLEDGE_ANALYSIS",
+            acquired_at=NOW + timedelta(minutes=2),
+            ttl=timedelta(minutes=30),
+        )
+    assert captured.value.code == "CONTROL_KNOWLEDGE_CAPACITY_EXHAUSTED"
+
+
+def test_knowledge_analysis_capacity_counts_held_leases_across_policy_revisions(
+    db_session: Session,
+) -> None:
+    first_plan, first_workflow, _ = _complete_control_plane(
+        db_session,
+        roles=(WorkerRole.AUTHORING,),
+    )
+    second_plan, second_workflow, _ = _complete_control_plane(
+        db_session,
+        roles=(WorkerRole.REVIEW,),
+    )
+    first_job = _job(db_session, workflow_id=first_workflow, role="authoring")
+    second_job = _job(db_session, workflow_id=second_workflow, role="review")
+    acquire_worker_lease(
+        db_session,
+        plan_id=first_plan,
+        step_key="authoring",
+        job_id=first_job.job_id,
+        attempt=1,
+        workload_class="KNOWLEDGE_ANALYSIS",
+        acquired_at=NOW + timedelta(minutes=1),
+        ttl=timedelta(minutes=30),
+    )
+
+    with pytest.raises(ControlPlaneError) as captured:
+        acquire_worker_lease(
+            db_session,
+            plan_id=second_plan,
+            step_key="review",
+            job_id=second_job.job_id,
             attempt=1,
             workload_class="KNOWLEDGE_ANALYSIS",
             acquired_at=NOW + timedelta(minutes=2),
@@ -883,6 +1053,52 @@ def test_gpu_capacity_is_one_across_distinct_role_pools(db_session: Session) -> 
         acquire_worker_lease(
             db_session,
             plan_id=plan_id,
+            step_key="item_management",
+            job_id=management_job.job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=2),
+            ttl=timedelta(minutes=30),
+        )
+    assert captured.value.code == "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE"
+
+
+def test_gpu_capacity_counts_held_leases_across_policy_revisions(
+    db_session: Session,
+) -> None:
+    image_plan, image_workflow, _ = _complete_control_plane(
+        db_session,
+        roles=(WorkerRole.IMAGE,),
+    )
+    management_plan, management_workflow, _ = _complete_control_plane(
+        db_session,
+        roles=(WorkerRole.ITEM_MANAGEMENT,),
+    )
+    second_gpu_slot = db_session.get(WorkerSlotRecord, "04")
+    assert second_gpu_slot is not None
+    second_gpu_slot.gpu = True
+    db_session.flush()
+    image_job = _job(db_session, workflow_id=image_workflow, role="image")
+    management_job = _job(
+        db_session,
+        workflow_id=management_workflow,
+        role="item_management",
+    )
+    acquire_worker_lease(
+        db_session,
+        plan_id=image_plan,
+        step_key="image",
+        job_id=image_job.job_id,
+        attempt=1,
+        workload_class="CODEX",
+        acquired_at=NOW + timedelta(minutes=1),
+        ttl=timedelta(minutes=30),
+    )
+
+    with pytest.raises(ControlPlaneError) as captured:
+        acquire_worker_lease(
+            db_session,
+            plan_id=management_plan,
             step_key="item_management",
             job_id=management_job.job_id,
             attempt=1,
@@ -1042,7 +1258,7 @@ def test_automatic_observation_window_covers_every_fixed_slot() -> None:
     assert timedelta(hours=1) == AUTH_OBSERVATION_TTL
     assert timedelta(hours=1) == CAPABILITY_OBSERVATION_TTL
     assert timedelta(minutes=30) == AUTOMATIC_OBSERVATION_REFRESH_LEAD
-    assert FIXED_WORKER_SLOT_IDS == ("01", "02", "03", "04", "05")
+    assert FIXED_WORKER_SLOT_IDS == ("01", "02", "03", "04", "05", "06")
     assert AUTOMATIC_OBSERVATION_REFRESH_LEAD >= (AUTOMATIC_OBSERVATION_CHECK_INTERVAL * 5)
 
 
@@ -2000,7 +2216,7 @@ def test_standard_bootstrap_is_idempotent_and_materializes_only_pinned_markdown(
     replay = bootstrap()
     assert replay == first
     assert len(first.instruction_bundle_revision_ids) == 4
-    assert len(first.auth_binding_ids) == 5
+    assert len(first.auth_binding_ids) == 6
 
     sessions = build_session_factory(integration_engine)
     with transaction(sessions) as session:

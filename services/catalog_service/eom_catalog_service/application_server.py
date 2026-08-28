@@ -96,7 +96,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 operation = raw_operation
             validate_contract(
                 (
-                    "catalog-application-request-v8"
+                    "catalog-application-request-v9"
                     if operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
                     else "catalog-application-request-v4"
                     if operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"

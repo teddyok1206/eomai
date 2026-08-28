@@ -24,7 +24,7 @@ SYSTEMCTL_ENV = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbi
 JOB_ID_PATTERN = re.compile(r"\Ajob_[0-9a-f]{32}\Z", re.ASCII)
 PROBE_ID_PATTERN = re.compile(r"\Aprobe_[0-9a-f]{32}\Z", re.ASCII)
 AUTH_ENROLLMENT_ID_PATTERN = re.compile(r"\Aauthflow_[0-9a-f]{32}\Z", re.ASCII)
-SLOT_IDS = frozenset({"01", "02", "03", "04", "05"})
+SLOT_IDS = frozenset({"01", "02", "03", "04", "05", "06"})
 ACTIVE_STATES = frozenset({"activating", "active", "deactivating", "reloading"})
 NON_ACTIVE_SYSTEMCTL_EXIT_CODES = frozenset({3, 4})
 AUTHORIZATION_DENIED_MARKERS = (
@@ -44,7 +44,7 @@ def fixed_worker_timeout_seconds(slot: WorkerSlot) -> int:
 
     return (
         FIXED_ANALYSIS_WORKER_TIMEOUT_SECONDS
-        if validate_slot(slot) == "05"
+        if validate_slot(slot) in {"05", "06"}
         else FIXED_WORKER_TIMEOUT_SECONDS
     )
 
@@ -52,11 +52,12 @@ def fixed_worker_timeout_seconds(slot: WorkerSlot) -> int:
 # These hashes are the installed contract. Tests compare them with the canonical repository
 # sources, and runtime readiness compares them with root-owned installed artifacts.
 WORKER_TEMPLATE_SHA256 = {
-    "01": "3c0f2b5b19852714a38739f20a73ade9f003832ae521711b5f08a83dd7238437",
-    "02": "08590fce316a9d6e3e3d57680204b3030d1b5672429fa32d9a91253cb85d62e8",
-    "03": "e261fdc7e5c5af7c260107a9594da605aa37d6edc0d14ea1733e5489ecae0f2f",
-    "04": "328fce8d9099d71925658552626d38e0702550b8da3d451f5f017fec32460a17",
-    "05": "b992622ee6c718a60ca3d9601ac56646213ab59703e6670a7b6edbf3484b4672",
+    "01": "9fd450e28e5d5dcec105ff67613e30479623714dacf97bd83f9ff3f4d81d1610",
+    "02": "4f161c30c11b9d1a77905caafdb2357cad9ff210babaf18e23fb9387cf4839de",
+    "03": "c2f2254c142a4929fed20924881870f155fae3c05d1e6096858d6237bf4a441d",
+    "04": "598519eb0f35d0d6869d7bed72c30c5ae10f17207ec3816093d096f74e97519c",
+    "05": "15216cdcd8b397520b7125f719db8f62142f625456fe6ed9b2a058a5bba36a79",
+    "06": "4fd257b45cc10c4b181a6c75572ff5b786d30d6a374e4d76d62c2cdf552abfd3",
 }
 PROBE_TEMPLATE_SHA256 = {
     "01": "6d74599b84b8ac243656fb1cef1ffb459261ff23195428cd47be4da86134d4e4",
@@ -64,6 +65,7 @@ PROBE_TEMPLATE_SHA256 = {
     "03": "b6851bf9e087ea6c0a2cbabe61e03abc06dd862bbe5edf69e2e4e7e2f445b8a5",
     "04": "83eccd46ee0b058ede1824b1f137b9f35803a9da5d91ae14ec1961651d34a69a",
     "05": "86c19aa495b44be6f38441b6fe63308e408cf12310d5d562207a128ef354768c",
+    "06": "f14b35970a292fa6ccd6d319880578e4243f047e73bc9d3dfe215a7b3cb8f87e",
 }
 AUTH_TEMPLATE_SHA256 = {
     "01": "4ca00325bea635d32b192ae3cc6300fc887d13f861d38aeb2bbc2639945e1ae4",
@@ -71,18 +73,20 @@ AUTH_TEMPLATE_SHA256 = {
     "03": "cf1686cb8bab136017148e9ede376362ff217bcc7a69a14c87fcde0c1fa90f5f",
     "04": "a46f8d4c4b5f7b2bfdf1993e0cb7694bef348e85d56fcb858471d8ba8bbcf142",
     "05": "98dbc3e1b1907912a71b8f2b7b2c7a7c224cd19b927084bfde2de5037ead29e3",
+    "06": "695e4742b2e4e624439712e16cc48245301b8cd42a4df86ee99d33bee80f84db",
 }
 LOGIN_TEMPLATE_SHA256 = {
-    "01": "a871e5b249b8c37a3e815a20ff356dec62704f667ec54b7ff7ab9c0107b51834",
-    "02": "1cf434dc3621ce3475914cf1fcede45769820039d343341b53110da5dc9bab8a",
-    "03": "4843ec553a7e80bd29f21e501b771dd4df65f955d3ae6543b315b763e8964a76",
-    "04": "5ce90ed12c840df17a5ab0942615041cad82a64f7281b42f65f7ac9493875788",
-    "05": "dd23413be918550d39a954b49b6502d2f7bf93ad71f4dcade9b950053b9f88ed",
+    "01": "1a1599089916ae6c51cf1fab6e65078f5fe83a07f2f9c517ec71830e7b5de5ce",
+    "02": "4f36d89147bfdf7e227d2c67265c3ea2c2d26fb875265ec664d2d1f5e578fbde",
+    "03": "d4ba2743d78ac02e196147f8b9c8e7d532572db648e0c0a698315ff87e0d92cf",
+    "04": "6ec5adadc3a2d3e9af89430a91094930ff36fe5e1f70720682add7f45daeafb4",
+    "05": "5036d11960c3b45cbf9c199df1c6be995e7e6de7e2d41f6504f6aa0157aacfa1",
+    "06": "6df179d670a1b299116bb59180d36b0bbbef7ec690b095d86add8b968850ea13",
 }
-WORKER_EXECUTABLE_SHA256 = "aab4b92a04caffd7a6864db0a703093c98e50b27ed084a122479b69c64e6b038"
-WORKER_AUTH_EXECUTABLE_SHA256 = "a4d0cb8655507d69c85ba7f12b8674f4b0ffef123af68190c36b95b67ea18b42"
+WORKER_EXECUTABLE_SHA256 = "97ea5bf468da3698e2e3bde6376bc5282d6b8efd0f6440be71bed55fc43547cf"
+WORKER_AUTH_EXECUTABLE_SHA256 = "42951e21b4c54574d6402fc61139792ec8abf2b549d30867e792df7977f6b7e7"
 WORKER_DEVICE_LOGIN_EXECUTABLE_SHA256 = (
-    "65825b50ad4bae50b4f9d9561a102bdeed4077f8118596b336875bf1279a18e9"
+    "47ca1fb12d88d1f02ac4402b2e260e96d4ae78b3ceefdeedbee9da392650feec"
 )
 AUTH_REQUIRED_EXIT = 20
 AUTH_PROBE_INVALID_EXIT = 21
@@ -404,7 +408,8 @@ def inspect_worker_systemd_contract(slot: WorkerSlot) -> WorkerSystemdReadiness:
         return WorkerSystemdReadiness(
             False, "WORKER_SYSTEMD_TEMPLATE_INVALID", f"slot {slot.slot_id}"
         )
-    return WorkerSystemdReadiness(True, "READY", f"slot {slot_id} contract v1")
+    contract_version = "v2" if slot_id == "06" else "v1"
+    return WorkerSystemdReadiness(True, "READY", f"slot {slot_id} contract {contract_version}")
 
 
 def observe_worker_auth_systemd(slot: WorkerSlot) -> WorkerAuthSystemdObservation:

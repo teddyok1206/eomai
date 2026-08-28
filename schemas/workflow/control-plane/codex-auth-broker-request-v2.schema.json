@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/control-plane/codex-auth-broker-request/1.1",
+  "title": "Codex Auth Broker Request V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "action", "enrollment_id", "slot_key"],
+  "properties": {
+    "schema_version": {"const": "codex-auth-broker-request/1.1"},
+    "action": {"enum": ["STATUS", "REVEAL"]},
+    "enrollment_id": {"type": "string", "pattern": "^authflow_[0-9a-f]{32}$"},
+    "slot_key": {"type": "string", "pattern": "^slot0[1-6]$"}
+  }
+}

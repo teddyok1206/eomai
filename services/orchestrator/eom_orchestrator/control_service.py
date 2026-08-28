@@ -19,6 +19,7 @@ from eom_workflow import (
     ResolvedExecutionPlan,
     ResolvedExecutionPlanV3,
     WorkerCapacityPolicy,
+    WorkerCapacityPolicyV2,
     WorkerLeaseView,
     validate_control_contract,
 )
@@ -60,6 +61,9 @@ from eom_orchestrator.models import (
 
 MAX_CONTROL_DOCUMENT_BYTES = 512 * 1024
 HELD_LEASE_STATES = ("ACTIVE", "RECONCILING")
+# One transaction-scoped host lock serializes capacity checks even while immutable policy
+# revisions coexist. The hexadecimal payload reads ``EOMCAP`` and is stable across processes.
+WORKER_HOST_CAPACITY_LOCK_ID = 0x454F4D4341500001
 
 
 class ControlPlaneError(RuntimeError):
@@ -101,6 +105,7 @@ def _validated_document(
         InstructionBundleManifest
         | ReferenceBundleManifest
         | WorkerCapacityPolicy
+        | WorkerCapacityPolicyV2
         | ExecutionPresetRevision
         | ExecutionPresetRevisionV2
         | ResolvedExecutionPlan
@@ -112,6 +117,7 @@ def _validated_document(
     InstructionBundleManifest
     | ReferenceBundleManifest
     | WorkerCapacityPolicy
+    | WorkerCapacityPolicyV2
     | ExecutionPresetRevision
     | ExecutionPresetRevisionV2
     | ResolvedExecutionPlan
@@ -376,10 +382,20 @@ def record_capacity_policy_revision(
     document: dict[str, Any],
     created_by: str,
 ) -> WorkerCapacityPolicyRevisionRecord:
-    model, normalized = _validated_document(
-        "worker-capacity-policy", document, WorkerCapacityPolicy
-    )
-    if not isinstance(model, WorkerCapacityPolicy):
+    schema_version = document.get("schema_version")
+    if schema_version == "worker-capacity-policy/1.0":
+        model, normalized = _validated_document(
+            "worker-capacity-policy", document, WorkerCapacityPolicy
+        )
+    elif schema_version == "worker-capacity-policy/1.1":
+        model, normalized = _validated_document(
+            "worker-capacity-policy-v2", document, WorkerCapacityPolicyV2
+        )
+    else:
+        raise ControlPlaneError(
+            "CONTROL_DOCUMENT_INVALID", "worker capacity schema version is unsupported"
+        )
+    if not isinstance(model, (WorkerCapacityPolicy, WorkerCapacityPolicyV2)):
         raise AssertionError("validated capacity model has the wrong type")
     _require_declared_hash(normalized, "content_sha256")
     logical_by_key = session.scalar(
@@ -1206,6 +1222,7 @@ def acquire_worker_lease(
         or stored_step.platform_job_id != job_id
     ):
         raise ControlPlaneError("CONTROL_LEASE_JOB_MISMATCH", "job does not match plan step")
+    session.execute(select(func.pg_advisory_xact_lock(WORKER_HOST_CAPACITY_LOCK_ID)))
     policy = session.execute(
         select(WorkerCapacityPolicyRevisionRecord)
         .where(
@@ -1247,13 +1264,7 @@ def acquire_worker_lease(
         raise ControlPlaneError(
             "CONTROL_CAPACITY_ROLE_MISMATCH", "plan role is absent from its capacity pool"
         )
-    if (
-        _held_count(
-            session,
-            WorkerLeaseRecord.capacity_policy_revision_id == plan.capacity_policy_revision_id,
-        )
-        >= policy.max_active_codex
-    ):
+    if _held_count(session) >= policy.max_active_codex:
         raise ControlPlaneError("CONTROL_CAPACITY_EXHAUSTED", "global worker capacity is full")
     if (
         _held_count(
@@ -1268,7 +1279,6 @@ def acquire_worker_lease(
         workload_class == "KNOWLEDGE_ANALYSIS"
         and _held_count(
             session,
-            WorkerLeaseRecord.capacity_policy_revision_id == plan.capacity_policy_revision_id,
             WorkerLeaseRecord.workload_class == "KNOWLEDGE_ANALYSIS",
         )
         >= policy.max_active_knowledge_analysis
@@ -1336,7 +1346,6 @@ def acquire_worker_lease(
             slot.gpu
             and _held_count(
                 session,
-                WorkerLeaseRecord.capacity_policy_revision_id == plan.capacity_policy_revision_id,
                 WorkerLeaseRecord.worker_slot_id.in_(
                     select(WorkerSlotRecord.slot_id).where(WorkerSlotRecord.gpu.is_(True))
                 ),

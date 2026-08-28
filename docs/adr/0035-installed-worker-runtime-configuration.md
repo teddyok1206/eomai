@@ -57,8 +57,9 @@ verifies installed-package origin, staging/workspace access, protocol schemas, f
 the harmless authorization probe before `submit()` is reachable. It never submits a job or invokes
 Codex.
 
-The dominant access is a one-time parse followed by role selection over five slots. Validation and
-selection are O(n) time and O(n) space, with deterministic slot ordering. PostgreSQL, workflow
+The dominant access is a one-time parse followed by role selection over the bounded installed
+inventory (five slots in V1 and six in additive V2). Validation and selection are O(n) time and
+O(n) space, with deterministic slot ordering. PostgreSQL, workflow
 state, and artifact pointers are outside this configuration transaction; a failure is fail-closed
 before any job row, workspace, unit, token use, or retry exists.
 
@@ -67,6 +68,9 @@ before any job row, workspace, unit, token use, or retry exists.
 Deployments must install or reconcile the external worker file before running doctor or a live
 verification. Build verification installs the real wheel into an isolated target, passes a copied
 non-production fixture explicitly, and proves `/tmp` CWD independence without a repository import.
+The reviewed worker-runtime installer owns this materialization boundary and atomically replaces
+the file only after installed-code validation and an empty durable-lease check; its provenance
+record pins the resulting inventory SHA-256.
 
 The simpler alternatives were rejected: packaging examples would turn operator settings into
 immutable code resources, and keeping `__file__` traversal or supplying repository paths per

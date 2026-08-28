@@ -131,10 +131,23 @@ class KnowledgeAnalysisBatchRequestV3(_KnowledgeAnalysisBatchRequestBase):
     ranges: tuple[KnowledgeAnalysisBatchRangeRequestV2, ...] = Field(min_length=1, max_length=1000)
 
 
+class KnowledgeAnalysisBatchRequestV4(_KnowledgeAnalysisBatchRequestBase):
+    """Two-way bounded-parallel batch with collected terminal failures."""
+
+    schema_version: Literal["knowledge-analysis-batch-request/1.3"] = (
+        "knowledge-analysis-batch-request/1.3"
+    )
+    range_failure_policy: Literal["CONTINUE_AND_COLLECT"] = "CONTINUE_AND_COLLECT"
+    scheduling_mode: Literal["BOUNDED_PARALLEL"] = "BOUNDED_PARALLEL"
+    max_in_flight: Literal[2] = 2
+    ranges: tuple[KnowledgeAnalysisBatchRangeRequestV2, ...] = Field(min_length=1, max_length=1000)
+
+
 KnowledgeAnalysisBatchRequestValue = Annotated[
     KnowledgeAnalysisBatchRequest
     | KnowledgeAnalysisBatchRequestV2
-    | KnowledgeAnalysisBatchRequestV3,
+    | KnowledgeAnalysisBatchRequestV3
+    | KnowledgeAnalysisBatchRequestV4,
     Field(discriminator="schema_version"),
 ]
 

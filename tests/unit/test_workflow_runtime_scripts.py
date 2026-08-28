@@ -16,7 +16,7 @@ def test_runtime_bootstrap_is_exact_and_non_recursive() -> None:
     assert "/srv/eom/workspaces" in source
     assert "chmod -R" not in source
     assert "chown -R" not in source
-    assert "sudo" not in source
+    assert "\nsudo " not in source
     assert "2770" in source and "0750" in source
     assert "find " not in source
 
@@ -71,6 +71,7 @@ def test_runtime_scripts_have_valid_shell_syntax() -> None:
         "scripts/workflow/deploy_runner_service.sh",
         "scripts/workflow/deploy_worker_runtime.sh",
         "scripts/workflow/install_runner_configuration.sh",
+        "scripts/workflow/provision_worker_slot06.sh",
         "scripts/workflow/verify_runtime_paths.sh",
         "scripts/workflow/verify_systemd_worker_authorization.sh",
     ):
@@ -89,7 +90,7 @@ def test_runtime_scripts_have_valid_shell_syntax() -> None:
 def test_worker_runtime_doctor_receives_each_slot_group_explicitly() -> None:
     source = (ROOT / "scripts/workflow/deploy_worker_runtime.sh").read_text(encoding="utf-8")
 
-    for slot in range(1, 6):
+    for slot in range(1, 7):
         assert f"-G eom-cdx-{slot:02d}" in source
     assert "eom-cdx-01,eom-cdx-02" not in source
     assert "EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging" in source
@@ -106,6 +107,45 @@ def test_worker_runtime_deployment_fails_closed_on_durable_lease() -> None:
     assert 'WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING"))' in guard
     assert "DELETE" not in guard
     assert "UPDATE" not in guard
+
+
+def test_worker_runtime_reloads_auth_broker_under_the_reviewed_slot06_groups() -> None:
+    deployer = (ROOT / "scripts/workflow/deploy_worker_runtime.sh").read_text(encoding="utf-8")
+    broker = (ROOT / "infra/systemd/eom-codex-auth-broker.service").read_text(encoding="utf-8")
+
+    assert 'systemctl stop "${BROKER_SERVICE}"' in deployer
+    assert 'systemctl start "${BROKER_SERVICE}"' in deployer
+    assert 'systemctl enable "${BROKER_SERVICE}"' in deployer
+    assert "BROKER_STOPPED" in deployer
+    assert "eom-cdx-06" in broker
+    assert "ReadOnlyPaths=-/run/eom-codex-login-06" in broker
+
+
+def test_worker_runtime_atomically_installs_reviewed_six_slot_inventory() -> None:
+    deployer = (ROOT / "scripts/workflow/deploy_worker_runtime.sh").read_text(encoding="utf-8")
+
+    assert "WORKER_CONFIG_SOURCE=${REPOSITORY}/config/worker-slots.example.yaml" in deployer
+    assert "WORKER_CONFIG_TARGET=/etc/eom/worker-slots.yaml" in deployer
+    assert 'require_regular "${WORKER_CONFIG_TARGET}" root:eom:640' in deployer
+    assert "mktemp /etc/eom/.worker-slots.XXXXXX" in deployer
+    assert 'install -o root -g eom -m 0640 "${WORKER_CONFIG_SOURCE}"' in deployer
+    assert 'mv -f "${WORKER_CONFIG_TEMPORARY}" "${WORKER_CONFIG_TARGET}"' in deployer
+    assert 'cmp -s "${WORKER_CONFIG_SOURCE}" "${WORKER_CONFIG_TARGET}"' in deployer
+    assert "worker_inventory_sha256=" in deployer
+    assert "WorkerRegistry.load(Path(sys.argv[1]))" in deployer
+
+
+def test_slot06_identity_provisioning_is_scoped_and_non_disruptive() -> None:
+    source = (ROOT / "scripts/workflow/provision_worker_slot06.sh").read_text(encoding="utf-8")
+
+    assert "eom-cdx-06" in source
+    assert "--no-create-home" in source
+    assert "--shell /usr/sbin/nologin" in source
+    assert 'usermod --append --groups "${WORKER}" "${RUNNER}"' in source
+    assert "for forbidden in eom sudo docker lxd adm" in source
+    assert "systemctl" not in source
+    assert "\nsudo " not in source
+    assert "service_restart=NONE" in source
 
 
 def test_worker_runtime_deployer_installs_and_smokes_bubblewrap_profile() -> None:

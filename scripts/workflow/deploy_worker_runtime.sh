@@ -12,10 +12,14 @@ GETCAP=/usr/sbin/getcap
 CODEX_BWRAP=/usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap
 SERVICE=eom-workflow-runner.service
 BROKER_SERVICE=eom-codex-auth-broker.service
+WORKER_CONFIG_SOURCE=${REPOSITORY}/config/worker-slots.example.yaml
+WORKER_CONFIG_TARGET=/etc/eom/worker-slots.yaml
 RELEASE_ROOT=/var/lib/eom-worker-runtime-deployments
 PYTHON=/srv/eom/conda/envs/eom-api/bin/python
 LEASE_GUARD=${REPOSITORY}/scripts/workflow/check_no_active_worker_leases.py
 STOPPED=0
+BROKER_STOPPED=0
+WORKER_CONFIG_TEMPORARY=
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -58,8 +62,15 @@ run_fixed_worker_sandbox_smoke() {
 recover() {
   local status=$?
   trap - ERR
+  if [[ -n ${WORKER_CONFIG_TEMPORARY} && -f ${WORKER_CONFIG_TEMPORARY} && \
+        ! -L ${WORKER_CONFIG_TEMPORARY} ]]; then
+    rm -f -- "${WORKER_CONFIG_TEMPORARY}"
+  fi
   if [[ ${STOPPED} -eq 1 ]]; then
     systemctl start "${SERVICE}" || true
+  fi
+  if [[ ${BROKER_STOPPED} -eq 1 ]]; then
+    systemctl start "${BROKER_SERVICE}" || true
   fi
   exit "${status}"
 }
@@ -97,8 +108,9 @@ SOURCES=(
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_auth_exec.py"
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_device_login_exec.py"
   "${REPOSITORY}/infra/systemd/${BROKER_SERVICE}"
+  "${WORKER_CONFIG_SOURCE}"
 )
-for slot in 01 02 03 04 05; do
+for slot in 01 02 03 04 05 06; do
   SOURCES+=(
     "${REPOSITORY}/infra/systemd/eom-worker-${slot}@.service"
     "${REPOSITORY}/infra/systemd/eom-worker-probe-${slot}@.service"
@@ -111,6 +123,9 @@ getent passwd eom-codex-auth-broker >/dev/null || fail "Codex auth broker user i
 for source in "${SOURCES[@]}"; do
   [[ -f "${source}" && ! -L "${source}" ]] || fail "unsafe runtime source: ${source}"
 done
+"${PYTHON}" -I -c \
+  'from pathlib import Path; import sys; from eom_orchestrator.worker_registry import WorkerRegistry; WorkerRegistry.load(Path(sys.argv[1]))' \
+  "${WORKER_CONFIG_SOURCE}" || fail "reviewed worker inventory is invalid"
 [[ -x "${APPARMOR_PARSER}" && ! -L "${APPARMOR_PARSER}" ]] || \
   fail "AppArmor parser is unavailable"
 require_regular "${GETCAP}" root:root:755
@@ -122,6 +137,15 @@ require_regular "${CODEX_BWRAP}" root:root:755
 if [[ ${ACTION} == install ]]; then
   systemctl stop "${SERVICE}"
   STOPPED=1
+  systemctl stop "${BROKER_SERVICE}"
+  BROKER_STOPPED=1
+  if [[ -e ${WORKER_CONFIG_TARGET} || -L ${WORKER_CONFIG_TARGET} ]]; then
+    require_regular "${WORKER_CONFIG_TARGET}" root:eom:640
+  fi
+  WORKER_CONFIG_TEMPORARY=$(mktemp /etc/eom/.worker-slots.XXXXXX)
+  install -o root -g eom -m 0640 "${WORKER_CONFIG_SOURCE}" "${WORKER_CONFIG_TEMPORARY}"
+  mv -f "${WORKER_CONFIG_TEMPORARY}" "${WORKER_CONFIG_TARGET}"
+  WORKER_CONFIG_TEMPORARY=
   install -o root -g root -m 0644 \
     "${APPARMOR_SOURCE}" "${APPARMOR_TARGET}"
   "${APPARMOR_PARSER}" -r -K "${APPARMOR_TARGET}"
@@ -143,7 +167,7 @@ if [[ ${ACTION} == install ]]; then
   install -o root -g root -m 0644 \
     "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules" \
     "${POLKIT_ROOT}/50-eom-worker-units.rules"
-  for slot in 01 02 03 04 05; do
+  for slot in 01 02 03 04 05 06; do
     install -o root -g root -m 0644 \
       "${REPOSITORY}/infra/systemd/eom-worker-${slot}@.service" \
       "${UNIT_ROOT}/eom-worker-${slot}@.service"
@@ -158,19 +182,24 @@ if [[ ${ACTION} == install ]]; then
       "${UNIT_ROOT}/eom-worker-login-${slot}@.service"
   done
   systemctl daemon-reload
-  systemctl enable --now "${BROKER_SERVICE}" >/dev/null
+  systemctl enable "${BROKER_SERVICE}" >/dev/null
+  systemctl start "${BROKER_SERVICE}"
+  BROKER_STOPPED=0
   systemctl start "${SERVICE}"
   STOPPED=0
 fi
 
 require_regular "${APPARMOR_TARGET}" root:root:644
 cmp -s "${APPARMOR_SOURCE}" "${APPARMOR_TARGET}" || fail "Codex Bubblewrap profile drift"
+require_regular "${WORKER_CONFIG_TARGET}" root:eom:640
+cmp -s "${WORKER_CONFIG_SOURCE}" "${WORKER_CONFIG_TARGET}" || \
+  fail "worker inventory source drift"
 systemd-analyze verify "${UNIT_ROOT}/eom-workflow-runner.service" \
   "${UNIT_ROOT}/${BROKER_SERVICE}" \
-  "${UNIT_ROOT}"/eom-worker-{01,02,03,04,05}@.service \
-  "${UNIT_ROOT}"/eom-worker-probe-{01,02,03,04,05}@.service \
-  "${UNIT_ROOT}"/eom-worker-auth-{01,02,03,04,05}.service \
-  "${UNIT_ROOT}"/eom-worker-login-{01,02,03,04,05}@.service
+  "${UNIT_ROOT}"/eom-worker-{01,02,03,04,05,06}@.service \
+  "${UNIT_ROOT}"/eom-worker-probe-{01,02,03,04,05,06}@.service \
+  "${UNIT_ROOT}"/eom-worker-auth-{01,02,03,04,05,06}.service \
+  "${UNIT_ROOT}"/eom-worker-login-{01,02,03,04,05,06}@.service
 
 require_regular "${UNIT_ROOT}/eom-workflow-runner.service" root:root:644
 cmp -s "${REPOSITORY}/infra/systemd/eom-workflow-runner.service" \
@@ -190,7 +219,7 @@ cmp -s "${REPOSITORY}/infra/systemd/${BROKER_SERVICE}" \
 require_regular "${POLKIT_ROOT}/50-eom-worker-units.rules" root:root:644
 cmp -s "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules" \
   "${POLKIT_ROOT}/50-eom-worker-units.rules" || fail "worker polkit source drift"
-for slot in 01 02 03 04 05; do
+for slot in 01 02 03 04 05 06; do
   for name in "eom-worker-${slot}@.service" "eom-worker-probe-${slot}@.service" \
     "eom-worker-auth-${slot}.service" "eom-worker-login-${slot}@.service"; do
     require_regular "${UNIT_ROOT}/${name}" root:root:644
@@ -240,6 +269,7 @@ DOCTOR_OUTPUT=$(mktemp /tmp/eom-workflow-runtime-doctor.XXXXXX)
 chmod 0600 "${DOCTOR_OUTPUT}"
 runuser -u eom-workflow-runner -g eom \
   -G eom-cdx-01 -G eom-cdx-02 -G eom-cdx-03 -G eom-cdx-04 -G eom-cdx-05 \
+  -G eom-cdx-06 \
   -G eom-codex-auth -- \
   env -i HOME=/var/lib/eom-workflow-runner USER=eom-workflow-runner \
     LOGNAME=eom-workflow-runner TZ=UTC PATH=/srv/eom/conda/envs/eom-api/bin:/usr/bin:/bin \
@@ -271,6 +301,7 @@ if [[ ${ACTION} == install ]]; then
     printf 'worker_device_login_exec_sha256=%s\n' "$(sha256sum "${LIBEXEC_ROOT}/eom-worker-device-login" | cut -d' ' -f1)"
     printf 'codex_auth_broker_unit_sha256=%s\n' "$(sha256sum "${UNIT_ROOT}/${BROKER_SERVICE}" | cut -d' ' -f1)"
     printf 'codex_bwrap_apparmor_sha256=%s\n' "$(sha256sum "${APPARMOR_TARGET}" | cut -d' ' -f1)"
+    printf 'worker_inventory_sha256=%s\n' "$(sha256sum "${WORKER_CONFIG_TARGET}" | cut -d' ' -f1)"
     printf 'deployed_at_utc=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
   } >"${TEMPORARY}"
   mv -f "${TEMPORARY}" "${RECORD}"

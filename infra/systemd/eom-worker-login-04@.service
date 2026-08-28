@@ -42,6 +42,7 @@ InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-01
 InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-02
 InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-03
 InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-05
+InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-06
 ReadOnlyPaths=/srv/eom/conda/envs/eom-api
 ReadWritePaths=/srv/eom/worker-homes/eom-cdx-04
 ReadWritePaths=/run/eom-codex-login-04

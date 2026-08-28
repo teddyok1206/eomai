@@ -98,7 +98,7 @@ def run_doctor(engine: Engine, settings: Settings) -> list[DoctorCheck]:
             "/usr/bin/systemctl",
         )
     )
-    for index in range(1, 6):
+    for index in range(1, 7):
         user = f"eom-cdx-{index:02d}"
         try:
             pwd.getpwnam(user)

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-request-v9",
+  "title": "EOM Catalog Application Knowledge Analysis Batch Request V9",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation", "request", "requested_by", "authorized_at", "idempotency_key",
+    "submission_sha256"
+  ],
+  "properties": {
+    "operation": {"const": "CREATE_KNOWLEDGE_ANALYSIS_BATCH"},
+    "request": {
+      "oneOf": [
+        {"$ref": "eom://schemas/knowledge/knowledge-analysis-batch-request/1.0"},
+        {"$ref": "eom://schemas/knowledge/knowledge-analysis-batch-request/1.1"},
+        {"$ref": "eom://schemas/knowledge/knowledge-analysis-batch-request/1.2"},
+        {"$ref": "eom://schemas/knowledge/knowledge-analysis-batch-request/1.3"}
+      ]
+    },
+    "requested_by": {
+      "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "authorized_at": {"type": "string", "format": "date-time"},
+    "idempotency_key": {
+      "type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[!-~]+$"
+    },
+    "submission_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

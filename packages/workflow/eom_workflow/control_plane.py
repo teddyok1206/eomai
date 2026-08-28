@@ -768,6 +768,59 @@ class CodexAuthBrokerResponse(FrozenModel):
         return self
 
 
+class CodexAuthEnrollmentRequestV2(CodexAuthEnrollmentRequest):
+    """Additive enrollment request for the six-slot inventory."""
+
+    schema_version: Literal["codex-auth-enrollment-request/1.1"] = (
+        "codex-auth-enrollment-request/1.1"  # type: ignore[assignment]
+    )
+    slot_key: str = Field(pattern=r"^slot0[1-6]$")
+
+
+class CodexAuthEnrollmentStatusV2(CodexAuthEnrollmentStatus):
+    schema_version: Literal["codex-auth-enrollment-status/1.1"] = "codex-auth-enrollment-status/1.1"  # type: ignore[assignment]
+    slot_key: str = Field(pattern=r"^slot0[1-6]$")
+
+
+class CodexDeviceChallengeV2(CodexDeviceChallenge):
+    schema_version: Literal["codex-device-challenge/1.1"] = "codex-device-challenge/1.1"  # type: ignore[assignment]
+    slot_key: str = Field(pattern=r"^slot0[1-6]$")
+
+
+class CodexDeviceLoginStatusV2(CodexDeviceLoginStatus):
+    schema_version: Literal["codex-device-login-status/1.1"] = "codex-device-login-status/1.1"  # type: ignore[assignment]
+    slot_key: str = Field(pattern=r"^slot0[1-6]$")
+
+
+class CodexAuthBrokerRequestV2(CodexAuthBrokerRequest):
+    schema_version: Literal["codex-auth-broker-request/1.1"] = "codex-auth-broker-request/1.1"  # type: ignore[assignment]
+    slot_key: str = Field(pattern=r"^slot0[1-6]$")
+
+
+class CodexAuthBrokerResponseV2(FrozenModel):
+    schema_version: Literal["codex-auth-broker-response/1.1"] = "codex-auth-broker-response/1.1"
+    outcome: Literal["OK", "FAILED"]
+    status: CodexDeviceLoginStatusV2 | None
+    challenge: CodexDeviceChallengeV2 | None
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+
+    @model_validator(mode="after")
+    def coherent_broker_response(self) -> CodexAuthBrokerResponseV2:
+        success = self.outcome == "OK"
+        if success != (self.status is not None):
+            raise ValueError("successful broker response requires sanitized status")
+        if success != (self.error_code is None):
+            raise ValueError("failed broker response requires stable error code")
+        if self.challenge is not None and (
+            self.status is None
+            or self.status.state != "WAITING_FOR_USER"
+            or self.challenge.enrollment_id != self.status.enrollment_id
+            or self.challenge.slot_key != self.status.slot_key
+        ):
+            raise ValueError("device challenge does not match waiting broker status")
+        return self
+
+
 class CodexControlCommand(FrozenModel):
     """Credential-free command consumed only by the orchestrator-owned runner."""
 
@@ -926,6 +979,72 @@ class WorkerCapacityPolicy(FrozenModel):
             raise ValueError("capacity pools reference too many configured slots")
         if any(pool.max_active > self.max_active_codex for pool in self.pools):
             raise ValueError("pool active limit cannot exceed global active limit")
+        return self
+
+
+class WorkerCapacityPoolV2(FrozenModel):
+    """Pool contract for the six-slot fixed-host inventory."""
+
+    pool_key: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")
+    roles: tuple[WorkerRole, ...] = Field(min_length=1, max_length=5)
+    slot_keys: tuple[SlotKey, ...] = Field(min_length=1, max_length=6)
+    max_active: int = Field(ge=1, le=3)
+
+    @model_validator(mode="after")
+    def bounded_unique_pool(self) -> WorkerCapacityPoolV2:
+        if len(self.roles) != len(set(self.roles)) or len(self.slot_keys) != len(
+            set(self.slot_keys)
+        ):
+            raise ValueError("capacity pool roles and slots must be unique")
+        if self.max_active > len(self.slot_keys):
+            raise ValueError("capacity pool cannot activate more workers than configured slots")
+        if any(
+            slot_key not in {f"slot{index:02d}" for index in range(1, 7)}
+            for slot_key in self.slot_keys
+        ):
+            raise ValueError("capacity V2 pool references an unsupported fixed slot")
+        return self
+
+
+class WorkerCapacityPolicyV2(FrozenModel):
+    """Additive fixed-host capacity revision with two support workers."""
+
+    schema_version: Literal["worker-capacity-policy/1.1"] = "worker-capacity-policy/1.1"
+    capacity_policy_id: str = Field(pattern=r"^capacity_[0-9a-f]{32}$")
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    revision_number: Literal[2] = 2
+    state: RevisionState
+    max_configured_slots: Literal[6] = 6
+    max_active_codex: Literal[3] = 3
+    max_active_per_slot: Literal[1] = 1
+    max_active_gpu: Literal[1] = 1
+    max_active_knowledge_analysis: Literal[2] = 2
+    pools: tuple[WorkerCapacityPoolV2, ...] = Field(min_length=5, max_length=5)
+    content_sha256: Sha256
+    created_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def coherent_capacity_limits(self) -> WorkerCapacityPolicyV2:
+        pool_keys = [pool.pool_key for pool in self.pools]
+        if len(pool_keys) != len(set(pool_keys)):
+            raise ValueError("capacity pool keys must be unique")
+        all_slots = {slot for pool in self.pools for slot in pool.slot_keys}
+        if len(all_slots) > self.max_configured_slots:
+            raise ValueError("capacity pools reference too many configured slots")
+        if any(pool.max_active > self.max_active_codex for pool in self.pools):
+            raise ValueError("pool active limit cannot exceed global active limit")
+        reviewed = {
+            "authoring": (("authoring",), ("slot01",), 1),
+            "review": (("review",), ("slot02",), 1),
+            "image": (("image",), ("slot03",), 1),
+            "item-management": (("item_management",), ("slot04",), 1),
+            "support": (("support",), ("slot05", "slot06"), 2),
+        }
+        actual = {
+            pool.pool_key: (pool.roles, pool.slot_keys, pool.max_active) for pool in self.pools
+        }
+        if actual != reviewed:
+            raise ValueError("capacity V2 differs from the reviewed fixed-host pools")
         return self
 
 

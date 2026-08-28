@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/control-plane/codex-auth-broker-response/1.1",
+  "title": "Codex Auth Broker Response V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "outcome", "status", "challenge", "error_code"],
+  "properties": {
+    "schema_version": {"const": "codex-auth-broker-response/1.1"},
+    "outcome": {"enum": ["OK", "FAILED"]},
+    "status": {"oneOf": [{"type": "null"}, {"$ref": "eom://schemas/workflow/control-plane/codex-device-login-status/1.1"}]},
+    "challenge": {"oneOf": [{"type": "null"}, {"$ref": "eom://schemas/workflow/control-plane/codex-device-challenge/1.1"}]},
+    "error_code": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{2,63}$"}
+  },
+  "allOf": [{
+    "if": {"properties": {"outcome": {"const": "OK"}}},
+    "then": {"properties": {"status": {"type": "object"}, "error_code": {"type": "null"}}},
+    "else": {"properties": {"status": {"type": "null"}, "challenge": {"type": "null"}, "error_code": {"type": "string"}}}
+  }]
+}

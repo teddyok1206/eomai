@@ -98,6 +98,7 @@ class CreateKnowledgeAnalysisBatchRequest(ApiModel):
     risk_policy_revision_id: str = Field(pattern=r"^analysisriskrev_[0-9a-f]{32}$")
     review_policy: Literal["PREAUTHORIZED_APPROVE_VALIDATED"] = "PREAUTHORIZED_APPROVE_VALIDATED"
     range_failure_policy: Literal["CONTINUE_AND_COLLECT"] = "CONTINUE_AND_COLLECT"
+    max_in_flight: Literal[1, 2] = 1
     ranges: tuple[KnowledgeAnalysisBatchRangeInput, ...] = Field(min_length=1, max_length=1000)
 
     @model_validator(mode="after")
@@ -216,6 +217,8 @@ class KnowledgeAnalysisBatchView(ApiModel):
     general_knowledge_mode: Literal["AUXILIARY_UNATTRIBUTED"]
     review_policy: Literal["PREAUTHORIZED_APPROVE_VALIDATED"]
     range_failure_policy: Literal["STOP_ON_FIRST_FAILURE", "CONTINUE_AND_COLLECT"]
+    scheduling_mode: Literal["SERIAL", "BOUNDED_PARALLEL"] = "SERIAL"
+    max_in_flight: Literal[1, 2] = 1
     authorized_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
     authorized_at: UtcDatetime
     state: Literal["QUEUED", "RUNNING", "BLOCKED", "SUCCEEDED", "CANCELLED"]

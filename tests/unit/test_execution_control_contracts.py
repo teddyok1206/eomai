@@ -7,18 +7,25 @@ from importlib.resources import files
 from pathlib import Path
 
 import pytest
+import yaml
 from eom_identifiers import content_sha256
 from eom_workflow import (
     CodexAuthBrokerRequest,
+    CodexAuthBrokerRequestV2,
     CodexAuthBrokerResponse,
+    CodexAuthBrokerResponseV2,
     CodexAuthEnrollmentRequest,
+    CodexAuthEnrollmentRequestV2,
     CodexAuthEnrollmentStatus,
+    CodexAuthEnrollmentStatusV2,
     CodexAuthHealthView,
     CodexCapabilitySnapshot,
     CodexControlCommand,
     CodexControlCommandResult,
     CodexDeviceChallenge,
+    CodexDeviceChallengeV2,
     CodexDeviceLoginStatus,
+    CodexDeviceLoginStatusV2,
     CodexImageInputManifest,
     CodexInvocation,
     ExecutionPresetEvaluationReport,
@@ -28,6 +35,7 @@ from eom_workflow import (
     ResolvedExecutionPlan,
     ResolvedExecutionPlanV2,
     WorkerCapacityPolicy,
+    WorkerCapacityPolicyV2,
     WorkerLeaseView,
     control_schema_inventory,
     load_control_schema,
@@ -265,6 +273,59 @@ def _capacity_policy() -> dict[str, object]:
     }
 
 
+def _capacity_policy_v2() -> dict[str, object]:
+    value = _capacity_policy()
+    value.update(
+        {
+            "schema_version": "worker-capacity-policy/1.1",
+            "revision_number": 2,
+            "max_configured_slots": 6,
+            "max_active_knowledge_analysis": 2,
+            "pools": [
+                {
+                    "pool_key": "authoring",
+                    "roles": ["authoring"],
+                    "slot_keys": ["slot01"],
+                    "max_active": 1,
+                },
+                {
+                    "pool_key": "review",
+                    "roles": ["review"],
+                    "slot_keys": ["slot02"],
+                    "max_active": 1,
+                },
+                {
+                    "pool_key": "image",
+                    "roles": ["image"],
+                    "slot_keys": ["slot03"],
+                    "max_active": 1,
+                },
+                {
+                    "pool_key": "item-management",
+                    "roles": ["item_management"],
+                    "slot_keys": ["slot04"],
+                    "max_active": 1,
+                },
+                {
+                    "pool_key": "support",
+                    "roles": ["support"],
+                    "slot_keys": ["slot05", "slot06"],
+                    "max_active": 2,
+                },
+            ],
+        }
+    )
+    return value
+
+
+def _slot_inventory_v2() -> dict[str, object]:
+    value = yaml.safe_load(
+        (REPOSITORY_ROOT / "config" / "worker-slots.example.yaml").read_text(encoding="utf-8")
+    )
+    assert isinstance(value, dict)
+    return value
+
+
 def _codex_invocation() -> dict[str, object]:
     value: dict[str, object] = {
         "schema_version": "codex-invocation/1.0",
@@ -282,7 +343,7 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 25
+    assert len(entries) == 33
     assert len({name for name, _ in entries}) == len(entries)
     assert {
         "execution-preset-revision-v2",
@@ -303,6 +364,77 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
         assert raw == canonical.read_bytes(), name
         assert "sha256:" + hashlib.sha256(raw).hexdigest() == entry.sha256, name
         assert isinstance(load_control_schema(name), dict)
+
+
+def test_codex_auth_v2_adds_only_slot06_and_preserves_v1() -> None:
+    enrollment = {
+        "schema_version": "codex-auth-enrollment-request/1.1",
+        "enrollment_id": "authflow_" + "1" * 32,
+        "binding_id": "authbinding_" + "2" * 32,
+        "expected_binding_resource_version": 7,
+        "slot_key": "slot06",
+        "requested_account_label": "teacher-account-06",
+        "requested_by_operator_id": "operator_" + "3" * 32,
+        "requested_by_api_session_id": "apisession_" + "4" * 32,
+        "requested_at": NOW.isoformat().replace("+00:00", "Z"),
+        "expires_at": (NOW + timedelta(minutes=15)).isoformat().replace("+00:00", "Z"),
+        "request_sha256": "sha256:" + "5" * 64,
+    }
+    validate_control_contract("codex-auth-enrollment-request-v2", enrollment)
+    CodexAuthEnrollmentRequestV2.model_validate(enrollment)
+    with pytest.raises((ValidationError, PydanticValidationError)):
+        validate_control_contract(
+            "codex-auth-enrollment-request",
+            enrollment | {"schema_version": "codex-auth-enrollment-request/1.0"},
+        )
+
+    status = CodexDeviceLoginStatusV2(
+        enrollment_id=enrollment["enrollment_id"],
+        slot_key="slot06",
+        state="WAITING_FOR_USER",
+        reason_code=None,
+        updated_at=NOW,
+    )
+    challenge = CodexDeviceChallengeV2(
+        enrollment_id=enrollment["enrollment_id"],
+        slot_key="slot06",
+        verification_uri="https://auth.openai.com/codex/device",
+        user_code="ABC1-DEF2",
+        issued_at=NOW,
+        expires_at=NOW + timedelta(minutes=10),
+    )
+    broker_request = CodexAuthBrokerRequestV2(
+        action="REVEAL",
+        enrollment_id=enrollment["enrollment_id"],
+        slot_key="slot06",
+    )
+    response = CodexAuthBrokerResponseV2(
+        outcome="OK", status=status, challenge=challenge, error_code=None
+    )
+    projected = CodexAuthEnrollmentStatusV2(
+        enrollment_id=enrollment["enrollment_id"],
+        binding_id=enrollment["binding_id"],
+        slot_key="slot06",
+        requested_account_label="teacher-account-06",
+        state="WAITING_FOR_USER",
+        challenge_available=True,
+        challenge_revealed_at=None,
+        assignment_revision_id=None,
+        error_code=None,
+        requested_at=NOW,
+        started_at=NOW,
+        expires_at=NOW + timedelta(minutes=15),
+        completed_at=None,
+        resource_version=1,
+    )
+    for schema_name, model in (
+        ("codex-device-login-status-v2", status),
+        ("codex-device-challenge-v2", challenge),
+        ("codex-auth-broker-request-v2", broker_request),
+        ("codex-auth-broker-response-v2", response),
+        ("codex-auth-enrollment-status-v2", projected),
+    ):
+        validate_control_contract(schema_name, model.model_dump(mode="json"))
 
 
 @pytest.mark.parametrize(
@@ -653,6 +785,59 @@ def test_capacity_contract_pins_host_limits_and_rejects_overcommit() -> None:
     overcommitted["max_configured_slots"] = 2
     with pytest.raises(PydanticValidationError, match="global active limit"):
         WorkerCapacityPolicy.model_validate(overcommitted)
+
+
+def test_capacity_v2_schema_pins_the_two_slot_analysis_pool() -> None:
+    value = _capacity_policy_v2()
+    validate_control_contract("worker-capacity-policy-v2", value)
+    parsed = WorkerCapacityPolicyV2.model_validate(value)
+    assert parsed.max_active_knowledge_analysis == 2
+    assert parsed.pools[-1].slot_keys == ("slot05", "slot06")
+
+    wrong_support_pool = deepcopy(value)
+    pools = wrong_support_pool["pools"]
+    assert isinstance(pools, list)
+    pools[-1]["slot_keys"] = ["slot05"]
+    pools[-1]["max_active"] = 1
+    with pytest.raises(ValidationError):
+        validate_control_contract("worker-capacity-policy-v2", wrong_support_pool)
+    with pytest.raises(PydanticValidationError, match="reviewed fixed-host pools"):
+        WorkerCapacityPolicyV2.model_validate(wrong_support_pool)
+
+    wrong_authoring_pool = deepcopy(value)
+    pools = wrong_authoring_pool["pools"]
+    assert isinstance(pools, list)
+    pools[0]["slot_keys"] = ["slot02"]
+    with pytest.raises(ValidationError):
+        validate_control_contract("worker-capacity-policy-v2", wrong_authoring_pool)
+    with pytest.raises(PydanticValidationError, match="reviewed fixed-host pools"):
+        WorkerCapacityPolicyV2.model_validate(wrong_authoring_pool)
+
+
+def test_worker_inventory_v2_schema_pins_all_fixed_slot_identities() -> None:
+    value = _slot_inventory_v2()
+    validate_control_contract("worker-slot-inventory-v2", value)
+
+    wrong_role = deepcopy(value)
+    slots = wrong_role["slots"]
+    assert isinstance(slots, list)
+    slots[-1]["role"] = "review"
+    with pytest.raises(ValidationError):
+        validate_control_contract("worker-slot-inventory-v2", wrong_role)
+
+    wrong_identity = deepcopy(value)
+    slots = wrong_identity["slots"]
+    assert isinstance(slots, list)
+    slots[-1]["linux_user"] = "eom-cdx-05"
+    with pytest.raises(ValidationError):
+        validate_control_contract("worker-slot-inventory-v2", wrong_identity)
+
+    missing_slot = deepcopy(value)
+    slots = missing_slot["slots"]
+    assert isinstance(slots, list)
+    slots.pop()
+    with pytest.raises(ValidationError):
+        validate_control_contract("worker-slot-inventory-v2", missing_slot)
 
 
 def test_health_and_lease_windows_fail_closed() -> None:

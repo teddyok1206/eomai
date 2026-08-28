@@ -1086,6 +1086,8 @@ class QueryAdapter:
             general_knowledge_mode=row.general_knowledge_mode,  # type: ignore[arg-type]
             review_policy=row.review_policy,  # type: ignore[arg-type]
             range_failure_policy=row.range_failure_policy,  # type: ignore[arg-type]
+            scheduling_mode=row.scheduling_mode,  # type: ignore[arg-type]
+            max_in_flight=row.max_in_flight,  # type: ignore[arg-type]
             authorized_by_operator_id=row.authorized_by_operator_id,
             authorized_at=row.authorized_at,
             state=row.state,  # type: ignore[arg-type]

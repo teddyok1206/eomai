@@ -45,10 +45,12 @@ InaccessiblePaths=/srv/eom/workspaces/eom-cdx-01
 InaccessiblePaths=/srv/eom/workspaces/eom-cdx-02
 InaccessiblePaths=/srv/eom/workspaces/eom-cdx-03
 InaccessiblePaths=/srv/eom/workspaces/eom-cdx-04
+InaccessiblePaths=/srv/eom/workspaces/eom-cdx-06
 InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-01
 InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-02
 InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-03
 InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-04
+InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-06
 ReadWritePaths=/srv/eom/workspaces/eom-cdx-05/%i
 ReadWritePaths=/srv/eom/worker-homes/eom-cdx-05
 

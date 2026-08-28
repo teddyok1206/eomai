@@ -9,11 +9,13 @@ from typing import Literal
 
 import yaml
 from eom_protocol import ErrorCode
+from eom_workflow import validate_control_contract
+from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from eom_orchestrator.errors import PlatformError
 
-FIXED_WORKER_SLOT_IDS = ("01", "02", "03", "04", "05")
+FIXED_WORKER_SLOT_IDS = ("01", "02", "03", "04", "05", "06")
 
 
 class SlotLimits(BaseModel):
@@ -26,8 +28,15 @@ class SlotLimits(BaseModel):
 class WorkerSlot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    slot_id: Literal["01", "02", "03", "04", "05"]
-    linux_user: Literal["eom-cdx-01", "eom-cdx-02", "eom-cdx-03", "eom-cdx-04", "eom-cdx-05"]
+    slot_id: Literal["01", "02", "03", "04", "05", "06"]
+    linux_user: Literal[
+        "eom-cdx-01",
+        "eom-cdx-02",
+        "eom-cdx-03",
+        "eom-cdx-04",
+        "eom-cdx-05",
+        "eom-cdx-06",
+    ]
     role: Literal["authoring", "review", "image", "item_management", "support"]
     enabled: bool
     gpu: bool = False
@@ -42,7 +51,7 @@ class WorkerSlot(BaseModel):
 class WorkerSlotConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    version: Literal[1]
+    version: Literal[1, 2]
     limits: SlotLimits
     slots: tuple[WorkerSlot, ...]
 
@@ -56,6 +65,24 @@ class WorkerSlotConfig(BaseModel):
             raise ValueError("worker slot ids and linux users must be unique")
         if self.limits.gpu_concurrency > self.limits.global_codex_concurrency:
             raise ValueError("GPU concurrency cannot exceed global Codex concurrency")
+        if self.version == 1 and any(slot.slot_id == "06" for slot in self.slots):
+            raise ValueError("worker inventory V1 cannot contain slot 06")
+        if self.version == 2:
+            expected = {
+                "01": ("eom-cdx-01", "authoring", False),
+                "02": ("eom-cdx-02", "review", False),
+                "03": ("eom-cdx-03", "image", True),
+                "04": ("eom-cdx-04", "item_management", False),
+                "05": ("eom-cdx-05", "support", False),
+                "06": ("eom-cdx-06", "support", False),
+            }
+            actual = {slot.slot_id: (slot.linux_user, slot.role, slot.gpu) for slot in self.slots}
+            if (
+                actual != expected
+                or self.limits.global_codex_concurrency != 3
+                or self.limits.gpu_concurrency != 1
+            ):
+                raise ValueError("worker inventory V2 differs from the reviewed fixed-host layout")
         return self
 
 
@@ -83,8 +110,16 @@ class WorkerRegistry:
             if len(content) > 1_048_576:
                 raise OSError("worker configuration file is too large")
             raw: object = yaml.safe_load(content)
+            if isinstance(raw, dict) and raw.get("version") == 2:
+                validate_control_contract("worker-slot-inventory-v2", raw)
             config = WorkerSlotConfig.model_validate(raw)
-        except (OSError, UnicodeError, yaml.YAMLError, ValidationError) as exc:
+        except (
+            OSError,
+            UnicodeError,
+            yaml.YAMLError,
+            JsonSchemaValidationError,
+            ValidationError,
+        ) as exc:
             raise PlatformError(ErrorCode.WORKER_UNAVAILABLE, "invalid worker slot config") from exc
         return cls(config)
 

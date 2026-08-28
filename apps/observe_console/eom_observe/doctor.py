@@ -168,10 +168,10 @@ def run_doctor(
         )
     try:
         workers = yaml.safe_load(worker_slot_resource().read_text(encoding="utf-8"))["slots"]
-        worker_ok = len(workers) == 5
+        worker_ok = len(workers) == 6
     except Exception:
         worker_ok = False
-    checks.append(Check("worker_slot_config", worker_ok, "5 slots" if worker_ok else "invalid"))
+    checks.append(Check("worker_slot_config", worker_ok, "6 slots" if worker_ok else "invalid"))
     if settings is not None:
         _, port_detail = _port_status(settings.server.host, settings.server.port)
         checks.append(Check("port_8780", True, port_detail))

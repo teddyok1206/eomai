@@ -6,6 +6,8 @@ ARTIFACT_MOUNT=/mnt/nas
 ARTIFACT_ROOT=/mnt/nas/eom/artifacts
 POLKIT_SOURCE=${REPOSITORY}/infra/polkit/50-eom-worker-units.rules
 POLKIT_TARGET=/etc/polkit-1/rules.d/50-eom-worker-units.rules
+PYTHON=/srv/eom/conda/envs/eom-api/bin/python
+LEASE_GUARD=${REPOSITORY}/scripts/workflow/check_no_active_worker_leases.py
 SERVICES=(
   eom-catalog-application-runner.service
   eom-hwpx-application-runner.service
@@ -48,8 +50,13 @@ ensure_identity() {
   local primary_group=$3
   local supplementary_groups=$4
   if ! getent passwd "${user}" >/dev/null; then
-    useradd --system --no-create-home --home-dir "${home}" --shell /usr/sbin/nologin \
-      --gid "${primary_group}" --groups "${supplementary_groups}" "${user}"
+    if [[ -n ${supplementary_groups} ]]; then
+      useradd --system --no-create-home --home-dir "${home}" --shell /usr/sbin/nologin \
+        --gid "${primary_group}" --groups "${supplementary_groups}" "${user}"
+    else
+      useradd --system --no-create-home --home-dir "${home}" --shell /usr/sbin/nologin \
+        --gid "${primary_group}" "${user}"
+    fi
   else
     usermod --gid "${primary_group}" --groups "${supplementary_groups}" "${user}"
   fi
@@ -116,16 +123,28 @@ for service in "${SERVICES[@]}"; do
   systemctl is-enabled --quiet "${service}" || fail "${service} is not enabled"
 done
 if systemctl list-units --no-legend --state=activating,active,deactivating \
-  'eom-worker-*@*.service' 'eom-hwpx-kordoc@*.service' 'eom-hwpx-builder@*.service' | grep -q .; then
+  'eom-worker-*@*.service' 'eom-worker-auth-*.service' \
+  'eom-hwpx-kordoc@*.service' 'eom-hwpx-builder@*.service' | grep -q .; then
   fail "a fixed child unit is active"
 fi
+[[ -f ${LEASE_GUARD} && ! -L ${LEASE_GUARD} ]] || fail "worker lease guard is unsafe"
+runuser -u eom-workflow-runner -g eom -- \
+  env -i HOME=/var/lib/eom-workflow-runner USER=eom-workflow-runner \
+    LOGNAME=eom-workflow-runner TZ=UTC PATH=/srv/eom/conda/envs/eom-api/bin:/usr/bin:/bin \
+    EOM_POSTGRES_ENV=/etc/eom/secrets/postgres.env \
+    "${PYTHON}" -I "${LEASE_GUARD}" || \
+  fail "an active or reconciling worker lease blocks identity deployment"
 [[ -d ${ARTIFACT_ROOT} && ! -L ${ARTIFACT_ROOT} ]] || fail "Artifact root is unsafe"
 verify_artifact_mount
 if ! getent group eom-codex-auth >/dev/null; then
   groupadd --system eom-codex-auth
 fi
+if ! getent group eom-cdx-06 >/dev/null; then
+  groupadd --system eom-cdx-06
+fi
+ensure_identity eom-cdx-06 /srv/eom/worker-homes/eom-cdx-06 eom-cdx-06 ""
 ensure_identity eom-workflow-runner /var/lib/eom-workflow-runner eom \
-  "eom-cdx-01,eom-cdx-02,eom-cdx-03,eom-cdx-04,eom-cdx-05,eom-codex-auth"
+  "eom-cdx-01,eom-cdx-02,eom-cdx-03,eom-cdx-04,eom-cdx-05,eom-cdx-06,eom-codex-auth"
 ensure_identity eom-codex-auth-broker /var/lib/eom-codex-auth-broker eom-codex-auth \
   "eom-codex-auth"
 ensure_identity eom-catalog-manager /var/lib/eom-catalog-api eom-api \
@@ -158,7 +177,7 @@ for service in "${SERVICES[@]}"; do
 done
 
 require_process_identity eom-workflow-runner.service eom-workflow-runner \
-  eom eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-codex-auth
+  eom eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-cdx-06 eom-codex-auth
 require_process_identity eom-catalog-application-runner.service eom-catalog-manager \
   eom-api eom
 require_process_identity eom-hwpx-application-runner.service eom-hwpx-manager \

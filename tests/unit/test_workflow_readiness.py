@@ -56,7 +56,7 @@ def _runtime(
     homes = tmp_path / "homes"
     workspaces.mkdir()
     homes.mkdir()
-    for index in range(1, 6):
+    for index in range(1, 7):
         user = f"eom-cdx-{index:02d}"
         workspace = workspaces / user
         workspace.mkdir(mode=0o2770)

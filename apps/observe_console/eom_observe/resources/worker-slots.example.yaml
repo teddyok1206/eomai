@@ -1,4 +1,4 @@
-version: 1
+version: 2
 
 limits:
   global_codex_concurrency: 3
@@ -28,5 +28,10 @@ slots:
 
   - slot_id: "05"
     linux_user: "eom-cdx-05"
+    role: "support"
+    enabled: true
+
+  - slot_id: "06"
+    linux_user: "eom-cdx-06"
     role: "support"
     enabled: true

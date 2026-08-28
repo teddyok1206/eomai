@@ -21,7 +21,10 @@ def test_workflow_runner_service_fixes_identity_command_and_group_contract() -> 
 
     assert "User=eom-workflow-runner" in source
     assert "Group=eom" in source
-    assert "SupplementaryGroups=eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05" in source
+    assert (
+        "SupplementaryGroups=eom-cdx-01 eom-cdx-02 eom-cdx-03 "
+        "eom-cdx-04 eom-cdx-05 eom-cdx-06 eom-codex-auth" in source
+    )
     assert "ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner serve" in source
     assert "EOM_POSTGRES_ENV=/etc/eom/secrets/postgres.env" in source
     assert "EOM_CODEX_CAPABILITY_POLICY=/etc/eom/codex-capabilities.yaml" in source
@@ -70,7 +73,7 @@ def test_workflow_runner_service_is_narrow_but_can_materialize_worker_handoffs()
     assert "/etc/eom/secrets/api.env" in inaccessible
     assert all(
         f"-/srv/eom/worker-homes/eom-cdx-{slot}/.codex" in inaccessible
-        for slot in ("01", "02", "03", "04", "05")
+        for slot in ("01", "02", "03", "04", "05", "06")
     )
 
 

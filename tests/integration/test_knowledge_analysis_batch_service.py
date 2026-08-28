@@ -17,6 +17,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisBatchRequest,
     KnowledgeAnalysisBatchRequestV2,
     KnowledgeAnalysisBatchRequestV3,
+    KnowledgeAnalysisBatchRequestV4,
     KnowledgeAnalysisBatchSourceRange,
     KnowledgeAnalysisBatchSourceRangeV2,
     KnowledgeAnalysisRequestV6,
@@ -148,6 +149,44 @@ def _continuing_batch_command(document_revision_id: str) -> CreateKnowledgeAnaly
         requested_by=OPERATOR_ID,
         authorized_at=datetime(2026, 8, 28, tzinfo=UTC),
         idempotency_key=f"knowledge-analysis-batch-continuing:{uuid4().hex}",
+        submission_sha256=content_sha256(canonical),
+    )
+
+
+def _parallel_batch_command(
+    document_revision_id: str,
+    *,
+    range_count: int = 3,
+    reuse_accepted_analysis_run_id: str | None = None,
+) -> CreateKnowledgeAnalysisBatchCommand:
+    request = KnowledgeAnalysisBatchRequestV4(
+        risk_policy_revision_id=POLICY_ID,
+        ranges=tuple(
+            KnowledgeAnalysisBatchRangeRequestV2(
+                ordinal=ordinal,
+                source=KnowledgeAnalysisBatchSourceRangeV2(
+                    document_revision_id=document_revision_id,
+                    first_physical_page=ordinal + 1,
+                    last_physical_page=ordinal + 1,
+                    curriculum_unit_keys=("1-(1)",),
+                ),
+                execution=(
+                    ReuseAcceptedKnowledgeAnalysisRange(
+                        accepted_analysis_run_id=reuse_accepted_analysis_run_id
+                    )
+                    if reuse_accepted_analysis_run_id is not None
+                    else ExecuteKnowledgeAnalysisRange()
+                ),
+            )
+            for ordinal in range(range_count)
+        ),
+    )
+    canonical = {"request": request.model_dump(mode="json"), "requested_by": OPERATOR_ID}
+    return CreateKnowledgeAnalysisBatchCommand(
+        request=request,
+        requested_by=OPERATOR_ID,
+        authorized_at=datetime(2026, 8, 28, 16, tzinfo=UTC),
+        idempotency_key=f"knowledge-analysis-batch-parallel:{uuid4().hex}",
         submission_sha256=content_sha256(canonical),
     )
 
@@ -793,4 +832,9 @@ def test_batch_claim_query_uses_reviewed_partial_index(integration_engine: Engin
     assert " WHERE " in claim_index
     assert all(state in claim_index for state in ("PENDING", "CLAIMED", "SUBMITTED"))
     assert "next_action_at" in claim_index
-    assert "uq_knowledge_analysis_batch_active_range" in indexes
+    assert "uq_knowledge_analysis_batch_active_range" not in indexes
+    assert "ix_knowledge_analysis_batch_active_range" in indexes
+    active_index = indexes["ix_knowledge_analysis_batch_active_range"]
+    assert "UNIQUE" not in active_index
+    assert all(column in active_index for column in ("batch_id", "state", "ordinal"))
+    assert all(state in active_index for state in ("CLAIMED", "SUBMITTED"))

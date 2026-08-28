@@ -260,6 +260,26 @@ def test_batch_creation_preserves_an_explicit_unmapped_textbook_range() -> None:
         services.engine.dispose()
 
 
+def test_batch_creation_selects_additive_parallel_contract_only_when_explicit() -> None:
+    client, services = _client(admin=True)
+    body = _request_body()
+    body["max_in_flight"] = 2
+    try:
+        with client:
+            response = client.post(
+                "/api/v1/knowledge-analysis-batches",
+                headers={"Idempotency-Key": "knowledge-analysis-batch-api-parallel-0001"},
+                json=body,
+            )
+        assert response.status_code == 202
+        command = services.catalog_application.commands[0]
+        assert command.request.schema_version == "knowledge-analysis-batch-request/1.3"
+        assert command.request.scheduling_mode == "BOUNDED_PARALLEL"
+        assert command.request.max_in_flight == 2
+    finally:
+        services.engine.dispose()
+
+
 def test_batch_creation_requires_fresh_admin_but_reads_do_not_require_fresh_auth() -> None:
     stale_admin, stale_services = _client(admin=True, age=timedelta(minutes=20))
     try:

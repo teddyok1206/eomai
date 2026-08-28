@@ -18,9 +18,13 @@ from typing import Any, cast
 
 from eom_workflow import (
     CodexAuthBrokerRequest,
+    CodexAuthBrokerRequestV2,
     CodexAuthBrokerResponse,
+    CodexAuthBrokerResponseV2,
     CodexDeviceChallenge,
+    CodexDeviceChallengeV2,
     CodexDeviceLoginStatus,
+    CodexDeviceLoginStatusV2,
     validate_control_contract,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -31,7 +35,7 @@ MAX_MESSAGE_BYTES = 4096
 SOCKET_MODE = 0o660
 RUNTIME_DIRECTORY_MODE = 0o750
 HANDOFF_MODE = 0o640
-SLOT_IDS = ("01", "02", "03", "04", "05")
+SLOT_IDS = ("01", "02", "03", "04", "05", "06")
 
 
 class _ThreadingUnixServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
@@ -54,8 +58,13 @@ class _BrokerHandler(socketserver.StreamRequestHandler):
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError
-            validate_control_contract("codex-auth-broker-request", value)
-            request = CodexAuthBrokerRequest.model_validate(value)
+            is_v2 = value.get("schema_version") == "codex-auth-broker-request/1.1"
+            request_type = CodexAuthBrokerRequestV2 if is_v2 else CodexAuthBrokerRequest
+            validate_control_contract(
+                "codex-auth-broker-request-v2" if is_v2 else "codex-auth-broker-request",
+                value,
+            )
+            request = request_type.model_validate(value)
             response = self.server.execute(request, caller_uid=peer_uid)
         except (
             UnicodeError,
@@ -148,40 +157,53 @@ class CodexAuthBrokerServer(_ThreadingUnixServer):
 
     def execute(
         self,
-        request: CodexAuthBrokerRequest,
+        request: CodexAuthBrokerRequest | CodexAuthBrokerRequestV2,
         *,
         caller_uid: int | None = None,
-    ) -> CodexAuthBrokerResponse:
+    ) -> CodexAuthBrokerResponse | CodexAuthBrokerResponseV2:
+        is_v2 = request.schema_version == "codex-auth-broker-request/1.1"
         effective_caller = os.geteuid() if caller_uid is None else caller_uid
         if effective_caller not in self.allowed_uids:
-            return self.error_response("CODEX_AUTH_BROKER_CALLER_DENIED")
+            return self.error_response("CODEX_AUTH_BROKER_CALLER_DENIED", is_v2=is_v2)
         if request.action == "REVEAL" and effective_caller not in self.reveal_uids:
-            return self.error_response("CODEX_AUTH_BROKER_REVEAL_DENIED")
+            return self.error_response("CODEX_AUTH_BROKER_REVEAL_DENIED", is_v2=is_v2)
         slot_id = request.slot_key.removeprefix("slot")
         if slot_id not in SLOT_IDS:
-            return self.error_response("CODEX_AUTH_BROKER_SLOT_INVALID")
+            return self.error_response("CODEX_AUTH_BROKER_SLOT_INVALID", is_v2=is_v2)
         status_path = self._handoff_path(slot_id, request.enrollment_id, "status")
         try:
-            status = CodexDeviceLoginStatus.model_validate(
-                self._read_document(status_path, "codex-device-login-status", slot_id)
+            status_type = CodexDeviceLoginStatusV2 if is_v2 else CodexDeviceLoginStatus
+            status = status_type.model_validate(
+                self._read_document(
+                    status_path,
+                    "codex-device-login-status-v2" if is_v2 else "codex-device-login-status",
+                    slot_id,
+                )
             )
         except FileNotFoundError:
-            return self.error_response("CODEX_AUTH_CHALLENGE_NOT_READY")
+            return self.error_response("CODEX_AUTH_CHALLENGE_NOT_READY", is_v2=is_v2)
         except (OSError, ValueError, JsonSchemaValidationError, ValidationError):
-            return self.error_response("CODEX_AUTH_HANDOFF_INVALID")
+            return self.error_response("CODEX_AUTH_HANDOFF_INVALID", is_v2=is_v2)
         if status.enrollment_id != request.enrollment_id or status.slot_key != request.slot_key:
-            return self.error_response("CODEX_AUTH_HANDOFF_IDENTITY_MISMATCH")
+            return self.error_response("CODEX_AUTH_HANDOFF_IDENTITY_MISMATCH", is_v2=is_v2)
         challenge = None
         if request.action == "REVEAL":
             if status.state != "WAITING_FOR_USER":
-                return self.error_response("CODEX_AUTH_CHALLENGE_NOT_AVAILABLE")
+                return self.error_response("CODEX_AUTH_CHALLENGE_NOT_AVAILABLE", is_v2=is_v2)
             challenge_path = self._handoff_path(slot_id, request.enrollment_id, "challenge")
             try:
                 with self._reveal_lock:
                     if request.enrollment_id in self._revealed:
-                        return self.error_response("CODEX_AUTH_CHALLENGE_ALREADY_REVEALED")
-                    challenge = CodexDeviceChallenge.model_validate(
-                        self._read_document(challenge_path, "codex-device-challenge", slot_id)
+                        return self.error_response(
+                            "CODEX_AUTH_CHALLENGE_ALREADY_REVEALED", is_v2=is_v2
+                        )
+                    challenge_type = CodexDeviceChallengeV2 if is_v2 else CodexDeviceChallenge
+                    challenge = challenge_type.model_validate(
+                        self._read_document(
+                            challenge_path,
+                            "codex-device-challenge-v2" if is_v2 else "codex-device-challenge",
+                            slot_id,
+                        )
                     )
                     if (
                         challenge.enrollment_id != request.enrollment_id
@@ -189,16 +211,17 @@ class CodexAuthBrokerServer(_ThreadingUnixServer):
                     ):
                         raise ValueError("device challenge identity mismatch")
                     if challenge.expires_at <= self.now():
-                        return self.error_response("CODEX_AUTH_CHALLENGE_EXPIRED")
+                        return self.error_response("CODEX_AUTH_CHALLENGE_EXPIRED", is_v2=is_v2)
                     self._revealed.add(request.enrollment_id)
             except FileNotFoundError:
-                return self.error_response("CODEX_AUTH_CHALLENGE_ALREADY_REVEALED")
+                return self.error_response("CODEX_AUTH_CHALLENGE_ALREADY_REVEALED", is_v2=is_v2)
             except (OSError, ValueError, JsonSchemaValidationError, ValidationError):
-                return self.error_response("CODEX_AUTH_HANDOFF_INVALID")
-        return CodexAuthBrokerResponse(
+                return self.error_response("CODEX_AUTH_HANDOFF_INVALID", is_v2=is_v2)
+        response_type = CodexAuthBrokerResponseV2 if is_v2 else CodexAuthBrokerResponse
+        return response_type(
             outcome="OK",
-            status=status,
-            challenge=challenge,
+            status=status,  # type: ignore[arg-type]
+            challenge=challenge,  # type: ignore[arg-type]
             error_code=None,
         )
 
@@ -242,8 +265,11 @@ class CodexAuthBrokerServer(_ThreadingUnixServer):
         return
 
     @staticmethod
-    def error_response(error_code: str) -> CodexAuthBrokerResponse:
-        return CodexAuthBrokerResponse(
+    def error_response(
+        error_code: str, *, is_v2: bool = False
+    ) -> CodexAuthBrokerResponse | CodexAuthBrokerResponseV2:
+        response_type = CodexAuthBrokerResponseV2 if is_v2 else CodexAuthBrokerResponse
+        return response_type(
             outcome="FAILED",
             status=None,
             challenge=None,
@@ -251,9 +277,16 @@ class CodexAuthBrokerServer(_ThreadingUnixServer):
         )
 
     @staticmethod
-    def write_response(stream: Any, value: CodexAuthBrokerResponse) -> None:
+    def write_response(
+        stream: Any, value: CodexAuthBrokerResponse | CodexAuthBrokerResponseV2
+    ) -> None:
         payload = value.model_dump(mode="json")
-        validate_control_contract("codex-auth-broker-response", payload)
+        validate_control_contract(
+            "codex-auth-broker-response-v2"
+            if value.schema_version == "codex-auth-broker-response/1.1"
+            else "codex-auth-broker-response",
+            payload,
+        )
         encoded = json.dumps(
             payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True
         ).encode("utf-8")

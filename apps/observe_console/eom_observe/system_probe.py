@@ -64,7 +64,7 @@ def _unit_properties(unit: str) -> dict[str, str]:
 
 def probe_system() -> ProbeResult:
     users: dict[str, bool] = {}
-    for number in range(1, 6):
+    for number in range(1, 7):
         name = f"eom-cdx-{number:02d}"
         try:
             pwd.getpwnam(name)

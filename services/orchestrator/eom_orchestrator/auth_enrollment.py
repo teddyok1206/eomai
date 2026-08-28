@@ -15,7 +15,9 @@ from eom_identifiers import (
 from eom_identity_service.models import ApiSessionRecord, OperatorRecord
 from eom_workflow import (
     CodexAuthEnrollmentRequest,
+    CodexAuthEnrollmentRequestV2,
     CodexAuthEnrollmentStatus,
+    CodexAuthEnrollmentStatusV2,
     validate_control_contract,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -64,8 +66,12 @@ def build_codex_auth_enrollment_request(
     requested_by_api_session_id: str,
     requested_at: datetime,
 ) -> dict[str, object]:
+    is_v2 = slot_key == "slot06"
+    request_type = CodexAuthEnrollmentRequestV2 if is_v2 else CodexAuthEnrollmentRequest
     document: dict[str, object] = {
-        "schema_version": "codex-auth-enrollment-request/1.0",
+        "schema_version": (
+            "codex-auth-enrollment-request/1.1" if is_v2 else "codex-auth-enrollment-request/1.0"
+        ),
         "enrollment_id": new_codex_auth_enrollment_id(),
         "binding_id": binding_id,
         "expected_binding_resource_version": expected_binding_resource_version,
@@ -77,7 +83,7 @@ def build_codex_auth_enrollment_request(
         "expires_at": requested_at + ENROLLMENT_TTL,
         "request_sha256": "sha256:" + "0" * 64,
     }
-    normalized = CodexAuthEnrollmentRequest.model_validate(document).model_dump(mode="json")
+    normalized = request_type.model_validate(document).model_dump(mode="json")
     normalized["request_sha256"] = compute_control_document_hash(normalized, "request_sha256")
     return normalized
 
@@ -93,8 +99,13 @@ def create_codex_auth_enrollment(
             "CODEX_AUTH_IDEMPOTENCY_KEY_INVALID", "auth enrollment idempotency key is invalid"
         )
     try:
-        validate_control_contract("codex-auth-enrollment-request", document)
-        request = CodexAuthEnrollmentRequest.model_validate(document)
+        is_v2 = document.get("schema_version") == "codex-auth-enrollment-request/1.1"
+        schema_name = (
+            "codex-auth-enrollment-request-v2" if is_v2 else "codex-auth-enrollment-request"
+        )
+        request_type = CodexAuthEnrollmentRequestV2 if is_v2 else CodexAuthEnrollmentRequest
+        validate_control_contract(schema_name, document)
+        request = request_type.model_validate(document)
     except (JsonSchemaValidationError, PydanticValidationError, ValueError) as exc:
         raise ControlPlaneError(
             "CODEX_AUTH_ENROLLMENT_INVALID", "Codex auth enrollment request is invalid"
@@ -408,7 +419,9 @@ def held_lease_exists(session: Session, *, binding_id: str) -> bool:
 def enrollment_status_document(
     record: CodexAuthEnrollmentRecord, *, challenge_available: bool
 ) -> dict[str, object]:
-    value = CodexAuthEnrollmentStatus(
+    is_v2 = record.canonical_document.get("schema_version") == "codex-auth-enrollment-request/1.1"
+    status_type = CodexAuthEnrollmentStatusV2 if is_v2 else CodexAuthEnrollmentStatus
+    value = status_type(
         enrollment_id=record.enrollment_id,
         binding_id=record.binding_id,
         slot_key=str(record.canonical_document["slot_key"]),
@@ -425,7 +438,10 @@ def enrollment_status_document(
         resource_version=record.resource_version,
     )
     document = value.model_dump(mode="json")
-    validate_control_contract("codex-auth-enrollment-status", document)
+    validate_control_contract(
+        "codex-auth-enrollment-status-v2" if is_v2 else "codex-auth-enrollment-status",
+        document,
+    )
     return document
 
 

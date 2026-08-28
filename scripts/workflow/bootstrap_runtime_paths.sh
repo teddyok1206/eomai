@@ -13,7 +13,8 @@ CATALOG_FIXED_STAGING=(
   /srv/eom/staging/catalog/workflow-prompts
 )
 WORKSPACE_PARENT=/srv/eom/workspaces
-WORKERS=(eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05)
+WORKER_HOME_PARENT=/srv/eom/worker-homes
+WORKERS=(eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-cdx-06)
 
 require_real_directory() {
   local path="$1"
@@ -39,6 +40,7 @@ reconcile_directory() {
 require_real_directory /srv/eom
 require_real_directory /srv/eom/staging
 require_real_directory "${WORKSPACE_PARENT}"
+require_real_directory "${WORKER_HOME_PARENT}"
 getent passwd eom >/dev/null
 getent group eom >/dev/null
 
@@ -50,6 +52,7 @@ for worker in "${WORKERS[@]}"; do
   getent passwd "${worker}" >/dev/null
   getent group "${worker}" >/dev/null
   reconcile_directory "${WORKSPACE_PARENT}/${worker}" "${worker}" "${worker}" 2770
+  reconcile_directory "${WORKER_HOME_PARENT}/${worker}" "${worker}" "${worker}" 0700
 done
 
 printf '%s\n' 'Workflow runtime paths reconciled.'

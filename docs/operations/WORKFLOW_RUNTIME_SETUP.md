@@ -51,6 +51,13 @@ symlinks, malformed YAML, unknown roles or fields, duplicate slot/user identitie
 schema versions fail closed before job submission. Use the same explicit value for doctor, runner,
 and an authorized dedicated live verification.
 
+The reviewed worker-runtime installer validates `config/worker-slots.example.yaml` through the
+installed contract package, stops only the workflow runner and authentication broker at an empty
+lease boundary, and atomically installs it as `/etc/eom/worker-slots.yaml` with
+`root:eom:0640`. The installed inventory hash is included in the runtime deployment provenance
+record. Identity creation is a separate explicit step; the inventory installer never invents a
+Linux user or copies Codex authentication state.
+
 ## Operator-Managed Workflow Configuration
 
 Review and run `scripts/workflow/install_runner_configuration.sh` as root when deploying the

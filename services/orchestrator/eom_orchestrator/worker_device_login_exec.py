@@ -23,11 +23,17 @@ from pathlib import Path
 from time import monotonic
 
 from eom_identifiers import canonical_json_bytes
-from eom_workflow import CodexDeviceChallenge, CodexDeviceLoginStatus, validate_control_contract
+from eom_workflow import (
+    CodexDeviceChallenge,
+    CodexDeviceChallengeV2,
+    CodexDeviceLoginStatus,
+    CodexDeviceLoginStatusV2,
+    validate_control_contract,
+)
 
 CODEX_BINARY = Path("/usr/local/bin/codex")
 PATH_VALUE = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-SLOT_USERS = {slot: f"eom-cdx-{slot}" for slot in ("01", "02", "03", "04", "05")}
+SLOT_USERS = {slot: f"eom-cdx-{slot}" for slot in ("01", "02", "03", "04", "05", "06")}
 ENROLLMENT_PATTERN = re.compile(r"^authflow_[0-9a-f]{32}$", re.ASCII)
 URL_PATTERN = re.compile(rb"https://auth\.openai\.com(?:/[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*)?")
 CODE_PATTERN = re.compile(rb"(?<![A-Z0-9])([A-Z0-9]{3,12}-[A-Z0-9]{3,12})(?![A-Z0-9])")
@@ -119,8 +125,13 @@ def _write_exclusive(path: Path, document: dict[str, object]) -> None:
 
 
 def _replace_status(path: Path, document: dict[str, object]) -> None:
-    normalized = CodexDeviceLoginStatus.model_validate(document).model_dump(mode="json")
-    validate_control_contract("codex-device-login-status", normalized)
+    is_v2 = document.get("schema_version") == "codex-device-login-status/1.1"
+    status_type = CodexDeviceLoginStatusV2 if is_v2 else CodexDeviceLoginStatus
+    normalized = status_type.model_validate(document).model_dump(mode="json")
+    validate_control_contract(
+        "codex-device-login-status-v2" if is_v2 else "codex-device-login-status",
+        normalized,
+    )
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
         _write_exclusive(temporary, normalized)
@@ -131,8 +142,13 @@ def _replace_status(path: Path, document: dict[str, object]) -> None:
 
 
 def _write_challenge(path: Path, document: dict[str, object]) -> None:
-    normalized = CodexDeviceChallenge.model_validate(document).model_dump(mode="json")
-    validate_control_contract("codex-device-challenge", normalized)
+    is_v2 = document.get("schema_version") == "codex-device-challenge/1.1"
+    challenge_type = CodexDeviceChallengeV2 if is_v2 else CodexDeviceChallenge
+    normalized = challenge_type.model_validate(document).model_dump(mode="json")
+    validate_control_contract(
+        "codex-device-challenge-v2" if is_v2 else "codex-device-challenge",
+        normalized,
+    )
     _write_exclusive(path, normalized)
 
 
@@ -140,7 +156,9 @@ def _status_document(
     *, enrollment_id: str, slot_id: str, state: str, reason_code: str | None
 ) -> dict[str, object]:
     return {
-        "schema_version": "codex-device-login-status/1.0",
+        "schema_version": (
+            "codex-device-login-status/1.1" if slot_id == "06" else "codex-device-login-status/1.0"
+        ),
         "enrollment_id": enrollment_id,
         "slot_key": f"slot{slot_id}",
         "state": state,
@@ -254,7 +272,11 @@ def _collect_device_login(
                         _write_challenge(
                             challenge_path,
                             {
-                                "schema_version": "codex-device-challenge/1.0",
+                                "schema_version": (
+                                    "codex-device-challenge/1.1"
+                                    if slot_id == "06"
+                                    else "codex-device-challenge/1.0"
+                                ),
                                 "enrollment_id": enrollment_id,
                                 "slot_key": f"slot{slot_id}",
                                 "verification_uri": url_match.group(0).decode("ascii"),

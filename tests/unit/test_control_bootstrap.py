@@ -35,6 +35,7 @@ ANALYSIS_CONFIG_V9 = ROOT / "config/control-plane/knowledge-analysis-v9"
 ANALYSIS_CONFIG_V10 = ROOT / "config/control-plane/knowledge-analysis-v10"
 ANALYSIS_CONFIG_V11 = ROOT / "config/control-plane/knowledge-analysis-v11"
 ANALYSIS_CONFIG_V12 = ROOT / "config/control-plane/knowledge-analysis-v12"
+ANALYSIS_CONFIG_V13 = ROOT / "config/control-plane/knowledge-analysis-v13"
 
 
 def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version() -> None:
@@ -43,7 +44,36 @@ def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version
     )
 
     assert set(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS) == schema_versions
-    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 13))
+    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 14))
+
+
+def test_knowledge_analysis_v13_adds_parallel_capacity_without_changing_worker_semantics() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V13)
+
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/13.0"
+    assert manifest.slot_key == "slot05"
+    assert manifest.worker_pool_key == "support"
+    assert manifest.timeout_seconds == 7200
+    assert manifest.compatible_workflow_protocols[-1] == "workflow-role/1.11.0"
+    expected_sha256 = {
+        "bootstrap.yaml": "6a1e15fe629e2cf90b46735e875ca58294b434293059eb2c6f78b6a4fdaaccc4",
+        "instructions/platform.md": (
+            "d89ba7eaffda1580178d215ad510e5401ed268473140cf3c3d53bb7195b9df91"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "93bf41b30a4520fbbcb0e21dc88be0a0a815f4ac96c9237d0d21758728b1b1ea"
+        ),
+    }
+    for relative_path, expected in expected_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V13 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+    assert (ANALYSIS_CONFIG_V13 / "instructions/platform.md").read_bytes() == (
+        ANALYSIS_CONFIG_V12 / "instructions/platform.md"
+    ).read_bytes()
+    assert (ANALYSIS_CONFIG_V13 / "instructions/knowledge-analysis.md").read_bytes() == (
+        ANALYSIS_CONFIG_V12 / "instructions/knowledge-analysis.md"
+    ).read_bytes()
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:
