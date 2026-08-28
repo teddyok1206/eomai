@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Never
+from typing import Literal, Never, cast
 
 from eom_api_contracts.control_plane import (
+    BeginCodexAuthEnrollmentRequest,
     CodexAccountCommandRequest,
     CodexAccountView,
+    CodexAuthEnrollmentView,
     CodexCapabilityView,
     CodexControlCommandView,
+    CodexDeviceChallengeView,
     CreateExecutionPresetDraftRequest,
     ExecutionPresetEvaluationView,
     ExecutionPresetRevisionView,
@@ -18,12 +21,24 @@ from eom_api_contracts.control_plane import (
     PresetRolePolicyInput,
 )
 from eom_operator_identity import ActorContext
+from eom_orchestrator.auth_enrollment import (
+    ACTIVE_STATES,
+    build_codex_auth_enrollment_request,
+    create_codex_auth_enrollment,
+    enrollment_status_document,
+    record_challenge_revealed,
+)
+from eom_orchestrator.codex_auth_broker_client import (
+    CodexAuthBrokerClient,
+    CodexAuthBrokerError,
+)
 from eom_orchestrator.control_commands import (
     build_codex_control_command,
     enqueue_codex_control_command,
 )
 from eom_orchestrator.control_models import (
     CodexAuthBindingRecord,
+    CodexAuthEnrollmentRecord,
     CodexCapabilityEntryRecord,
     CodexCapabilitySnapshotRecord,
     CodexControlCommandRecord,
@@ -49,8 +64,9 @@ from eom_api.errors import ApiError
 class ControlPlaneAdapter:
     """Keep HTTP presentation outside immutable lifecycle and queue transactions."""
 
-    def __init__(self, engine: Engine) -> None:
+    def __init__(self, engine: Engine, *, auth_broker: CodexAuthBrokerClient | None = None) -> None:
         self.sessions = build_session_factory(engine)
+        self.auth_broker = auth_broker or CodexAuthBrokerClient()
 
     def list_accounts(self) -> tuple[CodexAccountView, ...]:
         with self.sessions() as session:
@@ -119,6 +135,19 @@ class ControlPlaneAdapter:
                     .group_by(WorkerLeaseRecord.binding_id)
                 ).all()
             }
+            active_enrollments: dict[str, tuple[str, str]] = {
+                binding_id: (enrollment_id, state)
+                for binding_id, enrollment_id, state in session.execute(
+                    select(
+                        CodexAuthEnrollmentRecord.binding_id,
+                        CodexAuthEnrollmentRecord.enrollment_id,
+                        CodexAuthEnrollmentRecord.state,
+                    ).where(
+                        CodexAuthEnrollmentRecord.binding_id.in_(binding_ids),
+                        CodexAuthEnrollmentRecord.state.in_(ACTIVE_STATES),
+                    )
+                ).all()
+            }
             slot_ids = [row.worker_slot_id for row in bindings]
             ranked_jobs = (
                 select(
@@ -151,6 +180,7 @@ class ControlPlaneAdapter:
                     capabilities=tuple(capabilities.get(latest.get(binding.binding_id, ""), [])),
                     active_lease_count=int(lease_counts.get(binding.binding_id, 0)),
                     last_successful_job_id=last_jobs.get(binding.worker_slot_id),
+                    active_auth_enrollment=active_enrollments.get(binding.binding_id),
                 )
                 for binding in bindings
             )
@@ -195,6 +225,128 @@ class ControlPlaneAdapter:
             if row is None:
                 self._not_found("CODEX_CONTROL_COMMAND_NOT_FOUND")
             return self._command(row)
+
+    def create_auth_enrollment(
+        self,
+        *,
+        binding_id: str,
+        body: BeginCodexAuthEnrollmentRequest,
+        actor: ActorContext,
+        api_session_id: str,
+        expected_version: int,
+        idempotency_key: str,
+    ) -> CodexAuthEnrollmentView:
+        requested_at = datetime.now(UTC)
+        try:
+            with transaction(self.sessions) as session:
+                binding = session.get(
+                    CodexAuthBindingRecord,
+                    binding_id,
+                    with_for_update=True,
+                )
+                if binding is None:
+                    self._not_found("CODEX_ACCOUNT_NOT_FOUND")
+                document = build_codex_auth_enrollment_request(
+                    binding_id=binding_id,
+                    expected_binding_resource_version=expected_version,
+                    slot_key=f"slot{binding.worker_slot_id}",
+                    requested_account_label=body.requested_account_label,
+                    requested_by_operator_id=actor.actor_id,
+                    requested_by_api_session_id=api_session_id,
+                    requested_at=requested_at,
+                )
+                row = create_codex_auth_enrollment(
+                    session,
+                    document=document,
+                    idempotency_key=idempotency_key,
+                )
+                return self._enrollment(row, challenge_available=False)
+        except ControlPlaneError as exc:
+            self._map_error(exc)
+
+    def auth_enrollment(self, enrollment_id: str) -> CodexAuthEnrollmentView:
+        with self.sessions() as session:
+            row = session.get(CodexAuthEnrollmentRecord, enrollment_id)
+            if row is None:
+                self._not_found("CODEX_AUTH_ENROLLMENT_NOT_FOUND")
+            challenge_available = False
+            if row.state == "WAITING_FOR_USER" and row.challenge_revealed_at is None:
+                try:
+                    response = self.auth_broker.request(
+                        action="STATUS",
+                        enrollment_id=row.enrollment_id,
+                        slot_key=str(row.canonical_document["slot_key"]),
+                    )
+                    challenge_available = (
+                        response.status is not None and response.status.state == "WAITING_FOR_USER"
+                    )
+                except (CodexAuthBrokerError, KeyError):
+                    challenge_available = False
+            return self._enrollment(row, challenge_available=challenge_available)
+
+    def reveal_auth_challenge(
+        self,
+        *,
+        enrollment_id: str,
+        api_session_id: str,
+    ) -> CodexDeviceChallengeView:
+        revealed_at = datetime.now(UTC)
+        try:
+            with transaction(self.sessions) as session:
+                row = session.get(
+                    CodexAuthEnrollmentRecord,
+                    enrollment_id,
+                    with_for_update=True,
+                )
+                if row is None:
+                    self._not_found("CODEX_AUTH_ENROLLMENT_NOT_FOUND")
+                if row.requested_by_api_session_id != api_session_id:
+                    raise ControlPlaneError(
+                        "CODEX_AUTH_SESSION_MISMATCH",
+                        "auth enrollment belongs to another API session",
+                    )
+                if row.challenge_revealed_at is not None:
+                    raise ControlPlaneError(
+                        "CODEX_AUTH_CHALLENGE_ALREADY_REVEALED",
+                        "device challenge was already revealed",
+                    )
+                if row.expires_at <= revealed_at:
+                    raise ControlPlaneError(
+                        "CODEX_AUTH_ENROLLMENT_EXPIRED",
+                        "auth enrollment has expired",
+                    )
+                try:
+                    response = self.auth_broker.request(
+                        action="REVEAL",
+                        enrollment_id=row.enrollment_id,
+                        slot_key=str(row.canonical_document["slot_key"]),
+                    )
+                except CodexAuthBrokerError as exc:
+                    raise ControlPlaneError(
+                        exc.code,
+                        "device challenge is unavailable",
+                    ) from exc
+                if response.challenge is None:
+                    raise ControlPlaneError(
+                        "CODEX_AUTH_BROKER_RESPONSE_INVALID",
+                        "device challenge is absent",
+                    )
+                record_challenge_revealed(
+                    session,
+                    enrollment_id=row.enrollment_id,
+                    api_session_id=api_session_id,
+                    revealed_at=revealed_at,
+                )
+                challenge = response.challenge
+                return CodexDeviceChallengeView(
+                    enrollment_id=challenge.enrollment_id,
+                    slot_key=challenge.slot_key,
+                    verification_uri=challenge.verification_uri,
+                    user_code=challenge.user_code,
+                    expires_at=challenge.expires_at,
+                )
+        except ControlPlaneError as exc:
+            self._map_error(exc)
 
     def list_presets(self) -> tuple[ExecutionPresetView, ...]:
         with self.sessions() as session:
@@ -369,6 +521,7 @@ class ControlPlaneAdapter:
         capabilities: tuple[CodexCapabilityView, ...],
         active_lease_count: int,
         last_successful_job_id: str | None,
+        active_auth_enrollment: tuple[str, str] | None,
     ) -> CodexAccountView:
         return CodexAccountView(
             binding_id=row.binding_id,
@@ -383,6 +536,23 @@ class ControlPlaneAdapter:
             capabilities=capabilities,
             active_lease_count=active_lease_count,
             last_successful_job_id=last_successful_job_id,
+            active_auth_enrollment_id=(
+                active_auth_enrollment[0] if active_auth_enrollment is not None else None
+            ),
+            active_auth_enrollment_state=(
+                cast(
+                    Literal[
+                        "REQUESTED",
+                        "DRAINING",
+                        "READY_FOR_LOGIN",
+                        "WAITING_FOR_USER",
+                        "VERIFYING",
+                    ],
+                    active_auth_enrollment[1],
+                )
+                if active_auth_enrollment is not None
+                else None
+            ),
         )
 
     @staticmethod
@@ -397,6 +567,14 @@ class ControlPlaneAdapter:
             error_code=row.error_code,
             requested_at=row.requested_at,
             processed_at=row.processed_at,
+        )
+
+    @staticmethod
+    def _enrollment(
+        row: CodexAuthEnrollmentRecord, *, challenge_available: bool
+    ) -> CodexAuthEnrollmentView:
+        return CodexAuthEnrollmentView.model_validate(
+            enrollment_status_document(row, challenge_available=challenge_available)
         )
 
     @staticmethod
@@ -461,13 +639,23 @@ class ControlPlaneAdapter:
     @staticmethod
     def _map_error(exc: ControlPlaneError) -> Never:
         conflict_codes = {
+            "CODEX_AUTH_CHALLENGE_ALREADY_REVEALED",
+            "CODEX_AUTH_CHALLENGE_NOT_AVAILABLE",
+            "CODEX_AUTH_CHALLENGE_NOT_READY",
+            "CODEX_AUTH_ENROLLMENT_ALREADY_ACTIVE",
+            "CODEX_AUTH_IDEMPOTENCY_CONFLICT",
+            "CODEX_AUTH_SESSION_MISMATCH",
+            "CODEX_AUTH_SLOT_BUSY",
             "CONTROL_IDEMPOTENCY_CONFLICT",
             "CONTROL_RESOURCE_VERSION_CONFLICT",
             "CONTROL_REVISION_CONFLICT",
             "CONTROL_PRESET_RETIRED",
             "CONTROL_PRESET_EVALUATION_REQUIRED",
         }
-        status = 409 if exc.code in conflict_codes else 422
+        unavailable_codes = {"CODEX_AUTH_BROKER_UNAVAILABLE"}
+        status = (
+            409 if exc.code in conflict_codes else 503 if exc.code in unavailable_codes else 422
+        )
         raise ApiError(
             status,
             exc.code,

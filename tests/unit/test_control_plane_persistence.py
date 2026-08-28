@@ -133,7 +133,7 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260827_0019"
+    assert CURRENT_MIGRATION_REVISION == "20260827_0020"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -156,11 +156,29 @@ def test_multimodal_batch_migration_is_additive_and_keeps_legacy_pointers() -> N
         encoding="utf-8"
     )
     assert 'down_revision: str | None = "20260826_0018"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260827_0019"
+    assert CURRENT_MIGRATION_REVISION == "20260827_0020"
     assert "textbook-analysis-bundle-manifest/1.0" in source
     assert "textbook-analysis-bundle-manifest/2.0" in source
     assert "drop_table" not in source
     assert "DELETE FROM" not in source
+
+
+def test_codex_device_reauthentication_migration_is_additive_and_credential_free() -> None:
+    source = Path(
+        "migrations/versions/20260827_0020_codex_gui_device_reauthentication.py"
+    ).read_text(encoding="utf-8")
+    assert 'down_revision: str | None = "20260827_0019"' in source
+    assert CURRENT_MIGRATION_REVISION == "20260827_0020"
+    assert "codex_auth_enrollments" in source
+    assert "codex_auth_assignment_revisions" in source
+    assert "codex_auth_assignment_revisions_immutable" in source
+    assert "uq_codex_auth_enrollment_active_binding" in source
+    assert "current_assignment_revision_id" in source
+    assert "Codex authentication assignment pointer is invalid" in source
+    assert "assignment.account_label = NEW.account_label" in source
+    assert "login_unit_started_at" in source
+    for forbidden in ("password", "access_token", "refresh_token", "auth_json"):
+        assert forbidden not in source
 
 
 def test_knowledge_analysis_rbac_migration_is_additive_and_exact() -> None:

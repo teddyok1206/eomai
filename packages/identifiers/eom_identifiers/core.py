@@ -91,6 +91,14 @@ def new_codex_control_command_id() -> str:
     return f"codexcmd_{uuid4().hex}"
 
 
+def new_codex_auth_enrollment_id() -> str:
+    return f"authflow_{uuid4().hex}"
+
+
+def new_codex_auth_assignment_revision_id() -> str:
+    return f"authassignrev_{uuid4().hex}"
+
+
 def new_execution_preset_evaluation_id() -> str:
     return f"preseteval_{uuid4().hex}"
 

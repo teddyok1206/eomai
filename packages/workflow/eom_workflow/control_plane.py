@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Annotated, Literal
+from unicodedata import normalize
+from urllib.parse import urlsplit
 
 from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV3,
@@ -598,6 +600,171 @@ class CodexAuthHealthView(FrozenModel):
             raise ValueError("READY authentication health cannot include a failure reason")
         if self.state != "READY" and self.reason_code is None:
             raise ValueError("non-READY authentication health requires a reason code")
+        return self
+
+
+class CodexAuthEnrollmentRequest(FrozenModel):
+    """Credential-free request for one fixed-slot ChatGPT device login."""
+
+    schema_version: Literal["codex-auth-enrollment-request/1.0"] = (
+        "codex-auth-enrollment-request/1.0"
+    )
+    enrollment_id: str = Field(pattern=r"^authflow_[0-9a-f]{32}$")
+    binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
+    expected_binding_resource_version: int = Field(ge=1)
+    slot_key: str = Field(pattern=r"^slot0[1-5]$")
+    requested_account_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+    requested_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    requested_by_api_session_id: str = Field(pattern=r"^apisession_[0-9a-f]{32}$")
+    requested_at: UtcDatetime
+    expires_at: UtcDatetime
+    request_sha256: Sha256
+
+    @field_validator("requested_account_label")
+    @classmethod
+    def safe_account_label(cls, value: str) -> str:
+        if value != value.strip() or value != normalize("NFC", value):
+            raise ValueError("account label must be trimmed NFC text")
+        return value
+
+    @model_validator(mode="after")
+    def bounded_enrollment_window(self) -> CodexAuthEnrollmentRequest:
+        duration = self.expires_at - self.requested_at
+        if not timedelta(minutes=5) <= duration <= timedelta(minutes=15):
+            raise ValueError("auth enrollment window must be between five and fifteen minutes")
+        return self
+
+
+class CodexAuthEnrollmentStatus(FrozenModel):
+    """Durable sanitized enrollment projection; never contains a device code."""
+
+    schema_version: Literal["codex-auth-enrollment-status/1.0"] = "codex-auth-enrollment-status/1.0"
+    enrollment_id: str = Field(pattern=r"^authflow_[0-9a-f]{32}$")
+    binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
+    slot_key: str = Field(pattern=r"^slot0[1-5]$")
+    requested_account_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+    state: Literal[
+        "REQUESTED",
+        "DRAINING",
+        "READY_FOR_LOGIN",
+        "WAITING_FOR_USER",
+        "VERIFYING",
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED",
+        "EXPIRED",
+    ]
+    challenge_available: bool
+    challenge_revealed_at: UtcDatetime | None
+    assignment_revision_id: str | None = Field(
+        default=None, pattern=r"^authassignrev_[0-9a-f]{32}$"
+    )
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    requested_at: UtcDatetime
+    started_at: UtcDatetime | None
+    expires_at: UtcDatetime
+    completed_at: UtcDatetime | None
+    resource_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def coherent_enrollment_projection(self) -> CodexAuthEnrollmentStatus:
+        terminal = self.state in {"SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"}
+        failed = self.state in {"FAILED", "CANCELLED", "EXPIRED"}
+        if terminal != (self.completed_at is not None):
+            raise ValueError("terminal enrollment state must match completion timestamp")
+        if failed != (self.error_code is not None):
+            raise ValueError("failed enrollment state must match stable error code")
+        if (self.state == "SUCCEEDED") != (self.assignment_revision_id is not None):
+            raise ValueError("only successful enrollment may identify an assignment revision")
+        if self.challenge_available and self.state != "WAITING_FOR_USER":
+            raise ValueError("device challenge is available only while waiting for the user")
+        if self.challenge_available and self.challenge_revealed_at is not None:
+            raise ValueError("revealed device challenge cannot remain available")
+        if self.started_at is not None and self.started_at < self.requested_at:
+            raise ValueError("enrollment cannot start before it was requested")
+        if self.completed_at is not None and self.completed_at < self.requested_at:
+            raise ValueError("enrollment cannot complete before it was requested")
+        return self
+
+
+class CodexDeviceChallenge(FrozenModel):
+    """One-time ephemeral challenge; forbidden from durable persistence and logs."""
+
+    schema_version: Literal["codex-device-challenge/1.0"] = "codex-device-challenge/1.0"
+    enrollment_id: str = Field(pattern=r"^authflow_[0-9a-f]{32}$")
+    slot_key: str = Field(pattern=r"^slot0[1-5]$")
+    verification_uri: str = Field(max_length=512)
+    user_code: str = Field(pattern=r"^[A-Z0-9]{3,12}(?:-[A-Z0-9]{3,12})?$")
+    issued_at: UtcDatetime
+    expires_at: UtcDatetime
+
+    @field_validator("verification_uri")
+    @classmethod
+    def exact_openai_verification_origin(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "auth.openai.com"
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port not in {None, 443}
+            or parsed.fragment
+        ):
+            raise ValueError("device verification URI must use the reviewed OpenAI HTTPS origin")
+        return value
+
+    @model_validator(mode="after")
+    def bounded_challenge_window(self) -> CodexDeviceChallenge:
+        duration = self.expires_at - self.issued_at
+        if not timedelta(seconds=30) <= duration <= timedelta(minutes=15):
+            raise ValueError("device challenge window is outside the reviewed bound")
+        return self
+
+
+class CodexDeviceLoginStatus(FrozenModel):
+    schema_version: Literal["codex-device-login-status/1.0"] = "codex-device-login-status/1.0"
+    enrollment_id: str = Field(pattern=r"^authflow_[0-9a-f]{32}$")
+    slot_key: str = Field(pattern=r"^slot0[1-5]$")
+    state: Literal["STARTING", "WAITING_FOR_USER", "SUCCEEDED", "FAILED", "EXPIRED"]
+    reason_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    updated_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def coherent_login_status(self) -> CodexDeviceLoginStatus:
+        failed = self.state in {"FAILED", "EXPIRED"}
+        if failed != (self.reason_code is not None):
+            raise ValueError("failed login status must match stable reason code")
+        return self
+
+
+class CodexAuthBrokerRequest(FrozenModel):
+    schema_version: Literal["codex-auth-broker-request/1.0"] = "codex-auth-broker-request/1.0"
+    action: Literal["STATUS", "REVEAL"]
+    enrollment_id: str = Field(pattern=r"^authflow_[0-9a-f]{32}$")
+    slot_key: str = Field(pattern=r"^slot0[1-5]$")
+
+
+class CodexAuthBrokerResponse(FrozenModel):
+    schema_version: Literal["codex-auth-broker-response/1.0"] = "codex-auth-broker-response/1.0"
+    outcome: Literal["OK", "FAILED"]
+    status: CodexDeviceLoginStatus | None
+    challenge: CodexDeviceChallenge | None
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+
+    @model_validator(mode="after")
+    def coherent_broker_response(self) -> CodexAuthBrokerResponse:
+        success = self.outcome == "OK"
+        if success != (self.status is not None):
+            raise ValueError("successful broker response requires sanitized status")
+        if success != (self.error_code is None):
+            raise ValueError("failed broker response requires stable error code")
+        if self.challenge is not None and (
+            self.status is None
+            or self.status.state != "WAITING_FOR_USER"
+            or self.challenge.enrollment_id != self.status.enrollment_id
+            or self.challenge.slot_key != self.status.slot_key
+        ):
+            raise ValueError("device challenge does not match waiting broker status")
         return self
 
 

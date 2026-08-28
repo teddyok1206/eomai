@@ -107,6 +107,42 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:406330f2e44da43f9f559183c2204a2c7ba50796531bfc7886f9c1d1dfaf613c",
         ),
+        "codex-auth-enrollment-request": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-auth-enrollment-request-v1.schema.json",
+            "resources/control-plane/codex-auth-enrollment-request-v1.schema.json",
+            "1.0",
+            "sha256:4cc5734efd39d06c06b79f2585811672687629fedbadb51833bae66d97ad3f6e",
+        ),
+        "codex-auth-enrollment-status": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-auth-enrollment-status-v1.schema.json",
+            "resources/control-plane/codex-auth-enrollment-status-v1.schema.json",
+            "1.0",
+            "sha256:ad4a3e527f547280235d28c80582939533b4409c54f9ed0b58e042961e0055cd",
+        ),
+        "codex-device-challenge": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-device-challenge-v1.schema.json",
+            "resources/control-plane/codex-device-challenge-v1.schema.json",
+            "1.0",
+            "sha256:d9ef194d5832b4a61fc9ed44f6a7a7faeeea510b5e0bbe4ccbe6825df977ab72",
+        ),
+        "codex-device-login-status": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-device-login-status-v1.schema.json",
+            "resources/control-plane/codex-device-login-status-v1.schema.json",
+            "1.0",
+            "sha256:9c0a4893930c7a3355e92a08c1e4b0aee25f216783abb0c6b9fca57d112b3abe",
+        ),
+        "codex-auth-broker-request": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-auth-broker-request-v1.schema.json",
+            "resources/control-plane/codex-auth-broker-request-v1.schema.json",
+            "1.0",
+            "sha256:59e05f2f7c8e4f6a32909459ca369b6f070ddb1b786a78746a22a086549df492",
+        ),
+        "codex-auth-broker-response": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-auth-broker-response-v1.schema.json",
+            "resources/control-plane/codex-auth-broker-response-v1.schema.json",
+            "1.0",
+            "sha256:46a6e4bae0b5011accf1b1a8a3ae5c21edd99a04ac49bea86b1ef3d51caf3d20",
+        ),
         "codex-control-command": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-control-command-v1.schema.json",
             "resources/control-plane/codex-control-command-v1.schema.json",

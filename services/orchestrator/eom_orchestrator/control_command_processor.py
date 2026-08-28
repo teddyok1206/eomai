@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -36,6 +37,9 @@ from eom_orchestrator.worker_auth import (
     persist_worker_auth_observation,
 )
 from eom_orchestrator.worker_registry import FIXED_WORKER_SLOT_IDS, WorkerSlot
+
+if TYPE_CHECKING:
+    from eom_orchestrator.auth_enrollment_processor import CodexAuthEnrollmentProcessor
 
 AUTH_OBSERVATION_TTL = timedelta(hours=1)
 CAPABILITY_OBSERVATION_TTL = timedelta(hours=1)
@@ -69,11 +73,13 @@ class CodexControlCommandProcessor:
         *,
         capability_policy_path: Path,
         runner_id: str,
+        enrollment_processor: CodexAuthEnrollmentProcessor | None = None,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self.sessions = sessions
         self.capability_policy_path = capability_policy_path
         self.runner_id = runner_id
+        self.enrollment_processor = enrollment_processor
         self.now = now
         self._next_maintenance_at = datetime.min.replace(tzinfo=UTC)
 
@@ -125,6 +131,10 @@ class CodexControlCommandProcessor:
         return target.binding_id
 
     def process_once(self) -> str | None:
+        if self.enrollment_processor is not None:
+            enrollment_id = self.enrollment_processor.process_once()
+            if enrollment_id is not None:
+                return enrollment_id
         claimed_at = self.now()
         with transaction(self.sessions) as session:
             record = claim_next_codex_control_command(

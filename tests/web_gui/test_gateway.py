@@ -181,6 +181,62 @@ async def test_gateway_control_plane_preserves_etag_idempotency_and_no_credentia
         requests.append(request)
         if request.url.path == "/api/v1/codex-accounts":
             return httpx.Response(200, json=_list([]))
+        if request.url.path.endswith("/reauthentications"):
+            assert request.headers["if-match"] == '"v7"'
+            assert request.headers["idempotency-key"] == "stable-reauth-key-0001"
+            body = request.read().decode()
+            assert "teacher-account-01" in body
+            assert "password" not in body and "token" not in body
+            return httpx.Response(
+                202,
+                json=_single(
+                    {
+                        "command_id": "authflow_" + "3" * 32,
+                        "resource_id": "authflow_" + "3" * 32,
+                        "resource_type": "codex_auth_enrollment",
+                        "status": "ACCEPTED",
+                        "resource_version": 1,
+                        "status_url": "/api/v1/codex-auth-enrollments/authflow_" + "3" * 32,
+                    }
+                ),
+            )
+        if request.url.path == "/api/v1/codex-auth-enrollments/authflow_" + "3" * 32:
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "enrollment_id": "authflow_" + "3" * 32,
+                        "binding_id": "authbinding_" + "2" * 32,
+                        "slot_key": "slot01",
+                        "requested_account_label": "teacher-account-01",
+                        "state": "WAITING_FOR_USER",
+                        "challenge_available": True,
+                        "challenge_revealed_at": None,
+                        "assignment_revision_id": None,
+                        "error_code": None,
+                        "requested_at": "2026-08-27T12:00:00Z",
+                        "started_at": "2026-08-27T12:00:01Z",
+                        "expires_at": "2026-08-27T12:15:00Z",
+                        "completed_at": None,
+                        "resource_version": 4,
+                    }
+                ),
+            )
+        if request.url.path.endswith("/challenge"):
+            assert request.read() == b"{}"
+            return httpx.Response(
+                200,
+                headers={"Cache-Control": "no-store"},
+                json=_single(
+                    {
+                        "enrollment_id": "authflow_" + "3" * 32,
+                        "slot_key": "slot01",
+                        "verification_uri": "https://auth.openai.com/codex/device",
+                        "user_code": "ABC1-DEF2",
+                        "expires_at": "2026-08-27T12:10:00Z",
+                    }
+                ),
+            )
         if request.url.path.endswith("/commands"):
             assert request.headers["if-match"] == '"v7"'
             assert request.headers["idempotency-key"] == "stable-control-key-0001"
@@ -217,7 +273,19 @@ async def test_gateway_control_plane_preserves_etag_idempotency_and_no_credentia
         idempotency_key="stable-control-key-0001",
     )
     assert result["status"] == "ACCEPTED"
-    assert len(requests) == 2
+    enrollment = await gateway.start_codex_auth_enrollment(
+        _session(),
+        "authbinding_" + "2" * 32,
+        requested_account_label="teacher-account-01",
+        resource_version=7,
+        idempotency_key="stable-reauth-key-0001",
+    )
+    assert enrollment["resource_type"] == "codex_auth_enrollment"
+    status = await gateway.codex_auth_enrollment(_session(), "authflow_" + "3" * 32)
+    assert status.challenge_available is True
+    challenge = await gateway.reveal_codex_auth_challenge(_session(), "authflow_" + "3" * 32)
+    assert challenge.user_code == "ABC1-DEF2"
+    assert len(requests) == 5
     await gateway.close()
 
 

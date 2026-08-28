@@ -33,7 +33,16 @@ from eom_identifiers import (
     new_reference_bundle_revision_id,
     new_revision_id,
 )
-from eom_identity_service.models import OperatorRecord
+from eom_identity_service.models import ApiSessionRecord, OperatorRecord
+from eom_orchestrator.auth_enrollment import (
+    build_codex_auth_enrollment_request,
+    claim_due_codex_auth_enrollment,
+    create_auth_assignment_revision,
+    create_codex_auth_enrollment,
+    enrollment_status_document,
+    mark_codex_device_login_started,
+    transition_codex_auth_enrollment,
+)
 from eom_orchestrator.capability_observer import (
     REQUIRED_EXEC_HELP_FLAGS,
     ReviewedCapabilityPolicy,
@@ -64,7 +73,9 @@ from eom_orchestrator.control_commands import (
     terminalize_codex_control_command,
 )
 from eom_orchestrator.control_models import (
+    CodexAuthAssignmentRevisionRecord,
     CodexAuthBindingRecord,
+    CodexAuthEnrollmentRecord,
     CodexAuthHealthEventRecord,
     CodexCapabilityEntryRecord,
     CodexCapabilitySnapshotRecord,
@@ -1559,7 +1570,9 @@ def test_control_command_is_idempotent_leased_sanitized_and_terminal(
     db_session: Session,
 ) -> None:
     _complete_control_plane(db_session)
-    binding = db_session.scalar(select(CodexAuthBindingRecord))
+    binding = db_session.scalar(
+        select(CodexAuthBindingRecord).where(CodexAuthBindingRecord.worker_slot_id == "01")
+    )
     assert binding is not None
     operator = OperatorRecord(
         operator_id="operator_" + uuid4().hex,
@@ -1651,6 +1664,246 @@ def test_control_command_is_idempotent_leased_sanitized_and_terminal(
         == terminal.result_document
     )
     assert db_session.get(CodexControlCommandRecord, command.command_id) is terminal
+
+
+def test_codex_auth_enrollment_is_idempotent_credential_free_and_assignment_immutable(
+    db_session: Session,
+) -> None:
+    _complete_control_plane(db_session)
+    binding = db_session.scalar(
+        select(CodexAuthBindingRecord).where(CodexAuthBindingRecord.worker_slot_id == "01")
+    )
+    assert binding is not None
+    operator = OperatorRecord(
+        operator_id="operator_" + uuid4().hex,
+        username=f"auth-{uuid4().hex[:12]}",
+        normalized_username=f"auth-{uuid4().hex}",
+        display_name="Device auth integration operator",
+        status="ACTIVE",
+        must_change_password=False,
+        role_version=1,
+        created_by="device-auth-test",
+    )
+    requested_at = NOW + timedelta(minutes=40)
+    api_session = ApiSessionRecord(
+        api_session_id="apisession_" + uuid4().hex,
+        operator_id=operator.operator_id,
+        token_family_id="tokenfamily_" + uuid4().hex,
+        client_name="Device auth integration",
+        authenticated_at=requested_at,
+        created_at=requested_at,
+        last_seen_at=requested_at,
+        absolute_expires_at=requested_at + timedelta(days=1),
+        idle_expires_at=requested_at + timedelta(hours=1),
+        revoked_at=None,
+        revoked_by=None,
+        revoke_reason=None,
+        refresh_generation=1,
+        lock_version=1,
+    )
+    # The two mapped types intentionally have no ORM relationship. Flush the
+    # referenced operator first so unit-of-work ordering never depends on an
+    # incidental identity-service import graph.
+    db_session.add(operator)
+    db_session.flush()
+    db_session.add(api_session)
+    db_session.flush()
+
+    document = build_codex_auth_enrollment_request(
+        binding_id=binding.binding_id,
+        expected_binding_resource_version=binding.resource_version,
+        slot_key=f"slot{binding.worker_slot_id}",
+        requested_account_label="teacher-account-01",
+        requested_by_operator_id=operator.operator_id,
+        requested_by_api_session_id=api_session.api_session_id,
+        requested_at=requested_at,
+    )
+    key = f"device-auth:{uuid4().hex}"
+    enrollment = create_codex_auth_enrollment(db_session, document=document, idempotency_key=key)
+    replay_document = build_codex_auth_enrollment_request(
+        binding_id=binding.binding_id,
+        expected_binding_resource_version=binding.resource_version,
+        slot_key=f"slot{binding.worker_slot_id}",
+        requested_account_label="teacher-account-01",
+        requested_by_operator_id=operator.operator_id,
+        requested_by_api_session_id=api_session.api_session_id,
+        requested_at=requested_at,
+    )
+    replay = create_codex_auth_enrollment(
+        db_session,
+        document=replay_document,
+        idempotency_key=key,
+    )
+    assert replay.enrollment_id == enrollment.enrollment_id
+    status = enrollment_status_document(enrollment, challenge_available=False)
+    serialized = str({"request": enrollment.canonical_document, "status": status}).casefold()
+    assert all(
+        forbidden not in serialized
+        for forbidden in ("password", "access_token", "refresh_token", "auth.json")
+    )
+
+    conflict_document = build_codex_auth_enrollment_request(
+        binding_id=binding.binding_id,
+        expected_binding_resource_version=binding.resource_version,
+        slot_key=f"slot{binding.worker_slot_id}",
+        requested_account_label="another-account",
+        requested_by_operator_id=operator.operator_id,
+        requested_by_api_session_id=api_session.api_session_id,
+        requested_at=requested_at,
+    )
+    with pytest.raises(ControlPlaneError) as conflict:
+        create_codex_auth_enrollment(
+            db_session,
+            document=conflict_document,
+            idempotency_key=key,
+        )
+    assert conflict.value.code == "CODEX_AUTH_IDEMPOTENCY_CONFLICT"
+
+    second_document = build_codex_auth_enrollment_request(
+        binding_id=binding.binding_id,
+        expected_binding_resource_version=binding.resource_version,
+        slot_key=f"slot{binding.worker_slot_id}",
+        requested_account_label="teacher-account-02",
+        requested_by_operator_id=operator.operator_id,
+        requested_by_api_session_id=api_session.api_session_id,
+        requested_at=requested_at,
+    )
+    with pytest.raises(ControlPlaneError) as already_active:
+        create_codex_auth_enrollment(
+            db_session,
+            document=second_document,
+            idempotency_key=f"device-auth:{uuid4().hex}",
+        )
+    assert already_active.value.code == "CODEX_AUTH_ENROLLMENT_ALREADY_ACTIVE"
+
+    runner_id = "device-auth-integration-runner"
+    draining_at = requested_at + timedelta(seconds=1)
+    claimed = claim_due_codex_auth_enrollment(
+        db_session,
+        lease_owner=runner_id,
+        claimed_at=draining_at,
+    )
+    assert claimed is enrollment
+    transition_codex_auth_enrollment(
+        db_session,
+        enrollment_id=enrollment.enrollment_id,
+        lease_owner=runner_id,
+        target_state="DRAINING",
+        transitioned_at=draining_at,
+        next_action_at=draining_at,
+    )
+    claimed = claim_due_codex_auth_enrollment(
+        db_session,
+        lease_owner=runner_id,
+        claimed_at=draining_at,
+    )
+    assert claimed is enrollment
+    transition_codex_auth_enrollment(
+        db_session,
+        enrollment_id=enrollment.enrollment_id,
+        lease_owner=runner_id,
+        target_state="READY_FOR_LOGIN",
+        transitioned_at=draining_at,
+        next_action_at=draining_at,
+    )
+    claimed = claim_due_codex_auth_enrollment(
+        db_session,
+        lease_owner=runner_id,
+        claimed_at=draining_at,
+    )
+    assert claimed is enrollment
+    login_started_at = draining_at + timedelta(seconds=1)
+    assert mark_codex_device_login_started(
+        db_session,
+        enrollment_id=enrollment.enrollment_id,
+        lease_owner=runner_id,
+        started_at=login_started_at,
+    )
+    assert not mark_codex_device_login_started(
+        db_session,
+        enrollment_id=enrollment.enrollment_id,
+        lease_owner=runner_id,
+        started_at=login_started_at + timedelta(seconds=1),
+    )
+    assert enrollment.login_unit_started_at == login_started_at
+
+    waiting_at = login_started_at + timedelta(seconds=1)
+    transition_codex_auth_enrollment(
+        db_session,
+        enrollment_id=enrollment.enrollment_id,
+        lease_owner=runner_id,
+        target_state="WAITING_FOR_USER",
+        transitioned_at=waiting_at,
+        next_action_at=waiting_at,
+    )
+    claimed = claim_due_codex_auth_enrollment(
+        db_session,
+        lease_owner=runner_id,
+        claimed_at=waiting_at,
+    )
+    assert claimed is enrollment
+    verifying_at = waiting_at + timedelta(seconds=1)
+    transition_codex_auth_enrollment(
+        db_session,
+        enrollment_id=enrollment.enrollment_id,
+        lease_owner=runner_id,
+        target_state="VERIFYING",
+        transitioned_at=verifying_at,
+        next_action_at=verifying_at,
+    )
+    claimed = claim_due_codex_auth_enrollment(
+        db_session,
+        lease_owner=runner_id,
+        claimed_at=verifying_at,
+    )
+    assert claimed is enrollment
+
+    assignment = create_auth_assignment_revision(
+        db_session,
+        enrollment=enrollment,
+        codex_cli_version="0.147.0",
+        assigned_at=requested_at + timedelta(minutes=1),
+    )
+    binding.current_assignment_revision_id = assignment.assignment_revision_id
+    with db_session.no_autoflush:
+        record_auth_health(
+            db_session,
+            document={
+                "schema_version": "codex-auth-health-view/1.0",
+                "binding_id": binding.binding_id,
+                "slot_key": "slot01",
+                "account_label": assignment.account_label,
+                "state": "READY",
+                "reason_code": None,
+                "codex_cli_version": "0.147.0",
+                "observed_at": (requested_at + timedelta(minutes=1))
+                .isoformat()
+                .replace("+00:00", "Z"),
+                "valid_until": (requested_at + timedelta(minutes=16))
+                .isoformat()
+                .replace("+00:00", "Z"),
+            },
+        )
+    succeeded = transition_codex_auth_enrollment(
+        db_session,
+        enrollment_id=enrollment.enrollment_id,
+        lease_owner=runner_id,
+        target_state="SUCCEEDED",
+        transitioned_at=requested_at + timedelta(minutes=1),
+        assignment_revision_id=assignment.assignment_revision_id,
+        next_action_at=None,
+    )
+    assert succeeded.state == "SUCCEEDED"
+    assert succeeded.assignment_revision_id == assignment.assignment_revision_id
+    assert binding.current_assignment_revision_id == assignment.assignment_revision_id
+    assert db_session.get(CodexAuthEnrollmentRecord, enrollment.enrollment_id) is enrollment
+    assert (
+        db_session.get(CodexAuthAssignmentRevisionRecord, assignment.assignment_revision_id)
+        is assignment
+    )
+    with pytest.raises(DBAPIError, match="immutable"), db_session.begin_nested():
+        assignment.account_label = "forbidden-rewrite"
+        db_session.flush()
 
 
 def test_workflow_command_availability_delays_capacity_retry_claim(

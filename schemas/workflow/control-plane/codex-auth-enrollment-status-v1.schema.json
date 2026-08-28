@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/control-plane/codex-auth-enrollment-status/1.0",
+  "title": "Codex Auth Enrollment Status V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "enrollment_id",
+    "binding_id",
+    "slot_key",
+    "requested_account_label",
+    "state",
+    "challenge_available",
+    "challenge_revealed_at",
+    "assignment_revision_id",
+    "error_code",
+    "requested_at",
+    "started_at",
+    "expires_at",
+    "completed_at",
+    "resource_version"
+  ],
+  "properties": {
+    "schema_version": {"const": "codex-auth-enrollment-status/1.0"},
+    "enrollment_id": {"type": "string", "pattern": "^authflow_[0-9a-f]{32}$"},
+    "binding_id": {"type": "string", "pattern": "^authbinding_[0-9a-f]{32}$"},
+    "slot_key": {"type": "string", "pattern": "^slot0[1-5]$"},
+    "requested_account_label": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"
+    },
+    "state": {
+      "enum": [
+        "REQUESTED",
+        "DRAINING",
+        "READY_FOR_LOGIN",
+        "WAITING_FOR_USER",
+        "VERIFYING",
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED",
+        "EXPIRED"
+      ]
+    },
+    "challenge_available": {"type": "boolean"},
+    "challenge_revealed_at": {"type": ["string", "null"], "format": "date-time"},
+    "assignment_revision_id": {
+      "type": ["string", "null"],
+      "pattern": "^authassignrev_[0-9a-f]{32}$"
+    },
+    "error_code": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+    },
+    "requested_at": {"type": "string", "format": "date-time"},
+    "started_at": {"type": ["string", "null"], "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": ["string", "null"], "format": "date-time"},
+    "resource_version": {"type": "integer", "minimum": 1}
+  }
+}

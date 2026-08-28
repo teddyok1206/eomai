@@ -67,14 +67,21 @@ def test_systemd_authorization_verifier_is_nonprivileged_and_negative_by_default
 def test_runtime_scripts_have_valid_shell_syntax() -> None:
     for relative in (
         "scripts/workflow/bootstrap_runtime_paths.sh",
+        "scripts/workflow/check_no_active_worker_leases.py",
         "scripts/workflow/deploy_runner_service.sh",
         "scripts/workflow/deploy_worker_runtime.sh",
         "scripts/workflow/install_runner_configuration.sh",
         "scripts/workflow/verify_runtime_paths.sh",
         "scripts/workflow/verify_systemd_worker_authorization.sh",
     ):
+        if relative.endswith(".py"):
+            compile((ROOT / relative).read_text(encoding="utf-8"), relative, "exec")
+            continue
         result = subprocess.run(
-            ["bash", "-n", str(ROOT / relative)], capture_output=True, check=False, text=True
+            ["bash", "-n", str(ROOT / relative)],
+            capture_output=True,
+            check=False,
+            text=True,
         )
         assert result.returncode == 0, result.stderr
 
@@ -87,6 +94,18 @@ def test_worker_runtime_doctor_receives_each_slot_group_explicitly() -> None:
     assert "eom-cdx-01,eom-cdx-02" not in source
     assert "EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging" in source
     assert "eom-workflow-runner:eom:700" in source
+
+
+def test_worker_runtime_deployment_fails_closed_on_durable_lease() -> None:
+    deployer = (ROOT / "scripts/workflow/deploy_worker_runtime.sh").read_text(encoding="utf-8")
+    guard = (ROOT / "scripts/workflow/check_no_active_worker_leases.py").read_text(encoding="utf-8")
+
+    assert "check_no_active_worker_leases.py" in deployer
+    assert "runuser -u eom-workflow-runner -g eom --" in deployer
+    assert "an active or reconciling worker lease blocks runtime deployment" in deployer
+    assert 'WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING"))' in guard
+    assert "DELETE" not in guard
+    assert "UPDATE" not in guard
 
 
 def test_worker_runtime_deployer_installs_and_smokes_bubblewrap_profile() -> None:

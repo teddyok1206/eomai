@@ -19,6 +19,8 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from eom_web_gui.contracts import (
     CodexAccountAdminCommand,
+    CodexAuthChallengeReveal,
+    CodexAuthEnrollmentStart,
     DraftSubmission,
     ExecutionPresetDraftSubmission,
     ExecutionPresetLifecycleCommand,
@@ -388,6 +390,45 @@ def create_app(
         session: Annotated[WebSession, Depends(require_session)],
     ) -> dict[str, Any]:
         return await actual.codex_control_command(session, command_id)
+
+    @app.post(
+        f"{API_PREFIX}/admin/codex-accounts/{{binding_id}}/reauthentications",
+        status_code=202,
+    )
+    async def start_codex_auth_enrollment(
+        binding_id: str,
+        value: CodexAuthEnrollmentStart,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> JSONResponse:
+        result = await actual.start_codex_auth_enrollment(session, binding_id, value)
+        return JSONResponse(content=result, headers={"Cache-Control": "no-store"}, status_code=202)
+
+    @app.get(f"{API_PREFIX}/admin/codex-auth-enrollments/{{enrollment_id}}")
+    async def codex_auth_enrollment(
+        enrollment_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> JSONResponse:
+        value = await actual.codex_auth_enrollment(session, enrollment_id)
+        return JSONResponse(
+            content=value.model_dump(mode="json"),
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.post(f"{API_PREFIX}/admin/codex-auth-enrollments/{{enrollment_id}}/challenge")
+    async def reveal_codex_auth_challenge(
+        enrollment_id: str,
+        value: CodexAuthChallengeReveal,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> JSONResponse:
+        challenge = await actual.reveal_codex_auth_challenge(
+            session,
+            enrollment_id,
+            value,
+        )
+        return JSONResponse(
+            content=challenge.model_dump(mode="json"),
+            headers={"Cache-Control": "no-store"},
+        )
 
     @app.get(f"{API_PREFIX}/admin/execution-presets")
     async def execution_presets(

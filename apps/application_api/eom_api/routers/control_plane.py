@@ -5,9 +5,12 @@ from __future__ import annotations
 from eom_api_contracts import CommandResult, ListResponse, SingleResponse
 from eom_api_contracts.common import EmptyRequest
 from eom_api_contracts.control_plane import (
+    BeginCodexAuthEnrollmentRequest,
     CodexAccountCommandRequest,
     CodexAccountView,
+    CodexAuthEnrollmentView,
     CodexControlCommandView,
+    CodexDeviceChallengeView,
     CreateExecutionPresetDraftRequest,
     ExecutionPresetView,
 )
@@ -122,6 +125,106 @@ def get_codex_control_command(
     request: Request, command_id: str
 ) -> SingleResponse[CodexControlCommandView]:
     return one(request, request.app.state.services.control_plane.control_command(command_id))
+
+
+@router.post(
+    "/codex-accounts/{binding_id}/reauthentications",
+    operation_id="codex_auth_enrollment_create",
+    status_code=202,
+    response_model=SingleResponse[CommandResult],
+    dependencies=[
+        Depends(require_permission(PermissionKey.CODEX_ACCOUNT_MANAGE, fresh=True, admin_only=True))
+    ],
+)
+def create_codex_auth_enrollment(
+    request: Request,
+    binding_id: str,
+    body: BeginCodexAuthEnrollmentRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    expected_version: ExpectedVersion,
+    response: Response,
+) -> SingleResponse[CommandResult]:
+    response.headers["Cache-Control"] = "no-store"
+
+    def execute() -> CommandResult:
+        actor = request.state.request_context.actor()
+        submission_key = request.app.state.services.idempotency.submission_key(
+            operator_id=actor.actor_id,
+            endpoint_key="codex_auth_enrollment_create",
+            raw_key=idempotency_key,
+        )
+        enrollment = request.app.state.services.control_plane.create_auth_enrollment(
+            binding_id=binding_id,
+            body=body,
+            actor=actor,
+            api_session_id=authentication.session_id,
+            expected_version=expected_version,
+            idempotency_key=submission_key,
+        )
+        return CommandResult(
+            command_id=enrollment.enrollment_id,
+            resource_type="codex_auth_enrollment",
+            resource_id=enrollment.enrollment_id,
+            status="ACCEPTED",
+            resource_version=enrollment.resource_version,
+            status_url=f"/api/v1/codex-auth-enrollments/{enrollment.enrollment_id}",
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body=body.model_dump(mode="json"),
+            resource_type="codex_auth_enrollment",
+            callback=execute,
+            response_status=202,
+        ),
+    )
+
+
+@router.get(
+    "/codex-auth-enrollments/{enrollment_id}",
+    operation_id="codex_auth_enrollment_get",
+    response_model=SingleResponse[CodexAuthEnrollmentView],
+    dependencies=[
+        Depends(require_permission(PermissionKey.CODEX_ACCOUNT_READ, fresh=True, admin_only=True))
+    ],
+)
+def get_codex_auth_enrollment(
+    request: Request,
+    enrollment_id: str,
+    response: Response,
+) -> SingleResponse[CodexAuthEnrollmentView]:
+    response.headers["Cache-Control"] = "no-store"
+    value = request.app.state.services.control_plane.auth_enrollment(enrollment_id)
+    response.headers["ETag"] = etag(value.resource_version)
+    return one(request, value)
+
+
+@router.post(
+    "/codex-auth-enrollments/{enrollment_id}/challenge",
+    operation_id="codex_auth_challenge_reveal",
+    response_model=SingleResponse[CodexDeviceChallengeView],
+    dependencies=[
+        Depends(require_permission(PermissionKey.CODEX_ACCOUNT_MANAGE, fresh=True, admin_only=True))
+    ],
+)
+def reveal_codex_auth_challenge(
+    request: Request,
+    enrollment_id: str,
+    body: EmptyRequest,
+    authentication: Auth,
+    response: Response,
+) -> SingleResponse[CodexDeviceChallengeView]:
+    del body
+    response.headers["Cache-Control"] = "no-store"
+    value = request.app.state.services.control_plane.reveal_auth_challenge(
+        enrollment_id=enrollment_id,
+        api_session_id=authentication.session_id,
+    )
+    return one(request, value)
 
 
 @router.get(

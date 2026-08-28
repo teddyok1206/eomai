@@ -9,6 +9,10 @@ from typing import Any
 
 from eom_web_gui.contracts import (
     CodexAccountAdminCommand,
+    CodexAuthChallengeReveal,
+    CodexAuthEnrollmentStart,
+    CodexAuthEnrollmentStatusView,
+    CodexDeviceChallengeView,
     ContentIntakeOption,
     ContentIntakeSourcePointer,
     CurriculumEditorialOutline,
@@ -218,6 +222,38 @@ class WebServices:
     async def codex_control_command(self, session: WebSession, command_id: str) -> dict[str, Any]:
         _require_admin(session)
         return await self.gateway.codex_control_command(session, command_id)
+
+    async def start_codex_auth_enrollment(
+        self,
+        session: WebSession,
+        binding_id: str,
+        value: CodexAuthEnrollmentStart,
+    ) -> dict[str, Any]:
+        _require_admin(session)
+        return await self.gateway.start_codex_auth_enrollment(
+            session,
+            binding_id,
+            requested_account_label=value.requested_account_label,
+            resource_version=value.resource_version,
+            idempotency_key=value.idempotency_key,
+        )
+
+    async def codex_auth_enrollment(
+        self, session: WebSession, enrollment_id: str
+    ) -> CodexAuthEnrollmentStatusView:
+        _require_admin(session)
+        return await self.gateway.codex_auth_enrollment(session, enrollment_id)
+
+    async def reveal_codex_auth_challenge(
+        self,
+        session: WebSession,
+        enrollment_id: str,
+        value: CodexAuthChallengeReveal,
+    ) -> CodexDeviceChallengeView:
+        _require_admin(session)
+        if value.confirm is not True:
+            raise GatewayError(status=400, code="WEB_REQUEST_INVALID")
+        return await self.gateway.reveal_codex_auth_challenge(session, enrollment_id)
 
     async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]:
         _require_admin(session)

@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
+from eom_orchestrator.auth_enrollment_processor import CodexAuthEnrollmentProcessor
 from eom_orchestrator.control_command_processor import CodexControlCommandProcessor
 from eom_orchestrator.database import build_engine, build_session_factory
 from eom_orchestrator.orchestrator import Orchestrator
@@ -71,10 +72,17 @@ def build_workflow_runtime(
         runner_user="eom-workflow-runner",
     )
     runner_id = f"runner-{uuid4().hex}"
-    control_processor = CodexControlCommandProcessor(
-        build_session_factory(actual_engine),
+    control_sessions = build_session_factory(actual_engine)
+    enrollment_processor = CodexAuthEnrollmentProcessor(
+        control_sessions,
         capability_policy_path=actual_platform_settings.codex_capability_policy,
         runner_id=runner_id,
+    )
+    control_processor = CodexControlCommandProcessor(
+        control_sessions,
+        capability_policy_path=actual_platform_settings.codex_capability_policy,
+        runner_id=runner_id,
+        enrollment_processor=enrollment_processor,
     )
     runner = WorkflowRunner(
         actual_engine,

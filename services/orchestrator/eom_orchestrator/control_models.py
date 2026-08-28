@@ -502,6 +502,16 @@ class CodexAuthBindingRecord(Base):
         ),
         CheckConstraint("resource_version >= 1", name="ck_codex_auth_binding_version"),
         UniqueConstraint("worker_slot_id", name="uq_codex_auth_binding_slot"),
+        ForeignKeyConstraint(
+            ["current_assignment_revision_id", "binding_id"],
+            [
+                "codex_auth_assignment_revisions.assignment_revision_id",
+                "codex_auth_assignment_revisions.binding_id",
+            ],
+            name="fk_codex_auth_binding_current_assignment_owner",
+            use_alter=True,
+            ondelete="RESTRICT",
+        ),
     )
 
     binding_id: Mapped[str] = mapped_column(String(44), primary_key=True)
@@ -509,11 +519,178 @@ class CodexAuthBindingRecord(Base):
         ForeignKey("worker_slots.slot_id", ondelete="RESTRICT"), nullable=False
     )
     account_label: Mapped[str] = mapped_column(String(64), nullable=False)
+    current_assignment_revision_id: Mapped[str | None] = mapped_column(String(46), nullable=True)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     codex_cli_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resource_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CodexAuthAssignmentRevisionRecord(Base):
+    """Immutable non-secret account-label assignment history for one fixed binding."""
+
+    __tablename__ = "codex_auth_assignment_revisions"
+    __table_args__ = (
+        CheckConstraint("revision_number >= 1", name="ck_codex_auth_assignment_revision_number"),
+        CheckConstraint(
+            "assignment_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_codex_auth_assignment_revision_hash",
+        ),
+        CheckConstraint(
+            "login_method = 'CHATGPT_DEVICE_CODE'",
+            name="ck_codex_auth_assignment_login_method",
+        ),
+        UniqueConstraint(
+            "binding_id", "revision_number", name="uq_codex_auth_assignment_revision_number"
+        ),
+        UniqueConstraint(
+            "assignment_revision_id",
+            "binding_id",
+            name="uq_codex_auth_assignment_revision_owner",
+        ),
+        UniqueConstraint("enrollment_id", name="uq_codex_auth_assignment_enrollment"),
+        ForeignKeyConstraint(
+            ["enrollment_id"],
+            ["codex_auth_enrollments.enrollment_id"],
+            name="fk_codex_auth_assignment_enrollment",
+            use_alter=True,
+            ondelete="RESTRICT",
+        ),
+    )
+
+    assignment_revision_id: Mapped[str] = mapped_column(String(46), primary_key=True)
+    binding_id: Mapped[str] = mapped_column(
+        ForeignKey("codex_auth_bindings.binding_id", ondelete="RESTRICT"), nullable=False
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    enrollment_id: Mapped[str] = mapped_column(String(41), nullable=False)
+    account_label: Mapped[str] = mapped_column(String(64), nullable=False)
+    login_method: Mapped[str] = mapped_column(String(32), nullable=False)
+    codex_cli_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    assigned_by_operator_id: Mapped[str] = mapped_column(
+        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+    )
+    assignment_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CodexAuthEnrollmentRecord(Base):
+    """Durable, credential-free state for one GUI-coordinated device-login attempt."""
+
+    __tablename__ = "codex_auth_enrollments"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('REQUESTED','DRAINING','READY_FOR_LOGIN','WAITING_FOR_USER',"
+            "'VERIFYING','SUCCEEDED','FAILED','CANCELLED','EXPIRED')",
+            name="ck_codex_auth_enrollment_state",
+        ),
+        CheckConstraint("resource_version >= 1", name="ck_codex_auth_enrollment_version"),
+        CheckConstraint(
+            "request_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_codex_auth_enrollment_hash",
+        ),
+        CheckConstraint(
+            "expires_at > requested_at AND expires_at <= requested_at + interval '15 minutes'",
+            name="ck_codex_auth_enrollment_window",
+        ),
+        CheckConstraint(
+            "login_unit_started_at IS NULL OR "
+            "(login_unit_started_at >= requested_at AND login_unit_started_at < expires_at)",
+            name="ck_codex_auth_enrollment_login_start_window",
+        ),
+        CheckConstraint(
+            "(lease_owner IS NULL AND lease_expires_at IS NULL) OR "
+            "(lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL)",
+            name="ck_codex_auth_enrollment_lease_pair",
+        ),
+        CheckConstraint(
+            "(state = 'SUCCEEDED' AND completed_at IS NOT NULL "
+            "AND assignment_revision_id IS NOT NULL AND error_code IS NULL "
+            "AND next_action_at IS NULL AND lease_owner IS NULL) OR "
+            "(state IN ('FAILED','CANCELLED','EXPIRED') AND completed_at IS NOT NULL "
+            "AND assignment_revision_id IS NULL AND error_code IS NOT NULL "
+            "AND next_action_at IS NULL AND lease_owner IS NULL) OR "
+            "(state IN ('REQUESTED','DRAINING','READY_FOR_LOGIN','WAITING_FOR_USER','VERIFYING') "
+            "AND completed_at IS NULL AND assignment_revision_id IS NULL AND error_code IS NULL "
+            "AND next_action_at IS NOT NULL)",
+            name="ck_codex_auth_enrollment_lifecycle",
+        ),
+        UniqueConstraint("idempotency_key", name="uq_codex_auth_enrollment_idempotency"),
+        ForeignKeyConstraint(
+            ["assignment_revision_id", "binding_id"],
+            [
+                "codex_auth_assignment_revisions.assignment_revision_id",
+                "codex_auth_assignment_revisions.binding_id",
+            ],
+            name="fk_codex_auth_enrollment_assignment_owner",
+            use_alter=True,
+            ondelete="RESTRICT",
+        ),
+        Index(
+            "uq_codex_auth_enrollment_active_binding",
+            "binding_id",
+            unique=True,
+            postgresql_where=text(
+                "state IN ('REQUESTED','DRAINING','READY_FOR_LOGIN','WAITING_FOR_USER','VERIFYING')"
+            ),
+        ),
+        Index(
+            "ix_codex_auth_enrollment_claim",
+            "state",
+            "next_action_at",
+            "lease_expires_at",
+            "requested_at",
+            "enrollment_id",
+            postgresql_where=text(
+                "state IN ('REQUESTED','DRAINING','READY_FOR_LOGIN','WAITING_FOR_USER','VERIFYING')"
+            ),
+        ),
+    )
+
+    enrollment_id: Mapped[str] = mapped_column(String(41), primary_key=True)
+    binding_id: Mapped[str] = mapped_column(
+        ForeignKey("codex_auth_bindings.binding_id", ondelete="RESTRICT"), nullable=False
+    )
+    expected_binding_resource_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    requested_account_label: Mapped[str] = mapped_column(String(64), nullable=False)
+    requested_by_operator_id: Mapped[str] = mapped_column(
+        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+    )
+    requested_by_api_session_id: Mapped[str] = mapped_column(
+        ForeignKey("api_sessions.api_session_id", ondelete="RESTRICT"), nullable=False
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(96), nullable=False)
+    request_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    canonical_document: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    next_action_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    challenge_revealed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    login_unit_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    assignment_revision_id: Mapped[str | None] = mapped_column(String(46), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resource_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

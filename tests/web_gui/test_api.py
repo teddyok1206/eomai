@@ -429,6 +429,35 @@ def test_codex_control_plane_is_admin_only_and_never_accepts_credentials() -> No
         )
         assert command.status_code == 200
         assert command.json()["state"] == "SUCCEEDED"
+        enrollment = client.post(
+            f"/studio/api/v1/admin/codex-accounts/{account['binding_id']}/reauthentications",
+            headers={"X-CSRF-Token": session["csrf_token"]},
+            json={
+                "requested_account_label": "teacher-account-01",
+                "acknowledge_drain": True,
+                "resource_version": account["resource_version"],
+                "idempotency_key": "studio:codex-reauth:0001",
+            },
+        )
+        assert enrollment.status_code == 202
+        assert enrollment.headers["cache-control"] == "no-store"
+        assert gateway.auth_enrollment_calls == 1
+        enrollment_id = enrollment.json()["resource_id"]
+        status = client.get(f"/studio/api/v1/admin/codex-auth-enrollments/{enrollment_id}")
+        assert status.status_code == 200
+        assert status.headers["cache-control"] == "no-store"
+        assert status.json()["challenge_available"] is True
+        challenge = client.post(
+            f"/studio/api/v1/admin/codex-auth-enrollments/{enrollment_id}/challenge",
+            headers={"X-CSRF-Token": session["csrf_token"]},
+            json={"confirm": True},
+        )
+        assert challenge.status_code == 200
+        assert challenge.headers["cache-control"] == "no-store"
+        assert challenge.json()["verification_uri"] == "https://auth.openai.com/codex/device"
+        assert challenge.json()["user_code"] == "ABC1-DEF2"
+        assert gateway.auth_challenge_reveal_calls == 1
+        assert not {"token", "password", "auth_json"}.intersection(challenge.json())
         presets = client.get("/studio/api/v1/admin/execution-presets")
         assert presets.status_code == 200
         assert presets.json()[0]["preset_key"] == "standard-item"
@@ -473,6 +502,19 @@ def test_codex_control_plane_rejects_non_admin_and_credential_fields() -> None:
         )
         assert response.status_code == 422
         assert "MUST_NOT_ENTER_CONTRACT" not in response.text
+        reauth = client.post(
+            "/studio/api/v1/admin/codex-accounts/authbinding_" + "1" * 32 + "/reauthentications",
+            headers={"X-CSRF-Token": session["csrf_token"]},
+            json={
+                "requested_account_label": "teacher-account-01",
+                "acknowledge_drain": True,
+                "resource_version": 1,
+                "idempotency_key": "studio:codex-reauth:0002",
+                "password": "MUST_NOT_ENTER_CONTRACT",
+            },
+        )
+        assert reauth.status_code == 422
+        assert "MUST_NOT_ENTER_CONTRACT" not in reauth.text
 
 
 def test_mutations_require_csrf() -> None:

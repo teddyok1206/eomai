@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -385,6 +386,89 @@ class CodexAccountAdminCommand(WebModel):
         if requires_reason != (self.reason_code is not None):
             raise ValueError("drain/disable require a reason and observe/enable forbid one")
         return self
+
+
+class CodexAuthEnrollmentStart(WebModel):
+    requested_account_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+    acknowledge_drain: Literal[True]
+    resource_version: int = Field(ge=1)
+    idempotency_key: str = Field(
+        min_length=16,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
+
+
+class CodexAuthChallengeReveal(WebModel):
+    confirm: Literal[True]
+
+
+class CodexAuthEnrollmentStatusView(WebModel):
+    enrollment_id: str = Field(pattern=r"^authflow_[0-9a-f]{32}$")
+    binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
+    slot_key: str = Field(pattern=r"^slot0[1-5]$")
+    requested_account_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+    state: Literal[
+        "REQUESTED",
+        "DRAINING",
+        "READY_FOR_LOGIN",
+        "WAITING_FOR_USER",
+        "VERIFYING",
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED",
+        "EXPIRED",
+    ]
+    challenge_available: bool
+    challenge_revealed_at: UtcDatetime | None
+    assignment_revision_id: str | None = Field(
+        default=None, pattern=r"^authassignrev_[0-9a-f]{32}$"
+    )
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    requested_at: UtcDatetime
+    started_at: UtcDatetime | None
+    expires_at: UtcDatetime
+    completed_at: UtcDatetime | None
+    resource_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def coherent_lifecycle(self) -> CodexAuthEnrollmentStatusView:
+        terminal = self.state in {"SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"}
+        failed = self.state in {"FAILED", "CANCELLED", "EXPIRED"}
+        if terminal != (self.completed_at is not None):
+            raise ValueError("terminal enrollment state must match completion timestamp")
+        if failed != (self.error_code is not None):
+            raise ValueError("failed enrollment state must match stable error code")
+        if (self.state == "SUCCEEDED") != (self.assignment_revision_id is not None):
+            raise ValueError("only successful enrollment may identify an assignment revision")
+        if self.challenge_available and (
+            self.state != "WAITING_FOR_USER" or self.challenge_revealed_at is not None
+        ):
+            raise ValueError("challenge availability does not match enrollment state")
+        return self
+
+
+class CodexDeviceChallengeView(WebModel):
+    enrollment_id: str = Field(pattern=r"^authflow_[0-9a-f]{32}$")
+    slot_key: str = Field(pattern=r"^slot0[1-5]$")
+    verification_uri: str = Field(max_length=512)
+    user_code: str = Field(pattern=r"^[A-Z0-9]{3,12}(?:-[A-Z0-9]{3,12})?$")
+    expires_at: UtcDatetime
+
+    @field_validator("verification_uri")
+    @classmethod
+    def exact_openai_origin(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "auth.openai.com"
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port not in {None, 443}
+            or parsed.fragment
+        ):
+            raise ValueError("device verification URI must use the reviewed OpenAI origin")
+        return value
 
 
 class ControlArtifactPointerDraft(WebModel):

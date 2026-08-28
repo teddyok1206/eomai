@@ -9,10 +9,16 @@ from pathlib import Path
 import pytest
 from eom_identifiers import content_sha256
 from eom_workflow import (
+    CodexAuthBrokerRequest,
+    CodexAuthBrokerResponse,
+    CodexAuthEnrollmentRequest,
+    CodexAuthEnrollmentStatus,
     CodexAuthHealthView,
     CodexCapabilitySnapshot,
     CodexControlCommand,
     CodexControlCommandResult,
+    CodexDeviceChallenge,
+    CodexDeviceLoginStatus,
     CodexImageInputManifest,
     CodexInvocation,
     ExecutionPresetEvaluationReport,
@@ -276,13 +282,19 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 19
+    assert len(entries) == 25
     assert len({name for name, _ in entries}) == len(entries)
     assert {
         "execution-preset-revision-v2",
         "resolved-execution-plan-v3",
         "resolved-execution-plan-v4",
         "resolved-execution-plan-v5",
+        "codex-auth-enrollment-request",
+        "codex-auth-enrollment-status",
+        "codex-device-challenge",
+        "codex-device-login-status",
+        "codex-auth-broker-request",
+        "codex-auth-broker-response",
     }.issubset({name for name, _ in entries})
     for name, entry in entries:
         canonical = REPOSITORY_ROOT / entry.canonical_path
@@ -372,6 +384,97 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
                 "result_sha256": "sha256:" + "6" * 64,
             },
             CodexControlCommandResult,
+        ),
+        (
+            "codex-auth-enrollment-request",
+            {
+                "schema_version": "codex-auth-enrollment-request/1.0",
+                "enrollment_id": "authflow_" + "1" * 32,
+                "binding_id": "authbinding_" + "2" * 32,
+                "expected_binding_resource_version": 7,
+                "slot_key": "slot05",
+                "requested_account_label": "teacher-account-01",
+                "requested_by_operator_id": "operator_" + "3" * 32,
+                "requested_by_api_session_id": "apisession_" + "4" * 32,
+                "requested_at": NOW.isoformat().replace("+00:00", "Z"),
+                "expires_at": (NOW + timedelta(minutes=15)).isoformat().replace("+00:00", "Z"),
+                "request_sha256": "sha256:" + "5" * 64,
+            },
+            CodexAuthEnrollmentRequest,
+        ),
+        (
+            "codex-auth-enrollment-status",
+            {
+                "schema_version": "codex-auth-enrollment-status/1.0",
+                "enrollment_id": "authflow_" + "1" * 32,
+                "binding_id": "authbinding_" + "2" * 32,
+                "slot_key": "slot05",
+                "requested_account_label": "teacher-account-01",
+                "state": "WAITING_FOR_USER",
+                "challenge_available": True,
+                "challenge_revealed_at": None,
+                "assignment_revision_id": None,
+                "error_code": None,
+                "requested_at": NOW.isoformat().replace("+00:00", "Z"),
+                "started_at": NOW.isoformat().replace("+00:00", "Z"),
+                "expires_at": (NOW + timedelta(minutes=15)).isoformat().replace("+00:00", "Z"),
+                "completed_at": None,
+                "resource_version": 4,
+            },
+            CodexAuthEnrollmentStatus,
+        ),
+        (
+            "codex-device-challenge",
+            {
+                "schema_version": "codex-device-challenge/1.0",
+                "enrollment_id": "authflow_" + "1" * 32,
+                "slot_key": "slot05",
+                "verification_uri": "https://auth.openai.com/codex/device",
+                "user_code": "ABC1-DEF2",
+                "issued_at": NOW.isoformat().replace("+00:00", "Z"),
+                "expires_at": (NOW + timedelta(minutes=10)).isoformat().replace("+00:00", "Z"),
+            },
+            CodexDeviceChallenge,
+        ),
+        (
+            "codex-device-login-status",
+            {
+                "schema_version": "codex-device-login-status/1.0",
+                "enrollment_id": "authflow_" + "1" * 32,
+                "slot_key": "slot05",
+                "state": "WAITING_FOR_USER",
+                "reason_code": None,
+                "updated_at": NOW.isoformat().replace("+00:00", "Z"),
+            },
+            CodexDeviceLoginStatus,
+        ),
+        (
+            "codex-auth-broker-request",
+            {
+                "schema_version": "codex-auth-broker-request/1.0",
+                "action": "STATUS",
+                "enrollment_id": "authflow_" + "1" * 32,
+                "slot_key": "slot05",
+            },
+            CodexAuthBrokerRequest,
+        ),
+        (
+            "codex-auth-broker-response",
+            {
+                "schema_version": "codex-auth-broker-response/1.0",
+                "outcome": "OK",
+                "status": {
+                    "schema_version": "codex-device-login-status/1.0",
+                    "enrollment_id": "authflow_" + "1" * 32,
+                    "slot_key": "slot05",
+                    "state": "WAITING_FOR_USER",
+                    "reason_code": None,
+                    "updated_at": NOW.isoformat().replace("+00:00", "Z"),
+                },
+                "challenge": None,
+                "error_code": None,
+            },
+            CodexAuthBrokerResponse,
         ),
         (
             "execution-preset-evaluation-report",

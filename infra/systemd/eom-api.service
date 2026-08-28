@@ -7,6 +7,7 @@ Wants=network-online.target eom-catalog-application-runner.service
 Type=simple
 User=eom-api
 Group=eom-api
+SupplementaryGroups=eom-codex-auth
 WorkingDirectory=/var/lib/eom-api
 
 EnvironmentFile=/etc/eom/secrets/api.env

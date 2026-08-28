@@ -29,6 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from eom_orchestrator.control_models import (
+    CodexAuthAssignmentRevisionRecord,
     CodexAuthBindingRecord,
     CodexAuthHealthEventRecord,
     CodexCapabilityEntryRecord,
@@ -985,8 +986,24 @@ def record_auth_health(session: Session, *, document: dict[str, Any]) -> CodexAu
     )
     if by_slot is not None and by_slot.binding_id != model.binding_id:
         raise ControlPlaneError("CONTROL_AUTH_BINDING_CONFLICT", "slot has another auth binding")
+    assignment = (
+        session.get(
+            CodexAuthAssignmentRevisionRecord,
+            binding.current_assignment_revision_id,
+        )
+        if binding is not None and binding.current_assignment_revision_id is not None
+        else None
+    )
+    label_change_is_assigned = (
+        binding is not None
+        and assignment is not None
+        and assignment.binding_id == binding.binding_id
+        and assignment.account_label == model.account_label
+    )
+    label_changed = binding is not None and binding.account_label != model.account_label
     if binding is not None and (
-        binding.worker_slot_id != slot_id or binding.account_label != model.account_label
+        binding.worker_slot_id != slot_id
+        or (binding.account_label != model.account_label and not label_change_is_assigned)
     ):
         raise ControlPlaneError(
             "CONTROL_AUTH_BINDING_CONFLICT", "auth binding identity cannot change"
@@ -1005,8 +1022,11 @@ def record_auth_health(session: Session, *, document: dict[str, Any]) -> CodexAu
         )
         session.add(binding)
     else:
+        if label_change_is_assigned:
+            binding.account_label = model.account_label
         if (
-            binding.state == model.state
+            not label_changed
+            and binding.state == model.state
             and binding.reason_code == model.reason_code
             and binding.codex_cli_version == model.codex_cli_version
             and binding.observed_at == model.observed_at

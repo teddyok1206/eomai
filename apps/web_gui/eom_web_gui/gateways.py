@@ -10,6 +10,8 @@ from typing import Any, Protocol
 import httpx
 
 from eom_web_gui.contracts import (
+    CodexAuthEnrollmentStatusView,
+    CodexDeviceChallengeView,
     ContentIntakeOption,
     ContentIntakeSourcePointer,
     CurriculumEditorialOutline,
@@ -143,6 +145,24 @@ class ApplicationGateway(Protocol):
     async def codex_control_command(
         self, session: WebSession, command_id: str
     ) -> dict[str, Any]: ...
+
+    async def start_codex_auth_enrollment(
+        self,
+        session: WebSession,
+        binding_id: str,
+        *,
+        requested_account_label: str,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]: ...
+
+    async def codex_auth_enrollment(
+        self, session: WebSession, enrollment_id: str
+    ) -> CodexAuthEnrollmentStatusView: ...
+
+    async def reveal_codex_auth_challenge(
+        self, session: WebSession, enrollment_id: str
+    ) -> CodexDeviceChallengeView: ...
 
     async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]: ...
 
@@ -535,6 +555,60 @@ class HttpApplicationGateway:
             session, "GET", f"/api/v1/codex-control-commands/{command_id}"
         )
         return sanitize_mapping(self._data(response))
+
+    async def start_codex_auth_enrollment(
+        self,
+        session: WebSession,
+        binding_id: str,
+        *,
+        requested_account_label: str,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        _require_id(binding_id, "authbinding_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/codex-accounts/{binding_id}/reauthentications",
+            json={
+                "requested_account_label": requested_account_label,
+                "acknowledge_drain": True,
+            },
+            headers={
+                "If-Match": f'"v{resource_version}"',
+                "Idempotency-Key": idempotency_key,
+            },
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def codex_auth_enrollment(
+        self, session: WebSession, enrollment_id: str
+    ) -> CodexAuthEnrollmentStatusView:
+        _require_id(enrollment_id, "authflow_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/codex-auth-enrollments/{enrollment_id}",
+        )
+        try:
+            return CodexAuthEnrollmentStatusView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def reveal_codex_auth_challenge(
+        self, session: WebSession, enrollment_id: str
+    ) -> CodexDeviceChallengeView:
+        _require_id(enrollment_id, "authflow_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/codex-auth-enrollments/{enrollment_id}/challenge",
+            json={},
+        )
+        try:
+            return CodexDeviceChallengeView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]:
         response = await self._authorized(session, "GET", "/api/v1/execution-presets")

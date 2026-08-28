@@ -19,9 +19,11 @@ SYSTEMCTL = Path("/usr/bin/systemctl")
 SYSTEMD_UNIT_ROOT = Path("/etc/systemd/system")
 WORKER_EXECUTABLE = Path("/usr/local/libexec/eom-worker-exec")
 WORKER_AUTH_EXECUTABLE = Path("/usr/local/libexec/eom-worker-auth-status")
+WORKER_DEVICE_LOGIN_EXECUTABLE = Path("/usr/local/libexec/eom-worker-device-login")
 SYSTEMCTL_ENV = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
 JOB_ID_PATTERN = re.compile(r"\Ajob_[0-9a-f]{32}\Z", re.ASCII)
 PROBE_ID_PATTERN = re.compile(r"\Aprobe_[0-9a-f]{32}\Z", re.ASCII)
+AUTH_ENROLLMENT_ID_PATTERN = re.compile(r"\Aauthflow_[0-9a-f]{32}\Z", re.ASCII)
 SLOT_IDS = frozenset({"01", "02", "03", "04", "05"})
 ACTIVE_STATES = frozenset({"activating", "active", "deactivating", "reloading"})
 NON_ACTIVE_SYSTEMCTL_EXIT_CODES = frozenset({3, 4})
@@ -70,8 +72,18 @@ AUTH_TEMPLATE_SHA256 = {
     "04": "a46f8d4c4b5f7b2bfdf1993e0cb7694bef348e85d56fcb858471d8ba8bbcf142",
     "05": "98dbc3e1b1907912a71b8f2b7b2c7a7c224cd19b927084bfde2de5037ead29e3",
 }
+LOGIN_TEMPLATE_SHA256 = {
+    "01": "a871e5b249b8c37a3e815a20ff356dec62704f667ec54b7ff7ab9c0107b51834",
+    "02": "1cf434dc3621ce3475914cf1fcede45769820039d343341b53110da5dc9bab8a",
+    "03": "4843ec553a7e80bd29f21e501b771dd4df65f955d3ae6543b315b763e8964a76",
+    "04": "5ce90ed12c840df17a5ab0942615041cad82a64f7281b42f65f7ac9493875788",
+    "05": "dd23413be918550d39a954b49b6502d2f7bf93ad71f4dcade9b950053b9f88ed",
+}
 WORKER_EXECUTABLE_SHA256 = "aab4b92a04caffd7a6864db0a703093c98e50b27ed084a122479b69c64e6b038"
 WORKER_AUTH_EXECUTABLE_SHA256 = "a4d0cb8655507d69c85ba7f12b8674f4b0ffef123af68190c36b95b67ea18b42"
+WORKER_DEVICE_LOGIN_EXECUTABLE_SHA256 = (
+    "65825b50ad4bae50b4f9d9561a102bdeed4077f8118596b336875bf1279a18e9"
+)
 AUTH_REQUIRED_EXIT = 20
 AUTH_PROBE_INVALID_EXIT = 21
 AUTH_PROBE_TIMEOUT_EXIT = 22
@@ -136,6 +148,13 @@ class WorkerUnitActivity:
     exit_code: int | None
 
 
+@dataclass(frozen=True)
+class WorkerDeviceLoginActivity:
+    state: str
+    unit_name: str
+    exit_code: int | None
+
+
 def validate_slot(slot: WorkerSlot) -> str:
     if slot.slot_id not in SLOT_IDS or slot.linux_user != f"eom-cdx-{slot.slot_id}":
         raise ValueError("worker slot does not match a fixed systemd identity")
@@ -165,6 +184,13 @@ def auth_unit_name(slot: WorkerSlot) -> str:
     return f"eom-worker-auth-{validate_slot(slot)}.service"
 
 
+def device_login_unit_name(slot: WorkerSlot, enrollment_id: str) -> str:
+    slot_id = validate_slot(slot)
+    if AUTH_ENROLLMENT_ID_PATTERN.fullmatch(enrollment_id) is None:
+        raise ValueError("invalid Codex auth enrollment identity")
+    return f"eom-worker-login-{slot_id}@{enrollment_id}.service"
+
+
 def systemctl_start_argv(unit_name: str) -> tuple[str, ...]:
     return (
         str(SYSTEMCTL),
@@ -173,6 +199,10 @@ def systemctl_start_argv(unit_name: str) -> tuple[str, ...]:
         "start",
         unit_name,
     )
+
+
+def systemctl_start_async_argv(unit_name: str) -> tuple[str, ...]:
+    return (str(SYSTEMCTL), "--no-ask-password", "--no-block", "start", unit_name)
 
 
 def systemctl_show_argv(unit_name: str) -> tuple[str, ...]:
@@ -360,6 +390,16 @@ def inspect_worker_systemd_contract(slot: WorkerSlot) -> WorkerSystemdReadiness:
             expected_mode=0o755,
             expected_sha256=WORKER_AUTH_EXECUTABLE_SHA256,
         )
+        _validate_root_owned_artifact(
+            SYSTEMD_UNIT_ROOT / f"eom-worker-login-{slot_id}@.service",
+            expected_mode=0o644,
+            expected_sha256=LOGIN_TEMPLATE_SHA256[slot_id],
+        )
+        _validate_root_owned_artifact(
+            WORKER_DEVICE_LOGIN_EXECUTABLE,
+            expected_mode=0o755,
+            expected_sha256=WORKER_DEVICE_LOGIN_EXECUTABLE_SHA256,
+        )
     except (KeyError, OSError, ValueError):
         return WorkerSystemdReadiness(
             False, "WORKER_SYSTEMD_TEMPLATE_INVALID", f"slot {slot.slot_id}"
@@ -394,6 +434,49 @@ def observe_worker_auth_systemd(slot: WorkerSlot) -> WorkerAuthSystemdObservatio
     }
     state, reason = reason_by_exit.get(status.exit_code, ("DEGRADED", "AUTH_PROBE_FAILED"))
     return WorkerAuthSystemdObservation(state, reason, unit_name)
+
+
+def launch_device_login_unit(slot: WorkerSlot, enrollment_id: str) -> WorkerDeviceLoginActivity:
+    """Start exactly one fixed device-login unit without waiting for user interaction."""
+
+    unit_name = device_login_unit_name(slot, enrollment_id)
+    try:
+        completed = subprocess.run(
+            systemctl_start_async_argv(unit_name),
+            capture_output=True,
+            check=False,
+            env=SYSTEMCTL_ENV,
+            timeout=15,
+        )
+        status = _read_unit_status(unit_name)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return WorkerDeviceLoginActivity("UNAVAILABLE", unit_name, None)
+    if completed.returncode != 0 or status.need_daemon_reload:
+        return WorkerDeviceLoginActivity("UNAVAILABLE", unit_name, None)
+    if status.process_lingering:
+        return WorkerDeviceLoginActivity("RUNNING", unit_name, None)
+    if not status.process_started:
+        return WorkerDeviceLoginActivity("UNAVAILABLE", unit_name, None)
+    return WorkerDeviceLoginActivity("TERMINAL", unit_name, status.exit_code)
+
+
+def inspect_device_login_unit(slot: WorkerSlot, enrollment_id: str) -> WorkerDeviceLoginActivity:
+    """Read one exact login unit without changing it."""
+
+    unit_name = device_login_unit_name(slot, enrollment_id)
+    try:
+        status = _read_unit_status(unit_name)
+    except (OSError, ValueError):
+        return WorkerDeviceLoginActivity("UNAVAILABLE", unit_name, None)
+    if status.need_daemon_reload:
+        return WorkerDeviceLoginActivity("UNAVAILABLE", unit_name, None)
+    if status.process_lingering:
+        return WorkerDeviceLoginActivity("RUNNING", unit_name, None)
+    return WorkerDeviceLoginActivity(
+        "TERMINAL" if status.process_started else "ABSENT",
+        unit_name,
+        status.exit_code if status.process_started else None,
+    )
 
 
 def inspect_worker_unit_activity(slot: WorkerSlot, job_id: str) -> WorkerUnitActivity:

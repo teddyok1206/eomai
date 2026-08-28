@@ -11,8 +11,10 @@ APPARMOR_PARSER=/usr/sbin/apparmor_parser
 GETCAP=/usr/sbin/getcap
 CODEX_BWRAP=/usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap
 SERVICE=eom-workflow-runner.service
+BROKER_SERVICE=eom-codex-auth-broker.service
 RELEASE_ROOT=/var/lib/eom-worker-runtime-deployments
 PYTHON=/srv/eom/conda/envs/eom-api/bin/python
+LEASE_GUARD=${REPOSITORY}/scripts/workflow/check_no_active_worker_leases.py
 STOPPED=0
 
 fail() {
@@ -79,6 +81,13 @@ if systemctl list-units --no-legend --state=activating,active,deactivating \
   'eom-worker-*@*.service' 'eom-worker-auth-*.service' | grep -q .; then
   fail "a fixed worker unit is active"
 fi
+[[ -f "${LEASE_GUARD}" && ! -L "${LEASE_GUARD}" ]] || fail "worker lease guard is unsafe"
+runuser -u eom-workflow-runner -g eom -- \
+  env -i HOME=/var/lib/eom-workflow-runner USER=eom-workflow-runner \
+    LOGNAME=eom-workflow-runner TZ=UTC PATH=/srv/eom/conda/envs/eom-api/bin:/usr/bin:/bin \
+    EOM_POSTGRES_ENV=/etc/eom/secrets/postgres.env \
+    "${PYTHON}" -I "${LEASE_GUARD}" || \
+  fail "an active or reconciling worker lease blocks runtime deployment"
 
 SOURCES=(
   "${APPARMOR_SOURCE}"
@@ -86,14 +95,19 @@ SOURCES=(
   "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules"
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_exec.py"
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_auth_exec.py"
+  "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_device_login_exec.py"
+  "${REPOSITORY}/infra/systemd/${BROKER_SERVICE}"
 )
 for slot in 01 02 03 04 05; do
   SOURCES+=(
     "${REPOSITORY}/infra/systemd/eom-worker-${slot}@.service"
     "${REPOSITORY}/infra/systemd/eom-worker-probe-${slot}@.service"
     "${REPOSITORY}/infra/systemd/eom-worker-auth-${slot}.service"
+    "${REPOSITORY}/infra/systemd/eom-worker-login-${slot}@.service"
   )
 done
+getent group eom-codex-auth >/dev/null || fail "Codex auth broker group is unavailable"
+getent passwd eom-codex-auth-broker >/dev/null || fail "Codex auth broker user is unavailable"
 for source in "${SOURCES[@]}"; do
   [[ -f "${source}" && ! -L "${source}" ]] || fail "unsafe runtime source: ${source}"
 done
@@ -120,6 +134,12 @@ if [[ ${ACTION} == install ]]; then
   install -o root -g root -m 0755 \
     "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_auth_exec.py" \
     "${LIBEXEC_ROOT}/eom-worker-auth-status"
+  install -o root -g root -m 0755 \
+    "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_device_login_exec.py" \
+    "${LIBEXEC_ROOT}/eom-worker-device-login"
+  install -o root -g root -m 0644 \
+    "${REPOSITORY}/infra/systemd/${BROKER_SERVICE}" \
+    "${UNIT_ROOT}/${BROKER_SERVICE}"
   install -o root -g root -m 0644 \
     "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules" \
     "${POLKIT_ROOT}/50-eom-worker-units.rules"
@@ -133,8 +153,12 @@ if [[ ${ACTION} == install ]]; then
     install -o root -g root -m 0644 \
       "${REPOSITORY}/infra/systemd/eom-worker-auth-${slot}.service" \
       "${UNIT_ROOT}/eom-worker-auth-${slot}.service"
+    install -o root -g root -m 0644 \
+      "${REPOSITORY}/infra/systemd/eom-worker-login-${slot}@.service" \
+      "${UNIT_ROOT}/eom-worker-login-${slot}@.service"
   done
   systemctl daemon-reload
+  systemctl enable --now "${BROKER_SERVICE}" >/dev/null
   systemctl start "${SERVICE}"
   STOPPED=0
 fi
@@ -142,25 +166,33 @@ fi
 require_regular "${APPARMOR_TARGET}" root:root:644
 cmp -s "${APPARMOR_SOURCE}" "${APPARMOR_TARGET}" || fail "Codex Bubblewrap profile drift"
 systemd-analyze verify "${UNIT_ROOT}/eom-workflow-runner.service" \
+  "${UNIT_ROOT}/${BROKER_SERVICE}" \
   "${UNIT_ROOT}"/eom-worker-{01,02,03,04,05}@.service \
   "${UNIT_ROOT}"/eom-worker-probe-{01,02,03,04,05}@.service \
-  "${UNIT_ROOT}"/eom-worker-auth-{01,02,03,04,05}.service
+  "${UNIT_ROOT}"/eom-worker-auth-{01,02,03,04,05}.service \
+  "${UNIT_ROOT}"/eom-worker-login-{01,02,03,04,05}@.service
 
 require_regular "${UNIT_ROOT}/eom-workflow-runner.service" root:root:644
 cmp -s "${REPOSITORY}/infra/systemd/eom-workflow-runner.service" \
   "${UNIT_ROOT}/eom-workflow-runner.service" || fail "workflow runner unit source drift"
 require_regular "${LIBEXEC_ROOT}/eom-worker-exec" root:root:755
 require_regular "${LIBEXEC_ROOT}/eom-worker-auth-status" root:root:755
+require_regular "${LIBEXEC_ROOT}/eom-worker-device-login" root:root:755
 cmp -s "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_exec.py" \
   "${LIBEXEC_ROOT}/eom-worker-exec" || fail "worker executable source drift"
 cmp -s "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_auth_exec.py" \
   "${LIBEXEC_ROOT}/eom-worker-auth-status" || fail "worker auth executable source drift"
+cmp -s "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_device_login_exec.py" \
+  "${LIBEXEC_ROOT}/eom-worker-device-login" || fail "worker device-login executable source drift"
+require_regular "${UNIT_ROOT}/${BROKER_SERVICE}" root:root:644
+cmp -s "${REPOSITORY}/infra/systemd/${BROKER_SERVICE}" \
+  "${UNIT_ROOT}/${BROKER_SERVICE}" || fail "Codex auth broker unit source drift"
 require_regular "${POLKIT_ROOT}/50-eom-worker-units.rules" root:root:644
 cmp -s "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules" \
   "${POLKIT_ROOT}/50-eom-worker-units.rules" || fail "worker polkit source drift"
 for slot in 01 02 03 04 05; do
   for name in "eom-worker-${slot}@.service" "eom-worker-probe-${slot}@.service" \
-    "eom-worker-auth-${slot}.service"; do
+    "eom-worker-auth-${slot}.service" "eom-worker-login-${slot}@.service"; do
     require_regular "${UNIT_ROOT}/${name}" root:root:644
     cmp -s "${REPOSITORY}/infra/systemd/${name}" "${UNIT_ROOT}/${name}" || \
       fail "worker unit ${name} source drift"
@@ -181,6 +213,8 @@ run_fixed_worker_sandbox_smoke "${BWRAP_SMOKE_UNIT}" \
 
 systemctl is-active --quiet "${SERVICE}" || fail "workflow runner is not active"
 systemctl is-enabled --quiet "${SERVICE}" || fail "workflow runner is not enabled"
+systemctl is-active --quiet "${BROKER_SERVICE}" || fail "Codex auth broker is not active"
+systemctl is-enabled --quiet "${BROKER_SERVICE}" || fail "Codex auth broker is not enabled"
 RUNNER_ENVIRONMENT=$(systemctl show --property=Environment --value "${SERVICE}")
 [[ " ${RUNNER_ENVIRONMENT} " == \
   *" EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging "* ]] || \
@@ -205,7 +239,8 @@ runuser -u eom -g eom -- "${REPOSITORY}/scripts/workflow/verify_systemd_worker_a
 DOCTOR_OUTPUT=$(mktemp /tmp/eom-workflow-runtime-doctor.XXXXXX)
 chmod 0600 "${DOCTOR_OUTPUT}"
 runuser -u eom-workflow-runner -g eom \
-  -G eom-cdx-01 -G eom-cdx-02 -G eom-cdx-03 -G eom-cdx-04 -G eom-cdx-05 -- \
+  -G eom-cdx-01 -G eom-cdx-02 -G eom-cdx-03 -G eom-cdx-04 -G eom-cdx-05 \
+  -G eom-codex-auth -- \
   env -i HOME=/var/lib/eom-workflow-runner USER=eom-workflow-runner \
     LOGNAME=eom-workflow-runner TZ=UTC PATH=/srv/eom/conda/envs/eom-api/bin:/usr/bin:/bin \
     EOM_POSTGRES_ENV=/etc/eom/secrets/postgres.env \
@@ -233,6 +268,8 @@ if [[ ${ACTION} == install ]]; then
     printf 'runner_unit_sha256=%s\n' "$(sha256sum "${UNIT_ROOT}/eom-workflow-runner.service" | cut -d' ' -f1)"
     printf 'worker_exec_sha256=%s\n' "$(sha256sum "${LIBEXEC_ROOT}/eom-worker-exec" | cut -d' ' -f1)"
     printf 'worker_auth_exec_sha256=%s\n' "$(sha256sum "${LIBEXEC_ROOT}/eom-worker-auth-status" | cut -d' ' -f1)"
+    printf 'worker_device_login_exec_sha256=%s\n' "$(sha256sum "${LIBEXEC_ROOT}/eom-worker-device-login" | cut -d' ' -f1)"
+    printf 'codex_auth_broker_unit_sha256=%s\n' "$(sha256sum "${UNIT_ROOT}/${BROKER_SERVICE}" | cut -d' ' -f1)"
     printf 'codex_bwrap_apparmor_sha256=%s\n' "$(sha256sum "${APPARMOR_TARGET}" | cut -d' ' -f1)"
     printf 'deployed_at_utc=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
   } >"${TEMPORARY}"

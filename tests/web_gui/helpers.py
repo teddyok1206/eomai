@@ -5,6 +5,8 @@ from typing import Any
 
 from eom_web_gui.app import create_app
 from eom_web_gui.contracts import (
+    CodexAuthEnrollmentStatusView,
+    CodexDeviceChallengeView,
     ContentIntakeOption,
     ContentIntakeSourcePointer,
     CurriculumEditorialOutline,
@@ -123,6 +125,8 @@ class FakeGateway:
         self.hwpx_build_calls = 0
         self.structured_import_calls = 0
         self.control_command_calls = 0
+        self.auth_enrollment_calls = 0
+        self.auth_challenge_reveal_calls = 0
         self.preset_mutation_calls = 0
         self.last_start_payload: dict[str, object] | None = None
 
@@ -496,7 +500,70 @@ class FakeGateway:
                 ],
                 "active_lease_count": 0,
                 "last_successful_job_id": "job_" + "2" * 32,
+                "active_auth_enrollment_id": None,
+                "active_auth_enrollment_state": None,
             },
+        )
+
+    async def start_codex_auth_enrollment(
+        self,
+        session: WebSession,
+        binding_id: str,
+        *,
+        requested_account_label: str,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        del session
+        assert binding_id == "authbinding_" + "1" * 32
+        assert requested_account_label == "teacher-account-01"
+        assert resource_version == 2
+        assert len(idempotency_key) >= 16
+        self.auth_enrollment_calls += 1
+        enrollment_id = "authflow_" + "3" * 32
+        return {
+            "command_id": enrollment_id,
+            "resource_id": enrollment_id,
+            "resource_type": "codex_auth_enrollment",
+            "status": "ACCEPTED",
+            "resource_version": 1,
+            "status_url": f"/api/v1/codex-auth-enrollments/{enrollment_id}",
+        }
+
+    async def codex_auth_enrollment(
+        self, session: WebSession, enrollment_id: str
+    ) -> CodexAuthEnrollmentStatusView:
+        del session
+        assert enrollment_id == "authflow_" + "3" * 32
+        return CodexAuthEnrollmentStatusView(
+            enrollment_id=enrollment_id,
+            binding_id="authbinding_" + "1" * 32,
+            slot_key="slot01",
+            requested_account_label="teacher-account-01",
+            state="WAITING_FOR_USER",
+            challenge_available=True,
+            challenge_revealed_at=None,
+            assignment_revision_id=None,
+            error_code=None,
+            requested_at=NOW,
+            started_at=NOW,
+            expires_at=NOW + timedelta(minutes=15),
+            completed_at=None,
+            resource_version=4,
+        )
+
+    async def reveal_codex_auth_challenge(
+        self, session: WebSession, enrollment_id: str
+    ) -> CodexDeviceChallengeView:
+        del session
+        assert enrollment_id == "authflow_" + "3" * 32
+        self.auth_challenge_reveal_calls += 1
+        return CodexDeviceChallengeView(
+            enrollment_id=enrollment_id,
+            slot_key="slot01",
+            verification_uri="https://auth.openai.com/codex/device",
+            user_code="ABC1-DEF2",
+            expires_at=NOW + timedelta(minutes=10),
         )
 
     async def knowledge_analysis_batches(

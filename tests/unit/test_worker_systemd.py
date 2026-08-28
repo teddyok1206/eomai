@@ -21,8 +21,10 @@ from eom_orchestrator.worker_registry import WorkerSlot
 from eom_orchestrator.worker_systemd import (
     AUTH_REQUIRED_EXIT,
     AUTH_TEMPLATE_SHA256,
+    LOGIN_TEMPLATE_SHA256,
     PROBE_TEMPLATE_SHA256,
     WORKER_AUTH_EXECUTABLE_SHA256,
+    WORKER_DEVICE_LOGIN_EXECUTABLE_SHA256,
     WORKER_EXECUTABLE_SHA256,
     WORKER_TEMPLATE_SHA256,
     FixedUnitRun,
@@ -39,6 +41,7 @@ from eom_orchestrator.worker_systemd import (
     systemctl_is_active_argv,
     systemctl_show_argv,
     systemctl_start_argv,
+    systemctl_start_async_argv,
     worker_unit_name,
 )
 from eom_protocol import ErrorCode
@@ -122,6 +125,17 @@ def test_systemctl_command_cannot_select_identity_command_or_properties() -> Non
     assert "--uid" not in command
     assert "--gid" not in command
     assert "--property" not in command
+
+
+def test_device_login_start_is_nonblocking_and_fixed_to_one_reviewed_unit() -> None:
+    unit = "eom-worker-login-01@authflow_" + "1" * 32 + ".service"
+    assert systemctl_start_async_argv(unit) == (
+        "/usr/bin/systemctl",
+        "--no-ask-password",
+        "--no-block",
+        "start",
+        unit,
+    )
 
 
 def test_unit_status_parsing_and_exit_mapping() -> None:
@@ -646,13 +660,20 @@ def test_canonical_unit_and_helper_hashes_match_runtime_contract() -> None:
         worker = ROOT / "infra/systemd" / f"eom-worker-{slot_id}@.service"
         probe = ROOT / "infra/systemd" / f"eom-worker-probe-{slot_id}@.service"
         auth = ROOT / "infra/systemd" / f"eom-worker-auth-{slot_id}.service"
+        login = ROOT / "infra/systemd" / f"eom-worker-login-{slot_id}@.service"
         assert hashlib.sha256(worker.read_bytes()).hexdigest() == WORKER_TEMPLATE_SHA256[slot_id]
         assert hashlib.sha256(probe.read_bytes()).hexdigest() == PROBE_TEMPLATE_SHA256[slot_id]
         assert hashlib.sha256(auth.read_bytes()).hexdigest() == AUTH_TEMPLATE_SHA256[slot_id]
+        assert hashlib.sha256(login.read_bytes()).hexdigest() == LOGIN_TEMPLATE_SHA256[slot_id]
     executable = ROOT / "services/orchestrator/eom_orchestrator/worker_exec.py"
     assert hashlib.sha256(executable.read_bytes()).hexdigest() == WORKER_EXECUTABLE_SHA256
     auth_executable = ROOT / "services/orchestrator/eom_orchestrator/worker_auth_exec.py"
     assert hashlib.sha256(auth_executable.read_bytes()).hexdigest() == WORKER_AUTH_EXECUTABLE_SHA256
+    login_executable = ROOT / "services/orchestrator/eom_orchestrator/worker_device_login_exec.py"
+    assert (
+        hashlib.sha256(login_executable.read_bytes()).hexdigest()
+        == WORKER_DEVICE_LOGIN_EXECUTABLE_SHA256
+    )
 
 
 def test_standard_and_analysis_slots_have_their_reviewed_systemd_ceilings() -> None:

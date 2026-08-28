@@ -32,6 +32,9 @@ const state = {
   acceptedIntakes: [],
   structuredSource: null,
   codexAccounts: [],
+  codexReauthAccount: null,
+  codexAuthEnrollmentId: null,
+  codexAuthPollTimer: null,
   executionPresets: [],
   presetEditorBases: [],
   presetDraftBase: null,
@@ -1099,6 +1102,10 @@ function installControlPlane() {
   $("#preset-release-confirm").addEventListener("change", syncPresetReviewActions);
   $("#preset-release-cancel").addEventListener("click", clearPresetReleaseReview);
   $("#preset-release-submit").addEventListener("click", releaseReviewedPreset);
+  $("#codex-reauth-form").addEventListener("submit", startCodexReauthentication);
+  $("#codex-reauth-close").addEventListener("click", closeCodexReauthentication);
+  $("#codex-reauth-progress-close").addEventListener("click", closeCodexReauthentication);
+  $("#codex-challenge-reveal").addEventListener("click", revealCodexDeviceChallenge);
 }
 
 async function loadControlPlane() {
@@ -1626,6 +1633,7 @@ function renderCodexAccounts(accounts) {
     addControlDetail(details, "Active leases", account.active_lease_count);
     addControlDetail(details, "Last success", account.last_successful_job_id);
     addControlDetail(details, "Observed", account.observed_at);
+    addControlDetail(details, "Login change", account.active_auth_enrollment_state || "없음");
     const actions = document.createElement("div");
     actions.className = "form-actions";
     actions.append(
@@ -1634,8 +1642,171 @@ function renderCodexAccounts(accounts) {
       actionButton("Drain", () => sendAccountCommand(account, "DRAIN"), true),
       actionButton("Disable", () => sendAccountCommand(account, "DISABLE"), true),
     );
+    const reauth = account.active_auth_enrollment_id
+      ? actionButton("로그인 변경 계속", () => resumeCodexReauthentication(account))
+      : actionButton("계정 로그인 변경", () => openCodexReauthentication(account));
+    reauth.className = "button danger";
+    if (!account.active_auth_enrollment_id && account.active_lease_count > 0) {
+      reauth.disabled = true;
+      reauth.title = "현재 작업이 끝난 뒤 로그인 계정을 변경할 수 있습니다.";
+    }
+    actions.append(reauth);
     card.append(actions);
     root.append(card);
+  }
+}
+
+function clearCodexDeviceChallenge() {
+  $("#codex-device-code").textContent = "";
+  $("#codex-device-link").href = "/studio/";
+  $("#codex-device-challenge").hidden = true;
+}
+
+function openCodexReauthentication(account) {
+  window.clearTimeout(state.codexAuthPollTimer);
+  state.codexReauthAccount = account;
+  state.codexAuthEnrollmentId = null;
+  clearCodexDeviceChallenge();
+  $("#codex-reauth-slot").value = account.slot_key;
+  $("#codex-reauth-label").value = "";
+  $("#codex-reauth-ack").checked = false;
+  $("#codex-reauth-start").disabled = false;
+  $("#codex-challenge-reveal").disabled = false;
+  $("#codex-reauth-form").hidden = false;
+  $("#codex-reauth-progress").hidden = true;
+  $("#codex-challenge-reveal").hidden = true;
+  $("#codex-reauth-id").textContent = "-";
+  $("#codex-reauth-state").textContent = "-";
+  $("#codex-reauth-expires").textContent = "-";
+  $("#codex-reauth-result").textContent = "-";
+  setStatus($("#codex-reauth-badge"), "warning", "◆", "검토 필요");
+  showMessage($("#codex-reauth-message"), "비밀번호나 토큰은 입력하지 마세요.");
+  $("#codex-reauth-panel").hidden = false;
+  $("#codex-reauth-label").focus();
+}
+
+function resumeCodexReauthentication(account) {
+  window.clearTimeout(state.codexAuthPollTimer);
+  state.codexReauthAccount = account;
+  state.codexAuthEnrollmentId = account.active_auth_enrollment_id;
+  clearCodexDeviceChallenge();
+  $("#codex-reauth-slot").value = account.slot_key;
+  $("#codex-reauth-label").value = "";
+  $("#codex-reauth-ack").checked = false;
+  $("#codex-reauth-start").disabled = false;
+  $("#codex-challenge-reveal").disabled = false;
+  $("#codex-reauth-form").hidden = true;
+  $("#codex-reauth-progress").hidden = false;
+  $("#codex-challenge-reveal").hidden = true;
+  $("#codex-reauth-id").textContent = account.active_auth_enrollment_id;
+  $("#codex-reauth-state").textContent = account.active_auth_enrollment_state;
+  $("#codex-reauth-expires").textContent = "-";
+  $("#codex-reauth-result").textContent = "진행 중";
+  setStatus($("#codex-reauth-badge"), "primary", "●", "진행 중");
+  showMessage($("#codex-reauth-message"), "진행 중인 로그인 변경 상태를 다시 불러왔습니다.");
+  $("#codex-reauth-panel").hidden = false;
+  pollCodexAuthEnrollment(account.active_auth_enrollment_id);
+}
+
+function closeCodexReauthentication() {
+  window.clearTimeout(state.codexAuthPollTimer);
+  state.codexAuthPollTimer = null;
+  state.codexReauthAccount = null;
+  state.codexAuthEnrollmentId = null;
+  clearCodexDeviceChallenge();
+  $("#codex-reauth-label").value = "";
+  $("#codex-reauth-ack").checked = false;
+  $("#codex-reauth-panel").hidden = true;
+}
+
+async function startCodexReauthentication(event) {
+  event.preventDefault();
+  const account = state.codexReauthAccount;
+  const label = $("#codex-reauth-label").value.trim();
+  if (!account || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(label)) {
+    showMessage($("#codex-reauth-message"), "영문·숫자·._-만 사용해 운영용 계정 표시 이름을 입력하세요.", "error");
+    return;
+  }
+  if (!$("#codex-reauth-ack").checked) {
+    showMessage($("#codex-reauth-message"), "슬롯 drain과 로그인 절차를 확인해야 합니다.", "error");
+    return;
+  }
+  $("#codex-reauth-start").disabled = true;
+  try {
+    const result = await api(`/admin/codex-accounts/${encodeURIComponent(account.binding_id)}/reauthentications`, {
+      method: "POST",
+      mutation: true,
+      body: {
+        requested_account_label: label,
+        acknowledge_drain: true,
+        resource_version: account.resource_version,
+        idempotency_key: `studio:codex-reauth:${account.binding_id}:${crypto.randomUUID()}`,
+      },
+    });
+    const enrollmentId = result.resource_id || result.command_id;
+    if (!/^authflow_[a-f0-9]{32}$/.test(enrollmentId || "")) throw new Error("APPLICATION_API_RESPONSE_INVALID");
+    state.codexAuthEnrollmentId = enrollmentId;
+    $("#codex-reauth-form").hidden = true;
+    $("#codex-reauth-progress").hidden = false;
+    $("#codex-reauth-id").textContent = enrollmentId;
+    setStatus($("#codex-reauth-badge"), "primary", "●", "진행 중");
+    showMessage($("#codex-reauth-message"), "슬롯 drain과 기기 로그인 준비를 진행하고 있습니다.");
+    await pollCodexAuthEnrollment(enrollmentId);
+  } catch (failure) {
+    showMessage($("#codex-reauth-message"), `로그인 변경 시작 실패: ${failure.message}`, "error");
+    $("#codex-reauth-start").disabled = false;
+  }
+}
+
+async function pollCodexAuthEnrollment(enrollmentId) {
+  if (state.codexAuthEnrollmentId !== enrollmentId) return;
+  try {
+    const value = await api(`/admin/codex-auth-enrollments/${encodeURIComponent(enrollmentId)}`);
+    if (state.codexAuthEnrollmentId !== enrollmentId) return;
+    $("#codex-reauth-state").textContent = value.state;
+    $("#codex-reauth-expires").textContent = value.expires_at || "-";
+    $("#codex-reauth-result").textContent = value.assignment_revision_id || value.error_code || "진행 중";
+    const terminal = ["SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"].includes(value.state);
+    $("#codex-challenge-reveal").hidden = !value.challenge_available;
+    if (terminal) {
+      clearCodexDeviceChallenge();
+      setStatus($("#codex-reauth-badge"), value.state === "SUCCEEDED" ? "success" : "danger", value.state === "SUCCEEDED" ? "✓" : "!", value.state);
+      showMessage(
+        $("#codex-reauth-message"),
+        value.state === "SUCCEEDED"
+          ? "로그인이 검증되었습니다. 슬롯은 안전하게 drain 상태를 유지하며, 사용할 때 Enable을 명시적으로 눌러야 합니다."
+          : `로그인 변경 종료: ${value.error_code || value.state}`,
+        value.state === "SUCCEEDED" ? "success" : "error",
+      );
+      await loadControlPlane();
+      return;
+    }
+    state.codexAuthPollTimer = window.setTimeout(() => pollCodexAuthEnrollment(enrollmentId), 2000);
+  } catch (failure) {
+    showMessage($("#codex-reauth-message"), `로그인 상태 조회 실패: ${failure.message}`, "error");
+    state.codexAuthPollTimer = window.setTimeout(() => pollCodexAuthEnrollment(enrollmentId), 5000);
+  }
+}
+
+async function revealCodexDeviceChallenge() {
+  const enrollmentId = state.codexAuthEnrollmentId;
+  if (!enrollmentId) return;
+  const button = $("#codex-challenge-reveal");
+  button.disabled = true;
+  button.hidden = true;
+  try {
+    const value = await api(`/admin/codex-auth-enrollments/${encodeURIComponent(enrollmentId)}/challenge`, {
+      method: "POST",
+      mutation: true,
+      body: {confirm: true},
+    });
+    if (state.codexAuthEnrollmentId !== enrollmentId) return;
+    $("#codex-device-link").href = value.verification_uri;
+    $("#codex-device-code").textContent = value.user_code;
+    $("#codex-device-challenge").hidden = false;
+    showMessage($("#codex-reauth-message"), `코드는 ${value.expires_at}까지 유효합니다. OpenAI 창에서 직접 입력하세요.`, "success");
+  } catch (failure) {
+    showMessage($("#codex-reauth-message"), `일회용 코드 표시 실패: ${failure.message}`, "error");
   }
 }
 

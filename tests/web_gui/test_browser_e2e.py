@@ -36,6 +36,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "고급 실행 정책",
             "DRAFT 생성 전 확인",
             "DRAFT Release 검토",
+            "계정 로그인 변경",
         ):
             assert marker in shell.text
         assert client.get("/studio/assets/styles.css").status_code == 200
@@ -159,3 +160,10 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "draft_spec_sha256.slice" not in javascript
     assert "analysisBatchEta" in javascript
     assert 'id="hwpx-delivery-guide"' in html
+    assert 'id="codex-reauth-panel"' in html
+    assert 'id="codex-challenge-reveal"' in html
+    assert "비밀번호나 토큰은 입력하지 마세요." in javascript
+    assert '$("#codex-reauth-start").disabled = false' in javascript
+    assert '$("#codex-challenge-reveal").disabled = false' in javascript
+    assert "localStorage" not in javascript
+    assert "sessionStorage" not in javascript

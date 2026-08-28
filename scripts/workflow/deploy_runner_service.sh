@@ -79,6 +79,7 @@ preflight() {
   for group in eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05; do
     require_group_membership "${SERVICE_USER}" "${group}"
   done
+  require_group_membership "${SERVICE_USER}" eom-codex-auth
   systemd-analyze verify "${UNIT_SOURCE}"
 }
 
@@ -95,7 +96,7 @@ verify_unit() {
   require_property ProtectHome yes
   require_property IPAddressDeny "0.0.0.0/0 ::/0"
   [[ "$(systemctl show --property=SupplementaryGroups --value "${SERVICE}")" == \
-      "eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05" ]] || \
+      "eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-codex-auth" ]] || \
     fail "installed supplementary group contract mismatch"
   local runtime_environment
   runtime_environment="$(systemctl show --property=Environment --value "${SERVICE}")"
@@ -112,7 +113,8 @@ verify_unit() {
   [[ "${main_pid}" =~ ^[1-9][0-9]*$ && -r "/proc/${main_pid}/status" ]] || \
     fail "workflow runner process is unavailable"
   local group group_id
-  for group in eom eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05; do
+  for group in eom eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 \
+    eom-codex-auth; do
     group_id="$(getent group "${group}" | cut -d: -f3)"
     [[ "${group_id}" =~ ^[1-9][0-9]*$ ]] || fail "worker group identity is unavailable"
     grep -E "^Groups:.*[[:space:]]${group_id}([[:space:]]|$)" "/proc/${main_pid}/status" \

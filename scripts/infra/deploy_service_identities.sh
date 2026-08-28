@@ -121,8 +121,13 @@ if systemctl list-units --no-legend --state=activating,active,deactivating \
 fi
 [[ -d ${ARTIFACT_ROOT} && ! -L ${ARTIFACT_ROOT} ]] || fail "Artifact root is unsafe"
 verify_artifact_mount
+if ! getent group eom-codex-auth >/dev/null; then
+  groupadd --system eom-codex-auth
+fi
 ensure_identity eom-workflow-runner /var/lib/eom-workflow-runner eom \
-  "eom-cdx-01,eom-cdx-02,eom-cdx-03,eom-cdx-04,eom-cdx-05"
+  "eom-cdx-01,eom-cdx-02,eom-cdx-03,eom-cdx-04,eom-cdx-05,eom-codex-auth"
+ensure_identity eom-codex-auth-broker /var/lib/eom-codex-auth-broker eom-codex-auth \
+  "eom-codex-auth"
 ensure_identity eom-catalog-manager /var/lib/eom-catalog-api eom-api \
   "eom"
 ensure_identity eom-hwpx-manager /var/lib/eom-hwpx-api eom-api \
@@ -153,7 +158,7 @@ for service in "${SERVICES[@]}"; do
 done
 
 require_process_identity eom-workflow-runner.service eom-workflow-runner \
-  eom eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05
+  eom eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-codex-auth
 require_process_identity eom-catalog-application-runner.service eom-catalog-manager \
   eom-api eom
 require_process_identity eom-hwpx-application-runner.service eom-hwpx-manager \

@@ -76,6 +76,7 @@ def test_auth_binding_persistence_has_no_credential_or_path_columns() -> None:
     assert column_names == {
         "binding_id",
         "worker_slot_id",
+        "current_assignment_revision_id",
         "account_label",
         "state",
         "reason_code",

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/control-plane/codex-device-challenge/1.0",
+  "title": "Codex Device Challenge V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "enrollment_id",
+    "slot_key",
+    "verification_uri",
+    "user_code",
+    "issued_at",
+    "expires_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "codex-device-challenge/1.0"},
+    "enrollment_id": {"type": "string", "pattern": "^authflow_[0-9a-f]{32}$"},
+    "slot_key": {"type": "string", "pattern": "^slot0[1-5]$"},
+    "verification_uri": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 512,
+      "pattern": "^https://auth\\.openai\\.com(?:/|$)"
+    },
+    "user_code": {"type": "string", "pattern": "^[A-Z0-9]{3,12}(?:-[A-Z0-9]{3,12})?$"},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"}
+  }
+}
