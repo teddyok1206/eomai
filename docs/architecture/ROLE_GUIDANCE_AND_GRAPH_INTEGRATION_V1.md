@@ -85,17 +85,20 @@ released bytes are never changed in place.
 ## 4. Current content-team intake classification
 
 The two files received in `staging/content-team-prompt-drop/` remain protected, untracked intake
-bytes. They are not yet worker authority and are not copied into Git.
+bytes. They are not worker authority and the raw source bytes are not copied into Git. Reviewed,
+provenance-pinned derivatives now use the separately specified EOM Guidance Markdown V1 format.
 
 | Intake document | Initial canonical class | Intended use | Explicit non-use |
 | --- | --- | --- | --- |
 | 통합과학 모의고사 1회차 배치 방식 | `GUIDANCE` / `INTERNAL_GUIDE` | future assessment-form assembly constraints, coverage and score validation, product usage planning | not a one-item authoring prompt; not attached to current item jobs |
 | 통합과학 일러스트 프롬프트 가이드 통합본 | `GUIDANCE` / `INTERNAL_GUIDE` | image-role visual policy, reusable representation modules, and review-role QA criteria | not copied wholesale into `AGENTS.md`; not automatically trusted because it resembles a prompt |
 
-The mock-exam document belongs primarily to the future assembly layer above “make one item.” The
-illustration document may later produce two reviewed derivatives: a compact image-role instruction
-and a larger image/review guidance reference. Each derivative must keep a provenance pointer to the
-same approved source revision.
+The mock-exam derivative is
+`content/authoring-rules/integrated-science-mock-exam-assembly-v1.md` and belongs primarily to the
+future assembly layer above “make one item.” The illustration/reference derivative is
+`content/image-specs/kice-integrated-science-illustration-v1.md`. A future compact image-role
+instruction remains a separate artifact; it is not this reference file. Each future registered
+revision must preserve the original source provenance and its own derivative hash.
 
 ## 5. Role-specific selection
 
@@ -268,8 +271,9 @@ interrupt slot05.
 
 ## 13. Phased implementation
 
-1. **Current safe phase:** freeze this design, preserve the uploaded files as protected untracked
-   intake, record only hashes/classification, and add non-live separation tests.
+1. **Completed source phase:** preserve uploaded files as protected untracked intake; define the
+   JSON Schema-validated EOM Guidance Markdown V1 source format; create reviewed derivatives with
+   exact source hashes; and run non-live separation/parser tests.
 2. **Guidance intake:** register the two files as approved `GUIDANCE` Educational Document
    Revisions through Manual Content Intake; no worker is launched merely by intake.
 3. **Role derivatives:** create compact reviewed instruction derivatives and larger guidance

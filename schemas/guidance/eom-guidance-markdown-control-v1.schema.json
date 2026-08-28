@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/guidance/eom-guidance-markdown-control/1.0",
+  "title": "EOM Guidance Markdown V1 document control",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "guidance_key",
+    "revision",
+    "status",
+    "title",
+    "locale",
+    "guidance_type",
+    "rule_prefix",
+    "execution_authority",
+    "runtime_use",
+    "applicable_roles",
+    "applicable_use_cases",
+    "core_rule_ids",
+    "source_provenance",
+    "graph_projection"
+  ],
+  "properties": {
+    "schema_version": {"const": "eom-guidance-markdown/1.0"},
+    "guidance_key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "minLength": 3,
+      "maxLength": 100
+    },
+    "revision": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "status": {"enum": ["DRAFT", "REVIEWED", "RETIRED"]},
+    "title": {"type": "string", "minLength": 1, "maxLength": 160},
+    "locale": {"enum": ["ko-KR", "en-US"]},
+    "guidance_type": {
+      "enum": [
+        "ASSESSMENT_ASSEMBLY",
+        "ILLUSTRATION",
+        "AUTHORING_REFERENCE",
+        "REVIEW_REFERENCE",
+        "DATA_ANALYSIS_REFERENCE"
+      ]
+    },
+    "rule_prefix": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{1,7}$"},
+    "execution_authority": {"const": "NONE"},
+    "runtime_use": {"const": "PINNED_REFERENCE_ONLY"},
+    "applicable_roles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {"enum": ["AUTHORING", "IMAGE", "REVIEW", "SUPPORT", "ASSEMBLY"]}
+    },
+    "applicable_use_cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$"}
+    },
+    "core_rule_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{1,7}-(?:MUST|MUSTNOT)-[0-9]{3}$"}
+    },
+    "source_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind",
+        "original_filename_nfc",
+        "original_sha256",
+        "original_size_bytes",
+        "transformation"
+      ],
+      "properties": {
+        "source_kind": {"const": "INTERNAL_GUIDE"},
+        "original_filename_nfc": {"type": "string", "minLength": 1, "maxLength": 255},
+        "original_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "original_size_bytes": {"type": "integer", "minimum": 1, "maximum": 10485760},
+        "transformation": {"const": "REVIEWED_DERIVATIVE"}
+      }
+    },
+    "graph_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_class", "publication_status", "allowed_node_types"],
+      "properties": {
+        "source_class": {"const": "INTERNAL_GUIDE"},
+        "publication_status": {"enum": ["NOT_PUBLISHED", "PUBLISHED"]},
+        "allowed_node_types": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "DOCUMENT_REVISION",
+              "DOCUMENT_SECTION",
+              "ASSESSMENT_PATTERN",
+              "DATA_REPRESENTATION",
+              "FIGURE",
+              "TABLE",
+              "EQUATION"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

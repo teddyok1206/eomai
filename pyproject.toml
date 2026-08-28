@@ -71,6 +71,7 @@ eom_catalog_contracts = [
   "resources/content-intake/*.json",
   "resources/content-pack/*.json",
   "resources/curriculum/*.json",
+  "resources/guidance/*.json",
   "resources/educational-document/*.json",
   "resources/item-registry/*.json",
   "resources/knowledge/*.json",

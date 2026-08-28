@@ -168,6 +168,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:6b3e0bff6435827b322337f5c8a48e920c3fffc149e4e047e71374ededb28745",
         ),
+        "eom-guidance-markdown-control": CatalogSchemaResource(
+            "schemas/guidance/eom-guidance-markdown-control-v1.schema.json",
+            "resources/guidance/eom-guidance-markdown-control-v1.schema.json",
+            "1.0",
+            "sha256:9d34f2c8ff6c5c6d7f58593d0c25ac0b47584efb7cc735151498d2284d1725ac",
+        ),
         "educational-document-types": CatalogSchemaResource(
             "schemas/educational-document/educational-document-types-v1.schema.json",
             "resources/educational-document/educational-document-types-v1.schema.json",
