@@ -1721,9 +1721,9 @@ function closeCodexReauthentication() {
 
 async function startCodexReauthentication(event) {
   event.preventDefault();
-  const account = state.codexReauthAccount;
+  const openedAccount = state.codexReauthAccount;
   const label = $("#codex-reauth-label").value.trim();
-  if (!account || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(label)) {
+  if (!openedAccount || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(label)) {
     showMessage($("#codex-reauth-message"), "영문·숫자·._-만 사용해 운영용 계정 표시 이름을 입력하세요.", "error");
     return;
   }
@@ -1733,6 +1733,18 @@ async function startCodexReauthentication(event) {
   }
   $("#codex-reauth-start").disabled = true;
   try {
+    // Account observation is asynchronous and advances the optimistic-lock
+    // version. Resolve the current projection at the mutation boundary rather
+    // than submitting the version captured when the panel was opened.
+    const accounts = await api("/admin/codex-accounts");
+    const account = accounts.find((value) => value.binding_id === openedAccount.binding_id);
+    if (!account) throw new StudioApiError("CODEX_ACCOUNT_NOT_FOUND");
+    state.codexAccounts = accounts;
+    state.codexReauthAccount = account;
+    if (account.active_auth_enrollment_id) {
+      resumeCodexReauthentication(account);
+      return;
+    }
     const result = await api(`/admin/codex-accounts/${encodeURIComponent(account.binding_id)}/reauthentications`, {
       method: "POST",
       mutation: true,

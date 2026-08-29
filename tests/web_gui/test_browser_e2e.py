@@ -139,6 +139,9 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "최대 6 slots · 동시 3" in html
     assert "최대 5 slots" not in html
     assert 'api("/admin/knowledge-analysis-batches")' in javascript
+    assert 'const accounts = await api("/admin/codex-accounts")' in javascript
+    assert "value.binding_id === openedAccount.binding_id" in javascript
+    assert "account.active_auth_enrollment_id" in javascript
     assert "analysisBatchPollTimer" in javascript
     assert "10000" in javascript
     assert 'data-view-target="knowledge"' in html

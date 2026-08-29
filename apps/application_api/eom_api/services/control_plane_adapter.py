@@ -573,9 +573,18 @@ class ControlPlaneAdapter:
     def _enrollment(
         row: CodexAuthEnrollmentRecord, *, challenge_available: bool
     ) -> CodexAuthEnrollmentView:
-        return CodexAuthEnrollmentView.model_validate(
-            enrollment_status_document(row, challenge_available=challenge_available)
-        )
+        # The durable control-plane status document owns its versioned schema
+        # discriminator.  The public API view is an envelope payload with a
+        # deliberately smaller field set, so crossing this adapter boundary
+        # must not leak the internal discriminator as an unknown API field.
+        document = enrollment_status_document(row, challenge_available=challenge_available)
+        schema_version = document.pop("schema_version")
+        if schema_version not in {
+            "codex-auth-enrollment-status/1.0",
+            "codex-auth-enrollment-status/1.1",
+        }:
+            raise ValueError("unsupported Codex auth enrollment status schema")
+        return CodexAuthEnrollmentView.model_validate(document)
 
     @staticmethod
     def _preset_revision(
