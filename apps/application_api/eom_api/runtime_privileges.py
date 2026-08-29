@@ -138,6 +138,9 @@ UPDATE_TABLES: Final[tuple[str, ...]] = (
     "api_idempotency_records",
     "api_sessions",
     "api_tokens",
+    # Auth enrollment creation locks the binding before pinning its resource
+    # version and slot identity into the immutable enrollment request.
+    "codex_auth_bindings",
     "codex_auth_enrollments",
     "content_pack_activations",
     "content_pack_releases",

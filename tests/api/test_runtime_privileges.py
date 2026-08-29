@@ -37,7 +37,7 @@ def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
     assert "codex_control_commands" not in UPDATE_TABLES
     assert "codex_auth_bindings" in READ_TABLES
     assert "codex_auth_bindings" not in INSERT_TABLES
-    assert "codex_auth_bindings" not in UPDATE_TABLES
+    assert "codex_auth_bindings" in UPDATE_TABLES
     assert "execution_presets" in READ_TABLES
     assert "execution_presets" in INSERT_TABLES
     assert "execution_presets" in UPDATE_TABLES
