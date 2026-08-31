@@ -371,10 +371,10 @@ function syncGraphGroundingCapability() {
 
 function syncCurriculumSelectorAvailability() {
   const form = $("#draft-form");
-  const available = Array.isArray(state.curriculumOutline?.units);
+  const outlineLoaded = Array.isArray(state.curriculumOutline?.units);
   const smallAvailable = state.curriculumOutline?.units.some((unit) => unit.level === "SMALL") === true;
-  form.elements.curriculum_large_unit_key.disabled = !available;
-  form.elements.curriculum_middle_unit_key.disabled = !available;
+  form.elements.curriculum_large_unit_key.disabled = !outlineLoaded;
+  form.elements.curriculum_middle_unit_key.disabled = !outlineLoaded;
   form.elements.curriculum_small_unit_key.disabled = !smallAvailable;
 }
 
