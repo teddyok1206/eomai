@@ -55,8 +55,11 @@ _COMMON_ATTRIBUTES = frozenset(
         "transform",
     }
 )
+_SAFE_INHERITED_TEXT_ATTRIBUTES = frozenset(
+    {"font-family", "font-size", "font-weight", "text-anchor", "dominant-baseline"}
+)
 _TAG_ATTRIBUTES = {
-    "g": frozenset({"font-family", "font-size"}),
+    "g": _SAFE_INHERITED_TEXT_ATTRIBUTES,
     "rect": frozenset({"x", "y", "width", "height", "rx", "ry"}),
     "circle": frozenset({"cx", "cy", "r"}),
     "ellipse": frozenset({"cx", "cy", "rx", "ry"}),

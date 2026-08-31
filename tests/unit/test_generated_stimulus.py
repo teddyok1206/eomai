@@ -170,6 +170,20 @@ def test_vector_overlay_accepts_safe_group_fragment() -> None:
     assert "방형구" in clean
 
 
+def test_vector_overlay_accepts_safe_inherited_text_alignment_on_group() -> None:
+    source = (
+        '<g fill="#000000" font-family="Droid Sans Fallback" text-anchor="middle">'
+        '<text font-size="18" x="120" y="80">운동량</text>'
+        '<text font-size="18" x="240" y="80">충격량</text>'
+        "</g>"
+    )
+
+    clean = sanitize_svg_overlay(source, ("운동량", "충격량"))
+
+    assert clean.startswith('<g fill="#000000" font-family="Droid Sans Fallback"')
+    assert 'text-anchor="middle"' in clean
+
+
 def test_vector_overlay_accepts_safe_multi_element_fragment() -> None:
     source = (
         '<circle cx="180" cy="130" fill="#ffffff" r="35" stroke="#000000" '
