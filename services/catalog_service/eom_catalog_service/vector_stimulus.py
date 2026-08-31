@@ -143,7 +143,7 @@ def sanitize_svg_overlay(source: str, required_labels: tuple[str, ...]) -> str:
     try:
         root = ET.fromstring(source)
     except ET.ParseError as exc:
-        raise ValueError("SVG overlay XML is invalid") from exc
+        root = _parse_svg_fragment(source, exc)
     counter = [0]
     labels: set[str] = set()
     if root.tag == f"{{{SVG_NAMESPACE}}}svg":
@@ -156,7 +156,7 @@ def sanitize_svg_overlay(source: str, required_labels: tuple[str, ...]) -> str:
             raise ValueError("SVG overlay root text is invalid")
         if root.tail is not None and root.tail.strip():
             raise ValueError("SVG overlay root tail text is invalid")
-    elif _svg_tag_name(root) == "g":
+    elif _svg_tag_name(root) in _ALLOWED_TAGS:
         clean = _sanitize_element(root, depth=1, counter=counter, labels=labels)
     else:
         raise ValueError("SVG overlay root namespace is invalid")
@@ -354,6 +354,16 @@ def _sanitize_element(
         for child in element
     )
     return f"<{tag}{rendered_attributes}>{html.escape(text)}{children}</{tag}>"
+
+
+def _parse_svg_fragment(source: str, original: ET.ParseError) -> ET.Element:
+    try:
+        return ET.fromstring(
+            f'<svg xmlns="{SVG_NAMESPACE}" width="800" height="500" '
+            f'viewBox="0 0 800 500">{source}</svg>'
+        )
+    except ET.ParseError:
+        raise ValueError("SVG overlay XML is invalid") from original
 
 
 def _svg_tag_name(element: ET.Element) -> str:

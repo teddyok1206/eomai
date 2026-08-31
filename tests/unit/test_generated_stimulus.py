@@ -171,6 +171,24 @@ def test_vector_overlay_accepts_safe_group_fragment() -> None:
     assert "방형구" in clean
 
 
+def test_vector_overlay_accepts_safe_multi_element_fragment() -> None:
+    source = (
+        '<circle cx="180" cy="130" fill="#ffffff" r="35" stroke="#000000" '
+        'stroke-width="3"></circle>'
+        '<rect fill="none" height="180" stroke="#000000" stroke-width="4" '
+        'width="260" x="360" y="230"></rect>'
+        '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+        'x="130" y="200">조사자</text>'
+        '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+        'x="440" y="450">방형구</text>'
+    )
+
+    clean = sanitize_svg_overlay(source, ("조사자", "방형구"))
+
+    assert clean.startswith("<circle")
+    assert clean.count("<text") == 2
+
+
 def test_vector_overlay_rejects_unsafe_group_fragment() -> None:
     source = (
         '<g fill="none"><text fill="#000000" font-family="Droid Sans Fallback" '
