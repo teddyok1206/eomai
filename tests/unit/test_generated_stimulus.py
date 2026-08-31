@@ -152,6 +152,34 @@ def test_vector_overlay_is_sanitized_and_receives_a_deterministic_background() -
     assert b"<script" not in first.lower()
 
 
+def test_vector_overlay_accepts_safe_group_fragment() -> None:
+    source = (
+        '<g fill="none" stroke="#000000" stroke-linecap="round" stroke-width="3">'
+        '<circle cx="180" cy="130" fill="#ffffff" r="35"></circle>'
+        '<rect height="180" width="260" x="360" y="230"></rect>'
+        '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+        'x="130" y="200">조사자</text>'
+        '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+        'x="440" y="450">방형구</text>'
+        "</g>"
+    )
+
+    clean = sanitize_svg_overlay(source, ("조사자", "방형구"))
+
+    assert clean.startswith('<g fill="none"')
+    assert "조사자" in clean
+    assert "방형구" in clean
+
+
+def test_vector_overlay_rejects_unsafe_group_fragment() -> None:
+    source = (
+        '<g fill="none"><text fill="#000000" font-family="Droid Sans Fallback" '
+        'font-size="20" x="10" y="20">조사자</text><script>alert(1)</script></g>'
+    )
+    with pytest.raises(ValueError, match="forbidden"):
+        sanitize_svg_overlay(source, ("조사자",))
+
+
 @pytest.mark.parametrize(
     "unsafe",
     [

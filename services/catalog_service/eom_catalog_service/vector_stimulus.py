@@ -144,17 +144,22 @@ def sanitize_svg_overlay(source: str, required_labels: tuple[str, ...]) -> str:
         root = ET.fromstring(source)
     except ET.ParseError as exc:
         raise ValueError("SVG overlay XML is invalid") from exc
-    if root.tag != f"{{{SVG_NAMESPACE}}}svg":
-        raise ValueError("SVG overlay root namespace is invalid")
-    if root.attrib != {"width": "800", "height": "500", "viewBox": "0 0 800 500"}:
-        raise ValueError("SVG overlay canvas contract is invalid")
     counter = [0]
     labels: set[str] = set()
-    clean = "".join(
-        _sanitize_element(child, depth=1, counter=counter, labels=labels) for child in root
-    )
-    if root.text is not None and root.text.strip():
-        raise ValueError("SVG overlay root text is invalid")
+    if root.tag == f"{{{SVG_NAMESPACE}}}svg":
+        if root.attrib != {"width": "800", "height": "500", "viewBox": "0 0 800 500"}:
+            raise ValueError("SVG overlay canvas contract is invalid")
+        clean = "".join(
+            _sanitize_element(child, depth=1, counter=counter, labels=labels) for child in root
+        )
+        if root.text is not None and root.text.strip():
+            raise ValueError("SVG overlay root text is invalid")
+        if root.tail is not None and root.tail.strip():
+            raise ValueError("SVG overlay root tail text is invalid")
+    elif _svg_tag_name(root) == "g":
+        clean = _sanitize_element(root, depth=1, counter=counter, labels=labels)
+    else:
+        raise ValueError("SVG overlay root namespace is invalid")
     if not set(required_labels).issubset(labels):
         raise ValueError("SVG overlay is missing a required label")
     return clean
@@ -315,9 +320,7 @@ def _sanitize_element(
     counter[0] += 1
     if counter[0] > SVG_MAX_ELEMENTS:
         raise ValueError("SVG overlay has too many elements")
-    if not element.tag.startswith(f"{{{SVG_NAMESPACE}}}"):
-        raise ValueError("SVG overlay element namespace is invalid")
-    tag = element.tag.removeprefix(f"{{{SVG_NAMESPACE}}}")
+    tag = _svg_tag_name(element)
     if tag not in _ALLOWED_TAGS:
         raise ValueError("SVG overlay element is not allowed")
     allowed = _COMMON_ATTRIBUTES | _TAG_ATTRIBUTES[tag]
@@ -351,6 +354,14 @@ def _sanitize_element(
         for child in element
     )
     return f"<{tag}{rendered_attributes}>{html.escape(text)}{children}</{tag}>"
+
+
+def _svg_tag_name(element: ET.Element) -> str:
+    if element.tag.startswith(f"{{{SVG_NAMESPACE}}}"):
+        return element.tag.removeprefix(f"{{{SVG_NAMESPACE}}}")
+    if element.tag.startswith("{"):
+        raise ValueError("SVG overlay element namespace is invalid")
+    return element.tag
 
 
 def _validate_attribute(tag: str, name: str, value: str) -> str:
