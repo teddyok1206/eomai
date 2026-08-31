@@ -462,7 +462,11 @@ class ResolvedExecutionPlanV3(FrozenModel):
             self.evidence_manifest_artifact.member_path != "evidence/manifest.json"
             or self.evidence_manifest_artifact.media_type != "application/json"
             or self.evidence_manifest_artifact.schema_ref
-            != "eom://schemas/knowledge/evidence-bundle-manifest/2.0"
+            not in {
+                "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
+            }
             or self.evidence_context_artifact.member_path != "evidence/context.md"
             or self.evidence_context_artifact.media_type != "text/markdown"
             or self.evidence_context_artifact.schema_ref

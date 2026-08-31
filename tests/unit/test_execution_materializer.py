@@ -529,10 +529,13 @@ def _document_analysis_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     return fixture
 
 
+@pytest.mark.parametrize("manifest_schema_version", ["2.0", "4.0"])
 def test_knowledge_materializer_stages_only_exact_context_and_records_provenance(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manifest_schema_version: str
 ) -> None:
-    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+    fixture = _knowledge_fixture(
+        tmp_path, monkeypatch, manifest_schema_version=manifest_schema_version
+    )
     authorized = authorized_execution_artifact_revisions(
         fixture["session"], plan_id=str(fixture["plan_id"]), step_key="authoring"
     )
@@ -580,7 +583,11 @@ def test_knowledge_materializer_rejects_manifest_hash_drift_before_context_copy(
     assert not (workspace / "references/evidence/context.md").exists()
 
 
-def _knowledge_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+def _knowledge_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, manifest_schema_version: str = "2.0"
+) -> dict[str, Any]:
+    if manifest_schema_version not in {"2.0", "4.0"}:
+        raise ValueError("unsupported test manifest schema version")
     fixture = _fixture(tmp_path, monkeypatch)
     session = fixture["session"]
     assert isinstance(session, FakeSession)
@@ -641,7 +648,7 @@ def _knowledge_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[
         "logical_name": "content.json",
     }
     manifest: dict[str, Any] = {
-        "schema_version": "evidence-bundle-manifest/2.0",
+        "schema_version": f"evidence-bundle-manifest/{manifest_schema_version}",
         "evidence_bundle_id": "evidence_" + "f" * 32,
         "evidence_bundle_revision_id": "evidencerev_" + "f" * 32,
         "revision_number": 1,
@@ -696,7 +703,7 @@ def _knowledge_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[
         "artifact_id": manifest_artifact_id,
         "artifact_revision_id": manifest_revision_id,
         "sha256": manifest_content_hash,
-        "schema_ref": "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+        "schema_ref": f"eom://schemas/knowledge/evidence-bundle-manifest/{manifest_schema_version}",
         "media_type": "application/json",
         "logical_name": "manifest.json",
         "member_path": "evidence/manifest.json",

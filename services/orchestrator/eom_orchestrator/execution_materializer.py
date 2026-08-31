@@ -9,7 +9,12 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-from eom_catalog_contracts import EvidenceBundleManifestV2, KnowledgeArtifactMemberPointer
+from eom_catalog_contracts import (
+    EvidenceBundleManifestV2,
+    EvidenceBundleManifestV3,
+    EvidenceBundleManifestV4,
+    KnowledgeArtifactMemberPointer,
+)
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_workflow import (
@@ -779,8 +784,17 @@ def _materialize_evidence_context(
         manifest_value = json.loads(manifest_payload.decode("utf-8"))
         if not isinstance(manifest_value, dict):
             raise ValueError("manifest root is not an object")
-        validate_catalog_contract("evidence-bundle-manifest-v2", manifest_value)
-        manifest = EvidenceBundleManifestV2.model_validate(manifest_value)
+        manifest_schema_ref = plan.evidence_manifest_artifact.schema_ref
+        manifest: EvidenceBundleManifestV2 | EvidenceBundleManifestV3 | EvidenceBundleManifestV4
+        if manifest_schema_ref == "eom://schemas/knowledge/evidence-bundle-manifest/4.0":
+            validate_catalog_contract("evidence-bundle-manifest-v4", manifest_value)
+            manifest = EvidenceBundleManifestV4.model_validate(manifest_value)
+        elif manifest_schema_ref == "eom://schemas/knowledge/evidence-bundle-manifest/3.0":
+            validate_catalog_contract("evidence-bundle-manifest-v3", manifest_value)
+            manifest = EvidenceBundleManifestV3.model_validate(manifest_value)
+        else:
+            validate_catalog_contract("evidence-bundle-manifest-v2", manifest_value)
+            manifest = EvidenceBundleManifestV2.model_validate(manifest_value)
     except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
         raise ControlPlaneError(
             "CONTROL_EVIDENCE_MANIFEST_INVALID", "Evidence Bundle manifest is invalid"

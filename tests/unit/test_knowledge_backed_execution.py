@@ -8,6 +8,7 @@ import pytest
 from eom_catalog_contracts import (
     EducationalRetrievalRequirement,
     EvidenceBundlePublicationResultV2,
+    EvidenceBundlePublicationResultV4,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ExecutionPresetRevisionRecord
@@ -111,7 +112,11 @@ def _preset() -> ExecutionPresetRevisionV2:
     return ExecutionPresetRevisionV2.model_validate(value)
 
 
-def _evidence() -> EvidenceBundlePublicationResultV2:
+def _evidence(
+    *, manifest_schema_version: str = "2.0"
+) -> EvidenceBundlePublicationResultV2 | EvidenceBundlePublicationResultV4:
+    if manifest_schema_version not in {"2.0", "4.0"}:
+        raise ValueError("unsupported test manifest schema version")
     graph = {
         "graph_id": "graph_" + "5" * 32,
         "graph_snapshot_revision_id": "graphrev_" + "5" * 32,
@@ -124,7 +129,11 @@ def _evidence() -> EvidenceBundlePublicationResultV2:
         "manifest_sha256": "sha256:" + "5" * 64,
     }
     value: dict[str, Any] = {
-        "schema_version": "evidence-bundle-publication-result/2.0",
+        "schema_version": (
+            "evidence-bundle-publication-result/4.0"
+            if manifest_schema_version == "4.0"
+            else "evidence-bundle-publication-result/2.0"
+        ),
         "evidence_bundle_id": "evidence_" + "6" * 32,
         "evidence_bundle_revision_id": "evidencerev_" + "6" * 32,
         "revision_number": 1,
@@ -139,7 +148,7 @@ def _evidence() -> EvidenceBundlePublicationResultV2:
             "9",
             member_path="evidence/manifest.json",
             media_type="application/json",
-            schema_ref="eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+            schema_ref=f"eom://schemas/knowledge/evidence-bundle-manifest/{manifest_schema_version}",
         ),
         "manifest_sha256": "sha256:" + "a" * 64,
         "context_artifact": _artifact(
@@ -161,6 +170,8 @@ def _evidence() -> EvidenceBundlePublicationResultV2:
     value["result_sha256"] = content_sha256(
         {key: item for key, item in value.items() if key != "result_sha256"}
     )
+    if manifest_schema_version == "4.0":
+        return EvidenceBundlePublicationResultV4.model_validate(value)
     return EvidenceBundlePublicationResultV2.model_validate(value)
 
 
@@ -232,6 +243,48 @@ def test_resolved_v3_plan_pins_evidence_and_role_access(
     assert plan.steps[0].evidence_access == "EVIDENCE_CONTEXT"
     assert plan.plan_sha256 == content_sha256(
         {key: item for key, item in captured.items() if key != "plan_sha256"}
+    )
+
+
+def test_resolved_v3_plan_accepts_current_multimodal_evidence_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preset = _preset()
+    evidence = _evidence(manifest_schema_version="4.0")
+    dependencies = ResolvedPlanDependencyEvidence(
+        workflow_id="workflow_" + "c" * 32,
+        workflow_definition_key="generic-item-development",
+        workflow_definition_version="1.5.0",
+        workflow_definition_sha256="sha256:" + "d" * 64,
+        workflow_role_schema_version="workflow-role/1.12.0",
+        content_pack_release_id="packrel_" + "e" * 32,
+        content_pack_sha256="sha256:" + "f" * 64,
+        graph_snapshot_revision_id=evidence.graph_snapshot.graph_snapshot_revision_id,
+        evidence_bundle_revision_id=evidence.evidence_bundle_revision_id,
+    )
+
+    def record(_session: object, *, document: dict[str, Any], dependencies: object) -> object:
+        assert document["evidence_manifest_artifact"]["schema_ref"] == (
+            "eom://schemas/knowledge/evidence-bundle-manifest/4.0"
+        )
+        assert dependencies is not None
+        return SimpleNamespace(canonical_document=document)
+
+    monkeypatch.setattr(
+        "eom_orchestrator.execution_resolver.record_knowledge_backed_execution_plan", record
+    )
+    plan = resolve_knowledge_backed_execution_plan(
+        _Session(preset),  # type: ignore[arg-type]
+        preset_revision_id=preset.preset_revision_id,
+        requirement=_requirement(),
+        evidence=evidence,
+        dependencies=dependencies,
+        steps=(ExecutionStepRequirement("authoring", WorkerRole.AUTHORING),),
+        resolved_at=NOW,
+    )
+
+    assert plan.evidence_manifest_artifact.schema_ref == (
+        "eom://schemas/knowledge/evidence-bundle-manifest/4.0"
     )
 
 
