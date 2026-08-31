@@ -18,6 +18,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
     KnowledgeAnalysisProposalReceiptV4,
+    KnowledgeAnalysisProposalReceiptV5,
     KnowledgeAnalysisProposalReceiptV6,
     KnowledgeAnalysisProposalReceiptV7,
     KnowledgeAnalysisRequestV2,
@@ -388,6 +389,18 @@ def typed_identity_proposal(request: KnowledgeAnalysisRequestV7) -> dict[str, ob
     value = proposal_v5(historical_request)
     value["schema_version"] = "knowledge-analysis-worker-proposal/5.0"
     value["analysis_request_id"] = request.analysis_request_id
+    anchors = value["anchors"]
+    assert isinstance(anchors, list)
+    anchors.append(
+        {
+            "anchor_id": "anchor_page_2",
+            "artifact_revision_id": request.source.artifact_member.artifact_revision_id,
+            "member_path": request.source.artifact_member.member_path,
+            "anchor_kind": "PAGE",
+            "locator": "physical_page=2;paragraph=1",
+            "excerpt_sha256": "sha256:" + "8" * 64,
+        }
+    )
     value["nodes"] = [
         {
             "node_id": "knode_assessment_pattern_data_interpretation",
@@ -423,10 +436,20 @@ def typed_identity_proposal(request: KnowledgeAnalysisRequestV7) -> dict[str, ob
             "physical_page": page,
             "image_sha256": "sha256:" + str(page + 2) * 64,
             "observation_state": "OBSERVED",
-            "anchor_ids": ["anchor_page_1"],
+            "anchor_ids": [f"anchor_page_{page}"],
         }
         for page in (1, 2)
     ]
+    components = value["component_observations"]
+    assert isinstance(components, list)
+    components.append(
+        {
+            "component_id": "component_paragraph_2",
+            "kind": "PARAGRAPH",
+            "anchor_id": "anchor_page_2",
+            "confidence_milli": 850,
+        }
+    )
     return value
 
 
@@ -598,6 +621,32 @@ def test_stable_identity_proposal_stages_exact_v7_receipt(tmp_path: Path) -> Non
     validate_contract("knowledge-analysis-proposal-receipt-v7", receipt.model_dump(mode="json"))
 
 
+def test_multimodal_staging_rejects_observed_page_without_structured_evidence(
+    tmp_path: Path,
+) -> None:
+    request = KnowledgeAnalysisRequestV8.model_validate(request_v8())
+    value = stable_identity_proposal(request)
+    components = value["component_observations"]
+    assert isinstance(components, list)
+    components[:] = [
+        item
+        for item in components
+        if item["anchor_id"] != "anchor_page_2"  # type: ignore[index]
+    ]
+    proposal = KnowledgeAnalysisWorkerProposalV6.model_validate(value)
+
+    with pytest.raises(PlatformError, match="no structured source evidence"):
+        stage_knowledge_analysis_proposal(
+            proposal=proposal,
+            request=request,
+            job_id="job_" + "d" * 32,
+            logical_artifact_id="artifact_" + "e" * 32,
+            revision_id="rev_" + "e" * 32,
+            staging=tmp_path,
+        )
+    assert not (tmp_path / "knowledge-proposal-source").exists()
+
+
 def test_v1_9_role_input_validates_a_production_shaped_multimodal_request() -> None:
     raw = {
         "schema_version": "1.0",
@@ -627,7 +676,9 @@ def test_v1_9_role_input_validates_a_production_shaped_multimodal_request() -> N
     assert parsed.request.analysis_request.source.page_image_count == 2
 
 
-def test_multimodal_proposal_accepts_honest_empty_content_without_relaxing_delivery() -> None:
+def test_multimodal_proposal_accepts_honest_empty_content_without_relaxing_delivery(
+    tmp_path: Path,
+) -> None:
     value = {
         "schema_version": "knowledge-analysis-worker-proposal/4.0",
         "analysis_request_id": "knowledgeanalysis_" + "4" * 32,
@@ -642,7 +693,7 @@ def test_multimodal_proposal_accepts_honest_empty_content_without_relaxing_deliv
         "page_image_observations": [
             {
                 "physical_page": page,
-                "image_sha256": "sha256:" + str(page) * 64,
+                "image_sha256": "sha256:" + str(page + 2) * 64,
                 "observation_state": state,
                 "anchor_ids": [],
             }
@@ -669,6 +720,17 @@ def test_multimodal_proposal_accepts_honest_empty_content_without_relaxing_deliv
         ).page_image_observations
         == 2
     )
+
+    request = KnowledgeAnalysisRequestV6.model_validate(request_v6())
+    _, receipt = stage_knowledge_analysis_proposal(
+        proposal=proposal,
+        request=request,
+        job_id="job_" + "6" * 32,
+        logical_artifact_id="artifact_" + "7" * 32,
+        revision_id="rev_" + "7" * 32,
+        staging=tmp_path,
+    )
+    assert isinstance(receipt, KnowledgeAnalysisProposalReceiptV5)
 
     incomplete = deepcopy(value)
     incomplete["page_image_observations"] = []

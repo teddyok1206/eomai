@@ -36,6 +36,7 @@ ANALYSIS_CONFIG_V10 = ROOT / "config/control-plane/knowledge-analysis-v10"
 ANALYSIS_CONFIG_V11 = ROOT / "config/control-plane/knowledge-analysis-v11"
 ANALYSIS_CONFIG_V12 = ROOT / "config/control-plane/knowledge-analysis-v12"
 ANALYSIS_CONFIG_V13 = ROOT / "config/control-plane/knowledge-analysis-v13"
+ANALYSIS_CONFIG_V14 = ROOT / "config/control-plane/knowledge-analysis-v14"
 
 
 def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version() -> None:
@@ -44,7 +45,7 @@ def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version
     )
 
     assert set(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS) == schema_versions
-    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 14))
+    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 15))
 
 
 def test_knowledge_analysis_v13_adds_parallel_capacity_without_changing_worker_semantics() -> None:
@@ -74,6 +75,45 @@ def test_knowledge_analysis_v13_adds_parallel_capacity_without_changing_worker_s
     assert (ANALYSIS_CONFIG_V13 / "instructions/knowledge-analysis.md").read_bytes() == (
         ANALYSIS_CONFIG_V12 / "instructions/knowledge-analysis.md"
     ).read_bytes()
+
+
+def test_knowledge_analysis_v14_requires_page_local_structured_evidence() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V14)
+
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/14.0"
+    assert manifest.slot_key == "slot05"
+    assert manifest.worker_pool_key == "support"
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    assert manifest.timeout_seconds == 7200
+    assert manifest.compatible_workflow_protocols[-1] == "workflow-role/1.11.0"
+    expected_sha256 = {
+        "bootstrap.yaml": "cbd813837bdeeae9dba12bb65fd38708eed2a8401dded1e55d609e3272930898",
+        "instructions/platform.md": (
+            "d89ba7eaffda1580178d215ad510e5401ed268473140cf3c3d53bb7195b9df91"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "992db112a0bfe5c864f2ca3b5ee3ef4fa2be5c1abba11c3a47bb436da4a3426e"
+        ),
+    }
+    for relative_path, expected in expected_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V14 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+    assert (ANALYSIS_CONFIG_V14 / "instructions/platform.md").read_bytes() == (
+        ANALYSIS_CONFIG_V13 / "instructions/platform.md"
+    ).read_bytes()
+    role_instruction = (ANALYSIS_CONFIG_V14 / "instructions/knowledge-analysis.md").read_text(
+        encoding="utf-8"
+    )
+    for required in (
+        "For every `OBSERVED` page",
+        "that exact physical page",
+        "not a substitute for structured",
+        "mark it `NO_RELEVANT_CONTENT`",
+        "mark it `UNCLEAR`",
+    ):
+        assert required in role_instruction
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:

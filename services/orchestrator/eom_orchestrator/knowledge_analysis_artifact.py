@@ -98,6 +98,45 @@ MULTIMODAL_PROPOSAL_MEMBERS: tuple[tuple[str, str, ProposalMediaType, str], ...]
 _DOCUMENT_ANCHOR_LOCATOR = re.compile(r"^physical_page=([1-9][0-9]{0,5})(?:;.{1,220})?$")
 
 
+def _validate_observed_page_structured_evidence(
+    proposal: (
+        KnowledgeAnalysisWorkerProposalV4
+        | KnowledgeAnalysisWorkerProposalV5
+        | KnowledgeAnalysisWorkerProposalV6
+    ),
+) -> None:
+    """Require every relevant observed page to contribute typed, source-grounded evidence."""
+
+    anchor_pages: dict[str, int] = {}
+    for anchor in proposal.anchors:
+        locator = _DOCUMENT_ANCHOR_LOCATOR.fullmatch(anchor.locator)
+        if locator is not None:
+            anchor_pages[anchor.anchor_id] = int(locator.group(1))
+    structured_anchor_ids = {
+        anchor_id
+        for anchor_ids in (
+            *(node.anchor_ids for node in proposal.nodes),
+            *(edge.anchor_ids for edge in proposal.edges),
+            *(claim.anchor_ids for claim in proposal.claims),
+            *((item.anchor_id,) for item in proposal.component_observations),
+            *(item.anchor_ids for item in proposal.unresolved_ambiguities),
+        )
+        for anchor_id in anchor_ids
+    }
+    structured_pages = {
+        anchor_pages[anchor_id] for anchor_id in structured_anchor_ids if anchor_id in anchor_pages
+    }
+    if any(
+        observation.observation_state == "OBSERVED"
+        and observation.physical_page not in structured_pages
+        for observation in proposal.page_image_observations
+    ):
+        raise PlatformError(
+            ErrorCode.WORKER_RESULT_INVALID,
+            "observed document page has no structured source evidence",
+        )
+
+
 def stage_knowledge_analysis_proposal(
     *,
     proposal: (
@@ -199,6 +238,7 @@ def stage_knowledge_analysis_proposal(
                 ErrorCode.WORKER_RESULT_INVALID,
                 "page-image observations do not match the exact attached source images",
             )
+        _validate_observed_page_structured_evidence(proposal)
     source_directory = staging / "knowledge-proposal-source"
     artifact_stage = staging / "knowledge-proposal-artifact"
     if source_directory.exists() or artifact_stage.exists():

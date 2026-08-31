@@ -645,19 +645,46 @@ def _proposal(
             for member in request.source.materialization_members
             if member.member_kind == "PAGE_IMAGE"
         )
-        value["page_image_observations"] = [
-            {
-                "physical_page": member.physical_page,
-                "image_sha256": member.sha256,
-                "observation_state": "OBSERVED",
-                "anchor_ids": (
-                    ["anchor_source_1"]
-                    if member.physical_page == request.source.first_physical_page
-                    else []
-                ),
-            }
-            for member in image_members
-        ]
+        page_anchor_ids: dict[int, str] = {request.source.first_physical_page: "anchor_source_1"}
+        anchors = value["anchors"]
+        components = value["component_observations"]
+        assert isinstance(anchors, list) and isinstance(components, list)
+        for member in image_members:
+            assert member.physical_page is not None
+            if member.physical_page == request.source.first_physical_page:
+                continue
+            anchor_id = f"anchor_source_page_{member.physical_page}"
+            page_anchor_ids[member.physical_page] = anchor_id
+            anchors.append(
+                {
+                    "anchor_id": anchor_id,
+                    "artifact_revision_id": source.artifact_revision_id,
+                    "member_path": source.member_path,
+                    "anchor_kind": "PARAGRAPH",
+                    "locator": f"physical_page={member.physical_page};paragraph=1",
+                    "excerpt_sha256": "sha256:" + "d" * 64,
+                }
+            )
+            components.append(
+                {
+                    "component_id": f"component_source_page_{member.physical_page}",
+                    "kind": "PARAGRAPH",
+                    "anchor_id": anchor_id,
+                    "confidence_milli": 900,
+                }
+            )
+        page_image_observations: list[dict[str, object]] = []
+        for member in image_members:
+            assert member.physical_page is not None
+            page_image_observations.append(
+                {
+                    "physical_page": member.physical_page,
+                    "image_sha256": member.sha256,
+                    "observation_state": "OBSERVED",
+                    "anchor_ids": [page_anchor_ids[member.physical_page]],
+                }
+            )
+        value["page_image_observations"] = page_image_observations
         if isinstance(request, KnowledgeAnalysisRequestV8):
             return KnowledgeAnalysisWorkerProposalV6.model_validate(value)
         if isinstance(request, KnowledgeAnalysisRequestV7):
