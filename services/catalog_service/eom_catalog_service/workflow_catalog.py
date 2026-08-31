@@ -669,7 +669,10 @@ class WorkflowCatalogService:
         if request.item_brief is None:
             return
         is_v2 = isinstance(request.item_brief, ItemBriefV2)
-        expects_v2 = pack_key == "generated-knowledge-item" and release_version == "1.2.0"
+        expects_v2 = pack_key == "generated-knowledge-item" and release_version in {
+            "1.2.0",
+            "1.3.0",
+        }
         if expects_v2 != is_v2:
             raise ContentPackError(
                 ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
