@@ -37,6 +37,32 @@ SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 INTEGRATED_SCIENCE_OUTLINE_SHA256 = (
     "sha256:f11389c8ab26c2bd5b93acf66fe92d30fea9c1d0bc7e6b91a6b6751fdccb5108"
 )
+INTEGRATED_SCIENCE_CORPUS_KEY = "integrated-science-textbooks"
+
+
+def _verified_curriculum_graph_corpus_key(capability: dict[str, Any]) -> str | None:
+    """Validate the complete API-owned READY projection before returning its corpus identity."""
+
+    if (
+        capability.get("schema_version") == "curriculum-graph-capability/1.0"
+        and capability.get("capability_state") == "READY"
+        and capability.get("graph_grounding_available") is True
+        and capability.get("reason") == "READY"
+        and capability.get("corpus_key") == INTEGRATED_SCIENCE_CORPUS_KEY
+        and capability.get("outline_key") == "eom-integrated-science-editorial-outline"
+        and capability.get("outline_revision") == "1.0"
+        and capability.get("outline_sha256") == INTEGRATED_SCIENCE_OUTLINE_SHA256
+        and isinstance(capability.get("graph_snapshot_revision_id"), str)
+        and re.fullmatch(r"graphrev_[0-9a-f]{32}", capability["graph_snapshot_revision_id"])
+        and isinstance(capability.get("snapshot_sha256"), str)
+        and SHA256_PATTERN.fullmatch(capability["snapshot_sha256"])
+        and isinstance(capability.get("framework_revision_id"), str)
+        and re.fullmatch(r"curriculumrev_[0-9a-f]{32}", capability["framework_revision_id"])
+        and capability.get("unit_count") == 43
+        and capability.get("closure_count") == 119
+    ):
+        return INTEGRATED_SCIENCE_CORPUS_KEY
+    return None
 
 
 class GatewayError(RuntimeError):
@@ -82,6 +108,8 @@ class ApplicationGateway(Protocol):
     async def curriculum_editorial_outline(
         self, session: WebSession
     ) -> CurriculumEditorialOutline: ...
+
+    async def curriculum_graph_corpus_key(self, session: WebSession) -> str | None: ...
 
     async def start_workflow(
         self, session: WebSession, payload: dict[str, object], idempotency_key: str
@@ -405,21 +433,9 @@ class HttpApplicationGateway:
             )
             capability = self._data(capability_response)
             if (
-                capability.get("schema_version") == "curriculum-graph-capability/1.0"
-                and capability.get("capability_state") == "READY"
-                and capability.get("graph_grounding_available") is True
-                and capability.get("reason") == "READY"
+                _verified_curriculum_graph_corpus_key(capability) is not None
                 and capability.get("outline_key") == value.get("outline_key")
                 and capability.get("outline_revision") == value.get("outline_revision")
-                and capability.get("outline_sha256") == INTEGRATED_SCIENCE_OUTLINE_SHA256
-                and isinstance(capability.get("graph_snapshot_revision_id"), str)
-                and re.fullmatch(r"graphrev_[0-9a-f]{32}", capability["graph_snapshot_revision_id"])
-                and isinstance(capability.get("snapshot_sha256"), str)
-                and SHA256_PATTERN.fullmatch(capability["snapshot_sha256"])
-                and isinstance(capability.get("framework_revision_id"), str)
-                and re.fullmatch(r"curriculumrev_[0-9a-f]{32}", capability["framework_revision_id"])
-                and capability.get("unit_count") == 43
-                and capability.get("closure_count") == 119
             ):
                 graph_mapping_status = "PUBLISHED_CURRICULUM_GRAPH_VERIFIED"
                 graph_grounding_available = True
@@ -453,6 +469,22 @@ class HttpApplicationGateway:
             )
         except (KeyError, ValueError) as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def curriculum_graph_corpus_key(self, session: WebSession) -> str | None:
+        """Return the fresh API-owned corpus identity only while Graph grounding is READY."""
+
+        try:
+            response = await self._authorized(
+                session,
+                "GET",
+                "/api/v1/curriculum/integrated-science-graph-capability",
+            )
+            capability = self._data(response)
+        except GatewayError as exc:
+            if exc.status in {404, 409, 503}:
+                return None
+            raise
+        return _verified_curriculum_graph_corpus_key(capability)
 
     async def start_workflow(
         self, session: WebSession, payload: dict[str, object], idempotency_key: str

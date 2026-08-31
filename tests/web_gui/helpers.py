@@ -116,12 +116,14 @@ class FakeGateway:
         *,
         roles: list[str] | None = None,
         hwpx_state: str = "PREPARED_NOT_DEPLOYED",
+        graph_grounding_available: bool = False,
     ) -> None:
         self.start_calls = 0
         self.approval_calls = 0
         self.closed = False
         self.roles = roles or ["ADMIN", "REVIEWER"]
         self.hwpx_state = hwpx_state
+        self.graph_grounding_available = graph_grounding_available
         self.hwpx_build_calls = 0
         self.structured_import_calls = 0
         self.control_command_calls = 0
@@ -230,6 +232,10 @@ class FakeGateway:
                 "units": units,
             }
         )
+
+    async def curriculum_graph_corpus_key(self, session: WebSession) -> str | None:
+        del session
+        return "integrated-science-textbooks" if self.graph_grounding_available else None
 
     async def start_workflow(
         self, session: WebSession, payload: dict[str, object], idempotency_key: str

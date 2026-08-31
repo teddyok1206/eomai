@@ -542,6 +542,7 @@ async function loadWorkflow() {
 function renderWorkflow(bundle) {
   const workflow = bundle.workflow || {};
   const provenance = workflow.knowledge_provenance || null;
+  const registration = workflow.item_registration || null;
   setStateStatus($("#workflow-state"), "workflow", workflow.state);
   const summary = {
     "문항 제작 진행 ID": workflow.workflow_id,
@@ -565,6 +566,12 @@ function renderWorkflow(bundle) {
   renderStages(workflow, bundle.steps || []);
   renderTimeline(bundle.timeline || []);
   renderOperationalLog(bundle);
+  if (workflow.state === "COMPLETED" && registration) {
+    $("#item-id").value = registration.item_id;
+    $("#revision-id").value = registration.item_revision_id;
+    $("#hwpx-revision-id").value = registration.item_revision_id;
+    updateHwpxDeliveryGuide();
+  }
   $("#approval-etag").value = bundle.etag || "";
   renderApprovalSummary(bundle);
 }

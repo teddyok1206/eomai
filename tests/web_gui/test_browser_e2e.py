@@ -153,6 +153,8 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert 'select name="curriculum_middle_unit_key" disabled' in html
     assert 'input name="knowledge_grounding" type="checkbox" disabled' in html
     assert "graph_grounding_available === true" in javascript
+    assert 'workflow.state === "COMPLETED" && registration' in javascript
+    assert '$("#hwpx-revision-id").value = registration.item_revision_id' in javascript
     assert "curriculum_large_unit_key.disabled = !available" in javascript
     assert "curriculum_middle_unit_key.disabled = !available" in javascript
     assert "curriculum_small_unit_key.disabled = !smallAvailable" in javascript

@@ -379,6 +379,7 @@ async def test_gateway_projects_reviewed_curriculum_outline_without_graph_intern
     assert outline.graph_mapping_status == "PUBLISHED_CURRICULUM_GRAPH_VERIFIED"
     assert outline.units[14].key == "eom.is.middle.3-2"
     assert "graph_stable_key" not in outline.model_dump(mode="json")["units"][14]
+    assert await gateway.curriculum_graph_corpus_key(_session()) == ("integrated-science-textbooks")
     await gateway.close()
 
 
@@ -406,6 +407,7 @@ async def test_gateway_keeps_curriculum_classification_when_capability_is_unavai
     assert outline.graph_grounding_available is False
     assert outline.graph_mapping_status == "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF"
     assert len(outline.units) == 41
+    assert await gateway.curriculum_graph_corpus_key(_session()) is None
     await gateway.close()
 
 

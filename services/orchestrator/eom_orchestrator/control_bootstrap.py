@@ -19,7 +19,9 @@ from eom_workflow import (
     WorkerCapacityPolicy,
     WorkerCapacityPolicyV2,
 )
+from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.schemas import role_schema_bundle_hash
+from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -80,6 +82,13 @@ EXPECTED_STANDARD_V2_REFERENCE_KEYS = MappingProxyType(
             "kice-integrated-science-illustration",
         ),
         "item_management": ("general-knowledge-provenance",),
+    }
+)
+STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS = MappingProxyType(
+    {
+        "standard-control-bootstrap/1.0": 1,
+        "standard-control-bootstrap/2.0": 2,
+        "standard-control-bootstrap/3.0": 3,
     }
 )
 KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(
@@ -147,7 +156,11 @@ class StandardBootstrapReference(BaseModel):
 class StandardBootstrapManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["standard-control-bootstrap/1.0", "standard-control-bootstrap/2.0"]
+    schema_version: Literal[
+        "standard-control-bootstrap/1.0",
+        "standard-control-bootstrap/2.0",
+        "standard-control-bootstrap/3.0",
+    ]
     preset_key: Literal["standard-item"]
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=1000)
@@ -179,16 +192,22 @@ class StandardBootstrapManifest(BaseModel):
                 raise ValueError("standard bootstrap V1 reference contract differs")
             return self
         if self.reference_path is not None or len(self.references) != 3:
-            raise ValueError("standard bootstrap V2 requires exactly three reference definitions")
+            raise ValueError(
+                "standard bootstrap with reviewed references requires exactly three definitions"
+            )
         reference_keys = tuple(reference.reference_key for reference in self.references)
         if len(reference_keys) != len(set(reference_keys)):
             raise ValueError("standard bootstrap reference definitions must be unique")
         if {role.role: role.reference_keys for role in self.roles} != dict(
             EXPECTED_STANDARD_V2_REFERENCE_KEYS
         ):
-            raise ValueError("standard bootstrap V2 role reference map differs")
+            raise ValueError("standard bootstrap reviewed role reference map differs")
         if set(reference_keys) != set().union(*EXPECTED_STANDARD_V2_REFERENCE_KEYS.values()):
-            raise ValueError("standard bootstrap V2 has missing or unused references")
+            raise ValueError("standard bootstrap has missing or unused reviewed references")
+        if self.schema_version == "standard-control-bootstrap/3.0" and (
+            self.compatible_workflow_protocols != ("workflow-role/1.12.0",)
+        ):
+            raise ValueError("standard bootstrap V3 protocol differs")
         return self
 
 
@@ -354,14 +373,14 @@ def bootstrap_standard_control_plane(
     config_root = _safe_root(config_directory)
     content_root = (
         _safe_root(content_directory)
-        if manifest.schema_version == "standard-control-bootstrap/2.0"
+        if manifest.schema_version != "standard-control-bootstrap/1.0"
         and content_directory is not None
         else None
     )
-    if manifest.schema_version == "standard-control-bootstrap/2.0" and content_root is None:
+    if manifest.schema_version != "standard-control-bootstrap/1.0" and content_root is None:
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_INVALID",
-            "standard bootstrap V2 requires the reviewed content directory",
+            "standard bootstrap with reviewed references requires the content directory",
         )
     platform_payload = _read_member(config_root, "instructions/platform.md")
     role_payloads = {
@@ -502,9 +521,7 @@ def bootstrap_standard_control_plane(
             source_commit=source_commit,
             actor_id=actor_id,
             created_at=manifest.created_at,
-            revision_number=(
-                1 if manifest.schema_version == "standard-control-bootstrap/1.0" else 2
-            ),
+            revision_number=STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version],
         )
     reference_pointers: dict[str, BundleRevisionPointer] = {}
     if manifest.schema_version == "standard-control-bootstrap/1.0":
@@ -923,8 +940,12 @@ def load_standard_bootstrap_manifest(config_directory: Path) -> StandardBootstra
     raw = _read_file(root / "bootstrap.yaml", root=root, max_bytes=MAX_BOOTSTRAP_MANIFEST_BYTES)
     try:
         value: object = yaml.safe_load(raw.decode("utf-8"))
+        if isinstance(value, dict) and value.get("schema_version") == (
+            "standard-control-bootstrap/3.0"
+        ):
+            validate_control_contract("standard-control-bootstrap-v3", value)
         return StandardBootstrapManifest.model_validate(value)
-    except (UnicodeError, yaml.YAMLError, ValueError) as exc:
+    except (UnicodeError, yaml.YAMLError, JsonSchemaValidationError, ValueError) as exc:
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_INVALID", "standard bootstrap manifest is invalid"
         ) from exc

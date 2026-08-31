@@ -114,6 +114,10 @@ from eom_orchestrator.execution_resolver import (
     ExecutionStepRequirement,
     resolve_execution_plan,
 )
+from eom_orchestrator.knowledge_item_bootstrap import (
+    KnowledgeItemBootstrapResult,
+    bootstrap_knowledge_item_control_plane,
+)
 from eom_orchestrator.models import (
     ArtifactRecord,
     ArtifactRevisionRecord,
@@ -135,7 +139,7 @@ from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_auth import WorkerAuthObservation
 from eom_orchestrator.worker_registry import FIXED_WORKER_SLOT_IDS
 from eom_orchestrator.worker_systemd import WorkerUnitActivity
-from eom_workflow import ControlArtifactPointer
+from eom_workflow import ControlArtifactPointer, ExecutionPresetRevisionV2
 from eom_workflow.control_plane import WorkerRole
 from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.models import (
@@ -2449,6 +2453,122 @@ def test_standard_bootstrap_is_idempotent_and_materializes_only_pinned_markdown(
         review_workspace / "references/guidance/kice-integrated-science-illustration-v1.md"
     ).is_file()
     assert not (item_management_workspace / "references/guidance").exists()
+
+    svg_successor = bootstrap_standard_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/standard-item-v3").resolve(),
+        content_directory=Path("content").resolve(),
+        source_commit="c" * 40,
+        actor_id="phase5-integration",
+        evaluation_cases_total=5,
+        settings=settings,
+    )
+    assert svg_successor.preset_id == first.preset_id
+    assert svg_successor.preset_revision_id not in {
+        first.preset_revision_id,
+        successor.preset_revision_id,
+    }
+    assert svg_successor.reference_bundle_revision_id is None
+    assert len(svg_successor.instruction_bundle_revision_ids) == 4
+    assert len(set(svg_successor.instruction_bundle_revision_ids)) == 4
+    with sessions() as session:
+        logical = session.get(ExecutionPresetRecord, first.preset_id)
+        assert logical is not None
+        assert logical.current_revision_id == svg_successor.preset_revision_id
+        bundles = [
+            session.get(ExecutionBundleRevisionRecord, revision_id)
+            for revision_id in svg_successor.instruction_bundle_revision_ids
+        ]
+        assert all(bundle is not None for bundle in bundles)
+        assert {bundle.revision_number for bundle in bundles if bundle is not None} == {3}
+
+
+def test_knowledge_item_bootstrap_pins_standard_policy_and_is_idempotent(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    staging_root = tmp_path / "staging"
+    nas_root = tmp_path / "nas"
+    staging_root.mkdir()
+    nas_root.mkdir()
+    settings = Settings(
+        worker_config=Path("config/worker-slots.example.yaml").resolve(),
+        staging_root=staging_root,
+        workspace_root=tmp_path / "worker-workspaces",
+        worker_home_root=tmp_path / "worker-homes",
+        nas_artifact_root=nas_root.resolve(),
+        codex_binary=Path("/usr/local/bin/codex"),
+        codex_capability_policy=Path("config/codex-capabilities.example.yaml").resolve(),
+        worker_timeout_seconds=1800,
+    )
+    sessions = build_session_factory(integration_engine)
+    with transaction(sessions) as session:
+        ensure_protocol_version(
+            session,
+            "workflow-role/1.12.0",
+            role_schema_bundle_hash("workflow-role/1.12.0"),
+        )
+    standard = bootstrap_standard_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/standard-item-v3").resolve(),
+        content_directory=Path("content").resolve(),
+        source_commit="c" * 40,
+        actor_id="graph-item-integration",
+        evaluation_cases_total=5,
+        settings=settings,
+    )
+
+    def bootstrap() -> KnowledgeItemBootstrapResult:
+        return bootstrap_knowledge_item_control_plane(
+            integration_engine,
+            config_directory=Path("config/control-plane/knowledge-grounded-item-v1").resolve(),
+            source_commit="d" * 40,
+            actor_id="graph-item-integration",
+            evaluation_cases_total=7,
+            settings=settings,
+        )
+
+    first = bootstrap()
+    assert bootstrap() == first
+    assert first.base_preset_revision_id == standard.preset_revision_id
+    assert first.access_policy_revision_id == ("accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9")
+    assert first.access_policy_sha256 == (
+        "sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0"
+    )
+    with sessions() as session:
+        standard_logical = session.get(ExecutionPresetRecord, standard.preset_id)
+        grounded_logical = session.get(ExecutionPresetRecord, first.preset_id)
+        base_record = session.get(ExecutionPresetRevisionRecord, first.base_preset_revision_id)
+        grounded_record = session.get(ExecutionPresetRevisionRecord, first.preset_revision_id)
+        evaluation = session.get(ExecutionPresetEvaluationRecord, first.evaluation_id)
+        assert standard_logical is not None
+        assert grounded_logical is not None
+        assert base_record is not None
+        assert grounded_record is not None
+        assert evaluation is not None
+        assert standard_logical.current_revision_id == standard.preset_revision_id
+        assert grounded_logical.preset_key == "knowledge-grounded-item"
+        assert grounded_logical.current_revision_id == first.preset_revision_id
+        assert grounded_record.state == "RELEASED"
+        assert evaluation.cases_total == 7
+        grounded = ExecutionPresetRevisionV2.model_validate(grounded_record.canonical_document)
+        base_policies = {
+            policy["role"]: policy for policy in base_record.canonical_document["role_policies"]
+        }
+        assert grounded.compatible_workflow_protocols == ("workflow-role/1.12.0",)
+        assert grounded.retrieval_policy.allowed_corpus_keys == ("integrated-science-textbooks",)
+        assert grounded.retrieval_policy.allowed_query_kinds == ("ITEM_PREPARATION",)
+        assert grounded.retrieval_policy.allowed_source_classes == (
+            "APPROVED_ITEM",
+            "TEXTBOOK",
+        )
+        for policy in grounded.role_policies:
+            base_policy = base_policies[str(policy.role)]
+            projected = policy.model_dump(mode="json")
+            assert projected | {"evidence_access": None} == base_policy | {"evidence_access": None}
+            assert policy.evidence_access == (
+                "NONE" if policy.role == "item_management" else "EVIDENCE_CONTEXT"
+            )
 
 
 def test_knowledge_analysis_bootstrap_is_idempotent_and_support_only(

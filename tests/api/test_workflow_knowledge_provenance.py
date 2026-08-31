@@ -37,3 +37,46 @@ def test_knowledge_plan_projection_fails_closed_on_invalid_canonical_document() 
             malformed,
         )
     assert captured.value.error_code == "WORKFLOW_KNOWLEDGE_PROVENANCE_INVALID"
+
+
+def test_completed_workflow_projects_only_the_registered_item_revision_pointer() -> None:
+    registration = {
+        "item_id": "item_" + "1" * 32,
+        "item_revision_id": "itemrev_" + "2" * 32,
+        "revision_number": 3,
+        "manifest_artifact_id": "artifact_" + "3" * 32,
+        "manifest_artifact_revision_id": "rev_" + "4" * 32,
+        "manifest_sha256": "sha256:" + "5" * 64,
+    }
+    workflow = SimpleNamespace(runtime_context={"item_registration": registration})
+
+    projected = QueryAdapter._item_registration(workflow)  # type: ignore[arg-type]
+
+    assert projected is not None
+    assert projected.item_revision_id == registration["item_revision_id"]
+    assert "content" not in projected.model_dump(mode="json")
+    assert "path" not in projected.model_dump(mode="json")
+
+
+def test_workflow_item_registration_projection_fails_closed_on_malformed_pointer() -> None:
+    assert (
+        QueryAdapter._item_registration(  # type: ignore[arg-type]
+            SimpleNamespace(runtime_context={})
+        )
+        is None
+    )
+    workflow = SimpleNamespace(
+        runtime_context={
+            "item_registration": {
+                "item_id": "item_" + "1" * 32,
+                "item_revision_id": "itemrev_" + "2" * 32,
+                "revision_number": 1,
+                "manifest_artifact_id": "artifact_" + "3" * 32,
+                "manifest_artifact_revision_id": "rev_" + "4" * 32,
+                "manifest_sha256": "sha256:" + "0" * 63,
+            }
+        }
+    )
+    with pytest.raises(ApiError) as captured:
+        QueryAdapter._item_registration(workflow)  # type: ignore[arg-type]
+    assert captured.value.error_code == "WORKFLOW_ITEM_REGISTRATION_INVALID"

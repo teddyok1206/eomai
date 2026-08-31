@@ -10,6 +10,7 @@ from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_KEY,
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_REVISION,
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
+    INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
     IntegratedScienceCurriculumContractError,
     IntegratedScienceEditorialOutline,
     catalog_schema_inventory,
@@ -65,6 +66,7 @@ def test_canonical_and_packaged_schema_and_outline_bytes_are_equal_and_pinned() 
 
 def test_outline_has_exact_reviewed_cardinality_levels_and_order() -> None:
     outline = load_integrated_science_editorial_outline()
+    assert INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY == "integrated-science-textbooks"
     assert outline.outline_key == INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_KEY
     assert outline.outline_revision == INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_REVISION
     assert len(outline.volumes) == 2

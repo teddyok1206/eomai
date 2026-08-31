@@ -29,6 +29,7 @@ INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_REVISION = "1.0"
 INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256 = (
     "sha256:f11389c8ab26c2bd5b93acf66fe92d30fea9c1d0bc7e6b91a6b6751fdccb5108"
 )
+INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY = "integrated-science-textbooks"
 _OUTLINE_RESOURCE_NAME = "eom-integrated-science-editorial-outline-v1.json"
 _OUTLINE_RESOURCE_ROOT = files("eom_catalog_contracts").joinpath("resources", "curriculum")
 _MIDDLE_CODE_PATTERN = re.compile(r"([1-6])-\(([1-7])\)")

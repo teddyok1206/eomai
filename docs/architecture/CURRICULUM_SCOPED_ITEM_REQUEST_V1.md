@@ -22,7 +22,9 @@ closure, plus a capability-contract change; the browser never infers readiness f
 Scientific Studio owns presentation and draft editing. Application API exposes the authenticated
 read-only outline projection and resolves a submitted editorial key into the internal immutable
 scope. The workflow request contract owns the resolved authoring brief. Catalog owns resolution of
-that scope's graph root against the current published `science-core` snapshot. Workers receive only
+that scope's graph root against the current published `integrated-science-textbooks` snapshot.
+The BFF obtains that corpus identity from the fresh Application API capability projection rather
+than maintaining a second operational constant. Workers receive only
 the validated brief and pinned Evidence Bundle material; they do not resolve Graph or filesystem
 paths themselves.
 

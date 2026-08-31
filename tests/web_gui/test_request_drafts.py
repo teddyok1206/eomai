@@ -164,10 +164,10 @@ def test_workflow_payload_exposes_only_bounded_educational_requirement() -> None
         ),
         now=NOW,
     )
-    payload = workflow_start_payload(draft)
+    payload = workflow_start_payload(draft, graph_corpus_key="integrated-science-textbooks")
     assert payload["educational_retrieval"] == {
         "schema_version": "educational-retrieval-requirement/1.0",
-        "corpus_key": "science-core",
+        "corpus_key": "integrated-science-textbooks",
         "query_kind": "ITEM_PREPARATION",
         "curriculum_root_key": None,
         "topic_keys": [],

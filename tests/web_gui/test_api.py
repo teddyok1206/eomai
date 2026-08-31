@@ -168,7 +168,7 @@ def test_request_draft_submission_allows_source_free_general_knowledge() -> None
 
 
 def test_request_draft_submission_can_opt_in_to_bounded_graph_grounding() -> None:
-    client, gateway = make_client()
+    client, gateway = make_client(gateway=FakeGateway(graph_grounding_available=True))
     with client:
         session = login(client)
         headers = {"X-CSRF-Token": session["csrf_token"]}
@@ -208,10 +208,52 @@ def test_request_draft_submission_can_opt_in_to_bounded_graph_grounding() -> Non
         assert gateway.last_start_payload is not None
         requirement = gateway.last_start_payload["educational_retrieval"]
         assert isinstance(requirement, dict)
-        assert requirement["corpus_key"] == "science-core"
+        assert requirement["corpus_key"] == "integrated-science-textbooks"
         assert requirement["curriculum_root_key"] is None
         assert "graph_snapshot_revision_id" not in requirement
         assert gateway.last_start_payload["execution_preset_key"] == "knowledge-grounded-item"
+
+
+def test_grounded_submission_rechecks_capability_before_any_workflow_call() -> None:
+    client, gateway = make_client()
+    with client:
+        session = login(client)
+        headers = {"X-CSRF-Token": session["csrf_token"]}
+        draft = client.post(
+            "/studio/api/v1/request-drafts",
+            json={"original_request_text": "통합과학 판 경계 자료 해석 문항을 생성해 주세요."},
+            headers=headers,
+        ).json()
+        updated = client.put(
+            f"/studio/api/v1/request-drafts/{draft['request_draft_id']}",
+            json={
+                "subject": "통합과학",
+                "topic": "판 경계",
+                "item_format": "multiple_choice",
+                "task_type": "data_interpretation",
+                "difficulty": "hard",
+                "choice_count": 5,
+                "equation_required": True,
+                "image_required": True,
+                "quality_profile": "deep",
+                "source_intake_batch_id": None,
+                "authoring_guidance": "판 경계 자료를 해석하고 지각 변동을 추론한다.",
+                "knowledge_grounding": True,
+                "curriculum_selected_unit_key": "eom.is.middle.3-2",
+            },
+            headers=headers,
+        )
+        assert updated.status_code == 200
+
+        response = client.post(
+            f"/studio/api/v1/request-drafts/{draft['request_draft_id']}/submissions",
+            json={"idempotency_key": "studio:graph-capability-stale-0001"},
+            headers=headers,
+        )
+
+        assert response.status_code == 409
+        assert response.json()["error_code"] == "CURRICULUM_GRAPH_UNAVAILABLE"
+        assert gateway.start_calls == 0
 
 
 def test_curriculum_outline_is_authenticated_and_reviewed() -> None:

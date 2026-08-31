@@ -23,7 +23,6 @@ from eom_web_gui.draft_integrity import (
 DEMO_REQUEST = "물리학에서 2차원 포물선 운동에 관한 계산 문항을 출제해줘."
 STANDARD_EXECUTION_PRESET_KEY = "standard-item"
 KNOWLEDGE_EXECUTION_PRESET_KEY = "knowledge-grounded-item"
-KNOWLEDGE_CORPUS_KEY = "science-core"
 QUALITY_POLICY = {
     "fast": {"label": "빠름", "policy_key": "economy"},
     "balanced": {"label": "균형", "policy_key": "balanced"},
@@ -109,7 +108,9 @@ def quality_policy(profile: str) -> dict[str, str]:
         raise ValueError("unknown quality profile") from exc
 
 
-def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
+def workflow_start_payload(
+    draft: RequestDraft, *, graph_corpus_key: str | None = None
+) -> dict[str, object]:
     """Map a reviewed draft to the source-optional knowledge-item workflow contract."""
     payload: dict[str, object] = {
         "definition_key": "generic-item-development",
@@ -146,9 +147,14 @@ def workflow_start_payload(draft: RequestDraft) -> dict[str, object]:
     }
     if draft.knowledge_grounding:
         assert draft.curriculum_selected_unit_key is not None
+        if (
+            graph_corpus_key is None
+            or re.fullmatch(r"[a-z][a-z0-9_-]{1,63}", graph_corpus_key) is None
+        ):
+            raise ValueError("Graph grounding requires the API-verified production corpus")
         payload["educational_retrieval"] = {
             "schema_version": "educational-retrieval-requirement/1.0",
-            "corpus_key": KNOWLEDGE_CORPUS_KEY,
+            "corpus_key": graph_corpus_key,
             "query_kind": "ITEM_PREPARATION",
             "curriculum_root_key": None,
             "topic_keys": [],

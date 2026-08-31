@@ -99,7 +99,7 @@ def _workflow_request(*, grounded: bool) -> WorkflowRequest:
     if grounded:
         value["educational_retrieval"] = {
             "schema_version": "educational-retrieval-requirement/1.0",
-            "corpus_key": "science-core",
+            "corpus_key": "integrated-science-textbooks",
             "query_kind": "ITEM_PREPARATION",
             "curriculum_root_key": scope.graph_root_stable_key,
             "topic_keys": [],
@@ -181,6 +181,17 @@ def test_v2_grounding_must_use_the_selected_deepest_graph_root() -> None:
         WorkflowRequest.model_validate(escaped)
 
 
+def test_historical_v2_internal_request_preserves_its_pinned_corpus() -> None:
+    value = _workflow_request(grounded=True).model_dump(mode="json", exclude_none=True)
+    retrieval = cast(dict[str, object], value["educational_retrieval"])
+    retrieval["corpus_key"] = "science-core"
+
+    replayed = WorkflowRequest.model_validate(value)
+
+    assert replayed.educational_retrieval is not None
+    assert replayed.educational_retrieval.corpus_key == "science-core"
+
+
 @pytest.mark.parametrize(
     ("grounded", "expected_mode"),
     [(False, "general_model_knowledge"), (True, "graph_grounded")],
@@ -260,7 +271,7 @@ def _api_grounded_request(*, selected_unit_key: str = "eom.is.middle.3-2") -> di
         "item_brief": _api_brief_v2() | {"curriculum_selected_unit_key": selected_unit_key},
         "educational_retrieval": {
             "schema_version": "educational-retrieval-requirement/1.0",
-            "corpus_key": "science-core",
+            "corpus_key": "integrated-science-textbooks",
             "query_kind": "ITEM_PREPARATION",
             "curriculum_root_key": None,
             "topic_keys": [],
@@ -284,6 +295,12 @@ def test_api_resolves_only_the_selected_unit_key_into_internal_pinned_scope() ->
 
 
 def test_api_rejects_client_graph_root_and_unknown_selection_before_repository_access() -> None:
+    forged_corpus = _api_grounded_request()
+    forged_retrieval = cast(dict[str, object], forged_corpus["educational_retrieval"])
+    forged_retrieval["corpus_key"] = "science-core"
+    with pytest.raises(ValidationError, match="production corpus"):
+        WorkflowStartRequest.model_validate(forged_corpus)
+
     supplied_root = _api_grounded_request()
     retrieval = cast(dict[str, object], supplied_root["educational_retrieval"])
     retrieval["curriculum_root_key"] = _scope().graph_root_stable_key

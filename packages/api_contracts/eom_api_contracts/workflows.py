@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from eom_catalog_contracts import (
+    INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
     KnowledgeSourceClass,
     normalize_reviewed_authoring_guidance,
     validate_reviewed_authoring_guidance,
@@ -117,12 +118,13 @@ class WorkflowStartRequest(ApiModel):
         ):
             if (
                 self.item_brief.curriculum_selected_unit_key is None
+                or self.educational_retrieval.corpus_key != INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY
                 or self.educational_retrieval.curriculum_root_key is not None
                 or self.educational_retrieval.topic_keys
             ):
                 raise ValueError(
-                    "V2 grounded requests require one curriculum selection and forbid client "
-                    "graph roots or topic keys"
+                    "V2 grounded requests require the production corpus and one curriculum "
+                    "selection, and forbid client graph roots or topic keys"
                 )
         elif (
             self.educational_retrieval is not None
@@ -185,6 +187,17 @@ class WorkflowKnowledgeProvenanceView(ApiModel):
     resolved_at: UtcDatetime
 
 
+class WorkflowItemRegistrationView(ApiModel):
+    """Pointer-only result of one completed workflow registration boundary."""
+
+    item_id: str = Field(pattern=r"^item_[a-z0-9]{8,55}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
+    revision_number: int = Field(ge=1)
+    manifest_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    manifest_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    manifest_sha256: Sha256
+
+
 class WorkflowView(ApiModel):
     workflow_id: OpaqueId
     definition_key: str
@@ -199,6 +212,7 @@ class WorkflowView(ApiModel):
     completed_at: UtcDatetime | None = None
     failure_code: str | None = None
     knowledge_provenance: WorkflowKnowledgeProvenanceView | None = None
+    item_registration: WorkflowItemRegistrationView | None = None
 
 
 class WorkflowActionRequest(ApiModel):

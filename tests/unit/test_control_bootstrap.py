@@ -14,6 +14,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_ROLE_SLOTS,
     EXPECTED_STANDARD_V2_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
+    STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     KnowledgeAnalysisBootstrapManifest,
     StandardBootstrapManifest,
     bootstrap_standard_control_plane,
@@ -240,11 +241,15 @@ def test_standard_bootstrap_v2_is_role_scoped_and_preserves_v1_bytes() -> None:
 def test_standard_bootstrap_v3_selects_the_svg_first_protocol_without_secrets() -> None:
     manifest = load_standard_bootstrap_manifest(CONFIG_V3)
 
+    assert manifest.schema_version == "standard-control-bootstrap/3.0"
     assert manifest.preset_key == "standard-item"
     assert manifest.compatible_workflow_protocols == ("workflow-role/1.12.0",)
     assert {role.role: role.slot_key for role in manifest.roles} == EXPECTED_ROLE_SLOTS
     assert {role.role: role.reference_keys for role in manifest.roles} == dict(
         EXPECTED_STANDARD_V2_REFERENCE_KEYS
+    )
+    assert hashlib.sha256((CONFIG_V3 / "bootstrap.yaml").read_bytes()).hexdigest() == (
+        "835840e03abeabb33cd1a64d7c068cabd48b440b1af89860f786d04bfca1ae45"
     )
     source = "\n".join(
         path.read_text(encoding="utf-8") for path in CONFIG_V3.rglob("*") if path.is_file()
@@ -254,6 +259,19 @@ def test_standard_bootstrap_v3_selects_the_svg_first_protocol_without_secrets() 
         forbidden not in source
         for forbidden in ("auth.json", "bearer ", "password=", "token=", "api_key")
     )
+
+
+def test_standard_bootstrap_v3_uses_a_distinct_instruction_bundle_revision() -> None:
+    manifest_v2 = load_standard_bootstrap_manifest(CONFIG_V2)
+    manifest_v3 = load_standard_bootstrap_manifest(CONFIG_V3)
+
+    assert dict(STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS) == {
+        "standard-control-bootstrap/1.0": 1,
+        "standard-control-bootstrap/2.0": 2,
+        "standard-control-bootstrap/3.0": 3,
+    }
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
 
 
 def test_standard_bootstrap_v2_rejects_forged_role_reference_selection() -> None:

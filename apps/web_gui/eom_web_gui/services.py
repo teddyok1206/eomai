@@ -107,8 +107,15 @@ class WebServices:
             if existing.get("draft_spec_sha256") != draft.draft_spec_sha256:
                 raise GatewayError(status=409, code="REQUEST_DRAFT_IDEMPOTENCY_CONFLICT")
             return {**existing, "replayed": True}
+        graph_corpus_key: str | None = None
+        if draft.knowledge_grounding:
+            graph_corpus_key = await self.gateway.curriculum_graph_corpus_key(session)
+            if graph_corpus_key is None:
+                raise GatewayError(status=409, code="CURRICULUM_GRAPH_UNAVAILABLE")
         command = await self.gateway.start_workflow(
-            session, workflow_start_payload(draft), idempotency_key
+            session,
+            workflow_start_payload(draft, graph_corpus_key=graph_corpus_key),
+            idempotency_key,
         )
         result = {
             "mode": "KNOWLEDGE_ITEM",

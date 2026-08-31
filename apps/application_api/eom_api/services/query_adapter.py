@@ -42,11 +42,15 @@ from eom_api_contracts.knowledge_retrieval import (
 )
 from eom_api_contracts.usage import UsagePlanView, UsageRecordView
 from eom_api_contracts.workflows import (
+    WorkflowItemRegistrationView,
     WorkflowKnowledgeProvenanceView,
     WorkflowStepView,
     WorkflowView,
 )
-from eom_catalog_contracts import INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256
+from eom_catalog_contracts import (
+    INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
+    INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
+)
 from eom_catalog_service.curriculum_graph_structure import (
     integrated_science_curriculum_units,
 )
@@ -237,7 +241,7 @@ class QueryAdapter:
         with self.sessions() as session:
             corpus = session.scalar(
                 select(KnowledgeCorpusRecord).where(
-                    KnowledgeCorpusRecord.corpus_key == "integrated-science-textbooks"
+                    KnowledgeCorpusRecord.corpus_key == INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY
                 )
             )
             if (
@@ -1137,7 +1141,25 @@ class QueryAdapter:
             completed_at=row.completed_at,
             failure_code=row.failure_code,
             knowledge_provenance=cls._knowledge_provenance(row, plan),
+            item_registration=cls._item_registration(row),
         )
+
+    @staticmethod
+    def _item_registration(
+        workflow: WorkflowInstanceRecord,
+    ) -> WorkflowItemRegistrationView | None:
+        value = workflow.runtime_context.get("item_registration")
+        if value is None:
+            return None
+        try:
+            return WorkflowItemRegistrationView.model_validate(value)
+        except ValueError as exc:
+            raise ApiError(
+                500,
+                "WORKFLOW_ITEM_REGISTRATION_INVALID",
+                "Workflow item registration invalid",
+                "The registered Item Revision pointer failed contract validation.",
+            ) from exc
 
     @staticmethod
     def _knowledge_provenance(
