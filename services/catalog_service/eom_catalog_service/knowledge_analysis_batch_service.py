@@ -341,11 +341,21 @@ class KnowledgeAnalysisBatchService:
             ) from exc
 
     def advance_once(self, *, runner_id: str) -> bool:
-        """Advance one bounded action; never submit a second analysis for a range."""
+        """Advance one poll and refill at most one reviewed capacity position."""
 
         submitted = self._reserve_submitted_action()
         if submitted is not None:
             self._advance_submitted(*submitted)
+            # Polling every submitted range before claiming again can keep a due, long-running
+            # range permanently ahead of the empty second position. Refill only after the
+            # reserved poll commits; the batch lock and max_in_flight invariant still cap this at
+            # one new range, and each range retains its single deterministic submission key.
+            claimed = self._claim_next_range(
+                runner_id=runner_id,
+                parallel_refill_batch_id=submitted[0],
+            )
+            if claimed is not None:
+                self._submit_claimed(*claimed, runner_id=runner_id)
             return True
         reclaimed = self._reclaim_expired_claim(runner_id=runner_id)
         if reclaimed is not None:
@@ -497,7 +507,12 @@ class KnowledgeAnalysisBatchService:
                 reserved_version=reserved_version,
             )
 
-    def _claim_next_range(self, *, runner_id: str) -> tuple[str, str] | None:
+    def _claim_next_range(
+        self,
+        *,
+        runner_id: str,
+        parallel_refill_batch_id: str | None = None,
+    ) -> tuple[str, str] | None:
         now = datetime.now(UTC)
         active = aliased(KnowledgeAnalysisBatchRangeRecord)
         pending = aliased(KnowledgeAnalysisBatchRangeRecord)
@@ -512,19 +527,29 @@ class KnowledgeAnalysisBatchService:
                 .correlate(KnowledgeAnalysisBatchRecord)
                 .scalar_subquery()
             )
+            batch_conditions = [
+                KnowledgeAnalysisBatchRecord.state.in_(("QUEUED", "RUNNING")),
+                active_count < KnowledgeAnalysisBatchRecord.max_in_flight,
+                exists(
+                    select(1).where(
+                        pending.batch_id == KnowledgeAnalysisBatchRecord.batch_id,
+                        pending.state == "PENDING",
+                        pending.next_action_at <= now,
+                    )
+                ),
+            ]
+            if parallel_refill_batch_id is not None:
+                batch_conditions.extend(
+                    (
+                        KnowledgeAnalysisBatchRecord.batch_id == parallel_refill_batch_id,
+                        KnowledgeAnalysisBatchRecord.scheduling_mode == "BOUNDED_PARALLEL",
+                        KnowledgeAnalysisBatchRecord.range_failure_policy == CONTINUE_AND_COLLECT,
+                        KnowledgeAnalysisBatchRecord.max_in_flight == 2,
+                    )
+                )
             batch = session.scalar(
                 select(KnowledgeAnalysisBatchRecord)
-                .where(
-                    KnowledgeAnalysisBatchRecord.state.in_(("QUEUED", "RUNNING")),
-                    active_count < KnowledgeAnalysisBatchRecord.max_in_flight,
-                    exists(
-                        select(1).where(
-                            pending.batch_id == KnowledgeAnalysisBatchRecord.batch_id,
-                            pending.state == "PENDING",
-                            pending.next_action_at <= now,
-                        )
-                    ),
-                )
+                .where(*batch_conditions)
                 .order_by(
                     KnowledgeAnalysisBatchRecord.created_at,
                     KnowledgeAnalysisBatchRecord.batch_id,

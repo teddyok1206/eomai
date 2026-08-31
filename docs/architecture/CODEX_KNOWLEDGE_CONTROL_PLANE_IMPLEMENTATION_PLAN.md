@@ -5,7 +5,7 @@ and production-data authorization boundary.
 
 Plan baseline: `32e96263353f42e6bc857f6577604d83f8557680`
 
-Last reviewed: 2026-08-24 UTC
+Last reviewed: 2026-08-31 UTC
 
 ## Implementation status
 
@@ -13,17 +13,21 @@ Last reviewed: 2026-08-24 UTC
 | --- | --- | --- |
 | 0 — baseline and decisions | `COMPLETED` | [`CODEX_KNOWLEDGE_PHASE0_BASELINE.md`](CODEX_KNOWLEDGE_PHASE0_BASELINE.md), ADRs 0038/0039, V0 acceptance queries |
 | 1 — protocol-first contracts | `COMPLETED` | [`CODEX_KNOWLEDGE_PROTOCOL_COMPATIBILITY.md`](CODEX_KNOWLEDGE_PROTOCOL_COMPATIBILITY.md), 13 public contracts, two support schemas, frozen models, resource/package/negative tests |
-| 2 — preset and bundle persistence | `SOURCE_COMPLETE` | [`CODEX_CONTROL_PLANE_PERSISTENCE_DESIGN.md`](CODEX_CONTROL_PLANE_PERSISTENCE_DESIGN.md), additive migration 0009, immutable revision/pointer/plan records, deterministic lease transactions, disposable PostgreSQL migration/concurrency proof |
-| 3 — execution resolution and materialization | `SOURCE_COMPLETE` | [`CODEX_EXECUTION_RESOLUTION_AND_MATERIALIZATION.md`](CODEX_EXECUTION_RESOLUTION_AND_MATERIALIZATION.md), deterministic released-preset resolver, authorized hash-checked Markdown materializer, job-local `AGENTS.md`, exact Codex model/effort invocation |
-| 4 — auth, capability, and capacity | `SOURCE_COMPLETE` | [`CODEX_AUTH_CAPABILITY_CAPACITY_CONTROLLER.md`](CODEX_AUTH_CAPABILITY_CAPACITY_CONTROLLER.md), exact-identity non-generating probe, reviewed CLI policy, deterministic admission/reconciliation, disposable PostgreSQL concurrency proof |
-| 5 — control-plane MVP and GUI | `DEPLOYED_OBSERVE_PENDING` | [`CODEX_CONTROL_PLANE_MVP.md`](../operations/CODEX_CONTROL_PLANE_MVP.md), migration 0010, released `standard-item` preset, installed runner/API/GUI; five non-generating account observations await fresh ADMIN authentication |
+| 2 — preset and bundle persistence | `DEPLOYED` | [`CODEX_CONTROL_PLANE_PERSISTENCE_DESIGN.md`](CODEX_CONTROL_PLANE_PERSISTENCE_DESIGN.md), additive migration 0009, immutable revision/pointer/plan records, deterministic lease transactions, disposable PostgreSQL migration/concurrency proof |
+| 3 — execution resolution and materialization | `DEPLOYED` | [`CODEX_EXECUTION_RESOLUTION_AND_MATERIALIZATION.md`](CODEX_EXECUTION_RESOLUTION_AND_MATERIALIZATION.md), deterministic released-preset resolver, authorized hash-checked Markdown materializer, job-local `AGENTS.md`, exact Codex model/effort invocation |
+| 4 — auth, capability, and capacity | `DEPLOYED` | [`CODEX_AUTH_CAPABILITY_CAPACITY_CONTROLLER.md`](CODEX_AUTH_CAPABILITY_CAPACITY_CONTROLLER.md), six fixed identities, credential-free GUI device enrollment, exact capability snapshots, bounded leases, and two-slot analysis capacity |
+| 5 — control-plane MVP and GUI | `DEPLOYED` | [`CODEX_CONTROL_PLANE_MVP.md`](../operations/CODEX_CONTROL_PLANE_MVP.md), released presets, installed runner/API/GUI, account administration, device reauthentication, and public HTTPS Studio |
 | 6 — origin and product/usage decisions | `DESIGN_COMPLETE` | [`ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md`](ITEM_ORIGIN_OCCURRENCE_V1_DESIGN.md), [`PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md`](PRODUCT_FORM_ASSEMBLY_USAGE_V1_DESIGN.md), ADRs 0038/0039, eight required scenarios |
-| 7 — knowledge-analysis protocol | `SOURCE_COMPLETE` | [`KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md`](KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md) implements and verifies additive V2 contracts, source resolution, support-slot workflow, pointer-only proposal/acceptance artifacts, review, lifecycle, indexing, migrations 0011/0012, and failure boundaries |
-| 8 — graph snapshot publication | `SOURCE_COMPLETE` | [`EDUCATION_GRAPH_SNAPSHOT_PERSISTENCE_V1.md`](EDUCATION_GRAPH_SNAPSHOT_PERSISTENCE_V1.md), additive migration 0013, immutable publication/projection and indexed traversal tests |
-| 9 — retrieval and Evidence Bundle | `SOURCE_COMPLETE` | [`EDUCATION_RETRIEVAL_EVIDENCE_BUNDLE_V2.md`](EDUCATION_RETRIEVAL_EVIDENCE_BUNDLE_V2.md), additive migration 0014, closed retrieval, deterministic publication, and disposable-DB proof |
-| 10 — knowledge-backed item production | `SOURCE_COMPLETE` | [`KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md`](KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md), immutable preset V2/plan V3 protocols, pre-claim Evidence Bundle resolution, least-needed materialization, opt-in GUI and pointer-only provenance |
+| 7 — knowledge-analysis protocol | `DEPLOYED_AND_CORPUS_ACCEPTED` | [`KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md`](KNOWLEDGE_ANALYSIS_INTAKE_WORKFLOW_V1.md), all 495 textbook ranges and 1,702 pages accepted under immutable run pointers; bounded-parallel refill evidence in [`KNOWLEDGE_ANALYSIS_BOUNDED_PARALLEL_CAPACITY_V1.md`](KNOWLEDGE_ANALYSIS_BOUNDED_PARALLEL_CAPACITY_V1.md) |
+| 8 — graph snapshot publication | `DEPLOYED_AND_PUBLISHED` | [`EDUCATION_GRAPH_SNAPSHOT_PERSISTENCE_V1.md`](EDUCATION_GRAPH_SNAPSHOT_PERSISTENCE_V1.md), published full-corpus snapshot with 8,749 nodes, 16,917 edges, 3,370 anchors, and exact 495-run coverage |
+| 9 — retrieval and Evidence Bundle | `DEPLOYED_AND_ACCEPTED` | [`EDUCATION_RETRIEVAL_EVIDENCE_BUNDLE_V2.md`](EDUCATION_RETRIEVAL_EVIDENCE_BUNDLE_V2.md), one live bounded bundle resolved by exact snapshot/revision/hash pointers and re-read successfully |
+| 10 — knowledge-backed item production | `DEPLOYED_AND_READY` | [`KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md`](KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md), active Content Pack 1.2, verified curriculum capability, hierarchy-guided request UI, and pointer-only Evidence Bundle provenance |
 | 11 — legacy Product and Usage intake | `SOURCE_COMPLETE` | [`LEGACY_PRODUCT_USAGE_INTAKE_V1.md`](LEGACY_PRODUCT_USAGE_INTAKE_V1.md), additive migration 0015, guarded XLSX proposal/review/commit service, Product/Form/Assembly/Publication/Usage projection, disposable PostgreSQL proof |
-| 12 — hardening and measured rollout | `DEPLOYED_READY` | [`CODEX_KNOWLEDGE_PHASE12_ROLLOUT.md`](../operations/CODEX_KNOWLEDGE_PHASE12_ROLLOUT.md), source/migration/runtime hardening deployed; content-specific graph/live/workbook rollout stopped at its reviewed-input gate |
+| 12 — hardening and measured rollout | `GRAPH_ROLLOUT_COMPLETE` | [`CODEX_KNOWLEDGE_PHASE12_ROLLOUT.md`](../operations/CODEX_KNOWLEDGE_PHASE12_ROLLOUT.md), full textbook analysis, graph publication, bounded retrieval, dynamic GUI capability, public Studio, release provenance, and isolation gates passed; real legacy workbook import remains an independent reviewed-data gate |
+
+The table is the current operational status. The following phase notes preserve what each earlier
+source-complete exit gate was authorized to change; their “no deployment” statements are historical
+boundary records, not descriptions of the current runtime.
 
 Phase 1 added no migration, live worker execution, runtime deployment, or production-data write.
 Phase 2 source work adds an unapplied additive migration and source behavior only; it performed no
@@ -54,13 +58,17 @@ migration 0015 and versioned mapping/import/proposal/projection contracts, and c
 Product/Form/Assembly/Publication/Usage rows only after exact-pointer review. Its source, static,
 security, release, migration-cycle, concurrency, immutability, and disposable PostgreSQL gates
 passed. No production workbook was imported and no graph snapshot was published.
-Phase 12 deployed the Phase 8–11 dual-read runtime, migrations through 0015, exact Catalog runtime
-grants, bounded legacy-usage operator commands, API/Catalog/GUI release artifacts, and a
-commit-pinned migration wrapper. Backup/restore, disposable PostgreSQL, source, release,
-provenance, service, public Studio, and isolation checks passed. Measured content rollout remains a
-separate gate: the deployed database contains no accepted Knowledge Analysis result, Graph
-Snapshot, Evidence Bundle, or reviewed legacy workbook import, so no production graph, preset,
-workbook projection, or live Codex job was invented to claim completion.
+Phase 12 now includes a measured full-textbook rollout. Ten approved textbook revisions resolve to
+495 non-overlapping ordered ranges and 1,702 physical pages. All ranges are accepted and each final
+graph source pins its exact Analysis Run and accepted Artifact Revision rather than resolving a
+mutable latest result. Published snapshot `graphrev_8f062e995ca3ddbba867f9699126db0b`
+contains 8,749 nodes, 16,917 edges, and 3,370 anchors with manifest SHA
+`sha256:b845f76adb74e85e8fcfd1b577fced6172570e7bb00eab441b8f53ac04dc56c1`.
+Evidence Bundle revision `evidencerev_930a3e9d823e2e4c9f309b5f857541ff` proves bounded retrieval
+against that snapshot without copying textbook bytes into PostgreSQL. The public GUI enables Graph
+grounding only when the API revalidates the current published snapshot, Artifact pointers, all 43
+editorial curriculum units, and all 119 closure rows. Real legacy workbook import is still not
+claimed; it remains a separate reviewed-data authorization boundary.
 
 ## 1. Outcome
 
@@ -105,8 +113,9 @@ The following are implementation invariants, not open product choices:
    model IDs, reasoning effort, Linux users, paths, credentials, or fallback models.
 4. The Orchestrator resolves and pins the exact preset, model policy, effort, instruction,
    references, Content Pack, workflow protocol, and hashes before a worker claim.
-5. The current host retains five configured worker identities, at most three active Codex
-   processes, one active process per slot, and at most one knowledge-analysis process.
+5. The current host retains six configured worker identities, at most three active Codex
+   processes, one active process per slot, and at most two knowledge-analysis processes on the
+   dedicated support pool.
 6. Workers read only staged local inputs, communicate only through the Orchestrator, and never
    write NAS or canonical database state.
 7. Large source and reference bytes remain Artifact Revisions. PostgreSQL stores identities,

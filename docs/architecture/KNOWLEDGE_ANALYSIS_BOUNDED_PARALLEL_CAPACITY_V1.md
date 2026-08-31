@@ -179,3 +179,22 @@ range.
 - migration upgrade, downgrade, and re-upgrade preserve historical rows and indexes;
 - no large binary payload enters PostgreSQL; and
 - no live Codex invocation occurs in default tests.
+
+## 12. Single-runner capacity refill amendment
+
+Observed V14 execution evidence showed a valid `BOUNDED_PARALLEL/2` correction batch using only
+slot 5: four jobs ran sequentially even though slot 6 was eligible. The cause was scheduler
+starvation, not worker or authentication failure. The single Catalog runner always reserved a due
+submitted-range poll before attempting a pending-range claim. A long-running range became due again
+before every subsequent loop and kept the second capacity position empty.
+
+The runner now performs at most two bounded actions in that case: it commits one reserved poll, then
+attempts one ordinary capacity refill. The existing batch-row lock, active-range count, partial
+indexes, `max_in_flight=2`, per-range state machine, and deterministic range idempotency key remain
+the authoritative concurrency and duplicate-submission controls. Serial batches cannot refill
+because their one active range already equals `max_in_flight=1`. A failed stop-on-first range cannot
+refill because its batch is terminal; continue-and-collect may refill as designed.
+
+The simpler alternative of globally prioritizing claims over polls was rejected because a steady
+stream of new batches could starve result reconciliation. The post-poll refill preserves poll
+priority while ensuring an already selected bounded-parallel batch uses its reviewed second slot.

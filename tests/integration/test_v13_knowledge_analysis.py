@@ -139,6 +139,61 @@ def test_bounded_parallel_batch_claims_exactly_two_and_accepts_out_of_order(
         assert batch is not None and batch.state == "SUCCEEDED"
 
 
+def test_single_runner_refills_second_position_after_polling_due_range(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    orchestrator_settings, catalog_settings = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, orchestrator_settings)
+    bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v13").resolve(),
+        source_commit="f" * 40,
+        actor_id="parallel-refill-integration",
+        evaluation_cases_total=3,
+        settings=orchestrator_settings,
+    )
+    document_revision_id = _document_source(
+        integration_engine,
+        catalog_settings,
+        tmp_path,
+        multimodal=True,
+    )[1]
+    service = KnowledgeAnalysisBatchService(integration_engine, catalog_settings)
+    created = service.create(_parallel_batch_command(document_revision_id, range_count=2))
+
+    assert service.advance_once(runner_id="single-parallel-runner")
+    sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        ranges = tuple(
+            session.scalars(
+                select(KnowledgeAnalysisBatchRangeRecord)
+                .where(KnowledgeAnalysisBatchRangeRecord.batch_id == created.batch_id)
+                .order_by(KnowledgeAnalysisBatchRangeRecord.ordinal)
+            )
+        )
+        assert tuple(row.state for row in ranges) == ("SUBMITTED", "PENDING")
+        first_range_id = ranges[0].range_id
+
+    _make_submitted_range_due(integration_engine, range_id=first_range_id)
+    assert service.advance_once(runner_id="single-parallel-runner")
+
+    with sessions() as session:
+        batch = session.get(KnowledgeAnalysisBatchRecord, created.batch_id)
+        ranges = tuple(
+            session.scalars(
+                select(KnowledgeAnalysisBatchRangeRecord)
+                .where(KnowledgeAnalysisBatchRangeRecord.batch_id == created.batch_id)
+                .order_by(KnowledgeAnalysisBatchRangeRecord.ordinal)
+            )
+        )
+        assert batch is not None
+        assert (batch.scheduling_mode, batch.max_in_flight) == ("BOUNDED_PARALLEL", 2)
+        assert tuple(row.state for row in ranges) == ("SUBMITTED", "SUBMITTED")
+        assert tuple(row.submission_attempts for row in ranges) == (1, 1)
+        assert len({row.analysis_run_id for row in ranges}) == 2
+
+
 def test_bounded_parallel_batch_collects_failure_while_sibling_finishes(
     integration_engine: Engine,
     tmp_path: Path,
