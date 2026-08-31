@@ -184,7 +184,7 @@ def bootstrap_knowledge_item_control_plane(
         "evaluated_policy_sha256": policy_sha256,
         "scope": "NON_LIVE",
         "outcome": "PASS",
-        "summary_code": "GRAPH_ITEM_POLICY_NON_LIVE_ACCEPTANCE",
+        "summary_code": "FAKE_ADAPTER_ACCEPTANCE",
         "cases_total": evaluation_cases_total,
         "cases_passed": evaluation_cases_total,
         "quality_score_permille": 1000,

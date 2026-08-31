@@ -458,6 +458,12 @@ def bootstrap_standard_control_plane(
                 enabled=slot.enabled,
                 gpu=slot.gpu,
             )
+        for protocol_version in manifest.compatible_workflow_protocols:
+            ensure_protocol_version(
+                session,
+                protocol_version,
+                role_schema_bundle_hash(protocol_version),
+            )
     platform_artifact = _publish_markdown(
         publisher,
         payload=platform_payload,
