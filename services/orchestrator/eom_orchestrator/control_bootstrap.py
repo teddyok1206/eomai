@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 import stat
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Literal
@@ -56,6 +56,7 @@ from eom_orchestrator.worker_registry import WorkerSlot
 
 MAX_BOOTSTRAP_MANIFEST_BYTES = 64 * 1024
 MAX_BOOTSTRAP_MEMBER_BYTES = 512 * 1024
+PARALLEL_ANALYSIS_CAPACITY_CREATED_AT = datetime(2026, 8, 28, 15, 30, tzinfo=UTC)
 EXPECTED_ROLE_SLOTS = {
     "authoring": "slot01",
     "image": "slot03",
@@ -767,7 +768,6 @@ def bootstrap_knowledge_analysis_control_plane(
             sessions,
             slots=registry.config.slots,
             actor_id=actor_id,
-            created_at=manifest.created_at,
         )
         if parallel_capacity
         else _released_analysis_capacity_policy(sessions)
@@ -1265,7 +1265,6 @@ def _publish_analysis_capacity_policy_v2(
     *,
     slots: tuple[WorkerSlot, ...],
     actor_id: str,
-    created_at: datetime,
 ) -> str:
     """Publish the additive six-slot policy after exact inventory validation."""
 
@@ -1332,7 +1331,7 @@ def _publish_analysis_capacity_policy_v2(
         "max_active_knowledge_analysis": 2,
         "pools": pools,
         "content_sha256": "sha256:" + "0" * 64,
-        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+        "created_at": PARALLEL_ANALYSIS_CAPACITY_CREATED_AT.isoformat().replace("+00:00", "Z"),
     }
     document["content_sha256"] = compute_control_document_hash(document, "content_sha256")
     reviewed = WorkerCapacityPolicyV2.model_validate(document)

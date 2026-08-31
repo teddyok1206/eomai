@@ -229,6 +229,35 @@ def test_bounded_parallel_batch_collects_failure_while_sibling_finishes(
         assert tuple(row.submission_attempts for row in ranges) == (1, 1)
 
 
+def test_v14_reuses_the_immutable_v13_parallel_capacity_revision(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    orchestrator_settings, _ = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, orchestrator_settings)
+    v13 = bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v13").resolve(),
+        source_commit="d" * 40,
+        actor_id="parallel-v13-integration",
+        evaluation_cases_total=3,
+        settings=orchestrator_settings,
+    )
+
+    v14 = bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v14").resolve(),
+        source_commit="f" * 40,
+        actor_id="page-evidence-v14-integration",
+        evaluation_cases_total=3,
+        settings=orchestrator_settings,
+    )
+
+    assert v14.capacity_policy_revision_id == v13.capacity_policy_revision_id
+    assert v14.instruction_bundle_revision_id != v13.instruction_bundle_revision_id
+    assert v14.preset_revision_id != v13.preset_revision_id
+
+
 def _assert_parallel_batch_reuses_semantically_identical_v12_result_by_pointer(
     integration_engine: Engine,
     tmp_path: Path,
