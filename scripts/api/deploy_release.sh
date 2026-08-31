@@ -215,11 +215,16 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         if name.startswith("eom_api_contracts/schemas/") and name.endswith(".schema.json")
     ]
     if (
-        len(schemas) != 7
+        len(schemas) != 8
         or "eom_api_contracts/schemas/hwpx.schema.json" not in schemas
         or "eom_api_contracts/schemas/items.schema.json" not in schemas
+        or "eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"
+        not in schemas
     ):
-        raise SystemExit(f"expected 7 packaged API schemas including HWPX and Items, found {schemas}")
+        raise SystemExit(
+            "expected 8 packaged API schemas including HWPX, Items, and curriculum "
+            f"capability, found {schemas}"
+        )
 
 workflow_prefix = "eom_workflow/resources/"
 canonical_workflow_root = Path(os.environ["REPOSITORY_ROOT"]) / "schemas/workflow"

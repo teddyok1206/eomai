@@ -351,6 +351,13 @@ def test_release_verifies_curriculum_schema_resources() -> None:
     assert f'"schemas/curriculum/{resource}"' in deployment
 
 
+def test_release_packages_curriculum_graph_capability_api_schema() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+
+    assert "len(schemas) != 8" in deployment
+    assert '"eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"' in deployment
+
+
 def test_release_verifies_guidance_schema_resources() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
     resource = "eom-guidance-markdown-control-v1.schema.json"
