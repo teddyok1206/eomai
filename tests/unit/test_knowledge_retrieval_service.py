@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from eom_catalog_contracts import (
@@ -8,6 +9,7 @@ from eom_catalog_contracts import (
     ContentIntakeKnowledgeSourceV2,
     CreateItemProductionEvidenceCommand,
     EducationRetrievalRequestV2,
+    KnowledgeAnalysisSourceArtifactMemberV2,
 )
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
 from eom_catalog_service.knowledge_retrieval_service import (
@@ -20,22 +22,26 @@ from eom_identifiers import content_sha256
 NOW = "2026-08-24T00:00:00Z"
 
 
-def _member(seed: str, *, media_type: str, schema_ref: str | None) -> dict[str, object]:
-    return {
-        "artifact_id": "artifact_" + seed * 32,
-        "artifact_revision_id": "rev_" + seed * 32,
-        "member_path": "source/content.json"
-        if media_type == "application/json"
-        else "source/book.md",
-        "materialized_path": "source/content.json"
-        if media_type == "application/json"
-        else "source/book.md",
-        "sha256": "sha256:" + seed * 64,
-        "bytes": 512,
-        "schema_ref": schema_ref,
-        "media_type": media_type,
-        "logical_name": "content.json" if media_type == "application/json" else "book.md",
-    }
+def _member(
+    seed: str, *, media_type: str, schema_ref: str | None
+) -> KnowledgeAnalysisSourceArtifactMemberV2:
+    return KnowledgeAnalysisSourceArtifactMemberV2.model_validate(
+        {
+            "artifact_id": "artifact_" + seed * 32,
+            "artifact_revision_id": "rev_" + seed * 32,
+            "member_path": "source/content.json"
+            if media_type == "application/json"
+            else "source/book.md",
+            "materialized_path": "source/content.json"
+            if media_type == "application/json"
+            else "source/book.md",
+            "sha256": "sha256:" + seed * 64,
+            "bytes": 512,
+            "schema_ref": schema_ref,
+            "media_type": media_type,
+            "logical_name": "content.json" if media_type == "application/json" else "book.md",
+        }
+    )
 
 
 def _request() -> EducationRetrievalRequestV2:
@@ -146,6 +152,56 @@ def test_ranked_context_is_bounded_pointer_oriented_and_marks_answers_avoid_copy
     assert len(markdown.encode("utf-8")) < 64 * 1024
 
 
+def test_ranked_context_orders_equal_relevance_entries_by_evidence_id() -> None:
+    first_candidate_second_id = ContentIntakeKnowledgeSourceV2(
+        source_class="TEXTBOOK",
+        intake_batch_id="intake_" + "7" * 32,
+        source_file_id="sourcefile_" + "b" * 32,
+        artifact_member=_member("b", media_type="text/markdown", schema_ref=None),
+    )
+    second_candidate_first_id = ContentIntakeKnowledgeSourceV2(
+        source_class="TEXTBOOK",
+        intake_batch_id="intake_" + "8" * 32,
+        source_file_id="sourcefile_" + "a" * 32,
+        artifact_member=_member("a", media_type="text/markdown", schema_ref=None),
+    )
+
+    entries, markdown = KnowledgeRetrievalApplicationService._rank_and_render(
+        request=_request(),
+        candidates=(
+            _Candidate(
+                analysis_run_id="analysisrun_" + "1" * 32,
+                source=first_candidate_second_id,
+                node_ids=("knode_plate_b",),
+                anchor_ids=("anchor_plate_b",),
+                node_labels=("second evidence id",),
+                node_types=("CONCEPT",),
+                relevance_milli=950,
+                answer_bearing=False,
+            ),
+            _Candidate(
+                analysis_run_id="analysisrun_" + "2" * 32,
+                source=second_candidate_first_id,
+                node_ids=("knode_plate_a",),
+                anchor_ids=("anchor_plate_a",),
+                node_labels=("first evidence id",),
+                node_types=("CONCEPT",),
+                relevance_milli=950,
+                answer_bearing=False,
+            ),
+        ),
+    )
+
+    evidence_ids = tuple(entry.evidence_id for entry in entries)
+    assert evidence_ids == tuple(sorted(evidence_ids))
+    context_ids = tuple(
+        line.split("`", 2)[1]
+        for line in markdown.splitlines()
+        if line.startswith("- `evidenceitem_")
+    )
+    assert context_ids == evidence_ids
+
+
 def test_ranked_context_selects_one_exact_range_per_immutable_document() -> None:
     document = ContentIntakeKnowledgeSourceV2(
         source_class="TEXTBOOK",
@@ -246,7 +302,7 @@ def _item_production_command() -> CreateItemProductionEvidenceCommand:
 
 def test_item_production_graph_miss_fails_before_artifact_or_retrieval_creation() -> None:
     service = object.__new__(KnowledgeRetrievalApplicationService)
-    service.sessions = lambda: _SequenceSession([None, None])  # type: ignore[method-assign]
+    cast(Any, service).sessions = lambda: _SequenceSession([None, None])
     created = False
 
     def create(_command: object) -> object:
@@ -254,7 +310,7 @@ def test_item_production_graph_miss_fails_before_artifact_or_retrieval_creation(
         created = True
         raise AssertionError("graph miss must not create an Evidence Bundle")
 
-    service.create = create  # type: ignore[method-assign]
+    cast(Any, service).create = create
     with pytest.raises(KnowledgeRetrievalServiceError) as captured:
         service.create_item_production(_item_production_command())
     assert captured.value.code == "KNOWLEDGE_RETRIEVAL_CORPUS_UNAVAILABLE"

@@ -1068,13 +1068,7 @@ class KnowledgeRetrievalApplicationService:
         request: EducationRetrievalRequestV2,
         candidates: tuple[_Candidate, ...],
     ) -> tuple[tuple[EvidenceEntryContract, ...], str]:
-        selected: list[EvidenceEntryContract] = []
-        selected_immutable_sources: set[tuple[str, str, str]] = set()
-        documents: set[str] = set()
-        items: set[str] = set()
-        nodes: set[str] = set()
-        claim_count = 0
-        lines = [
+        header_lines = [
             "# EOM Evidence Bundle",
             "",
             f"- Retrieval request: `{request.retrieval_request_id}`",
@@ -1083,6 +1077,14 @@ class KnowledgeRetrievalApplicationService:
             "## Ranked evidence",
             "",
         ]
+        selected: list[EvidenceEntryContract] = []
+        selected_lines: dict[str, str] = {}
+        selected_immutable_sources: set[tuple[str, str, str]] = set()
+        documents: set[str] = set()
+        items: set[str] = set()
+        nodes: set[str] = set()
+        claim_count = 0
+        lines = list(header_lines)
         for candidate in candidates:
             source = candidate.source
             source_document = isinstance(
@@ -1181,6 +1183,7 @@ class KnowledgeRetrievalApplicationService:
             ):
                 continue
             selected.append(entry)
+            selected_lines[entry.evidence_id] = line
             selected_immutable_sources.add(immutable_source)
             lines.append(line)
             documents = new_documents
@@ -1194,8 +1197,13 @@ class KnowledgeRetrievalApplicationService:
                 "KNOWLEDGE_RETRIEVAL_BUDGET_EXHAUSTED",
                 "no authorized evidence fits the requested budget",
             )
-        context = "\n".join([*lines, ""])
-        return tuple(selected), context
+        ordered = tuple(
+            sorted(selected, key=lambda item: (-item.relevance_milli, item.evidence_id))
+        )
+        context = "\n".join(
+            [*header_lines, *(selected_lines[entry.evidence_id] for entry in ordered), ""]
+        )
+        return ordered, context
 
     @staticmethod
     def _evidence_kind(
