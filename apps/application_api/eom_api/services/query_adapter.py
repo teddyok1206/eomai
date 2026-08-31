@@ -8,7 +8,7 @@ import hmac
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Never
+from typing import Any, Literal, Never
 
 from eom_api_contracts.common import ArtifactPointer
 from eom_api_contracts.content_intakes import (
@@ -20,6 +20,7 @@ from eom_api_contracts.content_packs import (
     ContentPackActivationView,
     ContentPackReleaseView,
 )
+from eom_api_contracts.curriculum import CurriculumGraphCapabilityView
 from eom_api_contracts.deliverables import DeliverableView
 from eom_api_contracts.events import EventView
 from eom_api_contracts.hwpx import HwpxBuildView
@@ -45,14 +46,23 @@ from eom_api_contracts.workflows import (
     WorkflowStepView,
     WorkflowView,
 )
+from eom_catalog_contracts import INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256
+from eom_catalog_service.curriculum_graph_structure import (
+    integrated_science_curriculum_units,
+)
 from eom_catalog_service.knowledge_analysis_batch_models import (
     KnowledgeAnalysisBatchRangeRecord,
     KnowledgeAnalysisBatchRecord,
 )
 from eom_catalog_service.knowledge_graph_models import (
+    CurriculumUnitClosureRecord,
+    CurriculumUnitRecord,
     EducationRetrievalRequestRecord,
     EvidenceBundleRecord,
     EvidenceBundleRevisionRecord,
+    KnowledgeCorpusRecord,
+    KnowledgeGraphSnapshotRecord,
+    KnowledgeNodeRecord,
 )
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
@@ -81,7 +91,7 @@ from eom_orchestrator.knowledge_analysis_models import (
     KnowledgeAnalysisEventRecord,
     KnowledgeAnalysisRunRecord,
 )
-from eom_orchestrator.models import ArtifactRevisionRecord
+from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_workflow import ResolvedExecutionPlanV3
 from eom_workflow_runner.models import (
     WorkflowEventRecord,
@@ -181,6 +191,184 @@ class QueryAdapter:
     def __init__(self, engine: Engine, cursor_key: bytes) -> None:
         self.sessions = build_session_factory(engine)
         self.cursors = CursorCodec(cursor_key)
+
+    def integrated_science_graph_capability(self) -> CurriculumGraphCapabilityView:
+        """Verify the current Graph contains the exact reviewed curriculum hierarchy."""
+
+        expected_units = integrated_science_curriculum_units()
+        expected_framework = expected_units[0].framework_revision_id
+        expected_unit_rows = {
+            (
+                unit.curriculum_unit_id,
+                unit.node_stable_key,
+                unit.framework_revision_id,
+                unit.parent_unit_id,
+                unit.unit_level,
+                unit.ordinal,
+            )
+            for unit in expected_units
+        }
+        expected_by_id = {unit.curriculum_unit_id: unit for unit in expected_units}
+        expected_closure: set[tuple[str, str, str, int]] = set()
+        for unit in expected_units:
+            expected_closure.add(
+                (
+                    unit.framework_revision_id,
+                    unit.curriculum_unit_id,
+                    unit.curriculum_unit_id,
+                    0,
+                )
+            )
+            current = unit
+            depth = 0
+            while current.parent_unit_id is not None:
+                depth += 1
+                parent = expected_by_id[current.parent_unit_id]
+                expected_closure.add(
+                    (
+                        unit.framework_revision_id,
+                        parent.curriculum_unit_id,
+                        unit.curriculum_unit_id,
+                        depth,
+                    )
+                )
+                current = parent
+
+        with self.sessions() as session:
+            corpus = session.scalar(
+                select(KnowledgeCorpusRecord).where(
+                    KnowledgeCorpusRecord.corpus_key == "integrated-science-textbooks"
+                )
+            )
+            if (
+                corpus is None
+                or corpus.lifecycle_state != "ACTIVE"
+                or corpus.current_graph_snapshot_revision_id is None
+            ):
+                return self._unavailable_curriculum_graph("CORPUS_UNAVAILABLE")
+            snapshot_id = corpus.current_graph_snapshot_revision_id
+            snapshot = session.get(KnowledgeGraphSnapshotRecord, snapshot_id)
+            if (
+                snapshot is None
+                or snapshot.state != "PUBLISHED"
+                or snapshot.graph_id != corpus.graph_id
+            ):
+                return self._unavailable_curriculum_graph("SNAPSHOT_UNAVAILABLE")
+            manifest_artifact = session.get(ArtifactRecord, snapshot.manifest_artifact_id)
+            manifest_revision = session.get(
+                ArtifactRevisionRecord, snapshot.manifest_artifact_revision_id
+            )
+            projection_artifact = session.get(ArtifactRecord, snapshot.projection_artifact_id)
+            projection_revision = session.get(
+                ArtifactRevisionRecord, snapshot.projection_artifact_revision_id
+            )
+            if (
+                manifest_artifact is None
+                or manifest_revision is None
+                or not manifest_artifact.approved
+                or not manifest_revision.approved
+                or manifest_revision.logical_artifact_id != snapshot.manifest_artifact_id
+                or manifest_revision.content_hash != snapshot.manifest_sha256
+                or projection_artifact is None
+                or projection_revision is None
+                or not projection_artifact.approved
+                or not projection_revision.approved
+                or projection_revision.logical_artifact_id != snapshot.projection_artifact_id
+            ):
+                return self._unavailable_curriculum_graph("SNAPSHOT_UNAVAILABLE")
+            unit_rows = tuple(
+                session.execute(
+                    select(CurriculumUnitRecord, KnowledgeNodeRecord)
+                    .join(
+                        KnowledgeNodeRecord,
+                        and_(
+                            KnowledgeNodeRecord.graph_snapshot_revision_id
+                            == CurriculumUnitRecord.graph_snapshot_revision_id,
+                            KnowledgeNodeRecord.node_id == CurriculumUnitRecord.node_id,
+                        ),
+                    )
+                    .where(
+                        CurriculumUnitRecord.graph_snapshot_revision_id == snapshot_id,
+                        CurriculumUnitRecord.framework_revision_id == expected_framework,
+                    )
+                ).all()
+            )
+            closure_rows = tuple(
+                session.scalars(
+                    select(CurriculumUnitClosureRecord).where(
+                        CurriculumUnitClosureRecord.graph_snapshot_revision_id == snapshot_id,
+                        CurriculumUnitClosureRecord.framework_revision_id == expected_framework,
+                    )
+                )
+            )
+            observed_unit_rows = {
+                (
+                    unit.curriculum_unit_id,
+                    node.stable_key,
+                    unit.framework_revision_id,
+                    unit.parent_unit_id,
+                    unit.unit_level,
+                    unit.ordinal,
+                )
+                for unit, node in unit_rows
+            }
+            observed_closure = {
+                (
+                    row.framework_revision_id,
+                    row.ancestor_unit_id,
+                    row.descendant_unit_id,
+                    row.depth,
+                )
+                for row in closure_rows
+            }
+            current_snapshot_id = session.scalar(
+                select(KnowledgeCorpusRecord.current_graph_snapshot_revision_id).where(
+                    KnowledgeCorpusRecord.corpus_id == corpus.corpus_id
+                )
+            )
+            if current_snapshot_id != snapshot_id:
+                return self._unavailable_curriculum_graph("CURRENT_POINTER_CHANGED")
+            if observed_unit_rows != expected_unit_rows or observed_closure != expected_closure:
+                return self._unavailable_curriculum_graph(
+                    "CURRICULUM_MAPPING_INCOMPLETE",
+                    unit_count=len(unit_rows),
+                    closure_count=len(closure_rows),
+                )
+            return CurriculumGraphCapabilityView(
+                outline_sha256=INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
+                capability_state="READY",
+                graph_grounding_available=True,
+                reason="READY",
+                graph_snapshot_revision_id=snapshot_id,
+                snapshot_sha256=snapshot.snapshot_sha256,
+                framework_revision_id=expected_framework,
+                unit_count=len(unit_rows),
+                closure_count=len(closure_rows),
+            )
+
+    @staticmethod
+    def _unavailable_curriculum_graph(
+        reason: Literal[
+            "CORPUS_UNAVAILABLE",
+            "SNAPSHOT_UNAVAILABLE",
+            "CURRICULUM_MAPPING_INCOMPLETE",
+            "CURRENT_POINTER_CHANGED",
+        ],
+        *,
+        unit_count: int = 0,
+        closure_count: int = 0,
+    ) -> CurriculumGraphCapabilityView:
+        return CurriculumGraphCapabilityView(
+            outline_sha256=INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
+            capability_state="UNAVAILABLE",
+            graph_grounding_available=False,
+            reason=reason,
+            graph_snapshot_revision_id=None,
+            snapshot_sha256=None,
+            framework_revision_id=None,
+            unit_count=unit_count,
+            closure_count=closure_count,
+        )
 
     def list_hwpx_builds(
         self, *, limit: int, cursor: str | None, state: str | None = None

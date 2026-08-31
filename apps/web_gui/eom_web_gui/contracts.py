@@ -254,14 +254,21 @@ class CurriculumEditorialOutline(WebModel):
     outline_revision: Literal["1.0"]
     subject_key: Literal["integrated-science"]
     subject_label: Literal["통합과학"]
-    graph_mapping_status: Literal["RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF"]
-    graph_grounding_available: Literal[False] = False
+    graph_mapping_status: Literal[
+        "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF",
+        "PUBLISHED_CURRICULUM_GRAPH_VERIFIED",
+    ]
+    graph_grounding_available: bool = False
     supported_product_levels: tuple[Literal["LARGE", "MIDDLE"], Literal["LARGE", "MIDDLE"]]
     unsupported_product_levels: tuple[Literal["SMALL"]]
     units: tuple[CurriculumEditorialUnitOption, ...] = Field(min_length=41, max_length=41)
 
     @model_validator(mode="after")
     def coherent_hierarchy(self) -> CurriculumEditorialOutline:
+        if self.graph_grounding_available != (
+            self.graph_mapping_status == "PUBLISHED_CURRICULUM_GRAPH_VERIFIED"
+        ):
+            raise ValueError("curriculum Graph capability projection is inconsistent")
         if self.supported_product_levels != ("LARGE", "MIDDLE"):
             raise ValueError("curriculum supported product levels must remain ordered")
         by_key = {unit.key: unit for unit in self.units}

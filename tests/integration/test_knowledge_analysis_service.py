@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import eom_identity_service.models  # noqa: F401
 import pytest
+from eom_api.services.query_adapter import QueryAdapter
 from eom_catalog_contracts import (
     CreateEvidenceBundleCommand,
     CreateKnowledgeAnalysisCommand,
@@ -1578,7 +1579,7 @@ def test_reviewed_curriculum_v2_publishes_ranges_and_retrieves_subtree(
 
     publication_value: dict[str, object] = {
         "schema_version": "knowledge-graph-publication/2.0",
-        "corpus_key": f"reviewed-curriculum-{uuid4().hex[:12]}",
+        "corpus_key": "integrated-science-textbooks",
         "display_name": "검토된 통합과학 교과서 그래프",
         "accepted_analysis_run_ids": list(ordered_run_ids),
         "structure_manifest": structure_pointer.model_dump(mode="json"),
@@ -1602,6 +1603,16 @@ def test_reviewed_curriculum_v2_publishes_ranges_and_retrieves_subtree(
     assert published.graph_snapshot.manifest_artifact.schema_ref.endswith(
         "knowledge-graph-snapshot-manifest/5.0"
     )
+    capability = QueryAdapter(
+        integration_engine, b"curriculum-capability-test"
+    ).integrated_science_graph_capability()
+    assert capability.capability_state == "READY"
+    assert capability.graph_grounding_available is True
+    assert (
+        capability.graph_snapshot_revision_id == published.graph_snapshot.graph_snapshot_revision_id
+    )
+    assert capability.unit_count == 43
+    assert capability.closure_count == 119
 
     with sessions() as session:
         snapshot_id = published.graph_snapshot.graph_snapshot_revision_id

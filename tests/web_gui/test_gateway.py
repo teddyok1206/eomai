@@ -339,9 +339,32 @@ async def test_gateway_projects_reviewed_curriculum_outline_without_graph_intern
     )
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/api/v1/curriculum/integrated-science-editorial-outline"
         assert request.headers["authorization"].startswith("Bearer ")
-        return httpx.Response(200, json=_single(source))
+        if request.url.path == "/api/v1/curriculum/integrated-science-editorial-outline":
+            return httpx.Response(200, json=_single(source))
+        assert request.url.path == "/api/v1/curriculum/integrated-science-graph-capability"
+        return httpx.Response(
+            200,
+            json=_single(
+                {
+                    "schema_version": "curriculum-graph-capability/1.0",
+                    "corpus_key": "integrated-science-textbooks",
+                    "outline_key": source["outline_key"],
+                    "outline_revision": source["outline_revision"],
+                    "outline_sha256": (
+                        "sha256:f11389c8ab26c2bd5b93acf66fe92d30fea9c1d0bc7e6b91a6b6751fdccb5108"
+                    ),
+                    "capability_state": "READY",
+                    "graph_grounding_available": True,
+                    "reason": "READY",
+                    "graph_snapshot_revision_id": "graphrev_" + "2" * 32,
+                    "snapshot_sha256": "sha256:" + "3" * 64,
+                    "framework_revision_id": "curriculumrev_" + "4" * 32,
+                    "unit_count": 43,
+                    "closure_count": 119,
+                }
+            ),
+        )
 
     gateway = HttpApplicationGateway(
         application_api_url="http://127.0.0.1:8765",
@@ -352,9 +375,37 @@ async def test_gateway_projects_reviewed_curriculum_outline_without_graph_intern
     )
     outline = await gateway.curriculum_editorial_outline(_session())
     assert len(outline.units) == 41
-    assert outline.graph_grounding_available is False
+    assert outline.graph_grounding_available is True
+    assert outline.graph_mapping_status == "PUBLISHED_CURRICULUM_GRAPH_VERIFIED"
     assert outline.units[14].key == "eom.is.middle.3-2"
     assert "graph_stable_key" not in outline.model_dump(mode="json")["units"][14]
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_gateway_keeps_curriculum_classification_when_capability_is_unavailable() -> None:
+    source = json.loads(
+        (ROOT / "content/curriculum/eom-integrated-science-editorial-outline-v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("integrated-science-editorial-outline"):
+            return httpx.Response(200, json=_single(source))
+        return httpx.Response(503, json={"error_code": "API_DEPENDENCY_UNAVAILABLE"})
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    outline = await gateway.curriculum_editorial_outline(_session())
+    assert outline.graph_grounding_available is False
+    assert outline.graph_mapping_status == "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF"
+    assert len(outline.units) == 41
     await gateway.close()
 
 

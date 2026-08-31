@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from eom_api_contracts import SingleResponse
+from eom_api_contracts import CurriculumGraphCapabilityView, SingleResponse
 from eom_catalog_contracts import (
     IntegratedScienceEditorialOutline,
     load_integrated_science_editorial_outline,
@@ -26,3 +26,15 @@ def integrated_science_editorial_outline(
     request: Request,
 ) -> SingleResponse[IntegratedScienceEditorialOutline]:
     return one(request, load_integrated_science_editorial_outline())
+
+
+@router.get(
+    "/curriculum/integrated-science-graph-capability",
+    operation_id="integrated_science_graph_capability_get",
+    response_model=SingleResponse[CurriculumGraphCapabilityView],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_START))],
+)
+def integrated_science_graph_capability(
+    request: Request,
+) -> SingleResponse[CurriculumGraphCapabilityView]:
+    return one(request, request.app.state.services.queries.integrated_science_graph_capability())

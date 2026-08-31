@@ -59,6 +59,17 @@ def test_curriculum_outline_projection_matches_web_schema() -> None:
     Draft202012Validator(schema).validate(value.model_dump(mode="json"))
 
 
+def test_curriculum_outline_ready_capability_pair_matches_web_schema() -> None:
+    projection = _curriculum_outline_projection()
+    projection["graph_mapping_status"] = "PUBLISHED_CURRICULUM_GRAPH_VERIFIED"
+    projection["graph_grounding_available"] = True
+    value = CurriculumEditorialOutline.model_validate(projection)
+    schema = json.loads(
+        (SCHEMA_ROOT / "curriculum-editorial-outline-v1.schema.json").read_text(encoding="utf-8")
+    )
+    Draft202012Validator(schema).validate(value.model_dump(mode="json"))
+
+
 @pytest.mark.parametrize("defect", ("parent", "code", "order"))
 def test_curriculum_outline_projection_fails_closed_on_hierarchy_drift(defect: str) -> None:
     value = _curriculum_outline_projection()

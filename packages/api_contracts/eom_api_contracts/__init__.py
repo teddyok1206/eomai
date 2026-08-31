@@ -9,6 +9,7 @@ from eom_api_contracts.common import (
     ResponseMeta,
     SingleResponse,
 )
+from eom_api_contracts.curriculum import CurriculumGraphCapabilityView
 from eom_api_contracts.errors import ProblemDetails, ValidationIssue
 from eom_api_contracts.hwpx import (
     CreateHwpxBuildRequest,
@@ -52,6 +53,7 @@ __all__ = [
     "CreateHwpxBuildRequest",
     "CreateKnowledgeAnalysisBatchRequest",
     "CreateKnowledgeAnalysisRequest",
+    "CurriculumGraphCapabilityView",
     "CurriculumRetrievalScopeInput",
     "EducationalDocumentAnalysisSourceInput",
     "EvidenceBudgetInput",

@@ -33,6 +33,10 @@ from eom_web_gui.redaction import sanitize_mapping
 from eom_web_gui.sessions import ApiTokens, WebSession
 
 ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{7,127}$")
+SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
+INTEGRATED_SCIENCE_OUTLINE_SHA256 = (
+    "sha256:f11389c8ab26c2bd5b93acf66fe92d30fea9c1d0bc7e6b91a6b6751fdccb5108"
+)
 
 
 class GatewayError(RuntimeError):
@@ -391,6 +395,36 @@ class HttpApplicationGateway:
         units = value.get("units")
         if not isinstance(units, list):
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        graph_mapping_status = "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF"
+        graph_grounding_available = False
+        try:
+            capability_response = await self._authorized(
+                session,
+                "GET",
+                "/api/v1/curriculum/integrated-science-graph-capability",
+            )
+            capability = self._data(capability_response)
+            if (
+                capability.get("schema_version") == "curriculum-graph-capability/1.0"
+                and capability.get("capability_state") == "READY"
+                and capability.get("graph_grounding_available") is True
+                and capability.get("reason") == "READY"
+                and capability.get("outline_key") == value.get("outline_key")
+                and capability.get("outline_revision") == value.get("outline_revision")
+                and capability.get("outline_sha256") == INTEGRATED_SCIENCE_OUTLINE_SHA256
+                and isinstance(capability.get("graph_snapshot_revision_id"), str)
+                and re.fullmatch(r"graphrev_[0-9a-f]{32}", capability["graph_snapshot_revision_id"])
+                and isinstance(capability.get("snapshot_sha256"), str)
+                and SHA256_PATTERN.fullmatch(capability["snapshot_sha256"])
+                and isinstance(capability.get("framework_revision_id"), str)
+                and re.fullmatch(r"curriculumrev_[0-9a-f]{32}", capability["framework_revision_id"])
+                and capability.get("unit_count") == 43
+                and capability.get("closure_count") == 119
+            ):
+                graph_mapping_status = "PUBLISHED_CURRICULUM_GRAPH_VERIFIED"
+                graph_grounding_available = True
+        except GatewayError:
+            pass
         try:
             return CurriculumEditorialOutline.model_validate(
                 {
@@ -399,8 +433,8 @@ class HttpApplicationGateway:
                     "outline_revision": value["outline_revision"],
                     "subject_key": value["subject_key"],
                     "subject_label": value["subject_label"],
-                    "graph_mapping_status": value["graph_mapping_status"],
-                    "graph_grounding_available": False,
+                    "graph_mapping_status": graph_mapping_status,
+                    "graph_grounding_available": graph_grounding_available,
                     "supported_product_levels": value["supported_product_levels"],
                     "unsupported_product_levels": value["unsupported_product_levels"],
                     "units": [

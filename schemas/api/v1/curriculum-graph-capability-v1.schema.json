@@ -1,0 +1,60 @@
+{
+  "$id": "https://eom.local/schemas/api/curriculum-graph-capability-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "capability_state": {"enum": ["READY", "UNAVAILABLE"]},
+    "closure_count": {"maximum": 1000000, "minimum": 0, "type": "integer"},
+    "corpus_key": {"const": "integrated-science-textbooks"},
+    "framework_revision_id": {
+      "anyOf": [
+        {"pattern": "^curriculumrev_[0-9a-f]{32}$", "type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "graph_grounding_available": {"type": "boolean"},
+    "graph_snapshot_revision_id": {
+      "anyOf": [
+        {"pattern": "^graphrev_[0-9a-f]{32}$", "type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "outline_key": {"const": "eom-integrated-science-editorial-outline"},
+    "outline_revision": {"const": "1.0"},
+    "outline_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "reason": {
+      "enum": [
+        "READY",
+        "CORPUS_UNAVAILABLE",
+        "SNAPSHOT_UNAVAILABLE",
+        "CURRICULUM_MAPPING_INCOMPLETE",
+        "CURRENT_POINTER_CHANGED"
+      ]
+    },
+    "schema_version": {"const": "curriculum-graph-capability/1.0"},
+    "snapshot_sha256": {
+      "anyOf": [
+        {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "unit_count": {"maximum": 100000, "minimum": 0, "type": "integer"}
+  },
+  "required": [
+    "schema_version",
+    "corpus_key",
+    "outline_key",
+    "outline_revision",
+    "outline_sha256",
+    "capability_state",
+    "graph_grounding_available",
+    "reason",
+    "graph_snapshot_revision_id",
+    "snapshot_sha256",
+    "framework_revision_id",
+    "unit_count",
+    "closure_count"
+  ],
+  "title": "Integrated Science Graph Capability V1",
+  "type": "object"
+}

@@ -3,8 +3,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "graph_grounding_available": {"const": false},
-    "graph_mapping_status": {"const": "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF"},
+    "graph_grounding_available": {"type": "boolean"},
+    "graph_mapping_status": {
+      "enum": [
+        "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF",
+        "PUBLISHED_CURRICULUM_GRAPH_VERIFIED"
+      ]
+    },
     "outline_key": {"const": "eom-integrated-science-editorial-outline"},
     "outline_revision": {"const": "1.0"},
     "schema_version": {"const": "integrated-science-editorial-outline/1.0"},
@@ -48,6 +53,20 @@
     "supported_product_levels",
     "unsupported_product_levels",
     "units"
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "graph_grounding_available": {"const": false},
+        "graph_mapping_status": {"const": "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF"}
+      }
+    },
+    {
+      "properties": {
+        "graph_grounding_available": {"const": true},
+        "graph_mapping_status": {"const": "PUBLISHED_CURRICULUM_GRAPH_VERIFIED"}
+      }
+    }
   ],
   "title": "EOM Web GUI Curriculum Editorial Outline V1",
   "type": "object"
