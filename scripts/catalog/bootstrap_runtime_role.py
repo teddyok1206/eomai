@@ -9,6 +9,7 @@ import pwd
 import secrets
 import stat
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import NoReturn
 from urllib.parse import quote, unquote, urlsplit
@@ -134,9 +135,27 @@ def _install_secret(content: bytes, root_uid: int, api_gid: int) -> None:
         os.close(parent_descriptor)
 
 
+def _rotation_requested(arguments: Sequence[str]) -> bool:
+    if tuple(arguments) == ():
+        return False
+    if tuple(arguments) == ("--rotate-credential",):
+        return True
+    fail("run bootstrap_runtime_role.py as root with no arguments or --rotate-credential")
+
+
+def _select_runtime_password(existing: str | None, *, rotate: bool) -> str:
+    if existing is not None and not rotate:
+        return existing
+    generated = secrets.token_urlsafe(48)
+    while generated == existing:
+        generated = secrets.token_urlsafe(48)
+    return generated
+
+
 def main() -> None:
-    if os.geteuid() != 0 or len(sys.argv) != 1:
-        fail("run bootstrap_runtime_role.py without arguments as root")
+    if os.geteuid() != 0:
+        fail("run bootstrap_runtime_role.py as root")
+    rotate = _rotation_requested(sys.argv[1:])
     root_uid = pwd.getpwnam("root").pw_uid
     api_gid = grp.getgrnam("eom-api").gr_gid
     parent = TARGET_ENV.parent
@@ -156,7 +175,8 @@ def main() -> None:
         fail("PostgreSQL administrator secret is incomplete")
     database = admin.get("POSTGRES_DB", "eom")
     administrator = admin.get("POSTGRES_USER", "postgres")
-    password = _existing_password(root_uid, api_gid, database) or secrets.token_urlsafe(48)
+    existing_password = _existing_password(root_uid, api_gid, database)
+    password = _select_runtime_password(existing_password, rotate=rotate)
     connection = psycopg.connect(
         host="127.0.0.1",
         port=5432,
@@ -287,6 +307,7 @@ def main() -> None:
     ).encode()
     _install_secret(content, root_uid, api_gid)
     print("catalog_runtime_role_bootstrap=PASS")
+    print(f"catalog_runtime_credential_rotated={'YES' if rotate else 'NO'}")
 
 
 if __name__ == "__main__":

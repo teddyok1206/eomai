@@ -103,6 +103,22 @@ def test_catalog_runtime_bootstrap_migrates_only_the_exact_legacy_identity(
             bootstrapper._existing_password(os.getuid(), os.getgid(), "eom")
 
 
+def test_catalog_runtime_bootstrap_rotation_is_explicit_and_never_reuses_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bootstrapper = _bootstrapper()
+
+    assert bootstrapper._rotation_requested(()) is False
+    assert bootstrapper._rotation_requested(("--rotate-credential",)) is True
+    with pytest.raises(SystemExit, match="--rotate-credential"):
+        bootstrapper._rotation_requested(("--unexpected",))
+
+    generated = iter(("existing", "replacement"))
+    monkeypatch.setattr(bootstrapper.secrets, "token_urlsafe", lambda _length: next(generated))
+    assert bootstrapper._select_runtime_password("existing", rotate=False) == "existing"
+    assert bootstrapper._select_runtime_password("existing", rotate=True) == "replacement"
+
+
 def test_catalog_manager_unit_owns_nas_commit_boundary_without_api_secret() -> None:
     catalog_unit = (
         REPOSITORY_ROOT / "infra/systemd/eom-catalog-application-runner.service"
