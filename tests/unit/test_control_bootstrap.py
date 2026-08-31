@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import get_args
 
+import eom_orchestrator.control_bootstrap as control_bootstrap
 import pytest
 from eom_orchestrator.control_bootstrap import (
     EXPECTED_ROLE_SLOTS,
@@ -114,6 +118,35 @@ def test_knowledge_analysis_v14_requires_page_local_structured_evidence() -> Non
         "mark it `UNCLEAR`",
     ):
         assert required in role_instruction
+
+
+def test_parallel_bootstrap_preserves_an_operator_assigned_account_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding = SimpleNamespace(
+        binding_id="authbinding_9a706de221738715d237009bd2710b07",
+        worker_slot_id="06",
+        account_label="textbook-analysis-slot06",
+    )
+
+    class FakeSession:
+        @staticmethod
+        def get(_model: object, _identity: str) -> object:
+            return binding
+
+    @contextmanager
+    def fake_transaction(_sessions: object) -> Iterator[FakeSession]:
+        yield FakeSession()
+
+    monkeypatch.setattr(control_bootstrap, "transaction", fake_transaction)
+    binding_ids = control_bootstrap._bootstrap_bindings(
+        object(),  # type: ignore[arg-type]
+        slots=(SimpleNamespace(slot_id="06"),),  # type: ignore[arg-type]
+        observed_at=control_bootstrap.PARALLEL_ANALYSIS_CAPACITY_CREATED_AT,
+    )
+
+    assert binding_ids == (binding.binding_id,)
+    assert binding.account_label == "textbook-analysis-slot06"
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:

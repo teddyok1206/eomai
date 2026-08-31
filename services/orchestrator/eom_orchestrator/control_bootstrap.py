@@ -1385,10 +1385,7 @@ def _bootstrap_bindings(
                         .replace("+00:00", "Z"),
                     },
                 )
-            elif (
-                existing.worker_slot_id != slot_id
-                or existing.account_label != f"codex-slot-{slot_id}"
-            ):
+            elif existing.worker_slot_id != slot_id:
                 raise ControlPlaneError(
                     "CONTROL_BOOTSTRAP_CONFLICT", "Codex auth binding identity differs"
                 )

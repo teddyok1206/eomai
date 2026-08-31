@@ -243,7 +243,6 @@ def test_v14_reuses_the_immutable_v13_parallel_capacity_revision(
         evaluation_cases_total=3,
         settings=orchestrator_settings,
     )
-
     v14 = bootstrap_knowledge_analysis_control_plane(
         integration_engine,
         config_directory=Path("config/control-plane/knowledge-analysis-v14").resolve(),
