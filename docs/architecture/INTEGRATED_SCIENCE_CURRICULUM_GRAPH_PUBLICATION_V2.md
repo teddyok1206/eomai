@@ -37,6 +37,7 @@ KnowledgeGraphSnapshotRevision
   -> exact structure-manifest Artifact Revision
   -> snapshot-local curriculum units and transitive closure
   -> deterministic alignment edges and projections
+  -> every node/edge source pointer pins its originating Analysis Run
 ```
 
 Framework logical key, deterministic immutable revision ID, unit ID, Artifact ID, Artifact
@@ -78,6 +79,15 @@ lookup, and append-only publication history.
   cache, while each range request, accepted result, proposal, and hash is still validated;
 - node merge: hash map keyed by stable key, with a set of exact source labels and source pointers;
 - adjacency and closure: existing indexed snapshot-local adjacency list and transitive closure.
+- source-pointer lookup: snapshot/node/Analysis Run composite identity; anchor IDs are local to an
+  Analysis Run and are never treated as globally unique within one Document Revision.
+
+One Document Revision may contribute hundreds of non-overlapping analysis ranges. Source-pointer
+rows therefore include `analysis_run_id` and reference the snapshot's exact accepted-analysis
+association. Retrieval groups pointers by Analysis Run and immutable artifact member, resolves the
+exact range request, and selects at most one bounded entry per canonical Artifact member/use. The
+canonical Projection Artifact retains every exact range pointer even when the bounded Evidence
+Bundle selects only the highest-ranked range.
 
 Structure pointer lookup is `O(log n)` through existing Artifact indexes, in-memory unit lookup is
 `O(1)` average, projection merge is `O(nodes + edges)` plus deterministic sorting, and closure
@@ -128,6 +138,11 @@ One-shot live rollout uses one authorization marker and one attempt marker for s
 commit, one for Graph publication, and one for Evidence Bundle retrieval. There is no
 automatic retry with a fresh key. A failed step preserves its inputs and first error boundary.
 
+The additive database migration backfills historical pointer rows only when each legacy pointer
+resolves to exactly one snapshot Analysis Run. Ambiguous legacy data fails migration closed rather
+than selecting a run implicitly. Downgrade is rejected after history uses the new run-scoped
+identity if removing that dimension would recreate duplicate pointer identities.
+
 ## 8. Dependency direction
 
 JSON Schema and frozen value models live in `catalog_contracts`. Catalog application services own
@@ -153,8 +168,9 @@ rejected because the curriculum selectors would still have no usable subtree roo
 
 Source acceptance requires schema-first validation, old V1 hash preservation, deterministic
 manifest/projection serialization, alias merge and conflict tests, missing/stale/hash tests,
-idempotent and concurrent publication tests, runtime privilege tests, strict typing, format/lint,
-and package isolation checks. No database migration is required.
+idempotent and concurrent publication tests, exact run-scoped pointer resolution for repeated
+Document Revision ranges, migration upgrade/downgrade checks, runtime privilege tests, strict
+typing, format/lint, and package isolation checks.
 
 Live acceptance requires exactly 43 framework units, 119 closure rows (43 self + 41 direct-parent
 + 35 grandparent), 495 accepted analyses, 1,702 gap-free pages, no duplicate source page in the new

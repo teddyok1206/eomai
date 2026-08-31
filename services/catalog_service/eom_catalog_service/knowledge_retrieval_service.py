@@ -142,6 +142,7 @@ class KnowledgeRetrievalServiceError(RuntimeError):
 
 @dataclass(frozen=True)
 class _Candidate:
+    analysis_run_id: str
     source: KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4
     node_ids: tuple[str, ...]
     anchor_ids: tuple[str, ...]
@@ -419,7 +420,7 @@ class KnowledgeRetrievalApplicationService:
                 candidates=candidates,
             )
 
-        context_artifact = self._commit_context(request, context_markdown)
+        context_artifact = self._commit_context(request, context_markdown, entries=entries)
         context_pointer = KnowledgeArtifactMemberPointer(
             artifact_id=context_artifact.artifact_id,
             artifact_revision_id=context_artifact.revision_id,
@@ -576,6 +577,7 @@ class KnowledgeRetrievalApplicationService:
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/2.0",
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/3.0",
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/4.0",
+                    "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0",
                 }
             ),
         )
@@ -885,17 +887,21 @@ class KnowledgeRetrievalApplicationService:
                 .limit(max_nodes * MAX_POINTER_ROWS_PER_NODE)
             )
         )
-        grouped: dict[tuple[str, str], list[KnowledgeNodeSourcePointerRecord]] = defaultdict(list)
+        grouped: dict[tuple[str, str, str], list[KnowledgeNodeSourcePointerRecord]] = defaultdict(
+            list
+        )
         for pointer in pointer_rows:
             node = nodes.get(pointer.node_id)
             if node is None:
                 continue
             if node.answer_bearing and command.requester_role not in policy.answer_bearing_roles:
                 continue
-            grouped[(pointer.artifact_revision_id, pointer.member_path)].append(pointer)
+            grouped[
+                (pointer.analysis_run_id, pointer.artifact_revision_id, pointer.member_path)
+            ].append(pointer)
 
         source_cache: dict[
-            tuple[str, str], KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4
+            tuple[str, str, str], KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4
         ] = {}
         values: list[_Candidate] = []
         for key, pointers in sorted(grouped.items()):
@@ -916,6 +922,7 @@ class KnowledgeRetrievalApplicationService:
                 continue
             values.append(
                 _Candidate(
+                    analysis_run_id=pointers[0].analysis_run_id,
                     source=source,
                     node_ids=ordered_nodes,
                     anchor_ids=anchors,
@@ -941,6 +948,7 @@ class KnowledgeRetrievalApplicationService:
                     -item.relevance_milli,
                     item.source.artifact_member.artifact_revision_id,
                     item.source.artifact_member.member_path,
+                    item.analysis_run_id,
                 ),
             )[:MAX_RETRIEVAL_CANDIDATES]
         )
@@ -954,6 +962,7 @@ class KnowledgeRetrievalApplicationService:
         association = session.scalar(
             select(KnowledgeSnapshotAnalysisRecord).where(
                 KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id == snapshot_id,
+                KnowledgeSnapshotAnalysisRecord.analysis_run_id == pointer.analysis_run_id,
                 KnowledgeSnapshotAnalysisRecord.source_revision_id == pointer.source_revision_id,
                 KnowledgeSnapshotAnalysisRecord.source_artifact_revision_id
                 == pointer.artifact_revision_id,
@@ -1060,6 +1069,7 @@ class KnowledgeRetrievalApplicationService:
         candidates: tuple[_Candidate, ...],
     ) -> tuple[tuple[EvidenceEntryContract, ...], str]:
         selected: list[EvidenceEntryContract] = []
+        selected_immutable_sources: set[tuple[str, str, str]] = set()
         documents: set[str] = set()
         items: set[str] = set()
         nodes: set[str] = set()
@@ -1107,6 +1117,13 @@ class KnowledgeRetrievalApplicationService:
                 if candidate.answer_bearing
                 else ("GROUNDING" if source_document else "REFERENCE_PATTERN")
             )
+            immutable_source = (
+                source.artifact_member.artifact_revision_id,
+                source.artifact_member.member_path,
+                use,
+            )
+            if immutable_source in selected_immutable_sources:
+                continue
             evidence_id = _typed_id(
                 "evidenceitem_",
                 {
@@ -1164,6 +1181,7 @@ class KnowledgeRetrievalApplicationService:
             ):
                 continue
             selected.append(entry)
+            selected_immutable_sources.add(immutable_source)
             lines.append(line)
             documents = new_documents
             items = new_items
@@ -1197,7 +1215,11 @@ class KnowledgeRetrievalApplicationService:
         return "DOCUMENT"
 
     def _commit_context(
-        self, request: EducationRetrievalRequestV2, markdown: str
+        self,
+        request: EducationRetrievalRequestV2,
+        markdown: str,
+        *,
+        entries: tuple[EvidenceEntryContract, ...],
     ) -> CatalogArtifact:
         try:
             with tempfile.TemporaryDirectory(
@@ -1206,8 +1228,13 @@ class KnowledgeRetrievalApplicationService:
                 source = Path(raw_directory) / "context.md"
                 source.write_text(markdown, encoding="utf-8")
                 source.chmod(0o640)
-                document_graph = request.graph_snapshot.manifest_artifact.schema_ref.endswith(
-                    "/3.0"
+                multimodal_graph = any(
+                    isinstance(entry.source, EducationalDocumentKnowledgeSourceV4)
+                    for entry in entries
+                )
+                document_graph = multimodal_graph or any(
+                    isinstance(entry.source, EducationalDocumentKnowledgeSourceV3)
+                    for entry in entries
                 )
                 return self.artifacts.commit_file_set(
                     files={"evidence/context.md": source},
@@ -1227,14 +1254,22 @@ class KnowledgeRetrievalApplicationService:
                     },
                     manifest_version="evidence-bundle-context-file-set/1.0",
                     protocol_version=(
-                        KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_PROTOCOL
-                        if document_graph
-                        else KNOWLEDGE_RETRIEVAL_CATALOG_PROTOCOL
+                        KNOWLEDGE_RETRIEVAL_MULTIMODAL_CATALOG_PROTOCOL
+                        if multimodal_graph
+                        else (
+                            KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_PROTOCOL
+                            if document_graph
+                            else KNOWLEDGE_RETRIEVAL_CATALOG_PROTOCOL
+                        )
                     ),
                     protocol_schema_hash=(
-                        KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_SCHEMA_HASH
-                        if document_graph
-                        else KNOWLEDGE_RETRIEVAL_CATALOG_SCHEMA_HASH
+                        KNOWLEDGE_RETRIEVAL_MULTIMODAL_CATALOG_SCHEMA_HASH
+                        if multimodal_graph
+                        else (
+                            KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_SCHEMA_HASH
+                            if document_graph
+                            else KNOWLEDGE_RETRIEVAL_CATALOG_SCHEMA_HASH
+                        )
                     ),
                 )
         except (OSError, RuntimeError, ValueError) as exc:

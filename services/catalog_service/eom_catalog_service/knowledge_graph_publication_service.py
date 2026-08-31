@@ -12,6 +12,7 @@ from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     AssessmentItemContent,
     ContentIntakeKnowledgeSourceV2,
+    CurriculumUnitBinding,
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
     KnowledgeAnalysisProposalReceipt,
@@ -206,6 +207,52 @@ class KnowledgeGraphPublicationError(RuntimeError):
 
 def _typed_id(prefix: str, value: dict[str, object]) -> str:
     return prefix + content_sha256(value).removeprefix("sha256:")[:32]
+
+
+def _curriculum_unit_layers(
+    units: tuple[CurriculumUnitBinding, ...],
+) -> tuple[tuple[CurriculumUnitBinding, ...], ...]:
+    """Return deterministic parent-before-child layers for FK-safe persistence."""
+
+    unit_by_id = {unit.curriculum_unit_id: unit for unit in units}
+    if len(unit_by_id) != len(units):
+        raise KnowledgeGraphPublicationError(
+            "KNOWLEDGE_GRAPH_FRAMEWORK_INVALID",
+            "curriculum unit IDs must be unique",
+        )
+    children_by_parent: dict[str | None, list[CurriculumUnitBinding]] = {}
+    for unit in units:
+        if unit.parent_unit_id is not None and unit.parent_unit_id not in unit_by_id:
+            raise KnowledgeGraphPublicationError(
+                "KNOWLEDGE_GRAPH_FRAMEWORK_INVALID",
+                "curriculum unit parent does not resolve",
+            )
+        children_by_parent.setdefault(unit.parent_unit_id, []).append(unit)
+
+    def order_key(unit: CurriculumUnitBinding) -> tuple[str, str, int, str]:
+        return (
+            unit.framework_revision_id,
+            unit.parent_unit_id or "",
+            unit.ordinal,
+            unit.curriculum_unit_id,
+        )
+
+    frontier = tuple(sorted(children_by_parent.get(None, ()), key=order_key))
+    layers: list[tuple[CurriculumUnitBinding, ...]] = []
+    visited: set[str] = set()
+    while frontier:
+        layers.append(frontier)
+        next_frontier: list[CurriculumUnitBinding] = []
+        for unit in frontier:
+            visited.add(unit.curriculum_unit_id)
+            next_frontier.extend(children_by_parent.get(unit.curriculum_unit_id, ()))
+        frontier = tuple(sorted(next_frontier, key=order_key))
+    if visited != unit_by_id.keys():
+        raise KnowledgeGraphPublicationError(
+            "KNOWLEDGE_GRAPH_FRAMEWORK_INVALID",
+            "curriculum unit hierarchy contains a cycle or has no root",
+        )
+    return tuple(layers)
 
 
 def _manifest_member_schema_ref(revision: ArtifactRevisionRecord) -> str:
@@ -1459,6 +1506,7 @@ class KnowledgeGraphPublicationService:
                         KnowledgeNodeSourcePointerRecord(
                             graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
                             node_id=node.node_id,
+                            analysis_run_id=pointer.analysis_run_id,
                             source_revision_id=pointer.source_revision_id,
                             source_class=pointer.source_class,
                             source_artifact_id=pointer.source_artifact_id,
@@ -1482,25 +1530,31 @@ class KnowledgeGraphPublicationService:
                     )
                 )
             node_by_stable_key = {item.stable_key: item.node_id for item in projection.nodes}
-            for unit in projection.curriculum_units:
-                session.add(
-                    CurriculumUnitRecord(
-                        graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
-                        curriculum_unit_id=unit.curriculum_unit_id,
-                        node_id=node_by_stable_key[unit.node_stable_key],
-                        framework_revision_id=unit.framework_revision_id,
-                        parent_unit_id=unit.parent_unit_id,
-                        unit_level=unit.unit_level,
-                        ordinal=unit.ordinal,
+            # The parent FK is immediate, not deferred.  Flush one topological layer at
+            # a time because SQLAlchemy may reorder rows inside one executemany batch.
+            # The adjacency index keeps traversal O(units + hierarchy edges), apart
+            # from deterministic sibling sorting.
+            for unit_layer in _curriculum_unit_layers(projection.curriculum_units):
+                for unit in unit_layer:
+                    session.add(
+                        CurriculumUnitRecord(
+                            graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+                            curriculum_unit_id=unit.curriculum_unit_id,
+                            node_id=node_by_stable_key[unit.node_stable_key],
+                            framework_revision_id=unit.framework_revision_id,
+                            parent_unit_id=unit.parent_unit_id,
+                            unit_level=unit.unit_level,
+                            ordinal=unit.ordinal,
+                        )
                     )
-                )
-            session.flush()
+                session.flush()
             for edge in projection.edges:
                 for pointer in edge.source_pointers:
                     session.add(
                         KnowledgeEdgeSourcePointerRecord(
                             graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
                             edge_id=edge.edge_id,
+                            analysis_run_id=pointer.analysis_run_id,
                             source_revision_id=pointer.source_revision_id,
                             source_class=pointer.source_class,
                             source_artifact_id=pointer.source_artifact_id,

@@ -615,6 +615,15 @@ class KnowledgeNodeSourcePointerRecord(Base):
             ["knowledge_nodes.graph_snapshot_revision_id", "knowledge_nodes.node_id"],
             ondelete="CASCADE",
         ),
+        ForeignKeyConstraint(
+            ["graph_snapshot_revision_id", "analysis_run_id"],
+            [
+                "knowledge_snapshot_analyses.graph_snapshot_revision_id",
+                "knowledge_snapshot_analyses.analysis_run_id",
+            ],
+            name="fk_knowledge_node_source_analysis",
+            ondelete="CASCADE",
+        ),
         CheckConstraint(
             "excerpt_sha256 ~ '^sha256:[0-9a-f]{64}$' AND source_sha256 ~ '^sha256:[0-9a-f]{64}$'",
             name="ck_knowledge_node_source_hash",
@@ -622,6 +631,7 @@ class KnowledgeNodeSourcePointerRecord(Base):
         UniqueConstraint(
             "graph_snapshot_revision_id",
             "node_id",
+            "analysis_run_id",
             "source_revision_id",
             "artifact_revision_id",
             "member_path",
@@ -644,6 +654,7 @@ class KnowledgeNodeSourcePointerRecord(Base):
     pointer_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     graph_snapshot_revision_id: Mapped[str] = mapped_column(String(41), nullable=False)
     node_id: Mapped[str] = mapped_column(String(72), nullable=False)
+    analysis_run_id: Mapped[str] = mapped_column(String(44), nullable=False)
     source_revision_id: Mapped[str] = mapped_column(String(50), nullable=False)
     source_class: Mapped[str] = mapped_column(String(32), nullable=False)
     source_artifact_id: Mapped[str] = mapped_column(
@@ -666,6 +677,15 @@ class KnowledgeEdgeSourcePointerRecord(Base):
             ["knowledge_edges.graph_snapshot_revision_id", "knowledge_edges.edge_id"],
             ondelete="CASCADE",
         ),
+        ForeignKeyConstraint(
+            ["graph_snapshot_revision_id", "analysis_run_id"],
+            [
+                "knowledge_snapshot_analyses.graph_snapshot_revision_id",
+                "knowledge_snapshot_analyses.analysis_run_id",
+            ],
+            name="fk_knowledge_edge_source_analysis",
+            ondelete="CASCADE",
+        ),
         CheckConstraint(
             "excerpt_sha256 ~ '^sha256:[0-9a-f]{64}$' AND source_sha256 ~ '^sha256:[0-9a-f]{64}$'",
             name="ck_knowledge_edge_source_hash",
@@ -673,6 +693,7 @@ class KnowledgeEdgeSourcePointerRecord(Base):
         UniqueConstraint(
             "graph_snapshot_revision_id",
             "edge_id",
+            "analysis_run_id",
             "source_revision_id",
             "artifact_revision_id",
             "member_path",
@@ -695,6 +716,7 @@ class KnowledgeEdgeSourcePointerRecord(Base):
     pointer_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     graph_snapshot_revision_id: Mapped[str] = mapped_column(String(41), nullable=False)
     edge_id: Mapped[str] = mapped_column(String(72), nullable=False)
+    analysis_run_id: Mapped[str] = mapped_column(String(44), nullable=False)
     source_revision_id: Mapped[str] = mapped_column(String(50), nullable=False)
     source_class: Mapped[str] = mapped_column(String(32), nullable=False)
     source_artifact_id: Mapped[str] = mapped_column(

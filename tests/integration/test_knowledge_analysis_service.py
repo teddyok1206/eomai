@@ -63,6 +63,7 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeEdgeSourcePointerRecord,
     KnowledgeGraphSnapshotRecord,
     KnowledgeNodeRecord,
+    KnowledgeNodeSourcePointerRecord,
     KnowledgeNodeTermRecord,
     KnowledgeSnapshotAnalysisRecord,
 )
@@ -1604,6 +1605,13 @@ def test_reviewed_curriculum_v2_publishes_ranges_and_retrieves_subtree(
             )
             == 119
         )
+        assert set(
+            session.scalars(
+                select(KnowledgeNodeSourcePointerRecord.analysis_run_id).where(
+                    KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id == snapshot_id
+                )
+            )
+        ) == set(accepted_run_ids)
 
     selected_unit = next(
         unit

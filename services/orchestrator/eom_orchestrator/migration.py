@@ -1,3 +1,3 @@
 """Authoritative Alembic head expected by runtime health checks."""
 
-CURRENT_MIGRATION_REVISION = "20260828_0022"
+CURRENT_MIGRATION_REVISION = "20260831_0023"

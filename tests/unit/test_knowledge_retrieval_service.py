@@ -117,6 +117,7 @@ def test_ranked_context_is_bounded_pointer_oriented_and_marks_answers_avoid_copy
         request=_request(),
         candidates=(
             _Candidate(
+                analysis_run_id="analysisrun_" + "1" * 32,
                 source=document,
                 node_ids=("knode_plate",),
                 anchor_ids=("anchor_plate",),
@@ -126,6 +127,7 @@ def test_ranked_context_is_bounded_pointer_oriented_and_marks_answers_avoid_copy
                 answer_bearing=False,
             ),
             _Candidate(
+                analysis_run_id="analysisrun_" + "2" * 32,
                 source=item,
                 node_ids=("knode_item",),
                 anchor_ids=("anchor_item",),
@@ -142,6 +144,50 @@ def test_ranked_context_is_bounded_pointer_oriented_and_marks_answers_avoid_copy
     assert "nas://" not in markdown
     assert "/mnt/" not in markdown
     assert len(markdown.encode("utf-8")) < 64 * 1024
+
+
+def test_ranked_context_selects_one_exact_range_per_immutable_document() -> None:
+    document = ContentIntakeKnowledgeSourceV2(
+        source_class="TEXTBOOK",
+        intake_batch_id="intake_" + "7" * 32,
+        source_file_id="sourcefile_" + "8" * 32,
+        artifact_member=_member("8", media_type="text/markdown", schema_ref=None),
+    )
+    same_artifact_from_another_revision = ContentIntakeKnowledgeSourceV2(
+        source_class="TEXTBOOK",
+        intake_batch_id="intake_" + "9" * 32,
+        source_file_id="sourcefile_" + "a" * 32,
+        artifact_member=_member("8", media_type="text/markdown", schema_ref=None),
+    )
+    entries, _ = KnowledgeRetrievalApplicationService._rank_and_render(
+        request=_request(),
+        candidates=(
+            _Candidate(
+                analysis_run_id="analysisrun_" + "1" * 32,
+                source=same_artifact_from_another_revision,
+                node_ids=("knode_first",),
+                anchor_ids=("anchor_first",),
+                node_labels=("first range",),
+                node_types=("CONCEPT",),
+                relevance_milli=950,
+                answer_bearing=False,
+            ),
+            _Candidate(
+                analysis_run_id="analysisrun_" + "2" * 32,
+                source=document,
+                node_ids=("knode_second",),
+                anchor_ids=("anchor_second",),
+                node_labels=("second range",),
+                node_types=("CONCEPT",),
+                relevance_milli=900,
+                answer_bearing=False,
+            ),
+        ),
+    )
+
+    assert len(entries) == 1
+    assert entries[0].graph_node_ids == ("knode_first",)
+    assert entries[0].anchor_ids == ("anchor_first",)
 
 
 class _SequenceSession:

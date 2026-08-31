@@ -29,6 +29,7 @@ from eom_catalog_service.knowledge_graph_projection import (
 )
 from eom_catalog_service.knowledge_graph_publication_service import (
     KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH,
+    _curriculum_unit_layers,
 )
 from eom_identifiers import content_sha256
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -226,6 +227,25 @@ def test_reviewed_outline_builds_complete_deterministic_structure_and_projection
     assert KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH == (
         "sha256:741859c2e778560b3fba01e651fcf76e4c894dd5ab630cdcb0f4a475dc7cef60"
     )
+
+
+def test_reviewed_curriculum_units_are_persisted_in_parent_first_layers() -> None:
+    analyses = _complete_analyses()
+    structure = build_integrated_science_structure_manifest(
+        analyses, reviewed_by_operator_id=OPERATOR_ID, created_at=NOW
+    )
+    projection = build_education_graph_projection(analyses, structure)
+
+    layers = _curriculum_unit_layers(projection.curriculum_units)
+
+    assert tuple(len(layer) for layer in layers) == (2, 6, 35)
+    persisted: set[str] = set()
+    for layer in layers:
+        assert all(
+            unit.parent_unit_id is None or unit.parent_unit_id in persisted for unit in layer
+        )
+        persisted.update(unit.curriculum_unit_id for unit in layer)
+    assert persisted == {unit.curriculum_unit_id for unit in projection.curriculum_units}
 
 
 def test_reviewed_projection_preserves_worker_label_aliases_and_indexes_them() -> None:
