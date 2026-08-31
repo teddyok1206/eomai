@@ -154,19 +154,18 @@ def test_vector_overlay_is_sanitized_and_receives_a_deterministic_background() -
 
 def test_vector_overlay_accepts_safe_group_fragment() -> None:
     source = (
-        '<g fill="none" stroke="#000000" stroke-linecap="round" stroke-width="3">'
+        '<g fill="none" font-family="Droid Sans Fallback" font-size="20" stroke="#000000" '
+        'stroke-linecap="round" stroke-width="3">'
         '<circle cx="180" cy="130" fill="#ffffff" r="35"></circle>'
         '<rect height="180" width="260" x="360" y="230"></rect>'
-        '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
-        'x="130" y="200">조사자</text>'
-        '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
-        'x="440" y="450">방형구</text>'
+        '<text fill="#000000" x="130" y="200">조사자</text>'
+        '<text fill="#000000" x="440" y="450">방형구</text>'
         "</g>"
     )
 
     clean = sanitize_svg_overlay(source, ("조사자", "방형구"))
 
-    assert clean.startswith('<g fill="none"')
+    assert clean.startswith('<g fill="none" font-family="Droid Sans Fallback" font-size="20"')
     assert "조사자" in clean
     assert "방형구" in clean
 

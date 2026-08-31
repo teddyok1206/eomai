@@ -56,7 +56,7 @@ _COMMON_ATTRIBUTES = frozenset(
     }
 )
 _TAG_ATTRIBUTES = {
-    "g": frozenset(),
+    "g": frozenset({"font-family", "font-size"}),
     "rect": frozenset({"x", "y", "width", "height", "rx", "ry"}),
     "circle": frozenset({"cx", "cy", "r"}),
     "ellipse": frozenset({"cx", "cy", "rx", "ry"}),
