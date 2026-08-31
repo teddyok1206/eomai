@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-graph-publication/2.0",
+  "title": "Knowledge Graph Publication Command V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "corpus_key", "display_name", "accepted_analysis_run_ids",
+    "structure_manifest", "expected_current_snapshot_revision_id", "publisher_version",
+    "published_by_operator_id", "idempotency_key", "requested_at", "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-graph-publication/2.0"},
+    "corpus_key": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+    "display_name": {
+      "type": "string", "minLength": 1, "maxLength": 128,
+      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$"
+    },
+    "accepted_analysis_run_ids": {
+      "type": "array", "minItems": 1, "maxItems": 10000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"}
+    },
+    "structure_manifest": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+    },
+    "expected_current_snapshot_revision_id": {
+      "type": ["string", "null"], "pattern": "^graphrev_[0-9a-f]{32}$"
+    },
+    "publisher_version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "published_by_operator_id": {
+      "type": "string", "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "idempotency_key": {
+      "type": "string", "minLength": 16, "maxLength": 128,
+      "pattern": "^[!-~]+$"
+    },
+    "requested_at": {"type": "string", "format": "date-time"},
+    "request_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

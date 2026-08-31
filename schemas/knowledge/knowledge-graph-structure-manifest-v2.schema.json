@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-graph-structure-manifest/2.0",
+  "title": "Knowledge Graph Reviewed Structure Manifest V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "structure_manifest_id", "framework_key", "framework_revision_id",
+    "outline_key", "outline_revision", "outline_sha256", "source_analysis_run_ids",
+    "curriculum_units", "analysis_curriculum_bindings", "item_elements",
+    "reviewed_by_operator_id", "created_at", "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-graph-structure-manifest/2.0"},
+    "structure_manifest_id": {
+      "type": "string", "pattern": "^graphstructure_[0-9a-f]{32}$"
+    },
+    "framework_key": {
+      "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"
+    },
+    "framework_revision_id": {
+      "type": "string", "pattern": "^curriculumrev_[0-9a-f]{32}$"
+    },
+    "outline_key": {"type": "string", "minLength": 1, "maxLength": 128},
+    "outline_revision": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "outline_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "source_analysis_run_ids": {
+      "type": "array", "minItems": 1, "maxItems": 10000, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"}
+    },
+    "curriculum_units": {
+      "type": "array", "minItems": 1, "maxItems": 10000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "framework_revision_id", "curriculum_unit_id", "unit_key", "unit_code", "label",
+          "node_stable_key", "parent_unit_id", "unit_level", "ordinal"
+        ],
+        "properties": {
+          "framework_revision_id": {
+            "type": "string", "pattern": "^curriculumrev_[0-9a-f]{32}$"
+          },
+          "curriculum_unit_id": {
+            "type": "string", "pattern": "^currunit_[0-9a-f]{32}$"
+          },
+          "unit_key": {
+            "type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$"
+          },
+          "unit_code": {"type": "string", "minLength": 1, "maxLength": 32},
+          "label": {"type": "string", "minLength": 1, "maxLength": 500},
+          "node_stable_key": {
+            "type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$"
+          },
+          "parent_unit_id": {
+            "type": ["string", "null"], "pattern": "^currunit_[0-9a-f]{32}$"
+          },
+          "unit_level": {
+            "enum": ["MAJOR", "MIDDLE", "MINOR", "ACHIEVEMENT_STANDARD"]
+          },
+          "ordinal": {"type": "integer", "minimum": 1, "maximum": 100000}
+        }
+      }
+    },
+    "analysis_curriculum_bindings": {
+      "type": "array", "maxItems": 10000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["analysis_run_id", "curriculum_unit_ids"],
+        "properties": {
+          "analysis_run_id": {
+            "type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"
+          },
+          "curriculum_unit_ids": {
+            "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^currunit_[0-9a-f]{32}$"}
+          }
+        }
+      }
+    },
+    "item_elements": {
+      "type": "array", "maxItems": 100000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "node_stable_key", "item_id", "item_revision_id", "item_content_artifact_id",
+          "item_content_artifact_revision_id", "item_content_sha256", "schema_ref",
+          "element_kind", "element_id", "answer_bearing"
+        ],
+        "properties": {
+          "node_stable_key": {
+            "type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$"
+          },
+          "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+          "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+          "item_content_artifact_id": {
+            "type": "string", "pattern": "^artifact_[0-9a-f]{32}$"
+          },
+          "item_content_artifact_revision_id": {
+            "type": "string", "pattern": "^rev_[0-9a-f]{32}$"
+          },
+          "item_content_sha256": {
+            "type": "string", "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "schema_ref": {
+            "enum": [
+              "eom.assessment.item-content/1.0",
+              "eom://schemas/item-registry/assessment-item-content-v1"
+            ]
+          },
+          "element_kind": {
+            "enum": [
+              "paragraph", "table", "image", "equation", "statement_set", "statement", "choice"
+            ]
+          },
+          "element_id": {
+            "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          },
+          "answer_bearing": {"type": "boolean"}
+        }
+      }
+    },
+    "reviewed_by_operator_id": {
+      "type": "string", "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

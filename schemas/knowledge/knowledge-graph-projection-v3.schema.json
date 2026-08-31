@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-graph-projection/3.0",
+  "title": "Education Knowledge Graph Projection Types V3",
+  "oneOf": [
+    {"$ref": "#/$defs/node"},
+    {"$ref": "#/$defs/edge"},
+    {"$ref": "#/$defs/curriculumClosure"},
+    {"$ref": "#/$defs/lexicalIndex"}
+  ],
+  "$defs": {
+    "sourcePointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "analysis_run_id", "source_kind", "source_class", "source_revision_id",
+        "source_artifact_id", "source_artifact_revision_id", "source_sha256",
+        "member_path", "anchor_id", "anchor_kind", "locator", "excerpt_sha256"
+      ],
+      "properties": {
+        "analysis_run_id": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+        "source_kind": {
+          "type": "string",
+          "enum": ["CONTENT_INTAKE_FILE", "APPROVED_ITEM_REVISION", "DOCUMENT_REVISION"]
+        },
+        "source_class": {
+          "type": "string",
+          "enum": ["CURRICULUM", "TEXTBOOK", "APPROVED_ITEM", "PAST_EXAM", "INTERNAL_GUIDE"]
+        },
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^(sourcefile|itemrev|edudocrev)_[0-9a-f]{32}$"
+        },
+        "source_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "source_artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "source_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+        "member_path": {"type": "string", "minLength": 1, "maxLength": 512},
+        "anchor_id": {"type": "string", "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"},
+        "anchor_kind": {
+          "type": "string",
+          "enum": ["PAGE", "SECTION", "PARAGRAPH", "TABLE", "FIGURE", "EQUATION", "ITEM_ELEMENT"]
+        },
+        "locator": {"type": "string", "minLength": 1, "maxLength": 256},
+        "excerpt_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"}
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id", "node_type", "stable_key", "label", "aliases", "answer_bearing",
+        "source_pointers"
+      ],
+      "properties": {
+        "node_id": {"type": "string", "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"},
+        "node_type": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/nodeType"},
+        "stable_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$"},
+        "label": {"type": "string", "minLength": 1, "maxLength": 500},
+        "aliases": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "answer_bearing": {"type": "boolean"},
+        "source_pointers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 320000,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sourcePointer"}
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edge_id", "edge_type", "from_node_id", "to_node_id", "confidence_milli",
+        "answer_bearing", "source_pointers"
+      ],
+      "properties": {
+        "edge_id": {"type": "string", "pattern": "^kedge_[a-z0-9][a-z0-9_-]{0,63}$"},
+        "edge_type": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/edgeType"},
+        "from_node_id": {"type": "string", "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"},
+        "to_node_id": {"type": "string", "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"},
+        "confidence_milli": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "answer_bearing": {"type": "boolean"},
+        "source_pointers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 320000,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sourcePointer"}
+        }
+      }
+    },
+    "curriculumClosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["framework_revision_id", "ancestor_unit_id", "descendant_unit_id", "depth"],
+      "properties": {
+        "framework_revision_id": {"type": "string", "pattern": "^curriculumrev_[0-9a-f]{32}$"},
+        "ancestor_unit_id": {"type": "string", "pattern": "^currunit_[0-9a-f]{32}$"},
+        "descendant_unit_id": {"type": "string", "pattern": "^currunit_[0-9a-f]{32}$"},
+        "depth": {"type": "integer", "minimum": 0, "maximum": 3}
+      }
+    },
+    "lexicalEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["term", "node_ids"],
+      "properties": {
+        "term": {"type": "string", "minLength": 2, "maxLength": 500},
+        "node_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"}
+        }
+      }
+    },
+    "lexicalIndex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "entries"],
+      "properties": {
+        "schema_version": {"const": "knowledge-graph-lexical-index/2.0"},
+        "entries": {
+          "type": "array",
+          "maxItems": 10000000,
+          "items": {"$ref": "#/$defs/lexicalEntry"}
+        }
+      }
+    }
+  }
+}

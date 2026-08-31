@@ -31,6 +31,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV6,
     KnowledgeGraphPublicationResult,
     PublishKnowledgeGraphSnapshotCommand,
+    PublishKnowledgeGraphSnapshotCommandV2,
     ReconcileKnowledgeAnalysisCommand,
     ReviewKnowledgeAnalysisCommand,
     TextbookAnalysisBundleManifest,
@@ -38,6 +39,10 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.curriculum_graph_structure import (
+    build_integrated_science_structure_manifest,
+    integrated_science_curriculum_units,
+)
 from eom_catalog_service.educational_document_service import (
     EducationalDocumentService,
     prepare_textbook_registration_request,
@@ -47,6 +52,8 @@ from eom_catalog_service.knowledge_analysis_service import (
     KnowledgeAnalysisServiceError,
 )
 from eom_catalog_service.knowledge_graph_models import (
+    CurriculumUnitClosureRecord,
+    CurriculumUnitRecord,
     EducationRetrievalRequestRecord,
     EvidenceBundleEntryRecord,
     EvidenceBundleRecord,
@@ -357,6 +364,7 @@ def _document_source(
     tmp_path: Path,
     *,
     multimodal: bool = False,
+    curriculum_unit_keys: tuple[str, ...] = ("1-(1)",),
 ) -> tuple[str, str]:
     fixture_root = tmp_path / f"document-{uuid4().hex}"
     fixture_root.mkdir()
@@ -448,8 +456,8 @@ def _document_source(
         "curriculum_mappings": [
             {
                 "mapping_id": "textbookmapping_" + uuid4().hex,
-                "eom_unit_key": "1-(1)",
-                "eom_unit_label": "시간과 공간",
+                "eom_unit_key": unit_key,
+                "eom_unit_label": unit_key,
                 "first_physical_page": 1,
                 "last_physical_page": 2,
                 "evidence_anchor_ids": [anchor_id, anchor_two_id],
@@ -457,6 +465,7 @@ def _document_source(
                 "confidence_milli": 1000,
                 "review_state": "PROPOSED",
             }
+            for unit_key in curriculum_unit_keys
         ],
         "generated_at": "2026-08-25T00:00:00Z",
         "generated_by": "codex-data-analysis-pilot",
@@ -1441,6 +1450,208 @@ def _assert_v8_multimodal_document_analysis_flows_through_graph_and_retrieval(
     ).create(CreateEvidenceBundleCommand.model_validate(retrieval_value))
     assert evidence.schema_version == "evidence-bundle-publication-result/4.0"
     assert evidence.state == "PUBLISHED"
+
+
+def test_reviewed_curriculum_v2_publishes_ranges_and_retrieves_subtree(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    orchestrator_settings, catalog_settings = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, orchestrator_settings)
+    bootstrap_knowledge_analysis_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/knowledge-analysis-v8").resolve(),
+        source_commit="8" * 40,
+        actor_id="phase7-integration",
+        evaluation_cases_total=3,
+        settings=orchestrator_settings,
+    )
+    codes = tuple(
+        sorted(
+            unit.unit_code
+            for unit in integrated_science_curriculum_units()
+            if unit.unit_level == "MINOR"
+        )
+    )
+    chunks = (codes[:16], codes[16:32], codes[32:])
+    _, shared_document_revision_id = _document_source(
+        integration_engine,
+        catalog_settings,
+        tmp_path,
+        multimodal=True,
+        curriculum_unit_keys=tuple(sorted((*chunks[0], *chunks[1]))),
+    )
+    _, final_document_revision_id = _document_source(
+        integration_engine,
+        catalog_settings,
+        tmp_path,
+        multimodal=True,
+        curriculum_unit_keys=chunks[2],
+    )
+    selections = (
+        (shared_document_revision_id, 1, 1, chunks[0]),
+        (shared_document_revision_id, 2, 2, chunks[1]),
+        (final_document_revision_id, 1, 2, chunks[2]),
+    )
+    analysis_service = KnowledgeAnalysisApplicationService(integration_engine, catalog_settings)
+    accepted_run_ids: list[str] = []
+    sessions = build_session_factory(integration_engine)
+    for index, (document_revision_id, first_page, last_page, chunk) in enumerate(selections):
+        created = analysis_service.create(
+            CreateKnowledgeAnalysisCommand(
+                source=EducationalDocumentKnowledgeAnalysisSelection(
+                    source_class="TEXTBOOK",
+                    document_revision_id=document_revision_id,
+                    first_physical_page=first_page,
+                    last_physical_page=last_page,
+                    curriculum_unit_keys=chunk,
+                ),
+                preset_key="knowledge-analysis",
+                general_knowledge_mode="AUXILIARY_UNATTRIBUTED",
+                risk_policy_revision_id=POLICY_ID,
+                predecessor_analysis_run_id=None,
+                requested_by=OPERATOR_ID,
+                idempotency_key=f"curriculum-v2-analysis-{index}:{uuid4().hex}",
+            )
+        )
+        with sessions() as session:
+            run = session.get(KnowledgeAnalysisRunRecord, created.analysis_run_id)
+            assert run is not None
+            request = KnowledgeAnalysisRequestV6.model_validate(run.canonical_request)
+        _complete_proposal(
+            integration_engine,
+            catalog_settings,
+            run_id=created.analysis_run_id,
+            staging_root=tmp_path / f"curriculum-v2-proposal-{index}",
+            proposal_override=_proposal(request),
+        )
+        accepted = analysis_service.reconcile(
+            ReconcileKnowledgeAnalysisCommand(
+                analysis_run_id=created.analysis_run_id,
+                requested_by=OPERATOR_ID,
+            )
+        )
+        assert accepted.state == "ACCEPTED"
+        accepted_run_ids.append(created.analysis_run_id)
+
+    graph_service = KnowledgeGraphPublicationService(integration_engine, catalog_settings)
+    ordered_run_ids = tuple(sorted(accepted_run_ids))
+    with graph_service.sessions() as session:
+        analyses = tuple(
+            graph_service._load_accepted_analysis(session, run_id) for run_id in ordered_run_ids
+        )
+    structure = build_integrated_science_structure_manifest(
+        analyses,
+        reviewed_by_operator_id=OPERATOR_ID,
+        created_at=NOW + timedelta(hours=2),
+    )
+    structure_pointer = graph_service.commit_structure_manifest(structure)
+    assert graph_service.commit_structure_manifest(structure) == structure_pointer
+
+    publication_value: dict[str, object] = {
+        "schema_version": "knowledge-graph-publication/2.0",
+        "corpus_key": f"reviewed-curriculum-{uuid4().hex[:12]}",
+        "display_name": "검토된 통합과학 교과서 그래프",
+        "accepted_analysis_run_ids": list(ordered_run_ids),
+        "structure_manifest": structure_pointer.model_dump(mode="json"),
+        "expected_current_snapshot_revision_id": None,
+        "publisher_version": "2.0.0",
+        "published_by_operator_id": OPERATOR_ID,
+        "idempotency_key": f"reviewed-curriculum-publication:{uuid4().hex}",
+        "requested_at": (NOW + timedelta(hours=3)).isoformat().replace("+00:00", "Z"),
+        "request_sha256": "sha256:" + "0" * 64,
+    }
+    publication_value["request_sha256"] = content_sha256(
+        {key: item for key, item in publication_value.items() if key != "request_sha256"}
+    )
+    command = PublishKnowledgeGraphSnapshotCommandV2.model_validate(publication_value)
+    published = graph_service.publish(command)
+    assert graph_service.publish(command) == published
+    assert published.state == "PUBLISHED"
+    assert published.counts.source_revisions == 3
+    assert published.counts.nodes == 44
+    assert published.counts.edges == 76
+    assert published.graph_snapshot.manifest_artifact.schema_ref.endswith(
+        "knowledge-graph-snapshot-manifest/5.0"
+    )
+
+    with sessions() as session:
+        snapshot_id = published.graph_snapshot.graph_snapshot_revision_id
+        snapshot = session.get(KnowledgeGraphSnapshotRecord, snapshot_id)
+        assert snapshot is not None
+        projection_revision = session.get(
+            ArtifactRevisionRecord, snapshot.projection_artifact_revision_id
+        )
+        assert projection_revision is not None
+        assert {
+            entry["schema_ref"]
+            for entry in projection_revision.manifest["files"]
+            if entry["file_name"] != "projections/graph.md"
+        } == {"eom://schemas/knowledge/knowledge-graph-projection/3.0"}
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(CurriculumUnitRecord)
+                .where(CurriculumUnitRecord.graph_snapshot_revision_id == snapshot_id)
+            )
+            == 43
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(CurriculumUnitClosureRecord)
+                .where(CurriculumUnitClosureRecord.graph_snapshot_revision_id == snapshot_id)
+            )
+            == 119
+        )
+
+    selected_unit = next(
+        unit
+        for unit in integrated_science_curriculum_units()
+        if unit.unit_level == "MINOR" and unit.unit_code == "1-(1)"
+    )
+    retrieval_value: dict[str, object] = {
+        "operation": "CREATE_EVIDENCE_BUNDLE",
+        "graph_snapshot_revision_id": published.graph_snapshot.graph_snapshot_revision_id,
+        "query_kind": "CURRICULUM_COMPONENTS",
+        "curriculum_scope": {
+            "framework_revision_id": selected_unit.framework_revision_id,
+            "root_unit_id": selected_unit.curriculum_unit_id,
+            "include_descendants": True,
+        },
+        "topic_keys": [],
+        "target_item_revision_id": None,
+        "required_item_elements": [],
+        "source_classes": ["TEXTBOOK"],
+        "evidence_budget": {
+            "max_documents": 3,
+            "max_item_revisions": 0,
+            "max_graph_nodes": 16,
+            "max_claims": 4,
+            "max_context_tokens": 4000,
+        },
+        "access_policy_revision_id": "accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9",
+        "requester_role": "ADMIN",
+        "requester_permission_keys": [
+            "knowledge_graph:read",
+            "knowledge_graph:retrieve",
+        ],
+        "requested_by": OPERATOR_ID,
+        "idempotency_key": f"reviewed-curriculum-retrieval:{uuid4().hex}",
+        "submission_sha256": "sha256:" + "0" * 64,
+    }
+    retrieval_value["submission_sha256"] = content_sha256(
+        {
+            key: item
+            for key, item in retrieval_value.items()
+            if key not in {"idempotency_key", "submission_sha256"}
+        }
+    )
+    retrieval = KnowledgeRetrievalApplicationService(integration_engine, catalog_settings).create(
+        CreateEvidenceBundleCommand.model_validate(retrieval_value)
+    )
+    assert retrieval.state == "PUBLISHED"
+    assert retrieval.budget.document_count >= 1
 
 
 def _assert_v9_multimodal_document_analysis_uses_schema_closed_protocol(

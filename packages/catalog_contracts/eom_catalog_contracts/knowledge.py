@@ -1888,6 +1888,27 @@ class CurriculumUnitBinding(FrozenModel):
     ordinal: int = Field(ge=1, le=100000)
 
 
+class CurriculumUnitBindingV2(CurriculumUnitBinding):
+    unit_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$")
+    unit_code: str = Field(min_length=1, max_length=32)
+    label: str = Field(min_length=1, max_length=500)
+
+    _text = field_validator("unit_code", "label")(_safe_text)
+
+
+class AnalysisCurriculumBinding(FrozenModel):
+    analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    curriculum_unit_ids: tuple[Annotated[str, Field(pattern=r"^currunit_[0-9a-f]{32}$")], ...] = (
+        Field(min_length=1, max_length=32)
+    )
+
+    @model_validator(mode="after")
+    def unit_ids_are_sorted_and_unique(self) -> AnalysisCurriculumBinding:
+        if tuple(sorted(set(self.curriculum_unit_ids))) != self.curriculum_unit_ids:
+            raise ValueError("analysis curriculum unit IDs must be sorted and unique")
+        return self
+
+
 class ItemElementBinding(FrozenModel):
     node_stable_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$")
     item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
@@ -1965,6 +1986,96 @@ class KnowledgeGraphStructureManifest(FrozenModel):
         return self
 
 
+class KnowledgeGraphStructureManifestV2(FrozenModel):
+    """Reviewed framework hierarchy and exact accepted-analysis classification bindings."""
+
+    schema_version: Literal["knowledge-graph-structure-manifest/2.0"] = (
+        "knowledge-graph-structure-manifest/2.0"
+    )
+    structure_manifest_id: str = Field(pattern=r"^graphstructure_[0-9a-f]{32}$")
+    framework_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    framework_revision_id: str = Field(pattern=r"^curriculumrev_[0-9a-f]{32}$")
+    outline_key: str = Field(min_length=1, max_length=128)
+    outline_revision: str = Field(pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+    outline_sha256: Sha256
+    source_analysis_run_ids: tuple[
+        Annotated[str, Field(pattern=r"^analysisrun_[0-9a-f]{32}$")], ...
+    ] = Field(min_length=1, max_length=10000)
+    curriculum_units: tuple[CurriculumUnitBindingV2, ...] = Field(min_length=1, max_length=10000)
+    analysis_curriculum_bindings: tuple[AnalysisCurriculumBinding, ...] = Field(max_length=10000)
+    item_elements: tuple[ItemElementBinding, ...] = Field(max_length=100000)
+    reviewed_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    created_at: UtcDatetime
+    manifest_sha256: Sha256
+
+    _text = field_validator("outline_key")(_safe_text)
+
+    @model_validator(mode="after")
+    def reviewed_framework_and_bindings_are_closed(self) -> KnowledgeGraphStructureManifestV2:
+        if tuple(sorted(set(self.source_analysis_run_ids))) != self.source_analysis_run_ids:
+            raise ValueError("structure analysis run IDs must be sorted and unique")
+        if tuple(sorted(self.curriculum_units, key=lambda item: item.unit_key)) != (
+            self.curriculum_units
+        ):
+            raise ValueError("curriculum units must be sorted by immutable unit key")
+        units = {item.curriculum_unit_id: item for item in self.curriculum_units}
+        if len(units) != len(self.curriculum_units):
+            raise ValueError("curriculum unit IDs must be unique")
+        if any(item.framework_revision_id != self.framework_revision_id for item in units.values()):
+            raise ValueError("curriculum units must pin the manifest framework revision")
+        if len({item.unit_key for item in units.values()}) != len(units) or len(
+            {item.node_stable_key for item in units.values()}
+        ) != len(units):
+            raise ValueError("curriculum unit keys and graph stable keys must be unique")
+        code_keys = {(item.unit_level, item.unit_code) for item in units.values()}
+        if len(code_keys) != len(units):
+            raise ValueError("curriculum unit codes must be unique within one level")
+        parent_level = {
+            "MIDDLE": "MAJOR",
+            "MINOR": "MIDDLE",
+            "ACHIEVEMENT_STANDARD": "MINOR",
+        }
+        sibling_keys: set[tuple[str | None, int]] = set()
+        for item in units.values():
+            sibling_key = (item.parent_unit_id, item.ordinal)
+            if sibling_key in sibling_keys:
+                raise ValueError("curriculum sibling ordinals must be unique")
+            sibling_keys.add(sibling_key)
+            if item.unit_level == "MAJOR":
+                if item.parent_unit_id is not None:
+                    raise ValueError("major curriculum unit cannot have a parent")
+                continue
+            parent = units.get(item.parent_unit_id or "")
+            if parent is None or parent.unit_level != parent_level[item.unit_level]:
+                raise ValueError("curriculum parent pointer or level is invalid")
+
+        bindings = self.analysis_curriculum_bindings
+        if tuple(sorted(bindings, key=lambda item: item.analysis_run_id)) != bindings:
+            raise ValueError("analysis curriculum bindings must be sorted by analysis run ID")
+        binding_run_ids = tuple(item.analysis_run_id for item in bindings)
+        if len(binding_run_ids) != len(set(binding_run_ids)) or not set(binding_run_ids).issubset(
+            self.source_analysis_run_ids
+        ):
+            raise ValueError("analysis curriculum bindings must uniquely reference source runs")
+        for binding in bindings:
+            targets = [units.get(unit_id) for unit_id in binding.curriculum_unit_ids]
+            if any(target is None or target.unit_level != "MINOR" for target in targets):
+                raise ValueError("analysis curriculum bindings must resolve to MINOR units")
+
+        elements = [
+            (item.item_revision_id, item.element_kind, item.element_id)
+            for item in self.item_elements
+        ]
+        if len(elements) != len(set(elements)) or len(
+            {item.node_stable_key for item in self.item_elements}
+        ) != len(self.item_elements):
+            raise ValueError("Item element bindings and graph nodes must be unique")
+        body = self.model_dump(mode="json", exclude={"manifest_sha256"})
+        if content_sha256(body) != self.manifest_sha256:
+            raise ValueError("graph structure manifest hash does not match canonical content")
+        return self
+
+
 class PublishKnowledgeGraphSnapshotCommand(FrozenModel):
     """Pointer-only command for publishing one immutable graph snapshot."""
 
@@ -1990,16 +2101,45 @@ class PublishKnowledgeGraphSnapshotCommand(FrozenModel):
             raise ValueError("accepted analysis run IDs must be sorted")
         if len(self.accepted_analysis_run_ids) != len(set(self.accepted_analysis_run_ids)):
             raise ValueError("accepted analysis run IDs must be unique")
+        expected_structure_schema = (
+            "eom://schemas/knowledge/knowledge-graph-structure-manifest/2.0"
+            if str(self.schema_version) == "knowledge-graph-publication/2.0"
+            else "eom://schemas/knowledge/knowledge-graph-structure-manifest/1.0"
+        )
         if self.structure_manifest is not None and (
             self.structure_manifest.member_path != "evidence/graph-structure-manifest.json"
             or self.structure_manifest.media_type != "application/json"
-            or self.structure_manifest.schema_ref
-            != "eom://schemas/knowledge/knowledge-graph-structure-manifest/1.0"
+            or self.structure_manifest.schema_ref != expected_structure_schema
         ):
             raise ValueError("graph structure manifest pointer is incompatible")
         body = self.model_dump(mode="json", exclude={"request_sha256"})
         if content_sha256(body) != self.request_sha256:
             raise ValueError("graph publication request hash does not match canonical content")
+        return self
+
+
+class PublishKnowledgeGraphSnapshotCommandV2(PublishKnowledgeGraphSnapshotCommand):
+    """Publication command requiring one reviewed structure-manifest V2 pointer."""
+
+    schema_version: Literal["knowledge-graph-publication/2.0"] = "knowledge-graph-publication/2.0"  # type: ignore[assignment]
+    structure_manifest: KnowledgeArtifactMemberPointer
+
+    @field_validator("display_name")
+    @classmethod
+    def display_name_is_single_line_safe_text(cls, value: str) -> str:
+        if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in value):
+            raise ValueError("graph display name contains a control character")
+        return value
+
+    @model_validator(mode="after")
+    def exact_v2_structure_pointer(self) -> PublishKnowledgeGraphSnapshotCommandV2:
+        if (
+            self.structure_manifest.member_path != "evidence/graph-structure-manifest.json"
+            or self.structure_manifest.media_type != "application/json"
+            or self.structure_manifest.schema_ref
+            != "eom://schemas/knowledge/knowledge-graph-structure-manifest/2.0"
+        ):
+            raise ValueError("graph publication V2 requires the exact structure manifest V2")
         return self
 
 
@@ -2196,21 +2336,51 @@ class KnowledgeGraphSnapshotManifestV4(FrozenModel):
     def exact_analysis_sources_are_unique(self) -> KnowledgeGraphSnapshotManifestV4:
         if self.previous_graph_snapshot_revision_id == self.graph_snapshot_revision_id:
             raise ValueError("graph snapshot cannot point to itself as its predecessor")
-        source_keys = [
-            (
+        source_keys = []
+        for source in self.source_revisions:
+            base_key: tuple[object, ...] = (
                 source.source_kind,
                 _analysis_source_revision_id(source),
                 source.artifact_member.artifact_revision_id,
             )
-            for source in self.source_revisions
-        ]
+            if str(self.schema_version) == "knowledge-graph-snapshot-manifest/5.0" and isinstance(
+                source, EducationalDocumentKnowledgeSourceV4
+            ):
+                base_key = (
+                    *base_key,
+                    source.first_physical_page,
+                    source.last_physical_page,
+                )
+            source_keys.append(base_key)
         result_revisions = [result.artifact_revision_id for result in self.analysis_results]
         if len(source_keys) != len(set(source_keys)):
-            raise ValueError("graph snapshot V4 source revisions must be unique")
+            raise ValueError("graph snapshot source selections must be unique")
         if len(result_revisions) != len(set(result_revisions)):
             raise ValueError("graph snapshot analysis artifacts must be unique")
         if self.counts.source_revisions != len(self.source_revisions):
             raise ValueError("graph source count does not match pinned source revisions")
+        return self
+
+
+class KnowledgeGraphSnapshotManifestV5(KnowledgeGraphSnapshotManifestV4):
+    """Multimodal snapshot that pins its reviewed framework structure Artifact."""
+
+    schema_version: Literal["knowledge-graph-snapshot-manifest/5.0"] = (
+        "knowledge-graph-snapshot-manifest/5.0"  # type: ignore[assignment]
+    )
+    structure_manifest: KnowledgeArtifactMemberPointer
+
+    @model_validator(mode="after")
+    def exact_structure_pointer(self) -> KnowledgeGraphSnapshotManifestV5:
+        if (
+            self.structure_manifest.member_path != "evidence/graph-structure-manifest.json"
+            or self.structure_manifest.media_type != "application/json"
+            or self.structure_manifest.schema_ref
+            != "eom://schemas/knowledge/knowledge-graph-structure-manifest/2.0"
+        ):
+            raise ValueError("graph snapshot V5 requires the exact structure manifest V2")
+        if self.projections.curriculum_closure is None:
+            raise ValueError("graph snapshot V5 requires a curriculum closure projection")
         return self
 
 

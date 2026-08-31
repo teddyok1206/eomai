@@ -19,6 +19,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV4,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphStructureManifest,
+    KnowledgeGraphStructureManifestV2,
     KnowledgeNodeType,
     ProposedKnowledgeEdgeV2,
     validate_knowledge_edge_endpoint_types,
@@ -26,6 +27,16 @@ from eom_catalog_contracts import (
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 
 _LEXICAL_TOKEN = re.compile(r"[0-9A-Za-z가-힣]+")
+_MAX_NODE_ALIASES = 256
+_CURRICULUM_ALIGNED_NODE_TYPES = frozenset(
+    {
+        KnowledgeNodeType.CONCEPT,
+        KnowledgeNodeType.CLAIM,
+        KnowledgeNodeType.PROCESS,
+        KnowledgeNodeType.OBSERVABLE_PROPERTY,
+        KnowledgeNodeType.FORMULA,
+    }
+)
 
 
 def knowledge_node_terms(stable_key: str, label: str) -> tuple[str, ...]:
@@ -111,11 +122,12 @@ class ProjectedKnowledgeNode:
     node_type: str
     stable_key: str
     label: str
+    aliases: tuple[str, ...]
     answer_bearing: bool
     source_pointers: tuple[GraphSourcePointer, ...]
 
-    def document(self) -> dict[str, Any]:
-        return {
+    def document(self, *, include_aliases: bool = False) -> dict[str, Any]:
+        document = {
             "node_id": self.node_id,
             "node_type": self.node_type,
             "stable_key": self.stable_key,
@@ -123,6 +135,9 @@ class ProjectedKnowledgeNode:
             "answer_bearing": self.answer_bearing,
             "source_pointers": [item.document() for item in self.source_pointers],
         }
+        if include_aliases:
+            document["aliases"] = list(self.aliases)
+        return document
 
 
 @dataclass(frozen=True)
@@ -172,6 +187,7 @@ class EducationGraphProjection:
     curriculum_closure: tuple[CurriculumClosure, ...]
     item_elements: tuple[ItemElementBinding, ...]
     anchor_count: int
+    projection_schema_version: str
 
 
 @dataclass(frozen=True)
@@ -186,8 +202,30 @@ class _NodeAccumulator:
     node_id: str
     node_type: str
     stable_key: str
-    label: str
+    label_counts: dict[str, int]
+    reviewed_label: str | None
     source_pointers: set[GraphSourcePointer]
+
+    def add_label(self, label: str, *, reviewed: bool = False) -> None:
+        self.label_counts[label] = self.label_counts.get(label, 0) + 1
+        if reviewed:
+            self.reviewed_label = label
+
+    def preferred_label(self) -> str:
+        if self.reviewed_label is not None:
+            return self.reviewed_label
+        return min(
+            self.label_counts,
+            key=lambda label: (
+                -int(bool(re.search(r"[가-힣]", label))),
+                -self.label_counts[label],
+                label,
+            ),
+        )
+
+    def aliases(self) -> tuple[str, ...]:
+        preferred = self.preferred_label()
+        return tuple(sorted(label for label in self.label_counts if label != preferred))
 
 
 @dataclass
@@ -312,9 +350,189 @@ def _curriculum_closure(
     return tuple(sorted(closure))
 
 
+def _merge_edge(
+    accumulators: dict[tuple[str, str, str], _EdgeAccumulator],
+    *,
+    edge_type: str,
+    from_node_id: str,
+    to_node_id: str,
+    confidence_milli: int,
+    source_pointers: set[GraphSourcePointer],
+) -> None:
+    key = (edge_type, from_node_id, to_node_id)
+    existing = accumulators.get(key)
+    if existing is None:
+        accumulators[key] = _EdgeAccumulator(
+            edge_id=_stable_id(
+                "kedge_",
+                {
+                    "edge_type": edge_type,
+                    "from_node_id": from_node_id,
+                    "to_node_id": to_node_id,
+                },
+            ),
+            edge_type=edge_type,
+            from_node_id=from_node_id,
+            to_node_id=to_node_id,
+            confidence_milli=confidence_milli,
+            source_pointers=set(source_pointers),
+        )
+        return
+    existing.confidence_milli = min(existing.confidence_milli, confidence_milli)
+    existing.source_pointers.update(source_pointers)
+
+
+def _add_reviewed_curriculum_structure(
+    analyses: tuple[AcceptedAnalysisProposal, ...],
+    structure: KnowledgeGraphStructureManifestV2,
+    node_accumulators: dict[str, _NodeAccumulator],
+    local_node_ids: dict[tuple[str, str], str],
+    edge_accumulators: dict[tuple[str, str, str], _EdgeAccumulator],
+) -> None:
+    analysis_by_id = {analysis.analysis_run_id: analysis for analysis in analyses}
+    units_by_id = {unit.curriculum_unit_id: unit for unit in structure.curriculum_units}
+    bindings_by_run = {
+        binding.analysis_run_id: binding for binding in structure.analysis_curriculum_bindings
+    }
+    expected_bound_runs = {
+        analysis.analysis_run_id
+        for analysis in analyses
+        if isinstance(analysis.source, EducationalDocumentKnowledgeSourceV4)
+        and analysis.source.curriculum_unit_keys
+    }
+    if set(bindings_by_run) != expected_bound_runs:
+        raise KnowledgeGraphProjectionError(
+            "KNOWLEDGE_GRAPH_CURRICULUM_BINDING_COVERAGE_INVALID",
+            "reviewed curriculum bindings must exactly cover classified source ranges",
+        )
+    direct_pointers: dict[str, set[GraphSourcePointer]] = {
+        unit.curriculum_unit_id: set() for unit in structure.curriculum_units
+    }
+    node_pointers_by_run: dict[str, dict[str, set[GraphSourcePointer]]] = {}
+
+    for run_id, binding in bindings_by_run.items():
+        analysis = analysis_by_id[run_id]
+        source = analysis.source
+        if not isinstance(source, EducationalDocumentKnowledgeSourceV4):
+            raise KnowledgeGraphProjectionError(
+                "KNOWLEDGE_GRAPH_CURRICULUM_SOURCE_INVALID",
+                "reviewed curriculum bindings require a multimodal document source",
+            )
+        bound_units = tuple(units_by_id[unit_id] for unit_id in binding.curriculum_unit_ids)
+        if tuple(sorted(unit.unit_code for unit in bound_units)) != source.curriculum_unit_keys:
+            raise KnowledgeGraphProjectionError(
+                "KNOWLEDGE_GRAPH_CURRICULUM_SOURCE_MISMATCH",
+                "reviewed curriculum binding differs from the accepted source range",
+            )
+        proposal_nodes = {node.node_id: node for node in analysis.proposal.nodes}
+        pointers_by_stable_key: dict[str, set[GraphSourcePointer]] = {}
+        range_pointers: set[GraphSourcePointer] = set()
+        for node in proposal_nodes.values():
+            pointers = {_source_pointer(analysis, anchor_id) for anchor_id in node.anchor_ids}
+            pointers_by_stable_key[node.stable_key] = pointers
+            range_pointers.update(pointers)
+        if not range_pointers:
+            raise KnowledgeGraphProjectionError(
+                "KNOWLEDGE_GRAPH_CURRICULUM_SOURCE_MISSING",
+                "reviewed curriculum binding has no source evidence",
+            )
+        node_pointers_by_run[run_id] = pointers_by_stable_key
+        for unit in bound_units:
+            direct_pointers[unit.curriculum_unit_id].update(range_pointers)
+
+    children_by_parent: dict[str, list[str]] = {}
+    for unit in structure.curriculum_units:
+        if unit.parent_unit_id is not None:
+            children_by_parent.setdefault(unit.parent_unit_id, []).append(unit.curriculum_unit_id)
+
+    pointer_cache: dict[str, frozenset[GraphSourcePointer]] = {}
+
+    def descendant_pointers(
+        unit_id: str, visiting: frozenset[str] = frozenset()
+    ) -> frozenset[GraphSourcePointer]:
+        cached = pointer_cache.get(unit_id)
+        if cached is not None:
+            return cached
+        if unit_id in visiting:
+            raise KnowledgeGraphProjectionError(
+                "KNOWLEDGE_GRAPH_CURRICULUM_CYCLE", "curriculum hierarchy contains a cycle"
+            )
+        values = set(direct_pointers[unit_id])
+        for child_id in children_by_parent.get(unit_id, []):
+            values.update(descendant_pointers(child_id, visiting | {unit_id}))
+        result = frozenset(values)
+        pointer_cache[unit_id] = result
+        return result
+
+    pointers_by_unit = {
+        unit.curriculum_unit_id: descendant_pointers(unit.curriculum_unit_id)
+        for unit in structure.curriculum_units
+    }
+    if any(not values for values in pointers_by_unit.values()):
+        raise KnowledgeGraphProjectionError(
+            "KNOWLEDGE_GRAPH_CURRICULUM_COVERAGE_MISSING",
+            "every reviewed curriculum unit must resolve to accepted source evidence",
+        )
+
+    unit_node_ids: dict[str, str] = {}
+    for unit in structure.curriculum_units:
+        node_id = _stable_id(
+            "knode_",
+            {"node_type": KnowledgeNodeType.CURRICULUM_UNIT, "stable_key": unit.node_stable_key},
+        )
+        unit_node_ids[unit.curriculum_unit_id] = node_id
+        existing = node_accumulators.get(unit.node_stable_key)
+        if existing is None:
+            node_accumulators[unit.node_stable_key] = _NodeAccumulator(
+                node_id=node_id,
+                node_type=KnowledgeNodeType.CURRICULUM_UNIT,
+                stable_key=unit.node_stable_key,
+                label_counts={unit.label: 1},
+                reviewed_label=unit.label,
+                source_pointers=set(pointers_by_unit[unit.curriculum_unit_id]),
+            )
+        elif existing.node_id != node_id or existing.node_type != KnowledgeNodeType.CURRICULUM_UNIT:
+            raise KnowledgeGraphProjectionError(
+                "KNOWLEDGE_GRAPH_CURRICULUM_NODE_CONFLICT",
+                "reviewed curriculum node conflicts with an accepted proposal",
+            )
+        else:
+            existing.add_label(unit.label, reviewed=True)
+            existing.source_pointers.update(pointers_by_unit[unit.curriculum_unit_id])
+
+    for unit in structure.curriculum_units:
+        if unit.parent_unit_id is None:
+            continue
+        _merge_edge(
+            edge_accumulators,
+            edge_type="CONTAINS_CURRICULUM_UNIT",
+            from_node_id=unit_node_ids[unit.parent_unit_id],
+            to_node_id=unit_node_ids[unit.curriculum_unit_id],
+            confidence_milli=1000,
+            source_pointers=set(pointers_by_unit[unit.curriculum_unit_id]),
+        )
+
+    for run_id, binding in bindings_by_run.items():
+        analysis = analysis_by_id[run_id]
+        pointers_by_stable_key = node_pointers_by_run[run_id]
+        for proposed_node in analysis.proposal.nodes:
+            if proposed_node.node_type not in _CURRICULUM_ALIGNED_NODE_TYPES:
+                continue
+            from_node_id = local_node_ids[(run_id, proposed_node.node_id)]
+            for unit_id in binding.curriculum_unit_ids:
+                _merge_edge(
+                    edge_accumulators,
+                    edge_type="ALIGNS_WITH_CURRICULUM",
+                    from_node_id=from_node_id,
+                    to_node_id=unit_node_ids[unit_id],
+                    confidence_milli=1000,
+                    source_pointers=set(pointers_by_stable_key[proposed_node.stable_key]),
+                )
+
+
 def build_education_graph_projection(
     analyses: tuple[AcceptedAnalysisProposal, ...],
-    structure: KnowledgeGraphStructureManifest | None,
+    structure: KnowledgeGraphStructureManifest | KnowledgeGraphStructureManifestV2 | None,
 ) -> EducationGraphProjection:
     """Merge accepted proposals by stable identity and fail closed on conflicts."""
 
@@ -336,6 +554,7 @@ def build_education_graph_projection(
         )
 
     node_accumulators: dict[str, _NodeAccumulator] = {}
+    allow_label_aliases = isinstance(structure, KnowledgeGraphStructureManifestV2)
     local_node_ids: dict[tuple[str, str], str] = {}
     edge_accumulators: dict[tuple[str, str, str], _EdgeAccumulator] = {}
     anchor_count = 0
@@ -359,19 +578,21 @@ def build_education_graph_projection(
                     node_id=node_id,
                     node_type=proposed_node.node_type,
                     stable_key=proposed_node.stable_key,
-                    label=proposed_node.label,
+                    label_counts={proposed_node.label: 1},
+                    reviewed_label=None,
                     source_pointers=pointers,
                 )
             elif (
                 existing.node_id != node_id
                 or existing.node_type != proposed_node.node_type
-                or existing.label != proposed_node.label
+                or (not allow_label_aliases and proposed_node.label not in existing.label_counts)
             ):
                 raise KnowledgeGraphProjectionError(
                     "KNOWLEDGE_GRAPH_NODE_CONFLICT",
                     "one stable node key has conflicting type or label",
                 )
             else:
+                existing.add_label(proposed_node.label)
                 existing.source_pointers.update(pointers)
 
         proposal_nodes = {item.node_id: item for item in analysis.proposal.nodes}
@@ -390,32 +611,22 @@ def build_education_graph_projection(
                 ) from exc
             from_id = local_node_ids[(analysis.analysis_run_id, proposed_edge.from_node_id)]
             to_id = local_node_ids[(analysis.analysis_run_id, proposed_edge.to_node_id)]
-            key = (edge_type, from_id, to_id)
             pointers = {
                 _source_pointer(analysis, anchor_id) for anchor_id in proposed_edge.anchor_ids
             }
-            existing_edge = edge_accumulators.get(key)
-            if existing_edge is None:
-                edge_accumulators[key] = _EdgeAccumulator(
-                    edge_id=_stable_id(
-                        "kedge_",
-                        {
-                            "edge_type": edge_type,
-                            "from_node_id": from_id,
-                            "to_node_id": to_id,
-                        },
-                    ),
-                    edge_type=edge_type,
-                    from_node_id=from_id,
-                    to_node_id=to_id,
-                    confidence_milli=proposed_edge.confidence_milli,
-                    source_pointers=pointers,
-                )
-            else:
-                existing_edge.confidence_milli = min(
-                    existing_edge.confidence_milli, proposed_edge.confidence_milli
-                )
-                existing_edge.source_pointers.update(pointers)
+            _merge_edge(
+                edge_accumulators,
+                edge_type=edge_type,
+                from_node_id=from_id,
+                to_node_id=to_id,
+                confidence_milli=proposed_edge.confidence_milli,
+                source_pointers=pointers,
+            )
+
+    if isinstance(structure, KnowledgeGraphStructureManifestV2):
+        _add_reviewed_curriculum_structure(
+            analyses, structure, node_accumulators, local_node_ids, edge_accumulators
+        )
 
     curriculum_units = structure.curriculum_units if structure is not None else ()
     item_elements = structure.item_elements if structure is not None else ()
@@ -440,12 +651,19 @@ def build_education_graph_projection(
                 "Item element binding does not resolve to an ITEM_ELEMENT node",
             )
 
+    if any(len(item.aliases()) > _MAX_NODE_ALIASES for item in node_accumulators.values()):
+        raise KnowledgeGraphProjectionError(
+            "KNOWLEDGE_GRAPH_NODE_ALIAS_LIMIT_EXCEEDED",
+            "one stable node key exceeds the bounded alias contract",
+        )
+
     nodes = tuple(
         ProjectedKnowledgeNode(
             node_id=item.node_id,
             node_type=item.node_type,
             stable_key=item.stable_key,
-            label=item.label,
+            label=item.preferred_label(),
+            aliases=item.aliases(),
             answer_bearing=item.stable_key in answer_bearing_keys,
             source_pointers=tuple(sorted(item.source_pointers)),
         )
@@ -475,6 +693,18 @@ def build_education_graph_projection(
         curriculum_closure=_curriculum_closure(curriculum_units),
         item_elements=item_elements,
         anchor_count=anchor_count,
+        projection_schema_version=(
+            "3.0"
+            if isinstance(structure, KnowledgeGraphStructureManifestV2)
+            else (
+                "2.0"
+                if any(
+                    isinstance(analysis.source, EducationalDocumentKnowledgeSourceV3)
+                    for analysis in analyses
+                )
+                else "1.0"
+            )
+        ),
     )
 
 
@@ -483,15 +713,21 @@ def serialize_education_graph_projection(
 ) -> EducationGraphProjectionFiles:
     """Serialize projection members canonically for Artifact publication."""
 
-    node_documents = [item.document() for item in projection.nodes]
+    include_aliases = projection.projection_schema_version == "3.0"
+    node_documents = [item.document(include_aliases=include_aliases) for item in projection.nodes]
     edge_documents = [item.document() for item in projection.edges]
     closure_documents = [item.document() for item in projection.curriculum_closure]
     lexical: dict[str, set[str]] = {}
     for node in projection.nodes:
-        for token in knowledge_node_terms(node.stable_key, node.label):
-            lexical.setdefault(token, set()).add(node.node_id)
+        for label in (node.label, *node.aliases):
+            for token in knowledge_node_terms(node.stable_key, label):
+                lexical.setdefault(token, set()).add(node.node_id)
     lexical_document = {
-        "schema_version": "knowledge-graph-lexical-index/1.0",
+        "schema_version": (
+            "knowledge-graph-lexical-index/2.0"
+            if include_aliases
+            else "knowledge-graph-lexical-index/1.0"
+        ),
         "entries": [
             {"term": term, "node_ids": sorted(node_ids)}
             for term, node_ids in sorted(lexical.items())
@@ -522,12 +758,7 @@ def serialize_education_graph_projection(
             canonical_json_bytes(value) + b"\n" for value in closure_documents
         )
     projection_schema = (
-        "eom://schemas/knowledge/knowledge-graph-projection/2.0"
-        if any(
-            isinstance(analysis.source, EducationalDocumentKnowledgeSourceV3)
-            for analysis in projection.analyses
-        )
-        else "eom://schemas/knowledge/knowledge-graph-projection/1.0"
+        f"eom://schemas/knowledge/knowledge-graph-projection/{projection.projection_schema_version}"
     )
     metadata = {
         "projections/nodes.jsonl": {
