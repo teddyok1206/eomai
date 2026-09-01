@@ -225,6 +225,40 @@ def test_v6_hybrid_request_describes_a_semantic_raster_not_a_background(tmp_path
     )
 
     assert request.generation.prompt.startswith("Semantic raster layer")
+    assert "deterministic Python/SVG figure" in request.generation.prompt
+    assert "simplified generic figures" in request.generation.prompt
+    assert "pure white background" in request.generation.prompt
     assert "one student" in request.generation.prompt
     assert "background layer only" not in request.generation.prompt
     assert "text" in request.generation.negative_prompt
+    assert "photorealistic" in request.generation.negative_prompt
+    assert "uncanny face" in request.generation.negative_prompt
+
+
+@pytest.mark.parametrize(
+    "generation_prompt",
+    (
+        "one photorealistic student observing plants",
+        "one student with a detailed face observing plants",
+        "한 명의 학생을 실사 스타일로 표현",
+        "학생을 시네마틱 조명으로 표현",
+    ),
+)
+def test_v6_hybrid_request_rejects_style_that_conflicts_with_svg_contract(
+    tmp_path: Path,
+    generation_prompt: str,
+) -> None:
+    path = tmp_path / "generated-overlay.png"
+    path.write_bytes(_overlay_png())
+    path.chmod(0o640)
+    drawing = _hybrid_drawing().model_copy(update={"generation_prompt": generation_prompt})
+
+    with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_INPUT_INVALID"):
+        _build_request(
+            workflow_id="workflow_" + "8" * 32,
+            result_revision_id="rev_" + "9" * 32,
+            drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+            drawing=drawing,
+            binding=LocalImageProviderBinding.model_validate(_binding_value()),
+            overlay_path=path,
+        )

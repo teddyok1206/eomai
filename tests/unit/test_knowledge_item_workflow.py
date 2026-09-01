@@ -373,6 +373,29 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
     assert "DejaVu Serif" in image_prompt
     assert "Droid Sans Fallback" not in image_prompt
 
+    generated_fixed_gpu_style_pack = compile_pack(
+        ROOT / "content/packs/generated-knowledge-item/1.7.0"
+    )
+    assert generated_fixed_gpu_style_pack.manifest.pack.version == "1.7.0"
+    assert generated_fixed_gpu_style_pack.source_tree_sha256 == (
+        "sha256:3cdc4f3c8c085df7345991cd8e5ac1e86c84758ed47e303303590872ca1806bb"
+    )
+    assert {profile.profile.version for profile in generated_fixed_gpu_style_pack.profiles} == {
+        "6.0.0"
+    }
+    assert generated_fixed_gpu_style_pack.manifest.compatibility.workflow_definitions[
+        0
+    ].versions == ("1.6.0",)
+    prompt_text = "\n".join(
+        value.path.read_text(encoding="utf-8")
+        for value in generated_fixed_gpu_style_pack.files
+        if value.relative_path.startswith("prompt-templates/")
+    )
+    assert "결정론적 Python/SVG" in prompt_text
+    assert "순백 배경" in prompt_text
+    assert "실사" in prompt_text
+    assert "대상·자세·배치" in prompt_text
+
 
 def test_content_pack_provenance_never_fakes_a_source_pointer() -> None:
     pack_path = ROOT / "content/packs/general-knowledge-item/1.0.0/pack.yaml"

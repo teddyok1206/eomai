@@ -41,18 +41,50 @@ BACKGROUND_MEMBER: Final = "generated-background.png"
 FINAL_MEMBER: Final = "generated-stimulus.png"
 RECEIPT_MEMBER: Final = "local-image-receipt.json"
 PROVIDER_RECEIPT_MEMBER: Final = "composite-receipt.json"
+_EOM_TEXTBOOK_ILLUSTRATION_STYLE: Final = (
+    "Use exactly the visual language of an EOM deterministic Python/SVG figure: a clean Korean "
+    "high-school science assessment illustration with simplified generic figures, minimal facial "
+    "features, crisp dark outlines, flat shapes, restrained grayscale or limited flat colors, a "
+    "pure white background, and a clear front or side view. Do not create photorealism, "
+    "photographic texture, gradients, shadows, glossy highlights, dramatic lighting, detailed "
+    "skin, or cinematic composition. "
+)
 _SAFE_BACKGROUND_PREFIX: Final = (
-    "Non-authoritative background layer only. Render no text, labels, numbers, symbols, "
-    "equations, graphs, scales, measurement marks, logos, or watermarks. "
+    "Non-authoritative background layer only. "
+    + _EOM_TEXTBOOK_ILLUSTRATION_STYLE
+    + "Render no text, labels, numbers, symbols, equations, graphs, scales, measurement marks, "
+    "logos, or watermarks. "
 )
 _SAFE_RASTER_PREFIX: Final = (
-    "Semantic raster layer for an educational science stimulus. Render only the requested person, "
-    "animal, organism, natural object, or realistic scene. Render no text, labels, numbers, "
-    "symbols, equations, graph axes, scale marks, measurement marks, logos, or watermarks. "
+    "Semantic raster layer for an educational science stimulus. "
+    + _EOM_TEXTBOOK_ILLUSTRATION_STYLE
+    + "Render only the requested person, animal, organism, natural object, or scene. Render no "
+    "text, labels, numbers, symbols, equations, graph axes, scale marks, measurement marks, logos, "
+    "or watermarks. "
 )
 _SAFE_NEGATIVE_PROMPT: Final = (
-    "text, letters, labels, numbers, symbols, equations, graph axes, scale marks, "
-    "measurement marks, logo, watermark"
+    "photorealistic, photograph, photographic texture, detailed face, detailed skin, uncanny face, "
+    "3d render, gradient, shadow, glossy highlight, dramatic lighting, cinematic composition, "
+    "text, letters, labels, numbers, symbols, equations, graph axes, scale marks, measurement "
+    "marks, logo, watermark"
+)
+_FORBIDDEN_GENERATION_STYLE_TERMS: Final = (
+    "photoreal",
+    "photo-real",
+    "photograph",
+    "realistic human",
+    "realistic person",
+    "detailed face",
+    "detailed skin",
+    "cinematic",
+    "dramatic lighting",
+    "studio lighting",
+    "3d render",
+    "실사",
+    "사진풍",
+    "사실적인 사람",
+    "상세한 얼굴",
+    "시네마틱",
 )
 _WORKFLOW_ID: Final = re.compile(r"^workflow_[0-9a-f]{32}$")
 _REVISION_ID: Final = re.compile(r"^rev_[0-9a-f]{32}$")
@@ -179,6 +211,11 @@ def _build_request(
     ):
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
     if drawing.generation_prompt is None:
+        raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
+    normalized_generation_prompt = drawing.generation_prompt.casefold()
+    if any(
+        forbidden in normalized_generation_prompt for forbidden in _FORBIDDEN_GENERATION_STYLE_TERMS
+    ):
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
     prefix = (
         _SAFE_RASTER_PREFIX

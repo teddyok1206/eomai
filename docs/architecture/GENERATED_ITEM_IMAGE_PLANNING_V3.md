@@ -20,6 +20,14 @@ Two routes are executable:
   scene. A validated SVG overlay still owns every authoritative label, arrow, boundary, scale,
   equation, and geometric relation. Catalog composites both layers into the final PNG.
 
+The word `realistic` in a route reason describes the presence of a natural object or scene; it does
+not authorize photorealistic rendering. Both routes share one reviewed presentation language:
+pure-white background, simplified anonymous forms, minimal facial detail, crisp dark outlines,
+flat shapes, and restrained grayscale or limited flat color. The fixed local-provider adapter
+prepends that style contract to every GPU request. Worker-authored generation text describes only
+the subject, pose, and placement. Conflicting photo, detailed-face, 3D, gradient, shadow, dramatic
+lighting, or cinematic directives fail before the fixed GPU unit starts.
+
 External image APIs remain forbidden. `LOCAL_GENERATIVE_BACKGROUND` remains a historical V5 value
 and is not reinterpreted.
 
@@ -54,6 +62,11 @@ The supported reason codes are intentionally small:
 
 The route is not inferred from prompt text or image kind. A changed route or reason produces a new
 role-result revision and a new artifact identity.
+
+`generation_prompt` is content data rather than an unrestricted style prompt. Catalog owns the one
+authoritative renderer style. This keeps deterministic Python/SVG diagrams and optional GPU pixels
+visually coherent and prevents a later content worker from overriding the reviewed exam-figure
+presentation boundary.
 
 ## Required pointers and resolution checks
 

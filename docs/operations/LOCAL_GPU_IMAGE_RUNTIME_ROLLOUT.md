@@ -8,6 +8,12 @@ SVG overlay. The local model is invoked only for `HYBRID_LOCAL_GENERATIVE`; a
 expose the model to Codex workers and does not call an external API. Historical Content Pack 1.3
 and 1.4 workflows retain their original release and route semantics.
 
+The GPU route is not a photographic route. The adapter uses the same reviewed presentation
+language as deterministic Python/SVG output: pure white, simplified generic forms, minimal facial
+features, crisp outlines, flat shapes, and restrained colors. A worker prompt supplies only the
+semantic subject, pose, and placement. Photorealistic, photographic, detailed-face/skin, 3D,
+gradient, shadow, dramatic-lighting, and cinematic directives fail closed before unit activation.
+
 ## Immutable preflight
 
 1. Require the reviewed Git commit and a clean worktree.
