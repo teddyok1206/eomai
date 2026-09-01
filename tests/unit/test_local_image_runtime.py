@@ -87,6 +87,25 @@ def test_local_image_release_scripts_have_valid_syntax() -> None:
         "normalize_runtime_permissions.py",
         "exec",
     )
+    compile(
+        (ROOT / "scripts/image_provider/run_fixed_composite_smoke.py").read_text(encoding="utf-8"),
+        "run_fixed_composite_smoke.py",
+        "exec",
+    )
+
+
+def test_fixed_composite_smoke_uses_production_adapter_and_is_not_an_item_workflow() -> None:
+    source = (ROOT / "scripts/image_provider/run_fixed_composite_smoke.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "FixedLocalImageProviderAdapter(settings).generate" in source
+    assert "LOCAL_GENERATIVE_BACKGROUND" in source
+    assert "compose_vector_overlay_svg" in source
+    assert "LOCAL_IMAGE_FIXED_UNIT_SMOKE_PASS" in source
+    assert "shutil.rmtree(workspace)" in source
+    assert "WorkflowCatalogService" not in source
+    assert "session" not in source.lower()
 
 
 def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available() -> None:

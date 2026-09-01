@@ -49,7 +49,16 @@ After the active-lease guard passes:
    new Catalog adapter;
 3. verify the runner remains enabled/active and cannot read `/srv/eom/models/image`;
 4. execute one disposable fixed-unit identity/composition smoke using a protected synthetic SVG
-   overlay, never an Item workflow;
+   overlay, never an Item workflow:
+
+   ```bash
+   sudo -n runuser -u eom-workflow-runner -g eom -- \
+     /srv/eom/conda/envs/eom-api/bin/python -I \
+     /home/eom/EOM/scripts/image_provider/run_fixed_composite_smoke.py
+   ```
+
+   The script deletes its exact workspace only after full receipt/hash validation. A failed smoke
+   preserves its disposable state and provider workspace for diagnosis.
 5. import, release, inspect, and activate `content/packs/generated-knowledge-item/1.4.0`;
 6. verify new binding snapshots pin version 1.4, the binding SHA, model revision, and sampler while
    existing workflow rows retain their prior release pointers.
