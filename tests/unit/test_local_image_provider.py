@@ -250,6 +250,8 @@ def test_contract_timestamps_reject_non_utc_values(tmp_path: Path) -> None:
 
 
 def test_reviewed_ssd1b_file_set_creates_one_hash_pinned_manifest(tmp_path: Path) -> None:
+    assert len(SSD1B_REQUIRED_FILES) == 19
+    assert not any(path.endswith("added_tokens.json") for path in SSD1B_REQUIRED_FILES)
     revision = tmp_path / "revision"
     files_root = revision / "files"
     files_root.mkdir(parents=True, mode=0o750)
