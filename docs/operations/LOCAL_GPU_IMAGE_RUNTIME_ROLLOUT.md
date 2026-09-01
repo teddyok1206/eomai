@@ -17,6 +17,10 @@ and 1.4 workflows retain their original release and route semantics.
    staged, but runner restart and Content Pack activation wait.
 4. Confirm `/srv/eom/models/image` contains the exact binding-pinned model revision and manifest.
 5. Record the active generated Content Pack release and source/bundle/manifest hashes for rollback.
+6. Confirm the shared non-secret configuration traversal root `/etc/eom` is a non-symlink
+   `root:root:0755` directory. The image-runtime deployer must not take ownership of or narrow this
+   shared boundary. Protected `/etc/eom/secrets` remains independently `root:eom:0750`, and each
+   configuration or secret file retains its reviewed owner, group, and mode.
 
 ## Build and prepare runtime
 

@@ -64,6 +64,10 @@ def test_local_image_release_scripts_are_offline_scoped_and_non_recursive() -> N
     assert "RUNNER_RESTART_REQUIRED=YES" in deploy
     assert "systemctl restart" not in deploy
     assert "chmod -R" not in deploy and "chown -R" not in deploy
+    assert "stat -c '%U:%G:%a' /etc/eom" in deploy
+    assert '"root:root:755"' in deploy
+    assert "LOCAL_IMAGE_SHARED_CONFIG_ROOT_DRIFT" in deploy
+    assert "install -d -o root -g eom -m 0750 /etc/eom" not in deploy
     assert "os.walk(files_root, followlinks=False)" in normalize
     assert "manifest.files" in normalize
 

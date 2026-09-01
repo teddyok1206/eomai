@@ -59,7 +59,9 @@ for forbidden in eom sudo docker lxd adm; do
 done
 usermod --append --groups eom-image eom-workflow-runner
 
-install -d -o root -g eom -m 0750 /etc/eom
+[[ -d /etc/eom && ! -L /etc/eom ]] || fail "LOCAL_IMAGE_SHARED_CONFIG_ROOT_INVALID"
+[[ "$(stat -c '%U:%G:%a' /etc/eom)" == "root:root:755" ]] || \
+  fail "LOCAL_IMAGE_SHARED_CONFIG_ROOT_DRIFT"
 binding_temporary=$(mktemp /etc/eom/.local-image-provider.XXXXXX)
 trap 'rm -f "${binding_temporary}"' EXIT
 install -o root -g eom -m 0640 "${BINDING_SOURCE}" "${binding_temporary}"
