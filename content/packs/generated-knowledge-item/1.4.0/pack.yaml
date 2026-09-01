@@ -1,0 +1,39 @@
+schema_version: "1.1"
+pack:
+  key: "generated-knowledge-item"
+  name: "Generated Knowledge EOM Template Item"
+  version: "1.4.0"
+  locale: "ko-KR"
+  domain_key: "general-science"
+  description: "Reviewed item authoring with optional pinned local generative backgrounds"
+provenance:
+  mode: "built_in_general_knowledge"
+  intake_batch_ids: []
+  mapping_proposal_ids: []
+compatibility:
+  protocol:
+    minimum: "1.12.0"
+    maximum_exclusive: "1.13.0"
+  workflow_definitions:
+    - key: "generic-item-development"
+      versions: ["1.5.0"]
+  required_worker_roles: ["authoring", "review", "image", "item_management"]
+taxonomies:
+  curriculum: "taxonomies/curriculum.yaml"
+  tags: "taxonomies/tags.yaml"
+item_types:
+  - key: "eom-template-multiple-choice"
+    source: "item-types/eom-template-multiple-choice.yaml"
+profiles:
+  authoring:
+    generated-knowledge-authoring: "profiles/generated-knowledge-authoring.yaml"
+  review:
+    generated-knowledge-review: "profiles/generated-knowledge-review.yaml"
+  image:
+    generated-stimulus-drawing: "profiles/generated-stimulus-drawing.yaml"
+  registration:
+    generated-structured-registration: "profiles/generated-structured-registration.yaml"
+metadata_schemas:
+  item: "metadata-schemas/item-metadata.schema.json"
+rubrics:
+  review: "rubrics/review-rubric.yaml"

@@ -8,14 +8,20 @@ import os
 import stat
 import struct
 import zlib
+from dataclasses import dataclass
 from pathlib import Path
 
+from eom_image_contracts import LocalImageCompositeReceipt, LocalImageProviderBinding
 from eom_workflow.models import (
     GeneratedLineGraphDrawing,
     GeneratedLineGraphDrawingV5,
     GeneratedVectorDrawingV5,
 )
 
+from eom_catalog_service.local_image_adapter import (
+    FixedLocalImageProviderAdapter,
+    LocalImageMaterialization,
+)
 from eom_catalog_service.settings import CatalogSettings, CatalogStagingArea
 from eom_catalog_service.staging import (
     create_catalog_operation_directory,
@@ -25,6 +31,7 @@ from eom_catalog_service.vector_stimulus import (
     SVG_MEMBER,
     SVG_RENDERER_CONTRACT,
     RenderedVectorStimulus,
+    compose_vector_overlay_svg,
     compose_vector_svg,
     rasterize_vector_svg,
     svg_renderer_provenance,
@@ -33,6 +40,9 @@ from eom_catalog_service.vector_stimulus import (
 )
 
 PNG_MEMBER = "generated-stimulus.png"
+BACKGROUND_MEMBER = "generated-background.png"
+LOCAL_IMAGE_RECEIPT_MEMBER = "local-image-receipt.json"
+OVERLAY_MEMBER = "generated-overlay.png"
 PNG_WIDTH = 800
 PNG_HEIGHT = 500
 PNG_MAX_BYTES = 2 * 1024 * 1024
@@ -44,6 +54,21 @@ _COLORS = {
     "green": (22, 163, 74),
     "orange": (234, 88, 12),
 }
+
+
+@dataclass(frozen=True)
+class RenderedLocalImageStimulus:
+    svg_path: Path
+    background_path: Path
+    png_path: Path
+    receipt_path: Path
+    receipt: LocalImageCompositeReceipt
+    request_sha256: str
+    unit_name: str
+    renderer_contract: str
+    renderer_version: str
+    renderer_sha256: str
+    font_sha256: str
 
 
 def render_generated_stimulus(
@@ -131,6 +156,85 @@ def render_generated_vector_stimulus(
         provenance.renderer_sha256,
         provenance.font_sha256,
     )
+
+
+def render_generated_local_vector_stimulus(
+    settings: CatalogSettings,
+    *,
+    workflow_id: str,
+    result_revision_id: str,
+    drawing_hash: str,
+    drawing: GeneratedVectorDrawingV5,
+    binding: LocalImageProviderBinding,
+    adapter: FixedLocalImageProviderAdapter,
+) -> RenderedLocalImageStimulus:
+    """Materialize a transparent SVG overlay through the fixed local provider boundary."""
+
+    if not workflow_id.startswith("workflow_") or not result_revision_id.startswith("rev_"):
+        raise ValueError("generated vector stimulus identity is invalid")
+    root = require_fixed_catalog_staging_root(settings, CatalogStagingArea.REGISTRY)
+    operation = create_catalog_operation_directory(
+        root,
+        f"generated-vector-{workflow_id}-{result_revision_id}",
+        message="generated vector stimulus staging directory is unsafe",
+    )
+    svg_path = operation / SVG_MEMBER
+    overlay_path = operation / OVERLAY_MEMBER
+    payload = compose_vector_overlay_svg(drawing)
+    write_vector_svg(svg_path, payload)
+    if overlay_path.exists() or overlay_path.is_symlink():
+        validate_generated_overlay_png(overlay_path)
+        provenance = svg_renderer_provenance()
+    else:
+        provenance = rasterize_vector_svg(svg_path, overlay_path)
+        validate_generated_overlay_png(overlay_path)
+    materialized: LocalImageMaterialization = adapter.generate(
+        workflow_id=workflow_id,
+        result_revision_id=result_revision_id,
+        drawing_hash=drawing_hash,
+        drawing=drawing,
+        overlay_path=overlay_path,
+        binding=binding,
+        output_directory=operation,
+    )
+    validate_generated_png(materialized.background_path)
+    validate_generated_png(materialized.final_path)
+    return RenderedLocalImageStimulus(
+        svg_path=svg_path,
+        background_path=materialized.background_path,
+        png_path=materialized.final_path,
+        receipt_path=materialized.receipt_path,
+        receipt=materialized.receipt,
+        request_sha256=materialized.request.composite_request_sha256,
+        unit_name=materialized.unit_name,
+        renderer_contract=SVG_RENDERER_CONTRACT,
+        renderer_version=provenance.renderer_version,
+        renderer_sha256=provenance.renderer_sha256,
+        font_sha256=provenance.font_sha256,
+    )
+
+
+def validate_generated_overlay_png(path: Path) -> None:
+    """Validate the fixed 800x500 RGBA overlay passed to the provider."""
+
+    metadata = path.lstat()
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or not 0 < metadata.st_size <= PNG_MAX_BYTES
+        or stat.S_IMODE(metadata.st_mode) != 0o640
+    ):
+        raise ValueError("generated stimulus overlay PNG metadata is invalid")
+    with path.open("rb") as source:
+        header = source.read(26)
+    if (
+        len(header) != 26
+        or header[:8] != b"\x89PNG\r\n\x1a\n"
+        or header[12:16] != b"IHDR"
+        or struct.unpack(">II", header[16:24]) != (PNG_WIDTH, PNG_HEIGHT)
+        or header[24:26] != b"\x08\x06"
+    ):
+        raise ValueError("generated stimulus overlay PNG structure is invalid")
 
 
 def validate_generated_png(path: Path) -> None:

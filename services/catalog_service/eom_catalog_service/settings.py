@@ -52,6 +52,9 @@ class CatalogSettings:
     knowledge_stimulus_source: Path = Path(
         "/mnt/nas/eom/hwpx/poc-v0/reference-kit/v1/eom-placeholder-image-output.png"
     )
+    local_image_provider_binding: Path = Path("/etc/eom/local-image-provider.json")
+    local_image_workspace_root: Path = Path("/srv/eom/image-workspaces")
+    local_image_provider_group: str = "eom-image"
 
     @property
     def content_pack_staging_root(self) -> Path:
@@ -79,5 +82,14 @@ class CatalogSettings:
             ),
             knowledge_stimulus_source=Path(
                 os.environ.get("EOM_KNOWLEDGE_STIMULUS_SOURCE", cls.knowledge_stimulus_source)
+            ),
+            local_image_provider_binding=Path(
+                os.environ.get("EOM_LOCAL_IMAGE_PROVIDER_BINDING", cls.local_image_provider_binding)
+            ),
+            local_image_workspace_root=Path(
+                os.environ.get("EOM_LOCAL_IMAGE_WORKSPACE_ROOT", cls.local_image_workspace_root)
+            ),
+            local_image_provider_group=os.environ.get(
+                "EOM_LOCAL_IMAGE_PROVIDER_GROUP", cls.local_image_provider_group
             ),
         )

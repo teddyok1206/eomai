@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-composite-receipt/1.0",
+  "title": "EOM local image composite receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "composite_request_sha256", "generation", "overlay", "output", "compositor", "completed_at", "duration_ms", "receipt_sha256"],
+  "properties": {
+    "schema_version": {"const": "local-image-composite-receipt/1.0"},
+    "composite_request_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "generation": {"$ref": "eom://schemas/image-provider/local-image-generation-receipt/1.0"},
+    "overlay": {"$ref": "#/$defs/overlay"},
+    "output": {"$ref": "#/$defs/output"},
+    "compositor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "pillow_version"],
+      "properties": {
+        "contract": {"const": "eom-local-image-compositor/1.0"},
+        "pillow_version": {"type": "string", "minLength": 1, "maxLength": 64}
+      }
+    },
+    "completed_at": {"type": "string", "format": "date-time"},
+    "duration_ms": {"type": "integer", "minimum": 1, "maximum": 900000},
+    "receipt_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "overlay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["member_path", "media_type", "width_px", "height_px", "mode", "size_bytes", "sha256"],
+      "properties": {
+        "member_path": {"const": "generated-overlay.png"},
+        "media_type": {"const": "image/png"},
+        "width_px": {"const": 800},
+        "height_px": {"const": 500},
+        "mode": {"const": "RGBA"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 8388608},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["member_path", "media_type", "width_px", "height_px", "mode", "size_bytes", "sha256"],
+      "properties": {
+        "member_path": {"const": "generated-stimulus.png"},
+        "media_type": {"const": "image/png"},
+        "width_px": {"const": 800},
+        "height_px": {"const": 500},
+        "mode": {"const": "RGB"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 8388608},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

@@ -1,6 +1,7 @@
 # Local GPU image provider V1
 
-Status: V1 contracts and isolated SSD-1B adapter implemented; production route remains disabled
+Status: V1 contracts, pinned SSD-1B runtime, and fixed-unit orchestration implemented; Content Pack
+activation remains an explicit deployment gate
 
 Last reviewed: 2026-09-01 UTC
 
@@ -126,11 +127,13 @@ or hosted provider.
 
 - Model lookup: indexed by immutable model revision ID.
 - Model file verification: keyed manifest map from relative path to SHA-256 and size.
-- GPU scheduling: one FIFO lease per physical GPU. The provider must not share Slot 5 textbook
-  analysis capacity.
+- GPU scheduling: one non-blocking exclusive OS file lease per physical GPU. A busy GPU fails
+  explicitly; it is never hidden behind an in-process queue or automatic retry. The provider does
+  not share Codex Slot 5 textbook-analysis capacity.
 - Idempotent generation: key by `(model_revision_id, prompt_hash, negative_prompt_hash, seed,
   sampler_contract, canvas_size, route_contract)`.
-- Artifact output: keyed manifest of generated background, canonical SVG, and delivery PNG members.
+- Artifact output: keyed manifest of generated background, canonical SVG overlay, delivery PNG, and
+  composite receipt members.
 - Prompt policy lookup: immutable route policy map by visual kind and provider family.
 
 Expected scale is small: one local GPU, one active image-generation job, and a bounded number of
@@ -139,21 +142,23 @@ unbounded GPU usage, and confusing generated pixels with scientific content.
 
 ## Transaction and concurrency boundary
 
-Provider invocation occurs outside the final artifact commit transaction. The transaction stores a
-provider job record before execution, then records a terminal receipt or failure. Artifact commit
-occurs only after output validation succeeds.
+Provider invocation occurs outside the final artifact commit transaction. The existing durable image
+workflow step and attempt are the authoritative job record; a parallel provider-job table would
+duplicate state without a second lifecycle. The step pins the Content Pack, provider binding, model
+revision, drawing hash, and request hash. Artifact commit occurs only after output validation.
 
-The GPU lease is acquired before model load and released after output validation or failure. A
-process crash must leave a reclaimable lease with an expiry and a durable provider job state. The
-lease limit is one until measured evidence proves that concurrent GPU jobs do not harm worker
-stability or textbook-analysis throughput.
+The fixed provider unit acquires an advisory exclusive GPU file lock before model load and releases
+it at process exit. Kernel cleanup makes the lock crash-safe. A busy lock fails the current workflow
+attempt explicitly. The per-request sticky workspace preserves complete output for idempotent
+recovery and partial output for diagnosis; partial output is never silently regenerated.
 
 ## Failure, retry, and idempotency
 
-Each provider attempt has one explicit idempotency key. A lost HTTP or workflow response may replay
-the same key and body to recover the same provider job. A new seed, changed prompt, changed model
-revision, or changed sampler setting is a new attempt and needs explicit authorization by the
-calling use case.
+Each provider request has one deterministic idempotency key derived from the pinned workflow,
+result revision, drawing hash, and provider binding. Re-entering a complete workspace validates and
+returns the same receipt without another model invocation. A changed prompt, drawing, model
+revision, or sampler creates a different request identity. A partial workspace fails closed; no
+automatic regeneration or route fallback is performed.
 
 Failures should use stable codes:
 

@@ -134,6 +134,21 @@ def compose_vector_svg(
     return payload
 
 
+def compose_vector_overlay_svg(drawing: GeneratedVectorDrawingV5) -> bytes:
+    """Return the canonical transparent overlay for local background composition."""
+
+    if drawing.production_route != "LOCAL_GENERATIVE_BACKGROUND":
+        raise ValueError("local image overlay route is invalid")
+    overlay = sanitize_svg_overlay(drawing.svg_overlay, drawing.required_labels)
+    payload = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" '
+        f'viewBox="0 0 800 500">{overlay}</svg>\n'
+    ).encode()
+    if len(payload) > SVG_MAX_BYTES:
+        raise ValueError("composed SVG exceeds the bounded size")
+    return payload
+
+
 def sanitize_svg_overlay(source: str, required_labels: tuple[str, ...]) -> str:
     """Reconstruct the reviewed SVG subset and return canonical overlay elements only."""
 

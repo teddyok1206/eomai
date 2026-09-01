@@ -35,7 +35,7 @@ class Ssd1bDiffusersBackend:
         try:
             pipeline = DiffusionPipeline.from_pretrained(
                 str(model_directory),
-                torch_dtype=torch.float16,
+                dtype=torch.float16,
                 variant="fp16",
                 local_files_only=True,
                 use_safetensors=True,

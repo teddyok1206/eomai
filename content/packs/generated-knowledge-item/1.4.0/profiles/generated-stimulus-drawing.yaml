@@ -1,0 +1,14 @@
+schema_version: "1.0"
+profile:
+  type: "image"
+  key: "generated-stimulus-drawing"
+  version: "5.0.0"
+template: "prompt-templates/image.md"
+input_schema_ref: "eom://workflow/image-input@1.12"
+output_schema_ref: "image-result@5.0"
+required_context:
+  - "workflow.id"
+  - "workflow.step_key"
+  - "upstream.authoring.result_json"
+  - "local_image_provider.reviewed_binding_json"
+  - "pack.release_id"

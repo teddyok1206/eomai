@@ -1,0 +1,66 @@
+[Unit]
+Description=EOM fixed local image provider request %i
+After=local-fs.target
+ConditionPathIsDirectory=/srv/eom/image-workspaces/%i
+ConditionPathIsReadWrite=/srv/eom/image-workspaces/%i
+
+[Service]
+Type=oneshot
+User=eom-image
+Group=eom-image
+WorkingDirectory=/srv/eom/image-workspaces/%i
+Environment=HOME=/var/lib/eom-image
+Environment=TZ=UTC
+Environment=PYTHONNOUSERSITE=1
+ExecStart=/srv/eom/conda/envs/eom-image/bin/eom-local-image generate-composite --request /srv/eom/image-workspaces/%i/request.json --model-store-root /srv/eom/models/image --workspace /srv/eom/image-workspaces/%i --gpu-lock /run/eom-image-provider/gpu0.lock
+
+StateDirectory=eom-image
+StateDirectoryMode=0700
+RuntimeDirectory=eom-image-provider
+RuntimeDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateNetwork=true
+PrivateDevices=false
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX
+DevicePolicy=closed
+DeviceAllow=/dev/nvidia0 rw
+DeviceAllow=/dev/nvidiactl rw
+DeviceAllow=/dev/nvidia-uvm rw
+DeviceAllow=/dev/nvidia-uvm-tools rw
+
+ReadOnlyPaths=/srv/eom/conda/envs/eom-image
+ReadOnlyPaths=/srv/eom/models/image
+ReadWritePaths=/srv/eom/image-workspaces/%i
+ReadWritePaths=/run/eom-image-provider
+InaccessiblePaths=/mnt/nas
+InaccessiblePaths=/home/eom/EOM
+InaccessiblePaths=/home/eom/EOMIS
+InaccessiblePaths=/etc/eom
+InaccessiblePaths=/srv/eom/workspaces
+InaccessiblePaths=/srv/eom/worker-homes
+InaccessiblePaths=/root/.codex
+InaccessiblePaths=/var/run/docker.sock
+
+UMask=0077
+MemoryMax=24G
+TasksMax=512
+TimeoutStartSec=930
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+Restart=no

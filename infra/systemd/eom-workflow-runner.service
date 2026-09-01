@@ -9,7 +9,7 @@ StartLimitBurst=5
 Type=simple
 User=eom-workflow-runner
 Group=eom
-SupplementaryGroups=eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-cdx-06 eom-codex-auth
+SupplementaryGroups=eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-cdx-06 eom-codex-auth eom-image
 StateDirectory=eom-workflow-runner
 StateDirectoryMode=0700
 WorkingDirectory=/var/lib/eom-workflow-runner
@@ -22,6 +22,9 @@ Environment=EOM_HUMAN_ACTOR_CONFIG=/etc/eom/human-actors.yaml
 Environment=EOM_WORKFLOW_RUNNER_CONFIG=/etc/eom/workflow-runner.yaml
 Environment=EOM_WORKFLOW_PROMPT_ROOT=/etc/eom/workflow-prompts
 Environment=EOM_CODEX_CAPABILITY_POLICY=/etc/eom/codex-capabilities.yaml
+Environment=EOM_LOCAL_IMAGE_PROVIDER_BINDING=/etc/eom/local-image-provider.json
+Environment=EOM_LOCAL_IMAGE_WORKSPACE_ROOT=/srv/eom/image-workspaces
+Environment=EOM_LOCAL_IMAGE_PROVIDER_GROUP=eom-image
 Environment=EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging
 Environment=EOM_CATALOG_STAGING_ROOT=/var/lib/eom-workflow-runner/catalog-staging
 ExecStartPre=/usr/bin/install -d -m 0700 /var/lib/eom-workflow-runner/orchestrator-staging
@@ -60,15 +63,18 @@ ReadOnlyPaths=/etc/eom/workflow-runner.yaml
 ReadOnlyPaths=/etc/eom/codex-capabilities.yaml
 ReadOnlyPaths=/etc/eom/workflows
 ReadOnlyPaths=/etc/eom/workflow-prompts
+ReadOnlyPaths=/etc/eom/local-image-provider.json
 ReadOnlyPaths=/srv/eom/conda/envs/eom-api
 ReadOnlyPaths=/srv/eom/worker-homes
 ReadWritePaths=/srv/eom/workspaces
+ReadWritePaths=/srv/eom/image-workspaces
 ReadWritePaths=/mnt/nas/eom/artifacts
 ReadWritePaths=/var/lib/eom-workflow-runner
 
 InaccessiblePaths=/home/eom/EOM
 InaccessiblePaths=/home/eom/EOMIS
 InaccessiblePaths=/srv/eom/staging
+InaccessiblePaths=/srv/eom/models/image
 InaccessiblePaths=/root/.codex
 InaccessiblePaths=/var/run/docker.sock
 InaccessiblePaths=-/var/lib/lxd

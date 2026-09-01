@@ -305,6 +305,17 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
         "registration-result@5.0",
     }
 
+    generated_local_image_pack = compile_pack(ROOT / "content/packs/generated-knowledge-item/1.4.0")
+    assert generated_local_image_pack.manifest.pack.version == "1.4.0"
+    assert generated_local_image_pack.source_tree_sha256 == (
+        "sha256:427a2b2abcdcbf14a6d66e472dd79dd2aaf317c411a08aa0d9bc237d673e9684"
+    )
+    assert {profile.profile.version for profile in generated_local_image_pack.profiles} == {"5.0.0"}
+    assert generated_local_image_pack.manifest.compatibility.workflow_definitions[0].versions == (
+        "1.5.0",
+    )
+    assert generated_local_image_pack.manifest.compatibility.protocol.minimum == "1.12.0"
+
 
 def test_content_pack_provenance_never_fakes_a_source_pointer() -> None:
     pack_path = ROOT / "content/packs/general-knowledge-item/1.0.0/pack.yaml"

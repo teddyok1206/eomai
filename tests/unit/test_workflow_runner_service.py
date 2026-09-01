@@ -62,9 +62,12 @@ def test_workflow_runner_service_is_narrow_but_can_materialize_worker_handoffs()
     assert "RestrictSUIDSGID=true" not in source
     assert _directives(source, "ReadWritePaths") == {
         "/srv/eom/workspaces",
+        "/srv/eom/image-workspaces",
         "/mnt/nas/eom/artifacts",
         "/var/lib/eom-workflow-runner",
     }
+    assert "ReadOnlyPaths=/etc/eom/local-image-provider.json" in source
+    assert "InaccessiblePaths=/srv/eom/models/image" in source
     inaccessible = _directives(source, "InaccessiblePaths")
     assert "/home/eom/EOM" in inaccessible
     assert "/home/eom/EOMIS" in inaccessible

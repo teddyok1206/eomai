@@ -17,6 +17,7 @@ from eom_catalog_contracts import (
 )
 from eom_content_pack import ContentPackError, ContentPackErrorCode, render_prompt
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
+from eom_image_contracts import LocalImageProviderBinding, content_json_bytes
 from eom_item_registry import ComponentPointer, RegistrationRequest
 from eom_orchestrator.database import build_session_factory
 from eom_workflow import ArtifactPointer, ItemBriefV2, WorkflowRequest
@@ -45,13 +46,20 @@ from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.generated_stimulus import (
+    BACKGROUND_MEMBER,
+    LOCAL_IMAGE_RECEIPT_MEMBER,
     PNG_HEIGHT,
     PNG_MEMBER,
     PNG_WIDTH,
+    render_generated_local_vector_stimulus,
     render_generated_stimulus,
     render_generated_vector_stimulus,
 )
 from eom_catalog_service.knowledge_stimulus import KnowledgeStimulusService
+from eom_catalog_service.local_image_adapter import (
+    FixedLocalImageProviderAdapter,
+    load_local_image_provider_binding,
+)
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
     ContentPackActivationRecord,
@@ -134,6 +142,7 @@ def _validate_generated_vector_artifact_manifest(
     expected_file_sha256: dict[str, str],
     file_metadata: dict[str, dict[str, str]],
     content_hash: str,
+    manifest_version: str = "generated-item-stimulus-file-set/2.0",
 ) -> None:
     files = manifest.get("files")
     entries = (
@@ -142,7 +151,7 @@ def _validate_generated_vector_artifact_manifest(
         else {}
     )
     if (
-        manifest.get("manifest_version") != "generated-item-stimulus-file-set/2.0"
+        manifest.get("manifest_version") != manifest_version
         or manifest.get("primary_file") != PNG_MEMBER
         or not isinstance(files, list)
         or len(files) != len(expected_file_sha256)
@@ -220,6 +229,7 @@ class WorkflowCatalogService:
         self.resources = PackResourceResolver()
         self.registry = RegistryService(engine, self.settings)
         self.stimulus = KnowledgeStimulusService(engine, self.settings)
+        self.local_image = FixedLocalImageProviderAdapter(self.settings)
 
     def bind_request(
         self,
@@ -306,6 +316,11 @@ class WorkflowCatalogService:
                 ),
                 "prompt_artifacts": [],
             }
+            if pack.pack_key == "generated-knowledge-item" and release.version == "1.4.0":
+                binding = load_local_image_provider_binding(
+                    self.settings.local_image_provider_binding
+                )
+                context["local_image_provider"] = binding.model_dump(mode="json")
             if request.request_name in {
                 "KNOWLEDGE_ITEM_REQUEST",
                 "GENERATED_KNOWLEDGE_ITEM_REQUEST",
@@ -445,39 +460,110 @@ class WorkflowCatalogService:
         if isinstance(image_result, GeneratedImageRoleResultV5):
             if not isinstance(drawing, GeneratedLineGraphDrawingV5 | GeneratedVectorDrawingV5):
                 raise ValueError("generated vector drawing type is invalid")
-            rendered = render_generated_vector_stimulus(
-                self.settings,
-                workflow_id=workflow.workflow_id,
-                result_revision_id=image.revision_id,
-                drawing=drawing,
-            )
-            files = {PNG_MEMBER: rendered.png_path, SVG_MEMBER: rendered.svg_path}
-            result = {
-                "drawing_sha256": drawing_hash,
-                "renderer_contract": rendered.renderer_contract,
-                "renderer_version": rendered.renderer_version,
-                "renderer_sha256": rendered.renderer_sha256,
-                "font_family": SVG_FONT_FAMILY,
-                "font_sha256": rendered.font_sha256,
-                "production_route": drawing.production_route,
-            }
-            drawing_schema = "eom.generated-vector-stimulus/2.0"
-            file_metadata = {
-                PNG_MEMBER: {
-                    "schema_ref": "eom://schemas/generated-item/stimulus-png/2.0",
-                    "media_type": "image/png",
-                },
-                SVG_MEMBER: {
-                    "schema_ref": "eom://schemas/generated-item/stimulus-svg/2.0",
-                    "media_type": SVG_MEDIA_TYPE,
-                },
-            }
+            if (
+                isinstance(drawing, GeneratedVectorDrawingV5)
+                and drawing.production_route == "LOCAL_GENERATIVE_BACKGROUND"
+            ):
+                binding_value = workflow.runtime_context.get("local_image_provider")
+                if not isinstance(binding_value, dict):
+                    raise ValueError("pinned local image provider binding is missing")
+                binding = LocalImageProviderBinding.model_validate(binding_value)
+                local_rendered = render_generated_local_vector_stimulus(
+                    self.settings,
+                    workflow_id=workflow.workflow_id,
+                    result_revision_id=image.revision_id,
+                    drawing_hash=drawing_hash,
+                    drawing=drawing,
+                    binding=binding,
+                    adapter=self.local_image,
+                )
+                files = {
+                    PNG_MEMBER: local_rendered.png_path,
+                    SVG_MEMBER: local_rendered.svg_path,
+                    BACKGROUND_MEMBER: local_rendered.background_path,
+                    LOCAL_IMAGE_RECEIPT_MEMBER: local_rendered.receipt_path,
+                }
+                receipt = local_rendered.receipt
+                result = {
+                    "drawing_sha256": drawing_hash,
+                    "renderer_contract": local_rendered.renderer_contract,
+                    "renderer_version": local_rendered.renderer_version,
+                    "renderer_sha256": local_rendered.renderer_sha256,
+                    "font_family": SVG_FONT_FAMILY,
+                    "font_sha256": local_rendered.font_sha256,
+                    "production_route": drawing.production_route,
+                    "local_image_binding_sha256": binding.binding_sha256,
+                    "local_image_request_sha256": local_rendered.request_sha256,
+                    "local_image_receipt_sha256": receipt.receipt_sha256,
+                    "local_image_unit": local_rendered.unit_name,
+                    "local_image_background_sha256": receipt.generation.output.sha256,
+                    "local_image_model": receipt.generation.model.model_dump(mode="json"),
+                    "local_image_runtime": receipt.generation.runtime.model_dump(mode="json"),
+                    "compositor": receipt.compositor.model_dump(mode="json"),
+                }
+                drawing_schema = "eom.generated-vector-stimulus/3.0"
+                file_metadata = {
+                    PNG_MEMBER: {
+                        "schema_ref": "eom://schemas/generated-item/stimulus-png/3.0",
+                        "media_type": "image/png",
+                    },
+                    SVG_MEMBER: {
+                        "schema_ref": "eom://schemas/generated-item/stimulus-svg-overlay/1.0",
+                        "media_type": SVG_MEDIA_TYPE,
+                    },
+                    BACKGROUND_MEMBER: {
+                        "schema_ref": "eom://schemas/generated-item/background-png/1.0",
+                        "media_type": "image/png",
+                    },
+                    LOCAL_IMAGE_RECEIPT_MEMBER: {
+                        "schema_ref": (
+                            "eom://schemas/image-provider/local-image-composite-receipt/1.0"
+                        ),
+                        "media_type": "application/json",
+                    },
+                }
+                manifest_version = "generated-item-stimulus-file-set/3.0"
+                artifact_idempotency_key = (
+                    f"generated-stimulus:{workflow.workflow_id}:{image.revision_id}:"
+                    f"{drawing_hash}:{binding.binding_sha256}:{local_rendered.request_sha256}"
+                )
+            else:
+                vector_rendered = render_generated_vector_stimulus(
+                    self.settings,
+                    workflow_id=workflow.workflow_id,
+                    result_revision_id=image.revision_id,
+                    drawing=drawing,
+                )
+                files = {
+                    PNG_MEMBER: vector_rendered.png_path,
+                    SVG_MEMBER: vector_rendered.svg_path,
+                }
+                result = {
+                    "drawing_sha256": drawing_hash,
+                    "renderer_contract": vector_rendered.renderer_contract,
+                    "renderer_version": vector_rendered.renderer_version,
+                    "renderer_sha256": vector_rendered.renderer_sha256,
+                    "font_family": SVG_FONT_FAMILY,
+                    "font_sha256": vector_rendered.font_sha256,
+                    "production_route": drawing.production_route,
+                }
+                drawing_schema = "eom.generated-vector-stimulus/2.0"
+                file_metadata = {
+                    PNG_MEMBER: {
+                        "schema_ref": "eom://schemas/generated-item/stimulus-png/2.0",
+                        "media_type": "image/png",
+                    },
+                    SVG_MEMBER: {
+                        "schema_ref": "eom://schemas/generated-item/stimulus-svg/2.0",
+                        "media_type": SVG_MEDIA_TYPE,
+                    },
+                }
+                manifest_version = "generated-item-stimulus-file-set/2.0"
+                artifact_idempotency_key = (
+                    f"generated-stimulus:{workflow.workflow_id}:{image.revision_id}:"
+                    f"{SVG_RENDERER_CONTRACT}:{drawing_hash}"
+                )
             expected_file_sha256 = {name: sha256_file(source) for name, source in files.items()}
-            manifest_version = "generated-item-stimulus-file-set/2.0"
-            artifact_idempotency_key = (
-                f"generated-stimulus:{workflow.workflow_id}:{image.revision_id}:"
-                f"{SVG_RENDERER_CONTRACT}:{drawing_hash}"
-            )
         else:
             if not isinstance(drawing, GeneratedLineGraphDrawing):
                 raise ValueError("generated legacy drawing type is invalid")
@@ -519,6 +605,7 @@ class WorkflowCatalogService:
                 expected_file_sha256=expected_file_sha256,
                 file_metadata=file_metadata,
                 content_hash=artifact.content_hash,
+                manifest_version=manifest_version,
             )
         return GeneratedStimulusPointer(
             artifact_id=artifact.artifact_id,
@@ -672,6 +759,7 @@ class WorkflowCatalogService:
         expects_v2 = pack_key == "generated-knowledge-item" and release_version in {
             "1.2.0",
             "1.3.0",
+            "1.4.0",
         }
         if expects_v2 != is_v2:
             raise ContentPackError(
@@ -776,6 +864,14 @@ class WorkflowCatalogService:
         generated = workflow.runtime_context.get("generated_stimulus")
         if isinstance(generated, dict):
             context["generated_stimulus"] = generated
+        provider = workflow.runtime_context.get("local_image_provider")
+        if isinstance(provider, dict):
+            validated_provider = LocalImageProviderBinding.model_validate(provider)
+            provider_context = validated_provider.model_dump(mode="json")
+            provider_context["reviewed_binding_json"] = content_json_bytes(provider_context).decode(
+                "utf-8"
+            )
+            context["local_image_provider"] = provider_context
         return context
 
     def _knowledge_item_content(

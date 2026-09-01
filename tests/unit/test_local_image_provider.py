@@ -3,6 +3,7 @@ from __future__ import annotations
 import binascii
 import hashlib
 import json
+import os
 import stat
 import struct
 import zlib
@@ -11,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from eom_image_contracts import (
+    LocalImageCompositeRequest,
     LocalImageGenerationRequest,
     LocalImageModelManifest,
     LocalImageRuntime,
@@ -22,7 +24,10 @@ from eom_image_provider.model_manifest import SSD1B_REQUIRED_FILES, create_model
 from eom_image_provider.provider import (
     GeneratedBackground,
     ProviderError,
+    acquire_gpu_lease,
     generate_background,
+    generate_composite_handoff,
+    reuse_composite_handoff,
     verify_model_revision,
 )
 
@@ -45,6 +50,26 @@ def _png() -> bytes:
             b"\x89PNG\r\n\x1a\n",
             _chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)),
             _chunk(b"IDAT", zlib.compress(rows, level=9)),
+            _chunk(b"IEND", b""),
+        )
+    )
+
+
+def _rgba_png() -> bytes:
+    width, height = 800, 500
+    transparent = b"\x00\x00\x00\x00"
+    marker = b"\x00\x00\x00\xff"
+    rows = []
+    for y in range(height):
+        row = bytearray(transparent * width)
+        if 100 <= y < 120:
+            row[100 * 4 : 700 * 4] = marker * 600
+        rows.append(b"\x00" + bytes(row))
+    return b"".join(
+        (
+            b"\x89PNG\r\n\x1a\n",
+            _chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)),
+            _chunk(b"IDAT", zlib.compress(b"".join(rows), level=9)),
             _chunk(b"IEND", b""),
         )
     )
@@ -154,11 +179,37 @@ class FakeBackend:
         )
 
 
+def _composite_request(
+    manifest: LocalImageModelManifest, overlay: bytes
+) -> LocalImageCompositeRequest:
+    generation = _request(manifest)
+    body = {
+        "schema_version": "local-image-composite-request/1.0",
+        "generation": generation.model_dump(mode="json"),
+        "overlay": {
+            "member_path": "generated-overlay.png",
+            "media_type": "image/png",
+            "width_px": 800,
+            "height_px": 500,
+            "mode": "RGBA",
+            "size_bytes": len(overlay),
+            "sha256": "sha256:" + hashlib.sha256(overlay).hexdigest(),
+        },
+        "final_output_member": "generated-stimulus.png",
+    }
+    value = {**body, "composite_request_sha256": content_sha256(body)}
+    validate_contract("composite-request", value)
+    return LocalImageCompositeRequest.model_validate(value)
+
+
 def test_contract_resources_are_canonical_mirrors() -> None:
     for name in (
         "local-image-model-manifest-v1.schema.json",
         "local-image-generation-request-v1.schema.json",
         "local-image-generation-receipt-v1.schema.json",
+        "local-image-provider-binding-v1.schema.json",
+        "local-image-composite-request-v1.schema.json",
+        "local-image-composite-receipt-v1.schema.json",
     ):
         canonical = REPOSITORY_ROOT / "schemas" / "image-provider" / name
         packaged = (
@@ -237,6 +288,100 @@ def test_existing_output_prevents_an_implicit_regeneration(tmp_path: Path) -> No
             request=_request(manifest),
             backend=FakeBackend(),
         )
+
+
+def test_composite_handoff_is_idempotent_and_manager_readable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, manifest = _store(tmp_path)
+    workspace = tmp_path / "handoff"
+    workspace.mkdir(mode=0o1730)
+    workspace.chmod(0o1730)
+    overlay = _rgba_png()
+    overlay_path = workspace / "generated-overlay.png"
+    overlay_path.write_bytes(overlay)
+    overlay_path.chmod(0o440)
+    request = _composite_request(manifest, overlay)
+    calls = 0
+
+    class CountingBackend(FakeBackend):
+        def generate(
+            self, *, model_directory: Path, request: LocalImageGenerationRequest
+        ) -> GeneratedBackground:
+            nonlocal calls
+            calls += 1
+            return super().generate(model_directory=model_directory, request=request)
+
+    monkeypatch.setattr(
+        "eom_image_provider.provider._compose_png",
+        lambda _background, _overlay: _png(),
+    )
+    monkeypatch.setattr("eom_image_provider.provider.metadata.version", lambda _name: "11.3.0")
+    first = generate_composite_handoff(
+        model_store_root=root,
+        workspace=workspace,
+        request=request,
+        backend=CountingBackend(),
+    )
+    second = generate_composite_handoff(
+        model_store_root=root,
+        workspace=workspace,
+        request=request,
+        backend=CountingBackend(),
+    )
+
+    assert first == second
+    assert calls == 1
+    assert first.overlay.sha256 == request.overlay.sha256
+    assert first.output.sha256 == "sha256:" + hashlib.sha256(_png()).hexdigest()
+    for member in (
+        "generated-background.png",
+        "generation-receipt.json",
+        "generated-stimulus.png",
+        "composite-receipt.json",
+    ):
+        metadata = (workspace / member).stat()
+        assert stat.S_IMODE(metadata.st_mode) == 0o640
+        assert metadata.st_gid == os.getegid()
+    validate_contract("composite-receipt", first.model_dump(mode="json"))
+
+    lock_root = tmp_path / "locks"
+    lock_root.mkdir(mode=0o700)
+    lock_root.chmod(0o700)
+    with acquire_gpu_lease(lock_root / "gpu0.lock"):
+        assert reuse_composite_handoff(workspace=workspace, request=request) == first
+
+
+def test_composite_handoff_rejects_a_symlink_overlay(tmp_path: Path) -> None:
+    root, manifest = _store(tmp_path)
+    workspace = tmp_path / "handoff"
+    workspace.mkdir(mode=0o1730)
+    workspace.chmod(0o1730)
+    overlay = _rgba_png()
+    outside = tmp_path / "outside.png"
+    outside.write_bytes(overlay)
+    outside.chmod(0o440)
+    (workspace / "generated-overlay.png").symlink_to(outside)
+    with pytest.raises(ProviderError, match="LOCAL_IMAGE_HANDOFF_INVALID"):
+        generate_composite_handoff(
+            model_store_root=root,
+            workspace=workspace,
+            request=_composite_request(manifest, overlay),
+            backend=FakeBackend(),
+        )
+
+
+def test_gpu_lease_denies_a_second_concurrent_owner(tmp_path: Path) -> None:
+    lock_root = tmp_path / "locks"
+    lock_root.mkdir(mode=0o700)
+    lock_root.chmod(0o700)
+    lock_path = lock_root / "gpu0.lock"
+    with (
+        acquire_gpu_lease(lock_path),
+        pytest.raises(ProviderError, match="LOCAL_IMAGE_GPU_UNAVAILABLE"),
+        acquire_gpu_lease(lock_path),
+    ):
+        raise AssertionError("unreachable")
 
 
 def test_contract_timestamps_reject_non_utc_values(tmp_path: Path) -> None:

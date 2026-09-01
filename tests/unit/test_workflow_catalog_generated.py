@@ -19,6 +19,7 @@ from eom_workflow.schemas import ROLE_ALLOWED_RESULT_SCHEMAS
 from eom_workflow_runner.models import WorkflowInstanceRecord
 
 WORKFLOW_ID = "workflow_" + "1" * 32
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _pointer(step: str, marker: str, schema: str) -> ArtifactPointer:
@@ -201,10 +202,10 @@ def _image_result_v4() -> dict[str, object]:
     return cast(dict[str, object], result)
 
 
-def _vector_brief_v5() -> dict[str, object]:
+def _vector_brief_v5(*, route: str = "DETERMINISTIC_SVG") -> dict[str, object]:
     return {
         "kind": "apparatus",
-        "production_route": "DETERMINISTIC_SVG",
+        "production_route": route,
         "background_style": "WHITE",
         "block_id": "block_image",
         "alt_text": "비커와 온도계를 사용한 가열 실험 장치",
@@ -216,19 +217,19 @@ def _vector_brief_v5() -> dict[str, object]:
     }
 
 
-def _authoring_result_v5() -> dict[str, object]:
+def _authoring_result_v5(*, route: str = "DETERMINISTIC_SVG") -> dict[str, object]:
     result = json.loads(json.dumps(_authoring_result_v4()))
     result["protocol_version"] = "workflow-role/1.12.0"
     result["job_id"] = AUTHORING_V5.job_id
     result["artifact"]["logical_artifact_id"] = AUTHORING_V5.logical_artifact_id
     result["artifact"]["revision_id"] = AUTHORING_V5.revision_id
-    result["output"]["draft"]["image_brief"] = _vector_brief_v5()
+    result["output"]["draft"]["image_brief"] = _vector_brief_v5(route=route)
     return cast(dict[str, object], result)
 
 
-def _image_result_v5() -> dict[str, object]:
+def _image_result_v5(*, route: str = "DETERMINISTIC_SVG") -> dict[str, object]:
     drawing = {
-        **_vector_brief_v5(),
+        **_vector_brief_v5(route=route),
         "width_px": 800,
         "height_px": 500,
         "svg_overlay": (
@@ -522,6 +523,116 @@ def test_v5_generated_result_commits_svg_and_png_together_before_item_pointer(
             "media_type": "image/svg+xml",
         },
     }
+
+
+def test_v5_local_background_commits_one_pinned_four_member_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    artifacts.values[AUTHORING_V5.revision_id] = _authoring_result_v5(
+        route="LOCAL_GENERATIVE_BACKGROUND"
+    )
+    artifacts.values[IMAGE_V5.revision_id] = _image_result_v5(route="LOCAL_GENERATIVE_BACKGROUND")
+    service.local_image = cast(Any, object())
+    svg = tmp_path / "rendered.svg"
+    background = tmp_path / "background.png"
+    png = tmp_path / "rendered.png"
+    receipt_file = tmp_path / "receipt.json"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"></svg>\n', encoding="utf-8")
+    background.write_bytes(b"bounded-background-fixture")
+    png.write_bytes(b"bounded-final-fixture")
+    receipt_file.write_text("{}\n", encoding="utf-8")
+    binding = json.loads(
+        (REPOSITORY_ROOT / "config/local-image-provider.ssd1b.json").read_text(encoding="utf-8")
+    )
+    receipt = SimpleNamespace(
+        receipt_sha256="sha256:" + "1" * 64,
+        generation=SimpleNamespace(
+            output=SimpleNamespace(sha256=sha256_file(background)),
+            model=SimpleNamespace(model_dump=lambda **_kwargs: binding["model"]),
+            runtime=SimpleNamespace(
+                model_dump=lambda **_kwargs: {"provider_version": "eom-local-image-provider/1.0"}
+            ),
+        ),
+        compositor=SimpleNamespace(
+            model_dump=lambda **_kwargs: {
+                "contract": "eom-local-image-compositor/1.0",
+                "pillow_version": "11.3.0",
+            }
+        ),
+    )
+
+    def render(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(
+            svg_path=svg,
+            background_path=background,
+            png_path=png,
+            receipt_path=receipt_file,
+            receipt=receipt,
+            request_sha256="sha256:" + "2" * 64,
+            unit_name="eom-image-provider@imgreq_" + "3" * 32 + ".service",
+            renderer_contract="eom-safe-svg-compositor/1.0",
+            renderer_version="rsvg-convert version 2.58.0",
+            renderer_sha256="sha256:" + "a" * 64,
+            font_sha256="sha256:" + "b" * 64,
+        )
+
+    monkeypatch.setattr(
+        "eom_catalog_service.workflow_catalog.render_generated_local_vector_stimulus",
+        render,
+    )
+    media = service.materialize_generated_stimulus(
+        workflow=_workflow({"local_image_provider": binding}),
+        artifacts=(AUTHORING_V5, IMAGE_V5),
+    )
+
+    assert media.sha256 == sha256_file(png)
+    stimulus = artifacts.commits[0]
+    assert stimulus["manifest_version"] == "generated-item-stimulus-file-set/3.0"
+    assert set(stimulus["files"]) == {
+        "generated-stimulus.png",
+        "generated-stimulus.svg",
+        "generated-background.png",
+        "local-image-receipt.json",
+    }
+    assert stimulus["result"]["production_route"] == "LOCAL_GENERATIVE_BACKGROUND"
+    assert stimulus["result"]["local_image_binding_sha256"] == binding["binding_sha256"]
+    assert stimulus["result"]["local_image_request_sha256"] == "sha256:" + "2" * 64
+    assert stimulus["result"]["local_image_receipt_sha256"] == "sha256:" + "1" * 64
+    assert stimulus["result"]["local_image_unit"] == (
+        "eom-image-provider@imgreq_" + "3" * 32 + ".service"
+    )
+    assert "prompt" not in json.dumps(stimulus["result"]).casefold()
+
+
+def test_prompt_context_revalidates_the_pinned_local_provider_binding(tmp_path: Path) -> None:
+    service, _ = _service(tmp_path)
+    binding = json.loads(
+        (REPOSITORY_ROOT / "config/local-image-provider.ssd1b.json").read_text(encoding="utf-8")
+    )
+    workflow = _workflow({"local_image_provider": binding})
+    step = cast(
+        Any,
+        SimpleNamespace(step_key="authoring", worker_role="authoring", attempt=1),
+    )
+
+    context = service._prompt_context(workflow, step, _request(), (), "packrel_" + "1" * 32)
+
+    provider = context["local_image_provider"]
+    assert provider["binding_sha256"] == binding["binding_sha256"]
+    assert json.loads(provider["reviewed_binding_json"])["model"] == binding["model"]
+
+    forged = json.loads(json.dumps(binding))
+    forged["timeout_seconds"] = 899
+    with pytest.raises(ValueError, match="binding hash mismatch"):
+        service._prompt_context(
+            _workflow({"local_image_provider": forged}),
+            step,
+            _request(),
+            (),
+            "packrel_" + "1" * 32,
+        )
 
 
 def test_v5_generated_stimulus_reentry_rejects_a_changed_sidecar_hash() -> None:

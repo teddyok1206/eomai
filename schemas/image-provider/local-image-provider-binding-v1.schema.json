@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-provider-binding/1.0",
+  "title": "EOM local image provider binding v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "state", "route_contract", "model", "sampler", "timeout_seconds", "binding_sha256"],
+  "properties": {
+    "schema_version": {"const": "local-image-provider-binding/1.0"},
+    "state": {"const": "ENABLED"},
+    "route_contract": {"const": "eom-local-generative-background/1.0"},
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_id", "model_revision_id", "manifest_sha256", "provider_family", "runtime_contract_version"],
+      "properties": {
+        "model_id": {"type": "string", "pattern": "^imgmodel_[0-9a-f]{32}$"},
+        "model_revision_id": {"type": "string", "pattern": "^imgmodelrev_[0-9a-f]{32}$"},
+        "manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "provider_family": {"const": "diffusers-ssd-1b"},
+        "runtime_contract_version": {"const": "eom-local-image-provider/1.0"}
+      }
+    },
+    "sampler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "inference_steps", "guidance_scale", "dtype"],
+      "properties": {
+        "contract": {"const": "euler-discrete/ssd-1b-v1"},
+        "inference_steps": {"type": "integer", "minimum": 1, "maximum": 50},
+        "guidance_scale": {"type": "number", "minimum": 0, "maximum": 20},
+        "dtype": {"const": "float16"}
+      }
+    },
+    "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 900},
+    "binding_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

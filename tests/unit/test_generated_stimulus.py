@@ -17,6 +17,7 @@ from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.vector_stimulus import (
     SVG_FONT,
     SVG_RASTERIZER,
+    compose_vector_overlay_svg,
     compose_vector_svg,
     sanitize_svg_overlay,
 )
@@ -261,6 +262,19 @@ def test_unavailable_nondeterministic_provider_never_falls_back_to_svg() -> None
     drawing = _vector_drawing(route="LOCAL_GENERATIVE_BACKGROUND")
     with pytest.raises(ValueError, match="provider is not deployed"):
         compose_vector_svg(drawing)
+
+
+def test_local_route_produces_only_a_sanitized_transparent_overlay() -> None:
+    drawing = _vector_drawing(route="LOCAL_GENERATIVE_BACKGROUND")
+
+    payload = compose_vector_overlay_svg(drawing)
+
+    assert payload.startswith(b'<svg xmlns="http://www.w3.org/2000/svg"')
+    assert "조사자".encode() in payload
+    assert "방형구".encode() in payload
+    assert b"#fffdf5" not in payload
+    assert b"<image" not in payload.lower()
+    assert b"href=" not in payload.lower()
 
 
 def test_v5_line_graph_is_svg_first_and_preserves_exact_data() -> None:

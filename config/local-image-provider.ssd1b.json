@@ -1,0 +1,20 @@
+{
+  "binding_sha256": "sha256:d4bef6894710283782b24e41cbd6aa7b64a80cd293099d7f0758f6a482a7fe0a",
+  "model": {
+    "manifest_sha256": "sha256:20dbed28f34c9275538198110ac4962fcf7a312c0846e6819f284ead791fe70c",
+    "model_id": "imgmodel_7f1d9f4f4f041adde5dda11dba9491ff",
+    "model_revision_id": "imgmodelrev_17b6fb3832ac469316e3a447be8e7e1d",
+    "provider_family": "diffusers-ssd-1b",
+    "runtime_contract_version": "eom-local-image-provider/1.0"
+  },
+  "route_contract": "eom-local-generative-background/1.0",
+  "sampler": {
+    "contract": "euler-discrete/ssd-1b-v1",
+    "dtype": "float16",
+    "guidance_scale": 7.5,
+    "inference_steps": 20
+  },
+  "schema_version": "local-image-provider-binding/1.0",
+  "state": "ENABLED",
+  "timeout_seconds": 900
+}

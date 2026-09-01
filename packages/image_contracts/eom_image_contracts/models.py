@@ -14,14 +14,20 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 Sha256 = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 
 
-def content_sha256(value: object) -> str:
-    payload = json.dumps(
+def content_json_bytes(value: object) -> bytes:
+    """Serialize one image-contract value with the hash contract's canonical encoding."""
+
+    return json.dumps(
         value,
         ensure_ascii=False,
         allow_nan=False,
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
+
+
+def content_sha256(value: object) -> str:
+    payload = content_json_bytes(value)
     return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
@@ -128,6 +134,25 @@ class SamplerContract(FrozenModel):
     dtype: Literal["float16"] = "float16"
 
 
+class LocalImageProviderBinding(FrozenModel):
+    schema_version: Literal["local-image-provider-binding/1.0"] = "local-image-provider-binding/1.0"
+    state: Literal["ENABLED"] = "ENABLED"
+    route_contract: Literal["eom-local-generative-background/1.0"] = (
+        "eom-local-generative-background/1.0"
+    )
+    model: LocalImageModelPointer
+    sampler: SamplerContract
+    timeout_seconds: int = Field(ge=30, le=900)
+    binding_sha256: Sha256
+
+    @model_validator(mode="after")
+    def binding_hash_matches(self) -> LocalImageProviderBinding:
+        expected = content_sha256(self.model_dump(mode="json", exclude={"binding_sha256"}))
+        if self.binding_sha256 != expected:
+            raise ValueError("local image provider binding hash mismatch")
+        return self
+
+
 class GenerationCanvas(FrozenModel):
     width_px: Literal[800] = 800
     height_px: Literal[504] = 504
@@ -229,4 +254,78 @@ class LocalImageGenerationReceipt(FrozenModel):
         expected = content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))
         if self.receipt_sha256 != expected:
             raise ValueError("local image receipt hash mismatch")
+        return self
+
+
+class LocalImageOverlayInput(FrozenModel):
+    member_path: Literal["generated-overlay.png"] = "generated-overlay.png"
+    media_type: Literal["image/png"] = "image/png"
+    width_px: Literal[800] = 800
+    height_px: Literal[500] = 500
+    mode: Literal["RGBA"] = "RGBA"
+    size_bytes: int = Field(ge=1, le=8 * 1024 * 1024)
+    sha256: Sha256
+
+
+class LocalImageCompositeRequest(FrozenModel):
+    schema_version: Literal["local-image-composite-request/1.0"] = (
+        "local-image-composite-request/1.0"
+    )
+    generation: LocalImageGenerationRequest
+    overlay: LocalImageOverlayInput
+    final_output_member: Literal["generated-stimulus.png"] = "generated-stimulus.png"
+    composite_request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def composite_request_hash_matches(self) -> LocalImageCompositeRequest:
+        expected = content_sha256(
+            self.model_dump(mode="json", exclude={"composite_request_sha256"})
+        )
+        if self.composite_request_sha256 != expected:
+            raise ValueError("local image composite request hash mismatch")
+        return self
+
+
+class LocalImageFinalOutput(FrozenModel):
+    member_path: Literal["generated-stimulus.png"] = "generated-stimulus.png"
+    media_type: Literal["image/png"] = "image/png"
+    width_px: Literal[800] = 800
+    height_px: Literal[500] = 500
+    mode: Literal["RGB"] = "RGB"
+    size_bytes: int = Field(ge=1, le=8 * 1024 * 1024)
+    sha256: Sha256
+
+
+class LocalImageCompositorRuntime(FrozenModel):
+    contract: Literal["eom-local-image-compositor/1.0"] = "eom-local-image-compositor/1.0"
+    pillow_version: str = Field(min_length=1, max_length=64)
+
+
+class LocalImageCompositeReceipt(FrozenModel):
+    schema_version: Literal["local-image-composite-receipt/1.0"] = (
+        "local-image-composite-receipt/1.0"
+    )
+    composite_request_sha256: Sha256
+    generation: LocalImageGenerationReceipt
+    overlay: LocalImageOverlayInput
+    output: LocalImageFinalOutput
+    compositor: LocalImageCompositorRuntime
+    completed_at: datetime
+    duration_ms: int = Field(ge=1, le=900_000)
+    receipt_sha256: Sha256
+
+    @field_validator("completed_at")
+    @classmethod
+    def utc_completion(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def composite_receipt_is_consistent(self) -> LocalImageCompositeReceipt:
+        if self.completed_at < self.generation.completed_at:
+            raise ValueError("composition completion precedes generation")
+        if self.duration_ms < self.generation.duration_ms:
+            raise ValueError("composition duration is shorter than generation")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))
+        if self.receipt_sha256 != expected:
+            raise ValueError("local image composite receipt hash mismatch")
         return self

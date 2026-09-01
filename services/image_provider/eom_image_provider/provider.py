@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
+import io
 import json
 import os
 import stat
 import struct
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib import metadata
 from pathlib import Path
 from typing import Protocol
 
 from eom_image_contracts import (
+    LocalImageCompositeReceipt,
+    LocalImageCompositeRequest,
+    LocalImageCompositorRuntime,
+    LocalImageFinalOutput,
     LocalImageGenerationReceipt,
     LocalImageGenerationRequest,
     LocalImageModelManifest,
@@ -47,6 +56,38 @@ class ImageBackend(Protocol):
         model_directory: Path,
         request: LocalImageGenerationRequest,
     ) -> GeneratedBackground: ...
+
+
+@contextmanager
+def acquire_gpu_lease(lock_path: Path) -> Iterator[None]:
+    """Hold the one reviewed physical-GPU lease for the unit lifetime."""
+
+    _require_absolute_no_symlink_components(lock_path.parent)
+    _require_directory(lock_path.parent, mode=0o700, current_owner=True)
+    flags = os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(lock_path, flags, 0o600)
+    except OSError as exc:
+        raise ProviderError("LOCAL_IMAGE_GPU_UNAVAILABLE") from exc
+    try:
+        os.fchmod(descriptor, 0o600)
+        lock_metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(lock_metadata.st_mode)
+            or lock_metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(lock_metadata.st_mode) != 0o600
+        ):
+            raise ProviderError("LOCAL_IMAGE_GPU_UNAVAILABLE")
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ProviderError("LOCAL_IMAGE_GPU_UNAVAILABLE") from exc
+        yield
+    finally:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
 
 
 def load_json_object(path: Path, *, maximum_bytes: int) -> dict[str, object]:
@@ -158,6 +199,101 @@ def generate_background(
 ) -> LocalImageGenerationReceipt:
     _require_absolute_no_symlink_components(workspace)
     _require_directory(workspace, mode=0o700, current_owner=True)
+    return _generate_background(
+        model_store_root=model_store_root,
+        workspace=workspace,
+        request=request,
+        backend=backend,
+        output_mode=0o600,
+    )
+
+
+def generate_composite_handoff(
+    *,
+    model_store_root: Path,
+    workspace: Path,
+    request: LocalImageCompositeRequest,
+    backend: ImageBackend,
+) -> LocalImageCompositeReceipt:
+    """Generate once and compose a manager-readable result in one trusted handoff."""
+
+    _require_absolute_no_symlink_components(workspace)
+    _require_handoff_directory(workspace)
+    completed = _completed_composite(workspace, request)
+    if completed is not None:
+        return completed
+    output_paths = (
+        workspace / request.generation.output_member,
+        workspace / "generation-receipt.json",
+        workspace / request.final_output_member,
+        workspace / "composite-receipt.json",
+    )
+    if any(path.exists() or path.is_symlink() for path in output_paths):
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+    overlay_path = workspace / request.overlay.member_path
+    _require_handoff_input(overlay_path, request.overlay.size_bytes, request.overlay.sha256)
+    started_clock = time.monotonic_ns()
+    generation = _generate_background(
+        model_store_root=model_store_root,
+        workspace=workspace,
+        request=request.generation,
+        backend=backend,
+        output_mode=0o640,
+    )
+    background_path = workspace / generation.output.member_path
+    final_bytes = _compose_png(background_path, overlay_path)
+    final_path = workspace / request.final_output_member
+    _write_exclusive(final_path, final_bytes, mode=0o640)
+    output = LocalImageFinalOutput(
+        size_bytes=len(final_bytes),
+        sha256="sha256:" + hashlib.sha256(final_bytes).hexdigest(),
+    )
+    completed_at = datetime.now(UTC)
+    duration_ms = max(1, (time.monotonic_ns() - started_clock) // 1_000_000)
+    body = {
+        "schema_version": "local-image-composite-receipt/1.0",
+        "composite_request_sha256": request.composite_request_sha256,
+        "generation": generation.model_dump(mode="json"),
+        "overlay": request.overlay.model_dump(mode="json"),
+        "output": output.model_dump(mode="json"),
+        "compositor": LocalImageCompositorRuntime(
+            pillow_version=metadata.version("Pillow")
+        ).model_dump(mode="json"),
+        "completed_at": completed_at.isoformat().replace("+00:00", "Z"),
+        "duration_ms": duration_ms,
+    }
+    receipt = LocalImageCompositeReceipt.model_validate(
+        {**body, "receipt_sha256": content_sha256(body)}
+    )
+    receipt_value = receipt.model_dump(mode="json")
+    validate_contract("composite-receipt", receipt_value)
+    receipt_bytes = (
+        json.dumps(receipt_value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode("utf-8")
+    _write_exclusive(workspace / "composite-receipt.json", receipt_bytes, mode=0o640)
+    return receipt
+
+
+def reuse_composite_handoff(
+    *,
+    workspace: Path,
+    request: LocalImageCompositeRequest,
+) -> LocalImageCompositeReceipt | None:
+    """Return an exact completed handoff without acquiring the physical GPU."""
+
+    _require_absolute_no_symlink_components(workspace)
+    _require_handoff_directory(workspace)
+    return _completed_composite(workspace, request)
+
+
+def _generate_background(
+    *,
+    model_store_root: Path,
+    workspace: Path,
+    request: LocalImageGenerationRequest,
+    backend: ImageBackend,
+    output_mode: int,
+) -> LocalImageGenerationReceipt:
     manifest, model_directory = verify_model_revision(model_store_root, request.model)
     if manifest.state != "APPROVED":
         raise ProviderError("LOCAL_IMAGE_MODEL_UNAVAILABLE")
@@ -178,7 +314,7 @@ def generate_background(
     if duration_ms > request.timeout_seconds * 1000:
         raise ProviderError("LOCAL_IMAGE_PROVIDER_TIMEOUT")
     _validate_png(generated.png_bytes)
-    _write_exclusive(output_path, generated.png_bytes, mode=0o600)
+    _write_exclusive(output_path, generated.png_bytes, mode=output_mode)
     output = LocalImageOutput(
         size_bytes=len(generated.png_bytes),
         sha256="sha256:" + hashlib.sha256(generated.png_bytes).hexdigest(),
@@ -206,8 +342,130 @@ def generate_background(
     receipt_bytes = (
         json.dumps(receipt_value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
     ).encode("utf-8")
-    _write_exclusive(receipt_path, receipt_bytes, mode=0o600)
+    _write_exclusive(receipt_path, receipt_bytes, mode=output_mode)
     return receipt
+
+
+def _require_handoff_directory(path: Path) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise ProviderError("LOCAL_IMAGE_HANDOFF_INVALID") from exc
+    if (
+        path.is_symlink()
+        or not stat.S_ISDIR(metadata.st_mode)
+        or stat.S_IMODE(metadata.st_mode) != 0o1730
+        or metadata.st_gid != os.getegid()
+        or metadata.st_gid not in os.getgroups()
+    ):
+        raise ProviderError("LOCAL_IMAGE_HANDOFF_INVALID")
+
+
+def _require_handoff_input(path: Path, size_bytes: int, sha256: str) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise ProviderError("LOCAL_IMAGE_HANDOFF_INVALID") from exc
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or stat.S_IMODE(metadata.st_mode) != 0o440
+        or metadata.st_gid != os.getegid()
+        or metadata.st_size != size_bytes
+        or _sha256_file(path) != sha256
+    ):
+        raise ProviderError("LOCAL_IMAGE_HANDOFF_INVALID")
+
+
+def _require_handoff_output(path: Path, *, sha256: str | None = None) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID") from exc
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or stat.S_IMODE(metadata.st_mode) != 0o640
+        or metadata.st_uid != os.geteuid()
+        or metadata.st_gid != os.getegid()
+        or not 0 < metadata.st_size <= PNG_MAX_BYTES
+        or (sha256 is not None and _sha256_file(path) != sha256)
+    ):
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+
+
+def _completed_composite(
+    workspace: Path, request: LocalImageCompositeRequest
+) -> LocalImageCompositeReceipt | None:
+    receipt_path = workspace / "composite-receipt.json"
+    if not receipt_path.exists() and not receipt_path.is_symlink():
+        return None
+    _require_handoff_output(receipt_path)
+    value = load_json_object(receipt_path, maximum_bytes=256 * 1024)
+    try:
+        validate_contract("composite-receipt", value)
+        receipt = LocalImageCompositeReceipt.model_validate(value)
+    except Exception as exc:
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID") from exc
+    generation_receipt_path = workspace / "generation-receipt.json"
+    _require_handoff_output(generation_receipt_path)
+    generation_value = load_json_object(generation_receipt_path, maximum_bytes=256 * 1024)
+    if (
+        receipt.composite_request_sha256 != request.composite_request_sha256
+        or receipt.generation.model_dump(mode="json") != generation_value
+        or receipt.generation.request_sha256 != request.generation.request_sha256
+        or receipt.generation.model != request.generation.model
+        or receipt.generation.prompt_sha256 != request.generation.prompt_sha256
+        or receipt.generation.negative_prompt_sha256 != request.generation.negative_prompt_sha256
+        or receipt.generation.seed != request.generation.seed
+        or receipt.generation.sampler != request.generation.sampler
+        or receipt.overlay != request.overlay
+    ):
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+    _require_handoff_input(
+        workspace / request.overlay.member_path,
+        request.overlay.size_bytes,
+        request.overlay.sha256,
+    )
+    _require_handoff_output(
+        workspace / receipt.generation.output.member_path,
+        sha256=receipt.generation.output.sha256,
+    )
+    _require_handoff_output(
+        workspace / receipt.output.member_path,
+        sha256=receipt.output.sha256,
+    )
+    return receipt
+
+
+def _compose_png(background_path: Path, overlay_path: Path) -> bytes:
+    try:
+        from PIL import Image  # type: ignore[import-not-found]
+
+        with Image.open(background_path) as background_source:
+            background_source.load()
+            if background_source.format != "PNG" or background_source.size != (800, 500):
+                raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+            background = background_source.convert("RGBA")
+        with Image.open(overlay_path) as overlay_source:
+            overlay_source.load()
+            if (
+                overlay_source.format != "PNG"
+                or overlay_source.size != (800, 500)
+                or overlay_source.mode != "RGBA"
+            ):
+                raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+            overlay = overlay_source.copy()
+        composed = Image.alpha_composite(background, overlay).convert("RGB")
+        target = io.BytesIO()
+        composed.save(target, format="PNG", optimize=False, compress_level=9)
+    except ProviderError:
+        raise
+    except Exception as exc:
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID") from exc
+    payload = target.getvalue()
+    _validate_png(payload)
+    return payload
 
 
 def _require_beneath(root: Path, child: Path) -> None:
