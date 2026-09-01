@@ -354,6 +354,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "9.0",
             "sha256:a603c5023b3343faa66723e8c88736a6ea6515427cedb9747ba089a4f40519ea",
         ),
+        "catalog-item-media-request": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-item-media-request-v1.schema.json",
+            "resources/catalog-application/catalog-item-media-request-v1.schema.json",
+            "1.0",
+            "sha256:4e69c87208e641917fb6ce4655219767fce33ec9b32261d076b48c151f352385",
+        ),
+        "catalog-item-media-response": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-item-media-response-v1.schema.json",
+            "resources/catalog-application/catalog-item-media-response-v1.schema.json",
+            "1.0",
+            "sha256:e40e2f407ca6a124ed091dbc8e7b06e4eee78783d5855b6e8c17e24294f9928f",
+        ),
         "knowledge-types": CatalogSchemaResource(
             "schemas/knowledge/knowledge-types-v1.schema.json",
             "resources/knowledge/knowledge-types-v1.schema.json",

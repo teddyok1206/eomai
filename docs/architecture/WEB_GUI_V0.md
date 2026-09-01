@@ -18,9 +18,12 @@ short-lived Request Drafts, and idempotency replay results. Workflow, Item, Item
 Pack Release, Artifact, and HWPX identities remain separate typed references. A preview pins an
 Item Revision; it never resolves an implicit latest revision.
 
-Current Application API V1 exposes Item component pointers but not component bytes. The GUI
-therefore renders an A4 metadata-only state until a reviewed Application API preview endpoint is
-available. It does not read NAS or dereference an Artifact path itself.
+Application API exposes canonical structured Item content and a separately authorized,
+pointer-resolving media stream. Preview V2 preserves canonical block order and renders paragraphs,
+tables, pinned images, equations, and statement sets before the interaction and solution. Image
+delivery follows `browser -> BFF -> Application API -> private Catalog socket`; the GUI never reads
+NAS or receives an Artifact path. Missing structured content remains an explicit metadata-only
+state.
 
 Kordoc is isolated behind the deployed chain `Application API -> HWPX Manager -> Renderer Adapter`.
 Web GUI V0 has no Kordoc import, CLI, npm, workspace, or filesystem dependency. If that capability
@@ -83,6 +86,8 @@ rendered with `textContent`; the browser receives no artifact bytes or storage p
 - DB Explorer: closed entity-to-route mapping, O(1) dispatch, with API cursor pagination;
 - HWPX recovery: O(1) exact Build ID lookup; ADMIN recent history is a bounded 20-row list whose
   optional Revision filter is O(n) with `n <= 20`;
+- Item Preview: ordered O(n) projection for at most 100 blocks, with O(1) set membership for
+  duplicate block rejection and one exact `(revision ID, block ID)` media lookup;
 - status semantics: closed lookup tables for label, icon, and tone rather than nested conditionals.
 
 The session store is deliberately process-local for V0 and requires one service worker. A durable
@@ -112,7 +117,8 @@ Access and refresh tokens are server-side only. The browser receives an opaque H
 SameSite=Strict cookie and a per-session CSRF token. CSP uses local assets only. User and upstream
 text is inserted with `textContent`, not `innerHTML`. Explorer routes and sort keys are allowlisted;
 there is no raw SQL or arbitrary query language. Download identities and suggested filenames are
-strictly validated, and symlink/path handling remains the Application API/HWPX Manager's concern.
+strictly validated. HWPX symlink/path handling remains the HWPX Manager's concern; Item media
+member/path/hash validation remains the Catalog boundary's concern.
 
 ## Simpler alternative considered
 

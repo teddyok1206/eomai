@@ -21,11 +21,13 @@ from eom_catalog_contracts import (
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CatalogItemMediaResponse,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
     ItemContentQuery,
+    ItemMediaQuery,
     ReconcileKnowledgeAnalysisCommand,
     ReviewedItemContentImportCommand,
     ReviewedItemContentImportResult,
@@ -83,6 +85,18 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if not isinstance(value, dict):
                 raise ValueError
             raw_operation = value.get("operation")
+            if raw_operation == "GET_ITEM_MEDIA":
+                try:
+                    validate_contract("catalog-item-media-request", value)
+                    media_request = ItemMediaQuery.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_media_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._stream_item_media(media_request)
+                return
             if raw_operation in {
                 "IMPORT_REVIEWED_ITEM_CONTENT",
                 "GET_ITEM_CONTENT",
@@ -208,6 +222,37 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             return
         self.server.write_response(self.wfile, response)
 
+    def _stream_item_media(self, request: ItemMediaQuery) -> None:
+        try:
+            media = self.server.registry.load_item_media(
+                request.item_revision_id,
+                request.block_id,
+            )
+        except RegistryError as exc:
+            self.server.write_media_error(self.wfile, exc.code.value)
+            return
+        except Exception:
+            self.server.write_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+            return
+        self.server.write_media_header(
+            self.wfile,
+            CatalogItemMediaResponse(
+                status="OK",
+                media_type=media.media_type,
+                content_length=media.content_length,
+                sha256=media.sha256,
+            ),
+        )
+        chunks = media.iter_chunks()
+        try:
+            for chunk in chunks:
+                self.wfile.write(chunk)
+        finally:
+            chunks.close()
+
 
 class CatalogApplicationServer(_ThreadingUnixServer):
     """Closed protocol; only the fixed Application API UID may connect."""
@@ -322,6 +367,22 @@ class CatalogApplicationServer(_ThreadingUnixServer):
                 ),
                 error_code=error_code,
             ),
+        )
+
+    @staticmethod
+    def write_media_header(stream: Any, value: CatalogItemMediaResponse) -> None:
+        payload = value.model_dump(mode="json", exclude_none=True)
+        validate_contract("catalog-item-media-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Catalog media response header exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_media_error(cls, stream: Any, error_code: str) -> None:
+        cls.write_media_header(
+            stream,
+            CatalogItemMediaResponse(status="ERROR", error_code=error_code),
         )
 
     def server_close(self) -> None:

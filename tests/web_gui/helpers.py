@@ -19,13 +19,20 @@ from eom_web_gui.contracts import (
     KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
     PreviewChoice,
-    PreviewTable,
+    PreviewEquationBlock,
+    PreviewImageBlock,
+    PreviewParagraphBlock,
+    PreviewStatement,
+    PreviewStatementExplanation,
+    PreviewStatementSetBlock,
+    PreviewTableBlock,
     RecentItemOption,
     StructuredItemImportRequest,
 )
 from eom_web_gui.gateways import (
     GatewayError,
     HwpxDownload,
+    ItemMedia,
     KnowledgeAnalysisRangePage,
     LoginResult,
 )
@@ -91,6 +98,16 @@ def structured_item_content() -> dict[str, object]:
                 "purpose": "prompt",
                 "text": "옳은 것만을 고른 것은?",
             },
+            {
+                "block_id": "block_claims",
+                "type": "statement_set",
+                "purpose": "claims",
+                "statements": [
+                    {"statement_id": "statement_g", "label": "ㄱ", "text": "명제 ㄱ"},
+                    {"statement_id": "statement_n", "label": "ㄴ", "text": "명제 ㄴ"},
+                    {"statement_id": "statement_d", "label": "ㄷ", "text": "명제 ㄷ"},
+                ],
+            },
         ],
         "interaction": {
             "type": "single_choice",
@@ -104,7 +121,11 @@ def structured_item_content() -> dict[str, object]:
             "accepted_answers": [],
             "explanation": "정답 해설",
             "authoring_intent": "삼각함수의 기본 관계를 평가한다.",
-            "statement_explanations": [],
+            "statement_explanations": [
+                {"statement_id": "statement_g", "text": "ㄱ 해설"},
+                {"statement_id": "statement_n", "text": "ㄴ 해설"},
+                {"statement_id": "statement_d", "text": "ㄷ 해설"},
+            ],
         },
         "score": {"points": 3},
     }
@@ -366,21 +387,91 @@ class FakeGateway:
             revision_state="APPROVED",
             content_pack_release_id="packrel_test_physics",
             template_delivery_available=True,
-            body="공기 저항을 무시할 때 수평으로 던진 물체의 2초 후 수평 이동 거리를 구하시오.",
-            choices=tuple(
-                PreviewChoice(label=f"{index}.", text=f"{index * 5} m") for index in range(1, 6)
-            ),
-            answer="4.",
-            explanation="수평 방향 속도는 일정하므로 x = v₀t를 사용한다.",
-            equations=("x=v_0 t", "y=\\frac{1}{2}gt^2"),
-            tables=(
-                PreviewTable(
+            locale="ko-KR",
+            title="포물선 운동",
+            score_points=3,
+            blocks=(
+                PreviewParagraphBlock(
+                    block_id="block_stem",
+                    purpose="stem",
+                    text="공기 저항을 무시하고 다음 자료를 보시오.",
+                ),
+                PreviewTableBlock(
+                    block_id="block_data",
+                    purpose="data",
                     caption="운동 조건",
                     headers=("물리량", "값"),
                     rows=(("시간", "2 s"), ("수평 속도", "10 m/s")),
                 ),
+                PreviewImageBlock(
+                    block_id="block_image",
+                    purpose="stimulus",
+                    media_url=(
+                        f"/studio/api/v1/items/{item_id}/revisions/"
+                        f"{item_revision_id}/media/block_image"
+                    ),
+                    media_type="image/png",
+                    sha256="sha256:" + "3" * 64,
+                    alt_text="포물선 운동 도식",
+                    width_px=800,
+                    height_px=500,
+                ),
+                PreviewEquationBlock(
+                    block_id="block_equation",
+                    purpose="stimulus",
+                    notation="hancom-equation-script",
+                    source="x=v_0 t",
+                ),
+                PreviewParagraphBlock(
+                    block_id="block_prompt",
+                    purpose="prompt",
+                    text="2초 후 수평 이동 거리를 고르시오.",
+                ),
+                PreviewStatementSetBlock(
+                    block_id="block_claims",
+                    statements=(
+                        PreviewStatement(
+                            statement_id="statement_g", label="ㄱ", text="수평 속도는 일정하다."
+                        ),
+                        PreviewStatement(
+                            statement_id="statement_n", label="ㄴ", text="수직 속도는 변한다."
+                        ),
+                    ),
+                ),
+            ),
+            choices=tuple(
+                PreviewChoice(choice_id=f"choice_{index}", label=f"{index}.", text=f"{index * 5} m")
+                for index in range(1, 6)
+            ),
+            answer="4.",
+            explanation="수평 방향 속도는 일정하므로 x = v₀t를 사용한다.",
+            authoring_intent="수평·수직 운동의 독립성을 평가한다.",
+            statement_explanations=(
+                PreviewStatementExplanation(
+                    statement_id="statement_g", text="수평 가속도는 0이다."
+                ),
+                PreviewStatementExplanation(
+                    statement_id="statement_n", text="중력 때문에 수직 속도는 변한다."
+                ),
             ),
         )
+
+    async def item_media(
+        self,
+        session: WebSession,
+        item_id: str,
+        item_revision_id: str,
+        block_id: str,
+    ) -> ItemMedia:
+        del session
+        assert item_id == ITEM_ID
+        assert item_revision_id == REVISION_ID
+        assert block_id == "block_image"
+        content = b"\x89PNG\r\n\x1a\nTEST"
+        import hashlib
+
+        digest = "sha256:" + hashlib.sha256(content).hexdigest()
+        return ItemMedia(content=content, content_type="image/png", etag=f'"{digest}"')
 
     async def recent_items(self, session: WebSession) -> tuple[RecentItemOption, ...]:
         del session

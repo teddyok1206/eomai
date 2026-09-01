@@ -308,6 +308,29 @@ def create_app(
         value = await actual.preview(session, item_id, item_revision_id)
         return value.model_dump(mode="json")
 
+    @app.get(f"{API_PREFIX}/items/{{item_id}}/revisions/{{item_revision_id}}/media/{{block_id}}")
+    async def item_media(
+        item_id: str,
+        item_revision_id: str,
+        block_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> Response:
+        value = await actual.gateway.item_media(
+            session,
+            item_id,
+            item_revision_id,
+            block_id,
+        )
+        return Response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "ETag": value.etag,
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
     @app.get(f"{API_PREFIX}/items/recent")
     async def recent_items(
         session: Annotated[WebSession, Depends(require_session)],

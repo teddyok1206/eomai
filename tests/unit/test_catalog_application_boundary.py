@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import threading
 from pathlib import Path
@@ -15,12 +16,14 @@ from eom_catalog_contracts import (
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CatalogItemMediaResponse,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
+    ItemMediaQuery,
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisBatchApplicationResult,
     ReviewedItemContentImportCommand,
@@ -48,6 +51,20 @@ class FakeImports:
 class FakeRegistry:
     def load_item_content(self, _revision_id: str) -> AssessmentItemContent:
         return AssessmentItemContent.model_validate(item_content())
+
+    def load_item_media(self, _revision_id: str, block_id: str) -> SimpleNamespace:
+        assert block_id == "block_image"
+        content = b"\x89PNG\r\n\x1a\nCATALOG_MEDIA"
+
+        def iter_chunks() -> object:
+            yield content
+
+        return SimpleNamespace(
+            media_type="image/png",
+            content_length=len(content),
+            sha256="sha256:" + hashlib.sha256(content).hexdigest(),
+            iter_chunks=iter_chunks,
+        )
 
 
 class FakeKnowledgeAnalysis:
@@ -416,6 +433,18 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-application-response-v4", item_response)
     validate_contract("catalog-application-response-v6", item_response)
+    media_request = ItemMediaQuery(
+        item_revision_id="itemrev_" + "2" * 32,
+        block_id="block_image",
+    ).model_dump(mode="json")
+    validate_contract("catalog-item-media-request", media_request)
+    media_response = CatalogItemMediaResponse(
+        status="OK",
+        media_type="image/png",
+        content_length=12,
+        sha256="sha256:" + "a" * 64,
+    ).model_dump(mode="json", exclude_none=True)
+    validate_contract("catalog-item-media-response", media_response)
 
 
 def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
@@ -438,6 +467,10 @@ def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
         assert imported.item_revision_id == "itemrev_" + "2" * 32
         loaded = client.load_item_content("itemrev_" + "2" * 32)
         assert loaded == AssessmentItemContent.model_validate(item_content())
+        media = client.download_item_media("itemrev_" + "2" * 32, "block_image")
+        media_bytes = b"".join(media.iter_chunks())
+        assert media_bytes == b"\x89PNG\r\n\x1a\nCATALOG_MEDIA"
+        assert media.media_type == "image/png"
         analysis = client.create_knowledge_analysis(
             CreateKnowledgeAnalysisCommand(
                 source={

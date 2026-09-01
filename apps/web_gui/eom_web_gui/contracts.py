@@ -549,25 +549,89 @@ class TimelineEvent(WebModel):
 
 
 class PreviewChoice(WebModel):
+    choice_id: str = Field(pattern=r"^choice_[a-z0-9][a-z0-9_]{0,31}$")
     label: str = Field(min_length=1, max_length=16)
-    text: str = Field(min_length=1, max_length=4000)
+    text: str = Field(min_length=1, max_length=20_000)
 
 
-class PreviewTable(WebModel):
+class PreviewParagraphBlock(WebModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["paragraph"] = "paragraph"
+    purpose: Literal["stem", "prompt", "context"]
+    text: str = Field(min_length=1, max_length=20_000)
+
+
+class PreviewEquationBlock(WebModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["equation"] = "equation"
+    purpose: Literal["stimulus", "stem"]
+    notation: Literal["latex", "hancom-equation-script"]
+    source: str = Field(min_length=1, max_length=4000)
+
+
+class PreviewTableBlock(WebModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["table"] = "table"
+    purpose: Literal["stimulus", "data", "reference"]
     caption: str | None = Field(default=None, max_length=500)
-    headers: tuple[str, ...] = Field(default=(), max_length=20)
-    rows: tuple[tuple[str, ...], ...] = Field(default=(), max_length=100)
+    headers: tuple[str, ...] = Field(min_length=1, max_length=20)
+    rows: tuple[tuple[str, ...], ...] = Field(min_length=1, max_length=100)
 
     @model_validator(mode="after")
-    def rectangular(self) -> PreviewTable:
+    def rectangular(self) -> PreviewTableBlock:
         width = len(self.headers)
         if any(len(row) != width for row in self.rows):
             raise ValueError("preview table rows must match header width")
         return self
 
 
+class PreviewImageBlock(WebModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["image"] = "image"
+    purpose: Literal["stimulus", "reference"]
+    media_url: str = Field(
+        pattern=(
+            r"^/studio/api/v1/items/item_[a-z0-9]{8,55}/revisions/"
+            r"itemrev_[a-z0-9]{8,55}/media/block_[a-z][a-z0-9_]{0,63}$"
+        )
+    )
+    media_type: Literal["image/png", "image/jpeg"]
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    alt_text: str = Field(min_length=1, max_length=1000)
+    width_px: int = Field(ge=1, le=10_000)
+    height_px: int = Field(ge=1, le=10_000)
+
+
+class PreviewStatement(WebModel):
+    statement_id: str = Field(pattern=r"^statement_[a-z][a-z0-9_]{0,31}$")
+    label: str = Field(min_length=1, max_length=16)
+    text: str = Field(min_length=1, max_length=20_000)
+
+
+class PreviewStatementSetBlock(WebModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["statement_set"] = "statement_set"
+    purpose: Literal["claims"] = "claims"
+    statements: tuple[PreviewStatement, ...] = Field(min_length=2, max_length=10)
+
+
+PreviewBlock = Annotated[
+    PreviewParagraphBlock
+    | PreviewEquationBlock
+    | PreviewTableBlock
+    | PreviewImageBlock
+    | PreviewStatementSetBlock,
+    Field(discriminator="type"),
+]
+
+
+class PreviewStatementExplanation(WebModel):
+    statement_id: str = Field(pattern=r"^statement_[a-z][a-z0-9_]{0,31}$")
+    text: str = Field(min_length=1, max_length=20_000)
+
+
 class ItemPreview(WebModel):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["2.0"] = "2.0"
     preview_state: Literal["AVAILABLE", "METADATA_ONLY"]
     workflow_id: str
     item_id: str
@@ -576,12 +640,67 @@ class ItemPreview(WebModel):
     revision_state: str
     content_pack_release_id: str
     template_delivery_available: bool = False
-    body: str | None = Field(default=None, max_length=20000)
+    locale: str | None = Field(default=None, pattern=r"^[a-z]{2}-[A-Z]{2}$")
+    title: str | None = Field(default=None, min_length=1, max_length=20_000)
+    score_points: int | None = Field(default=None, ge=0, le=100)
+    blocks: tuple[PreviewBlock, ...] = Field(default=(), max_length=100)
     choices: tuple[PreviewChoice, ...] = Field(default=(), max_length=10)
-    answer: str | None = Field(default=None, max_length=4000)
-    explanation: str | None = Field(default=None, max_length=20000)
-    equations: tuple[str, ...] = Field(default=(), max_length=50)
-    tables: tuple[PreviewTable, ...] = Field(default=(), max_length=20)
+    answer: str | None = Field(default=None, min_length=1, max_length=4000)
+    explanation: str | None = Field(default=None, min_length=1, max_length=20000)
+    authoring_intent: str | None = Field(default=None, min_length=1, max_length=20_000)
+    statement_explanations: tuple[PreviewStatementExplanation, ...] = Field(
+        default=(), max_length=10
+    )
+
+    @model_validator(mode="after")
+    def available_preview_is_complete(self) -> ItemPreview:
+        if self.preview_state == "AVAILABLE" and (
+            self.locale is None
+            or self.title is None
+            or self.score_points is None
+            or not self.blocks
+            or not self.choices
+            or self.answer is None
+            or self.explanation is None
+        ):
+            raise ValueError("available Item Preview is incomplete")
+        if self.preview_state == "METADATA_ONLY" and any(
+            (
+                self.locale is not None,
+                self.title is not None,
+                self.score_points is not None,
+                bool(self.blocks),
+                bool(self.choices),
+                self.answer is not None,
+                self.explanation is not None,
+                self.authoring_intent is not None,
+                bool(self.statement_explanations),
+            )
+        ):
+            raise ValueError("metadata-only Item Preview cannot contain rendered content")
+        block_ids = tuple(block.block_id for block in self.blocks)
+        if len(block_ids) != len(set(block_ids)):
+            raise ValueError("Item Preview block identifiers must be unique")
+        choice_ids = tuple(choice.choice_id for choice in self.choices)
+        choice_labels = tuple(choice.label for choice in self.choices)
+        if len(choice_ids) != len(set(choice_ids)) or len(choice_labels) != len(set(choice_labels)):
+            raise ValueError("Item Preview choice identifiers and labels must be unique")
+        if self.preview_state == "AVAILABLE" and self.answer not in set(choice_labels):
+            raise ValueError("Item Preview answer must resolve to one choice label")
+        statement_ids = tuple(
+            statement.statement_id
+            for block in self.blocks
+            if isinstance(block, PreviewStatementSetBlock)
+            for statement in block.statements
+        )
+        explanation_ids = tuple(value.statement_id for value in self.statement_explanations)
+        if len(statement_ids) != len(set(statement_ids)) or len(explanation_ids) != len(
+            set(explanation_ids)
+        ):
+            raise ValueError("Item Preview statement identifiers must be unique")
+        if set(statement_ids) != set(explanation_ids):
+            raise ValueError("Item Preview statement explanations must cover the statement set")
+        return self
 
 
 class RecentItemOption(WebModel):

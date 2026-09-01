@@ -34,6 +34,7 @@ CATALOG_APPLICATION_SOCKET_PATH = "/run/eom-catalog-api/manager.sock"
 CATALOG_APPLICATION_MAX_MESSAGE_BYTES = 4 * 1024 * 1024
 CATALOG_APPLICATION_SOCKET_MODE = 0o660
 CATALOG_APPLICATION_RUNTIME_DIRECTORY_MODE = 0o750
+CATALOG_ITEM_MEDIA_MAX_BYTES = 16 * 1024 * 1024
 
 
 class CatalogApplicationErrorCode(StrEnum):
@@ -68,6 +69,34 @@ class ReviewedItemContentImportCommand(FrozenModel):
 class ItemContentQuery(FrozenModel):
     operation: Literal["GET_ITEM_CONTENT"] = "GET_ITEM_CONTENT"
     item_revision_id: ItemRevisionId
+
+
+class ItemMediaQuery(FrozenModel):
+    operation: Literal["GET_ITEM_MEDIA"] = "GET_ITEM_MEDIA"
+    item_revision_id: ItemRevisionId
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+
+
+class CatalogItemMediaResponse(FrozenModel):
+    status: Literal["OK", "ERROR"]
+    operation: Literal["GET_ITEM_MEDIA"] = "GET_ITEM_MEDIA"
+    media_type: Literal["image/png", "image/jpeg"] | None = None
+    content_length: int | None = Field(default=None, ge=1, le=CATALOG_ITEM_MEDIA_MAX_BYTES)
+    sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
+
+    @model_validator(mode="after")
+    def exact_variant(self) -> CatalogItemMediaResponse:
+        success_values = (self.media_type, self.content_length, self.sha256)
+        if self.status == "OK" and all(value is not None for value in success_values):
+            if self.error_code is not None:
+                raise ValueError("Catalog media success cannot contain an error code")
+            return self
+        if self.status == "ERROR" and self.error_code is not None:
+            if any(value is not None for value in success_values):
+                raise ValueError("Catalog media error cannot contain success metadata")
+            return self
+        raise ValueError("Catalog media response variant is incomplete")
 
 
 class ContentIntakeKnowledgeAnalysisSelection(FrozenModel):

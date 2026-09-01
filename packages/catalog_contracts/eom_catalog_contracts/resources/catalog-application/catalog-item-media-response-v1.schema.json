@@ -1,0 +1,29 @@
+{
+  "$id": "eom://schemas/catalog-application/catalog-item-media-response/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "content_length": {"maximum": 16777216, "minimum": 1, "type": "integer"},
+        "media_type": {"enum": ["image/png", "image/jpeg"]},
+        "operation": {"const": "GET_ITEM_MEDIA"},
+        "sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        "status": {"const": "OK"}
+      },
+      "required": ["status", "operation", "media_type", "content_length", "sha256"],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {"pattern": "^[A-Z][A-Z0-9_]{2,127}$", "type": "string"},
+        "operation": {"const": "GET_ITEM_MEDIA"},
+        "status": {"const": "ERROR"}
+      },
+      "required": ["status", "operation", "error_code"],
+      "type": "object"
+    }
+  ],
+  "title": "Catalog Item Media Response V1"
+}

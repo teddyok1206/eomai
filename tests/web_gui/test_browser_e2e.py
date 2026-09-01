@@ -43,6 +43,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
         assert client.get("/studio/assets/app.js").status_code == 200
         assert client.get("/studio/assets/curriculum-selector.js").status_code == 200
         assert client.get("/studio/assets/execution-preset-editor.js").status_code == 200
+        assert client.get("/studio/assets/item-preview.js").status_code == 200
         assert client.get("/studio/assets/presentation-vocabulary.ko-KR.json").status_code == 200
 
         draft = client.post(
@@ -94,10 +95,16 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
         preview = client.get(
             f"/studio/api/v1/items/{ITEM_ID}/revisions/{REVISION_ID}/preview"
         ).json()
-        assert (
-            preview["body"] and preview["choices"] and preview["answer"] and preview["explanation"]
-        )
-        assert preview["equations"] and preview["tables"]
+        assert preview["title"] and preview["choices"] and preview["answer"]
+        assert preview["explanation"] and preview["authoring_intent"]
+        assert [block["type"] for block in preview["blocks"]] == [
+            "paragraph",
+            "table",
+            "image",
+            "equation",
+            "paragraph",
+            "statement_set",
+        ]
         assert (
             client.get("/studio/api/v1/hwpx/capability").json()["state"] == "PREPARED_NOT_DEPLOYED"
         )

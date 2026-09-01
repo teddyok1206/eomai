@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
+import os
 import stat
+from collections.abc import Generator
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, BinaryIO, Literal, cast
 
-from eom_catalog_contracts import AssessmentItemContent, validate_contract
+from eom_catalog_contracts import (
+    CATALOG_ITEM_MEDIA_MAX_BYTES,
+    AssessmentItemContent,
+    ImageBlock,
+    MediaArtifactPointer,
+    validate_contract,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
 from eom_item_registry import (
     ComponentPointer,
@@ -48,6 +58,23 @@ from eom_catalog_service.models import (
 from eom_catalog_service.pack_resources import PackResourceResolver
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.staging import stage_registry_manifest
+
+
+@dataclass(frozen=True)
+class ResolvedItemMedia:
+    """Validated descriptor for one pinned image block; storage paths stay private."""
+
+    stream: BinaryIO
+    media_type: Literal["image/png", "image/jpeg"]
+    content_length: int
+    sha256: str
+
+    def iter_chunks(self) -> Generator[bytes, None, None]:
+        try:
+            while chunk := self.stream.read(1024 * 1024):
+                yield chunk
+        finally:
+            self.stream.close()
 
 
 class RegistryService:
@@ -313,51 +340,125 @@ class RegistryService:
         """Resolve and validate the exact canonical content pinned by one revision."""
 
         with self.sessions() as session:
+            return self._load_item_content(session, revision_id)
+
+    def load_item_media(self, revision_id: str, block_id: str) -> ResolvedItemMedia:
+        """Open exactly one image block after revalidating its immutable pointer and bytes."""
+
+        with self.sessions() as session:
             revision = session.get(ItemRevisionRecord, revision_id)
             if revision is None:
                 raise RegistryError(
                     RegistryErrorCode.ITEM_REVISION_NOT_FOUND,
                     "item revision not found",
                 )
-            component = session.scalar(
-                select(ItemComponentRecord).where(
-                    ItemComponentRecord.item_revision_id == revision_id,
-                    ItemComponentRecord.component_type == "ITEM_CONTENT",
-                    ItemComponentRecord.ordinal == 0,
+            if revision.revision_state != ItemRevisionState.APPROVED.value:
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_REVISION_NOT_APPROVED,
+                    "item revision is not approved",
                 )
-            )
-            if component is None:
+            content = self._load_item_content(session, revision_id)
+            matches = [
+                block
+                for block in content.body
+                if isinstance(block, ImageBlock) and block.block_id == block_id
+            ]
+            if len(matches) != 1:
                 raise RegistryError(
                     RegistryErrorCode.ITEM_COMPONENT_INVALID,
-                    "item revision has no canonical content component",
+                    "item media block does not resolve",
                 )
-            artifact_revision = session.get(
-                ArtifactRevisionRecord,
-                component.artifact_revision_id,
-            )
+            pointer = matches[0].artifact
+            path = self._resolve_media_file(session, pointer)
+            return self._open_validated_media(path, pointer)
+
+    @staticmethod
+    def _open_validated_media(
+        path: Path,
+        pointer: MediaArtifactPointer,
+    ) -> ResolvedItemMedia:
+        descriptor = -1
+        stream: BinaryIO | None = None
+        try:
+            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            stream = os.fdopen(descriptor, "rb")
+            metadata = os.fstat(stream.fileno())
             if (
-                artifact_revision is None
-                or artifact_revision.logical_artifact_id != component.artifact_id
-                or artifact_revision.content_hash != component.sha256
-                or not artifact_revision.approved
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_size < 1
+                or metadata.st_size > CATALOG_ITEM_MEDIA_MAX_BYTES
             ):
-                raise RegistryError(
-                    RegistryErrorCode.ITEM_COMPONENT_INVALID,
-                    "item content component pointer does not resolve",
-                )
-            pointer = ComponentPointer(
-                component_type="ITEM_CONTENT",
-                ordinal=component.ordinal,
-                schema_ref=component.schema_ref,
-                media_type=component.media_type,
-                artifact_id=component.artifact_id,
-                artifact_revision_id=component.artifact_revision_id,
-                sha256=component.sha256,
-                logical_name=component.logical_name,
-                required=component.required,
-                metadata=component.metadata_json,
+                raise ValueError("item media size or type is outside the delivery contract")
+            digest = hashlib.sha256()
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+            if "sha256:" + digest.hexdigest() != pointer.sha256:
+                raise ValueError("item media changed after pointer validation")
+            stream.seek(0)
+        except (OSError, ValueError) as exc:
+            if stream is not None:
+                stream.close()
+            elif descriptor >= 0:
+                os.close(descriptor)
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "item media is unavailable or stale",
+            ) from exc
+        assert stream is not None
+        return ResolvedItemMedia(
+            stream=stream,
+            media_type=pointer.media_type,
+            content_length=metadata.st_size,
+            sha256=pointer.sha256,
+        )
+
+    @staticmethod
+    def _load_item_content(session: Session, revision_id: str) -> AssessmentItemContent:
+        revision = session.get(ItemRevisionRecord, revision_id)
+        if revision is None:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_REVISION_NOT_FOUND,
+                "item revision not found",
             )
-            return self._validate_item_content_component(session, pointer, artifact_revision)
+        component = session.scalar(
+            select(ItemComponentRecord).where(
+                ItemComponentRecord.item_revision_id == revision_id,
+                ItemComponentRecord.component_type == "ITEM_CONTENT",
+                ItemComponentRecord.ordinal == 0,
+            )
+        )
+        if component is None:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "item revision has no canonical content component",
+            )
+        artifact_revision = session.get(
+            ArtifactRevisionRecord,
+            component.artifact_revision_id,
+        )
+        if (
+            artifact_revision is None
+            or artifact_revision.logical_artifact_id != component.artifact_id
+            or artifact_revision.content_hash != component.sha256
+            or not artifact_revision.approved
+        ):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "item content component pointer does not resolve",
+            )
+        pointer = ComponentPointer(
+            component_type="ITEM_CONTENT",
+            ordinal=component.ordinal,
+            schema_ref=component.schema_ref,
+            media_type=component.media_type,
+            artifact_id=component.artifact_id,
+            artifact_revision_id=component.artifact_revision_id,
+            sha256=component.sha256,
+            logical_name=component.logical_name,
+            required=component.required,
+            metadata=component.metadata_json,
+        )
+        return RegistryService._validate_item_content_component(session, pointer, artifact_revision)
 
     def relationships(self, item_id: str) -> list[dict[str, Any]]:
         with self.sessions() as session:
@@ -537,31 +638,31 @@ class RegistryService:
             artifact_pointer = getattr(block, "artifact", None)
             if artifact_pointer is None:
                 continue
-            artifact = session.get(ArtifactRecord, artifact_pointer.artifact_id)
-            media_revision = session.get(
-                ArtifactRevisionRecord, artifact_pointer.artifact_revision_id
-            )
-            if (
-                artifact is None
-                or media_revision is None
-                or not artifact.approved
-                or not media_revision.approved
-                or media_revision.logical_artifact_id != artifact_pointer.artifact_id
-            ):
-                raise RegistryError(
-                    RegistryErrorCode.ITEM_COMPONENT_INVALID,
-                    "item content media pointer does not resolve",
-                )
-            media_primary = RegistryService._artifact_member_file(
-                media_revision,
-                artifact_pointer.artifact_member,
-                artifact_pointer.sha256,
-            )
-            RegistryService._validate_media_file(
-                media_primary,
-                artifact_pointer.media_type,
-            )
+            RegistryService._resolve_media_file(session, artifact_pointer)
         return content
+
+    @staticmethod
+    def _resolve_media_file(session: Session, pointer: MediaArtifactPointer) -> Path:
+        artifact = session.get(ArtifactRecord, pointer.artifact_id)
+        media_revision = session.get(ArtifactRevisionRecord, pointer.artifact_revision_id)
+        if (
+            artifact is None
+            or media_revision is None
+            or not artifact.approved
+            or not media_revision.approved
+            or media_revision.logical_artifact_id != pointer.artifact_id
+        ):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "item content media pointer does not resolve",
+            )
+        media_primary = RegistryService._artifact_member_file(
+            media_revision,
+            pointer.artifact_member,
+            pointer.sha256,
+        )
+        RegistryService._validate_media_file(media_primary, pointer.media_type)
+        return media_primary
 
     @staticmethod
     def _artifact_primary_file(revision: ArtifactRevisionRecord) -> Path:

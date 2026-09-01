@@ -10,6 +10,7 @@ import {
   guidedPresetBases,
   reviewedPresetDraft,
 } from "./execution-preset-editor.js";
+import {formatEquationSource, orderedItemPreviewBlocks} from "./item-preview.js";
 
 const API = "/studio/api/v1";
 const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/;
@@ -792,6 +793,10 @@ async function loadRecentItems() {
       const when = item.created_at || "시각 미상";
       select.append(new Option(`${reference}${item.item_id} · ${when}`, item.item_id));
     }
+    if (!$("#item-id").value.trim() && state.recentItems.length) {
+      select.value = state.recentItems[0].item_id;
+      await loadSelectedRecentItem();
+    }
   } catch (failure) {
     select.replaceChildren(new Option(`목록 조회 실패: ${failure.message}`, ""));
   }
@@ -833,9 +838,14 @@ function renderItemPreview(preview) {
   }
   $("#preview-empty").hidden = true;
   $("#preview-content").hidden = false;
-  $("#preview-body").textContent = preview.body || "";
+  $("#preview-title").textContent = preview.title || "";
+  $("#preview-score").textContent = Number.isInteger(preview.score_points) ? `${preview.score_points}점` : "";
   $("#preview-answer").textContent = preview.answer || "";
   $("#preview-explanation").textContent = preview.explanation || "";
+  $("#preview-authoring-intent").textContent = preview.authoring_intent || "";
+  const blocks = $("#preview-blocks");
+  blocks.replaceChildren();
+  for (const block of orderedItemPreviewBlocks(preview)) blocks.append(renderPreviewBlock(block));
   const choices = $("#preview-choices");
   choices.replaceChildren();
   for (const choice of preview.choices || []) {
@@ -843,16 +853,75 @@ function renderItemPreview(preview) {
     item.textContent = `${choice.label} ${choice.text}`;
     choices.append(item);
   }
-  const equations = $("#preview-equations");
-  equations.replaceChildren();
-  for (const value of preview.equations || []) {
-    const code = document.createElement("code");
-    code.textContent = value;
-    equations.append(code);
+  const statementExplanations = $("#preview-statement-explanations");
+  statementExplanations.replaceChildren();
+  for (const value of preview.statement_explanations || []) {
+    const row = document.createElement("p");
+    row.className = "statement-explanation";
+    const label = document.createElement("strong");
+    label.textContent = value.statement_id;
+    const text = document.createElement("span");
+    text.textContent = value.text;
+    row.append(label, text);
+    statementExplanations.append(row);
   }
-  const tables = $("#preview-tables");
-  tables.replaceChildren();
-  for (const value of preview.tables || []) tables.append(buildDocumentTable(value));
+}
+
+function renderPreviewBlock(block) {
+  if (block.type === "paragraph") {
+    const paragraph = document.createElement("p");
+    paragraph.className = `preview-paragraph preview-${block.purpose}`;
+    paragraph.textContent = block.text;
+    return paragraph;
+  }
+  if (block.type === "table") {
+    const section = document.createElement("section");
+    section.className = "document-tables";
+    section.append(buildDocumentTable(block));
+    return section;
+  }
+  if (block.type === "image") {
+    const figure = document.createElement("figure");
+    figure.className = "preview-image";
+    const image = document.createElement("img");
+    image.src = block.media_url;
+    image.alt = block.alt_text;
+    image.width = block.width_px;
+    image.height = block.height_px;
+    image.loading = "eager";
+    image.decoding = "async";
+    const caption = document.createElement("figcaption");
+    caption.textContent = block.alt_text;
+    figure.append(image, caption);
+    return figure;
+  }
+  if (block.type === "equation") {
+    const section = document.createElement("section");
+    section.className = "equation-block";
+    const equation = document.createElement("div");
+    equation.className = "equation-display";
+    equation.setAttribute("role", "math");
+    equation.setAttribute("aria-label", block.source);
+    equation.textContent = formatEquationSource(block.source);
+    section.append(equation);
+    return section;
+  }
+  if (block.type === "statement_set") {
+    const section = document.createElement("section");
+    section.className = "preview-statements";
+    for (const statement of block.statements || []) {
+      const row = document.createElement("p");
+      row.className = "preview-statement";
+      const label = document.createElement("strong");
+      label.textContent = statement.label;
+      const text = document.createElement("span");
+      text.textContent = statement.text;
+      row.append(label, text);
+      section.append(row);
+    }
+    return section;
+  }
+  throw new Error("ITEM_PREVIEW_BLOCK_UNSUPPORTED");
 }
 
 function installStructuredImport() {

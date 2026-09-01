@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -25,7 +26,12 @@ from eom_web_gui.contracts import (
     KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
     PreviewChoice,
-    PreviewTable,
+    PreviewEquationBlock,
+    PreviewImageBlock,
+    PreviewParagraphBlock,
+    PreviewStatementExplanation,
+    PreviewStatementSetBlock,
+    PreviewTableBlock,
     RecentItemOption,
     StructuredItemImportRequest,
 )
@@ -65,6 +71,65 @@ def _verified_curriculum_graph_corpus_key(capability: dict[str, Any]) -> str | N
     return None
 
 
+def _ordered_preview_blocks(
+    content: dict[str, Any], item_id: str, item_revision_id: str
+) -> tuple[
+    PreviewParagraphBlock
+    | PreviewEquationBlock
+    | PreviewTableBlock
+    | PreviewImageBlock
+    | PreviewStatementSetBlock,
+    ...,
+]:
+    body = content.get("body")
+    if not isinstance(body, list):
+        raise ValueError("structured item body is not an ordered array")
+    blocks: list[
+        PreviewParagraphBlock
+        | PreviewEquationBlock
+        | PreviewTableBlock
+        | PreviewImageBlock
+        | PreviewStatementSetBlock
+    ] = []
+    for block in body:
+        if not isinstance(block, dict):
+            raise ValueError("structured item block is not an object")
+        block_type = block.get("type")
+        if block_type == "paragraph":
+            blocks.append(PreviewParagraphBlock.model_validate(block))
+        elif block_type == "equation":
+            blocks.append(PreviewEquationBlock.model_validate(block))
+        elif block_type == "table":
+            blocks.append(PreviewTableBlock.model_validate(block))
+        elif block_type == "statement_set":
+            blocks.append(PreviewStatementSetBlock.model_validate(block))
+        elif block_type == "image":
+            artifact = block.get("artifact")
+            if not isinstance(artifact, dict):
+                raise ValueError("structured item image pointer is absent")
+            blocks.append(
+                PreviewImageBlock.model_validate(
+                    {
+                        "block_id": block.get("block_id"),
+                        "type": "image",
+                        "purpose": block.get("purpose"),
+                        "media_url": (
+                            f"/studio/api/v1/items/{item_id}/revisions/"
+                            f"{item_revision_id}/media/{block.get('block_id')}"
+                        ),
+                        "media_type": artifact.get("media_type"),
+                        "sha256": artifact.get("sha256"),
+                        "alt_text": block.get("alt_text"),
+                        "width_px": block.get("width_px"),
+                        "height_px": block.get("height_px"),
+                    }
+                )
+            )
+        else:
+            raise ValueError("structured item block type is unsupported")
+    return tuple(blocks)
+
+
 class GatewayError(RuntimeError):
     def __init__(self, *, status: int, code: str) -> None:
         super().__init__(code)
@@ -83,6 +148,13 @@ class HwpxDownload:
     content: bytes
     content_type: str
     content_disposition: str
+
+
+@dataclass(frozen=True)
+class ItemMedia:
+    content: bytes
+    content_type: str
+    etag: str
 
 
 @dataclass(frozen=True)
@@ -130,6 +202,14 @@ class ApplicationGateway(Protocol):
     async def item_preview(
         self, session: WebSession, item_id: str, item_revision_id: str
     ) -> ItemPreview: ...
+
+    async def item_media(
+        self,
+        session: WebSession,
+        item_id: str,
+        item_revision_id: str,
+        block_id: str,
+    ) -> ItemMedia: ...
 
     async def recent_items(self, session: WebSession) -> tuple[RecentItemOption, ...]: ...
 
@@ -812,31 +892,27 @@ class HttpApplicationGateway:
                 f"/api/v1/item-revisions/{item_revision_id}/structured-content",
             )
             content = self._data(content_response)
-        paragraphs = [
-            str(block.get("text"))
-            for block in (content or {}).get("body", [])
-            if isinstance(block, dict) and block.get("type") == "paragraph"
-        ]
-        equations = tuple(
-            str(block.get("source"))
-            for block in (content or {}).get("body", [])
-            if isinstance(block, dict) and block.get("type") == "equation"
-        )
-        tables = tuple(
-            PreviewTable.model_validate(
-                {
-                    "caption": block.get("caption"),
-                    "headers": block.get("headers", []),
-                    "rows": block.get("rows", []),
-                }
-            )
-            for block in (content or {}).get("body", [])
-            if isinstance(block, dict) and block.get("type") == "table"
-        )
+        try:
+            blocks = _ordered_preview_blocks(content, item_id, item_revision_id) if content else ()
+        except (TypeError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
         interaction = (content or {}).get("interaction")
         choices = interaction.get("choices", []) if isinstance(interaction, dict) else []
         solution = (content or {}).get("solution")
         correct_ids = solution.get("correct_choice_ids", []) if isinstance(solution, dict) else []
+        statement_explanations = (
+            solution.get("statement_explanations", []) if isinstance(solution, dict) else []
+        )
+        if content is not None and (
+            not isinstance(interaction, dict)
+            or not isinstance(choices, list)
+            or any(not isinstance(choice, dict) for choice in choices)
+            or not isinstance(solution, dict)
+            or not isinstance(correct_ids, list)
+            or not isinstance(statement_explanations, list)
+            or any(not isinstance(value, dict) for value in statement_explanations)
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
         answer = next(
             (
                 str(choice.get("label"))
@@ -845,29 +921,46 @@ class HttpApplicationGateway:
             ),
             None,
         )
-        return ItemPreview(
-            preview_state="AVAILABLE" if content is not None else "METADATA_ONLY",
-            workflow_id=str(revision.get("workflow_id") or "unknown"),
-            item_id=item_id,
-            item_revision_id=item_revision_id,
-            revision_etag=revision_etag,
-            revision_state=str(revision.get("revision_state") or "UNKNOWN"),
-            content_pack_release_id=str(revision.get("content_pack_release_id") or "unknown"),
-            template_delivery_available=template_delivery_available,
-            body="\n\n".join(paragraphs) if content is not None else None,
-            choices=tuple(
-                PreviewChoice(
-                    label=str(choice.get("label")),
-                    text=str(choice.get("text")),
-                )
-                for choice in choices
-                if isinstance(choice, dict)
-            ),
-            answer=answer,
-            explanation=(str(solution.get("explanation")) if isinstance(solution, dict) else None),
-            equations=equations,
-            tables=tables,
-        )
+        try:
+            return ItemPreview(
+                preview_state="AVAILABLE" if content is not None else "METADATA_ONLY",
+                workflow_id=str(revision.get("workflow_id") or "unknown"),
+                item_id=item_id,
+                item_revision_id=item_revision_id,
+                revision_etag=revision_etag,
+                revision_state=str(revision.get("revision_state") or "UNKNOWN"),
+                content_pack_release_id=str(revision.get("content_pack_release_id") or "unknown"),
+                template_delivery_available=template_delivery_available,
+                locale=(str(content.get("locale")) if content is not None else None),
+                title=(str(content.get("title")) if content is not None else None),
+                score_points=(
+                    int(content["score"]["points"])
+                    if content is not None and isinstance(content.get("score"), dict)
+                    else None
+                ),
+                blocks=tuple(blocks),
+                choices=tuple(
+                    PreviewChoice(
+                        choice_id=str(choice.get("choice_id")),
+                        label=str(choice.get("label")),
+                        text=str(choice.get("text")),
+                    )
+                    for choice in choices
+                ),
+                answer=answer,
+                explanation=(
+                    str(solution.get("explanation")) if isinstance(solution, dict) else None
+                ),
+                authoring_intent=(
+                    str(solution.get("authoring_intent")) if isinstance(solution, dict) else None
+                ),
+                statement_explanations=tuple(
+                    PreviewStatementExplanation.model_validate(value)
+                    for value in statement_explanations
+                ),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def recent_items(self, session: WebSession) -> tuple[RecentItemOption, ...]:
         response = await self._authorized(
@@ -893,6 +986,46 @@ class HttpApplicationGateway:
             )
         except (KeyError, ValueError) as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def item_media(
+        self,
+        session: WebSession,
+        item_id: str,
+        item_revision_id: str,
+        block_id: str,
+    ) -> ItemMedia:
+        _require_id(item_id, "item_")
+        _require_id(item_revision_id, "itemrev_")
+        _require_id(block_id, "block_")
+        revision_response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/item-revisions/{item_revision_id}",
+        )
+        if self._data(revision_response).get("item_id") != item_id:
+            raise GatewayError(status=409, code="ITEM_REVISION_POINTER_MISMATCH")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/item-revisions/{item_revision_id}/media/{block_id}",
+            headers={"Accept": "image/png,image/jpeg"},
+        )
+        content_type = response.headers.get("content-type", "").split(";", 1)[0]
+        etag = response.headers.get("etag", "")
+        content_length = response.headers.get("content-length", "")
+        actual_sha256 = "sha256:" + hashlib.sha256(response.content).hexdigest()
+        if (
+            content_type not in {"image/png", "image/jpeg"}
+            or response.headers.get("content-disposition") is not None
+            or not content_length.isascii()
+            or not content_length.isdigit()
+            or int(content_length) != len(response.content)
+            or len(response.content) < 1
+            or len(response.content) > 16 * 1024 * 1024
+            or etag != f'"{actual_sha256}"'
+        ):
+            raise GatewayError(status=502, code="ITEM_MEDIA_RESPONSE_INVALID")
+        return ItemMedia(content=response.content, content_type=content_type, etag=etag)
 
     async def import_structured_item(
         self, session: WebSession, value: StructuredItemImportRequest

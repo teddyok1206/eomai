@@ -192,6 +192,8 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "catalog-application/catalog-application-response-v7.schema.json",
         "catalog-application/catalog-application-response-v8.schema.json",
         "catalog-application/catalog-application-response-v9.schema.json",
+        "catalog-application/catalog-item-media-request-v1.schema.json",
+        "catalog-application/catalog-item-media-response-v1.schema.json",
         "knowledge/knowledge-analysis-batch-request-v1.schema.json",
         "knowledge/knowledge-analysis-batch-request-v2.schema.json",
         "knowledge/knowledge-analysis-batch-request-v3.schema.json",

@@ -305,8 +305,21 @@ def test_workflow_timeline_approval_etag_and_item_preview() -> None:
         preview = client.get(f"/studio/api/v1/items/{ITEM_ID}/revisions/{REVISION_ID}/preview")
         assert preview.status_code == 200
         assert preview.json()["preview_state"] == "AVAILABLE"
-        assert len(preview.json()["equations"]) == 2
-        assert len(preview.json()["tables"]) == 1
+        assert [block["type"] for block in preview.json()["blocks"]] == [
+            "paragraph",
+            "table",
+            "image",
+            "equation",
+            "paragraph",
+            "statement_set",
+        ]
+        media = client.get(
+            f"/studio/api/v1/items/{ITEM_ID}/revisions/{REVISION_ID}/media/block_image"
+        )
+        assert media.status_code == 200
+        assert media.headers["content-type"] == "image/png"
+        assert media.headers["x-content-type-options"] == "nosniff"
+        assert media.content.startswith(b"\x89PNG")
 
 
 def test_recent_items_returns_current_revision_pointers() -> None:

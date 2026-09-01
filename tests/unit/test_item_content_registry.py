@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from eom_catalog_contracts import CATALOG_ITEM_MEDIA_MAX_BYTES, MediaArtifactPointer
 from eom_catalog_service.registry_service import RegistryService
 from eom_identifiers import sha256_file
 from eom_item_registry import ComponentPointer, RegistryError, RegistryErrorCode
@@ -94,11 +95,38 @@ def test_registry_validates_canonical_content_and_nested_media_pointer(tmp_path:
     RegistryService._validate_item_content_component(session, pointer, revision)  # type: ignore[arg-type]
 
 
-def test_registry_rejects_stale_nested_media_pointer(tmp_path: Path) -> None:
+def test_registry_rejects_stale_pointer_and_media_type_mismatch(tmp_path: Path) -> None:
     pointer, revision, session = _fixture(tmp_path)
     media = session.values[(ArtifactRevisionRecord, "rev_" + "2" * 32)]
     assert isinstance(media, SimpleNamespace)
     media.manifest["files"][1]["sha256"] = "sha256:" + "0" * 64
+    with pytest.raises(RegistryError) as raised:
+        RegistryService._validate_item_content_component(  # type: ignore[arg-type]
+            session, pointer, revision
+        )
+    assert raised.value.code is RegistryErrorCode.ITEM_COMPONENT_INVALID
+
+    media_root = tmp_path / "media"
+    media_root.mkdir()
+    pointer, revision, session = _fixture(media_root)
+    media_revision = session.values[(ArtifactRevisionRecord, "rev_" + "2" * 32)]
+    assert isinstance(media_revision, SimpleNamespace)
+    media_path = Path(media_revision.nas_path) / "diagram.png"
+    media_path.write_bytes(b"NOT_AN_IMAGE")
+    media_revision.manifest["files"][1]["sha256"] = sha256_file(media_path)
+    media_revision.manifest["files"][1]["bytes"] = media_path.stat().st_size
+    value = item_content()
+    body = value["body"]
+    assert isinstance(body, list) and isinstance(body[2], dict)
+    artifact = body[2]["artifact"]
+    assert isinstance(artifact, dict)
+    artifact["sha256"] = sha256_file(media_path)
+    content_path = Path(revision.nas_path) / str(revision.manifest["primary_file"])
+    content_path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+    revision.content_hash = sha256_file(content_path)
+    revision.manifest["files"][0]["sha256"] = revision.content_hash
+    revision.manifest["files"][0]["bytes"] = content_path.stat().st_size
+    pointer = pointer.model_copy(update={"sha256": revision.content_hash})
     with pytest.raises(RegistryError) as raised:
         RegistryService._validate_item_content_component(  # type: ignore[arg-type]
             session, pointer, revision
@@ -116,7 +144,7 @@ def test_registry_rejects_unsafe_content_primary_file(tmp_path: Path) -> None:
     assert raised.value.code is RegistryErrorCode.ITEM_COMPONENT_INVALID
 
 
-def test_registry_rejects_nested_symlink_and_media_type_mismatch(tmp_path: Path) -> None:
+def test_registry_rejects_nested_symlink(tmp_path: Path) -> None:
     pointer, revision, session = _fixture(tmp_path)
     content_root = Path(revision.nas_path)
     content_file = content_root / str(revision.manifest["primary_file"])
@@ -142,29 +170,38 @@ def test_registry_rejects_nested_symlink_and_media_type_mismatch(tmp_path: Path)
         )
     assert raised.value.code is RegistryErrorCode.ITEM_COMPONENT_INVALID
 
-    media_root = tmp_path / "media"
-    media_root.mkdir()
-    pointer, revision, session = _fixture(media_root)
-    media = session.values[(ArtifactRevisionRecord, "rev_" + "2" * 32)]
-    assert isinstance(media, SimpleNamespace)
-    media_path = Path(media.nas_path) / "diagram.png"
-    media_path.write_bytes(b"NOT_AN_IMAGE")
-    media.manifest["files"][1]["sha256"] = sha256_file(media_path)
-    media.manifest["files"][1]["bytes"] = media_path.stat().st_size
-    value = item_content()
-    body = value["body"]
-    assert isinstance(body, list) and isinstance(body[2], dict)
-    artifact = body[2]["artifact"]
-    assert isinstance(artifact, dict)
-    artifact["sha256"] = sha256_file(media_path)
-    content_path = Path(revision.nas_path) / str(revision.manifest["primary_file"])
-    content_path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
-    revision.content_hash = sha256_file(content_path)
-    revision.manifest["files"][0]["sha256"] = revision.content_hash
-    revision.manifest["files"][0]["bytes"] = content_path.stat().st_size
-    pointer = pointer.model_copy(update={"sha256": revision.content_hash})
-    with pytest.raises(RegistryError) as raised:
-        RegistryService._validate_item_content_component(  # type: ignore[arg-type]
-            session, pointer, revision
-        )
-    assert raised.value.code is RegistryErrorCode.ITEM_COMPONENT_INVALID
+
+def test_registry_media_descriptor_rechecks_hash_symlink_and_size(tmp_path: Path) -> None:
+    media = tmp_path / "diagram.png"
+    content = b"\x89PNG\r\n\x1a\nPREVIEW"
+    media.write_bytes(content)
+    pointer = MediaArtifactPointer(
+        artifact_id="artifact_" + "1" * 32,
+        artifact_revision_id="rev_" + "2" * 32,
+        artifact_member="diagram.png",
+        sha256=sha256_file(media),
+        media_type="image/png",
+    )
+    resolved = RegistryService._open_validated_media(media, pointer)
+    assert b"".join(resolved.iter_chunks()) == content
+
+    media.write_bytes(content + b"CHANGED")
+    with pytest.raises(RegistryError) as stale:
+        RegistryService._open_validated_media(media, pointer)
+    assert stale.value.code is RegistryErrorCode.ITEM_COMPONENT_INVALID
+
+    target = tmp_path / "target.png"
+    target.write_bytes(content)
+    media.unlink()
+    media.symlink_to(target)
+    with pytest.raises(RegistryError) as symlink:
+        RegistryService._open_validated_media(media, pointer)
+    assert symlink.value.code is RegistryErrorCode.ITEM_COMPONENT_INVALID
+
+    media.unlink()
+    with media.open("wb") as stream:
+        stream.truncate(CATALOG_ITEM_MEDIA_MAX_BYTES + 1)
+    oversized_pointer = pointer.model_copy(update={"sha256": sha256_file(media)})
+    with pytest.raises(RegistryError) as oversized:
+        RegistryService._open_validated_media(media, oversized_pointer)
+    assert oversized.value.code is RegistryErrorCode.ITEM_COMPONENT_INVALID

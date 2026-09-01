@@ -8,6 +8,9 @@ import pytest
 from eom_web_gui.contracts import (
     CurriculumEditorialOutline,
     ExplorerQuery,
+    ItemPreview,
+    PreviewChoice,
+    PreviewParagraphBlock,
     RequestDraftInput,
     RequestDraftUpdate,
     WorkflowApproval,
@@ -20,7 +23,7 @@ SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "web-gui"
 
 def test_web_gui_schemas_are_valid_draft_2020_12() -> None:
     schemas = sorted(SCHEMA_ROOT.glob("*.schema.json"))
-    assert len(schemas) == 10
+    assert len(schemas) == 11
     for path in schemas:
         schema = json.loads(path.read_text(encoding="utf-8"))
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
@@ -57,6 +60,60 @@ def test_curriculum_outline_projection_matches_web_schema() -> None:
         (SCHEMA_ROOT / "curriculum-editorial-outline-v1.schema.json").read_text(encoding="utf-8")
     )
     Draft202012Validator(schema).validate(value.model_dump(mode="json"))
+
+
+def test_item_preview_v2_metadata_projection_matches_web_schema() -> None:
+    value = ItemPreview(
+        preview_state="METADATA_ONLY",
+        workflow_id="workflow_test0001",
+        item_id="item_test0001",
+        item_revision_id="itemrev_test0001",
+        revision_etag='"v1"',
+        revision_state="APPROVED",
+        content_pack_release_id="packrel_test0001",
+    )
+    schema = json.loads((SCHEMA_ROOT / "item-preview-v2.schema.json").read_text(encoding="utf-8"))
+    Draft202012Validator(schema).validate(value.model_dump(mode="json"))
+
+
+def test_item_preview_v2_fails_closed_on_dangling_answer() -> None:
+    with pytest.raises(ValueError, match="answer must resolve"):
+        ItemPreview(
+            preview_state="AVAILABLE",
+            workflow_id="workflow_test0001",
+            item_id="item_test0001",
+            item_revision_id="itemrev_test0001",
+            revision_etag='"v1"',
+            revision_state="APPROVED",
+            content_pack_release_id="packrel_test0001",
+            locale="ko-KR",
+            title="검증 문항",
+            score_points=2,
+            blocks=(
+                PreviewParagraphBlock(
+                    block_id="block_stem", purpose="stem", text="다음 질문에 답하시오."
+                ),
+            ),
+            choices=(PreviewChoice(choice_id="choice_1", label="1", text="선택지"),),
+            answer="2",
+            explanation="검증 해설",
+        )
+
+
+def test_item_preview_v2_schema_rejects_content_in_metadata_only_projection() -> None:
+    value = ItemPreview(
+        preview_state="METADATA_ONLY",
+        workflow_id="workflow_test0001",
+        item_id="item_test0001",
+        item_revision_id="itemrev_test0001",
+        revision_etag='"v1"',
+        revision_state="APPROVED",
+        content_pack_release_id="packrel_test0001",
+    ).model_dump(mode="json")
+    value["title"] = "허용되지 않는 본문"
+    schema = json.loads((SCHEMA_ROOT / "item-preview-v2.schema.json").read_text(encoding="utf-8"))
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema).validate(value)
 
 
 def test_curriculum_outline_ready_capability_pair_matches_web_schema() -> None:

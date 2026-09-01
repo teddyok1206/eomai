@@ -14,7 +14,8 @@ from eom_api_contracts.items import (
 from eom_api_contracts.usage import UsageRecordView
 from eom_catalog_contracts import AssessmentItemContent
 from eom_operator_identity import PermissionKey
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
+from fastapi.responses import StreamingResponse
 
 from eom_api.dependencies import Auth, ExpectedVersion, IdempotencyKey, etag, require_permission
 from eom_api.routers.common import many, one, run_command
@@ -147,6 +148,41 @@ def get_structured_content(
     return one(
         request,
         request.app.state.services.catalog_application.load_item_content(item_revision_id),
+    )
+
+
+@router.get(
+    "/item-revisions/{item_revision_id}/media/{block_id}",
+    operation_id="item_revision_media_get",
+    dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
+)
+def get_item_media(
+    request: Request,
+    item_revision_id: str,
+    block_id: str = Path(pattern=r"^block_[a-z][a-z0-9_]{0,63}$"),
+) -> StreamingResponse:
+    value = request.app.state.services.catalog_application.download_item_media(
+        item_revision_id,
+        block_id,
+    )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="ITEM_MEDIA_READ_AUTHORIZED",
+        operation_id="item_revision_media_get",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="item_revision",
+        target_id=item_revision_id,
+    )
+    return StreamingResponse(
+        value.iter_chunks(),
+        media_type=value.media_type,
+        headers={
+            "Content-Length": str(value.content_length),
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "ETag": f'"{value.sha256}"',
+        },
     )
 
 

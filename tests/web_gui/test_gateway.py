@@ -730,7 +730,18 @@ async def test_item_preview_reports_exact_structured_template_component() -> Non
     assert preview.template_delivery_available is True
     assert preview.preview_state == "AVAILABLE"
     assert preview.revision_etag == '"v1"'
-    assert preview.equations == ("a^2+b^2=c^2",)
+    assert [block.type for block in preview.blocks] == [
+        "paragraph",
+        "table",
+        "image",
+        "equation",
+        "paragraph",
+        "statement_set",
+    ]
+    equation = next(block for block in preview.blocks if block.type == "equation")
+    assert equation.source == "a^2+b^2=c^2"
+    image = next(block for block in preview.blocks if block.type == "image")
+    assert image.media_url.endswith(f"/{revision_id}/media/block_image")
     await gateway.close()
 
 

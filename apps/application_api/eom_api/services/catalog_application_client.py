@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import grp
+import hashlib
 import json
 import pwd
 import socket
 import stat
+from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -14,10 +17,12 @@ from eom_catalog_contracts import (
     CATALOG_APPLICATION_MAX_MESSAGE_BYTES,
     CATALOG_APPLICATION_SOCKET_MODE,
     CATALOG_APPLICATION_SOCKET_PATH,
+    CATALOG_ITEM_MEDIA_MAX_BYTES,
     AssessmentItemContent,
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CatalogItemMediaResponse,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
@@ -27,6 +32,7 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV3,
     EvidenceBundlePublicationResultV4,
     ItemContentQuery,
+    ItemMediaQuery,
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisBatchApplicationResult,
     ReconcileKnowledgeAnalysisCommand,
@@ -41,6 +47,32 @@ from pydantic import ValidationError
 
 CONNECT_TIMEOUT_SECONDS = 5.0
 RESPONSE_TIMEOUT_SECONDS = 30.0
+
+
+@dataclass(frozen=True)
+class ProxiedItemMedia:
+    connection: socket.socket
+    media_type: str
+    content_length: int
+    sha256: str
+
+    def iter_chunks(self) -> Iterator[bytes]:
+        digest = hashlib.sha256()
+        remaining = self.content_length
+        try:
+            while remaining:
+                chunk = self.connection.recv(min(1024 * 1024, remaining))
+                if not chunk:
+                    raise RuntimeError("Catalog media stream ended before its declared size")
+                remaining -= len(chunk)
+                digest.update(chunk)
+                yield chunk
+            if self.connection.recv(1):
+                raise RuntimeError("Catalog media stream exceeded its declared size")
+            if "sha256:" + digest.hexdigest() != self.sha256:
+                raise RuntimeError("Catalog media stream failed end-to-end SHA-256 validation")
+        finally:
+            self.connection.close()
 
 
 class CatalogApplicationClientError(RuntimeError):
@@ -82,6 +114,54 @@ class CatalogApplicationClient:
                 "Catalog application content response is invalid",
             )
         return response.content
+
+    def download_item_media(self, item_revision_id: str, block_id: str) -> ProxiedItemMedia:
+        command = ItemMediaQuery(item_revision_id=item_revision_id, block_id=block_id)
+        payload = command.model_dump(mode="json")
+        validate_contract("catalog-item-media-request", payload)
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+            connection.sendall(encoded + b"\n")
+            connection.settimeout(RESPONSE_TIMEOUT_SECONDS)
+            raw = self._read_media_header(connection)
+            value: Any = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError
+            validate_contract("catalog-item-media-response", value)
+            response = CatalogItemMediaResponse.model_validate(value)
+            if response.status == "ERROR":
+                self._raise_remote_error(response.error_code)
+            assert response.media_type is not None
+            assert response.content_length is not None
+            assert response.sha256 is not None
+            if response.content_length > CATALOG_ITEM_MEDIA_MAX_BYTES:
+                raise ValueError("Catalog media response exceeds its fixed bound")
+            return ProxiedItemMedia(
+                connection=connection,
+                media_type=response.media_type,
+                content_length=response.content_length,
+                sha256=response.sha256,
+            )
+        except CatalogApplicationClientError:
+            connection.close()
+            raise
+        except (
+            OSError,
+            ValueError,
+            json.JSONDecodeError,
+            UnicodeError,
+            ValidationError,
+            JsonSchemaValidationError,
+        ) as exc:
+            connection.close()
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog media boundary is unavailable",
+            ) from exc
 
     def create_knowledge_analysis(
         self, command: CreateKnowledgeAnalysisCommand
@@ -271,6 +351,18 @@ class CatalogApplicationClient:
                 return bytes(value)
             value.extend(chunk)
         raise ValueError("Catalog application response is absent or exceeds its fixed bound")
+
+    @staticmethod
+    def _read_media_header(connection: socket.socket) -> bytes:
+        value = bytearray()
+        while len(value) <= CATALOG_APPLICATION_MAX_MESSAGE_BYTES:
+            chunk = connection.recv(1)
+            if not chunk:
+                break
+            if chunk == b"\n":
+                return bytes(value)
+            value.extend(chunk)
+        raise ValueError("Catalog media header is absent or exceeds its fixed bound")
 
     @staticmethod
     def _raise_remote_error(error_code: str | None) -> None:

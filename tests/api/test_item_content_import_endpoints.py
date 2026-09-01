@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from eom_api.app import create_app
@@ -45,6 +46,22 @@ class FakeCatalogApplication:
         from eom_catalog_contracts import AssessmentItemContent
 
         return AssessmentItemContent.model_validate(item_content())
+
+    def download_item_media(self, item_revision_id: str, block_id: str) -> object:
+        assert item_revision_id == REVISION_ID
+        assert block_id == "block_image"
+        content = b"\x89PNG\r\n\x1a\nAPI_MEDIA"
+
+        class Media:
+            media_type = "image/png"
+            content_length = len(content)
+            sha256 = "sha256:" + hashlib.sha256(content).hexdigest()
+
+            @staticmethod
+            def iter_chunks() -> object:
+                yield content
+
+        return Media()
 
 
 def _client(*, admin: bool) -> tuple[TestClient, Any]:
@@ -144,5 +161,20 @@ def test_structured_content_read_uses_catalog_application_boundary() -> None:
             response = client.get(f"/api/v1/item-revisions/{REVISION_ID}/structured-content")
         assert response.status_code == 200
         assert response.json()["data"] == item_content()
+    finally:
+        services.engine.dispose()
+
+
+def test_item_media_stream_uses_catalog_boundary_and_security_headers() -> None:
+    client, services = _client(admin=True)
+    try:
+        with client:
+            response = client.get(f"/api/v1/item-revisions/{REVISION_ID}/media/block_image")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["etag"].startswith('"sha256:')
+        assert response.content == b"\x89PNG\r\n\x1a\nAPI_MEDIA"
     finally:
         services.engine.dispose()
