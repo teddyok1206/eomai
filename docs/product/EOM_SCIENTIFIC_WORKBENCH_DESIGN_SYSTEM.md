@@ -69,14 +69,16 @@ Color names describe responsibility rather than a widget:
 | Mist | workbench background and quiet grouped surfaces |
 | Porcelain | navigation and document-adjacent surfaces |
 | Line | boundaries and table rules |
-| Oxidized Teal | user action and completed production work |
-| Cobalt | active process, information, and technical focus |
+| Signal Blue | user action, active process, information, and technical focus |
+| Emerald | successful completion and validated output |
 | Amber | review or attention required |
 | Vermilion | failure, destructive consequence, or blocked state |
 
 Color is never the only state signal. Every state includes text and, where compact display helps, a
-shape or icon. Primary buttons use action teal; cobalt is reserved for information and the active
-execution step. World-facing product content remains on a warm document surface.
+shape or icon. Primary buttons and active navigation use signal blue. Emerald is reserved for
+successful completion; amber and vermilion retain their warning and failure meaning. World-facing
+product content remains on a pure white document surface so application chrome never tints item
+figures.
 
 ## 5. Structural components
 

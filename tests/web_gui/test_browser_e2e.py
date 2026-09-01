@@ -22,7 +22,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "HWPX 제작 및 다운로드",
             "기존 제작 결과 불러오기",
             "최근 HWPX 제작 결과",
-            "DB Explorer Lite",
+            "운영 데이터 조회",
             "운영·근거 화면",
             "근거에서 출판 문서까지",
             "eom-cdx가 문항에 맞춰 생성하는 자료 그림",
@@ -32,10 +32,10 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "중단원 선택",
             "소단원 목록 준비 중",
             "자연어 출제 요구",
-            "Graph 매핑 준비 중",
+            "지식 연결 준비 중",
             "고급 실행 정책",
-            "DRAFT 생성 전 확인",
-            "DRAFT Release 검토",
+            "새 설정 초안 생성 전 확인",
+            "설정 초안 사용 전환 검토",
             "계정 로그인 변경",
         ):
             assert marker in shell.text
@@ -132,6 +132,26 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "https://" not in html and "http://" not in html
     assert "localStorage" not in javascript
     assert "sessionStorage" not in javascript
+    for obsolete_label in (
+        "Codex Control Plane",
+        "DB Explorer Lite",
+        "Execution Presets",
+        "Textbook Analysis Batches",
+        "DRAFT 생성 전 확인",
+        "DRAFT Release 검토",
+        "API 확인 중",
+    ):
+        assert obsolete_label not in html
+    for obsolete_message in (
+        "API Active",
+        "API Unavailable",
+        "Control Plane 조회 실패",
+        "Draft 저장 실패",
+        "Workflow 제출 실패",
+        "SSE 연결",
+        "Polling fallback",
+    ):
+        assert obsolete_message not in javascript
     assert "innerHTML" not in javascript
     assert "textContent" in javascript
     assert "http://" not in vocabulary and "https://" not in vocabulary
@@ -143,8 +163,8 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert 'entity: "hwpx_builds"' in javascript
     assert "state.hwpxBuildId = buildId" in javascript
     assert 'id="analysis-batch-list"' in html
-    assert "최대 6 slots · 동시 3" in html
-    assert "최대 5 slots" not in html
+    assert "최대 6개 · 동시 3개" in html
+    assert "최대 5개" not in html
     assert 'api("/admin/knowledge-analysis-batches")' in javascript
     assert 'const accounts = await api("/admin/codex-accounts")' in javascript
     assert "value.binding_id === openedAccount.binding_id" in javascript
@@ -153,7 +173,7 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "10000" in javascript
     assert 'data-view-target="knowledge"' in html
     assert 'id="knowledge-quality-load"' in html
-    assert "공개된 canonical Graph Snapshot이 아닙니다." in html
+    assert "공개된 지식 그래프 버전이 아닙니다." in html
     assert "/admin/knowledge-analysis-batches/${encodeURIComponent(batchId)}/quality" in javascript
     assert "document.createElement" in javascript
     assert 'select name="curriculum_large_unit_key" disabled' not in html

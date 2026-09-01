@@ -101,7 +101,7 @@ def test_execution_preset_mutation_is_guided_and_separately_reviewed() -> None:
     assert 'id="preset-release-confirm"' in HTML
     assert 'id="preset-draft-json"' not in HTML
     assert 'JSON.parse($("#preset-draft-json")' not in JAVASCRIPT
-    assert 'actionButton("Release 검토"' in JAVASCRIPT
+    assert 'actionButton("사용 가능 전환 검토"' in JAVASCRIPT
     assert "state.reviewedPresetDraft" in JAVASCRIPT
     assert "state.presetReleaseCandidate" in JAVASCRIPT
 

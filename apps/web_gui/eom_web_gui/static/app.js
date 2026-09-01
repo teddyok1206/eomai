@@ -188,6 +188,20 @@ function stageLabel(value) {
   return state.presentationVocabulary?.stages?.[key]?.label || key || "-";
 }
 
+function termLabel(key, fallback) {
+  const label = state.presentationVocabulary?.terms?.[key]?.label;
+  return typeof label === "string" ? label : fallback;
+}
+
+function roleLabel(value) {
+  return {
+    ADMIN: termLabel("admin_role", "관리자"),
+    EDITOR: termLabel("editor_role", "문항 편집자"),
+    REVIEWER: termLabel("reviewer_role", "검토자"),
+    VIEWER: termLabel("viewer_role", "조회 사용자"),
+  }[value] || "사용자";
+}
+
 function errorPresentation(value) {
   const code = String(value || "APPLICATION_API_REQUEST_FAILED").toUpperCase();
   const presentation = state.presentationVocabulary?.errors?.[code];
@@ -268,9 +282,9 @@ async function initializeSession() {
   const session = await api("/session");
   state.csrf = session.csrf_token;
   state.operator = session.operator;
-  $("#current-user").textContent = session.operator.display_name || session.operator.username || "Operator";
+  $("#current-user").textContent = session.operator.display_name || session.operator.username || "운영 사용자";
   const roles = Array.isArray(session.operator.roles) ? session.operator.roles : [];
-  $("#current-role").textContent = roles.join(" · ") || "Operator";
+  $("#current-role").textContent = roles.map(roleLabel).join(" · ") || "운영 사용자";
   $$(".admin-only").forEach((element) => { element.hidden = !roles.includes("ADMIN"); });
 }
 
@@ -278,14 +292,14 @@ async function loadHealth() {
   try {
     const value = await api("/health/ready");
     state.health = value;
-    const apiState = value.application_api === "ACTIVE" ? ["success", "✓", "API Active"] : ["danger", "!", "API Unavailable"];
-    const observeState = value.observability === "ACTIVE" ? ["success", "✓", "Observe Active"] : ["warning", "◆", "Observe 제한"];
+    const apiState = value.application_api === "ACTIVE" ? ["success", "✓", "핵심 서비스 정상"] : ["danger", "!", "핵심 서비스 점검 필요"];
+    const observeState = value.observability === "ACTIVE" ? ["success", "✓", "운영 상태 정상"] : ["warning", "◆", "운영 상태 일부 제한"];
     setStatus($("#api-health"), ...apiState);
     setStatus($("#observe-health"), ...observeState);
     renderDashboard(value);
   } catch (_) {
-    setStatus($("#api-health"), "danger", "!", "API Unavailable");
-    setStatus($("#observe-health"), "warning", "◆", "Observe 미확인");
+    setStatus($("#api-health"), "danger", "!", "핵심 서비스 점검 필요");
+    setStatus($("#observe-health"), "warning", "◆", "운영 상태 미확인");
   }
 }
 
@@ -366,8 +380,8 @@ function syncGraphGroundingCapability() {
   input.disabled = !available;
   if (!available) input.checked = false;
   $("#graph-grounding-status").textContent = available
-    ? "공개된 Graph 매핑을 선택한 교육과정 범위에 적용합니다."
-    : "Graph 매핑 준비 중 · 교육과정 분류는 지금 사용할 수 있습니다.";
+    ? "공개된 지식 연결을 선택한 교육과정 범위에 적용합니다."
+    : "지식 연결 준비 중 · 교육과정 분류는 지금 사용할 수 있습니다.";
 }
 
 function syncCurriculumSelectorAvailability() {
@@ -462,7 +476,7 @@ function draftUpdateBody() {
   const form = $("#draft-form");
   const selectedUnitKey = deepestCurriculumUnitKey(state.curriculumSelection) || null;
   if (form.elements.knowledge_grounding.checked && selectedUnitKey === null) {
-    throw new Error("Graph 근거를 사용하려면 대단원 또는 중단원을 선택하세요.");
+    throw new Error("교육 지식 근거를 사용하려면 대단원 또는 중단원을 선택하세요.");
   }
   return {
     subject: form.elements.subject.value.trim(),
@@ -492,7 +506,7 @@ async function saveDraft() {
     $("#draft-submit").disabled = false;
     return true;
   } catch (failure) {
-    showMessage($("#draft-message"), `Draft 저장 실패: ${failure.message}`, "error");
+    showMessage($("#draft-message"), `초안 저장 실패: ${failure.message}`, "error");
     return false;
   }
 }
@@ -514,7 +528,7 @@ async function submitDraft() {
       await loadWorkflow();
     }
   } catch (failure) {
-    showMessage($("#draft-message"), `Workflow 제출 실패: ${failure.message}`, "error");
+    showMessage($("#draft-message"), `문항 제작 시작 실패: ${failure.message}`, "error");
   }
 }
 
@@ -549,7 +563,7 @@ function renderWorkflow(bundle) {
     "문항 제작 진행 ID": workflow.workflow_id,
     "진행 상태": statePresentation("workflow", workflow.state).label,
     "현재 단계": stageLabel(workflow.current_step_key),
-    ETag: bundle.etag,
+    "동시 편집 확인값": bundle.etag,
     "제작 절차 버전": `${workflow.definition_key || "-"}@${workflow.definition_version || "-"}`,
     "최근 갱신 (UTC)": workflow.updated_at,
   };
@@ -559,7 +573,7 @@ function renderWorkflow(bundle) {
       "지식 그래프 버전": provenance.graph_snapshot_revision_id,
       "교육과정 키": provenance.curriculum_root_key,
       "근거 자료 유형": (provenance.source_classes || []).join(", "),
-      "실행 계획 SHA": provenance.plan_sha256,
+      "실행 계획 검증값": provenance.plan_sha256,
     });
   }
   renderDefinitionList($("#workflow-inspector"), summary);
@@ -652,7 +666,7 @@ function renderTimeline(events) {
   if (!events.length) {
     const empty = document.createElement("li");
     empty.className = "empty-state";
-    empty.textContent = "표시 가능한 sanitized event가 없습니다.";
+    empty.textContent = "표시 가능한 안전한 제작 이력이 없습니다.";
     root.append(empty);
     return;
   }
@@ -695,7 +709,7 @@ function renderOperationalLog(bundle) {
   const entries = [];
   for (const step of bundle.steps || []) entries.push(`${step.step_key || "step"} · ${step.state || "UNKNOWN"} · attempt ${step.attempt || "-"} · ${step.error_code || "validated"}`);
   for (const event of bundle.events || []) entries.push(`${event.created_at || "-"} · ${event.event_type || "EVENT"} · ${event.new_state || "RECORDED"}`);
-  if (!entries.length) entries.push("표시할 sanitized 운영 기록이 없습니다.");
+  if (!entries.length) entries.push("표시할 안전한 운영 기록이 없습니다.");
   for (const entry of entries.slice(-100)) {
     const line = document.createElement("p");
     line.textContent = entry;
@@ -707,14 +721,14 @@ function startWorkflowUpdates(workflowId) {
   if (typeof window.EventSource !== "function") return startPolling(workflowId);
   const stream = new EventSource(`${API}/workflows/${encodeURIComponent(workflowId)}/stream`, {withCredentials: true});
   state.stream = stream;
-  stream.addEventListener("open", () => setStatus($("#stream-status"), "success", "●", "SSE 연결"));
+  stream.addEventListener("open", () => setStatus($("#stream-status"), "success", "●", "실시간 갱신"));
   stream.addEventListener("workflow", (event) => {
     try { state.workflow = JSON.parse(event.data); renderWorkflow(state.workflow); } catch (_) { /* invalid events are ignored and polling remains available */ }
   });
   stream.addEventListener("error", () => {
     stream.close();
     if (state.stream === stream) state.stream = null;
-    setStatus($("#stream-status"), "warning", "◆", "Polling fallback");
+    setStatus($("#stream-status"), "warning", "◆", "주기적 갱신");
     startPolling(workflowId);
   });
 }
@@ -749,7 +763,7 @@ function installApproval() {
 
 function renderApprovalSummary(bundle) {
   const workflow = bundle.workflow || {};
-  renderDefinitionList($("#approval-summary"), {"문항 제작 진행 ID": workflow.workflow_id, "진행 상태": statePresentation("workflow", workflow.state).label, "현재 단계": stageLabel(workflow.current_step_key), ETag: bundle.etag});
+  renderDefinitionList($("#approval-summary"), {"문항 제작 진행 ID": workflow.workflow_id, "진행 상태": statePresentation("workflow", workflow.state).label, "현재 단계": stageLabel(workflow.current_step_key), "동시 편집 확인값": bundle.etag});
   const waiting = ["AWAITING_HUMAN_APPROVAL", "AWAITING_APPROVAL"].includes(workflow.state) || String(workflow.stage || "").includes("APPROVAL");
   if (waiting) setStatus($("#approval-state"), "warning", "◆", "검토 승인 대기");
   else setStateStatus($("#approval-state"), "workflow", workflow.state);
@@ -823,7 +837,7 @@ async function loadItemPreview() {
 
 function renderItemPreview(preview) {
   setStateStatus($("#revision-state"), "item_revision", preview.revision_state);
-  renderDefinitionList($("#item-inspector"), {"문항 ID": preview.item_id, "문항 버전 ID": preview.item_revision_id, "문항 제작 진행 ID": preview.workflow_id, "콘텐츠 팩 버전": preview.content_pack_release_id, "EOM 문항 템플릿": preview.template_delivery_available ? "사용 가능" : "구조화 문항 필요"});
+  renderDefinitionList($("#item-inspector"), {"문항 ID": preview.item_id, "문항 버전 ID": preview.item_revision_id, "문항 제작 진행 ID": preview.workflow_id, "제작 기준 버전": preview.content_pack_release_id, "EOM 문항 템플릿": preview.template_delivery_available ? "사용 가능" : "구조화 문항 필요"});
   $("#structured-base-revision").value = preview.item_revision_id;
   $("#structured-revision-etag").value = preview.revision_etag;
   if (preview.template_delivery_available) $("#hwpx-revision-id").value = preview.item_revision_id;
@@ -832,8 +846,8 @@ function renderItemPreview(preview) {
   if (preview.preview_state !== "AVAILABLE") {
     $("#preview-content").hidden = true;
     $("#preview-empty").hidden = false;
-    $("#preview-empty strong").textContent = "Metadata-only Preview";
-    $("#preview-empty p").textContent = "Application API의 검토된 문항 read-model endpoint가 준비되면 본문·수식·표가 표시됩니다.";
+    $("#preview-empty strong").textContent = "미리보기 준비 중";
+    $("#preview-empty p").textContent = "이 문항은 아직 미리보기 본문이 준비되지 않았습니다.";
     return;
   }
   $("#preview-empty").hidden = true;
@@ -937,7 +951,7 @@ async function loadStructuredImportIntakes() {
   select.replaceChildren();
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = values.length ? "ACCEPTED intake 선택" : "사용 가능한 ACCEPTED intake 없음";
+  placeholder.textContent = values.length ? "사용 가능한 참고 자료 선택" : "사용 가능한 참고 자료 없음";
   select.append(placeholder);
   for (const value of values) {
     const option = document.createElement("option");
@@ -949,7 +963,7 @@ async function loadStructuredImportIntakes() {
 
 async function loadStructuredSources() {
   const intakeId = $("#structured-intake").value;
-  if (!intakeId) return showMessage($("#structured-import-message"), "ACCEPTED intake를 선택하세요.", "error");
+  if (!intakeId) return showMessage($("#structured-import-message"), "사용 가능한 참고 자료를 선택하세요.", "error");
   try {
     const sources = await api(`/content-intakes/${encodeURIComponent(intakeId)}/sources`);
     const pointer = sources.find((value) => ["image/png", "image/jpeg"].includes(value.media_type));
@@ -959,9 +973,9 @@ async function loadStructuredSources() {
     if (!$("#structured-content-json").value.trim()) {
       $("#structured-content-json").value = JSON.stringify(structuredItemSkeleton(pointer), null, 2);
     }
-    showMessage($("#structured-import-message"), "정확한 artifact member와 SHA를 불러왔습니다. 문항 의미를 편집하고 검토하세요.", "success");
+    showMessage($("#structured-import-message"), "고정된 그림 원본과 내용 검증값을 불러왔습니다. 문항 내용을 편집하고 검토하세요.", "success");
   } catch (failure) {
-    showMessage($("#structured-import-message"), `Source 조회 실패: ${failure.message}`, "error");
+    showMessage($("#structured-import-message"), `참고 자료 조회 실패: ${failure.message}`, "error");
   }
 }
 
@@ -995,7 +1009,7 @@ async function importStructuredItem() {
     });
     $("#revision-id").value = result.resource_id;
     $("#hwpx-revision-id").value = result.resource_id;
-    showMessage(message, `새 immutable Revision ${result.resource_id}가 등록되었습니다.`, "success");
+    showMessage(message, `변경되지 않는 새 문항 버전 ${result.resource_id}가 등록되었습니다.`, "success");
     await loadItemPreview();
   } catch (failure) {
     showMessage(message, `등록 실패: ${failure.message}`, "error");
@@ -1022,8 +1036,8 @@ async function loadHwpx() {
     state.hwpxCapability = value;
     $("#hwpx-state-title").textContent = statePresentation("hwpx_capability", value.state).label;
     $("#hwpx-message").textContent = value.message;
-    $("#renderer-key").textContent = value.renderer_key;
-    $("#renderer-version").textContent = `${value.renderer_version} / ${value.document_profile}`;
+    $("#renderer-key").textContent = value.renderer_key === "eom-template" ? "EOM 문항 템플릿" : "검증된 문서 제작 방식";
+    $("#renderer-version").textContent = value.renderer_version ? `버전 ${value.renderer_version}` : "-";
     $("#hwpx-build-state").textContent = value.build_available ? "제작 가능" : "현재 제작 불가";
     $("#hwpx-validation").textContent = value.detail_code;
     $("#hwpx-equations").textContent = value.native_equations ? "지원" : "준비 필요";
@@ -1199,11 +1213,11 @@ async function loadControlPlane() {
     renderExecutionPresets(presets);
     renderPresetEditorChoices(presets);
     renderAnalysisBatches(batches);
-    showMessage($("#codex-account-message"), `${accounts.length}개 fixed binding · credential 비노출`, "success");
-    showMessage($("#execution-preset-message"), `${presets.length}개 logical preset · immutable revision`, "success");
+    showMessage($("#codex-account-message"), `${accounts.length}개 고정 작업 계정 · 자격증명 비노출`, "success");
+    showMessage($("#execution-preset-message"), `${presets.length}개 실행 설정 · 고정 버전`, "success");
     scheduleAnalysisBatchRefresh(batches);
   } catch (failure) {
-    showMessage($("#codex-account-message"), `Control Plane 조회 실패: ${failure.message}`, "error");
+    showMessage($("#codex-account-message"), `실행 관리 조회 실패: ${failure.message}`, "error");
   }
 }
 
@@ -1222,7 +1236,7 @@ async function loadAnalysisBatches() {
     renderAnalysisBatches(batches);
     scheduleAnalysisBatchRefresh(batches);
   } catch (failure) {
-    showMessage($("#analysis-batch-message"), `배치 상태 조회 실패: ${failure.message}`, "error");
+    showMessage($("#analysis-batch-message"), `분석 작업 상태 조회 실패: ${failure.message}`, "error");
   }
 }
 
@@ -1232,21 +1246,21 @@ function renderAnalysisBatches(batches) {
   if (!batches.length) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "등록된 분석 배치가 없습니다.";
+    empty.textContent = "등록된 분석 작업이 없습니다.";
     root.append(empty);
-    showMessage($("#analysis-batch-message"), "배치 0개 · 제품 기능과 독립된 읽기 전용 상태");
+    showMessage($("#analysis-batch-message"), "분석 작업 0개 · 제품 기능과 독립된 조회 전용 상태");
     return;
   }
   for (const batch of batches) {
     const {card, details} = controlCard(batch.batch_id, batch.state, "knowledge_analysis");
     const completed = batch.accepted_range_count + batch.failed_range_count;
     const percent = Math.floor((completed * 100) / batch.total_range_count);
-    addControlDetail(details, "Accepted", `${batch.accepted_range_count} / ${batch.total_range_count}`);
-    addControlDetail(details, "Failed", batch.failed_range_count);
-    addControlDetail(details, "Progress", `${percent}%`);
-    addControlDetail(details, "ETA", analysisBatchEta(batch, completed));
-    addControlDetail(details, "Failure", batch.failure_code);
-    addControlDetail(details, "Updated", batch.updated_at);
+    addControlDetail(details, "분석 완료", `${batch.accepted_range_count} / ${batch.total_range_count}`);
+    addControlDetail(details, "실패", batch.failed_range_count);
+    addControlDetail(details, "진행률", `${percent}%`);
+    addControlDetail(details, "예상 남은 시간", analysisBatchEta(batch, completed));
+    addControlDetail(details, "실패 코드", batch.failure_code);
+    addControlDetail(details, "최근 갱신", batch.updated_at);
     const progress = document.createElement("progress");
     progress.className = "analysis-progress";
     progress.max = batch.total_range_count;
@@ -1264,7 +1278,7 @@ function renderAnalysisBatches(batches) {
     root.append(card);
   }
   const active = batches.filter((value) => ["QUEUED", "RUNNING"].includes(value.state)).length;
-  showMessage($("#analysis-batch-message"), `${batches.length}개 최근 배치 · 실행 중 ${active}개 · 10초 자동 갱신`, "success");
+  showMessage($("#analysis-batch-message"), `${batches.length}개 최근 분석 작업 · 실행 중 ${active}개 · 10초 자동 갱신`, "success");
 }
 
 function analysisBatchEta(batch, completed) {
@@ -1292,14 +1306,14 @@ async function loadKnowledgeQuality() {
   const batchId = $("#knowledge-batch-id").value.trim();
   const message = $("#knowledge-quality-message");
   if (!ANALYSIS_BATCH_PATTERN.test(batchId)) {
-    return showMessage(message, "정확한 analysisbatch_ ID를 입력하세요.", "error");
+    return showMessage(message, "정확한 분석 작업 ID를 입력하세요.", "error");
   }
-  showMessage(message, "기존 read-only 범위를 확인하고 있습니다.");
+  showMessage(message, "기존 조회 전용 범위를 확인하고 있습니다.");
   try {
     const report = await api(`/admin/knowledge-analysis-batches/${encodeURIComponent(batchId)}/quality`);
     state.knowledgeQualityReport = report;
     renderKnowledgeQuality(report);
-    showMessage(message, `resource v${report.resource_version} · ${report.observed_range_count}개 범위 관찰`, "success");
+    showMessage(message, `보고서 버전 ${report.resource_version} · ${report.observed_range_count}개 범위 관찰`, "success");
   } catch (failure) {
     state.knowledgeQualityReport = null;
     setStatus($("#knowledge-quality-badge"), "danger", "!", "조회 실패");
@@ -1316,7 +1330,7 @@ function renderKnowledgeQuality(report) {
   $("#quality-accepted-pages").textContent = `${report.accepted_page_count}`;
   $("#quality-gaps").textContent = `${report.gap_page_count}`;
   $("#quality-overlaps").textContent = `${report.overlap_page_count}`;
-  $("#knowledge-observed-at").textContent = `Observed ${report.observed_at}`;
+  $("#knowledge-observed-at").textContent = `확인 시각 ${report.observed_at}`;
   renderKnowledgeMap(report.documents || []);
   renderKnowledgeFindings(report.findings || []);
   renderKnowledgeDocuments(report.documents || []);
@@ -1340,7 +1354,7 @@ function renderKnowledgeMap(documents) {
     const revision = document.createElement("strong");
     revision.textContent = documentCoverage.document_revision_id;
     const pages = document.createElement("small");
-    pages.textContent = `physical pages ${documentCoverage.first_physical_page}–${documentCoverage.last_physical_page}`;
+    pages.textContent = `실제 페이지 ${documentCoverage.first_physical_page}–${documentCoverage.last_physical_page}`;
     target.append(revision, pages);
     row.append(unit, arrow, target);
     root.append(row);
@@ -1351,7 +1365,7 @@ function renderKnowledgeMap(documents) {
     empty.textContent = "관찰된 교육과정 연결이 없습니다.";
     root.append(empty);
   }
-  $("#knowledge-edge-count").textContent = `${edgeCount} observed edges`;
+  $("#knowledge-edge-count").textContent = `관계 ${edgeCount}개`;
 }
 
 function renderKnowledgeFindings(findings) {
@@ -1360,7 +1374,7 @@ function renderKnowledgeFindings(findings) {
   if (!findings.length) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "범위·pointer 구조에서 이상을 찾지 못했습니다.";
+    empty.textContent = "범위와 고정 원본 연결에서 이상을 찾지 못했습니다.";
     root.append(empty);
     return;
   }
@@ -1380,8 +1394,9 @@ function renderKnowledgeFindings(findings) {
     const code = document.createElement("strong");
     code.textContent = labels[finding.code] || finding.code;
     const context = document.createElement("small");
-    const pageScope = finding.first_physical_page === null ? "" : ` · pages ${finding.first_physical_page}–${finding.last_physical_page}`;
-    context.textContent = `${finding.severity}${finding.document_revision_id ? ` · ${finding.document_revision_id}` : ""}${pageScope}`;
+    const pageScope = finding.first_physical_page === null ? "" : ` · 페이지 ${finding.first_physical_page}–${finding.last_physical_page}`;
+    const severity = finding.severity === "ERROR" ? "오류" : finding.severity === "WARN" ? "검토 필요" : "정보";
+    context.textContent = `${severity}${finding.document_revision_id ? ` · ${finding.document_revision_id}` : ""}${pageScope}`;
     item.append(code, context);
     root.append(item);
   }
@@ -1397,10 +1412,10 @@ function renderKnowledgeDocuments(documents) {
     const revision = document.createElement("code");
     revision.textContent = documentCoverage.document_revision_id;
     const scope = document.createElement("small");
-    scope.textContent = `pages ${documentCoverage.first_physical_page}–${documentCoverage.last_physical_page} · ${documentCoverage.curriculum_unit_keys.join(", ") || "미분류"}`;
+    scope.textContent = `페이지 ${documentCoverage.first_physical_page}–${documentCoverage.last_physical_page} · ${documentCoverage.curriculum_unit_keys.join(", ") || "미분류"}`;
     identity.append(revision, scope);
     card.append(identity);
-    for (const [label, value] of [["Ranges", documentCoverage.range_count], ["Unique", documentCoverage.unique_page_count], ["Accepted", documentCoverage.accepted_page_count], ["Cancelled", documentCoverage.cancelled_page_count], ["Gaps", documentCoverage.gap_page_count], ["Overlaps", documentCoverage.overlap_page_count]]) {
+    for (const [label, value] of [["범위", documentCoverage.range_count], ["고유 페이지", documentCoverage.unique_page_count], ["분석 완료", documentCoverage.accepted_page_count], ["취소", documentCoverage.cancelled_page_count], ["누락", documentCoverage.gap_page_count], ["중복", documentCoverage.overlap_page_count]]) {
       const stat = document.createElement("div");
       stat.className = "coverage-stat";
       const title = document.createElement("span");
@@ -1478,6 +1493,20 @@ function presetRoleLabel(role) {
   }[role] || role;
 }
 
+function workerSlotLabel(value) {
+  const match = /^slot0*([0-9]+)$/u.exec(String(value || ""));
+  return match ? `작업 슬롯 ${match[1]}` : "작업 슬롯";
+}
+
+function codexCommandLabel(value) {
+  return {
+    OBSERVE: "상태 확인",
+    ENABLE: "사용 시작",
+    DRAIN: "새 작업 중지",
+    DISABLE: "사용 중지",
+  }[value] || "계정 작업";
+}
+
 function presetCapabilityOptions(draft, role) {
   const options = new Map();
   const add = (candidate) => {
@@ -1513,7 +1542,7 @@ function resetPresetEditor() {
   $("#preset-review-open").disabled = true;
   const empty = document.createElement("p");
   empty.className = "empty-state";
-  empty.textContent = "기준 프리셋을 선택하면 역할별 실행 설정이 표시됩니다.";
+  empty.textContent = "기준 실행 설정을 선택하면 역할별 설정이 표시됩니다.";
   $("#preset-role-editors").replaceChildren(empty);
   clearPresetDraftReview();
 }
@@ -1526,13 +1555,13 @@ function renderPresetEditorChoices(presets) {
   const placeholder = document.createElement("option");
   placeholder.value = "";
   placeholder.textContent = state.presetEditorBases.length
-    ? "활성 프리셋 선택"
-    : "GUI에서 편집 가능한 V1 프리셋 없음";
+    ? "사용 중인 실행 설정 선택"
+    : "화면에서 편집 가능한 실행 설정 없음";
   selector.append(placeholder);
   for (const base of state.presetEditorBases) {
     const option = document.createElement("option");
     option.value = base.preset_revision_id;
-    option.textContent = `${base.preset_key} · revision ${base.revision_number}`;
+    option.textContent = `${base.draft.display_name} · 버전 ${base.revision_number}`;
     selector.append(option);
   }
   selector.disabled = state.presetEditorBases.length === 0;
@@ -1560,7 +1589,7 @@ function loadPresetEditorBase() {
   $("#preset-general-knowledge").disabled = false;
   $("#preset-review-open").disabled = false;
   renderPresetRoleEditors(base.draft);
-  showMessage($("#preset-draft-message"), "기준 버전의 고정 bundle·sandbox 정책을 유지한 채 모델·추론·제한 시간을 조정할 수 있습니다.");
+  showMessage($("#preset-draft-message"), "기준 버전의 고정 지시 자료와 격리 정책을 유지한 채 모델·추론·제한 시간을 조정할 수 있습니다.");
 }
 
 function renderPresetRoleEditors(draft) {
@@ -1574,7 +1603,7 @@ function renderPresetRoleEditors(draft) {
     const heading = document.createElement("h3");
     heading.textContent = presetRoleLabel(policy.role);
     const pool = document.createElement("span");
-    pool.textContent = policy.worker_pool_key;
+    pool.textContent = termLabel("worker_slot", "작업 슬롯");
     header.append(heading, pool);
 
     const fields = document.createElement("div");
@@ -1615,13 +1644,13 @@ function renderPresetRoleEditors(draft) {
     const pointers = document.createElement("details");
     pointers.className = "policy-pointer-details";
     const pointerSummary = document.createElement("summary");
-    pointerSummary.textContent = "고정 bundle·sandbox 정보";
+    pointerSummary.textContent = "고정 지시 자료·격리 정보";
     const pointerList = document.createElement("dl");
     pointerList.className = "summary-grid";
-    addControlDetail(pointerList, "Instruction", policy.instruction_bundle.bundle_revision_id);
-    addControlDetail(pointerList, "Reference", policy.reference_bundle?.bundle_revision_id || "없음");
-    addControlDetail(pointerList, "Manifest SHA", policy.instruction_bundle.manifest_sha256);
-    addControlDetail(pointerList, "Sandbox", `${policy.sandbox} · network ${policy.network}`);
+    addControlDetail(pointerList, "작업 지시 자료", policy.instruction_bundle.bundle_revision_id);
+    addControlDetail(pointerList, "참고 자료", policy.reference_bundle?.bundle_revision_id || "없음");
+    addControlDetail(pointerList, "지시 자료 검증값", policy.instruction_bundle.manifest_sha256);
+    addControlDetail(pointerList, "격리 정책", `${policy.sandbox} · 네트워크 ${policy.network}`);
     pointers.append(pointerSummary, pointerList);
     card.append(header, fields, pointers);
     root.append(card);
@@ -1653,7 +1682,7 @@ function openPresetDraftReview() {
     state.reviewedPresetDraft = reviewedPresetDraft(base.draft, collectPresetEditorEdits());
     const summary = $("#preset-review-summary");
     summary.replaceChildren();
-    addControlDetail(summary, "프리셋", state.reviewedPresetDraft.preset_key);
+    addControlDetail(summary, "실행 설정", state.reviewedPresetDraft.display_name);
     addControlDetail(summary, "기준 버전", base.preset_revision_id);
     addControlDetail(summary, "표시 이름", state.reviewedPresetDraft.display_name);
     addControlDetail(summary, "일반 지식", state.reviewedPresetDraft.general_knowledge_policy);
@@ -1664,7 +1693,7 @@ function openPresetDraftReview() {
     $("#preset-review-confirm").checked = false;
     $("#preset-review-panel").hidden = false;
     syncPresetReviewActions();
-    showMessage($("#preset-draft-message"), "DRAFT 생성 전 요약을 확인하세요.");
+    showMessage($("#preset-draft-message"), "설정 초안 생성 전 요약을 확인하세요.");
   } catch (failure) {
     const code = failure instanceof Error ? failure.message : "PRESET_DRAFT_INVALID";
     showMessage($("#preset-draft-message"), `변경사항 검토 실패: ${code}`, "error");
@@ -1696,27 +1725,27 @@ function renderCodexAccounts(accounts) {
   if (!accounts.length) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "등록된 sanitized binding이 없습니다.";
+    empty.textContent = "등록된 작업 계정 연결이 없습니다.";
     root.append(empty);
     return;
   }
   for (const account of accounts) {
-    const {card, details} = controlCard(`${account.slot_key} · ${account.account_label}`, account.state, "codex_account");
+    const {card, details} = controlCard(`${workerSlotLabel(account.slot_key)} · ${account.account_label}`, account.state, "codex_account");
     const capabilities = (account.capabilities || []).map((value) => `${value.model}/${value.reasoning_effort}`).join(", ") || "관측 없음";
-    addControlDetail(details, "Binding", account.binding_id);
-    addControlDetail(details, "CLI", account.codex_cli_version);
-    addControlDetail(details, "Capabilities", capabilities);
-    addControlDetail(details, "Active leases", account.active_lease_count);
-    addControlDetail(details, "Last success", account.last_successful_job_id);
-    addControlDetail(details, "Observed", account.observed_at);
-    addControlDetail(details, "Login change", account.active_auth_enrollment_state || "없음");
+    addControlDetail(details, "계정 연결 ID", account.binding_id);
+    addControlDetail(details, "Codex 버전", account.codex_cli_version);
+    addControlDetail(details, "사용 가능 모델", capabilities);
+    addControlDetail(details, "진행 중인 작업", account.active_lease_count);
+    addControlDetail(details, "최근 성공 작업", account.last_successful_job_id);
+    addControlDetail(details, "확인 시각", account.observed_at);
+    addControlDetail(details, "로그인 변경", account.active_auth_enrollment_state ? statePresentation("generic", account.active_auth_enrollment_state).label : "없음");
     const actions = document.createElement("div");
     actions.className = "form-actions";
     actions.append(
-      actionButton("상태 관측", () => sendAccountCommand(account, "OBSERVE")),
-      actionButton("Enable", () => sendAccountCommand(account, "ENABLE")),
-      actionButton("Drain", () => sendAccountCommand(account, "DRAIN"), true),
-      actionButton("Disable", () => sendAccountCommand(account, "DISABLE"), true),
+      actionButton("상태 확인", () => sendAccountCommand(account, "OBSERVE")),
+      actionButton("사용 시작", () => sendAccountCommand(account, "ENABLE")),
+      actionButton("새 작업 중지", () => sendAccountCommand(account, "DRAIN"), true),
+      actionButton("사용 중지", () => sendAccountCommand(account, "DISABLE"), true),
     );
     const reauth = account.active_auth_enrollment_id
       ? actionButton("로그인 변경 계속", () => resumeCodexReauthentication(account))
@@ -1775,7 +1804,7 @@ function resumeCodexReauthentication(account) {
   $("#codex-reauth-progress").hidden = false;
   $("#codex-challenge-reveal").hidden = true;
   $("#codex-reauth-id").textContent = account.active_auth_enrollment_id;
-  $("#codex-reauth-state").textContent = account.active_auth_enrollment_state;
+  $("#codex-reauth-state").textContent = statePresentation("generic", account.active_auth_enrollment_state).label;
   $("#codex-reauth-expires").textContent = "-";
   $("#codex-reauth-result").textContent = "진행 중";
   setStatus($("#codex-reauth-badge"), "primary", "●", "진행 중");
@@ -1804,7 +1833,7 @@ async function startCodexReauthentication(event) {
     return;
   }
   if (!$("#codex-reauth-ack").checked) {
-    showMessage($("#codex-reauth-message"), "슬롯 drain과 로그인 절차를 확인해야 합니다.", "error");
+    showMessage($("#codex-reauth-message"), "작업 슬롯의 새 작업 중지와 로그인 절차를 확인해야 합니다.", "error");
     return;
   }
   $("#codex-reauth-start").disabled = true;
@@ -1838,7 +1867,7 @@ async function startCodexReauthentication(event) {
     $("#codex-reauth-progress").hidden = false;
     $("#codex-reauth-id").textContent = enrollmentId;
     setStatus($("#codex-reauth-badge"), "primary", "●", "진행 중");
-    showMessage($("#codex-reauth-message"), "슬롯 drain과 기기 로그인 준비를 진행하고 있습니다.");
+    showMessage($("#codex-reauth-message"), "작업 슬롯의 새 작업을 중지하고 기기 로그인을 준비하고 있습니다.");
     await pollCodexAuthEnrollment(enrollmentId);
   } catch (failure) {
     showMessage($("#codex-reauth-message"), `로그인 변경 시작 실패: ${failure.message}`, "error");
@@ -1851,18 +1880,19 @@ async function pollCodexAuthEnrollment(enrollmentId) {
   try {
     const value = await api(`/admin/codex-auth-enrollments/${encodeURIComponent(enrollmentId)}`);
     if (state.codexAuthEnrollmentId !== enrollmentId) return;
-    $("#codex-reauth-state").textContent = value.state;
+    const enrollmentPresentation = statePresentation("generic", value.state);
+    $("#codex-reauth-state").textContent = enrollmentPresentation.label;
     $("#codex-reauth-expires").textContent = value.expires_at || "-";
     $("#codex-reauth-result").textContent = value.assignment_revision_id || value.error_code || "진행 중";
     const terminal = ["SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"].includes(value.state);
     $("#codex-challenge-reveal").hidden = !value.challenge_available;
     if (terminal) {
       clearCodexDeviceChallenge();
-      setStatus($("#codex-reauth-badge"), value.state === "SUCCEEDED" ? "success" : "danger", value.state === "SUCCEEDED" ? "✓" : "!", value.state);
+      setStatus($("#codex-reauth-badge"), value.state === "SUCCEEDED" ? "success" : "danger", value.state === "SUCCEEDED" ? "✓" : "!", enrollmentPresentation.label);
       showMessage(
         $("#codex-reauth-message"),
         value.state === "SUCCEEDED"
-          ? "로그인이 검증되었습니다. 슬롯은 안전하게 drain 상태를 유지하며, 사용할 때 Enable을 명시적으로 눌러야 합니다."
+          ? "로그인이 검증되었습니다. 작업 슬롯은 새 작업 중지 상태를 유지하며, 사용할 때 ‘사용 시작’을 눌러야 합니다."
           : `로그인 변경 종료: ${value.error_code || value.state}`,
         value.state === "SUCCEEDED" ? "success" : "error",
       );
@@ -1911,10 +1941,10 @@ async function sendAccountCommand(account, commandType) {
         reason_code: reason,
       },
     });
-    showMessage($("#codex-account-message"), `${result.command_id} 접수 · credential 전송 없음`, "success");
+    showMessage($("#codex-account-message"), `${codexCommandLabel(commandType)} 요청 접수 · 자격증명 전송 없음`, "success");
     await pollControlCommand(result.command_id);
   } catch (failure) {
-    showMessage($("#codex-account-message"), `계정 command 실패: ${failure.message}`, "error");
+    showMessage($("#codex-account-message"), `계정 작업 실패: ${failure.message}`, "error");
   }
 }
 
@@ -1922,13 +1952,13 @@ async function pollControlCommand(commandId) {
   for (let attempt = 0; attempt < 15; attempt += 1) {
     const value = await api(`/admin/codex-control-commands/${encodeURIComponent(commandId)}`);
     if (["SUCCEEDED", "FAILED"].includes(value.state)) {
-      showMessage($("#codex-account-message"), `${value.command_type}: ${value.state}${value.error_code ? ` · ${value.error_code}` : ""}`, value.state === "SUCCEEDED" ? "success" : "error");
+      showMessage($("#codex-account-message"), `${codexCommandLabel(value.command_type)}: ${statePresentation("generic", value.state).label}${value.error_code ? ` · 기술 코드 ${value.error_code}` : ""}`, value.state === "SUCCEEDED" ? "success" : "error");
       await loadControlPlane();
       return;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 1000));
   }
-  showMessage($("#codex-account-message"), "command가 계속 처리 중입니다. 새로고침으로 확인하세요.");
+  showMessage($("#codex-account-message"), "계정 작업이 계속 처리 중입니다. 새로고침으로 확인하세요.");
 }
 
 function renderExecutionPresets(presets) {
@@ -1937,7 +1967,7 @@ function renderExecutionPresets(presets) {
   if (!presets.length) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "등록된 Execution Preset이 없습니다.";
+    empty.textContent = "등록된 실행 설정이 없습니다.";
     root.append(empty);
     return;
   }
@@ -1945,17 +1975,17 @@ function renderExecutionPresets(presets) {
     const revisions = Array.isArray(preset.revisions) ? [...preset.revisions].sort((left, right) => right.revision_number - left.revision_number) : [];
     const latest = revisions[0];
     const current = revisions.find((revision) => revision.preset_revision_id === preset.current_revision_id);
-    const {card, details} = controlCard(preset.preset_key, preset.state, "execution_preset");
-    addControlDetail(details, "Preset", preset.preset_id);
-    addControlDetail(details, "Current", preset.current_revision_id);
-    addControlDetail(details, "Revision count", revisions.length);
-    addControlDetail(details, "Policy SHA", current ? current.content_sha256 : null);
-    addControlDetail(details, "Models", current ? current.role_policies.map((policy) => `${policy.role}:${policy.model_candidates.map((candidate) => `${candidate.model}/${candidate.reasoning_effort}`).join("|")}`).join(", ") : null);
-    addControlDetail(details, "Evaluation", current && current.evaluations.length ? current.evaluations.map((value) => `${value.scope}:${value.outcome}`).join(", ") : "없음");
+    const {card, details} = controlCard(current?.display_name || "고정 실행 설정", preset.state, "execution_preset");
+    addControlDetail(details, "실행 설정 ID", preset.preset_id);
+    addControlDetail(details, "현재 고정 버전", preset.current_revision_id);
+    addControlDetail(details, "고정 버전 수", revisions.length);
+    addControlDetail(details, "정책 내용 검증값", current ? current.content_sha256 : null);
+    addControlDetail(details, "모델·추론 설정", current ? current.role_policies.map((policy) => `${presetRoleLabel(policy.role)}:${policy.model_candidates.map((candidate) => `${candidate.model}/${candidate.reasoning_effort}`).join("|")}`).join(", ") : null);
+    addControlDetail(details, "검증 결과", current && current.evaluations.length ? current.evaluations.map((value) => `${value.scope}:${value.outcome}`).join(", ") : "없음");
     const actions = document.createElement("div");
     actions.className = "form-actions";
-    if (latest && latest.state === "DRAFT") actions.append(actionButton("Release 검토", () => openPresetReleaseReview(preset, latest)));
-    if (current && preset.state === "ACTIVE") actions.append(actionButton("Deprecate", () => deprecatePreset(preset.preset_id, current.revision_number), true));
+    if (latest && latest.state === "DRAFT") actions.append(actionButton("사용 가능 전환 검토", () => openPresetReleaseReview(preset, latest)));
+    if (current && preset.state === "ACTIVE") actions.append(actionButton("사용 중단", () => deprecatePreset(preset.preset_id, current.revision_number), true));
     card.append(actions);
     root.append(card);
   }
@@ -1969,17 +1999,17 @@ async function deprecatePreset(identifier, resourceVersion) {
       mutation: true,
       body: {resource_version: resourceVersion, idempotency_key: `studio:preset:deprecate:${identifier}:${crypto.randomUUID()}`},
     });
-    showMessage($("#execution-preset-message"), `deprecate: ${result.resource_id}`, "success");
+    showMessage($("#execution-preset-message"), `사용 중단 완료: ${result.resource_id}`, "success");
     await loadControlPlane();
   } catch (failure) {
-    showMessage($("#execution-preset-message"), `deprecate 실패: ${failure.message}`, "error");
+    showMessage($("#execution-preset-message"), `사용 중단 실패: ${failure.message}`, "error");
   }
 }
 
 async function createPresetDraft() {
   const value = state.reviewedPresetDraft;
   if (!value || !$("#preset-review-confirm").checked) {
-    return showMessage($("#preset-draft-message"), "검토 확인 후 DRAFT를 생성하세요.", "error");
+    return showMessage($("#preset-draft-message"), "검토 확인 후 설정 초안을 생성하세요.", "error");
   }
   try {
     const result = await api("/admin/execution-presets", {
@@ -1987,11 +2017,11 @@ async function createPresetDraft() {
       mutation: true,
       body: {...value, idempotency_key: `studio:preset:draft:${crypto.randomUUID()}`},
     });
-    showMessage($("#preset-draft-message"), `DRAFT ${result.resource_id} 생성`, "success");
+    showMessage($("#preset-draft-message"), `설정 초안 ${result.resource_id} 생성`, "success");
     clearPresetDraftReview();
     await loadControlPlane();
   } catch (failure) {
-    showMessage($("#preset-draft-message"), `DRAFT 생성 실패: ${failure.message}`, "error");
+    showMessage($("#preset-draft-message"), `설정 초안 생성 실패: ${failure.message}`, "error");
   }
 }
 
@@ -2005,9 +2035,9 @@ function openPresetReleaseReview(preset, revision) {
   };
   const summary = $("#preset-release-summary");
   summary.replaceChildren();
-  addControlDetail(summary, "프리셋", preset.preset_key);
-  addControlDetail(summary, "DRAFT 버전", revision.preset_revision_id);
-  addControlDetail(summary, "정책 SHA", revision.content_sha256);
+  addControlDetail(summary, "실행 설정", revision.display_name || preset.preset_key);
+  addControlDetail(summary, "설정 초안 버전", revision.preset_revision_id);
+  addControlDetail(summary, "정책 내용 검증값", revision.content_sha256);
   addControlDetail(summary, "역할 정책", revision.role_policies.map((policy) => (
     `${presetRoleLabel(policy.role)}: ${policy.model_candidates.map((candidate) => `${candidate.model}/${candidate.reasoning_effort}`).join(" → ")} · ${policy.timeout_seconds}초`
   )).join(" | "));
@@ -2029,7 +2059,7 @@ function clearPresetReleaseReview() {
 async function releaseReviewedPreset() {
   const candidate = state.presetReleaseCandidate;
   if (!candidate || !$("#preset-release-confirm").checked) {
-    return showMessage($("#execution-preset-message"), "Release 검토 확인이 필요합니다.", "error");
+    return showMessage($("#execution-preset-message"), "사용 가능 전환 검토 확인이 필요합니다.", "error");
   }
   try {
     const result = await api(`/admin/execution-preset-revisions/${encodeURIComponent(candidate.preset_revision_id)}/releases`, {
@@ -2040,11 +2070,11 @@ async function releaseReviewedPreset() {
         idempotency_key: `studio:preset:release:${candidate.preset_revision_id}:${crypto.randomUUID()}`,
       },
     });
-    showMessage($("#execution-preset-message"), `Release: ${result.resource_id}`, "success");
+    showMessage($("#execution-preset-message"), `사용 가능 전환 완료: ${result.resource_id}`, "success");
     clearPresetReleaseReview();
     await loadControlPlane();
   } catch (failure) {
-    showMessage($("#execution-preset-message"), `Release 실패: ${failure.message}`, "error");
+    showMessage($("#execution-preset-message"), `사용 가능 전환 실패: ${failure.message}`, "error");
   }
 }
 
@@ -2129,11 +2159,63 @@ async function runExplorer() {
     renderExplorer(result);
     state.explorerCursor = result.next_cursor;
     $("#explorer-next").disabled = !result.has_more || !result.next_cursor;
-    $("#explorer-capability").textContent = `${result.entity} · ${result.capability}`;
-    showMessage(message, `${result.rows.length}개 row · Application API/Observability read-only projection`, "success");
+    $("#explorer-capability").textContent = `${explorerEntityLabel(result.entity)} · 조회 전용`;
+    showMessage(message, `${result.rows.length}개 결과 · 허용된 운영 정보 조회`, "success");
   } catch (failure) {
     showMessage(message, `조회 실패: ${failure.message}`, "error");
   }
+}
+
+function explorerEntityLabel(value) {
+  return {
+    workflows: "문항 제작 진행",
+    workflow_events: "문항 제작 이력",
+    step_runs: "단계 실행",
+    jobs: "작업",
+    artifacts: "결과 파일",
+    artifact_revisions: "결과 파일 버전",
+    items: "문항",
+    item_revisions: "문항 버전",
+    content_pack_releases: "제작 기준 버전",
+    usage_plans: "사용 계획",
+    usage_records: "사용 기록",
+    hwpx_builds: "HWPX 제작",
+  }[value] || "운영 정보";
+}
+
+function explorerColumnLabel(value) {
+  return {
+    workflow_id: "문항 제작 진행 ID",
+    event_id: "이력 ID",
+    step_run_id: "단계 실행 ID",
+    job_id: "작업 ID",
+    artifact_id: "결과 파일 ID",
+    artifact_revision_id: "결과 파일 버전 ID",
+    item_id: "문항 ID",
+    item_revision_id: "문항 버전 ID",
+    build_id: "HWPX 제작 ID",
+    state: "상태",
+    status: "상태",
+    validation_state: "검증 상태",
+    renderer: "제작 방식",
+    renderer_version: "제작 버전",
+    output_artifact_revision_id: "결과 파일 버전 ID",
+    native_equation_count: "수식 수",
+    native_table_count: "표 수",
+    created_at: "생성 시각",
+    updated_at: "최근 변경 시각",
+    completed_at: "완료 시각",
+  }[value] || value.replaceAll("_", " ");
+}
+
+function explorerCellPresentation(column, value) {
+  if (value === null || value === undefined) return "-";
+  if (["state", "status", "validation_state", "revision_state"].includes(column)) {
+    return statePresentation("generic", value).label;
+  }
+  if (column === "renderer" && value === "eom-template") return "EOM 문항 템플릿";
+  if (typeof value === "boolean") return value ? "예" : "아니요";
+  return String(value);
 }
 
 function renderExplorer(result) {
@@ -2141,16 +2223,16 @@ function renderExplorer(result) {
   table.querySelector("thead").replaceChildren();
   table.querySelector("tbody").replaceChildren();
   const headerRow = document.createElement("tr");
-  for (const column of result.columns) { const th = document.createElement("th"); th.textContent = column.replaceAll("_", " "); headerRow.append(th); }
+  for (const column of result.columns) { const th = document.createElement("th"); th.textContent = explorerColumnLabel(column); headerRow.append(th); }
   table.querySelector("thead").append(headerRow);
   if (!result.rows.length) {
-    const tr = document.createElement("tr"); const td = document.createElement("td"); td.className = "empty-state"; td.colSpan = Math.max(1, result.columns.length); td.textContent = result.capability === "EXACT_ID_REQUIRED" ? "이 entity는 정확한 ID 조회가 필요합니다." : result.capability === "PREPARED_NOT_DEPLOYED" ? "HWPX Renderer 운영 배포 필요" : "조건에 맞는 row가 없습니다."; tr.append(td); table.querySelector("tbody").append(tr); return;
+    const tr = document.createElement("tr"); const td = document.createElement("td"); td.className = "empty-state"; td.colSpan = Math.max(1, result.columns.length); td.textContent = result.capability === "EXACT_ID_REQUIRED" ? "이 조회 대상은 정확한 ID가 필요합니다." : result.capability === "PREPARED_NOT_DEPLOYED" ? "HWPX 제작 기능의 운영 연결이 필요합니다." : "조건에 맞는 결과가 없습니다."; tr.append(td); table.querySelector("tbody").append(tr); return;
   }
   for (const row of result.rows) {
     const tr = document.createElement("tr"); tr.tabIndex = 0;
     tr.addEventListener("click", () => openExplorerRow(row));
     tr.addEventListener("keydown", (event) => { if (event.key === "Enter") openExplorerRow(row); });
-    for (const column of result.columns) { const td = document.createElement("td"); td.textContent = row[column] === null || row[column] === undefined ? "-" : String(row[column]); td.title = td.textContent; tr.append(td); }
+    for (const column of result.columns) { const td = document.createElement("td"); td.textContent = explorerCellPresentation(column, row[column]); td.title = td.textContent; tr.append(td); }
     table.querySelector("tbody").append(tr);
   }
 }
@@ -2164,7 +2246,7 @@ function openExplorerRow(row) {
 async function copyExplorerId() {
   if (!state.explorerRow || !navigator.clipboard) return toast("복사 가능한 ID가 없습니다.");
   const value = Object.values(state.explorerRow).find((item) => typeof item === "string" && /^(workflow|item|itemrev|job|artifact|revision|usage|contentpack)_/.test(item));
-  if (!value) return toast("이 row에는 복사 가능한 ID가 없습니다.");
+  if (!value) return toast("이 결과에는 복사 가능한 ID가 없습니다.");
   await navigator.clipboard.writeText(value);
   toast("ID를 복사했습니다.");
 }

@@ -47,13 +47,24 @@ def test_vocabulary_preserves_distinct_pointer_identities() -> None:
     assert terms["item_id"]["label"] == "문항 ID"
     assert terms["item_revision_id"]["label"] == "문항 버전 ID"
     assert terms["artifact_revision_id"]["label"] == "결과 파일 버전 ID"
-    assert terms["sha256"]["label"] == "내용 해시 (SHA-256)"
+    assert terms["sha256"]["label"] == "내용 검증값"
     assert (
         len(
             {terms[key]["label"] for key in ("item_id", "item_revision_id", "artifact_revision_id")}
         )
         == 3
     )
+
+
+def test_vocabulary_names_product_surfaces_without_backend_jargon() -> None:
+    terms = _vocabulary()["terms"]
+    assert terms["execution_preset"]["label"] == "실행 설정"
+    assert terms["analysis_batch"]["label"] == "분석 작업"
+    assert terms["content_pack_release"]["label"] == "제작 기준 버전"
+    assert terms["etag"]["label"] == "동시 편집 확인값"
+    assert terms["application_api"]["label"] == "핵심 서비스"
+    assert terms["observability"]["label"] == "운영 상태"
+    assert terms["database_explorer"]["label"] == "운영 데이터 조회"
 
 
 def test_known_user_errors_have_explanation_and_next_action() -> None:

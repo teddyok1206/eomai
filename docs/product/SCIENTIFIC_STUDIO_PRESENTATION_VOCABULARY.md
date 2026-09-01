@@ -36,6 +36,10 @@ JSON 사전이 런타임 표시값의 유일한 권위 자료다. HTML과 JavaSc
    취할 수 있는 조치를 표시한다. 원본 오류 코드는 숨기거나 다른 코드로 바꾸지 않는다.
 6. **대상 사용자를 구분한다.** `USER`는 일상 업무, `ADMIN`은 운영 설정,
    `DIAGNOSTIC`은 지원·감사에 필요한 표현이다.
+7. **일상 작업면에서는 구현명을 노출하지 않는다.** `API`, `Control Plane`, `DB Explorer`,
+   `ETag`, `Artifact`, `DRAFT`, `Release`, `Drain`처럼 사용자가 행동을 결정하는 데 필요하지
+   않은 구현명은 각각 서비스 역할, 작업 목적, 안전 장치, 사용자 행동을 설명하는 말로
+   표시한다. 원본 값은 요청 payload와 접힌 기술 정보에만 보존한다.
 
 ## 표현 구조
 
@@ -80,8 +84,26 @@ JSON 사전이 런타임 표시값의 유일한 권위 자료다. HTML과 JavaSc
 | Source Intake | 참고 자료 묶음 | 사용자 |
 | Evidence Bundle | 근거 자료 묶음 | 관리자 |
 | Graph Snapshot | 지식 그래프 버전 | 관리자 |
-| Execution Preset | 실행 프리셋 | 관리자 |
+| Execution Preset | 실행 설정 | 관리자 |
 | Worker Slot | 작업 슬롯 | 관리자 |
+| Analysis Batch | 분석 작업 | 관리자 |
+| Content Pack Release | 제작 기준 버전 | 진단·지원 |
+| ETag | 동시 편집 확인값 | 편집·승인 |
+| Application API | 핵심 서비스 | 사용자 |
+| Observability | 운영 상태 | 사용자 |
+| DB Explorer | 운영 데이터 조회 | 관리자 |
+| SHA-256 | 내용 검증값 | 진단·지원 |
+
+### 사용자 행동
+
+| 내부 동작 | GUI 표현 |
+|---|---|
+| `ENABLE` | 사용 시작 |
+| `DRAIN` | 새 작업 중지 |
+| `DISABLE` | 사용 중지 |
+| create `DRAFT` | 설정 초안 생성 |
+| `Release` preset revision | 설정 사용 가능 전환 |
+| `Deprecate` preset | 설정 사용 중단 |
 
 논리 ID와 불변 Revision ID를 합치지 않는다. GUI에서 더 친숙한 이름을 사용하더라도 서로
 다른 식별자는 별도 필드로 표시한다.
