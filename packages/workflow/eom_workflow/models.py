@@ -373,6 +373,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.10.0",
         "workflow-role/1.11.0",
         "workflow-role/1.12.0",
+        "workflow-role/1.13.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -457,6 +458,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.10.0",
         "workflow-role/1.11.0",
         "workflow-role/1.12.0",
+        "workflow-role/1.13.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -734,27 +736,16 @@ class GeneratedLineGraphImageBriefV5(GeneratedImageBrief):
     background_style: Literal["WHITE", "GRID", "PAPER"] = "WHITE"
 
 
-class GeneratedVectorImageBriefV5(FrozenModel):
+class _GeneratedVectorImageBriefBase(FrozenModel):
     kind: Literal["diagram", "apparatus", "map", "particle_model", "natural_scene", "composite"]
-    production_route: Literal[
-        "DETERMINISTIC_SVG", "LOCAL_GENERATIVE_BACKGROUND", "HUMAN_REVIEWED_BACKGROUND"
-    ]
     background_style: Literal["WHITE", "GRID", "PAPER"]
     block_id: Literal["block_image"] = "block_image"
     alt_text: str = Field(min_length=1, max_length=1000)
     scene_description: str = Field(min_length=1, max_length=4000)
     scientific_constraints: tuple[str, ...] = Field(min_length=1, max_length=16)
     required_labels: tuple[str, ...] = Field(max_length=16)
-    generation_prompt: str = Field(min_length=1, max_length=4000)
-    negative_prompt: str | None = Field(default=None, max_length=2000)
 
-    @field_validator(
-        "alt_text",
-        "scene_description",
-        "generation_prompt",
-        "negative_prompt",
-        mode="after",
-    )
+    @field_validator("alt_text", "scene_description", mode="after")
     @classmethod
     def safe_vector_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -790,6 +781,23 @@ class GeneratedVectorImageBriefV5(FrozenModel):
         ):
             raise ValueError("generated vector label is unsafe")
         return values
+
+
+class GeneratedVectorImageBriefV5(_GeneratedVectorImageBriefBase):
+    production_route: Literal[
+        "DETERMINISTIC_SVG", "LOCAL_GENERATIVE_BACKGROUND", "HUMAN_REVIEWED_BACKGROUND"
+    ]
+    generation_prompt: str = Field(min_length=1, max_length=4000)
+    negative_prompt: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("generation_prompt", "negative_prompt", mode="after")
+    @classmethod
+    def safe_generation_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not _is_safe_generated_vector_text(value, allow_layout=True):
+            raise ValueError("generated vector text contains unsafe whitespace or controls")
+        return value
 
 
 def _is_safe_generated_vector_text(value: str, *, allow_layout: bool) -> bool:
@@ -902,6 +910,174 @@ class GeneratedRegistrationRoleResultV5(RoleResultBase):
     output: KnowledgeRegistrationOutput
 
 
+DeterministicImageRouteReason = Literal[
+    "DATA_VISUALIZATION",
+    "SCIENTIFIC_SCHEMATIC",
+    "GEOMETRIC_DIAGRAM",
+    "MAP_OR_SPATIAL_DIAGRAM",
+]
+HybridImageRouteReason = Literal[
+    "HUMAN_OR_ANIMAL_REQUIRED",
+    "ORGANIC_OBJECT_REQUIRED",
+    "REALISTIC_NATURAL_SCENE_REQUIRED",
+    "COMPLEX_NATURAL_TEXTURE_REQUIRED",
+]
+ImageRouteReason = DeterministicImageRouteReason | HybridImageRouteReason
+
+_DETERMINISTIC_IMAGE_ROUTE_REASONS = frozenset(
+    {
+        "DATA_VISUALIZATION",
+        "SCIENTIFIC_SCHEMATIC",
+        "GEOMETRIC_DIAGRAM",
+        "MAP_OR_SPATIAL_DIAGRAM",
+    }
+)
+_HYBRID_IMAGE_ROUTE_REASONS = frozenset(
+    {
+        "HUMAN_OR_ANIMAL_REQUIRED",
+        "ORGANIC_OBJECT_REQUIRED",
+        "REALISTIC_NATURAL_SCENE_REQUIRED",
+        "COMPLEX_NATURAL_TEXTURE_REQUIRED",
+    }
+)
+
+
+class GeneratedLineGraphImageBriefV6(GeneratedLineGraphImageBriefV5):
+    route_reason: Literal["DATA_VISUALIZATION"] = "DATA_VISUALIZATION"
+
+
+class GeneratedVectorImageBriefV6(_GeneratedVectorImageBriefBase):
+    production_route: Literal["DETERMINISTIC_SVG", "HYBRID_LOCAL_GENERATIVE"]
+    route_reason: ImageRouteReason
+    generation_prompt: str | None = Field(default=None, max_length=4000)
+    negative_prompt: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("generation_prompt", "negative_prompt", mode="after")
+    @classmethod
+    def safe_generation_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not _is_safe_generated_vector_text(value, allow_layout=True):
+            raise ValueError("generated vector text contains unsafe whitespace or controls")
+        return value
+
+    @model_validator(mode="after")
+    def validate_route_plan(self) -> GeneratedVectorImageBriefV6:
+        if self.production_route == "DETERMINISTIC_SVG":
+            if self.route_reason not in _DETERMINISTIC_IMAGE_ROUTE_REASONS:
+                raise ValueError("deterministic image route reason is invalid")
+            if self.generation_prompt is not None or self.negative_prompt is not None:
+                raise ValueError("deterministic image route cannot declare generation prompts")
+        else:
+            if self.route_reason not in _HYBRID_IMAGE_ROUTE_REASONS:
+                raise ValueError("hybrid image route reason is invalid")
+            if self.kind not in {"natural_scene", "composite"}:
+                raise ValueError("hybrid image route requires a natural scene or composite")
+            if self.generation_prompt is None:
+                raise ValueError("hybrid image route requires a generation prompt")
+        return self
+
+
+GeneratedImageBriefV6 = Annotated[
+    GeneratedLineGraphImageBriefV6 | GeneratedVectorImageBriefV6,
+    Field(discriminator="kind"),
+]
+
+
+class GeneratedItemDraftV6(FrozenModel):
+    schema_version: Literal["1.0"] = "1.0"
+    locale: Literal["ko-KR"] = "ko-KR"
+    title: str = Field(min_length=1, max_length=20_000)
+    stem: ParagraphBlock
+    data_table: TableBlock
+    image_brief: GeneratedImageBriefV6
+    equation: EquationBlock
+    prompt: ParagraphBlock
+    statements: StatementSetBlock
+    interaction: SingleChoiceInteraction
+    solution: ItemSolution
+    score: ItemScore
+
+    @model_validator(mode="after")
+    def validate_template_and_references(self) -> GeneratedItemDraftV6:
+        _validate_generated_item_template_contract(
+            stem=self.stem,
+            data_table=self.data_table,
+            equation=self.equation,
+            prompt=self.prompt,
+            statements=self.statements,
+            interaction=self.interaction,
+            score=self.score,
+        )
+        validate_item_reference_contract(
+            block_ids=(
+                self.stem.block_id,
+                self.data_table.block_id,
+                self.image_brief.block_id,
+                self.equation.block_id,
+                self.prompt.block_id,
+                self.statements.block_id,
+            ),
+            statement_ids=tuple(statement.statement_id for statement in self.statements.statements),
+            interaction=self.interaction,
+            solution=self.solution,
+        )
+        return self
+
+
+class GeneratedAuthoringOutputV6(FrozenModel):
+    draft: GeneratedItemDraftV6
+    metadata: KnowledgeAuthoringMetadata
+
+
+class GeneratedAuthoringRoleResultV6(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.13.0"] = "workflow-role/1.13.0"
+    role: Literal["authoring"]
+    output: GeneratedAuthoringOutputV6
+
+
+class GeneratedLineGraphDrawingV6(GeneratedLineGraphImageBriefV6):
+    width_px: Literal[800] = 800
+    height_px: Literal[500] = 500
+    stroke_color: Literal["blue", "green", "orange"]
+    point_style: Literal["circle", "square"]
+
+
+class GeneratedVectorDrawingV6(GeneratedVectorImageBriefV6):
+    width_px: Literal[800] = 800
+    height_px: Literal[500] = 500
+    svg_overlay: str = Field(min_length=64, max_length=65_536)
+
+
+GeneratedDrawingV6 = Annotated[
+    GeneratedLineGraphDrawingV6 | GeneratedVectorDrawingV6,
+    Field(discriminator="kind"),
+]
+
+
+class GeneratedImageOutputV6(FrozenModel):
+    drawing: GeneratedDrawingV6
+    summary: str = Field(min_length=1, max_length=2000)
+
+
+class GeneratedImageRoleResultV6(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.13.0"] = "workflow-role/1.13.0"
+    role: Literal["image"]
+    output: GeneratedImageOutputV6
+
+
+class GeneratedReviewRoleResultV6(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.13.0"] = "workflow-role/1.13.0"
+    role: Literal["review"]
+    output: KnowledgeReviewOutput
+
+
+class GeneratedRegistrationRoleResultV6(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.13.0"] = "workflow-role/1.13.0"
+    role: Literal["item_management"]
+    output: KnowledgeRegistrationOutput
+
+
 class KnowledgeAnalysisProposalOutput(FrozenModel):
     proposal: KnowledgeAnalysisWorkerProposal
 
@@ -995,6 +1171,10 @@ RoleResult = (
     | GeneratedImageRoleResultV5
     | GeneratedReviewRoleResultV5
     | GeneratedRegistrationRoleResultV5
+    | GeneratedAuthoringRoleResultV6
+    | GeneratedImageRoleResultV6
+    | GeneratedReviewRoleResultV6
+    | GeneratedRegistrationRoleResultV6
     | KnowledgeAnalysisProposalRoleResult
     | KnowledgeAnalysisProposalRoleResultV2
     | KnowledgeAnalysisProposalRoleResultV3

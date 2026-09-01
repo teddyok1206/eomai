@@ -94,4 +94,4 @@ printf 'PROVIDER_WHEEL_SHA256=%s\n' "${PROVIDER_SHA256}"
 printf 'WORKSPACE_ROOT=root:eom-image:3770\n'
 printf 'MODEL_STORE=root:eom-image:0750_0640\n'
 printf 'RUNNER_RESTART_REQUIRED=YES\n'
-printf 'CONTENT_PACK_ACTIVATION_REQUIRED=generated-knowledge-item@1.4.0\n'
+printf 'CONTENT_PACK_ACTIVATION_REQUIRED=generated-knowledge-item@1.5.0\n'

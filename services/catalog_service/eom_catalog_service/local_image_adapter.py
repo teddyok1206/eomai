@@ -26,7 +26,7 @@ from eom_image_contracts import (
     text_sha256,
     validate_contract,
 )
-from eom_workflow.models import GeneratedVectorDrawingV5
+from eom_workflow.models import GeneratedVectorDrawingV5, GeneratedVectorDrawingV6
 
 from eom_catalog_service.settings import CatalogSettings
 
@@ -44,6 +44,11 @@ PROVIDER_RECEIPT_MEMBER: Final = "composite-receipt.json"
 _SAFE_BACKGROUND_PREFIX: Final = (
     "Non-authoritative background layer only. Render no text, labels, numbers, symbols, "
     "equations, graphs, scales, measurement marks, logos, or watermarks. "
+)
+_SAFE_RASTER_PREFIX: Final = (
+    "Semantic raster layer for an educational science stimulus. Render only the requested person, "
+    "animal, organism, natural object, or realistic scene. Render no text, labels, numbers, "
+    "symbols, equations, graph axes, scale marks, measurement marks, logos, or watermarks. "
 )
 _SAFE_NEGATIVE_PROMPT: Final = (
     "text, letters, labels, numbers, symbols, equations, graph axes, scale marks, "
@@ -115,12 +120,15 @@ class FixedLocalImageProviderAdapter:
         workflow_id: str,
         result_revision_id: str,
         drawing_hash: str,
-        drawing: GeneratedVectorDrawingV5,
+        drawing: GeneratedVectorDrawingV5 | GeneratedVectorDrawingV6,
         overlay_path: Path,
         binding: LocalImageProviderBinding,
         output_directory: Path,
     ) -> LocalImageMaterialization:
-        if drawing.production_route != "LOCAL_GENERATIVE_BACKGROUND":
+        if drawing.production_route not in {
+            "LOCAL_GENERATIVE_BACKGROUND",
+            "HYBRID_LOCAL_GENERATIVE",
+        }:
             raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED")
         request = _build_request(
             workflow_id=workflow_id,
@@ -163,7 +171,7 @@ def _build_request(
     workflow_id: str,
     result_revision_id: str,
     drawing_hash: str,
-    drawing: GeneratedVectorDrawingV5,
+    drawing: GeneratedVectorDrawingV5 | GeneratedVectorDrawingV6,
     binding: LocalImageProviderBinding,
     overlay_path: Path,
 ) -> LocalImageCompositeRequest:
@@ -173,7 +181,14 @@ def _build_request(
         or _SHA256.fullmatch(drawing_hash) is None
     ):
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
-    prompt = _SAFE_BACKGROUND_PREFIX + drawing.generation_prompt
+    if drawing.generation_prompt is None:
+        raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
+    prefix = (
+        _SAFE_RASTER_PREFIX
+        if drawing.production_route == "HYBRID_LOCAL_GENERATIVE"
+        else _SAFE_BACKGROUND_PREFIX
+    )
+    prompt = prefix + drawing.generation_prompt
     negative = (
         _SAFE_NEGATIVE_PROMPT
         if drawing.negative_prompt is None

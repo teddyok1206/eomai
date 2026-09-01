@@ -25,12 +25,16 @@ from eom_workflow.models import (
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
     GeneratedAuthoringRoleResultV5,
+    GeneratedAuthoringRoleResultV6,
     GeneratedImageRoleResult,
     GeneratedImageRoleResultV4,
     GeneratedImageRoleResultV5,
+    GeneratedImageRoleResultV6,
     GeneratedLineGraphDrawing,
     GeneratedLineGraphDrawingV5,
+    GeneratedLineGraphDrawingV6,
     GeneratedVectorDrawingV5,
+    GeneratedVectorDrawingV6,
     KnowledgeAuthoringRoleResult,
     RoleResult,
 )
@@ -51,6 +55,7 @@ from eom_catalog_service.generated_stimulus import (
     PNG_HEIGHT,
     PNG_MEMBER,
     PNG_WIDTH,
+    RASTER_MEMBER,
     render_generated_local_vector_stimulus,
     render_generated_stimulus,
     render_generated_vector_stimulus,
@@ -116,6 +121,10 @@ ROLE_BY_RESULT_SCHEMA = {
     "image-result@5.0": "image",
     "review-result@5.0": "review",
     "registration-result@5.0": "item_management",
+    "authoring-result@6.0": "authoring",
+    "image-result@6.0": "image",
+    "review-result@6.0": "review",
+    "registration-result@6.0": "item_management",
     "knowledge-analysis-proposal-result@1.0": "support",
     "knowledge-analysis-proposal-result@2.0": "support",
     "knowledge-analysis-proposal-result@3.0": "support",
@@ -130,6 +139,7 @@ GENERATED_RESULT_SCHEMA_PAIRS = frozenset(
         ("authoring-result@3.0", "image-result@3.0"),
         ("authoring-result@4.0", "image-result@4.0"),
         ("authoring-result@5.0", "image-result@5.0"),
+        ("authoring-result@6.0", "image-result@6.0"),
     }
 )
 GENERATED_AUTHORING_SCHEMAS = frozenset(pair[0] for pair in GENERATED_RESULT_SCHEMA_PAIRS)
@@ -316,7 +326,10 @@ class WorkflowCatalogService:
                 ),
                 "prompt_artifacts": [],
             }
-            if pack.pack_key == "generated-knowledge-item" and release.version == "1.4.0":
+            if pack.pack_key == "generated-knowledge-item" and release.version in {
+                "1.4.0",
+                "1.5.0",
+            }:
                 binding = load_local_image_provider_binding(
                     self.settings.local_image_provider_binding
                 )
@@ -437,10 +450,14 @@ class WorkflowCatalogService:
             authoring_result,
             GeneratedAuthoringRoleResult
             | GeneratedAuthoringRoleResultV4
-            | GeneratedAuthoringRoleResultV5,
+            | GeneratedAuthoringRoleResultV5
+            | GeneratedAuthoringRoleResultV6,
         ) or not isinstance(
             image_result,
-            GeneratedImageRoleResult | GeneratedImageRoleResultV4 | GeneratedImageRoleResultV5,
+            GeneratedImageRoleResult
+            | GeneratedImageRoleResultV4
+            | GeneratedImageRoleResultV5
+            | GeneratedImageRoleResultV6,
         ):
             raise ValueError("generated stimulus result types are invalid")
         brief = authoring_result.output.draft.image_brief
@@ -457,13 +474,21 @@ class WorkflowCatalogService:
         if brief.model_dump(mode="json") != drawing_data:
             raise ValueError("image worker changed the authoring image brief")
         drawing_hash = content_sha256(drawing.model_dump(mode="json"))
-        if isinstance(image_result, GeneratedImageRoleResultV5):
-            if not isinstance(drawing, GeneratedLineGraphDrawingV5 | GeneratedVectorDrawingV5):
-                raise ValueError("generated vector drawing type is invalid")
-            if (
-                isinstance(drawing, GeneratedVectorDrawingV5)
-                and drawing.production_route == "LOCAL_GENERATIVE_BACKGROUND"
+        if isinstance(image_result, GeneratedImageRoleResultV5 | GeneratedImageRoleResultV6):
+            if not isinstance(
+                drawing,
+                GeneratedLineGraphDrawingV5
+                | GeneratedVectorDrawingV5
+                | GeneratedLineGraphDrawingV6
+                | GeneratedVectorDrawingV6,
             ):
+                raise ValueError("generated vector drawing type is invalid")
+            if isinstance(
+                drawing, GeneratedVectorDrawingV5 | GeneratedVectorDrawingV6
+            ) and drawing.production_route in {
+                "LOCAL_GENERATIVE_BACKGROUND",
+                "HYBRID_LOCAL_GENERATIVE",
+            }:
                 binding_value = workflow.runtime_context.get("local_image_provider")
                 if not isinstance(binding_value, dict):
                     raise ValueError("pinned local image provider binding is missing")
@@ -477,10 +502,15 @@ class WorkflowCatalogService:
                     binding=binding,
                     adapter=self.local_image,
                 )
+                raster_member = (
+                    RASTER_MEMBER
+                    if isinstance(image_result, GeneratedImageRoleResultV6)
+                    else BACKGROUND_MEMBER
+                )
                 files = {
                     PNG_MEMBER: local_rendered.png_path,
                     SVG_MEMBER: local_rendered.svg_path,
-                    BACKGROUND_MEMBER: local_rendered.background_path,
+                    raster_member: local_rendered.background_path,
                     LOCAL_IMAGE_RECEIPT_MEMBER: local_rendered.receipt_path,
                 }
                 receipt = local_rendered.receipt
@@ -492,16 +522,34 @@ class WorkflowCatalogService:
                     "font_family": SVG_FONT_FAMILY,
                     "font_sha256": local_rendered.font_sha256,
                     "production_route": drawing.production_route,
+                    **(
+                        {
+                            "route_reason": cast(
+                                GeneratedLineGraphDrawingV6 | GeneratedVectorDrawingV6,
+                                drawing,
+                            ).route_reason
+                        }
+                        if isinstance(image_result, GeneratedImageRoleResultV6)
+                        else {}
+                    ),
                     "local_image_binding_sha256": binding.binding_sha256,
                     "local_image_request_sha256": local_rendered.request_sha256,
                     "local_image_receipt_sha256": receipt.receipt_sha256,
                     "local_image_unit": local_rendered.unit_name,
-                    "local_image_background_sha256": receipt.generation.output.sha256,
+                    (
+                        "local_image_raster_sha256"
+                        if isinstance(image_result, GeneratedImageRoleResultV6)
+                        else "local_image_background_sha256"
+                    ): receipt.generation.output.sha256,
                     "local_image_model": receipt.generation.model.model_dump(mode="json"),
                     "local_image_runtime": receipt.generation.runtime.model_dump(mode="json"),
                     "compositor": receipt.compositor.model_dump(mode="json"),
                 }
-                drawing_schema = "eom.generated-vector-stimulus/3.0"
+                drawing_schema = (
+                    "eom.generated-vector-stimulus/4.0"
+                    if isinstance(image_result, GeneratedImageRoleResultV6)
+                    else "eom.generated-vector-stimulus/3.0"
+                )
                 file_metadata = {
                     PNG_MEMBER: {
                         "schema_ref": "eom://schemas/generated-item/stimulus-png/3.0",
@@ -511,8 +559,12 @@ class WorkflowCatalogService:
                         "schema_ref": "eom://schemas/generated-item/stimulus-svg-overlay/1.0",
                         "media_type": SVG_MEDIA_TYPE,
                     },
-                    BACKGROUND_MEMBER: {
-                        "schema_ref": "eom://schemas/generated-item/background-png/1.0",
+                    raster_member: {
+                        "schema_ref": (
+                            "eom://schemas/generated-item/semantic-raster-png/1.0"
+                            if isinstance(image_result, GeneratedImageRoleResultV6)
+                            else "eom://schemas/generated-item/background-png/1.0"
+                        ),
                         "media_type": "image/png",
                     },
                     LOCAL_IMAGE_RECEIPT_MEMBER: {
@@ -522,7 +574,11 @@ class WorkflowCatalogService:
                         "media_type": "application/json",
                     },
                 }
-                manifest_version = "generated-item-stimulus-file-set/3.0"
+                manifest_version = (
+                    "generated-item-stimulus-file-set/4.0"
+                    if isinstance(image_result, GeneratedImageRoleResultV6)
+                    else "generated-item-stimulus-file-set/3.0"
+                )
                 artifact_idempotency_key = (
                     f"generated-stimulus:{workflow.workflow_id}:{image.revision_id}:"
                     f"{drawing_hash}:{binding.binding_sha256}:{local_rendered.request_sha256}"
@@ -546,8 +602,22 @@ class WorkflowCatalogService:
                     "font_family": SVG_FONT_FAMILY,
                     "font_sha256": vector_rendered.font_sha256,
                     "production_route": drawing.production_route,
+                    **(
+                        {
+                            "route_reason": cast(
+                                GeneratedLineGraphDrawingV6 | GeneratedVectorDrawingV6,
+                                drawing,
+                            ).route_reason
+                        }
+                        if isinstance(image_result, GeneratedImageRoleResultV6)
+                        else {}
+                    ),
                 }
-                drawing_schema = "eom.generated-vector-stimulus/2.0"
+                drawing_schema = (
+                    "eom.generated-vector-stimulus/3.0"
+                    if isinstance(image_result, GeneratedImageRoleResultV6)
+                    else "eom.generated-vector-stimulus/2.0"
+                )
                 file_metadata = {
                     PNG_MEMBER: {
                         "schema_ref": "eom://schemas/generated-item/stimulus-png/2.0",
@@ -760,6 +830,7 @@ class WorkflowCatalogService:
             "1.2.0",
             "1.3.0",
             "1.4.0",
+            "1.5.0",
         }
         if expects_v2 != is_v2:
             raise ContentPackError(
@@ -961,7 +1032,8 @@ class WorkflowCatalogService:
             parsed,
             GeneratedAuthoringRoleResult
             | GeneratedAuthoringRoleResultV4
-            | GeneratedAuthoringRoleResultV5,
+            | GeneratedAuthoringRoleResultV5
+            | GeneratedAuthoringRoleResultV6,
         ):
             raise ValueError("generated authoring result type is invalid")
         stimulus = workflow.runtime_context.get("generated_stimulus")

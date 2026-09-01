@@ -106,7 +106,7 @@ def test_knowledge_item_workflow_is_source_optional_but_template_constrained() -
         WorkflowStartRequest.model_validate(request | {"image_mode": "skip"})
 
 
-@pytest.mark.parametrize("definition_version", ["1.3.0", "1.4.0", "1.5.0"])
+@pytest.mark.parametrize("definition_version", ["1.3.0", "1.4.0", "1.5.0", "1.6.0"])
 def test_generated_item_workflow_requires_image_role_without_a_prebuilt_stimulus(
     definition_version: str,
 ) -> None:

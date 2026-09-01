@@ -15,7 +15,9 @@ from eom_image_contracts import LocalImageCompositeReceipt, LocalImageProviderBi
 from eom_workflow.models import (
     GeneratedLineGraphDrawing,
     GeneratedLineGraphDrawingV5,
+    GeneratedLineGraphDrawingV6,
     GeneratedVectorDrawingV5,
+    GeneratedVectorDrawingV6,
 )
 
 from eom_catalog_service.local_image_adapter import (
@@ -41,6 +43,7 @@ from eom_catalog_service.vector_stimulus import (
 
 PNG_MEMBER = "generated-stimulus.png"
 BACKGROUND_MEMBER = "generated-background.png"
+RASTER_MEMBER = "generated-raster.png"
 LOCAL_IMAGE_RECEIPT_MEMBER = "local-image-receipt.json"
 OVERLAY_MEMBER = "generated-overlay.png"
 PNG_WIDTH = 800
@@ -116,9 +119,14 @@ def render_generated_vector_stimulus(
     *,
     workflow_id: str,
     result_revision_id: str,
-    drawing: GeneratedLineGraphDrawingV5 | GeneratedVectorDrawingV5,
+    drawing: (
+        GeneratedLineGraphDrawingV5
+        | GeneratedVectorDrawingV5
+        | GeneratedLineGraphDrawingV6
+        | GeneratedVectorDrawingV6
+    ),
 ) -> RenderedVectorStimulus:
-    """Materialize one V5 SVG-first stimulus beneath Catalog-owned staging."""
+    """Materialize one deterministic SVG-first stimulus beneath Catalog-owned staging."""
 
     if not workflow_id.startswith("workflow_") or not result_revision_id.startswith("rev_"):
         raise ValueError("generated vector stimulus identity is invalid")
@@ -164,11 +172,11 @@ def render_generated_local_vector_stimulus(
     workflow_id: str,
     result_revision_id: str,
     drawing_hash: str,
-    drawing: GeneratedVectorDrawingV5,
+    drawing: GeneratedVectorDrawingV5 | GeneratedVectorDrawingV6,
     binding: LocalImageProviderBinding,
     adapter: FixedLocalImageProviderAdapter,
 ) -> RenderedLocalImageStimulus:
-    """Materialize a transparent SVG overlay through the fixed local provider boundary."""
+    """Materialize a transparent SVG overlay through the fixed local raster provider boundary."""
 
     if not workflow_id.startswith("workflow_") or not result_revision_id.startswith("rev_"):
         raise ValueError("generated vector stimulus identity is invalid")

@@ -16,7 +16,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Final
 
-from eom_workflow.models import GeneratedLineGraphDrawingV5, GeneratedVectorDrawingV5
+from eom_workflow.models import (
+    GeneratedLineGraphDrawingV5,
+    GeneratedLineGraphDrawingV6,
+    GeneratedVectorDrawingV5,
+    GeneratedVectorDrawingV6,
+)
 
 SVG_MEMBER: Final = "generated-stimulus.svg"
 SVG_MEDIA_TYPE: Final = "image/svg+xml"
@@ -113,13 +118,18 @@ class SvgRendererProvenance:
 
 
 def compose_vector_svg(
-    drawing: GeneratedLineGraphDrawingV5 | GeneratedVectorDrawingV5,
+    drawing: (
+        GeneratedLineGraphDrawingV5
+        | GeneratedVectorDrawingV5
+        | GeneratedLineGraphDrawingV6
+        | GeneratedVectorDrawingV6
+    ),
 ) -> bytes:
-    """Return canonical, background-composed SVG bytes from one validated V5 drawing."""
+    """Return canonical, background-composed SVG bytes from one deterministic drawing."""
 
     if drawing.production_route != "DETERMINISTIC_SVG":
         raise ValueError("generated background provider is not deployed")
-    if isinstance(drawing, GeneratedLineGraphDrawingV5):
+    if isinstance(drawing, GeneratedLineGraphDrawingV5 | GeneratedLineGraphDrawingV6):
         overlay = _line_graph_overlay(drawing)
     else:
         overlay = sanitize_svg_overlay(drawing.svg_overlay, drawing.required_labels)
@@ -134,10 +144,15 @@ def compose_vector_svg(
     return payload
 
 
-def compose_vector_overlay_svg(drawing: GeneratedVectorDrawingV5) -> bytes:
-    """Return the canonical transparent overlay for local background composition."""
+def compose_vector_overlay_svg(
+    drawing: GeneratedVectorDrawingV5 | GeneratedVectorDrawingV6,
+) -> bytes:
+    """Return the canonical transparent overlay for local raster composition."""
 
-    if drawing.production_route != "LOCAL_GENERATIVE_BACKGROUND":
+    if drawing.production_route not in {
+        "LOCAL_GENERATIVE_BACKGROUND",
+        "HYBRID_LOCAL_GENERATIVE",
+    }:
         raise ValueError("local image overlay route is invalid")
     overlay = sanitize_svg_overlay(drawing.svg_overlay, drawing.required_labels)
     payload = (
@@ -531,7 +546,9 @@ def _background_elements(style: str) -> tuple[str, ...]:
     raise ValueError("SVG background style is invalid")
 
 
-def _line_graph_overlay(drawing: GeneratedLineGraphDrawingV5) -> str:
+def _line_graph_overlay(
+    drawing: GeneratedLineGraphDrawingV5 | GeneratedLineGraphDrawingV6,
+) -> str:
     left, top, right, bottom = 90, 55, 750, 420
     minimum_x, maximum_x = min(drawing.x_values), max(drawing.x_values)
     minimum_y, maximum_y = min(drawing.y_values), max(drawing.y_values)

@@ -15,7 +15,7 @@ from eom_catalog_service.local_image_adapter import (
     load_local_image_provider_binding,
 )
 from eom_image_contracts import LocalImageProviderBinding, content_sha256
-from eom_workflow.models import GeneratedVectorDrawingV5
+from eom_workflow.models import GeneratedVectorDrawingV5, GeneratedVectorDrawingV6
 
 
 def _chunk(kind: bytes, payload: bytes) -> bytes:
@@ -82,6 +82,19 @@ def _drawing() -> GeneratedVectorDrawingV5:
             ),
         }
     )
+
+
+def _hybrid_drawing() -> GeneratedVectorDrawingV6:
+    value = _drawing().model_dump(mode="json")
+    value.update(
+        {
+            "production_route": "HYBRID_LOCAL_GENERATIVE",
+            "route_reason": "HUMAN_OR_ANIMAL_REQUIRED",
+            "generation_prompt": "one student observing plants inside a quadrat",
+            "negative_prompt": "extra people, decorative objects",
+        }
+    )
+    return GeneratedVectorDrawingV6.model_validate(value)
 
 
 def test_binding_loader_pins_root_controlled_bytes(tmp_path: Path) -> None:
@@ -166,3 +179,24 @@ def test_binding_loader_rejects_symlink(tmp_path: Path) -> None:
             trusted_owner_uid=os.geteuid(),
             trusted_group_ids=(os.getegid(),),
         )
+
+
+def test_v6_hybrid_request_describes_a_semantic_raster_not_a_background(tmp_path: Path) -> None:
+    path = tmp_path / "generated-overlay.png"
+    path.write_bytes(_overlay_png())
+    path.chmod(0o640)
+    drawing = _hybrid_drawing()
+
+    request = _build_request(
+        workflow_id="workflow_" + "6" * 32,
+        result_revision_id="rev_" + "7" * 32,
+        drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+        drawing=drawing,
+        binding=LocalImageProviderBinding.model_validate(_binding_value()),
+        overlay_path=path,
+    )
+
+    assert request.generation.prompt.startswith("Semantic raster layer")
+    assert "one student" in request.generation.prompt
+    assert "background layer only" not in request.generation.prompt
+    assert "text" in request.generation.negative_prompt

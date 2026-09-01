@@ -40,6 +40,8 @@ AUTHORING_V4 = _pointer("authoring", "e", "authoring-result@4.0")
 IMAGE_V4 = _pointer("image", "f", "image-result@4.0")
 AUTHORING_V5 = _pointer("authoring", "6", "authoring-result@5.0")
 IMAGE_V5 = _pointer("image", "7", "image-result@5.0")
+AUTHORING_V6 = _pointer("authoring", "9", "authoring-result@6.0")
+IMAGE_V6 = _pointer("image", "4", "image-result@6.0")
 
 
 def _image_brief() -> dict[str, object]:
@@ -263,6 +265,68 @@ def _image_result_v5(*, route: str = "DETERMINISTIC_SVG") -> dict[str, object]:
     }
 
 
+def _vector_brief_v6(*, hybrid: bool = False) -> dict[str, object]:
+    return {
+        "kind": "natural_scene" if hybrid else "apparatus",
+        "production_route": "HYBRID_LOCAL_GENERATIVE" if hybrid else "DETERMINISTIC_SVG",
+        "route_reason": "HUMAN_OR_ANIMAL_REQUIRED" if hybrid else "SCIENTIFIC_SCHEMATIC",
+        "background_style": "WHITE",
+        "block_id": "block_image",
+        "alt_text": "학생이 비커와 온도계를 사용해 가열 실험을 관찰한다.",
+        "scene_description": "학생과 비커, 온도계가 있는 실험 장면이다.",
+        "scientific_constraints": ["온도계 구부가 비커 바닥에 닿지 않는다."],
+        "required_labels": ["온도계", "비커"],
+        "generation_prompt": "비커를 관찰하는 학생 한 명" if hybrid else None,
+        "negative_prompt": "추가 인물" if hybrid else None,
+    }
+
+
+def _authoring_result_v6(*, hybrid: bool = False) -> dict[str, object]:
+    result = json.loads(json.dumps(_authoring_result_v4()))
+    result["protocol_version"] = "workflow-role/1.13.0"
+    result["job_id"] = AUTHORING_V6.job_id
+    result["artifact"]["logical_artifact_id"] = AUTHORING_V6.logical_artifact_id
+    result["artifact"]["revision_id"] = AUTHORING_V6.revision_id
+    result["output"]["draft"]["image_brief"] = _vector_brief_v6(hybrid=hybrid)
+    return cast(dict[str, object], result)
+
+
+def _image_result_v6(*, hybrid: bool = False) -> dict[str, object]:
+    drawing = {
+        **_vector_brief_v6(hybrid=hybrid),
+        "width_px": 800,
+        "height_px": 500,
+        "svg_overlay": (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" '
+            'viewBox="0 0 800 500">'
+            '<rect fill="none" height="220" stroke="#000000" stroke-width="4" '
+            'width="280" x="270" y="170"></rect>'
+            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            'x="445" y="100">온도계</text>'
+            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            'x="360" y="430">비커</text>'
+            "</svg>"
+        ),
+    }
+    return {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.13.0",
+        "job_id": IMAGE_V6.job_id,
+        "workflow_id": WORKFLOW_ID,
+        "step_run_id": "steprun_" + "5" * 32,
+        "role": "image",
+        "status": "ok",
+        "artifact": {
+            "logical_artifact_id": IMAGE_V6.logical_artifact_id,
+            "revision_id": IMAGE_V6.revision_id,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+        "output": {"drawing": drawing, "summary": "검토된 이미지 계획에 맞는 SVG를 설계했다."},
+        "completed_at": "2026-09-01T00:00:01Z",
+    }
+
+
 class _Artifacts:
     def __init__(self, *, changed_y: bool = False) -> None:
         self.values = {
@@ -272,6 +336,8 @@ class _Artifacts:
             IMAGE_V4.revision_id: _image_result_v4(),
             AUTHORING_V5.revision_id: _authoring_result_v5(),
             IMAGE_V5.revision_id: _image_result_v5(),
+            AUTHORING_V6.revision_id: _authoring_result_v6(),
+            IMAGE_V6.revision_id: _image_result_v6(),
         }
         self.commits: list[dict[str, Any]] = []
         self.verified: list[dict[str, str]] = []
@@ -604,6 +670,126 @@ def test_v5_local_background_commits_one_pinned_four_member_artifact(
         "eom-image-provider@imgreq_" + "3" * 32 + ".service"
     )
     assert "prompt" not in json.dumps(stimulus["result"]).casefold()
+
+
+def test_v6_deterministic_plan_never_invokes_the_local_gpu_adapter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    svg = tmp_path / "rendered-v6.svg"
+    png = tmp_path / "rendered-v6.png"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"></svg>\n', encoding="utf-8")
+    png.write_bytes(b"bounded-deterministic-v6-png")
+
+    def render_vector(*_args: object, **_kwargs: object) -> RenderedVectorStimulus:
+        return RenderedVectorStimulus(
+            svg,
+            png,
+            "eom-safe-svg-compositor/1.0",
+            "rsvg-convert version 2.58.0",
+            "sha256:" + "a" * 64,
+            "sha256:" + "b" * 64,
+        )
+
+    def forbidden_gpu(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("deterministic plan attempted to invoke the local GPU")
+
+    monkeypatch.setattr(
+        "eom_catalog_service.workflow_catalog.render_generated_vector_stimulus",
+        render_vector,
+    )
+    monkeypatch.setattr(
+        "eom_catalog_service.workflow_catalog.render_generated_local_vector_stimulus",
+        forbidden_gpu,
+    )
+
+    service.materialize_generated_stimulus(workflow=_workflow(), artifacts=(AUTHORING_V6, IMAGE_V6))
+
+    stimulus = artifacts.commits[0]
+    assert set(stimulus["files"]) == {"generated-stimulus.png", "generated-stimulus.svg"}
+    assert stimulus["result"]["production_route"] == "DETERMINISTIC_SVG"
+    assert stimulus["result"]["route_reason"] == "SCIENTIFIC_SCHEMATIC"
+    assert "local_image_unit" not in stimulus["result"]
+
+
+def test_v6_hybrid_plan_invokes_one_local_raster_and_commits_a_semantic_member(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    artifacts.values[AUTHORING_V6.revision_id] = _authoring_result_v6(hybrid=True)
+    artifacts.values[IMAGE_V6.revision_id] = _image_result_v6(hybrid=True)
+    service.local_image = cast(Any, object())
+    svg = tmp_path / "hybrid.svg"
+    raster = tmp_path / "semantic-raster.png"
+    png = tmp_path / "hybrid-final.png"
+    receipt_file = tmp_path / "hybrid-receipt.json"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"></svg>\n', encoding="utf-8")
+    raster.write_bytes(b"bounded-semantic-raster")
+    png.write_bytes(b"bounded-hybrid-final")
+    receipt_file.write_text("{}\n", encoding="utf-8")
+    binding = json.loads(
+        (REPOSITORY_ROOT / "config/local-image-provider.ssd1b.json").read_text(encoding="utf-8")
+    )
+    receipt = SimpleNamespace(
+        receipt_sha256="sha256:" + "1" * 64,
+        generation=SimpleNamespace(
+            output=SimpleNamespace(sha256=sha256_file(raster)),
+            model=SimpleNamespace(model_dump=lambda **_kwargs: binding["model"]),
+            runtime=SimpleNamespace(
+                model_dump=lambda **_kwargs: {"provider_version": "eom-local-image-provider/1.0"}
+            ),
+        ),
+        compositor=SimpleNamespace(
+            model_dump=lambda **_kwargs: {
+                "contract": "eom-local-image-compositor/1.0",
+                "pillow_version": "11.3.0",
+            }
+        ),
+    )
+    calls = 0
+
+    def render_hybrid(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        nonlocal calls
+        calls += 1
+        return SimpleNamespace(
+            svg_path=svg,
+            background_path=raster,
+            png_path=png,
+            receipt_path=receipt_file,
+            receipt=receipt,
+            request_sha256="sha256:" + "2" * 64,
+            unit_name="eom-image-provider@imgreq_" + "3" * 32 + ".service",
+            renderer_contract="eom-safe-svg-compositor/1.0",
+            renderer_version="rsvg-convert version 2.58.0",
+            renderer_sha256="sha256:" + "a" * 64,
+            font_sha256="sha256:" + "b" * 64,
+        )
+
+    monkeypatch.setattr(
+        "eom_catalog_service.workflow_catalog.render_generated_local_vector_stimulus",
+        render_hybrid,
+    )
+
+    service.materialize_generated_stimulus(
+        workflow=_workflow({"local_image_provider": binding}),
+        artifacts=(AUTHORING_V6, IMAGE_V6),
+    )
+
+    assert calls == 1
+    stimulus = artifacts.commits[0]
+    assert stimulus["manifest_version"] == "generated-item-stimulus-file-set/4.0"
+    assert set(stimulus["files"]) == {
+        "generated-stimulus.png",
+        "generated-stimulus.svg",
+        "generated-raster.png",
+        "local-image-receipt.json",
+    }
+    assert stimulus["result"]["production_route"] == "HYBRID_LOCAL_GENERATIVE"
+    assert stimulus["result"]["route_reason"] == "HUMAN_OR_ANIMAL_REQUIRED"
+    assert stimulus["result"]["local_image_raster_sha256"] == sha256_file(raster)
+    assert "local_image_background_sha256" not in stimulus["result"]
 
 
 def test_prompt_context_revalidates_the_pinned_local_provider_binding(tmp_path: Path) -> None:

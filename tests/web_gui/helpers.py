@@ -242,7 +242,7 @@ class FakeGateway:
     ) -> dict[str, Any]:
         del session, idempotency_key
         assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-        assert payload["definition_version"] == "1.5.0"
+        assert payload["definition_version"] == "1.6.0"
         assert payload["pack_key"] == "generated-knowledge-item"
         expected_preset = (
             "knowledge-grounded-item" if "educational_retrieval" in payload else "standard-item"

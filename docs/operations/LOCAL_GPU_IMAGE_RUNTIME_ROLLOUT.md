@@ -1,11 +1,12 @@
 # Local GPU image runtime rollout
 
-Status: reviewed operator procedure for `eom-local-generative-background/1.0`.
+Status: reviewed operator procedure for the isolated SSD-1B runtime used by image-plan V6.
 
-This rollout enables an optional SSD-1B background under the authoritative deterministic SVG
-overlay. It does not make a generated raster authoritative, does not expose the model to Codex
-workers, and does not call an external API. Historical Content Pack 1.3 workflows remain pinned to
-their original release and deterministic artifacts.
+This rollout enables an optional SSD-1B semantic raster layer under the authoritative deterministic
+SVG overlay. The local model is invoked only for `HYBRID_LOCAL_GENERATIVE`; a
+`DETERMINISTIC_SVG` plan never constructs a provider request or consumes GPU capacity. It does not
+expose the model to Codex workers and does not call an external API. Historical Content Pack 1.3
+and 1.4 workflows retain their original release and route semantics.
 
 ## Immutable preflight
 
@@ -59,12 +60,14 @@ After the active-lease guard passes:
 
    The script deletes its exact workspace only after full receipt/hash validation. A failed smoke
    preserves its disposable state and provider workspace for diagnosis.
-5. import, release, inspect, and activate `content/packs/generated-knowledge-item/1.4.0`;
-6. verify new binding snapshots pin version 1.4, the binding SHA, model revision, and sampler while
+5. import, release, inspect, and activate `content/packs/generated-knowledge-item/1.5.0`;
+6. verify new binding snapshots pin version 1.5, the binding SHA, model revision, and sampler while
    existing workflow rows retain their prior release pointers.
 
-Do not activate 1.4 before the runner identity and fixed provider smoke pass. Never modify the
-immutable 1.3 release in place.
+Do not activate 1.5 before the runner identity and fixed provider smoke pass. Never modify the
+immutable 1.3 or 1.4 release in place. The fixed-unit smoke still exercises the historical V1
+provider transport member name; production V6 publishes that byte-identical layer as the semantic
+`generated-raster.png` artifact member.
 
 ## Acceptance
 
@@ -74,10 +77,11 @@ immutable 1.3 release in place.
 - request workspace is `1730`, staged inputs `0440`, provider outputs `0640`, and world bits absent;
 - a second GPU lease is denied rather than queued or retried implicitly;
 - artifact primary member is the final 800x500 RGB PNG;
-- the same Artifact Revision also pins canonical SVG overlay, generated background, and composite
+- the same Artifact Revision also pins canonical SVG overlay, generated semantic raster, and composite
   receipt; manifest and all SHA-256 values agree;
 - no prompt or filesystem path is persisted in the artifact result;
-- deterministic SVG workflows and HWPX native equation/table regressions remain green.
+- deterministic SVG workflows prove the provider adapter was not called, and HWPX native
+  equation/table regressions remain green.
 
 ## Failure and rollback
 

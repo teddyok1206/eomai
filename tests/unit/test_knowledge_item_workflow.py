@@ -316,6 +316,40 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
     )
     assert generated_local_image_pack.manifest.compatibility.protocol.minimum == "1.12.0"
 
+    generated_v6_definition = compile_definition(
+        ROOT / "config/workflows/generic-item-development.v1.6.yaml", ROLES
+    )
+    generated_image_plan_pack = compile_pack(ROOT / "content/packs/generated-knowledge-item/1.5.0")
+    assert generated_v6_definition.definition.definition_version == "1.6.0"
+    assert generated_v6_definition.sha256 == (
+        "sha256:8881c4f670e0122e0e36387e54e6a98f89706feca6eb8953ada476093be1b3b9"
+    )
+    assert [
+        step.result_schema
+        for step in generated_v6_definition.definition.steps
+        if hasattr(step, "result_schema")
+    ] == [
+        "authoring-result@6.0",
+        "image-result@6.0",
+        "review-result@6.0",
+        "registration-result@6.0",
+    ]
+    assert generated_image_plan_pack.manifest.pack.version == "1.5.0"
+    assert generated_image_plan_pack.source_tree_sha256 == (
+        "sha256:401a0b5423fa9866b8023e280129bab728069df67b37cf1bbe5c59100d10a42b"
+    )
+    assert {profile.profile.version for profile in generated_image_plan_pack.profiles} == {"6.0.0"}
+    assert generated_image_plan_pack.manifest.compatibility.workflow_definitions[0].versions == (
+        "1.6.0",
+    )
+    assert generated_image_plan_pack.manifest.compatibility.protocol.minimum == "1.13.0"
+    assert {profile.output_schema_ref for profile in generated_image_plan_pack.profiles} == {
+        "authoring-result@6.0",
+        "image-result@6.0",
+        "review-result@6.0",
+        "registration-result@6.0",
+    }
+
 
 def test_content_pack_provenance_never_fakes_a_source_pointer() -> None:
     pack_path = ROOT / "content/packs/general-knowledge-item/1.0.0/pack.yaml"
