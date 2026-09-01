@@ -101,24 +101,51 @@ def test_binding_loader_pins_root_controlled_bytes(tmp_path: Path) -> None:
     path = tmp_path / "binding.json"
     value = _binding_value()
     path.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")), encoding="utf-8")
-    path.chmod(0o640)
+    path.chmod(0o644)
 
     binding = load_local_image_provider_binding(
         path,
         trusted_owner_uid=os.geteuid(),
-        trusted_group_ids=(os.getegid(),),
+        trusted_group_gid=os.getegid(),
     )
 
     assert binding.binding_sha256 == value["binding_sha256"]
     changed = dict(value)
     changed["timeout_seconds"] = 899
     path.write_text(json.dumps(changed), encoding="utf-8")
-    path.chmod(0o640)
+    path.chmod(0o644)
     with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_ROUTE_UNDEPLOYED"):
         load_local_image_provider_binding(
             path,
             trusted_owner_uid=os.geteuid(),
-            trusted_group_ids=(os.getegid(),),
+            trusted_group_gid=os.getegid(),
+        )
+
+
+@pytest.mark.parametrize("mode", (0o640, 0o664))
+def test_binding_loader_rejects_noncanonical_mode(tmp_path: Path, mode: int) -> None:
+    path = tmp_path / "binding.json"
+    path.write_text(json.dumps(_binding_value()), encoding="utf-8")
+    path.chmod(mode)
+
+    with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_ROUTE_UNDEPLOYED"):
+        load_local_image_provider_binding(
+            path,
+            trusted_owner_uid=os.geteuid(),
+            trusted_group_gid=os.getegid(),
+        )
+
+
+def test_binding_loader_rejects_wrong_group(tmp_path: Path) -> None:
+    path = tmp_path / "binding.json"
+    path.write_text(json.dumps(_binding_value()), encoding="utf-8")
+    path.chmod(0o644)
+
+    with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_ROUTE_UNDEPLOYED"):
+        load_local_image_provider_binding(
+            path,
+            trusted_owner_uid=os.geteuid(),
+            trusted_group_gid=os.getegid() + 1,
         )
 
 
@@ -170,14 +197,14 @@ def test_composite_request_is_deterministic_and_input_pinned(tmp_path: Path) -> 
 def test_binding_loader_rejects_symlink(tmp_path: Path) -> None:
     actual = tmp_path / "actual.json"
     actual.write_text(json.dumps(_binding_value()), encoding="utf-8")
-    actual.chmod(0o640)
+    actual.chmod(0o644)
     link = tmp_path / "binding.json"
     link.symlink_to(actual)
     with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_ROUTE_UNDEPLOYED"):
         load_local_image_provider_binding(
             link,
             trusted_owner_uid=os.geteuid(),
-            trusted_group_ids=(os.getegid(),),
+            trusted_group_gid=os.getegid(),
         )
 
 

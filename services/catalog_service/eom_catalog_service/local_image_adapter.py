@@ -79,7 +79,7 @@ def load_local_image_provider_binding(
     path: Path,
     *,
     trusted_owner_uid: int = 0,
-    trusted_group_ids: tuple[int, ...] | None = None,
+    trusted_group_gid: int = 0,
 ) -> LocalImageProviderBinding:
     """Load one root-controlled binding without following a symlink."""
 
@@ -88,15 +88,12 @@ def load_local_image_provider_binding(
         metadata = path.lstat()
     except OSError as exc:
         raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED") from exc
-    group_ids = (
-        tuple({os.getegid(), *os.getgroups()}) if trusted_group_ids is None else trusted_group_ids
-    )
     if (
         path.is_symlink()
         or not stat.S_ISREG(metadata.st_mode)
         or metadata.st_uid != trusted_owner_uid
-        or metadata.st_gid not in group_ids
-        or stat.S_IMODE(metadata.st_mode) != 0o640
+        or metadata.st_gid != trusted_group_gid
+        or stat.S_IMODE(metadata.st_mode) != 0o644
         or not 0 < metadata.st_size <= 64 * 1024
     ):
         raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED")
