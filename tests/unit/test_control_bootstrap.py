@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "config/control-plane/standard-item-v1"
 CONFIG_V2 = ROOT / "config/control-plane/standard-item-v2"
 CONFIG_V3 = ROOT / "config/control-plane/standard-item-v3"
+CONFIG_V4 = ROOT / "config/control-plane/standard-item-v4"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -261,17 +262,76 @@ def test_standard_bootstrap_v3_selects_the_svg_first_protocol_without_secrets() 
     )
 
 
-def test_standard_bootstrap_v3_uses_a_distinct_instruction_bundle_revision() -> None:
+def test_standard_bootstrap_v4_pins_image_plan_protocol_and_preserves_v3() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V4)
+
+    assert manifest.schema_version == "standard-control-bootstrap/4.0"
+    assert manifest.preset_key == "standard-item"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.13.0",)
+    assert {role.role: role.slot_key for role in manifest.roles} == EXPECTED_ROLE_SLOTS
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V2_REFERENCE_KEYS
+    )
+    expected_v4_sha256 = {
+        "bootstrap.yaml": "3c5521d3bd83ed5712d6b92ebf73adae8f32b52282ddda9d9883c9d6ae8f8b44",
+        "instructions/authoring.md": (
+            "89887d29172eec23491e1e11a108ceffd32e7546e080feea0bf2190af015f40d"
+        ),
+        "instructions/image.md": (
+            "a72ca540fff9c24279f249d0b46c03119db96c8d511010792a72ab5606990954"
+        ),
+        "instructions/item-management.md": (
+            "6f6f6acf786d09f3759c72e46bcf8a09671045a473a7269d010d90af20d64860"
+        ),
+        "instructions/platform.md": (
+            "31513e33106313953fb2017268e08ff6cd1a64bce165c96ab5356860ffa08102"
+        ),
+        "instructions/review.md": (
+            "36b8c1ddb1a334a7edc883d3f71e71dbb08c4a34939221082c0eefe5152d16e9"
+        ),
+        "references/general-knowledge-provenance.md": (
+            "ff3859cb40aa66e37bbac632b0b35df3e314cc6d56aca0145dfedbea847d51f7"
+        ),
+    }
+    for relative_path, expected in expected_v4_sha256.items():
+        assert hashlib.sha256((CONFIG_V4 / relative_path).read_bytes()).hexdigest() == expected
+    assert hashlib.sha256((CONFIG_V3 / "bootstrap.yaml").read_bytes()).hexdigest() == (
+        "835840e03abeabb33cd1a64d7c068cabd48b440b1af89860f786d04bfca1ae45"
+    )
+    source = "\n".join(
+        path.read_text(encoding="utf-8") for path in CONFIG_V4.rglob("*") if path.is_file()
+    ).casefold()
+    assert "hybrid_local_generative" in source
+    assert "white" in source
+    assert all(
+        forbidden not in source
+        for forbidden in ("auth.json", "bearer ", "password=", "token=", "api_key")
+    )
+
+
+def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> None:
     manifest_v2 = load_standard_bootstrap_manifest(CONFIG_V2)
     manifest_v3 = load_standard_bootstrap_manifest(CONFIG_V3)
+    manifest_v4 = load_standard_bootstrap_manifest(CONFIG_V4)
 
     assert dict(STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS) == {
         "standard-control-bootstrap/1.0": 1,
         "standard-control-bootstrap/2.0": 2,
         "standard-control-bootstrap/3.0": 3,
+        "standard-control-bootstrap/4.0": 4,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v4.schema_version] == 4
+
+
+def test_standard_bootstrap_v4_rejects_legacy_protocol() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V4)
+    forged = manifest.model_dump(mode="json")
+    forged["compatible_workflow_protocols"] = ["workflow-role/1.12.0"]
+
+    with pytest.raises(ValidationError, match="V4 protocol differs"):
+        StandardBootstrapManifest.model_validate(forged)
 
 
 def test_standard_bootstrap_v2_rejects_forged_role_reference_selection() -> None:

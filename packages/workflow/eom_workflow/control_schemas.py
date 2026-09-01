@@ -59,6 +59,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "3.0",
             "sha256:cb83aa2124fc1116f55b08daa080ade2ff849c6623d78632c0db64f57732fd68",
         ),
+        "standard-control-bootstrap-v4": ControlSchemaResource(
+            "schemas/workflow/control-plane/standard-control-bootstrap-v4.schema.json",
+            "resources/control-plane/standard-control-bootstrap-v4.schema.json",
+            "4.0",
+            "sha256:45d327d0e5f03f8d26d479d46feffd5e6dccbdb6f4dfd33cf9a2e576a81fdb4d",
+        ),
         "instruction-bundle-manifest": ControlSchemaResource(
             "schemas/workflow/control-plane/instruction-bundle-manifest-v1.schema.json",
             "resources/control-plane/instruction-bundle-manifest-v1.schema.json",

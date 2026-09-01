@@ -89,6 +89,7 @@ STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS = MappingProxyType(
         "standard-control-bootstrap/1.0": 1,
         "standard-control-bootstrap/2.0": 2,
         "standard-control-bootstrap/3.0": 3,
+        "standard-control-bootstrap/4.0": 4,
     }
 )
 KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(
@@ -160,6 +161,7 @@ class StandardBootstrapManifest(BaseModel):
         "standard-control-bootstrap/1.0",
         "standard-control-bootstrap/2.0",
         "standard-control-bootstrap/3.0",
+        "standard-control-bootstrap/4.0",
     ]
     preset_key: Literal["standard-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -208,6 +210,10 @@ class StandardBootstrapManifest(BaseModel):
             self.compatible_workflow_protocols != ("workflow-role/1.12.0",)
         ):
             raise ValueError("standard bootstrap V3 protocol differs")
+        if self.schema_version == "standard-control-bootstrap/4.0" and (
+            self.compatible_workflow_protocols != ("workflow-role/1.13.0",)
+        ):
+            raise ValueError("standard bootstrap V4 protocol differs")
         return self
 
 
@@ -946,10 +952,14 @@ def load_standard_bootstrap_manifest(config_directory: Path) -> StandardBootstra
     raw = _read_file(root / "bootstrap.yaml", root=root, max_bytes=MAX_BOOTSTRAP_MANIFEST_BYTES)
     try:
         value: object = yaml.safe_load(raw.decode("utf-8"))
-        if isinstance(value, dict) and value.get("schema_version") == (
-            "standard-control-bootstrap/3.0"
-        ):
-            validate_control_contract("standard-control-bootstrap-v3", value)
+        if isinstance(value, dict):
+            schema_version = value.get("schema_version")
+            contract_name = {
+                "standard-control-bootstrap/3.0": "standard-control-bootstrap-v3",
+                "standard-control-bootstrap/4.0": "standard-control-bootstrap-v4",
+            }.get(schema_version if isinstance(schema_version, str) else "")
+            if contract_name is not None:
+                validate_control_contract(contract_name, value)
         return StandardBootstrapManifest.model_validate(value)
     except (UnicodeError, yaml.YAMLError, JsonSchemaValidationError, ValueError) as exc:
         raise ControlPlaneError(

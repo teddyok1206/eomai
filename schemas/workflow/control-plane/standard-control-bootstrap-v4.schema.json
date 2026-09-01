@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/standard-control-bootstrap/4.0",
+  "title": "Standard item control bootstrap V4 manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "preset_key",
+    "display_name",
+    "description",
+    "created_at",
+    "model",
+    "reasoning_effort",
+    "general_knowledge_policy",
+    "compatible_workflow_protocols",
+    "references",
+    "roles",
+    "support_slot_key"
+  ],
+  "properties": {
+    "schema_version": {"const": "standard-control-bootstrap/4.0"},
+    "preset_key": {"const": "standard-item"},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "description": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "created_at": {"type": "string", "format": "date-time"},
+    "model": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "reasoning_effort": {"enum": ["minimal", "low", "medium", "high", "xhigh"]},
+    "general_knowledge_policy": {"const": "ALLOW_WITH_PROVENANCE"},
+    "compatible_workflow_protocols": {
+      "type": "array",
+      "prefixItems": [{"const": "workflow-role/1.13.0"}],
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true
+    },
+    "references": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/reference"}
+    },
+    "roles": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/role"}
+    },
+    "support_slot_key": {"const": "slot05"}
+  },
+  "$defs": {
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference_key",
+        "source_root",
+        "source_path",
+        "materialized_path",
+        "reference_format",
+        "sha256"
+      ],
+      "properties": {
+        "reference_key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{1,127}$"
+        },
+        "source_root": {"enum": ["CONFIG", "CONTENT"]},
+        "source_path": {"type": "string", "minLength": 3, "maxLength": 240},
+        "materialized_path": {"type": "string", "minLength": 3, "maxLength": 240},
+        "reference_format": {
+          "enum": ["REFERENCE_MARKDOWN", "EOM_GUIDANCE_MARKDOWN_V1"]
+        },
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "slot_key",
+        "worker_pool_key",
+        "instruction_path",
+        "reference_keys",
+        "timeout_seconds"
+      ],
+      "properties": {
+        "role": {"enum": ["authoring", "image", "review", "item_management"]},
+        "slot_key": {"type": "string", "pattern": "^slot0[1-5]$"},
+        "worker_pool_key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+        },
+        "instruction_path": {
+          "type": "string",
+          "pattern": "^instructions/[a-z0-9-]+\\.md$"
+        },
+        "reference_keys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,127}$"}
+        },
+        "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 7200}
+      }
+    }
+  }
+}
