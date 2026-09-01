@@ -16,6 +16,12 @@ The only enabled production route is `DETERMINISTIC_SVG`. `LOCAL_GENERATIVE_BACK
 provider adapters and immutable input/output pointers exist. External image or LLM APIs are not a
 supported provider class.
 
+The local GPU provider design is tracked separately in
+`docs/architecture/LOCAL_GPU_IMAGE_PROVIDER_V1.md` and
+`docs/operations/LOCAL_GPU_IMAGE_PROVIDER_ROLLOUT.md`. That design does not enable the route by
+itself; it only defines the model-store, GPU lease, provider receipt, and rollout boundary required
+before `LOCAL_GENERATIVE_BACKGROUND` can be used.
+
 ## No-interruption gate
 
 Do not run the installation phase while any fixed Codex worker unit is active or while an analysis
