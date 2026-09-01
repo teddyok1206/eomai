@@ -29,6 +29,10 @@ Preset publication is transactional and idempotent for the reviewed immutable co
 creation fails closed before worker execution when the active Revision is absent, stale, unhashed,
 unreleased, or protocol-incompatible. Deployment order is:
 
+V4 intentionally retains the original bootstrap timestamp for reused capacity/reference revisions;
+their stable IDs and bytes, including timestamps, remain identical. New instruction bundles and the
+new preset Revision have distinct revision identities even when the operator publishes them later.
+
 1. install code and the V4 JSON Schema;
 2. bootstrap and release `standard-item` V4 from the reviewed source commit;
 3. verify the current Revision pins `workflow-role/1.13.0` and exact bundle hashes;
