@@ -2,8 +2,7 @@ schema_version: standard-control-bootstrap/4.0
 preset_key: standard-item
 display_name: 표준 문항 제작 · 통합과학 이미지 계획 V4
 description: 검토된 단일 문항 가이드와 결정론적 SVG·로컬 생성형 이미지 계획 계약을 역할별로 고정하는 표준 문항 제작 정책입니다.
-# Reused guidance and capacity revisions keep their original immutable timestamp.
-created_at: "2026-08-28T00:00:00Z"
+created_at: "2026-09-01T00:00:00Z"
 model: gpt-5.6-terra
 reasoning_effort: high
 general_knowledge_policy: ALLOW_WITH_PROVENANCE

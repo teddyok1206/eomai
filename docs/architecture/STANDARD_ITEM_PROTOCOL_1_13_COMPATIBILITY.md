@@ -29,9 +29,9 @@ Preset publication is transactional and idempotent for the reviewed immutable co
 creation fails closed before worker execution when the active Revision is absent, stale, unhashed,
 unreleased, or protocol-incompatible. Deployment order is:
 
-V4 intentionally retains the original bootstrap timestamp for reused capacity/reference revisions;
-their stable IDs and bytes, including timestamps, remain identical. New instruction bundles and the
-new preset Revision have distinct revision identities even when the operator publishes them later.
+V4 uses a new bootstrap timestamp for its new instruction bundles and preset Revision. Reused
+role-guidance bundle IDs instead use the guidance contract's fixed original timestamp, so their
+stable IDs and canonical bytes remain identical across later compatible preset publications.
 
 1. install code and the V4 JSON Schema;
 2. bootstrap and release `standard-item` V4 from the reviewed source commit;

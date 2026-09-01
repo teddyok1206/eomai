@@ -59,6 +59,7 @@ from eom_orchestrator.worker_registry import WorkerSlot
 MAX_BOOTSTRAP_MANIFEST_BYTES = 64 * 1024
 MAX_BOOTSTRAP_MEMBER_BYTES = 512 * 1024
 PARALLEL_ANALYSIS_CAPACITY_CREATED_AT = datetime(2026, 8, 28, 15, 30, tzinfo=UTC)
+STANDARD_GUIDANCE_BUNDLE_CREATED_AT = datetime(2026, 8, 28, tzinfo=UTC)
 EXPECTED_ROLE_SLOTS = {
     "authoring": "slot01",
     "image": "slot03",
@@ -584,7 +585,8 @@ def bootstrap_standard_control_plane(
                 entries=tuple(selected_entries),
                 source_commit=source_commit,
                 actor_id=actor_id,
-                created_at=manifest.created_at,
+                # The stable guidance Revision identity is shared by later compatible presets.
+                created_at=STANDARD_GUIDANCE_BUNDLE_CREATED_AT,
             )
     capacity_revision_id = _publish_capacity_policy(
         sessions,

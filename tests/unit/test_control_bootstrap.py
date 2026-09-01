@@ -15,6 +15,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_STANDARD_V2_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
+    STANDARD_GUIDANCE_BUNDLE_CREATED_AT,
     KnowledgeAnalysisBootstrapManifest,
     StandardBootstrapManifest,
     bootstrap_standard_control_plane,
@@ -252,7 +253,6 @@ def test_standard_bootstrap_v3_selects_the_svg_first_protocol_without_secrets() 
     assert hashlib.sha256((CONFIG_V3 / "bootstrap.yaml").read_bytes()).hexdigest() == (
         "835840e03abeabb33cd1a64d7c068cabd48b440b1af89860f786d04bfca1ae45"
     )
-    assert manifest.created_at == load_standard_bootstrap_manifest(CONFIG_V3).created_at
     source = "\n".join(
         path.read_text(encoding="utf-8") for path in CONFIG_V3.rglob("*") if path.is_file()
     ).casefold()
@@ -274,7 +274,7 @@ def test_standard_bootstrap_v4_pins_image_plan_protocol_and_preserves_v3() -> No
         EXPECTED_STANDARD_V2_REFERENCE_KEYS
     )
     expected_v4_sha256 = {
-        "bootstrap.yaml": "bef878f4fc0ea89ecac1d5346e146ebafcd6caac69defa574f3a517766cd2039",
+        "bootstrap.yaml": "3c5521d3bd83ed5712d6b92ebf73adae8f32b52282ddda9d9883c9d6ae8f8b44",
         "instructions/authoring.md": (
             "89887d29172eec23491e1e11a108ceffd32e7546e080feea0bf2190af015f40d"
         ),
@@ -298,6 +298,11 @@ def test_standard_bootstrap_v4_pins_image_plan_protocol_and_preserves_v3() -> No
         assert hashlib.sha256((CONFIG_V4 / relative_path).read_bytes()).hexdigest() == expected
     assert hashlib.sha256((CONFIG_V3 / "bootstrap.yaml").read_bytes()).hexdigest() == (
         "835840e03abeabb33cd1a64d7c068cabd48b440b1af89860f786d04bfca1ae45"
+    )
+    assert manifest.created_at > load_standard_bootstrap_manifest(CONFIG_V3).created_at
+    assert (
+        load_standard_bootstrap_manifest(CONFIG_V3).created_at
+        == STANDARD_GUIDANCE_BUNDLE_CREATED_AT
     )
     source = "\n".join(
         path.read_text(encoding="utf-8") for path in CONFIG_V4.rglob("*") if path.is_file()
