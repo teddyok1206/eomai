@@ -44,9 +44,9 @@ def _drawing() -> GeneratedVectorDrawingV5:
             'width="280" x="270" y="170"></rect>'
             '<line stroke="#000000" stroke-width="5" x1="430" x2="430" '
             'y1="70" y2="300"></line>'
-            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            '<text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20" '
             'x="445" y="100">온도계</text>'
-            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            '<text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20" '
             'x="360" y="430">비커</text>'
             "</svg>"
         ),
@@ -70,9 +70,9 @@ def _drawing_v6(*, hybrid: bool = False) -> GeneratedVectorDrawingV6:
             'viewBox="0 0 800 500">'
             '<rect fill="none" height="220" stroke="#000000" stroke-width="4" '
             'width="280" x="270" y="170"></rect>'
-            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            '<text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20" '
             'x="445" y="100">온도계</text>'
-            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            '<text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20" '
             'x="360" y="430">비커</text>'
             "</svg>"
         ),

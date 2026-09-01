@@ -105,12 +105,14 @@ Workflow schemas and frozen models own the message contract. Catalog owns the SV
 and renderer adapter. The workflow engine calls the existing Catalog port. No domain or contract
 module imports subprocess, filesystem, HTTP, or provider infrastructure.
 
-The runtime dependencies for deterministic SVG rasterization are Ubuntu's official `librsvg2-bin`
-and `fonts-droid-fallback` packages. Catalog invokes the fixed `/usr/bin/rsvg-convert` path after the
-SVG has been sanitized and permits only `Droid Sans Fallback` from the fixed system font path. The
-renderer version and both executable/font hashes are recorded in Artifact provenance. This is
-chosen instead of a broad Python graphics dependency because it provides mature Korean text/path
-rasterization while the process boundary remains independently timeout- and size-bounded.
+The runtime rasterizer dependency is Ubuntu's official `librsvg2-bin`. Catalog invokes the fixed
+`/usr/bin/rsvg-convert` path only after the SVG has been sanitized. The reviewed content-team font
+profile permits only root-owned, hash-pinned `SM JGothic Std` with `Noto Sans CJK KR` fallback,
+`Century Old Style`, and `DejaVu Serif` files. The renderer version, executable hash, primary Korean-font hash, and complete
+font-manifest hash are retained in Artifact result provenance. This is chosen instead of a broad
+Python graphics dependency because it provides mature Korean text/path rasterization while the
+process boundary remains independently timeout- and size-bounded. See
+`CONTENT_TEAM_DIAGRAM_FONT_PROFILE_V1.md`.
 
 ## Failure and rollback
 

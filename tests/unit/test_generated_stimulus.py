@@ -16,6 +16,9 @@ from eom_catalog_service.generated_stimulus import (
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.vector_stimulus import (
     SVG_FONT,
+    SVG_FONT_PROFILE,
+    SVG_LATIN_FONT_FAMILY,
+    SVG_MATH_FONT_FAMILY,
     SVG_RASTERIZER,
     compose_vector_overlay_svg,
     compose_vector_svg,
@@ -131,9 +134,11 @@ def _vector_drawing(*, route: str = "DETERMINISTIC_SVG") -> GeneratedVectorDrawi
                 'stroke-width="3"></circle>'
                 '<rect fill="none" height="180" stroke="#000000" stroke-width="4" '
                 'width="260" x="360" y="230"></rect>'
-                '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+                '<text fill="#000000" font-family="'
+                'SM JGothic Std, Noto Sans CJK KR" font-size="20" '
                 'x="130" y="200">조사자</text>'
-                '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+                '<text fill="#000000" font-family="'
+                'SM JGothic Std, Noto Sans CJK KR" font-size="20" '
                 'x="440" y="450">방형구</text>'
                 "</svg>"
             ),
@@ -155,7 +160,8 @@ def test_vector_overlay_is_sanitized_and_receives_a_deterministic_background() -
 
 def test_vector_overlay_accepts_safe_group_fragment() -> None:
     source = (
-        '<g fill="none" font-family="Droid Sans Fallback" font-size="20" stroke="#000000" '
+        '<g fill="none" font-family="SM JGothic Std, Noto Sans CJK KR" '
+        'font-size="20" stroke="#000000" '
         'stroke-linecap="round" stroke-width="3">'
         '<circle cx="180" cy="130" fill="#ffffff" r="35"></circle>'
         '<rect height="180" width="260" x="360" y="230"></rect>'
@@ -166,14 +172,16 @@ def test_vector_overlay_accepts_safe_group_fragment() -> None:
 
     clean = sanitize_svg_overlay(source, ("조사자", "방형구"))
 
-    assert clean.startswith('<g fill="none" font-family="Droid Sans Fallback" font-size="20"')
+    assert clean.startswith(
+        '<g fill="none" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20"'
+    )
     assert "조사자" in clean
     assert "방형구" in clean
 
 
 def test_vector_overlay_accepts_safe_inherited_text_alignment_on_group() -> None:
     source = (
-        '<g fill="#000000" font-family="Droid Sans Fallback" text-anchor="middle">'
+        '<g fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" text-anchor="middle">'
         '<text font-size="18" x="120" y="80">운동량</text>'
         '<text font-size="18" x="240" y="80">충격량</text>'
         "</g>"
@@ -181,7 +189,7 @@ def test_vector_overlay_accepts_safe_inherited_text_alignment_on_group() -> None
 
     clean = sanitize_svg_overlay(source, ("운동량", "충격량"))
 
-    assert clean.startswith('<g fill="#000000" font-family="Droid Sans Fallback"')
+    assert clean.startswith('<g fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR"')
     assert 'text-anchor="middle"' in clean
 
 
@@ -191,9 +199,9 @@ def test_vector_overlay_accepts_safe_multi_element_fragment() -> None:
         'stroke-width="3"></circle>'
         '<rect fill="none" height="180" stroke="#000000" stroke-width="4" '
         'width="260" x="360" y="230"></rect>'
-        '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+        '<text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20" '
         'x="130" y="200">조사자</text>'
-        '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+        '<text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20" '
         'x="440" y="450">방형구</text>'
     )
 
@@ -205,7 +213,7 @@ def test_vector_overlay_accepts_safe_multi_element_fragment() -> None:
 
 def test_vector_overlay_rejects_unsafe_group_fragment() -> None:
     source = (
-        '<g fill="none"><text fill="#000000" font-family="Droid Sans Fallback" '
+        '<g fill="none"><text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" '
         'font-size="20" x="10" y="20">조사자</text><script>alert(1)</script></g>'
     )
     with pytest.raises(ValueError, match="forbidden"):
@@ -244,7 +252,7 @@ def test_vector_overlay_requires_every_reviewed_label() -> None:
 def test_vector_overlay_rejects_unpinned_font_or_malformed_geometry() -> None:
     valid = _vector_drawing().svg_overlay
     with pytest.raises(ValueError, match="font family"):
-        sanitize_svg_overlay(valid.replace("Droid Sans Fallback", "sans-serif"), ())
+        sanitize_svg_overlay(valid.replace("SM JGothic Std, Noto Sans CJK KR", "sans-serif"), ())
     with pytest.raises(ValueError, match="numeric list"):
         sanitize_svg_overlay(
             '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" '
@@ -255,6 +263,39 @@ def test_vector_overlay_rejects_unpinned_font_or_malformed_geometry() -> None:
         sanitize_svg_overlay(
             valid.replace('<circle cx="180"', '<circle transform="scale(1,2,3)" cx="180"'),
             (),
+        )
+
+
+def test_vector_overlay_uses_reviewed_content_team_fonts_by_script() -> None:
+    source = (
+        '<g fill="#000000">'
+        '<text font-family="SM JGothic Std, Noto Sans CJK KR" '
+        'font-size="20" x="10" y="20">한글 라벨</text>'
+        '<text font-family="Century Old Style" font-size="20" x="10" y="50">axis 12</text>'
+        '<text font-family="DejaVu Serif" font-size="20" x="10" y="80">\u03b1 + \u03b2</text>'
+        "</g>"
+    )
+
+    clean = sanitize_svg_overlay(source, ("한글 라벨", "axis 12", "\u03b1 + \u03b2"))
+
+    assert f'font-family="{SVG_LATIN_FONT_FAMILY}"' in clean
+    assert f'font-family="{SVG_MATH_FONT_FAMILY}"' in clean
+
+
+def test_vector_overlay_rejects_missing_font_and_korean_in_latin_font() -> None:
+    with pytest.raises(ValueError, match="explicit fixed font"):
+        sanitize_svg_overlay('<text fill="#000000" font-size="20" x="10" y="20">A</text>', ("A",))
+    with pytest.raises(ValueError, match="fixed Korean font"):
+        sanitize_svg_overlay(
+            '<text fill="#000000" font-family="Century Old Style" font-size="20" '
+            'x="10" y="20">한글</text>',
+            ("한글",),
+        )
+    with pytest.raises(ValueError, match="italic style"):
+        sanitize_svg_overlay(
+            '<text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20" '
+            'font-style="italic" x="10" y="20">한글</text>',
+            ("한글",),
         )
 
 
@@ -295,7 +336,10 @@ def test_v5_line_graph_is_svg_first_and_preserves_exact_data() -> None:
     assert b"time(s)" in svg
 
 
-@pytest.mark.skipif(not SVG_RASTERIZER.exists(), reason="Ubuntu librsvg2-bin is not installed")
+@pytest.mark.skipif(
+    not SVG_RASTERIZER.exists() or not SVG_FONT.exists(),
+    reason="reviewed SVG runtime is not installed",
+)
 def test_real_fixed_svg_rasterizer_produces_reproducible_svg_and_png(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     first = render_generated_vector_stimulus(
@@ -325,4 +369,7 @@ def test_real_fixed_svg_rasterizer_produces_reproducible_svg_and_png(tmp_path: P
         first.renderer_sha256 == "sha256:" + hashlib.sha256(SVG_RASTERIZER.read_bytes()).hexdigest()
     )
     assert first.font_sha256 == "sha256:" + hashlib.sha256(SVG_FONT.read_bytes()).hexdigest()
+    assert first.font_manifest_sha256.startswith("sha256:")
+    assert len(first.font_manifest_sha256) == 71
+    assert SVG_FONT_PROFILE == "eom-content-team-diagram-fonts/1.0"
     validate_generated_png(second.png_path)

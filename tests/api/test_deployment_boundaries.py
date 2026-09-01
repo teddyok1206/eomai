@@ -241,6 +241,32 @@ def test_api_release_verifies_local_image_runtime_and_contract_resources() -> No
         assert required in source
 
 
+def test_content_team_font_installer_pins_exact_files_and_never_depends_on_eomis() -> None:
+    source = _source("scripts/catalog/install_content_team_svg_fonts.sh")
+
+    for required in (
+        "/usr/local/share/fonts/eom",
+        "SMJGothicStd-Regular.otf",
+        "NotoSansCJKkr-Regular.otf",
+        "CenturyOldStyle-Regular.otf",
+        "CenturyOldStyle-Italic.otf",
+        "9200e1e46cca77f0ff9481c5345c3333caf22d50487418df74f830e4221adea1",
+        "6bcb2a0703aa137e874fc2dffa85f6c21ba9a67fa329e81b8c801663af7e992a",
+        "7f9420403e10e7e74f002fbb48e8034d48f64cbdbef556d4f964b266043de338",
+        "44b00cbdab9fdb7b4307db79784c5b90cbc52c5ffb0add32ac8239d73e567809",
+        "--source-dir",
+        "--korean-fallback-source",
+        "--verify-only",
+        "fc-cache",
+        "fontconfig resolved an unexpected font",
+    ):
+        assert required in source
+    assert "/home/eom/EOMIS" not in source
+    assert "curl" not in source
+    assert "wget" not in source
+    assert "pip install" not in source
+
+
 def test_release_migration_wrapper_pins_source_and_database_owner() -> None:
     source = _source("scripts/api/migrate_release.sh")
 

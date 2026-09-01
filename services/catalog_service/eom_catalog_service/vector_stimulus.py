@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import html
+import json
 import math
 import os
 import re
@@ -14,7 +15,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Final
+from typing import Final, NamedTuple
 
 from eom_workflow.models import (
     GeneratedLineGraphDrawingV5,
@@ -32,9 +33,82 @@ SVG_MAX_ELEMENTS: Final = 256
 SVG_MAX_DEPTH: Final = 8
 SVG_NAMESPACE: Final = "http://www.w3.org/2000/svg"
 SVG_RASTERIZER: Final = Path("/usr/bin/rsvg-convert")
-SVG_FONT: Final = Path("/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf")
-SVG_FONT_FAMILY: Final = "Droid Sans Fallback"
-SVG_RENDERER_CONTRACT: Final = "eom-safe-svg-compositor/1.0"
+SVG_FONT_PROFILE: Final = "eom-content-team-diagram-fonts/1.0"
+SVG_FONT_ROOT: Final = Path("/usr/local/share/fonts/eom")
+SVG_FONT: Final = SVG_FONT_ROOT / "SMJGothicStd-Regular.otf"
+SVG_KOREAN_FALLBACK_FONT: Final = SVG_FONT_ROOT / "NotoSansCJKkr-Regular.otf"
+SVG_FONT_FAMILY: Final = "SM JGothic Std, Noto Sans CJK KR"
+SVG_LATIN_FONT: Final = SVG_FONT_ROOT / "CenturyOldStyle-Regular.otf"
+SVG_LATIN_ITALIC_FONT: Final = SVG_FONT_ROOT / "CenturyOldStyle-Italic.otf"
+SVG_LATIN_FONT_FAMILY: Final = "Century Old Style"
+SVG_MATH_FONT: Final = Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf")
+SVG_MATH_FONT_FAMILY: Final = "DejaVu Serif"
+SVG_LEGACY_FONT: Final = Path("/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf")
+SVG_LEGACY_FONT_FAMILY: Final = "Droid Sans Fallback"
+SVG_ALLOWED_FONT_FAMILIES: Final = frozenset(
+    {
+        SVG_FONT_FAMILY,
+        SVG_LATIN_FONT_FAMILY,
+        SVG_MATH_FONT_FAMILY,
+        SVG_LEGACY_FONT_FAMILY,
+    }
+)
+_SVG_KOREAN_FONT_FAMILIES: Final = frozenset({SVG_FONT_FAMILY, SVG_LEGACY_FONT_FAMILY})
+SVG_RENDERER_CONTRACT: Final = "eom-safe-svg-compositor/1.1"
+
+
+class _FixedSvgFont(NamedTuple):
+    role: str
+    family: str
+    style: str
+    path: Path
+    expected_sha256: str
+
+
+_FIXED_SVG_FONTS: Final = (
+    _FixedSvgFont(
+        "korean_label",
+        "SM JGothic Std",
+        "regular",
+        SVG_FONT,
+        "sha256:9200e1e46cca77f0ff9481c5345c3333caf22d50487418df74f830e4221adea1",
+    ),
+    _FixedSvgFont(
+        "korean_fallback",
+        "Noto Sans CJK KR",
+        "regular",
+        SVG_KOREAN_FALLBACK_FONT,
+        "sha256:6bcb2a0703aa137e874fc2dffa85f6c21ba9a67fa329e81b8c801663af7e992a",
+    ),
+    _FixedSvgFont(
+        "latin_label",
+        SVG_LATIN_FONT_FAMILY,
+        "regular",
+        SVG_LATIN_FONT,
+        "sha256:7f9420403e10e7e74f002fbb48e8034d48f64cbdbef556d4f964b266043de338",
+    ),
+    _FixedSvgFont(
+        "latin_label",
+        SVG_LATIN_FONT_FAMILY,
+        "italic",
+        SVG_LATIN_ITALIC_FONT,
+        "sha256:44b00cbdab9fdb7b4307db79784c5b90cbc52c5ffb0add32ac8239d73e567809",
+    ),
+    _FixedSvgFont(
+        "math_label",
+        SVG_MATH_FONT_FAMILY,
+        "regular",
+        SVG_MATH_FONT,
+        "sha256:8f2c103bfa3fd5de71f1b92b18f21906b5a26871fb7e19a9a4c9af539c3cc7ab",
+    ),
+    _FixedSvgFont(
+        "legacy_korean_compatibility",
+        SVG_LEGACY_FONT_FAMILY,
+        "regular",
+        SVG_LEGACY_FONT,
+        "sha256:acb6440a713d880a13a21b468ba7cd43f5a2b2934972e51be791c880730777b8",
+    ),
+)
 
 _FORBIDDEN_MARKERS = (
     "<!doctype",
@@ -61,7 +135,14 @@ _COMMON_ATTRIBUTES = frozenset(
     }
 )
 _SAFE_INHERITED_TEXT_ATTRIBUTES = frozenset(
-    {"font-family", "font-size", "font-weight", "text-anchor", "dominant-baseline"}
+    {
+        "font-family",
+        "font-size",
+        "font-style",
+        "font-weight",
+        "text-anchor",
+        "dominant-baseline",
+    }
 )
 _TAG_ATTRIBUTES = {
     "g": _SAFE_INHERITED_TEXT_ATTRIBUTES,
@@ -73,7 +154,16 @@ _TAG_ATTRIBUTES = {
     "polygon": frozenset({"points"}),
     "path": frozenset({"d"}),
     "text": frozenset(
-        {"x", "y", "font-size", "font-family", "font-weight", "text-anchor", "dominant-baseline"}
+        {
+            "x",
+            "y",
+            "font-size",
+            "font-family",
+            "font-style",
+            "font-weight",
+            "text-anchor",
+            "dominant-baseline",
+        }
     ),
 }
 _COLOR_NAMES = frozenset(
@@ -108,6 +198,7 @@ class RenderedVectorStimulus:
     renderer_version: str
     renderer_sha256: str
     font_sha256: str
+    font_manifest_sha256: str
 
 
 @dataclass(frozen=True)
@@ -115,6 +206,7 @@ class SvgRendererProvenance:
     renderer_version: str
     renderer_sha256: str
     font_sha256: str
+    font_manifest_sha256: str
 
 
 def compose_vector_svg(
@@ -183,14 +275,29 @@ def sanitize_svg_overlay(source: str, required_labels: tuple[str, ...]) -> str:
         if root.attrib != {"width": "800", "height": "500", "viewBox": "0 0 800 500"}:
             raise ValueError("SVG overlay canvas contract is invalid")
         clean = "".join(
-            _sanitize_element(child, depth=1, counter=counter, labels=labels) for child in root
+            _sanitize_element(
+                child,
+                depth=1,
+                counter=counter,
+                labels=labels,
+                inherited_font_family=None,
+                inherited_font_style="normal",
+            )
+            for child in root
         )
         if root.text is not None and root.text.strip():
             raise ValueError("SVG overlay root text is invalid")
         if root.tail is not None and root.tail.strip():
             raise ValueError("SVG overlay root tail text is invalid")
     elif _svg_tag_name(root) in _ALLOWED_TAGS:
-        clean = _sanitize_element(root, depth=1, counter=counter, labels=labels)
+        clean = _sanitize_element(
+            root,
+            depth=1,
+            counter=counter,
+            labels=labels,
+            inherited_font_family=None,
+            inherited_font_style="normal",
+        )
     else:
         raise ValueError("SVG overlay root namespace is invalid")
     if not set(required_labels).issubset(labels):
@@ -279,7 +386,6 @@ def svg_renderer_provenance() -> SvgRendererProvenance:
     """Validate fixed renderer/font identities and return their immutable byte provenance."""
 
     renderer = SVG_RASTERIZER.lstat()
-    font = SVG_FONT.lstat()
     if (
         SVG_RASTERIZER.is_symlink()
         or not stat.S_ISREG(renderer.st_mode)
@@ -288,25 +394,27 @@ def svg_renderer_provenance() -> SvgRendererProvenance:
         or not os.access(SVG_RASTERIZER, os.X_OK)
     ):
         raise ValueError("fixed SVG rasterizer metadata is invalid")
-    if (
-        SVG_FONT.is_symlink()
-        or not stat.S_ISREG(font.st_mode)
-        or font.st_uid != 0
-        or stat.S_IMODE(font.st_mode) & 0o022
-        or not os.access(SVG_FONT, os.R_OK)
-    ):
-        raise ValueError("fixed SVG font metadata is invalid")
+    font_identities: list[int] = []
+    for fixed in _FIXED_SVG_FONTS:
+        font = fixed.path.lstat()
+        if (
+            fixed.path.is_symlink()
+            or not stat.S_ISREG(font.st_mode)
+            or font.st_uid != 0
+            or stat.S_IMODE(font.st_mode) != 0o644
+            or not os.access(fixed.path, os.R_OK)
+        ):
+            raise ValueError("fixed SVG font metadata is invalid")
+        font_identities.extend(
+            (font.st_dev, font.st_ino, font.st_size, font.st_mtime_ns, font.st_ctime_ns)
+        )
     return _cached_svg_renderer_provenance(
         renderer.st_dev,
         renderer.st_ino,
         renderer.st_size,
         renderer.st_mtime_ns,
         renderer.st_ctime_ns,
-        font.st_dev,
-        font.st_ino,
-        font.st_size,
-        font.st_mtime_ns,
-        font.st_ctime_ns,
+        *font_identities,
     )
 
 
@@ -326,10 +434,36 @@ def _cached_svg_renderer_provenance(*identity: int) -> SvgRendererProvenance:
     version = completed.stdout.decode("ascii", errors="strict").strip()
     if completed.returncode != 0 or not version.startswith("rsvg-convert version 2.58."):
         raise ValueError("fixed SVG rasterizer version is invalid")
+    font_hashes = tuple(_sha256_file(font.path) for font in _FIXED_SVG_FONTS)
+    if any(
+        actual != font.expected_sha256
+        for font, actual in zip(_FIXED_SVG_FONTS, font_hashes, strict=True)
+    ):
+        raise ValueError("fixed SVG font hash is invalid")
+    font_manifest = {
+        "schema_version": "1.0",
+        "profile": SVG_FONT_PROFILE,
+        "fonts": [
+            {
+                "role": font.role,
+                "family": font.family,
+                "style": font.style,
+                "sha256": font.expected_sha256,
+            }
+            for font in _FIXED_SVG_FONTS
+        ],
+    }
+    manifest_bytes = json.dumps(
+        font_manifest,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
     return SvgRendererProvenance(
         renderer_version=version,
         renderer_sha256=_sha256_file(SVG_RASTERIZER),
-        font_sha256=_sha256_file(SVG_FONT),
+        font_sha256=font_hashes[0],
+        font_manifest_sha256="sha256:" + hashlib.sha256(manifest_bytes).hexdigest(),
     )
 
 
@@ -347,6 +481,8 @@ def _sanitize_element(
     depth: int,
     counter: list[int],
     labels: set[str],
+    inherited_font_family: str | None,
+    inherited_font_style: str,
 ) -> str:
     if depth > SVG_MAX_DEPTH:
         raise ValueError("SVG overlay nesting is too deep")
@@ -362,6 +498,10 @@ def _sanitize_element(
     attributes = {
         name: _validate_attribute(tag, name, value) for name, value in element.attrib.items()
     }
+    effective_font_family = attributes.get("font-family", inherited_font_family)
+    effective_font_style = attributes.get("font-style", inherited_font_style)
+    if effective_font_style == "italic" and effective_font_family != SVG_LATIN_FONT_FAMILY:
+        raise ValueError("SVG italic style requires the fixed Latin font family")
     text = ""
     if tag == "text":
         if tuple(element):
@@ -374,6 +514,10 @@ def _sanitize_element(
             or any(unicodedata.category(character).startswith("C") for character in text)
         ):
             raise ValueError("SVG text value is unsafe")
+        if effective_font_family is None:
+            raise ValueError("SVG text requires an explicit fixed font family")
+        if _contains_hangul(text) and effective_font_family not in _SVG_KOREAN_FONT_FAMILIES:
+            raise ValueError("SVG Korean text requires the fixed Korean font family")
         labels.add(text)
     elif element.text is not None and element.text.strip():
         raise ValueError("SVG non-text element contains text")
@@ -383,7 +527,14 @@ def _sanitize_element(
         f' {name}="{html.escape(value, quote=True)}"' for name, value in sorted(attributes.items())
     )
     children = "".join(
-        _sanitize_element(child, depth=depth + 1, counter=counter, labels=labels)
+        _sanitize_element(
+            child,
+            depth=depth + 1,
+            counter=counter,
+            labels=labels,
+            inherited_font_family=effective_font_family,
+            inherited_font_style=effective_font_style,
+        )
         for child in element
     )
     return f"<{tag}{rendered_attributes}>{html.escape(text)}{children}</{tag}>"
@@ -423,8 +574,12 @@ def _validate_attribute(tag: str, name: str, value: str) -> str:
             raise ValueError("SVG line join is invalid")
         return value
     if name == "font-family":
-        if value != SVG_FONT_FAMILY:
+        if value not in SVG_ALLOWED_FONT_FAMILIES:
             raise ValueError("SVG font family is invalid")
+        return value
+    if name == "font-style":
+        if value not in {"normal", "italic"}:
+            raise ValueError("SVG font style is invalid")
         return value
     if name == "font-weight":
         if value not in {"normal", "bold", "400", "700"}:
@@ -546,6 +701,23 @@ def _background_elements(style: str) -> tuple[str, ...]:
     raise ValueError("SVG background style is invalid")
 
 
+def _contains_hangul(value: str) -> bool:
+    return any(
+        "\u1100" <= character <= "\u11ff"
+        or "\u3130" <= character <= "\u318f"
+        or "\uac00" <= character <= "\ud7a3"
+        for character in value
+    )
+
+
+def _label_font_family(value: str) -> str:
+    if _contains_hangul(value):
+        return SVG_FONT_FAMILY
+    if any("\u0370" <= character <= "\u03ff" for character in value):
+        return SVG_MATH_FONT_FAMILY
+    return SVG_LATIN_FONT_FAMILY
+
+
 def _line_graph_overlay(
     drawing: GeneratedLineGraphDrawingV5 | GeneratedLineGraphDrawingV6,
 ) -> str:
@@ -582,10 +754,12 @@ def _line_graph_overlay(
             for x, y in points
         )
     labels = (
-        f'<text fill="#1f2937" font-family="{SVG_FONT_FAMILY}" font-size="18" '
+        f'<text fill="#1f2937" font-family="{_label_font_family(drawing.x_axis_label)}" '
+        f'font-size="18" '
         f'text-anchor="middle" '
         f'x="420" y="475">{html.escape(drawing.x_axis_label)}</text>'
-        f'<text fill="#1f2937" font-family="{SVG_FONT_FAMILY}" font-size="18" x="20" y="35">'
+        f'<text fill="#1f2937" font-family="{_label_font_family(drawing.y_axis_label)}" '
+        f'font-size="18" x="20" y="35">'
         f"{html.escape(drawing.y_axis_label)}</text>"
     )
     return axes + polyline + markers + labels

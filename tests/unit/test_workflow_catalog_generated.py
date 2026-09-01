@@ -239,9 +239,9 @@ def _image_result_v5(*, route: str = "DETERMINISTIC_SVG") -> dict[str, object]:
             'viewBox="0 0 800 500">'
             '<rect fill="none" height="220" stroke="#000000" stroke-width="4" '
             'width="280" x="270" y="170"></rect>'
-            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            '<text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20" '
             'x="445" y="100">온도계</text>'
-            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            '<text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20" '
             'x="360" y="430">비커</text>'
             "</svg>"
         ),
@@ -301,9 +301,9 @@ def _image_result_v6(*, hybrid: bool = False) -> dict[str, object]:
             'viewBox="0 0 800 500">'
             '<rect fill="none" height="220" stroke="#000000" stroke-width="4" '
             'width="280" x="270" y="170"></rect>'
-            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            '<text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20" '
             'x="445" y="100">온도계</text>'
-            '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+            '<text fill="#000000" font-family="SM JGothic Std, Noto Sans CJK KR" font-size="20" '
             'x="360" y="430">비커</text>'
             "</svg>"
         ),
@@ -544,10 +544,11 @@ def test_v5_generated_result_commits_svg_and_png_together_before_item_pointer(
         return RenderedVectorStimulus(
             svg,
             png,
-            "eom-safe-svg-compositor/1.0",
+            "eom-safe-svg-compositor/1.1",
             "rsvg-convert version 2.58.0",
             "sha256:" + "a" * 64,
             "sha256:" + "b" * 64,
+            "sha256:" + "c" * 64,
         )
 
     monkeypatch.setattr(
@@ -566,15 +567,23 @@ def test_v5_generated_result_commits_svg_and_png_together_before_item_pointer(
     stimulus = artifacts.commits[0]
     assert stimulus["primary_file"] == "generated-stimulus.png"
     assert set(stimulus["files"]) == {"generated-stimulus.png", "generated-stimulus.svg"}
-    assert stimulus["result"]["renderer_contract"] == "eom-safe-svg-compositor/1.0"
+    assert stimulus["result"]["renderer_contract"] == "eom-safe-svg-compositor/1.1"
     assert stimulus["result"]["renderer_version"] == "rsvg-convert version 2.58.0"
     assert stimulus["result"]["renderer_sha256"] == "sha256:" + "a" * 64
-    assert stimulus["result"]["font_family"] == "Droid Sans Fallback"
+    assert stimulus["result"]["font_family"] == "SM JGothic Std, Noto Sans CJK KR"
     assert stimulus["result"]["font_sha256"] == "sha256:" + "b" * 64
+    assert stimulus["result"]["font_profile"] == "eom-content-team-diagram-fonts/1.0"
+    assert stimulus["result"]["font_manifest_sha256"] == "sha256:" + "c" * 64
+    assert stimulus["result"]["font_families"] == [
+        "Century Old Style",
+        "DejaVu Serif",
+        "Droid Sans Fallback",
+        "SM JGothic Std, Noto Sans CJK KR",
+    ]
     assert stimulus["result"]["production_route"] == "DETERMINISTIC_SVG"
     assert stimulus["manifest_version"] == "generated-item-stimulus-file-set/2.0"
     assert stimulus["idempotency_key"].startswith(
-        f"generated-stimulus:{WORKFLOW_ID}:{IMAGE_V5.revision_id}:eom-safe-svg-compositor/1.0:"
+        f"generated-stimulus:{WORKFLOW_ID}:{IMAGE_V5.revision_id}:eom-safe-svg-compositor/1.1:"
     )
     assert stimulus["expected_file_sha256"] == {
         name: sha256_file(Path(source)) for name, source in stimulus["files"].items()
@@ -638,10 +647,11 @@ def test_v5_local_background_commits_one_pinned_four_member_artifact(
             receipt=receipt,
             request_sha256="sha256:" + "2" * 64,
             unit_name="eom-image-provider@imgreq_" + "3" * 32 + ".service",
-            renderer_contract="eom-safe-svg-compositor/1.0",
+            renderer_contract="eom-safe-svg-compositor/1.1",
             renderer_version="rsvg-convert version 2.58.0",
             renderer_sha256="sha256:" + "a" * 64,
             font_sha256="sha256:" + "b" * 64,
+            font_manifest_sha256="sha256:" + "c" * 64,
         )
 
     monkeypatch.setattr(
@@ -686,10 +696,11 @@ def test_v6_deterministic_plan_never_invokes_the_local_gpu_adapter(
         return RenderedVectorStimulus(
             svg,
             png,
-            "eom-safe-svg-compositor/1.0",
+            "eom-safe-svg-compositor/1.1",
             "rsvg-convert version 2.58.0",
             "sha256:" + "a" * 64,
             "sha256:" + "b" * 64,
+            "sha256:" + "c" * 64,
         )
 
     def forbidden_gpu(*_args: object, **_kwargs: object) -> object:
@@ -761,10 +772,11 @@ def test_v6_hybrid_plan_invokes_one_local_raster_and_commits_a_semantic_member(
             receipt=receipt,
             request_sha256="sha256:" + "2" * 64,
             unit_name="eom-image-provider@imgreq_" + "3" * 32 + ".service",
-            renderer_contract="eom-safe-svg-compositor/1.0",
+            renderer_contract="eom-safe-svg-compositor/1.1",
             renderer_version="rsvg-convert version 2.58.0",
             renderer_sha256="sha256:" + "a" * 64,
             font_sha256="sha256:" + "b" * 64,
+            font_manifest_sha256="sha256:" + "c" * 64,
         )
 
     monkeypatch.setattr(

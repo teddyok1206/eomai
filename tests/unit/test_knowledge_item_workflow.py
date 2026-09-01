@@ -350,6 +350,29 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
         "registration-result@6.0",
     }
 
+    generated_font_profile_pack = compile_pack(
+        ROOT / "content/packs/generated-knowledge-item/1.6.0"
+    )
+    assert generated_font_profile_pack.manifest.pack.version == "1.6.0"
+    assert generated_font_profile_pack.source_tree_sha256 == (
+        "sha256:c929c6a2a54fb483e854d70d0857134ad38a775ca3d62da4b60d501db4a91a95"
+    )
+    assert {profile.profile.version for profile in generated_font_profile_pack.profiles} == {
+        "6.0.0"
+    }
+    assert generated_font_profile_pack.manifest.compatibility.workflow_definitions[0].versions == (
+        "1.6.0",
+    )
+    image_prompt = next(
+        value.path.read_text(encoding="utf-8")
+        for value in generated_font_profile_pack.files
+        if value.relative_path == "prompt-templates/image.md"
+    )
+    assert "SM JGothic Std" in image_prompt
+    assert "Century Old Style" in image_prompt
+    assert "DejaVu Serif" in image_prompt
+    assert "Droid Sans Fallback" not in image_prompt
+
 
 def test_content_pack_provenance_never_fakes_a_source_pointer() -> None:
     pack_path = ROOT / "content/packs/general-knowledge-item/1.0.0/pack.yaml"

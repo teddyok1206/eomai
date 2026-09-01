@@ -81,7 +81,9 @@ from eom_catalog_service.staging import (
     stage_registry_item_content,
 )
 from eom_catalog_service.vector_stimulus import (
+    SVG_ALLOWED_FONT_FAMILIES,
     SVG_FONT_FAMILY,
+    SVG_FONT_PROFILE,
     SVG_MEDIA_TYPE,
     SVG_MEMBER,
     SVG_RENDERER_CONTRACT,
@@ -521,6 +523,9 @@ class WorkflowCatalogService:
                     "renderer_sha256": local_rendered.renderer_sha256,
                     "font_family": SVG_FONT_FAMILY,
                     "font_sha256": local_rendered.font_sha256,
+                    "font_families": sorted(SVG_ALLOWED_FONT_FAMILIES),
+                    "font_profile": SVG_FONT_PROFILE,
+                    "font_manifest_sha256": local_rendered.font_manifest_sha256,
                     "production_route": drawing.production_route,
                     **(
                         {
@@ -601,6 +606,9 @@ class WorkflowCatalogService:
                     "renderer_sha256": vector_rendered.renderer_sha256,
                     "font_family": SVG_FONT_FAMILY,
                     "font_sha256": vector_rendered.font_sha256,
+                    "font_families": sorted(SVG_ALLOWED_FONT_FAMILIES),
+                    "font_profile": SVG_FONT_PROFILE,
+                    "font_manifest_sha256": vector_rendered.font_manifest_sha256,
                     "production_route": drawing.production_route,
                     **(
                         {

@@ -77,7 +77,8 @@ def _drawing() -> GeneratedVectorDrawingV5:
                 '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" '
                 'viewBox="0 0 800 500"><rect fill="none" height="240" '
                 'stroke="#000000" stroke-width="4" width="300" x="250" y="130"></rect>'
-                '<text fill="#000000" font-family="Droid Sans Fallback" font-size="20" '
+                '<text fill="#000000" font-family="'
+                'SM JGothic Std, Noto Sans CJK KR" font-size="20" '
                 'x="350" y="410">방형구</text></svg>'
             ),
         }

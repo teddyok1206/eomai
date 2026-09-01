@@ -52,16 +52,19 @@ Before installation, require:
 5. `scripts/api/deploy_release.sh --build-only` and `scripts/web_gui/build_release.sh` pass from the
    clean reviewed commit.
 
-Install the deterministic renderer only through the reviewed Ubuntu package boundary:
+Install the reviewed content-team font bytes first, then validate/install the deterministic
+renderer through the reviewed Ubuntu package boundary:
 
 ```bash
+sudo -n /home/eom/EOM/scripts/catalog/install_content_team_svg_fonts.sh \
+  --source-dir <reviewed-font-directory> \
+  --korean-fallback-source <reviewed-noto-font>
 sudo -n /home/eom/EOM/scripts/catalog/install_svg_rasterizer.sh
 ```
 
-The script permits Ubuntu 24.04 packages `librsvg2-bin` and `fonts-droid-fallback`, verifies the
-fixed root-owned paths, and installs no Python dependency. Catalog accepts only the system family
-`Droid Sans Fallback`; the renderer version, renderer SHA-256, and font SHA-256 are stored in the
-stimulus Artifact result provenance.
+The scripts permit Ubuntu 24.04's `librsvg2-bin`, verify the exact root-owned font paths and hashes,
+and install no Python dependency. Catalog accepts only the reviewed content-team font profile;
+renderer and font-manifest provenance are stored in the stimulus Artifact result.
 
 ## Compatible deployment order
 

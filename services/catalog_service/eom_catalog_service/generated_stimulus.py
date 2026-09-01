@@ -72,6 +72,7 @@ class RenderedLocalImageStimulus:
     renderer_version: str
     renderer_sha256: str
     font_sha256: str
+    font_manifest_sha256: str
 
 
 def render_generated_stimulus(
@@ -152,6 +153,7 @@ def render_generated_vector_stimulus(
             provenance.renderer_version,
             provenance.renderer_sha256,
             provenance.font_sha256,
+            provenance.font_manifest_sha256,
         )
     write_vector_svg(svg_path, payload)
     provenance = rasterize_vector_svg(svg_path, png_path)
@@ -163,6 +165,7 @@ def render_generated_vector_stimulus(
         provenance.renderer_version,
         provenance.renderer_sha256,
         provenance.font_sha256,
+        provenance.font_manifest_sha256,
     )
 
 
@@ -219,6 +222,7 @@ def render_generated_local_vector_stimulus(
         renderer_version=provenance.renderer_version,
         renderer_sha256=provenance.renderer_sha256,
         font_sha256=provenance.font_sha256,
+        font_manifest_sha256=provenance.font_manifest_sha256,
     )
 
 

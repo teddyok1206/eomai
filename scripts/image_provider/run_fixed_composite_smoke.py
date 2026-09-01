@@ -67,7 +67,7 @@ def _drawing() -> GeneratedVectorDrawingV5:
                 '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" '
                 'viewBox="0 0 800 500"><circle cx="400" cy="250" fill="none" r="96" '
                 'stroke="#111827" stroke-width="5"></circle><text fill="#111827" '
-                'font-family="Droid Sans Fallback" font-size="28" x="390" y="260">'
+                'font-family="SM JGothic Std, Noto Sans CJK KR" font-size="28" x="390" y="260">'
                 "A</text></svg>"
             ),
         }
