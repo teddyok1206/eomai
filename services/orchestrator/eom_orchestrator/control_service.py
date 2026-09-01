@@ -20,6 +20,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV3,
     WorkerCapacityPolicy,
     WorkerCapacityPolicyV2,
+    WorkerCapacityPolicyV3,
     WorkerLeaseView,
     validate_control_contract,
 )
@@ -106,6 +107,7 @@ def _validated_document(
         | ReferenceBundleManifest
         | WorkerCapacityPolicy
         | WorkerCapacityPolicyV2
+        | WorkerCapacityPolicyV3
         | ExecutionPresetRevision
         | ExecutionPresetRevisionV2
         | ResolvedExecutionPlan
@@ -118,6 +120,7 @@ def _validated_document(
     | ReferenceBundleManifest
     | WorkerCapacityPolicy
     | WorkerCapacityPolicyV2
+    | WorkerCapacityPolicyV3
     | ExecutionPresetRevision
     | ExecutionPresetRevisionV2
     | ResolvedExecutionPlan
@@ -391,11 +394,17 @@ def record_capacity_policy_revision(
         model, normalized = _validated_document(
             "worker-capacity-policy-v2", document, WorkerCapacityPolicyV2
         )
+    elif schema_version == "worker-capacity-policy/1.2":
+        model, normalized = _validated_document(
+            "worker-capacity-policy-v3", document, WorkerCapacityPolicyV3
+        )
     else:
         raise ControlPlaneError(
             "CONTROL_DOCUMENT_INVALID", "worker capacity schema version is unsupported"
         )
-    if not isinstance(model, (WorkerCapacityPolicy, WorkerCapacityPolicyV2)):
+    if not isinstance(
+        model, (WorkerCapacityPolicy, WorkerCapacityPolicyV2, WorkerCapacityPolicyV3)
+    ):
         raise AssertionError("validated capacity model has the wrong type")
     _require_declared_hash(normalized, "content_sha256")
     logical_by_key = session.scalar(

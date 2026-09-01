@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/assessment-layout-observation/1.0",
+  "title": "EOM Assessment Layout Observation V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "assessment_layout_observation_id",
+    "bundle",
+    "pages",
+    "item_boundaries",
+    "expected_item_numbers",
+    "conflicts",
+    "created_at",
+    "observation_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "assessment-layout-observation/1.0"},
+    "assessment_layout_observation_id": {"type": "string", "pattern": "^assessmentlayout_[0-9a-f]{32}$"},
+    "bundle": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/assessmentSourceBundlePointer"
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["page", "observation_state", "visible_item_numbers"],
+        "properties": {
+          "page": {
+            "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/pageImageInput"
+          },
+          "observation_state": {"enum": ["OBSERVED", "NO_ITEM_CONTENT", "UNCLEAR"]},
+          "visible_item_numbers": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 1, "maximum": 10000}
+          }
+        }
+      }
+    },
+    "item_boundaries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["boundary_id", "item_number", "segments", "continues_across_pages", "confidence_milli"],
+        "properties": {
+          "boundary_id": {"type": "string", "pattern": "^itemboundary_[0-9a-f]{32}$"},
+          "item_number": {"type": "integer", "minimum": 1, "maximum": 10000},
+          "segments": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["page_input_id", "bounding_box", "reading_ordinal"],
+              "properties": {
+                "page_input_id": {"type": "string", "pattern": "^assessmentpage_[0-9a-f]{32}$"},
+                "bounding_box": {
+                  "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/normalizedBoundingBox"
+                },
+                "reading_ordinal": {"type": "integer", "minimum": 1, "maximum": 100}
+              }
+            }
+          },
+          "continues_across_pages": {"type": "boolean"},
+          "confidence_milli": {"type": "integer", "minimum": 0, "maximum": 1000}
+        }
+      }
+    },
+    "expected_item_numbers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {"type": "integer", "minimum": 1, "maximum": 10000}
+    },
+    "conflicts": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/conflictObservation"
+      }
+    },
+    "created_at": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/utcTimestamp"
+    },
+    "observation_sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    }
+  }
+}

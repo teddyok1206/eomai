@@ -75,6 +75,51 @@ PHASE11_SCHEMA_SHA256 = {
     ),
 }
 
+LEGACY_ASSESSMENT_SCHEMA_SHA256 = {
+    "assessment-layout-observation": (
+        "sha256:ce10b60ff6ca4e94191ac9d23a512af94f364df82e713c171433b038ba51396c"
+    ),
+    "assessment-source-bundle": (
+        "sha256:9fc91febb16de433b077ba61fd6f52015e7ff5dcac9cd85b5a08fcc89bab5592"
+    ),
+    "assessment-source-bundle-proposal": (
+        "sha256:84308332c21aeef93ffec4e17c7ffb23dbd41634bf0357d632aa1a18311825e6"
+    ),
+    "legacy-assessment-types": (
+        "sha256:6bfa999200ba29d50a7da4aa1daecabe7bedd0c0adcb7b48beac0bb8b5c963b5"
+    ),
+    "legacy-item-corpus-coverage": (
+        "sha256:b739132cabd2c2cafb246942e5b6d8fe05e6195aefdc09594182555869004021"
+    ),
+    "legacy-item-extraction-acceptance": (
+        "sha256:cc998174aaccc487c8449f91c4156c8caaf23ec294d06fa905b39bad7d8a11a6"
+    ),
+    "legacy-item-extraction-request": (
+        "sha256:c7345e533aa51b0cf6dece535d89b4848a5b6452fc29b2f31ec96cd77b0c4bf0"
+    ),
+    "legacy-item-extraction-receipt": (
+        "sha256:0a4650e2c38fc31270db8ba5874643730da12f60f4715613528e128244d79b1a"
+    ),
+    "legacy-item-extraction-result": (
+        "sha256:2c81a578eebdbfd450af0e386196a7d3892cb7083b061dce97f9b86c8d16b2e5"
+    ),
+}
+
+ITEM_ORIGIN_SCHEMA_SHA256 = {
+    "assessment-occurrence-revision": (
+        "sha256:0ae2cdc2ddce804dbdec22a175847061ed096be561f07a5ffda0ac0167e1f722"
+    ),
+    "item-origin-profile": (
+        "sha256:1a428b3ce8d0a09460cbefcb23384c2222e0fd3aa4c84a71ae76490cfff12d8d"
+    ),
+    "item-origin-types": (
+        "sha256:51f25418d08cbc2c26848a6db129fee3e7b88e19dc9228ee149cfea05d040b0c"
+    ),
+    "organization-revision": (
+        "sha256:62cabab12bac346efef23c352c8eaeb95e0ca012682e802f8a43e83d15178a8b"
+    ),
+}
+
 
 def _prompt_envelope() -> dict[str, object]:
     return {
@@ -96,7 +141,7 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 123
+    assert len(entries) == 136
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {
@@ -166,6 +211,8 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         "legacy-source-selection-v2",
         "textbook-analysis-bundle-manifest",
         "textbook-analysis-bundle-manifest-v2",
+        *ITEM_ORIGIN_SCHEMA_SHA256,
+        *LEGACY_ASSESSMENT_SCHEMA_SHA256,
         *PHASE11_SCHEMA_SHA256,
     }.issubset({name for name, _ in entries})
     for name, entry in entries:
@@ -190,6 +237,20 @@ def test_phase9_retrieval_contract_bytes_are_pinned_before_publication() -> None
 def test_phase11_legacy_usage_contract_bytes_are_pinned_before_rollout() -> None:
     inventory = dict(catalog_schema_inventory())
     assert {name: inventory[name].sha256 for name in PHASE11_SCHEMA_SHA256} == PHASE11_SCHEMA_SHA256
+
+
+def test_legacy_assessment_contract_bytes_are_pinned_before_worker_rollout() -> None:
+    inventory = dict(catalog_schema_inventory())
+    assert {
+        name: inventory[name].sha256 for name in LEGACY_ASSESSMENT_SCHEMA_SHA256
+    } == LEGACY_ASSESSMENT_SCHEMA_SHA256
+
+
+def test_item_origin_contract_bytes_are_pinned_before_persistence_rollout() -> None:
+    inventory = dict(catalog_schema_inventory())
+    assert {name: inventory[name].sha256 for name in ITEM_ORIGIN_SCHEMA_SHA256} == (
+        ITEM_ORIGIN_SCHEMA_SHA256
+    )
 
 
 def test_prompt_envelope_validates_and_invalid_fixture_is_rejected() -> None:

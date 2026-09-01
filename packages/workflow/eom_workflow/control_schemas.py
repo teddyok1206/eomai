@@ -53,6 +53,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:0b7d102659015fbbfdad0b81ecd0a0857198ca5d353758e4ca5382f3a583f4a4",
         ),
+        "legacy-item-extraction-control-bootstrap": ControlSchemaResource(
+            "schemas/workflow/control-plane/legacy-item-extraction-control-bootstrap-v1.schema.json",
+            "resources/control-plane/legacy-item-extraction-control-bootstrap-v1.schema.json",
+            "1.0",
+            "sha256:487d26ccd825de39737f202cfa336896ecfdb0bbec128cc274cd72c35dc60dbb",
+        ),
         "standard-control-bootstrap-v3": ControlSchemaResource(
             "schemas/workflow/control-plane/standard-control-bootstrap-v3.schema.json",
             "resources/control-plane/standard-control-bootstrap-v3.schema.json",
@@ -107,6 +113,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "5.0",
             "sha256:78e648052b9837a2ae5ae9d0d99b910f559c7188f274485b56f7c667ae8b7a7f",
         ),
+        "resolved-execution-plan-v6": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v6.schema.json",
+            "resources/control-plane/resolved-execution-plan-v6.schema.json",
+            "6.0",
+            "sha256:89a1b022d15e0d62fd5716a40119cb6dd2f15fd36daddc2ffbd80eec231db308",
+        ),
         "codex-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-invocation-v1.schema.json",
             "resources/control-plane/codex-invocation-v1.schema.json",
@@ -118,6 +130,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/codex-image-input-manifest-v1.schema.json",
             "1.0",
             "sha256:40ce920b7e5719b9d0cc56c3034a5e8f24d43e2d5a73e797f294d98be7dcb9dc",
+        ),
+        "codex-image-input-manifest-v2": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-image-input-manifest-v2.schema.json",
+            "resources/control-plane/codex-image-input-manifest-v2.schema.json",
+            "2.0",
+            "sha256:b11c648682f67884f23c38d76348accfd657a62d5b1cb220405b8580cc3d53c7",
         ),
         "codex-auth-health-view": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-auth-health-view-v1.schema.json",
@@ -227,6 +245,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.1",
             "sha256:c58e43df5add41e956d13cba9207b4e43a919a9d78c32e7b7da8f85218c465a7",
         ),
+        "worker-capacity-policy-v3": ControlSchemaResource(
+            "schemas/workflow/control-plane/worker-capacity-policy-v3.schema.json",
+            "resources/control-plane/worker-capacity-policy-v3.schema.json",
+            "1.2",
+            "sha256:83d8c3f258b0aa5b660c7dd75dda3b486e36564d4736767ca01c7a62cf9ee439",
+        ),
         "worker-slot-inventory-v2": ControlSchemaResource(
             "schemas/workflow/control-plane/worker-slot-inventory-v2.schema.json",
             "resources/control-plane/worker-slot-inventory-v2.schema.json",
@@ -327,6 +351,9 @@ def _control_schema_registry() -> Registry[Any]:
         "knowledge-analysis-types-v2",
         "knowledge-analysis-types-v3",
         "knowledge-analysis-types-v4",
+        "item-origin-types",
+        "legacy-assessment-types",
+        "legacy-item-extraction-request",
     ):
         schema = load_schema(name)
         identifier = schema.get("$id")

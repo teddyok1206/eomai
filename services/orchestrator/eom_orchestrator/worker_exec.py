@@ -22,9 +22,12 @@ from typing import BinaryIO
 
 MAX_INPUT_BYTES = 4 * 1024 * 1024
 MAX_RESULT_BYTES = 1024 * 1024
-MAX_IMAGE_INPUTS = 32
+MAX_IMAGE_INPUTS_V1 = 32
+MAX_IMAGE_INPUTS_V2 = 64
 MAX_IMAGE_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_TOTAL_BYTES = 128 * 1024 * 1024
+MAX_ASSESSMENT_IMAGE_PIXELS = 64_000_000
+MAX_ASSESSMENT_IMAGE_TOTAL_PIXELS = 256_000_000
 FINALIZATION_ERROR_EXIT = 74
 WORKSPACE_ERROR_EXIT = 78
 CODEX_BINARY = Path("/usr/local/bin/codex")
@@ -35,6 +38,9 @@ STEP_KEY_PATTERN = re.compile(r"\A[a-z][a-z0-9_]{1,63}\Z", re.ASCII)
 MODEL_PATTERN = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z", re.ASCII)
 SHA256_PATTERN = re.compile(r"\Asha256:[0-9a-f]{64}\Z", re.ASCII)
 IMAGE_PATH_PATTERN = re.compile(r"\Asource/document/images/page-([0-9]{6})\.png\Z", re.ASCII)
+ASSESSMENT_IMAGE_PATH_PATTERN = re.compile(
+    r"\Asource/pages/(assessmentpage_[0-9a-f]{32})\.png\Z", re.ASCII
+)
 REASONING_EFFORTS = frozenset({"minimal", "low", "medium", "high", "xhigh"})
 SLOT_USERS = {
     "01": "eom-cdx-01",
@@ -209,14 +215,20 @@ def _load_image_inputs(
     required = {"schema_version", "plan_id", "images", "manifest_sha256"}
     if not isinstance(document, dict) or set(document) != required:
         raise ValueError("Codex image-input manifest shape is invalid")
+    schema_version = document.get("schema_version")
     if (
-        document.get("schema_version") != "codex-image-input-manifest/1.0"
+        schema_version not in {"codex-image-input-manifest/1.0", "codex-image-input-manifest/2.0"}
         or document.get("plan_id") != expected_plan_id
         or SHA256_PATTERN.fullmatch(str(document.get("manifest_sha256"))) is None
     ):
         raise ValueError("Codex image-input manifest identity is invalid")
     images = document.get("images")
-    if not isinstance(images, list) or not 1 <= len(images) <= MAX_IMAGE_INPUTS:
+    maximum_images = (
+        MAX_IMAGE_INPUTS_V1
+        if schema_version == "codex-image-input-manifest/1.0"
+        else MAX_IMAGE_INPUTS_V2
+    )
+    if not isinstance(images, list) or not 1 <= len(images) <= maximum_images:
         raise ValueError("Codex image-input manifest count is invalid")
     canonical = json.dumps(
         {key: value for key, value in document.items() if key != "manifest_sha256"},
@@ -230,7 +242,10 @@ def _load_image_inputs(
 
     paths: list[Path] = []
     pages: list[int] = []
+    page_input_ids: list[str] = []
+    source_positions: list[tuple[str, int]] = []
     total_bytes = 0
+    total_pixels = 0
     image_keys = {
         "physical_page",
         "relative_path",
@@ -240,6 +255,8 @@ def _load_image_inputs(
         "width_pixels",
         "height_pixels",
     }
+    if schema_version == "codex-image-input-manifest/2.0":
+        image_keys.update({"page_input_id", "source_role"})
     for item in images:
         if not isinstance(item, dict) or set(item) != image_keys:
             raise ValueError("Codex image-input entry shape is invalid")
@@ -248,6 +265,7 @@ def _load_image_inputs(
         byte_count = item.get("bytes")
         width = item.get("width_pixels")
         height = item.get("height_pixels")
+        maximum_dimension = 10000 if schema_version == "codex-image-input-manifest/1.0" else 20000
         if (
             not isinstance(page, int)
             or not isinstance(relative_path, str)
@@ -257,13 +275,31 @@ def _load_image_inputs(
             or item.get("media_type") != "image/png"
             or SHA256_PATTERN.fullmatch(str(item.get("sha256"))) is None
             or not 1 <= byte_count <= MAX_IMAGE_BYTES
-            or not 1 <= width <= 10000
-            or not 1 <= height <= 10000
+            or not 1 <= width <= maximum_dimension
+            or not 1 <= height <= maximum_dimension
+            or (
+                schema_version == "codex-image-input-manifest/2.0"
+                and width * height > MAX_ASSESSMENT_IMAGE_PIXELS
+            )
         ):
             raise ValueError("Codex image-input entry values are invalid")
-        match = IMAGE_PATH_PATTERN.fullmatch(relative_path)
-        if match is None or int(match.group(1)) != page:
-            raise ValueError("Codex image-input page path is inconsistent")
+        if schema_version == "codex-image-input-manifest/1.0":
+            match = IMAGE_PATH_PATTERN.fullmatch(relative_path)
+            if match is None or int(match.group(1)) != page:
+                raise ValueError("Codex image-input page path is inconsistent")
+        else:
+            page_input_id = item.get("page_input_id")
+            source_role = item.get("source_role")
+            match = ASSESSMENT_IMAGE_PATH_PATTERN.fullmatch(relative_path)
+            if (
+                not isinstance(page_input_id, str)
+                or match is None
+                or match.group(1) != page_input_id
+                or source_role not in {"PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"}
+            ):
+                raise ValueError("assessment image-input identity is inconsistent")
+            page_input_ids.append(page_input_id)
+            source_positions.append((str(source_role), page))
         image_path = workspace.joinpath(*Path(relative_path).parts)
         _verify_png_input(
             image_path,
@@ -277,7 +313,22 @@ def _load_image_inputs(
         pages.append(page)
         paths.append(image_path)
         total_bytes += byte_count
-    if pages != sorted(set(pages)) or total_bytes > MAX_IMAGE_TOTAL_BYTES:
+        total_pixels += width * height
+    if schema_version == "codex-image-input-manifest/1.0":
+        expected_pages = list(range(pages[0], pages[-1] + 1))
+        identities_valid = pages == expected_pages
+    else:
+        identities_valid = len(page_input_ids) == len(set(page_input_ids)) and len(
+            source_positions
+        ) == len(set(source_positions))
+    if (
+        not identities_valid
+        or total_bytes > MAX_IMAGE_TOTAL_BYTES
+        or (
+            schema_version == "codex-image-input-manifest/2.0"
+            and total_pixels > MAX_ASSESSMENT_IMAGE_TOTAL_PIXELS
+        )
+    ):
         raise ValueError("Codex image inputs are duplicated, unordered, or oversized")
     return tuple(paths)
 

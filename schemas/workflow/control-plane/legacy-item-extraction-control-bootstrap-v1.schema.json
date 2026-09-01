@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/legacy-item-extraction-control-bootstrap/1.0",
+  "title": "Legacy item extraction control bootstrap manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "preset_key",
+    "display_name",
+    "description",
+    "created_at",
+    "model",
+    "reasoning_effort",
+    "general_knowledge_policy",
+    "compatible_workflow_protocols",
+    "platform_instruction_path",
+    "role_instruction_path",
+    "slot_key",
+    "worker_pool_key",
+    "timeout_seconds"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-item-extraction-control-bootstrap/1.0"},
+    "preset_key": {"const": "legacy-item-extraction"},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "description": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "created_at": {"type": "string", "format": "date-time"},
+    "model": {"const": "gpt-5.6-terra"},
+    "reasoning_effort": {"const": "xhigh"},
+    "general_knowledge_policy": {"const": "DENY"},
+    "compatible_workflow_protocols": {
+      "type": "array",
+      "prefixItems": [{"const": "workflow-role/1.14.0"}],
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true
+    },
+    "platform_instruction_path": {"const": "instructions/platform.md"},
+    "role_instruction_path": {"const": "instructions/legacy-item-extraction.md"},
+    "slot_key": {"const": "slot06"},
+    "worker_pool_key": {"const": "legacy-extraction"},
+    "timeout_seconds": {"const": 7200}
+  }
+}

@@ -23,8 +23,11 @@ from eom_catalog_service.intake_files import (
     validate_analysis_markdown,
 )
 from eom_catalog_service.intake_service import (
+    INTAKE_MANIFEST_SCHEMA_REF,
+    INTAKE_SOURCE_FILE_SCHEMA_REF,
     IntakeSourceDeclaration,
     _require_exact_replay,
+    _source_artifact_file_metadata,
     _source_declarations,
 )
 from eom_content_intake import IntakeError, IntakeErrorCode, IntakeState, require_transition
@@ -116,6 +119,63 @@ def test_intake_contracts_validate_and_reject_unknown_fields() -> None:
     assert HumanDecision.model_validate(decision).decision == "ACCEPT"
     with pytest.raises(ValidationError):
         IntakeManifest.model_validate({**manifest, "unexpected": True})
+
+
+def test_source_artifact_metadata_closes_every_manifest_pointer() -> None:
+    manifest = IntakeManifest.model_validate(
+        {
+            "schema_version": "1.0",
+            "batch_id": "intake_" + "1" * 32,
+            "batch_name": "reviewed assessment sources",
+            "received_at": "2026-09-01T00:00:00Z",
+            "received_by": "operator_01",
+            "source_owner": {"type": "legacy_system", "reference": "ai-linux"},
+            "purpose": "legacy assessment extraction",
+            "files": [
+                {
+                    "source_file_id": "sourcefile_" + "2" * 32,
+                    "relative_path": "source/problem.pdf",
+                    "original_filename": "problem.pdf",
+                    "media_type": "application/pdf",
+                    "size_bytes": 100,
+                    "sha256": "sha256:" + "3" * 64,
+                    "declared_role": "DATA",
+                    "declared_description": "reviewed problem document",
+                },
+                {
+                    "source_file_id": "sourcefile_" + "4" * 32,
+                    "relative_path": "source/source.hwp",
+                    "original_filename": "source.hwp",
+                    "media_type": "application/vnd.hancom.hwp",
+                    "size_bytes": 200,
+                    "sha256": "sha256:" + "5" * 64,
+                    "declared_role": "REFERENCE",
+                    "declared_description": "reviewed authoring source",
+                },
+            ],
+        }
+    )
+
+    metadata = _source_artifact_file_metadata(manifest)
+
+    assert metadata == {
+        "intake-manifest.json": {
+            "media_type": "application/json",
+            "schema_ref": INTAKE_MANIFEST_SCHEMA_REF,
+        },
+        "source/problem.pdf": {
+            "media_type": "application/pdf",
+            "schema_ref": INTAKE_SOURCE_FILE_SCHEMA_REF,
+        },
+        "source/source.hwp": {
+            "media_type": "application/vnd.hancom.hwp",
+            "schema_ref": INTAKE_SOURCE_FILE_SCHEMA_REF,
+        },
+    }
+    assert set(metadata) == {
+        "intake-manifest.json",
+        *(item.relative_path for item in manifest.files),
+    }
 
 
 def test_source_discovery_hash_and_deterministic_fingerprint(tmp_path: Path) -> None:

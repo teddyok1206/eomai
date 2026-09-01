@@ -34,6 +34,7 @@ from eomctl.catalog import (
 from eomctl.control_plane import control_plane_app
 from eomctl.hwpx import hwpx_app
 from eomctl.knowledge import knowledge_app
+from eomctl.legacy_assessment import legacy_assessment_app
 from eomctl.operator import operator_app
 from eomctl.workflow import workflow_app
 
@@ -47,6 +48,7 @@ app.add_typer(job_app, name="job")
 app.add_typer(workflow_app, name="workflow")
 app.add_typer(hwpx_app, name="hwpx")
 app.add_typer(knowledge_app, name="knowledge")
+app.add_typer(legacy_assessment_app, name="legacy-assessment")
 app.add_typer(content_app, name="content")
 app.add_typer(item_app, name="item")
 app.add_typer(deliverable_app, name="deliverable")

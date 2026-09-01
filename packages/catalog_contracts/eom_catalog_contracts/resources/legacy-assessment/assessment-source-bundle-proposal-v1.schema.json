@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/assessment-source-bundle-proposal/1.0",
+  "title": "EOM Assessment Source Bundle Proposal V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "proposal_id",
+    "inventory_id",
+    "inventory_sha256",
+    "candidate_key",
+    "members",
+    "occurrence_observation",
+    "conflicts",
+    "created_at",
+    "proposal_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "assessment-source-bundle-proposal/1.0"},
+    "proposal_id": {
+      "type": "string",
+      "pattern": "^assessbundleproposal_[0-9a-f]{32}$"
+    },
+    "inventory_id": {
+      "type": "string",
+      "pattern": "^legacyinventory_[0-9a-f]{32}$"
+    },
+    "inventory_sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    },
+    "candidate_key": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/stableKey"
+    },
+    "members": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "proposed_role",
+          "pairing_reason_codes",
+          "confidence_milli"
+        ],
+        "properties": {
+          "source": {
+            "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/inventoryEntryPointer"
+          },
+          "proposed_role": {
+            "enum": [
+              "PROBLEM_DOCUMENT",
+              "ANSWER_EXPLANATION_DOCUMENT",
+              "STRUCTURED_RECONSTRUCTION",
+              "ITEM_CLASSIFICATION_WORKBOOK",
+              "TYPE_CODE_REFERENCE",
+              "OTHER_REVIEWED_EVIDENCE"
+            ]
+          },
+          "pairing_reason_codes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "EXACT_OCCURRENCE_TOKEN",
+                "EXACT_SUBJECT_TOKEN",
+                "EXACT_DATE_TOKEN",
+                "EXACT_DOCUMENT_ROLE_TOKEN",
+                "SAME_REVIEWED_DIRECTORY",
+                "WORKBOOK_INTERNAL_IDENTITY",
+                "EXACT_CONTENT_HASH",
+                "MANUAL_RELATION_EVIDENCE"
+              ]
+            }
+          },
+          "confidence_milli": {"type": "integer", "minimum": 0, "maximum": 1000}
+        }
+      }
+    },
+    "occurrence_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "organization_label",
+        "exam_family_label",
+        "administration_year",
+        "administration_date",
+        "session_label",
+        "subject_label",
+        "form_label",
+        "source_entry_keys"
+      ],
+      "properties": {
+        "organization_label": {"type": ["string", "null"], "maxLength": 256},
+        "exam_family_label": {"type": "string", "minLength": 1, "maxLength": 256},
+        "administration_year": {"type": ["integer", "null"], "minimum": 1900, "maximum": 2200},
+        "administration_date": {"type": ["string", "null"], "format": "date"},
+        "session_label": {"type": ["string", "null"], "maxLength": 128},
+        "subject_label": {"type": "string", "minLength": 1, "maxLength": 128},
+        "form_label": {"type": ["string", "null"], "maxLength": 128},
+        "source_entry_keys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^legacyentry_[0-9a-f]{32}$"}
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/bundleConflictObservation"
+      }
+    },
+    "created_at": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/utcTimestamp"
+    },
+    "proposal_sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    }
+  }
+}

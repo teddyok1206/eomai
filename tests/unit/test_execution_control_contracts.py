@@ -10,6 +10,7 @@ import pytest
 import yaml
 from eom_identifiers import content_sha256
 from eom_workflow import (
+    CodexAssessmentImageInputManifest,
     CodexAuthBrokerRequest,
     CodexAuthBrokerRequestV2,
     CodexAuthBrokerResponse,
@@ -36,6 +37,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV2,
     WorkerCapacityPolicy,
     WorkerCapacityPolicyV2,
+    WorkerCapacityPolicyV3,
     WorkerLeaseView,
     control_schema_inventory,
     load_control_schema,
@@ -318,6 +320,34 @@ def _capacity_policy_v2() -> dict[str, object]:
     return value
 
 
+def _capacity_policy_v3() -> dict[str, object]:
+    value = _capacity_policy_v2()
+    pools = value["pools"]
+    assert isinstance(pools, list)
+    value.update(
+        {
+            "schema_version": "worker-capacity-policy/1.2",
+            "revision_number": 3,
+            "pools": [
+                *pools[:-1],
+                {
+                    "pool_key": "support",
+                    "roles": ["support"],
+                    "slot_keys": ["slot05"],
+                    "max_active": 1,
+                },
+                {
+                    "pool_key": "legacy-extraction",
+                    "roles": ["support"],
+                    "slot_keys": ["slot06"],
+                    "max_active": 1,
+                },
+            ],
+        }
+    )
+    return value
+
+
 def _slot_inventory_v2() -> dict[str, object]:
     value = yaml.safe_load(
         (REPOSITORY_ROOT / "config" / "worker-slots.example.yaml").read_text(encoding="utf-8")
@@ -343,7 +373,7 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 36
+    assert len(entries) == 40
     assert len({name for name, _ in entries}) == len(entries)
     assert {
         "execution-preset-revision-v2",
@@ -353,6 +383,8 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
         "resolved-execution-plan-v3",
         "resolved-execution-plan-v4",
         "resolved-execution-plan-v5",
+        "resolved-execution-plan-v6",
+        "worker-capacity-policy-v3",
         "codex-auth-enrollment-request",
         "codex-auth-enrollment-status",
         "codex-device-challenge",
@@ -761,6 +793,33 @@ def test_codex_image_manifest_requires_complete_ordered_page_set_and_exact_hash(
         CodexImageInputManifest.model_validate(missing)
 
 
+def test_assessment_image_manifest_bounds_decoded_pixels() -> None:
+    value: dict[str, object] = {
+        "schema_version": "codex-image-input-manifest/2.0",
+        "plan_id": "execplan_" + "8" * 32,
+        "images": [
+            {
+                "page_input_id": "assessmentpage_" + "1" * 32,
+                "source_role": "PROBLEM_DOCUMENT",
+                "physical_page": 1,
+                "relative_path": "source/pages/assessmentpage_" + "1" * 32 + ".png",
+                "media_type": "image/png",
+                "sha256": "sha256:" + "1" * 64,
+                "bytes": 1024,
+                "width_pixels": 20000,
+                "height_pixels": 4000,
+            }
+        ],
+        "manifest_sha256": ZERO_SHA,
+    }
+    value["manifest_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "manifest_sha256"}
+    )
+    validate_control_contract("codex-image-input-manifest-v2", value)
+    with pytest.raises(PydanticValidationError, match="decoded-pixel"):
+        CodexAssessmentImageInputManifest.model_validate(value)
+
+
 def test_analysis_plan_is_support_only_and_hash_pinned() -> None:
     wrong_role = _resolved_analysis_plan()
     steps = wrong_role["steps"]
@@ -815,6 +874,24 @@ def test_capacity_v2_schema_pins_the_two_slot_analysis_pool() -> None:
         validate_control_contract("worker-capacity-policy-v2", wrong_authoring_pool)
     with pytest.raises(PydanticValidationError, match="reviewed fixed-host pools"):
         WorkerCapacityPolicyV2.model_validate(wrong_authoring_pool)
+
+
+def test_capacity_v3_isolates_slot05_analysis_from_slot06_extraction() -> None:
+    value = _capacity_policy_v3()
+    validate_control_contract("worker-capacity-policy-v3", value)
+    parsed = WorkerCapacityPolicyV3.model_validate(value)
+    pools = {pool.pool_key: pool for pool in parsed.pools}
+    assert pools["support"].slot_keys == ("slot05",)
+    assert pools["legacy-extraction"].slot_keys == ("slot06",)
+
+    shared = deepcopy(value)
+    shared_pools = shared["pools"]
+    assert isinstance(shared_pools, list)
+    shared_pools[-2]["slot_keys"] = ["slot05", "slot06"]
+    with pytest.raises(ValidationError):
+        validate_control_contract("worker-capacity-policy-v3", shared)
+    with pytest.raises(PydanticValidationError, match="reviewed isolated pools"):
+        WorkerCapacityPolicyV3.model_validate(shared)
 
 
 def test_worker_inventory_v2_schema_pins_all_fixed_slot_identities() -> None:

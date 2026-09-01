@@ -19,6 +19,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisRequestV8,
+    LegacyItemExtractionRequest,
 )
 from eom_identifiers import content_sha256, new_execution_plan_id
 from eom_workflow.control_plane import (
@@ -29,6 +30,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV4,
     ResolvedExecutionPlanV5,
+    ResolvedExecutionPlanV6,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     WorkerRole,
@@ -495,6 +497,127 @@ def resolve_knowledge_analysis_plan(
         resolved_at=model.resolved_at,
     )
     session.add(record)
+    session.flush()
+    session.add(
+        ResolvedExecutionPlanStepRecord(
+            plan_id=model.plan_id,
+            step_key=step.step_key,
+            role=step.role,
+            model=step.model,
+            reasoning_effort=step.reasoning_effort,
+            instruction_bundle_revision_id=step.instruction_bundle.bundle_revision_id,
+            reference_bundle_revision_id=None,
+            worker_pool_key=step.worker_pool_key,
+            timeout_seconds=step.timeout_seconds,
+            sandbox=step.sandbox,
+            network=step.network,
+            general_knowledge_mode=step.general_knowledge_mode,
+        )
+    )
+    session.flush()
+    return model
+
+
+def resolve_legacy_item_extraction_plan(
+    session: Session,
+    *,
+    workflow_id: str,
+    workflow_definition_version: str,
+    workflow_definition_sha256: str,
+    workflow_role_schema_version: str,
+    request: LegacyItemExtractionRequest,
+    resolved_at: datetime | None = None,
+) -> ResolvedExecutionPlanV6:
+    """Resolve one released private support policy for one exact extraction request."""
+
+    existing = session.scalar(
+        select(ResolvedExecutionPlanRecord).where(
+            ResolvedExecutionPlanRecord.workflow_id == workflow_id
+        )
+    )
+    if existing is not None:
+        return ResolvedExecutionPlanV6.model_validate(existing.canonical_document)
+    preset_record = session.get(ExecutionPresetRevisionRecord, request.execution_preset_revision_id)
+    logical = session.get(ExecutionPresetRecord, request.execution_preset_id)
+    if (
+        preset_record is None
+        or logical is None
+        or preset_record.preset_id != logical.preset_id
+        or preset_record.state != "RELEASED"
+        or preset_record.content_sha256 != request.execution_preset_sha256
+        or workflow_role_schema_version not in preset_record.compatible_workflow_protocols
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POINTER_INVALID",
+            "legacy item extraction preset pointer is stale",
+        )
+    preset = ExecutionPresetRevision.model_validate(preset_record.canonical_document)
+    support_policies = [policy for policy in preset.role_policies if policy.role == "support"]
+    if len(support_policies) != 1:
+        raise ControlPlaneError(
+            "CONTROL_PRESET_ROLE_MISSING",
+            "legacy item extraction preset needs one support policy",
+        )
+    policy = support_policies[0]
+    if (
+        policy.worker_pool_key != "legacy-extraction"
+        or policy.reference_bundle is not None
+        or preset.general_knowledge_policy != "DENY"
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID",
+            "legacy item extraction policy must be source-only private support",
+        )
+    candidate = policy.model_candidates[0]
+    step = ResolvedStepExecution(
+        step_key="extract",
+        role=WorkerRole.SUPPORT,
+        model=candidate.model,
+        reasoning_effort=candidate.reasoning_effort,
+        instruction_bundle=policy.instruction_bundle,
+        reference_bundle=None,
+        worker_pool_key="legacy-extraction",
+        timeout_seconds=policy.timeout_seconds,
+        sandbox=policy.sandbox,
+        network=policy.network,
+        general_knowledge_mode="DENIED",
+    )
+    document: dict[str, object] = {
+        "schema_version": "resolved-execution-plan/6.0",
+        "plan_id": new_execution_plan_id(),
+        "workflow_id": workflow_id,
+        "workload_class": "KNOWLEDGE_ANALYSIS",
+        "preset_id": preset.preset_id,
+        "preset_revision_id": preset.preset_revision_id,
+        "preset_sha256": preset.content_sha256,
+        "workflow_definition_key": "legacy-item-extraction",
+        "workflow_definition_version": workflow_definition_version,
+        "workflow_definition_sha256": workflow_definition_sha256,
+        "extraction_request": request.model_dump(mode="json"),
+        "capacity_policy_revision_id": preset.capacity_policy_revision_id,
+        "steps": [step.model_dump(mode="json")],
+        "resolver_version": "6.0.0",
+        "resolved_at": (resolved_at or datetime.now(UTC)).isoformat().replace("+00:00", "Z"),
+        "plan_sha256": "sha256:" + "0" * 64,
+    }
+    document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
+    validate_control_contract("resolved-execution-plan-v6", document)
+    model = ResolvedExecutionPlanV6.model_validate(document)
+    session.add(
+        ResolvedExecutionPlanRecord(
+            plan_id=model.plan_id,
+            workflow_id=model.workflow_id,
+            preset_id=model.preset_id,
+            preset_revision_id=model.preset_revision_id,
+            capacity_policy_revision_id=model.capacity_policy_revision_id,
+            graph_snapshot_revision_id=None,
+            evidence_bundle_revision_id=None,
+            plan_sha256=model.plan_sha256,
+            resolver_version=model.resolver_version,
+            canonical_document=model.model_dump(mode="json"),
+            resolved_at=model.resolved_at,
+        )
+    )
     session.flush()
     session.add(
         ResolvedExecutionPlanStepRecord(

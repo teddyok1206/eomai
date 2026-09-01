@@ -9,7 +9,9 @@ import eom_hwpx_manager.models  # noqa: F401
 import eom_workflow_runner.models  # noqa: F401
 import pytest
 from eom_catalog_service import (  # noqa: F401
+    item_origin_models,
     knowledge_graph_models,
+    legacy_assessment_models,
     legacy_usage_models,
 )
 from eom_identifiers import content_sha256
@@ -133,7 +135,7 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260831_0023"
+    assert CURRENT_MIGRATION_REVISION == "20260901_0025"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -156,7 +158,7 @@ def test_multimodal_batch_migration_is_additive_and_keeps_legacy_pointers() -> N
         encoding="utf-8"
     )
     assert 'down_revision: str | None = "20260826_0018"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260831_0023"
+    assert CURRENT_MIGRATION_REVISION == "20260901_0025"
     assert "textbook-analysis-bundle-manifest/1.0" in source
     assert "textbook-analysis-bundle-manifest/2.0" in source
     assert "drop_table" not in source
@@ -168,7 +170,7 @@ def test_codex_device_reauthentication_migration_is_additive_and_credential_free
         "migrations/versions/20260827_0020_codex_gui_device_reauthentication.py"
     ).read_text(encoding="utf-8")
     assert 'down_revision: str | None = "20260827_0019"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260831_0023"
+    assert CURRENT_MIGRATION_REVISION == "20260901_0025"
     assert "codex_auth_enrollments" in source
     assert "codex_auth_assignment_revisions" in source
     assert "codex_auth_assignment_revisions_immutable" in source
@@ -186,7 +188,7 @@ def test_knowledge_analysis_continue_collect_migration_preserves_legacy_batches(
         "migrations/versions/20260828_0021_knowledge_analysis_continue_collect.py"
     ).read_text(encoding="utf-8")
     assert 'down_revision: str | None = "20260827_0020"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260831_0023"
+    assert CURRENT_MIGRATION_REVISION == "20260901_0025"
     assert 'server_default="STOP_ON_FIRST_FAILURE"' in source
     assert "CONTINUE_AND_COLLECT" in source
     assert "DELETE FROM" not in source
@@ -198,7 +200,7 @@ def test_bounded_parallel_capacity_migration_preserves_serial_history() -> None:
         "migrations/versions/20260828_0022_bounded_parallel_knowledge_capacity.py"
     ).read_text(encoding="utf-8")
     assert 'down_revision: str | None = "20260828_0021"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260831_0023"
+    assert CURRENT_MIGRATION_REVISION == "20260901_0025"
     assert 'server_default="SERIAL"' in source
     assert 'server_default="1"' in source
     assert "max_active_knowledge_analysis BETWEEN 1 AND 2" in source
@@ -213,7 +215,7 @@ def test_graph_source_pointer_migration_pins_exact_analysis_runs() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | None = "20260828_0022"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260831_0023"
+    assert CURRENT_MIGRATION_REVISION == "20260901_0025"
     assert "analysis_run_id" in source
     assert "fk_knowledge_node_source_analysis" in source
     assert "fk_knowledge_edge_source_analysis" in source

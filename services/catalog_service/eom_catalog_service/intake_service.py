@@ -53,6 +53,9 @@ from eom_catalog_service.models import (
 )
 from eom_catalog_service.settings import CatalogSettings
 
+INTAKE_MANIFEST_SCHEMA_REF = "eom://schemas/content-intake/intake-manifest-v1"
+INTAKE_SOURCE_FILE_SCHEMA_REF = "eom://schemas/content-intake/source-file/1.0"
+
 
 @dataclass(frozen=True)
 class IntakeSourceDeclaration:
@@ -196,6 +199,7 @@ class IntakeService:
         files.update(
             {f"source/{source.normalized_relative_path}": source.source for source in sources}
         )
+        file_metadata = _source_artifact_file_metadata(manifest)
         artifact = self.artifacts.commit_file_set(
             files=files,
             primary_file="intake-manifest.json",
@@ -203,6 +207,7 @@ class IntakeService:
             idempotency_key=f"content-intake-source:{fingerprint}",
             request={"batch_id": batch_id, "source_fingerprint": fingerprint},
             result={"batch_id": batch_id, "file_count": len(sources)},
+            file_metadata=file_metadata,
         )
         with transaction(self.sessions) as session:
             batch = session.execute(
@@ -705,6 +710,32 @@ def _source_declarations(
             "reviewed source declarations do not match materialized sources",
         )
     return by_path
+
+
+def _source_artifact_file_metadata(manifest: IntakeManifest) -> dict[str, dict[str, str]]:
+    """Bind every source member to its reviewed media type and semantic schema.
+
+    The source-file schema reference identifies opaque intake bytes; it does not imply that
+    arbitrary binary input is JSON.  The intake manifest remains the authoritative typed record
+    for each member's reviewed media type, size, and content hash.
+    """
+
+    metadata = {
+        "intake-manifest.json": {
+            "media_type": "application/json",
+            "schema_ref": INTAKE_MANIFEST_SCHEMA_REF,
+        }
+    }
+    metadata.update(
+        {
+            source.relative_path: {
+                "media_type": source.media_type,
+                "schema_ref": INTAKE_SOURCE_FILE_SCHEMA_REF,
+            }
+            for source in manifest.files
+        }
+    )
+    return metadata
 
 
 def _require_exact_replay(

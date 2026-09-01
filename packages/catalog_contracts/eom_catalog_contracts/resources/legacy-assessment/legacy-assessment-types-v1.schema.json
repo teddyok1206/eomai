@@ -1,0 +1,517 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0",
+  "title": "EOM Legacy Assessment Shared Types V1",
+  "$defs": {
+    "sha256": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/sha256"
+    },
+    "utcTimestamp": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/utcTimestamp"
+    },
+    "actorId": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/actorId"
+    },
+    "stableKey": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/stableKey"
+    },
+    "artifactMemberPointer": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/artifactMemberPointer"
+    },
+    "inventoryEntryPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inventory_id",
+        "inventory_sha256",
+        "entry_key",
+        "content_sha256"
+      ],
+      "properties": {
+        "inventory_id": {
+          "type": "string",
+          "pattern": "^legacyinventory_[0-9a-f]{32}$"
+        },
+        "inventory_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "entry_key": {
+          "type": "string",
+          "pattern": "^legacyentry_[0-9a-f]{32}$"
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "rightsPolicyPointer": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/rightsPolicyPointer"
+    },
+    "assessmentOccurrencePointer": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/assessmentOccurrencePointer"
+    },
+    "assessmentSourceBundlePointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessment_source_bundle_id",
+        "assessment_source_bundle_revision_id",
+        "bundle_manifest_sha256"
+      ],
+      "properties": {
+        "assessment_source_bundle_id": {
+          "type": "string",
+          "pattern": "^assessbundle_[0-9a-f]{32}$"
+        },
+        "assessment_source_bundle_revision_id": {
+          "type": "string",
+          "pattern": "^assessbundlerev_[0-9a-f]{32}$"
+        },
+        "bundle_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "normalizedBoundingBox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "top", "right", "bottom"],
+      "properties": {
+        "left": {"type": "integer", "minimum": 0, "maximum": 9999},
+        "top": {"type": "integer", "minimum": 0, "maximum": 9999},
+        "right": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "bottom": {"type": "integer", "minimum": 1, "maximum": 10000}
+      }
+    },
+    "sourceAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "anchor_id",
+        "source",
+        "source_role",
+        "physical_page",
+        "bounding_box",
+        "locator_detail"
+      ],
+      "properties": {
+        "anchor_id": {
+          "type": "string",
+          "pattern": "^assessmentanchor_[0-9a-f]{32}$"
+        },
+        "source": {
+          "$ref": "#/$defs/artifactMemberPointer"
+        },
+        "source_role": {
+          "enum": [
+            "PROBLEM_DOCUMENT",
+            "ANSWER_EXPLANATION_DOCUMENT",
+            "STRUCTURED_RECONSTRUCTION",
+            "ITEM_CLASSIFICATION_WORKBOOK",
+            "TYPE_CODE_REFERENCE",
+            "OTHER_REVIEWED_EVIDENCE"
+          ]
+        },
+        "physical_page": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "bounding_box": {
+          "oneOf": [
+            {"$ref": "#/$defs/normalizedBoundingBox"},
+            {"type": "null"}
+          ]
+        },
+        "locator_detail": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "conflictObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conflict_id",
+        "field_path",
+        "conflict_kind",
+        "source_anchor_ids",
+        "description",
+        "blocking"
+      ],
+      "properties": {
+        "conflict_id": {
+          "type": "string",
+          "pattern": "^assessmentconflict_[0-9a-f]{32}$"
+        },
+        "field_path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.\\[\\]-]{0,255}$"
+        },
+        "conflict_kind": {
+          "enum": [
+            "SOURCE_DISAGREEMENT",
+            "MISSING_SOURCE",
+            "AMBIGUOUS_LAYOUT",
+            "UNRESOLVED_OCCURRENCE",
+            "UNRESOLVED_CURRICULUM",
+            "UNREADABLE_CONTENT",
+            "UNSUPPORTED_STRUCTURE",
+            "OTHER_REVIEWED"
+          ]
+        },
+        "source_anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^assessmentanchor_[0-9a-f]{32}$"
+          }
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "blocking": {"type": "boolean"}
+      }
+    },
+    "bundleConflictObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conflict_id",
+        "field_path",
+        "conflict_kind",
+        "source_entry_keys",
+        "description",
+        "blocking"
+      ],
+      "properties": {
+        "conflict_id": {
+          "type": "string",
+          "pattern": "^assessmentconflict_[0-9a-f]{32}$"
+        },
+        "field_path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.\\[\\]-]{0,255}$"
+        },
+        "conflict_kind": {
+          "enum": [
+            "SOURCE_DISAGREEMENT",
+            "MISSING_SOURCE",
+            "AMBIGUOUS_BUNDLE",
+            "UNRESOLVED_OCCURRENCE",
+            "UNSUPPORTED_MEDIA",
+            "OTHER_REVIEWED"
+          ]
+        },
+        "source_entry_keys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^legacyentry_[0-9a-f]{32}$"
+          }
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "blocking": {"type": "boolean"}
+      }
+    },
+    "curriculumObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_id",
+        "observed_code",
+        "observed_label",
+        "resolved_unit_key",
+        "source_anchor_ids",
+        "confidence_milli"
+      ],
+      "properties": {
+        "observation_id": {
+          "type": "string",
+          "pattern": "^curriculumobservation_[0-9a-f]{32}$"
+        },
+        "observed_code": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "observed_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "resolved_unit_key": {
+          "oneOf": [
+            {"$ref": "#/$defs/stableKey"},
+            {"type": "null"}
+          ]
+        },
+        "source_anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^assessmentanchor_[0-9a-f]{32}$"
+          }
+        },
+        "confidence_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      }
+    },
+    "linguisticPatternObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pattern_id",
+        "prompt_form",
+        "polarity",
+        "condition_placement",
+        "choice_grammar",
+        "uses_statement_set",
+        "closing_expression",
+        "structure_summary",
+        "reusable_pattern",
+        "source_anchor_ids"
+      ],
+      "properties": {
+        "pattern_id": {
+          "type": "string",
+          "pattern": "^linguisticpattern_[0-9a-f]{32}$"
+        },
+        "prompt_form": {
+          "enum": [
+            "SELECT_CORRECT",
+            "SELECT_INCORRECT",
+            "SELECT_MOST_APPROPRIATE",
+            "SELECT_COMBINATION",
+            "CALCULATE",
+            "INFER",
+            "MATCH",
+            "ORDER",
+            "CONSTRUCT_RESPONSE",
+            "OTHER_OBSERVED"
+          ]
+        },
+        "polarity": {
+          "enum": ["POSITIVE", "NEGATIVE", "MIXED", "NOT_APPLICABLE"]
+        },
+        "condition_placement": {
+          "enum": ["BEFORE_STEM", "INLINE", "AFTER_STEM", "MIXED", "NONE"]
+        },
+        "choice_grammar": {
+          "enum": [
+            "COMPLETE_SENTENCE",
+            "NOUN_PHRASE",
+            "NUMERIC_OR_SYMBOLIC",
+            "STATEMENT_COMBINATION",
+            "MIXED",
+            "NOT_APPLICABLE"
+          ]
+        },
+        "uses_statement_set": {"type": "boolean"},
+        "closing_expression": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "structure_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "reusable_pattern": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "source_anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^assessmentanchor_[0-9a-f]{32}$"
+          }
+        }
+      }
+    },
+    "visualPatternObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pattern_id",
+        "representation_kind",
+        "rendering_mode",
+        "color_mode",
+        "background",
+        "panel_layout",
+        "features",
+        "pedagogical_function",
+        "composition_summary",
+        "reconstruction_guidance",
+        "source_anchor_ids"
+      ],
+      "properties": {
+        "pattern_id": {
+          "type": "string",
+          "pattern": "^visualpattern_[0-9a-f]{32}$"
+        },
+        "representation_kind": {
+          "enum": [
+            "NONE",
+            "TABLE",
+            "LINE_GRAPH",
+            "BAR_GRAPH",
+            "SCATTER_PLOT",
+            "DIAGRAM",
+            "PARTICLE_MODEL",
+            "APPARATUS",
+            "MAP",
+            "CROSS_SECTION",
+            "TIMELINE",
+            "FLOW",
+            "PHOTOGRAPH",
+            "COMPOSITE",
+            "OTHER_OBSERVED"
+          ]
+        },
+        "rendering_mode": {
+          "enum": ["VECTOR_LIKE", "RASTER", "MIXED", "TEXT_ONLY"]
+        },
+        "color_mode": {
+          "enum": ["MONOCHROME", "GRAYSCALE", "LIMITED_COLOR", "FULL_COLOR"]
+        },
+        "background": {
+          "enum": ["WHITE", "TRANSPARENT", "OTHER_OBSERVED"]
+        },
+        "panel_layout": {
+          "enum": ["SINGLE", "HORIZONTAL", "VERTICAL", "GRID", "OVERLAID", "NONE"]
+        },
+        "features": {
+          "type": "array",
+          "maxItems": 24,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "AXES",
+              "GRID",
+              "LEGEND",
+              "ARROWS",
+              "LEADER_LINES",
+              "LABELS",
+              "SCALE",
+              "PATTERN_FILL",
+              "SYMBOL_KEY",
+              "NUMBERED_STEPS",
+              "MULTIPLE_PANELS",
+              "CALLOUT",
+              "BOUNDARY",
+              "TRAJECTORY",
+              "DATA_POINTS",
+              "ERROR_BAR"
+            ]
+          }
+        },
+        "pedagogical_function": {
+          "enum": [
+            "PRIMARY_DATA",
+            "CONTEXT",
+            "COMPARISON",
+            "PROCESS",
+            "SPATIAL_RELATION",
+            "CLASSIFICATION",
+            "DECORATIVE",
+            "OTHER_OBSERVED"
+          ]
+        },
+        "composition_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 3000
+        },
+        "reconstruction_guidance": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 3000
+        },
+        "source_anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^assessmentanchor_[0-9a-f]{32}$"
+          }
+        }
+      }
+    },
+    "pageImageInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page_input_id",
+        "source_role",
+        "physical_page",
+        "source",
+        "image",
+        "workspace_relative_path",
+        "width_px",
+        "height_px"
+      ],
+      "properties": {
+        "page_input_id": {
+          "type": "string",
+          "pattern": "^assessmentpage_[0-9a-f]{32}$"
+        },
+        "source_role": {
+          "enum": ["PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"]
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "source": {
+          "$ref": "#/$defs/artifactMemberPointer"
+        },
+        "image": {
+          "$ref": "#/$defs/artifactMemberPointer"
+        },
+        "workspace_relative_path": {
+          "type": "string",
+          "pattern": "^source/pages/assessmentpage_[0-9a-f]{32}\\.png$"
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20000
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20000
+        }
+      }
+    }
+  }
+}

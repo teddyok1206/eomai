@@ -434,6 +434,48 @@ def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions()
     )
 
 
+def test_release_verifies_legacy_item_extraction_runtime_and_contracts() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+
+    for runtime_member in (
+        "eom_orchestrator/legacy_item_extraction_artifact.py",
+        "eom_orchestrator/legacy_item_extraction_bootstrap.py",
+        "eom_catalog_contracts/item_origin.py",
+        "eom_catalog_contracts/legacy_assessment.py",
+        "eom_catalog_service/item_origin_models.py",
+        "eom_catalog_service/item_origin_service.py",
+        "eom_catalog_service/legacy_assessment_bundle_discovery.py",
+        "eom_catalog_service/legacy_assessment_models.py",
+        "eom_catalog_service/legacy_assessment_packages.py",
+        "eom_catalog_service/legacy_assessment_registry.py",
+        "eom_catalog_service/legacy_assessment_rights.py",
+        "eom_catalog_service/legacy_item_extraction_service.py",
+        "eomctl/legacy_assessment.py",
+    ):
+        assert f'"{runtime_member}"' in deployment
+    for resource in (
+        "item-origin/item-origin-types-v1.schema.json",
+        "item-origin/organization-revision-v1.schema.json",
+        "item-origin/assessment-occurrence-revision-v1.schema.json",
+        "item-origin/item-origin-profile-v1.schema.json",
+        "legacy-assessment/legacy-assessment-types-v1.schema.json",
+        "legacy-assessment/assessment-source-bundle-proposal-v1.schema.json",
+        "legacy-assessment/assessment-source-bundle-v1.schema.json",
+        "legacy-assessment/assessment-layout-observation-v1.schema.json",
+        "legacy-assessment/legacy-item-extraction-request-v1.schema.json",
+        "legacy-assessment/legacy-item-extraction-receipt-v1.schema.json",
+        "legacy-assessment/legacy-item-extraction-result-v1.schema.json",
+        "legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json",
+        "legacy-assessment/legacy-item-corpus-coverage-v1.schema.json",
+    ):
+        assert f'"{resource}"' in deployment
+        assert f'"schemas/{resource}"' in deployment
+    assert '"config/workflows/legacy-item-extraction.v1.yaml"' in deployment
+    assert 'load_role_input_schema("support", "workflow-role/1.14.0")' in deployment
+    assert 'legacy.definition_key != "legacy-item-extraction"' in deployment
+    assert 'legacy.definition_version != "1.0.0"' in deployment
+
+
 def test_release_install_normalizes_restrictive_operator_umask() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
     install_body = deployment.partition("install_wheels() {")[2].partition("\n}")[0]

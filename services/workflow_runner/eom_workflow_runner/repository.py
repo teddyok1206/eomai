@@ -227,7 +227,8 @@ def create_workflow_instance(
         state=WorkflowState.REQUESTED.value,
         stage=(
             WorkflowStage.KNOWLEDGE_ANALYSIS.value
-            if request.request_name == "KNOWLEDGE_ANALYSIS_REQUEST"
+            if request.request_name
+            in {"KNOWLEDGE_ANALYSIS_REQUEST", "LEGACY_ITEM_EXTRACTION_REQUEST"}
             else WorkflowStage.AUTHORING.value
         ),
         current_step_key=start_step,

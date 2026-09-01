@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/assessment-source-bundle/1.0",
+  "title": "EOM Assessment Source Bundle Revision V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "assessment_source_bundle_id",
+    "assessment_source_bundle_revision_id",
+    "revision_number",
+    "previous_revision_id",
+    "bundle_key",
+    "state",
+    "inventory_id",
+    "inventory_sha256",
+    "inventory_artifact",
+    "occurrence",
+    "rights_policy",
+    "members",
+    "reviewed_at",
+    "reviewed_by",
+    "bundle_manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "assessment-source-bundle/1.0"},
+    "assessment_source_bundle_id": {"type": "string", "pattern": "^assessbundle_[0-9a-f]{32}$"},
+    "assessment_source_bundle_revision_id": {"type": "string", "pattern": "^assessbundlerev_[0-9a-f]{32}$"},
+    "revision_number": {"type": "integer", "minimum": 1},
+    "previous_revision_id": {
+      "type": ["string", "null"],
+      "pattern": "^assessbundlerev_[0-9a-f]{32}$"
+    },
+    "bundle_key": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/stableKey"
+    },
+    "state": {"enum": ["REVIEWED", "SUPERSEDED", "WITHDRAWN"]},
+    "inventory_id": {"type": "string", "pattern": "^legacyinventory_[0-9a-f]{32}$"},
+    "inventory_sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    },
+    "inventory_artifact": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/artifactMemberPointer"
+    },
+    "occurrence": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/assessmentOccurrencePointer"
+    },
+    "rights_policy": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/rightsPolicyPointer"
+    },
+    "members": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["member_id", "role", "source", "inventory_source"],
+        "properties": {
+          "member_id": {"type": "string", "pattern": "^assessbundlemember_[0-9a-f]{32}$"},
+          "role": {
+            "enum": [
+              "PROBLEM_DOCUMENT",
+              "ANSWER_EXPLANATION_DOCUMENT",
+              "STRUCTURED_RECONSTRUCTION",
+              "ITEM_CLASSIFICATION_WORKBOOK",
+              "TYPE_CODE_REFERENCE",
+              "OTHER_REVIEWED_EVIDENCE"
+            ]
+          },
+          "source": {
+            "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/artifactMemberPointer"
+          },
+          "inventory_source": {
+            "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/inventoryEntryPointer"
+          }
+        }
+      }
+    },
+    "reviewed_at": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/utcTimestamp"
+    },
+    "reviewed_by": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/actorId"
+    },
+    "bundle_manifest_sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    }
+  }
+}

@@ -145,6 +145,9 @@ class ArtifactRevisionRecord(Base):
     __tablename__ = "artifact_revisions"
     __table_args__ = (
         UniqueConstraint("logical_artifact_id", "content_hash", name="uq_artifact_content_hash"),
+        UniqueConstraint(
+            "logical_artifact_id", "revision_id", name="uq_artifact_revision_identity"
+        ),
     )
 
     revision_id: Mapped[str] = mapped_column(String(36), primary_key=True)

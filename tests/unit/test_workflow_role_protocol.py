@@ -281,6 +281,12 @@ def test_role_schema_bundle_hash_is_canonical() -> None:
     assert role_schema_bundle_hash("workflow-role/1.10.0") == (
         "sha256:3a224f960ae01574e25b44bd9a187ba60a98f0638ecb8c30d11de4fe8111ab43"
     )
+    assert role_schema_bundle_hash("workflow-role/1.11.0") == (
+        "sha256:db929999c19a251e80ae5df7e63f499b1180ed316ed853ab8f36a476b6b06c9f"
+    )
+    assert role_schema_bundle_hash("workflow-role/1.14.0") == (
+        "sha256:204a5070a9c465dde25677688980463c1df8feba64673001e2477a11d9f69e54"
+    )
 
 
 def _unresolved_schema_references(schema: dict[str, object]) -> set[str]:

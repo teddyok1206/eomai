@@ -32,6 +32,8 @@ from eom_workflow.models import (
     KnowledgeAnalysisProposalRoleResultV7,
     KnowledgeAnalysisProposalRoleResultV8,
     KnowledgeAnalysisWorkerRequest,
+    LegacyItemExtractionRoleResult,
+    LegacyItemExtractionWorkerRequest,
     RoleWorkerInput,
     WorkerRequest,
 )
@@ -66,6 +68,9 @@ from eom_orchestrator.execution_materializer import (
     materialize_execution_step,
 )
 from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
+from eom_orchestrator.legacy_item_extraction_artifact import (
+    stage_legacy_item_extraction_result,
+)
 from eom_orchestrator.logging import log_event
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.protocol import protocol_schema_hash
@@ -228,7 +233,7 @@ class Orchestrator:
         step_key: str,
         attempt: int,
         role: str,
-        request: WorkerRequest | KnowledgeAnalysisWorkerRequest,
+        request: WorkerRequest | KnowledgeAnalysisWorkerRequest | LegacyItemExtractionWorkerRequest,
         upstream_artifacts: tuple[ArtifactPointer, ...],
         result_schema: str,
         idempotency_key: str,
@@ -342,7 +347,11 @@ class Orchestrator:
                         attempt=attempt,
                         workload_class=(
                             "KNOWLEDGE_ANALYSIS"
-                            if request.request_name == "KNOWLEDGE_ANALYSIS_REQUEST"
+                            if request.request_name
+                            in {
+                                "KNOWLEDGE_ANALYSIS_REQUEST",
+                                "LEGACY_ITEM_EXTRACTION_REQUEST",
+                            }
                             else "CODEX"
                         ),
                         acquired_at=datetime.now(UTC),
@@ -490,6 +499,32 @@ class Orchestrator:
                 staged_file_set, receipt = stage_knowledge_analysis_proposal(
                     proposal=result.output.proposal,
                     request=worker_input.request.analysis_request,
+                    job_id=job_id,
+                    logical_artifact_id=artifact.logical_artifact_id,
+                    revision_id=artifact.revision_id,
+                    staging=staging,
+                )
+                self._transition(job_id, JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED")
+                final_path = commit_file_set_artifact(
+                    staged_file_set, self.settings.nas_artifact_root
+                )
+                content_hash = staged_file_set.primary_hash
+                manifest_hash = staged_file_set.manifest_hash
+                content_bytes = staged_file_set.primary_bytes
+                manifest_document = staged_file_set.manifest
+                database_result = receipt.model_dump(mode="json")
+            elif result_schema == "legacy-item-extraction-result@1.0":
+                if not isinstance(result, LegacyItemExtractionRoleResult) or not isinstance(
+                    worker_input.request, LegacyItemExtractionWorkerRequest
+                ):
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "legacy extraction typed boundary is inconsistent",
+                    )
+                staged_file_set, receipt = stage_legacy_item_extraction_result(
+                    result=result.output.extraction_result,
+                    request=worker_input.request.extraction_request,
+                    completed_at=result.completed_at,
                     job_id=job_id,
                     logical_artifact_id=artifact.logical_artifact_id,
                     revision_id=artifact.revision_id,

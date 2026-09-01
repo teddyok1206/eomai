@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/legacy-item-corpus-coverage/1.0",
+  "title": "EOM Legacy Item Corpus Coverage V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "coverage_id",
+    "inventory_id",
+    "inventory_sha256",
+    "bundle_coverages",
+    "expected_item_count",
+    "accepted_item_count",
+    "missing_item_count",
+    "conflict_item_count",
+    "state",
+    "created_at",
+    "coverage_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-item-corpus-coverage/1.0"},
+    "coverage_id": {"type": "string", "pattern": "^itemcoverage_[0-9a-f]{32}$"},
+    "inventory_id": {"type": "string", "pattern": "^legacyinventory_[0-9a-f]{32}$"},
+    "inventory_sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    },
+    "bundle_coverages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bundle",
+          "expected_item_numbers",
+          "accepted_items",
+          "missing_item_numbers",
+          "conflict_item_numbers"
+        ],
+        "properties": {
+          "bundle": {
+            "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/assessmentSourceBundlePointer"
+          },
+          "expected_item_numbers": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10000,
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 1, "maximum": 10000}
+          },
+          "accepted_items": {
+            "type": "array",
+            "maxItems": 10000,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["item_number", "acceptance_id", "acceptance_sha256"],
+              "properties": {
+                "item_number": {"type": "integer", "minimum": 1, "maximum": 10000},
+                "acceptance_id": {"type": "string", "pattern": "^itemacceptance_[0-9a-f]{32}$"},
+                "acceptance_sha256": {
+                  "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+                }
+              }
+            }
+          },
+          "missing_item_numbers": {
+            "type": "array",
+            "maxItems": 10000,
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 1, "maximum": 10000}
+          },
+          "conflict_item_numbers": {
+            "type": "array",
+            "maxItems": 10000,
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 1, "maximum": 10000}
+          }
+        }
+      }
+    },
+    "expected_item_count": {"type": "integer", "minimum": 0, "maximum": 10000000},
+    "accepted_item_count": {"type": "integer", "minimum": 0, "maximum": 10000000},
+    "missing_item_count": {"type": "integer", "minimum": 0, "maximum": 10000000},
+    "conflict_item_count": {"type": "integer", "minimum": 0, "maximum": 10000000},
+    "state": {"enum": ["COMPLETE", "INCOMPLETE", "CONFLICT"]},
+    "created_at": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/utcTimestamp"
+    },
+    "coverage_sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    }
+  }
+}

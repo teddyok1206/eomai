@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/item-origin/item-origin-types/1.0",
+  "title": "EOM Item Origin Shared Types V1",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actorId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "stableKey": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{0,159}$"
+    },
+    "artifactMemberPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "minLength": 1, "maxLength": 512},
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "rightsPolicyPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rights_policy_id",
+        "rights_policy_revision_id",
+        "rights_policy_sha256"
+      ],
+      "properties": {
+        "rights_policy_id": {
+          "type": "string",
+          "pattern": "^rightspolicy_[0-9a-f]{32}$"
+        },
+        "rights_policy_revision_id": {
+          "type": "string",
+          "pattern": "^rightspolicyrev_[0-9a-f]{32}$"
+        },
+        "rights_policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "organizationRevisionPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["organization_id", "organization_revision_id", "revision_sha256"],
+      "properties": {
+        "organization_id": {"type": "string", "pattern": "^org_[0-9a-f]{32}$"},
+        "organization_revision_id": {
+          "type": "string",
+          "pattern": "^orgrev_[0-9a-f]{32}$"
+        },
+        "revision_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "assessmentOccurrencePointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessment_occurrence_id",
+        "assessment_occurrence_revision_id",
+        "occurrence_revision_sha256"
+      ],
+      "properties": {
+        "assessment_occurrence_id": {
+          "type": "string",
+          "pattern": "^occurrence_[0-9a-f]{32}$"
+        },
+        "assessment_occurrence_revision_id": {
+          "type": "string",
+          "pattern": "^occurrev_[0-9a-f]{32}$"
+        },
+        "occurrence_revision_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "itemRevisionPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_id", "item_revision_id", "item_manifest_sha256"],
+      "properties": {
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "item_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

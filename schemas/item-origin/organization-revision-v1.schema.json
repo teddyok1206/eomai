@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/item-origin/organization-revision/1.0",
+  "title": "EOM Organization Revision V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "organization_id",
+    "organization_revision_id",
+    "revision_number",
+    "previous_revision_id",
+    "organization_key",
+    "revision_state",
+    "organization_class",
+    "class_detail",
+    "display_name",
+    "locale",
+    "jurisdiction",
+    "aliases",
+    "effective_from",
+    "effective_to",
+    "source_evidence",
+    "rights_policy",
+    "created_at",
+    "created_by",
+    "revision_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "organization-revision/1.0"},
+    "organization_id": {"type": "string", "pattern": "^org_[0-9a-f]{32}$"},
+    "organization_revision_id": {"type": "string", "pattern": "^orgrev_[0-9a-f]{32}$"},
+    "revision_number": {"type": "integer", "minimum": 1},
+    "previous_revision_id": {
+      "type": ["string", "null"],
+      "pattern": "^orgrev_[0-9a-f]{32}$"
+    },
+    "organization_key": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/stableKey"
+    },
+    "revision_state": {"enum": ["REVIEWED", "SUPERSEDED", "RETIRED"]},
+    "organization_class": {
+      "enum": [
+        "EOM_INTERNAL",
+        "NATIONAL_ASSESSMENT_AGENCY",
+        "EDUCATION_AUTHORITY",
+        "SCHOOL",
+        "UNIVERSITY",
+        "PUBLISHER",
+        "PRIVATE_EDUCATION_PROVIDER",
+        "OTHER_REVIEWED"
+      ]
+    },
+    "class_detail": {"type": ["string", "null"], "maxLength": 256},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 256},
+    "locale": {"type": "string", "pattern": "^[a-z]{2}-[A-Z]{2}$"},
+    "jurisdiction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["country_code", "level", "jurisdiction_code"],
+      "properties": {
+        "country_code": {"type": "string", "pattern": "^[A-Z]{2}$"},
+        "level": {
+          "enum": [
+            "NATIONAL",
+            "PROVINCE",
+            "METROPOLITAN",
+            "CITY",
+            "COUNTY",
+            "DISTRICT",
+            "INSTITUTION",
+            "OTHER"
+          ]
+        },
+        "jurisdiction_code": {"type": ["string", "null"], "maxLength": 64}
+      }
+    },
+    "aliases": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["alias_kind", "locale", "display_value", "normalized_value"],
+        "properties": {
+          "alias_kind": {"enum": ["OFFICIAL", "ABBREVIATION", "FORMER", "LEGACY_SOURCE"]},
+          "locale": {"type": "string", "pattern": "^[a-z]{2}-[A-Z]{2}$"},
+          "display_value": {"type": "string", "minLength": 1, "maxLength": 256},
+          "normalized_value": {"type": "string", "minLength": 1, "maxLength": 256}
+        }
+      }
+    },
+    "effective_from": {"type": ["string", "null"], "format": "date"},
+    "effective_to": {"type": ["string", "null"], "format": "date"},
+    "source_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/artifactMemberPointer"
+      }
+    },
+    "rights_policy": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/rightsPolicyPointer"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/utcTimestamp"
+    },
+    "created_by": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/actorId"
+    },
+    "revision_sha256": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/sha256"
+    }
+  }
+}

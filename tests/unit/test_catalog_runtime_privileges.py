@@ -91,6 +91,35 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     assert immutable_legacy_tables | mutable_legacy_headers <= set(INSERT_TABLES)
     assert immutable_legacy_tables.isdisjoint(UPDATE_TABLES)
     assert mutable_legacy_headers <= set(UPDATE_TABLES)
+    immutable_item_origin_tables = {
+        "organization_revisions",
+        "organization_aliases",
+        "organization_source_evidence",
+        "assessment_occurrence_revisions",
+        "assessment_occurrence_source_evidence",
+        "item_origin_profiles",
+        "item_origin_occurrences",
+        "item_origin_derivations",
+        "item_origin_provenance",
+    }
+    mutable_item_origin_headers = {"organizations", "assessment_occurrences"}
+    assert immutable_item_origin_tables | mutable_item_origin_headers <= set(READ_TABLES)
+    assert immutable_item_origin_tables | mutable_item_origin_headers <= set(INSERT_TABLES)
+    assert immutable_item_origin_tables.isdisjoint(UPDATE_TABLES)
+    assert mutable_item_origin_headers <= set(UPDATE_TABLES)
+    immutable_legacy_assessment_tables = {
+        "assessment_source_bundle_revisions",
+        "assessment_source_bundle_members",
+        "assessment_layout_observations",
+        "legacy_item_extraction_acceptances",
+        "legacy_item_extraction_decisions",
+        "legacy_item_corpus_coverages",
+        "legacy_item_corpus_bundle_coverages",
+    }
+    assert immutable_legacy_assessment_tables | {"assessment_source_bundles"} <= set(READ_TABLES)
+    assert immutable_legacy_assessment_tables | {"assessment_source_bundles"} <= set(INSERT_TABLES)
+    assert immutable_legacy_assessment_tables.isdisjoint(UPDATE_TABLES)
+    assert "assessment_source_bundles" in UPDATE_TABLES
     assert {"deliverables", "deliverable_revisions"} <= set(READ_TABLES)
     assert {"deliverables", "deliverable_revisions"}.isdisjoint(INSERT_TABLES)
     assert {"deliverables", "deliverable_revisions"}.isdisjoint(UPDATE_TABLES)

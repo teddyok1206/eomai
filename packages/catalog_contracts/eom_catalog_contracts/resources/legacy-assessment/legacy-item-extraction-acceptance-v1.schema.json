@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/legacy-item-extraction-acceptance/1.0",
+  "title": "EOM Legacy Item Extraction Acceptance V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "acceptance_id",
+    "extraction_result",
+    "state",
+    "item_decisions",
+    "coverage_state",
+    "reviewed_at",
+    "reviewed_by",
+    "acceptance_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-item-extraction-acceptance/1.0"},
+    "acceptance_id": {"type": "string", "pattern": "^itemacceptance_[0-9a-f]{32}$"},
+    "extraction_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "extraction_result_id", "result_sha256"],
+      "properties": {
+        "artifact": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/artifactMemberPointer"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/legacy-assessment/legacy-item-extraction-result/1.0"
+                },
+                "media_type": {"const": "application/json"}
+              }
+            }
+          ]
+        },
+        "extraction_result_id": {"type": "string", "pattern": "^itemextractresult_[0-9a-f]{32}$"},
+        "result_sha256": {
+          "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+        }
+      }
+    },
+    "state": {"enum": ["ACCEPTED", "ACCEPTED_WITH_CORRECTIONS", "REJECTED"]},
+    "item_decisions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item_proposal_id", "item_number", "decision", "accepted_content_paths", "rejected_content_paths", "required_corrections"],
+        "properties": {
+          "item_proposal_id": {"type": "string", "pattern": "^itemproposal_[0-9a-f]{32}$"},
+          "item_number": {"type": "integer", "minimum": 1, "maximum": 10000},
+          "decision": {"enum": ["ACCEPT", "CORRECT_AND_ACCEPT", "REJECT"]},
+          "accepted_content_paths": {
+            "type": "array",
+            "maxItems": 512,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1, "maxLength": 256}
+          },
+          "rejected_content_paths": {
+            "type": "array",
+            "maxItems": 512,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1, "maxLength": 256}
+          },
+          "required_corrections": {
+            "type": "array",
+            "maxItems": 128,
+            "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+          }
+        }
+      }
+    },
+    "coverage_state": {"enum": ["COMPLETE", "INCOMPLETE", "CONFLICT"]},
+    "reviewed_at": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/utcTimestamp"
+    },
+    "reviewed_by": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/actorId"
+    },
+    "acceptance_sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    }
+  }
+}

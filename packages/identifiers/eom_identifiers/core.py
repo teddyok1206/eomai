@@ -127,6 +127,58 @@ def new_knowledge_analysis_range_id() -> str:
     return f"analysisrange_{uuid4().hex}"
 
 
+def new_organization_id() -> str:
+    return f"org_{uuid4().hex}"
+
+
+def new_organization_revision_id() -> str:
+    return f"orgrev_{uuid4().hex}"
+
+
+def new_assessment_occurrence_id() -> str:
+    return f"occurrence_{uuid4().hex}"
+
+
+def new_assessment_occurrence_revision_id() -> str:
+    return f"occurrev_{uuid4().hex}"
+
+
+def new_item_origin_profile_id() -> str:
+    return f"originprofile_{uuid4().hex}"
+
+
+def new_assessment_source_bundle_id() -> str:
+    return f"assessbundle_{uuid4().hex}"
+
+
+def new_assessment_source_bundle_revision_id() -> str:
+    return f"assessbundlerev_{uuid4().hex}"
+
+
+def new_assessment_source_bundle_member_id() -> str:
+    return f"assessbundlemember_{uuid4().hex}"
+
+
+def new_assessment_layout_observation_id() -> str:
+    return f"assessmentlayout_{uuid4().hex}"
+
+
+def new_legacy_item_extraction_request_id() -> str:
+    return f"itemextractreq_{uuid4().hex}"
+
+
+def new_legacy_item_extraction_result_id() -> str:
+    return f"itemextractresult_{uuid4().hex}"
+
+
+def new_legacy_item_acceptance_id() -> str:
+    return f"itemacceptance_{uuid4().hex}"
+
+
+def new_legacy_item_coverage_id() -> str:
+    return f"itemcoverage_{uuid4().hex}"
+
+
 def educational_document_id(document_key: str) -> str:
     """Return the stable logical ID for one normalized educational-document key."""
     digest = hashlib.sha256(f"educational-document:{document_key}".encode()).hexdigest()

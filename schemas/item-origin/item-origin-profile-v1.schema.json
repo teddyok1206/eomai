@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/item-origin/item-origin-profile/1.0",
+  "title": "EOM Item Origin Profile V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "item_origin_profile_id",
+    "item_revision",
+    "source_domain",
+    "creation_method",
+    "source_organization",
+    "assessment_occurrences",
+    "derivations",
+    "rights_policy",
+    "provenance",
+    "created_at",
+    "created_by",
+    "profile_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "item-origin-profile/1.0"},
+    "item_origin_profile_id": {
+      "type": "string",
+      "pattern": "^originprofile_[0-9a-f]{32}$"
+    },
+    "item_revision": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/itemRevisionPointer"
+    },
+    "source_domain": {
+      "enum": ["INTERNAL_EOM", "EXTERNAL_INSTITUTION", "EXTERNAL_INDIVIDUAL", "LEGACY_UNKNOWN"]
+    },
+    "creation_method": {
+      "enum": ["HUMAN_AUTHORED", "AI_ASSISTED", "AI_GENERATED", "IMPORTED", "ADAPTED", "UNKNOWN"]
+    },
+    "source_organization": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/organizationRevisionPointer"
+        },
+        {"type": "null"}
+      ]
+    },
+    "assessment_occurrences": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/assessmentOccurrencePointer"
+      }
+    },
+    "derivations": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_kind", "logical_id", "revision_id", "manifest_sha256", "relation"],
+        "properties": {
+          "source_kind": {
+            "enum": ["ITEM_REVISION", "DOCUMENT_REVISION", "ASSESSMENT_SOURCE_BUNDLE_REVISION"]
+          },
+          "logical_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*_[0-9a-f]{32}$"
+          },
+          "revision_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*_[0-9a-f]{32}$"
+          },
+          "manifest_sha256": {
+            "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/sha256"
+          },
+          "relation": {
+            "enum": ["DERIVED_FROM", "TRANSLATED_FROM", "DIGITIZED_FROM", "RECONSTRUCTED_FROM"]
+          }
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"source_kind": {"const": "ITEM_REVISION"}}},
+            "then": {
+              "properties": {
+                "logical_id": {"pattern": "^item_[0-9a-f]{32}$"},
+                "revision_id": {"pattern": "^itemrev_[0-9a-f]{32}$"}
+              }
+            }
+          },
+          {
+            "if": {"properties": {"source_kind": {"const": "DOCUMENT_REVISION"}}},
+            "then": {
+              "properties": {
+                "logical_id": {"pattern": "^edudoc_[0-9a-f]{32}$"},
+                "revision_id": {"pattern": "^edudocrev_[0-9a-f]{32}$"}
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {"source_kind": {"const": "ASSESSMENT_SOURCE_BUNDLE_REVISION"}}
+            },
+            "then": {
+              "properties": {
+                "logical_id": {"pattern": "^assessbundle_[0-9a-f]{32}$"},
+                "revision_id": {"pattern": "^assessbundlerev_[0-9a-f]{32}$"}
+              }
+            }
+          }
+        ]
+      }
+    },
+    "rights_policy": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/rightsPolicyPointer"
+    },
+    "provenance": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provenance_kind", "logical_id", "revision_id", "evidence_sha256"],
+        "properties": {
+          "provenance_kind": {
+            "enum": ["WORKFLOW", "CONTENT_INTAKE", "ITEM_PROVENANCE", "MANUAL_REVIEW"]
+          },
+          "logical_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "revision_id": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "evidence_sha256": {
+            "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/sha256"
+          }
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"provenance_kind": {"const": "WORKFLOW"}}},
+            "then": {
+              "properties": {
+                "logical_id": {"pattern": "^workflow_[0-9a-f]{32}$"},
+                "revision_id": {"type": "string", "pattern": "^execplan_[0-9a-f]{32}$"}
+              }
+            }
+          },
+          {
+            "if": {"properties": {"provenance_kind": {"const": "CONTENT_INTAKE"}}},
+            "then": {
+              "properties": {
+                "logical_id": {"pattern": "^intake_[0-9a-f]{32}$"},
+                "revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"}
+              }
+            }
+          },
+          {
+            "if": {"properties": {"provenance_kind": {"const": "ITEM_PROVENANCE"}}},
+            "then": {
+              "properties": {
+                "logical_id": {"pattern": "^provenance_[0-9a-f]{32}$"},
+                "revision_id": {"type": "null"}
+              }
+            }
+          },
+          {
+            "if": {"properties": {"provenance_kind": {"const": "MANUAL_REVIEW"}}},
+            "then": {
+              "properties": {
+                "logical_id": {"pattern": "^itemacceptance_[0-9a-f]{32}$"},
+                "revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"}
+              }
+            }
+          }
+        ]
+      }
+    },
+    "created_at": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/utcTimestamp"
+    },
+    "created_by": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/actorId"
+    },
+    "profile_sha256": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/sha256"
+    }
+  }
+}

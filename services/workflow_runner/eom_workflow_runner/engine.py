@@ -21,6 +21,7 @@ from eom_workflow import (
     DecisionStep,
     HumanGateStep,
     KnowledgeAnalysisWorkerRequest,
+    LegacyItemExtractionWorkerRequest,
     TerminalStep,
     WorkerRequest,
     compile_definition_data,
@@ -88,6 +89,20 @@ TERMINAL_WORKFLOW_STATES = {
 }
 
 
+def _prompt_name_for_request(
+    *,
+    worker_role: str,
+    request: WorkerRequest | KnowledgeAnalysisWorkerRequest | LegacyItemExtractionWorkerRequest,
+) -> str:
+    """Select the fixed prompt without conflating support workloads."""
+
+    if worker_role == "support" and isinstance(request, LegacyItemExtractionWorkerRequest):
+        return "legacy-item-extraction"
+    if worker_role == "item_management":
+        return "registration"
+    return worker_role
+
+
 @dataclass(frozen=True)
 class RoleExecutionResult:
     job_id: str
@@ -105,7 +120,7 @@ class RoleJobExecutor(Protocol):
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkerRequest | KnowledgeAnalysisWorkerRequest,
+        request: WorkerRequest | KnowledgeAnalysisWorkerRequest | LegacyItemExtractionWorkerRequest,
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
@@ -138,7 +153,7 @@ class PlatformRoleJobExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkerRequest | KnowledgeAnalysisWorkerRequest,
+        request: WorkerRequest | KnowledgeAnalysisWorkerRequest | LegacyItemExtractionWorkerRequest,
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
@@ -148,7 +163,7 @@ class PlatformRoleJobExecutor:
                 WorkflowErrorCode.WORKFLOW_STEP_FAILED,
                 "agent step is missing role contract",
             )
-        prompt_name = "registration" if step.worker_role == "item_management" else step.worker_role
+        prompt_name = _prompt_name_for_request(worker_role=step.worker_role, request=request)
         prompt_path = (
             None
             if prompt_text is not None

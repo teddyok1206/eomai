@@ -7,6 +7,12 @@ import pytest
 from eom_identifiers import (
     canonical_json_bytes,
     content_sha256,
+    new_assessment_layout_observation_id,
+    new_assessment_occurrence_id,
+    new_assessment_occurrence_revision_id,
+    new_assessment_source_bundle_id,
+    new_assessment_source_bundle_member_id,
+    new_assessment_source_bundle_revision_id,
     new_auth_binding_id,
     new_capability_snapshot_id,
     new_capacity_policy_id,
@@ -22,6 +28,7 @@ from eom_identifiers import (
     new_hwpx_validation_id,
     new_instruction_bundle_id,
     new_instruction_bundle_revision_id,
+    new_item_origin_profile_id,
     new_job_id,
     new_knowledge_analysis_batch_id,
     new_knowledge_analysis_decision_id,
@@ -29,7 +36,13 @@ from eom_identifiers import (
     new_knowledge_analysis_request_id,
     new_knowledge_analysis_result_id,
     new_knowledge_analysis_run_id,
+    new_legacy_item_acceptance_id,
+    new_legacy_item_coverage_id,
+    new_legacy_item_extraction_request_id,
+    new_legacy_item_extraction_result_id,
     new_logical_artifact_id,
+    new_organization_id,
+    new_organization_revision_id,
     new_reference_bundle_id,
     new_reference_bundle_revision_id,
     new_revision_id,
@@ -65,6 +78,21 @@ def test_ids_have_distinct_namespaces() -> None:
     assert re.fullmatch(r"analysisdecision_[0-9a-f]{32}", new_knowledge_analysis_decision_id())
     assert re.fullmatch(r"analysisbatch_[0-9a-f]{32}", new_knowledge_analysis_batch_id())
     assert re.fullmatch(r"analysisrange_[0-9a-f]{32}", new_knowledge_analysis_range_id())
+    assert re.fullmatch(r"org_[0-9a-f]{32}", new_organization_id())
+    assert re.fullmatch(r"orgrev_[0-9a-f]{32}", new_organization_revision_id())
+    assert re.fullmatch(r"occurrence_[0-9a-f]{32}", new_assessment_occurrence_id())
+    assert re.fullmatch(r"occurrev_[0-9a-f]{32}", new_assessment_occurrence_revision_id())
+    assert re.fullmatch(r"originprofile_[0-9a-f]{32}", new_item_origin_profile_id())
+    assert re.fullmatch(r"assessbundle_[0-9a-f]{32}", new_assessment_source_bundle_id())
+    assert re.fullmatch(r"assessbundlerev_[0-9a-f]{32}", new_assessment_source_bundle_revision_id())
+    assert re.fullmatch(
+        r"assessbundlemember_[0-9a-f]{32}", new_assessment_source_bundle_member_id()
+    )
+    assert re.fullmatch(r"assessmentlayout_[0-9a-f]{32}", new_assessment_layout_observation_id())
+    assert re.fullmatch(r"itemextractreq_[0-9a-f]{32}", new_legacy_item_extraction_request_id())
+    assert re.fullmatch(r"itemextractresult_[0-9a-f]{32}", new_legacy_item_extraction_result_id())
+    assert re.fullmatch(r"itemacceptance_[0-9a-f]{32}", new_legacy_item_acceptance_id())
+    assert re.fullmatch(r"itemcoverage_[0-9a-f]{32}", new_legacy_item_coverage_id())
 
 
 def test_canonical_serialization_and_hash_are_stable() -> None:

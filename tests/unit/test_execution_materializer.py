@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from eom_catalog_contracts import AssessmentArtifactMemberPointer
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.control_models import (
     ExecutionBundleRevisionRecord,
@@ -266,6 +267,227 @@ def _workspace(tmp_path: Path, name: str) -> Path:
     path.mkdir(mode=0o2770)
     path.chmod(0o2770)
     return path
+
+
+def _assessment_pointer(
+    fixture: dict[str, Any],
+    *,
+    seed: str,
+    member_path: str,
+    payload: bytes,
+    media_type: str,
+    schema_ref: str,
+) -> dict[str, object]:
+    session = fixture["session"]
+    assert isinstance(session, FakeSession)
+    artifact_id = "artifact_" + seed * 32
+    revision_id = "rev_" + seed * 32
+    root = fixture["artifact_root"] / artifact_id / revision_id
+    target = root / member_path
+    target.parent.mkdir(parents=True)
+    target.write_bytes(payload)
+    digest = sha256_bytes(payload)
+    session.records[(ArtifactRecord, artifact_id)] = SimpleNamespace(approved=True)
+    session.records[(ArtifactRevisionRecord, revision_id)] = SimpleNamespace(
+        approved=True,
+        logical_artifact_id=artifact_id,
+        nas_path=str(root),
+        manifest={
+            "files": [
+                {
+                    "file_name": member_path,
+                    "sha256": digest,
+                    "bytes": len(payload),
+                    "media_type": media_type,
+                    "schema_ref": schema_ref,
+                }
+            ]
+        },
+    )
+    return AssessmentArtifactMemberPointer(
+        artifact_id=artifact_id,
+        artifact_revision_id=revision_id,
+        member_path=member_path,
+        schema_ref=schema_ref,
+        media_type=media_type,
+        sha256=digest,
+    ).model_dump(mode="json")
+
+
+def _legacy_extraction_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    fixture = _fixture(tmp_path, monkeypatch)
+    session = fixture["session"]
+    assert isinstance(session, FakeSession)
+    old_record = session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+    old_plan = old_record.canonical_document
+    instruction_pointer = old_plan["steps"][0]["instruction_bundle"]
+    instruction_record = session.records[
+        (ExecutionBundleRevisionRecord, instruction_pointer["bundle_revision_id"])
+    ]
+    instruction_record.manifest_artifact_revision_id = instruction_pointer["manifest_artifact"][
+        "artifact_revision_id"
+    ]
+
+    source = _assessment_pointer(
+        fixture,
+        seed="a",
+        member_path="exam/problem.pdf",
+        payload=b"%PDF-pinned-source",
+        media_type="application/pdf",
+        schema_ref="eom://schemas/legacy-assessment/source-document/1.0",
+    )
+    width, height = 800, 1200
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + b"\x00\x00\x00\rIHDR"
+        + width.to_bytes(4, "big")
+        + height.to_bytes(4, "big")
+    )
+    image = _assessment_pointer(
+        fixture,
+        seed="b",
+        member_path="pages/page-1.png",
+        payload=png,
+        media_type="image/png",
+        schema_ref="eom://schemas/legacy-assessment/page-image/1.0",
+    )
+    bundle = {
+        "assessment_source_bundle_id": "assessbundle_" + "1" * 32,
+        "assessment_source_bundle_revision_id": "assessbundlerev_" + "2" * 32,
+        "bundle_manifest_sha256": "sha256:" + "3" * 64,
+    }
+    page = {
+        "page_input_id": "assessmentpage_" + "4" * 32,
+        "source_role": "PROBLEM_DOCUMENT",
+        "physical_page": 1,
+        "source": source,
+        "image": image,
+        "workspace_relative_path": "source/pages/assessmentpage_" + "4" * 32 + ".png",
+        "width_px": width,
+        "height_px": height,
+    }
+    layout: dict[str, object] = {
+        "schema_version": "assessment-layout-observation/1.0",
+        "assessment_layout_observation_id": "assessmentlayout_" + "5" * 32,
+        "bundle": bundle,
+        "pages": [
+            {
+                "page": page,
+                "observation_state": "OBSERVED",
+                "visible_item_numbers": [1],
+            }
+        ],
+        "item_boundaries": [
+            {
+                "boundary_id": "itemboundary_" + "6" * 32,
+                "item_number": 1,
+                "segments": [
+                    {
+                        "page_input_id": page["page_input_id"],
+                        "bounding_box": {"left": 1, "top": 1, "right": 9999, "bottom": 9999},
+                        "reading_ordinal": 1,
+                    }
+                ],
+                "continues_across_pages": False,
+                "confidence_milli": 1000,
+            }
+        ],
+        "expected_item_numbers": [1],
+        "conflicts": [],
+        "created_at": "2026-09-01T00:00:00Z",
+        "observation_sha256": ZERO_SHA,
+    }
+    layout["observation_sha256"] = content_sha256(
+        {key: value for key, value in layout.items() if key != "observation_sha256"}
+    )
+    layout_payload = canonical_json_bytes(layout)
+    layout_pointer = _assessment_pointer(
+        fixture,
+        seed="c",
+        member_path="layout/layout-observation.json",
+        payload=layout_payload,
+        media_type="application/json",
+        schema_ref="eom://schemas/legacy-assessment/assessment-layout-observation/1.0",
+    )
+    request: dict[str, object] = {
+        "schema_version": "legacy-item-extraction-request/1.0",
+        "extraction_request_id": "itemextractreq_" + "7" * 32,
+        "bundle": bundle,
+        "occurrence": {
+            "assessment_occurrence_id": "occurrence_" + "8" * 32,
+            "assessment_occurrence_revision_id": "occurrev_" + "9" * 32,
+            "occurrence_revision_sha256": "sha256:" + "8" * 64,
+        },
+        "layout_observation": {
+            "assessment_layout_observation_id": layout["assessment_layout_observation_id"],
+            "artifact": layout_pointer,
+            "workspace_relative_path": "source/layout-observation.json",
+            "observation_sha256": layout["observation_sha256"],
+        },
+        "work_unit_ordinal": 0,
+        "expected_item_numbers": [1],
+        "page_inputs": [page],
+        "source_materializations": [],
+        "execution_preset_id": old_plan["preset_id"],
+        "execution_preset_revision_id": old_plan["preset_revision_id"],
+        "execution_preset_sha256": old_plan["preset_sha256"],
+        "worker_result_schema_ref": (
+            "eom://schemas/legacy-assessment/legacy-item-extraction-result/1.0"
+        ),
+        "created_at": "2026-09-01T00:00:00Z",
+        "request_sha256": ZERO_SHA,
+    }
+    request["request_sha256"] = content_sha256(
+        {key: value for key, value in request.items() if key != "request_sha256"}
+    )
+    plan = {
+        "schema_version": "resolved-execution-plan/6.0",
+        "plan_id": old_plan["plan_id"],
+        "workflow_id": old_plan["workflow_id"],
+        "workload_class": "KNOWLEDGE_ANALYSIS",
+        "preset_id": old_plan["preset_id"],
+        "preset_revision_id": old_plan["preset_revision_id"],
+        "preset_sha256": old_plan["preset_sha256"],
+        "workflow_definition_key": "legacy-item-extraction",
+        "workflow_definition_version": "1.0.0",
+        "workflow_definition_sha256": old_plan["workflow_definition_sha256"],
+        "extraction_request": request,
+        "capacity_policy_revision_id": old_plan["capacity_policy_revision_id"],
+        "steps": [
+            {
+                "step_key": "extract",
+                "role": "support",
+                "model": "gpt-5.6-terra",
+                "reasoning_effort": "xhigh",
+                "instruction_bundle": instruction_pointer,
+                "reference_bundle": None,
+                "worker_pool_key": "legacy-extraction",
+                "timeout_seconds": 7200,
+                "sandbox": "read-only",
+                "network": "disabled",
+                "general_knowledge_mode": "DENIED",
+            }
+        ],
+        "resolver_version": "6.0.0",
+        "resolved_at": "2026-09-01T00:00:00Z",
+        "plan_sha256": ZERO_SHA,
+    }
+    plan["plan_sha256"] = compute_control_document_hash(plan, "plan_sha256")
+    session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))] = SimpleNamespace(
+        canonical_document=plan,
+        plan_sha256=plan["plan_sha256"],
+    )
+    fixture.update(
+        {
+            "page": page,
+            "layout": layout,
+            "source_revision_id": source["artifact_revision_id"],
+            "image_revision_id": image["artifact_revision_id"],
+            "layout_revision_id": layout_pointer["artifact_revision_id"],
+            "png": png,
+        }
+    )
+    return fixture
 
 
 def _analysis_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
@@ -996,6 +1218,68 @@ def test_document_analysis_materializer_fails_closed_on_member_hash_drift(
             plan_id=str(fixture["plan_id"]),
             step_key="analyze",
             workspace=_workspace(tmp_path, "document-analysis"),
+            canonical_artifact_root=fixture["artifact_root"],
+            worker_group_id=GROUP_ID,
+            authorized_artifact_revision_ids=authorized,
+        )
+    assert captured.value.code in {
+        "CONTROL_POINTER_FILE_INVALID",
+        "CONTROL_POINTER_HASH_MISMATCH",
+    }
+
+
+def test_legacy_extraction_materializer_stages_closed_images_and_layout_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _legacy_extraction_fixture(tmp_path, monkeypatch)
+    authorized = authorized_execution_artifact_revisions(
+        fixture["session"], plan_id=str(fixture["plan_id"]), step_key="extract"
+    )
+    assert {
+        fixture["source_revision_id"],
+        fixture["image_revision_id"],
+        fixture["layout_revision_id"],
+    }.issubset(authorized)
+
+    workspace = _workspace(tmp_path, "legacy-extraction")
+    result = materialize_execution_step(
+        fixture["session"],
+        plan_id=str(fixture["plan_id"]),
+        step_key="extract",
+        workspace=workspace,
+        canonical_artifact_root=fixture["artifact_root"],
+        worker_group_id=GROUP_ID,
+        authorized_artifact_revision_ids=authorized,
+    )
+
+    page_path = workspace / str(fixture["page"]["workspace_relative_path"])
+    assert page_path.read_bytes() == fixture["png"]
+    assert (
+        json.loads((workspace / "source/layout-observation.json").read_text()) == fixture["layout"]
+    )
+    assert not (workspace / "exam/problem.pdf").exists()
+    manifest = json.loads((workspace / "codex-image-inputs.json").read_text())
+    assert manifest["schema_version"] == "codex-image-input-manifest/2.0"
+    assert manifest["images"][0]["page_input_id"] == fixture["page"]["page_input_id"]
+    assert result.image_input_manifest_sha256 == manifest["manifest_sha256"]
+    assert result.materialized_member_count == 5
+
+
+def test_legacy_extraction_materializer_rejects_page_hash_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _legacy_extraction_fixture(tmp_path, monkeypatch)
+    authorized = authorized_execution_artifact_revisions(
+        fixture["session"], plan_id=str(fixture["plan_id"]), step_key="extract"
+    )
+    revision = fixture["session"].records[(ArtifactRevisionRecord, fixture["image_revision_id"])]
+    (Path(revision.nas_path) / "pages/page-1.png").write_bytes(b"tampered")
+    with pytest.raises(ControlPlaneError) as captured:
+        materialize_execution_step(
+            fixture["session"],
+            plan_id=str(fixture["plan_id"]),
+            step_key="extract",
+            workspace=_workspace(tmp_path, "legacy-extraction"),
             canonical_artifact_root=fixture["artifact_root"],
             worker_group_id=GROUP_ID,
             authorized_artifact_revision_ids=authorized,

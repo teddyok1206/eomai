@@ -17,6 +17,7 @@ from eom_catalog_contracts import (
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphSnapshotPointer,
     KnowledgeSourceClass,
+    LegacyItemExtractionRequest,
 )
 from eom_identifiers import content_sha256
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -528,6 +529,54 @@ class ResolvedExecutionPlanV5(ResolvedExecutionPlanV4):
     document_source: EducationalDocumentKnowledgeSourceV4  # type: ignore[assignment]
 
 
+class ResolvedExecutionPlanV6(FrozenModel):
+    """One exact legacy item extraction request and its closed local materializations."""
+
+    schema_version: Literal["resolved-execution-plan/6.0"] = "resolved-execution-plan/6.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["KNOWLEDGE_ANALYSIS"] = "KNOWLEDGE_ANALYSIS"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["legacy-item-extraction"] = "legacy-item-extraction"
+    workflow_definition_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    workflow_definition_sha256: Sha256
+    extraction_request: LegacyItemExtractionRequest
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
+    resolver_version: Literal["6.0.0"] = "6.0.0"
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def one_extraction_support_step_and_exact_hash(self) -> ResolvedExecutionPlanV6:
+        step = self.steps[0]
+        if (
+            step.step_key != "extract"
+            or step.role != WorkerRole.SUPPORT
+            or step.worker_pool_key != "legacy-extraction"
+            or step.reference_bundle is not None
+        ):
+            raise ValueError("legacy item extraction plan requires its isolated support step")
+        if (
+            self.preset_id,
+            self.preset_revision_id,
+            self.preset_sha256,
+        ) != (
+            self.extraction_request.execution_preset_id,
+            self.extraction_request.execution_preset_revision_id,
+            self.extraction_request.execution_preset_sha256,
+        ):
+            raise ValueError("legacy item extraction preset differs from its request")
+        body = self.model_dump(mode="json", exclude={"plan_sha256"})
+        if content_sha256(body) != self.plan_sha256:
+            raise ValueError("legacy item extraction plan hash does not match canonical content")
+        return self
+
+
 class CodexInvocation(FrozenModel):
     """Bounded job-local CLI selection derived from one resolved plan step."""
 
@@ -582,6 +631,54 @@ class CodexImageInputManifest(FrozenModel):
         body = self.model_dump(mode="json", exclude={"manifest_sha256"})
         if content_sha256(body) != self.manifest_sha256:
             raise ValueError("Codex image-input manifest hash does not match canonical content")
+        return self
+
+
+class CodexAssessmentImageInput(FrozenModel):
+    """One extraction image keyed by immutable page-input identity and source role."""
+
+    page_input_id: str = Field(pattern=r"^assessmentpage_[0-9a-f]{32}$")
+    source_role: Literal["PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"]
+    physical_page: int = Field(ge=1, le=100000)
+    relative_path: str = Field(
+        pattern=r"^source/pages/assessmentpage_[0-9a-f]{32}\.png$", max_length=64
+    )
+    media_type: Literal["image/png"] = "image/png"
+    sha256: Sha256
+    bytes: int = Field(ge=1, le=16 * 1024 * 1024)
+    width_pixels: int = Field(ge=1, le=20000)
+    height_pixels: int = Field(ge=1, le=20000)
+
+    @model_validator(mode="after")
+    def path_matches_page_input(self) -> CodexAssessmentImageInput:
+        if self.relative_path != f"source/pages/{self.page_input_id}.png":
+            raise ValueError("assessment image-input path must match its page input ID")
+        if self.width_pixels * self.height_pixels > 64_000_000:
+            raise ValueError("assessment image input exceeds the decoded-pixel limit")
+        return self
+
+
+class CodexAssessmentImageInputManifest(FrozenModel):
+    """Exact ordered assessment PNG set crossing the worker invocation boundary."""
+
+    schema_version: Literal["codex-image-input-manifest/2.0"] = "codex-image-input-manifest/2.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    images: tuple[CodexAssessmentImageInput, ...] = Field(min_length=1, max_length=64)
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_order_identity_and_hash(self) -> CodexAssessmentImageInputManifest:
+        identities = tuple(image.page_input_id for image in self.images)
+        source_positions = tuple((image.source_role, image.physical_page) for image in self.images)
+        if len(identities) != len(set(identities)) or len(source_positions) != len(
+            set(source_positions)
+        ):
+            raise ValueError("assessment image inputs must be unique and ordered by request")
+        if sum(image.width_pixels * image.height_pixels for image in self.images) > 256_000_000:
+            raise ValueError("assessment image inputs exceed the aggregate decoded-pixel limit")
+        body = self.model_dump(mode="json", exclude={"manifest_sha256"})
+        if content_sha256(body) != self.manifest_sha256:
+            raise ValueError("assessment image-input manifest hash differs")
         return self
 
 
@@ -1049,6 +1146,41 @@ class WorkerCapacityPolicyV2(FrozenModel):
         }
         if actual != reviewed:
             raise ValueError("capacity V2 differs from the reviewed fixed-host pools")
+        return self
+
+
+class WorkerCapacityPolicyV3(FrozenModel):
+    """Six-slot policy isolating textbook analysis from legacy item extraction."""
+
+    schema_version: Literal["worker-capacity-policy/1.2"] = "worker-capacity-policy/1.2"
+    capacity_policy_id: str = Field(pattern=r"^capacity_[0-9a-f]{32}$")
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    revision_number: Literal[3] = 3
+    state: RevisionState
+    max_configured_slots: Literal[6] = 6
+    max_active_codex: Literal[3] = 3
+    max_active_per_slot: Literal[1] = 1
+    max_active_gpu: Literal[1] = 1
+    max_active_knowledge_analysis: Literal[2] = 2
+    pools: tuple[WorkerCapacityPoolV2, ...] = Field(min_length=6, max_length=6)
+    content_sha256: Sha256
+    created_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def coherent_isolated_capacity(self) -> WorkerCapacityPolicyV3:
+        actual = {
+            pool.pool_key: (pool.roles, pool.slot_keys, pool.max_active) for pool in self.pools
+        }
+        reviewed = {
+            "authoring": (("authoring",), ("slot01",), 1),
+            "review": (("review",), ("slot02",), 1),
+            "image": (("image",), ("slot03",), 1),
+            "item-management": (("item_management",), ("slot04",), 1),
+            "support": (("support",), ("slot05",), 1),
+            "legacy-extraction": (("support",), ("slot06",), 1),
+        }
+        if actual != reviewed or len(actual) != len(self.pools):
+            raise ValueError("capacity V3 differs from the reviewed isolated pools")
         return self
 
 

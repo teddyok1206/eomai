@@ -267,6 +267,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_orchestrator/control_service.py",
         "eom_orchestrator/execution_materializer.py",
         "eom_orchestrator/execution_resolver.py",
+        "eom_orchestrator/legacy_item_extraction_artifact.py",
+        "eom_orchestrator/legacy_item_extraction_bootstrap.py",
         "eom_orchestrator/preset_lifecycle.py",
         "eom_workflow/control_plane.py",
         "eom_workflow/control_schemas.py",
@@ -277,6 +279,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eomctl/cli.py",
         "eomctl/control_plane.py",
         "eomctl/knowledge.py",
+        "eomctl/legacy_assessment.py",
     }
     catalog_staging_runtime = {
         "eom_image_contracts/models.py",
@@ -285,6 +288,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_contracts/application.py",
         "eom_catalog_contracts/knowledge.py",
         "eom_catalog_contracts/knowledge_analysis_batch.py",
+        "eom_catalog_contracts/item_origin.py",
+        "eom_catalog_contracts/legacy_assessment.py",
         "eom_catalog_contracts/legacy_knowledge.py",
         "eom_catalog_contracts/legacy_usage.py",
         "eom_catalog_contracts/validation.py",
@@ -292,6 +297,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/application_server.py",
         "eom_catalog_service/generated_stimulus.py",
         "eom_catalog_service/item_content_import.py",
+        "eom_catalog_service/item_origin_models.py",
+        "eom_catalog_service/item_origin_service.py",
         "eom_catalog_service/knowledge_analysis_risk.py",
         "eom_catalog_service/knowledge_analysis_batch_models.py",
         "eom_catalog_service/knowledge_analysis_batch_service.py",
@@ -303,6 +310,12 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/legacy_usage_service.py",
         "eom_catalog_service/legacy_xlsx.py",
         "eom_catalog_service/legacy_knowledge_intake_service.py",
+        "eom_catalog_service/legacy_assessment_bundle_discovery.py",
+        "eom_catalog_service/legacy_assessment_models.py",
+        "eom_catalog_service/legacy_assessment_packages.py",
+        "eom_catalog_service/legacy_assessment_registry.py",
+        "eom_catalog_service/legacy_assessment_rights.py",
+        "eom_catalog_service/legacy_item_extraction_service.py",
         "eom_catalog_service/legacy_source_inventory.py",
         "eom_catalog_service/settings.py",
         "eom_catalog_service/staging.py",
@@ -456,6 +469,19 @@ catalog_resources = {
     "educational-document/educational-document-types-v1.schema.json": "schemas/educational-document/educational-document-types-v1.schema.json",
     "item-registry/assessment-item-content-v1.schema.json": "schemas/item-registry/assessment-item-content-v1.schema.json",
     "item-registry/item-revision-manifest-v1.schema.json": "schemas/item-registry/item-revision-manifest-v1.schema.json",
+    "item-origin/item-origin-types-v1.schema.json": "schemas/item-origin/item-origin-types-v1.schema.json",
+    "item-origin/organization-revision-v1.schema.json": "schemas/item-origin/organization-revision-v1.schema.json",
+    "item-origin/assessment-occurrence-revision-v1.schema.json": "schemas/item-origin/assessment-occurrence-revision-v1.schema.json",
+    "item-origin/item-origin-profile-v1.schema.json": "schemas/item-origin/item-origin-profile-v1.schema.json",
+    "legacy-assessment/legacy-assessment-types-v1.schema.json": "schemas/legacy-assessment/legacy-assessment-types-v1.schema.json",
+    "legacy-assessment/assessment-source-bundle-proposal-v1.schema.json": "schemas/legacy-assessment/assessment-source-bundle-proposal-v1.schema.json",
+    "legacy-assessment/assessment-source-bundle-v1.schema.json": "schemas/legacy-assessment/assessment-source-bundle-v1.schema.json",
+    "legacy-assessment/assessment-layout-observation-v1.schema.json": "schemas/legacy-assessment/assessment-layout-observation-v1.schema.json",
+    "legacy-assessment/legacy-item-extraction-request-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-request-v1.schema.json",
+    "legacy-assessment/legacy-item-extraction-receipt-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-receipt-v1.schema.json",
+    "legacy-assessment/legacy-item-extraction-result-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-result-v1.schema.json",
+    "legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json",
+    "legacy-assessment/legacy-item-corpus-coverage-v1.schema.json": "schemas/legacy-assessment/legacy-item-corpus-coverage-v1.schema.json",
     "knowledge/knowledge-types-v1.schema.json": "schemas/knowledge/knowledge-types-v1.schema.json",
     "knowledge/knowledge-analysis-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-request-v1.schema.json",
     "knowledge/knowledge-analysis-result-v1.schema.json": "schemas/knowledge/knowledge-analysis-result-v1.schema.json",
@@ -613,6 +639,13 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             ).read_bytes()
         )
         analysis_definitions.append(definition)
+    legacy_definition = root / "legacy-item-extraction.v1.yaml"
+    legacy_definition.write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/legacy-item-extraction.v1.yaml"
+        ).read_bytes()
+    )
     worker_config = root / "worker-slots.yaml"
     worker_config.write_bytes(
         (Path(os.environ["REPOSITORY_ROOT"]) / "config/worker-slots.example.yaml").read_bytes()
@@ -659,7 +692,7 @@ import sys
 from pathlib import Path
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, legacy_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -737,6 +770,7 @@ load_role_input_schema("support", "workflow-role/1.8.0")
 load_role_input_schema("support", "workflow-role/1.9.0")
 load_role_input_schema("support", "workflow-role/1.10.0")
 load_role_input_schema("support", "workflow-role/1.11.0")
+load_role_input_schema("support", "workflow-role/1.14.0")
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
     load_codex_result_schema(schema_id)
@@ -761,6 +795,12 @@ analysis_versions = {
 }
 if analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0", "6.0.0", "7.0.0", "8.0.0"}:
     raise SystemExit("knowledge analysis workflow definition mismatch")
+legacy = compile_definition(Path(legacy_definition), {"support"}).definition
+if (
+    legacy.definition_key != "legacy-item-extraction"
+    or legacy.definition_version != "1.0.0"
+):
+    raise SystemExit("legacy item extraction workflow definition mismatch")
 for name, _ in catalog_schema_inventory():
     load_schema(name)
 validate_contract(
@@ -792,6 +832,7 @@ validate_contract(
             os.environ["REPOSITORY_ROOT"],
             *(str(definition) for definition in definitions),
             *(str(definition) for definition in analysis_definitions),
+            str(legacy_definition),
             str(worker_config),
             str(staging),
             str(workspace_root),

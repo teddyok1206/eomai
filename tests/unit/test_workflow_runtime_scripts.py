@@ -187,8 +187,12 @@ def test_runner_configuration_installs_root_owned_capability_policy() -> None:
     assert (ROOT / "config/workflows/knowledge-analysis.v2.yaml").is_file()
     assert (ROOT / "config/workflows/knowledge-analysis.v1.yaml").is_file()
     assert "/knowledge-analysis.yaml" in source
+    assert "config/workflows/legacy-item-extraction.v1.yaml" in source
+    assert "/legacy-item-extraction.yaml" in source
     assert "content/prompt-templates/placeholders/support.txt" in source
     assert "/support.txt" in source
+    assert "content/prompt-templates/placeholders/legacy-item-extraction.txt" in source
+    assert "/legacy-item-extraction.txt" in source
     assert "config/codex-capabilities.example.yaml" in source
     assert "/codex-capabilities.yaml" in source
     assert "install -o root -g root -m 0644" in source

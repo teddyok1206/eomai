@@ -53,6 +53,8 @@ from eom_workflow.models import (
     KnowledgeImageRoleResult,
     KnowledgeRegistrationRoleResult,
     KnowledgeReviewRoleResult,
+    LegacyItemExtractionRoleResult,
+    LegacyItemExtractionWorkerRequest,
     RegistrationRoleResult,
     ReviewRoleResult,
     RoleResult,
@@ -118,6 +120,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "knowledge-analysis-proposal-result@6.0",
             "knowledge-analysis-proposal-result@7.0",
             "knowledge-analysis-proposal-result@8.0",
+            "legacy-item-extraction-result@1.0",
         }
     ),
 }
@@ -154,6 +157,7 @@ RESULT_SCHEMA_FILES = {
     "knowledge-analysis-proposal-result@6.0": ("knowledge-analysis-proposal-result-v6.schema.json"),
     "knowledge-analysis-proposal-result@7.0": ("knowledge-analysis-proposal-result-v7.schema.json"),
     "knowledge-analysis-proposal-result@8.0": ("knowledge-analysis-proposal-result-v8.schema.json"),
+    "legacy-item-extraction-result@1.0": "legacy-item-extraction-result-v1.schema.json",
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -170,6 +174,7 @@ INPUT_SCHEMA_FILES_V1_8 = {"support": "knowledge-analysis-input-v5.schema.json"}
 INPUT_SCHEMA_FILES_V1_9 = {"support": "knowledge-analysis-input-v6.schema.json"}
 INPUT_SCHEMA_FILES_V1_10 = {"support": "knowledge-analysis-input-v7.schema.json"}
 INPUT_SCHEMA_FILES_V1_11 = {"support": "knowledge-analysis-input-v8.schema.json"}
+INPUT_SCHEMA_FILES_V1_14 = {"support": "legacy-item-extraction-input-v1.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -203,6 +208,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "image-result@6.0": "workflow-role/1.13.0",
     "review-result@6.0": "workflow-role/1.13.0",
     "registration-result@6.0": "workflow-role/1.13.0",
+    "legacy-item-extraction-result@1.0": "workflow-role/1.14.0",
 }
 PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.0.1": INPUT_SCHEMA_FILES,
@@ -219,6 +225,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.11.0": INPUT_SCHEMA_FILES_V1_11,
     "workflow-role/1.12.0": INPUT_SCHEMA_FILES_V1_1,
     "workflow-role/1.13.0": INPUT_SCHEMA_FILES_V1_1,
+    "workflow-role/1.14.0": INPUT_SCHEMA_FILES_V1_14,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -235,6 +242,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.11.0",
     "workflow-role/1.12.0",
     "workflow-role/1.13.0",
+    "workflow-role/1.14.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -250,6 +258,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_9.values(),
             *INPUT_SCHEMA_FILES_V1_10.values(),
             *INPUT_SCHEMA_FILES_V1_11.values(),
+            *INPUT_SCHEMA_FILES_V1_14.values(),
         }
     )
 )
@@ -325,7 +334,12 @@ def load_role_input_schema(
     return _inline_catalog_schema(
         schema,
         require_reference_closure=protocol_version
-        in {"workflow-role/1.9.0", "workflow-role/1.10.0", "workflow-role/1.11.0"},
+        in {
+            "workflow-role/1.9.0",
+            "workflow-role/1.10.0",
+            "workflow-role/1.11.0",
+            "workflow-role/1.14.0",
+        },
     )
 
 
@@ -343,6 +357,7 @@ def load_role_result_schema(schema_id: str) -> dict[str, Any]:
             "knowledge-analysis-proposal-result@6.0",
             "knowledge-analysis-proposal-result@7.0",
             "knowledge-analysis-proposal-result@8.0",
+            "legacy-item-extraction-result@1.0",
         },
     )
 
@@ -412,6 +427,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return KnowledgeAnalysisProposalRoleResultV7.model_validate(value)
         if schema_id == "knowledge-analysis-proposal-result@8.0" and role == "support":
             return KnowledgeAnalysisProposalRoleResultV8.model_validate(value)
+        if schema_id == "legacy-item-extraction-result@1.0" and role == "support":
+            return LegacyItemExtractionRoleResult.model_validate(value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":
@@ -533,6 +550,44 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
                 analysis_request,
             )
             _prune_unreferenced_definitions(schema)
+    if schema_id == "legacy-item-extraction-result@1.0":
+        if not isinstance(worker_input.request, LegacyItemExtractionWorkerRequest):
+            raise WorkflowSchemaError("legacy extraction result requires its typed worker request")
+        output = _mapping(_mapping(schema, "properties"), "output")
+        if output.get("$ref") != "#/$defs/output":
+            raise WorkflowSchemaError("legacy extraction output reference is not projectable")
+        output_definition = _mapping(definitions, "output")
+        extraction_ref = _mapping(_mapping(output_definition, "properties"), "extraction_result")
+        if extraction_ref.get("$ref") != "#/$defs/LegacyItemExtractionResult":
+            raise WorkflowSchemaError("legacy extraction result reference is not projectable")
+        result_definition = _mapping(definitions, "LegacyItemExtractionResult")
+        result_properties = _mapping(result_definition, "properties")
+        request = worker_input.request.extraction_request
+        _bind_result_string_const(
+            schema,
+            _mapping(result_properties, "extraction_request_id"),
+            request.extraction_request_id,
+        )
+        _bind_result_string_const(
+            schema,
+            _mapping(result_properties, "request_sha256"),
+            request.request_sha256,
+        )
+        observed_pages = _mapping(result_properties, "observed_page_input_ids")
+        observed_pages["minItems"] = len(request.page_inputs)
+        observed_pages["maxItems"] = len(request.page_inputs)
+        observed_pages["items"] = {
+            "type": "string",
+            "enum": [page.page_input_id for page in request.page_inputs],
+        }
+        items = _mapping(result_properties, "items")
+        items["minItems"] = len(request.expected_item_numbers)
+        items["maxItems"] = len(request.expected_item_numbers)
+        item_schema = _mapping(items, "items")
+        _mapping(_mapping(item_schema, "properties"), "item_number")["enum"] = list(
+            request.expected_item_numbers
+        )
+        _prune_unreferenced_definitions(schema)
     validate_codex_structured_output_schema(schema)
     return schema
 
@@ -641,6 +696,8 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         "knowledge-analysis-proposal-result@7.0",
         "knowledge-analysis-proposal-result@8.0",
     }:
+        _prune_unreferenced_definitions(schema)
+    if schema_id == "legacy-item-extraction-result@1.0":
         _prune_unreferenced_definitions(schema)
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
@@ -996,9 +1053,106 @@ def _inline_catalog_schema(
                 definition_name=definition_name,
                 close_type_dependencies=require_reference_closure,
             )
+    legacy_contracts = (
+        (
+            "eom://schemas/legacy-assessment/legacy-item-extraction-request/1.0",
+            "legacy-item-extraction-request",
+            "LegacyItemExtractionRequest",
+        ),
+        (
+            "eom://schemas/legacy-assessment/legacy-item-extraction-result/1.0",
+            "legacy-item-extraction-result",
+            "LegacyItemExtractionResult",
+        ),
+    )
+    for contract_reference, catalog_name, definition_name in legacy_contracts:
+        if contract_reference in json.dumps(bundled, ensure_ascii=True):
+            bundled = _inline_legacy_assessment_contract(
+                bundled,
+                reference=contract_reference,
+                catalog_name=catalog_name,
+                definition_name=definition_name,
+            )
     Draft202012Validator.check_schema(bundled)
     if require_reference_closure:
         _validate_local_reference_closure(bundled)
+    return bundled
+
+
+def _inline_legacy_assessment_contract(
+    schema: dict[str, Any], *, reference: str, catalog_name: str, definition_name: str
+) -> dict[str, Any]:
+    """Close one extraction role schema over its immutable Catalog-owned dependencies."""
+
+    from eom_catalog_contracts import load_schema
+
+    sources = (
+        (reference, definition_name, copy.deepcopy(load_schema(catalog_name))),
+        (
+            "eom://schemas/legacy-assessment/legacy-assessment-types/1.0",
+            "LegacyAssessmentTypes",
+            copy.deepcopy(load_schema("legacy-assessment-types")),
+        ),
+        (
+            "eom://schemas/item-origin/item-origin-types/1.0",
+            "ItemOriginTypes",
+            copy.deepcopy(load_schema("item-origin-types")),
+        ),
+        (
+            "eom://schemas/item-registry/assessment-item-content-v1",
+            "AssessmentItemContent",
+            copy.deepcopy(load_schema("assessment-item-content")),
+        ),
+    )
+
+    def rewrite(value: object, *, local_prefix: str | None = None) -> object:
+        if isinstance(value, dict):
+            rewritten: dict[str, Any] = {}
+            for key, item in value.items():
+                if key == "$ref" and isinstance(item, str):
+                    replacement: str | None = None
+                    for source_id, prefix, _ in sources:
+                        if item == source_id:
+                            replacement = f"#/$defs/{prefix}"
+                            break
+                        fragment = source_id + "#/$defs/"
+                        if item.startswith(fragment):
+                            replacement = f"#/$defs/{prefix}_" + item.removeprefix(fragment)
+                            break
+                    if replacement is not None:
+                        rewritten[key] = replacement
+                    elif local_prefix is not None and item.startswith("#/$defs/"):
+                        rewritten[key] = f"#/$defs/{local_prefix}_" + item.removeprefix("#/$defs/")
+                    else:
+                        rewritten[key] = item
+                else:
+                    rewritten[key] = rewrite(item, local_prefix=local_prefix)
+            return rewritten
+        if isinstance(value, list):
+            return [rewrite(item, local_prefix=local_prefix) for item in value]
+        return value
+
+    bundled = rewrite(schema)
+    if not isinstance(bundled, dict):
+        raise WorkflowSchemaError("bundled legacy assessment role schema is not an object")
+    definitions = bundled.setdefault("$defs", {})
+    if not isinstance(definitions, dict):
+        raise WorkflowSchemaError("bundled legacy assessment definitions are not an object")
+    for _, prefix, source in sources:
+        body = {
+            key: item
+            for key, item in source.items()
+            if key not in {"$schema", "$id", "title", "$defs"}
+        }
+        rewritten_body = rewrite(body, local_prefix=prefix)
+        if not isinstance(rewritten_body, dict):
+            raise WorkflowSchemaError("legacy assessment contract body is not an object")
+        definitions[prefix] = rewritten_body
+        source_definitions = source.get("$defs", {})
+        if not isinstance(source_definitions, dict):
+            raise WorkflowSchemaError("legacy assessment contract definitions are invalid")
+        for name, value in source_definitions.items():
+            definitions[f"{prefix}_{name}"] = rewrite(value, local_prefix=prefix)
     return bundled
 
 

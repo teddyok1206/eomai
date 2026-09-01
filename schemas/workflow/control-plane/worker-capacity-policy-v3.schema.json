@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/worker-capacity-policy/1.2",
+  "title": "EOM Worker Capacity Policy V1.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "capacity_policy_id",
+    "capacity_policy_revision_id",
+    "revision_number",
+    "state",
+    "max_configured_slots",
+    "max_active_codex",
+    "max_active_per_slot",
+    "max_active_gpu",
+    "max_active_knowledge_analysis",
+    "pools",
+    "content_sha256",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "worker-capacity-policy/1.2"},
+    "capacity_policy_id": {"type": "string", "pattern": "^capacity_[0-9a-f]{32}$"},
+    "capacity_policy_revision_id": {
+      "type": "string",
+      "pattern": "^capacityrev_[0-9a-f]{32}$"
+    },
+    "revision_number": {"const": 3},
+    "state": {"enum": ["DRAFT", "RELEASED", "DEPRECATED"]},
+    "max_configured_slots": {"const": 6},
+    "max_active_codex": {"const": 3},
+    "max_active_per_slot": {"const": 1},
+    "max_active_gpu": {"const": 1},
+    "max_active_knowledge_analysis": {"const": 2},
+    "pools": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "allOf": [
+        {"contains": {"$ref": "#/$defs/authoringPool"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/reviewPool"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/imagePool"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/itemManagementPool"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/supportPool"}, "minContains": 1, "maxContains": 1},
+        {
+          "contains": {"$ref": "#/$defs/legacyExtractionPool"},
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pool_key", "roles", "slot_keys", "max_active"],
+        "properties": {
+          "pool_key": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,63}$"},
+          "roles": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/role"}
+          },
+          "slot_keys": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^slot0[1-6]$"}
+          },
+          "max_active": {"type": "integer", "minimum": 1, "maximum": 3}
+        }
+      }
+    },
+    "content_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+    }
+  },
+  "$defs": {
+    "authoringPool": {
+      "type": "object",
+      "required": ["pool_key", "roles", "slot_keys", "max_active"],
+      "properties": {"pool_key": {"const": "authoring"}, "roles": {"const": ["authoring"]}, "slot_keys": {"const": ["slot01"]}, "max_active": {"const": 1}}
+    },
+    "reviewPool": {
+      "type": "object",
+      "required": ["pool_key", "roles", "slot_keys", "max_active"],
+      "properties": {"pool_key": {"const": "review"}, "roles": {"const": ["review"]}, "slot_keys": {"const": ["slot02"]}, "max_active": {"const": 1}}
+    },
+    "imagePool": {
+      "type": "object",
+      "required": ["pool_key", "roles", "slot_keys", "max_active"],
+      "properties": {"pool_key": {"const": "image"}, "roles": {"const": ["image"]}, "slot_keys": {"const": ["slot03"]}, "max_active": {"const": 1}}
+    },
+    "itemManagementPool": {
+      "type": "object",
+      "required": ["pool_key", "roles", "slot_keys", "max_active"],
+      "properties": {"pool_key": {"const": "item-management"}, "roles": {"const": ["item_management"]}, "slot_keys": {"const": ["slot04"]}, "max_active": {"const": 1}}
+    },
+    "supportPool": {
+      "type": "object",
+      "required": ["pool_key", "roles", "slot_keys", "max_active"],
+      "properties": {"pool_key": {"const": "support"}, "roles": {"const": ["support"]}, "slot_keys": {"const": ["slot05"]}, "max_active": {"const": 1}}
+    },
+    "legacyExtractionPool": {
+      "type": "object",
+      "required": ["pool_key", "roles", "slot_keys", "max_active"],
+      "properties": {"pool_key": {"const": "legacy-extraction"}, "roles": {"const": ["support"]}, "slot_keys": {"const": ["slot06"]}, "max_active": {"const": 1}}
+    }
+  }
+}

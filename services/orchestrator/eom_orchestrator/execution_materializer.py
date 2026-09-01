@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from eom_catalog_contracts import (
+    AssessmentArtifactMemberPointer,
+    AssessmentLayoutObservation,
     EvidenceBundleManifestV2,
     EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
@@ -18,6 +20,7 @@ from eom_catalog_contracts import (
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_workflow import (
+    CodexAssessmentImageInputManifest,
     CodexImageInputManifest,
     CodexInvocation,
     InstructionBundleManifest,
@@ -27,6 +30,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV4,
     ResolvedExecutionPlanV5,
+    ResolvedExecutionPlanV6,
     ResolvedStepExecutionV3,
     validate_control_contract,
 )
@@ -51,6 +55,7 @@ from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 MAX_MARKDOWN_MEMBER_BYTES = 2 * 1024 * 1024
 MAX_MATERIALIZED_BYTES = 32 * 1024 * 1024
 MAX_ANALYSIS_MATERIALIZED_BYTES = 132 * 1024 * 1024
+MAX_ASSESSMENT_MEMBER_BYTES = 64 * 1024 * 1024
 COPY_BUFFER_BYTES = 1024 * 1024
 WORKSPACE_MODE = 0o2770
 MATERIALIZED_DIRECTORY_MODE = 0o750
@@ -130,6 +135,7 @@ def materialize_execution_step(
         "resolved-execution-plan/2.0",
         "resolved-execution-plan/4.0",
         "resolved-execution-plan/5.0",
+        "resolved-execution-plan/6.0",
     }
     plan: (
         ResolvedExecutionPlan
@@ -137,6 +143,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV3
         | ResolvedExecutionPlanV4
         | ResolvedExecutionPlanV5
+        | ResolvedExecutionPlanV6
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -146,6 +153,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV4.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/5.0":
         plan = ResolvedExecutionPlanV5.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/6.0":
+        plan = ResolvedExecutionPlanV6.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -257,6 +266,18 @@ def materialize_execution_step(
             evidence_bundle_revision_id = plan.evidence_bundle_revision_id
             evidence_manifest_sha256 = plan.evidence_manifest_sha256
             evidence_context_sha256 = plan.evidence_context_artifact.sha256
+    elif isinstance(plan, ResolvedExecutionPlanV6):
+        extraction_bytes, extraction_members = _materialize_legacy_extraction_source(
+            session,
+            plan=plan,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        )
+        total_bytes += extraction_bytes
+        member_count += extraction_members
+        _require_total_size(total_bytes, analysis=True)
 
     agents_bytes = _agents_document(instruction_docs)
     total_bytes += len(agents_bytes)
@@ -303,6 +324,54 @@ def materialize_execution_step(
             group_id=worker_group_id,
         )
         image_input_manifest_sha256 = image_manifest.manifest_sha256
+    elif isinstance(plan, ResolvedExecutionPlanV6):
+        image_entries: list[dict[str, object]] = []
+        for page in plan.extraction_request.page_inputs:
+            expected_bytes = _assessment_member_expected_bytes(
+                session,
+                pointer=page.image,
+                authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            )
+            image_entries.append(
+                {
+                    "page_input_id": page.page_input_id,
+                    "source_role": page.source_role,
+                    "physical_page": page.physical_page,
+                    "relative_path": page.workspace_relative_path,
+                    "media_type": "image/png",
+                    "sha256": page.image.sha256,
+                    "bytes": expected_bytes,
+                    "width_pixels": page.width_px,
+                    "height_pixels": page.height_px,
+                }
+            )
+        image_manifest_document = {
+            "schema_version": "codex-image-input-manifest/2.0",
+            "plan_id": plan.plan_id,
+            "images": image_entries,
+            "manifest_sha256": "sha256:" + "0" * 64,
+        }
+        image_manifest_document["manifest_sha256"] = content_sha256(
+            {
+                key: value
+                for key, value in image_manifest_document.items()
+                if key != "manifest_sha256"
+            }
+        )
+        validate_control_contract("codex-image-input-manifest-v2", image_manifest_document)
+        assessment_image_manifest = CodexAssessmentImageInputManifest.model_validate(
+            image_manifest_document
+        )
+        image_manifest_bytes = canonical_json_bytes(assessment_image_manifest) + b"\n"
+        total_bytes += len(image_manifest_bytes)
+        member_count += 1
+        _require_total_size(total_bytes, analysis=True)
+        _write_exclusive(
+            workspace / "codex-image-inputs.json",
+            image_manifest_bytes,
+            group_id=worker_group_id,
+        )
+        image_input_manifest_sha256 = assessment_image_manifest.manifest_sha256
 
     invocation_document: dict[str, object] = {
         "schema_version": "codex-invocation/1.0",
@@ -369,6 +438,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV3
             | ResolvedExecutionPlanV4
             | ResolvedExecutionPlanV5
+            | ResolvedExecutionPlanV6
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -376,6 +446,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV4.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/5.0":
         plan = ResolvedExecutionPlanV5.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/6.0":
+        plan = ResolvedExecutionPlanV6.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -408,6 +480,14 @@ def authorized_execution_artifact_revisions(
                     plan.evidence_context_artifact.artifact_revision_id,
                 }
             )
+    elif isinstance(plan, ResolvedExecutionPlanV6):
+        request = plan.extraction_request
+        revision_ids.add(request.layout_observation.artifact.artifact_revision_id)
+        revision_ids.update(page.source.artifact_revision_id for page in request.page_inputs)
+        revision_ids.update(page.image.artifact_revision_id for page in request.page_inputs)
+        revision_ids.update(
+            material.source.artifact_revision_id for material in request.source_materializations
+        )
     bundles: list[tuple[BundleRevisionPointer, str]] = [(step.instruction_bundle, "INSTRUCTION")]
     if step.reference_bundle is not None:
         bundles.append((step.reference_bundle, "REFERENCE"))
@@ -735,6 +815,230 @@ def _materialize_analysis_document_source(
             "document analysis materialized byte count differs from the plan",
         )
     return total_bytes, len(source.materialization_members)
+
+
+def _materialize_legacy_extraction_source(
+    session: Session,
+    *,
+    plan: ResolvedExecutionPlanV6,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> tuple[int, int]:
+    """Materialize only reviewed extraction inputs; original source documents stay canonical."""
+
+    request = plan.extraction_request
+    total_bytes = 0
+    member_count = 0
+    layout_payload = _materialize_assessment_member(
+        session,
+        pointer=request.layout_observation.artifact,
+        relative_path=request.layout_observation.workspace_relative_path,
+        workspace=workspace,
+        artifact_root=artifact_root,
+        worker_group_id=worker_group_id,
+        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        maximum_bytes=2 * 1024 * 1024,
+    )
+    try:
+        layout_value = json.loads(layout_payload.decode("utf-8"))
+        if not isinstance(layout_value, dict):
+            raise ValueError("layout observation is not an object")
+        validate_catalog_contract("assessment-layout-observation", layout_value)
+        layout = AssessmentLayoutObservation.model_validate(layout_value)
+    except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_ASSESSMENT_LAYOUT_INVALID",
+            "assessment layout observation is invalid",
+        ) from exc
+    layout_pages = {page.page.page_input_id: page.page for page in layout.pages}
+    request_pages = {page.page_input_id: page for page in request.page_inputs}
+    layout_boundaries = {boundary.item_number: boundary for boundary in layout.item_boundaries}
+    if (
+        layout.assessment_layout_observation_id
+        != request.layout_observation.assessment_layout_observation_id
+        or layout.observation_sha256 != request.layout_observation.observation_sha256
+        or layout.bundle != request.bundle
+        or any(layout_pages.get(page_id) != page for page_id, page in request_pages.items())
+        or any(
+            item_number not in layout_boundaries for item_number in request.expected_item_numbers
+        )
+        or any(
+            segment.page_input_id not in request_pages
+            for item_number in request.expected_item_numbers
+            for segment in layout_boundaries[item_number].segments
+        )
+    ):
+        raise ControlPlaneError(
+            "CONTROL_ASSESSMENT_LAYOUT_MISMATCH",
+            "assessment layout differs from the resolved extraction request",
+        )
+    total_bytes += len(layout_payload)
+    member_count += 1
+
+    for page in request.page_inputs:
+        _validate_assessment_member_pointer(
+            session,
+            pointer=page.source,
+            artifact_root=artifact_root,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        )
+        payload = _materialize_assessment_member(
+            session,
+            pointer=page.image,
+            relative_path=page.workspace_relative_path,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=16 * 1024 * 1024,
+        )
+        _validate_png_payload(
+            payload,
+            expected_width=page.width_px,
+            expected_height=page.height_px,
+        )
+        total_bytes += len(payload)
+        member_count += 1
+        _require_total_size(total_bytes, analysis=True)
+
+    for material in request.source_materializations:
+        payload = _materialize_assessment_member(
+            session,
+            pointer=material.source,
+            relative_path=material.workspace_relative_path,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=MAX_ASSESSMENT_MEMBER_BYTES,
+        )
+        total_bytes += len(payload)
+        member_count += 1
+        _require_total_size(total_bytes, analysis=True)
+    return total_bytes, member_count
+
+
+def _assessment_member_expected_bytes(
+    session: Session,
+    *,
+    pointer: AssessmentArtifactMemberPointer,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> int:
+    """Return the pinned manifest size after validating immutable pointer identity."""
+
+    if pointer.artifact_revision_id not in authorized_artifact_revision_ids:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_PERMISSION_DENIED",
+            "assessment Artifact revision is not authorized",
+        )
+    logical = session.get(ArtifactRecord, pointer.artifact_id)
+    revision = session.get(ArtifactRevisionRecord, pointer.artifact_revision_id)
+    if (
+        logical is None
+        or revision is None
+        or not logical.approved
+        or not revision.approved
+        or revision.logical_artifact_id != pointer.artifact_id
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_REVISION_INVALID",
+            "assessment Artifact pointer is stale",
+        )
+    entry = _manifest_entry(revision.manifest, pointer.member_path)
+    expected_bytes = entry.get("bytes")
+    if (
+        entry.get("sha256") != pointer.sha256
+        or entry.get("media_type") != pointer.media_type
+        or entry.get("schema_ref") != pointer.schema_ref
+        or not isinstance(expected_bytes, int)
+        or expected_bytes <= 0
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_MANIFEST_MISMATCH",
+            "assessment Artifact manifest differs from its pointer",
+        )
+    return expected_bytes
+
+
+def _validate_assessment_member_pointer(
+    session: Session,
+    *,
+    pointer: AssessmentArtifactMemberPointer,
+    artifact_root: Path,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> None:
+    """Validate one provenance-only source pointer without copying its bytes to a worker."""
+
+    _assessment_member_expected_bytes(
+        session,
+        pointer=pointer,
+        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+    )
+    revision = session.get(ArtifactRevisionRecord, pointer.artifact_revision_id)
+    assert revision is not None
+    if (
+        Path(revision.nas_path)
+        != artifact_root / pointer.artifact_id / pointer.artifact_revision_id
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_STORAGE_MISMATCH",
+            "assessment Artifact storage is not canonical",
+        )
+
+
+def _materialize_assessment_member(
+    session: Session,
+    *,
+    pointer: AssessmentArtifactMemberPointer,
+    relative_path: str,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+    maximum_bytes: int,
+) -> bytes:
+    expected_bytes = _assessment_member_expected_bytes(
+        session,
+        pointer=pointer,
+        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+    )
+    if expected_bytes > maximum_bytes:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_SIZE_INVALID",
+            "assessment Artifact member exceeds its materialization limit",
+        )
+    revision = session.get(ArtifactRevisionRecord, pointer.artifact_revision_id)
+    assert revision is not None
+    stored_root = Path(revision.nas_path)
+    if stored_root != artifact_root / pointer.artifact_id / pointer.artifact_revision_id:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_STORAGE_MISMATCH",
+            "assessment Artifact storage is not canonical",
+        )
+    relative = PurePosixPath(relative_path)
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or relative.parts[0] != "source"
+        or ".." in relative.parts
+        or "." in relative.parts
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_UNSAFE",
+            "assessment materialization path is unsafe",
+        )
+    payload = _read_verified_source(
+        stored_root / PurePosixPath(pointer.member_path),
+        canonical_root=artifact_root,
+        expected_sha256=pointer.sha256,
+        expected_bytes=expected_bytes,
+    )
+    destination = workspace.joinpath(*relative.parts)
+    _ensure_parent(destination.parent, workspace=workspace, group_id=worker_group_id)
+    _write_exclusive(destination, payload, group_id=worker_group_id)
+    return payload
 
 
 def _validate_png_payload(

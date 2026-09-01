@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/item-origin/assessment-occurrence-revision/1.0",
+  "title": "EOM Assessment Occurrence Revision V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "assessment_occurrence_id",
+    "assessment_occurrence_revision_id",
+    "revision_number",
+    "previous_revision_id",
+    "occurrence_key",
+    "revision_state",
+    "issuing_organization",
+    "occurrence_kind",
+    "exam_family_key",
+    "administration_year",
+    "administration_date",
+    "session_key",
+    "subject_key",
+    "form_key",
+    "region_key",
+    "display_label",
+    "source_evidence",
+    "rights_policy",
+    "created_at",
+    "created_by",
+    "revision_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "assessment-occurrence-revision/1.0"},
+    "assessment_occurrence_id": {
+      "type": "string",
+      "pattern": "^occurrence_[0-9a-f]{32}$"
+    },
+    "assessment_occurrence_revision_id": {
+      "type": "string",
+      "pattern": "^occurrev_[0-9a-f]{32}$"
+    },
+    "revision_number": {"type": "integer", "minimum": 1},
+    "previous_revision_id": {
+      "type": ["string", "null"],
+      "pattern": "^occurrev_[0-9a-f]{32}$"
+    },
+    "occurrence_key": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/stableKey"
+    },
+    "revision_state": {"enum": ["REVIEWED", "SUPERSEDED", "WITHDRAWN"]},
+    "issuing_organization": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/organizationRevisionPointer"
+    },
+    "occurrence_kind": {
+      "enum": [
+        "NATIONAL_ENTRANCE",
+        "NATIONAL_ACHIEVEMENT",
+        "EDUCATION_AUTHORITY_EXAM",
+        "SCHOOL_EXAM",
+        "INSTITUTIONAL_EXAM",
+        "OTHER_REVIEWED"
+      ]
+    },
+    "exam_family_key": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/stableKey"
+    },
+    "administration_year": {"type": "integer", "minimum": 1900, "maximum": 2200},
+    "administration_date": {"type": ["string", "null"], "format": "date"},
+    "session_key": {
+      "oneOf": [
+        {"$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/stableKey"},
+        {"type": "null"}
+      ]
+    },
+    "subject_key": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/stableKey"
+    },
+    "form_key": {
+      "oneOf": [
+        {"$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/stableKey"},
+        {"type": "null"}
+      ]
+    },
+    "region_key": {
+      "oneOf": [
+        {"$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/stableKey"},
+        {"type": "null"}
+      ]
+    },
+    "display_label": {"type": "string", "minLength": 1, "maxLength": 512},
+    "source_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/artifactMemberPointer"
+      }
+    },
+    "rights_policy": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/rightsPolicyPointer"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/utcTimestamp"
+    },
+    "created_by": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/actorId"
+    },
+    "revision_sha256": {
+      "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/sha256"
+    }
+  }
+}

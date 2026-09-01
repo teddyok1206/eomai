@@ -524,6 +524,7 @@ class ItemRevisionRecord(Base):
     __tablename__ = "item_revisions"
     __table_args__ = (
         UniqueConstraint("item_id", "revision_number", name="uq_item_revision_number"),
+        UniqueConstraint("item_id", "item_revision_id", name="uq_item_revision_identity"),
         UniqueConstraint("registration_key", name="uq_item_registration_key"),
         CheckConstraint("revision_number > 0", name="ck_item_revision_number_positive"),
         CheckConstraint(
