@@ -59,6 +59,20 @@ def test_disposable_prepare_matches_production_application_schema_contract() -> 
     assert "CREATE SCHEMA IF NOT EXISTS" not in disposable
 
 
+def test_disposable_prepare_cleans_database_when_state_receipt_write_fails() -> None:
+    source = (REPOSITORY_ROOT / "scripts/api/testdb_prepare.sh").read_text(encoding="utf-8")
+
+    receipt_write = source.index('owner_env.write_text(f"EOM_DATABASE_URL={owner_url}\\n"')
+    cleanup_boundary = source.index("except BaseException:", receipt_write)
+    runtime_reconcile = source.index('if (($# != 2)) || [[ "$1" != "--reconcile" ]]')
+    cleanup_block = source[cleanup_boundary:runtime_reconcile]
+
+    assert receipt_write < cleanup_boundary
+    assert "path.unlink(missing_ok=True)" in cleanup_block
+    assert "DROP DATABASE {}" in cleanup_block
+    assert "DROP ROLE {}" in cleanup_block
+
+
 def test_disposable_schema_metadata_requires_owner_marker_path_and_minimum_privileges() -> None:
     manifest = testdb_guard.TestDatabaseManifest.create("20260818112233_deadbeef")
 

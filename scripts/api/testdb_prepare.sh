@@ -62,6 +62,8 @@ connection = psycopg.connect(
 )
 role_created = False
 database_created = False
+owner_env = state / "owner.env"
+manifest_path = state / "manifest.json"
 try:
     with connection.cursor() as cursor:
         cursor.execute(
@@ -152,29 +154,28 @@ try:
         has_usage=bool(has_usage),
         has_create=bool(has_create),
     )
+    owner_url = (
+        f"postgresql+psycopg://{manifest.owner_role}:{quote(owner_password, safe='')}"
+        f"@127.0.0.1:5432/{manifest.database}"
+    )
+    owner_env.write_text(f"EOM_DATABASE_URL={owner_url}\n", encoding="ascii")
+    manifest_path.write_text(manifest.to_json(), encoding="ascii")
+    uid = pwd.getpwnam("eom").pw_uid
+    gid = pwd.getpwnam("eom").pw_gid
+    for path in (owner_env, manifest_path):
+        os.chown(path, uid, gid)
+        os.chmod(path, 0o600)
 except BaseException:
     with connection.cursor() as cursor:
         if database_created:
             cursor.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(manifest.database)))
         if role_created:
             cursor.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(manifest.owner_role)))
+    for path in (owner_env, manifest_path):
+        path.unlink(missing_ok=True)
     raise
 finally:
     connection.close()
-
-owner_url = (
-    f"postgresql+psycopg://{manifest.owner_role}:{quote(owner_password, safe='')}"
-    f"@127.0.0.1:5432/{manifest.database}"
-)
-owner_env = state / "owner.env"
-owner_env.write_text(f"EOM_DATABASE_URL={owner_url}\n", encoding="ascii")
-manifest_path = state / "manifest.json"
-manifest_path.write_text(manifest.to_json(), encoding="ascii")
-uid = pwd.getpwnam("eom").pw_uid
-gid = pwd.getpwnam("eom").pw_gid
-for path in (owner_env, manifest_path):
-    os.chown(path, uid, gid)
-    os.chmod(path, 0o600)
 PY
   then
     rmdir "${state_directory}" 2>/dev/null || true
