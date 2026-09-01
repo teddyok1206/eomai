@@ -29,6 +29,15 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     assert "knowledge_analysis_risk_policy_revisions" not in INSERT_TABLES
     assert "knowledge_analysis_runs" in UPDATE_TABLES
     assert "jobs" in UPDATE_TABLES
+    content_intake_tables = {
+        "content_intake_batches",
+        "content_intake_events",
+        "content_intake_source_files",
+    }
+    assert content_intake_tables <= set(READ_TABLES)
+    assert content_intake_tables <= set(INSERT_TABLES)
+    assert "content_intake_batches" in UPDATE_TABLES
+    assert {"content_intake_events", "content_intake_source_files"}.isdisjoint(UPDATE_TABLES)
     batch_tables = {
         "knowledge_analysis_batches",
         "knowledge_analysis_batch_ranges",
