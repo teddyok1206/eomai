@@ -21,6 +21,11 @@ and 1.4 workflows retain their original release and route semantics.
    `root:root:0755` directory. The image-runtime deployer must not take ownership of or narrow this
    shared boundary. Protected `/etc/eom/secrets` remains independently `root:eom:0750`, and each
    configuration or secret file retains its reviewed owner, group, and mode.
+7. Confirm `/etc/eom/local-image-provider.json` is the reviewed non-secret binding projection at
+   `root:root:0644`. The Application API and workflow runner may read this small immutable pointer
+   contract so workflow creation can pin a provider/model revision. Both service sandboxes must
+   deny `/srv/eom/models/image`, while Codex workers and the provider unit continue to deny
+   `/etc/eom` entirely.
 
 ## Build and prepare runtime
 

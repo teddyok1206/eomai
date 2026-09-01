@@ -64,7 +64,7 @@ usermod --append --groups eom-image eom-workflow-runner
   fail "LOCAL_IMAGE_SHARED_CONFIG_ROOT_DRIFT"
 binding_temporary=$(mktemp /etc/eom/.local-image-provider.XXXXXX)
 trap 'rm -f "${binding_temporary}"' EXIT
-install -o root -g eom -m 0640 "${BINDING_SOURCE}" "${binding_temporary}"
+install -o root -g root -m 0644 "${BINDING_SOURCE}" "${binding_temporary}"
 mv -f "${binding_temporary}" "${BINDING_TARGET}"
 trap - EXIT
 install -d -o root -g eom-image -m 03770 /srv/eom/image-workspaces

@@ -83,7 +83,13 @@ def _valid_snapshot() -> ServiceSnapshot:
         protect_system="strict",
         protect_home="yes",
         capability_bounding_set="",
-        read_only_paths=frozenset({"/etc/eom-api/api.yaml", "/etc/eom/secrets/api.env"}),
+        read_only_paths=frozenset(
+            {
+                "/etc/eom-api/api.yaml",
+                "/etc/eom/secrets/api.env",
+                "/etc/eom/local-image-provider.json",
+            }
+        ),
         read_write_paths=frozenset({"/var/lib/eom-api"}),
         inaccessible_paths=frozenset(
             {
@@ -92,6 +98,7 @@ def _valid_snapshot() -> ServiceSnapshot:
                 "/root/.codex",
                 "/srv/eom/worker-homes",
                 "/mnt/nas",
+                "/srv/eom/models/image",
                 "/var/run/docker.sock",
                 "/etc/eom/secrets/postgres.env",
                 "/etc/eom/secrets/dev-slack.env",

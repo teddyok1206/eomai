@@ -32,6 +32,7 @@ CapabilityBoundingSet=
 
 ReadOnlyPaths=/etc/eom-api/api.yaml
 ReadOnlyPaths=/etc/eom/secrets/api.env
+ReadOnlyPaths=/etc/eom/local-image-provider.json
 ReadWritePaths=/var/lib/eom-api
 
 InaccessiblePaths=/home/eom/EOM
@@ -39,6 +40,7 @@ InaccessiblePaths=/home/eom/EOMIS
 InaccessiblePaths=/root/.codex
 InaccessiblePaths=/srv/eom/worker-homes
 InaccessiblePaths=/mnt/nas
+InaccessiblePaths=/srv/eom/models/image
 InaccessiblePaths=/var/run/docker.sock
 InaccessiblePaths=/etc/eom/secrets/postgres.env
 InaccessiblePaths=/etc/eom/secrets/dev-slack.env

@@ -55,6 +55,8 @@ def test_systemd_manager_reads_secret_and_runtime_reads_service_config() -> None
     assert "EnvironmentFile=/etc/eom/secrets/api.env" in source
     assert "Environment=EOM_API_CONFIG=/etc/eom-api/api.yaml" in source
     assert "ReadOnlyPaths=/etc/eom-api/api.yaml" in source
+    assert "ReadOnlyPaths=/etc/eom/local-image-provider.json" in source
+    assert "InaccessiblePaths=/srv/eom/models/image" in source
     assert "ReadOnlyPaths=/etc/eom/api.yaml" not in source
     assert 'check_metadata "${SECRET_DIRECTORY}" "root:eom:750"' in metadata
     assert "eom-api must not belong to the eom group" in metadata

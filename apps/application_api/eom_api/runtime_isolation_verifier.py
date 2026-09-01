@@ -93,6 +93,13 @@ PROBE_INVENTORY: Final = (
         "service configuration is required and read-only",
     ),
     ProbeSpec(
+        "local_image_binding_read",
+        AccessExpectation.ALLOWED,
+        ProbeOperation.READ_FILE,
+        Path("/etc/eom/local-image-provider.json"),
+        "workflow creation pins the reviewed non-secret local image provider binding",
+    ),
+    ProbeSpec(
         "api_environment_read",
         AccessExpectation.DENIED,
         ProbeOperation.READ_FILE,
@@ -154,6 +161,13 @@ PROBE_INVENTORY: Final = (
         ProbeOperation.LIST_DIRECTORY,
         Path("/mnt/nas"),
         "NAS access belongs to validated orchestrator commit boundaries",
+    ),
+    ProbeSpec(
+        "local_image_model_read",
+        AccessExpectation.DENIED,
+        ProbeOperation.LIST_DIRECTORY,
+        Path("/srv/eom/models/image"),
+        "the API may pin provider identity but must never read model bytes",
     ),
     ProbeSpec(
         "docker_socket_connect",
@@ -302,7 +316,13 @@ class RuntimeIsolationAdapter(Protocol):
     def close_service(self, process: ServiceProcessHandle) -> None: ...
 
 
-EXPECTED_READ_ONLY_PATHS: Final = frozenset({"/etc/eom-api/api.yaml", "/etc/eom/secrets/api.env"})
+EXPECTED_READ_ONLY_PATHS: Final = frozenset(
+    {
+        "/etc/eom-api/api.yaml",
+        "/etc/eom/secrets/api.env",
+        "/etc/eom/local-image-provider.json",
+    }
+)
 EXPECTED_READ_WRITE_PATHS: Final = frozenset({str(SERVICE_HOME)})
 EXPECTED_INACCESSIBLE_PATHS: Final = frozenset(
     str(probe.path)
