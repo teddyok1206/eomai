@@ -13,7 +13,7 @@ from eom_catalog_service.workflow_catalog import (
     WorkflowCatalogService,
     _validate_generated_vector_artifact_manifest,
 )
-from eom_identifiers import sha256_file
+from eom_identifiers import content_sha256, sha256_file
 from eom_workflow import ArtifactPointer, WorkflowRequest
 from eom_workflow.schemas import ROLE_ALLOWED_RESULT_SCHEMAS
 from eom_workflow_runner.models import WorkflowInstanceRecord
@@ -806,8 +806,9 @@ def test_prompt_context_revalidates_the_pinned_local_provider_binding(tmp_path: 
     context = service._prompt_context(workflow, step, _request(), (), "packrel_" + "1" * 32)
 
     provider = context["local_image_provider"]
-    assert provider["binding_sha256"] == binding["binding_sha256"]
+    assert set(provider) == {"reviewed_binding_json"}
     assert json.loads(provider["reviewed_binding_json"])["model"] == binding["model"]
+    assert content_sha256(context).startswith("sha256:")
 
     forged = json.loads(json.dumps(binding))
     forged["timeout_seconds"] = 899

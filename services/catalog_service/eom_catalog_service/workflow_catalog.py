@@ -939,10 +939,12 @@ class WorkflowCatalogService:
         if isinstance(provider, dict):
             validated_provider = LocalImageProviderBinding.model_validate(provider)
             provider_context = validated_provider.model_dump(mode="json")
-            provider_context["reviewed_binding_json"] = content_json_bytes(provider_context).decode(
-                "utf-8"
-            )
-            context["local_image_provider"] = provider_context
+            # The provider contract legitimately contains a floating-point sampler value. EOM
+            # message hashing rejects floats, so expose only its already validated canonical JSON
+            # data boundary to prompts; execution continues to use the pinned typed runtime value.
+            context["local_image_provider"] = {
+                "reviewed_binding_json": content_json_bytes(provider_context).decode("utf-8")
+            }
         return context
 
     def _knowledge_item_content(
