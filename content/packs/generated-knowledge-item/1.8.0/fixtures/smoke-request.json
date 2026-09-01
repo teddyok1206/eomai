@@ -1,0 +1,27 @@
+{
+  "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+  "image_mode": "required",
+  "content_pack": {"pack_key": "generated-knowledge-item", "environment": "development"},
+  "profiles": {
+    "authoring": "generated-knowledge-authoring",
+    "review": "generated-knowledge-review",
+    "image": "generated-stimulus-drawing",
+    "registration": "generated-structured-registration"
+  },
+  "registry_intent": {"mode": "CREATE_ITEM"},
+  "item_brief": {
+    "schema_version": "2.0",
+    "subject": "일반 과학",
+    "topic": "변인 사이의 선형 관계",
+    "task_type": "data_interpretation",
+    "difficulty": "medium",
+    "choice_count": 5,
+    "equation_required": true,
+    "image_required": true,
+    "quality_profile": "balanced",
+    "authoring_guidance": "표와 선그래프를 함께 해석하여 변인 사이의 선형 관계를 판단하는 문항을 작성해 주세요.",
+    "authoring_guidance_sha256": "sha256:5e6abb33f5fb56e58f4b3faac3ff5301c6dc9944a07295056f6cad4746e45118",
+    "curriculum_scope": null,
+    "original_request_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

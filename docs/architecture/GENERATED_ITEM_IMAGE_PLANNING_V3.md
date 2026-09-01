@@ -33,6 +33,14 @@ lighting, or cinematic directives fail before the fixed GPU unit starts.
 External image APIs remain forbidden. `LOCAL_GENERATIVE_BACKGROUND` remains a historical V5 value
 and is not reinterpreted.
 
+The deployed lightweight local model is not an approved renderer for people. A student, teacher,
+or other human figure is expressed as a simplified anonymous deterministic SVG figure under the
+same pure-white, crisp-outline assessment style. Catalog rejects human-subject generation text
+before starting the fixed GPU unit. The hybrid route remains available for non-human organisms,
+animals, natural objects, and non-authoritative scene texture; authoritative geometry and labels
+still belong to SVG. This avoids accepting a collage, duplicate person, or malformed face that a
+small diffusion model may produce even when the prompt requests one subject.
+
 ## Canonical source and revision model
 
 ```text

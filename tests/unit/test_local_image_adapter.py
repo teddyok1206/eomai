@@ -91,8 +91,8 @@ def _hybrid_drawing() -> GeneratedVectorDrawingV6:
         {
             "production_route": "HYBRID_LOCAL_GENERATIVE",
             "route_reason": "HUMAN_OR_ANIMAL_REQUIRED",
-            "generation_prompt": "one student observing plants inside a quadrat",
-            "negative_prompt": "extra people, decorative objects",
+            "generation_prompt": "one fox standing beside sparse grass",
+            "negative_prompt": "extra animals, decorative objects",
         }
     )
     return GeneratedVectorDrawingV6.model_validate(value)
@@ -230,7 +230,7 @@ def test_v6_hybrid_request_describes_a_semantic_raster_not_a_background(tmp_path
     assert "pure white background" in request.generation.prompt
     assert "one coherent single-panel composition" in request.generation.prompt
     assert "never make a collage" in request.generation.prompt
-    assert "one student" in request.generation.prompt
+    assert "one fox" in request.generation.prompt
     assert "background layer only" not in request.generation.prompt
     assert "text" in request.generation.negative_prompt
     assert "photorealistic" in request.generation.negative_prompt
@@ -261,6 +261,35 @@ def test_v6_hybrid_request_rejects_style_that_conflicts_with_svg_contract(
         _build_request(
             workflow_id="workflow_" + "8" * 32,
             result_revision_id="rev_" + "9" * 32,
+            drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+            drawing=drawing,
+            binding=LocalImageProviderBinding.model_validate(_binding_value()),
+            overlay_path=path,
+        )
+
+
+@pytest.mark.parametrize(
+    "generation_prompt",
+    (
+        "one generic student holding a clipboard",
+        "one simplified person observing plants",
+        "기록판을 든 학생 한 명",
+        "식물을 관찰하는 사람 한 명",
+    ),
+)
+def test_v6_hybrid_request_rejects_human_subjects_that_require_deterministic_svg(
+    tmp_path: Path,
+    generation_prompt: str,
+) -> None:
+    path = tmp_path / "generated-overlay.png"
+    path.write_bytes(_overlay_png())
+    path.chmod(0o640)
+    drawing = _hybrid_drawing().model_copy(update={"generation_prompt": generation_prompt})
+
+    with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_INPUT_INVALID"):
+        _build_request(
+            workflow_id="workflow_" + "a" * 32,
+            result_revision_id="rev_" + "b" * 32,
             drawing_hash=content_sha256(drawing.model_dump(mode="json")),
             drawing=drawing,
             binding=LocalImageProviderBinding.model_validate(_binding_value()),

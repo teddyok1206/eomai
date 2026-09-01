@@ -396,6 +396,24 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
     assert "실사" in prompt_text
     assert "대상·자세·배치" in prompt_text
 
+    generated_deterministic_human_pack = compile_pack(
+        ROOT / "content/packs/generated-knowledge-item/1.8.0"
+    )
+    assert generated_deterministic_human_pack.manifest.pack.version == "1.8.0"
+    assert generated_deterministic_human_pack.source_tree_sha256 == (
+        "sha256:7bf08d9bec5e7ed94dd03d2c211dcd3701a5d12caef17782c8caf68359893060"
+    )
+    assert {profile.profile.version for profile in generated_deterministic_human_pack.profiles} == {
+        "6.0.0"
+    }
+    human_policy_text = "\n".join(
+        value.path.read_text(encoding="utf-8")
+        for value in generated_deterministic_human_pack.files
+        if value.relative_path.startswith("prompt-templates/")
+    )
+    assert "사람 형상은 반드시 익명화한 단순 SVG 선화" in human_policy_text
+    assert "현재 비인간 동물에만 사용한다" in human_policy_text
+
 
 def test_content_pack_provenance_never_fakes_a_source_pointer() -> None:
     pack_path = ROOT / "content/packs/general-knowledge-item/1.0.0/pack.yaml"

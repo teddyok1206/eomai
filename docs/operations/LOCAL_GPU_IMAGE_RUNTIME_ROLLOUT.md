@@ -14,6 +14,12 @@ features, crisp outlines, flat shapes, and restrained colors. A worker prompt su
 semantic subject, pose, and placement. Photorealistic, photographic, detailed-face/skin, 3D,
 gradient, shadow, dramatic-lighting, and cinematic directives fail closed before unit activation.
 
+Human subjects also fail closed before unit activation. The current lightweight model did not
+reliably honor exact-person-count or single-panel constraints, so students and other people use the
+deterministic SVG route. GPU generation is limited to non-human organic context and
+non-authoritative natural texture until a separately reviewed model and structural validator are
+released.
+
 ## Immutable preflight
 
 1. Require the reviewed Git commit and a clean worktree.
@@ -75,12 +81,12 @@ After the active-lease guard passes:
 
    The script deletes its exact workspace only after full receipt/hash validation. A failed smoke
    preserves its disposable state and provider workspace for diagnosis.
-5. import, release, inspect, and activate `content/packs/generated-knowledge-item/1.5.0`;
-6. verify new binding snapshots pin version 1.5, the binding SHA, model revision, and sampler while
+5. import, release, inspect, and activate `content/packs/generated-knowledge-item/1.8.0`;
+6. verify new binding snapshots pin version 1.8, the binding SHA, model revision, and sampler while
    existing workflow rows retain their prior release pointers.
 
-Do not activate 1.5 before the runner identity and fixed provider smoke pass. Never modify the
-immutable 1.3 or 1.4 release in place. The fixed-unit smoke still exercises the historical V1
+Do not activate 1.8 before the runner identity and fixed provider smoke pass. Never modify any
+historical release in place. The fixed-unit smoke still exercises the historical V1
 provider transport member name; production V6 publishes that byte-identical layer as the semantic
 `generated-raster.png` artifact member.
 

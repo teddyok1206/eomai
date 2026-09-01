@@ -89,6 +89,11 @@ _FORBIDDEN_GENERATION_STYLE_TERMS: Final = (
     "상세한 얼굴",
     "시네마틱",
 )
+_FORBIDDEN_GPU_HUMAN_SUBJECT: Final = re.compile(
+    r"(?:\b(?:student|person|people|human|boy|girl|man|woman|teacher|child|teenager)\b|"
+    r"학생|사람|소년|소녀|남자|여자|교사|선생|어린이|청소년)",
+    re.IGNORECASE,
+)
 _WORKFLOW_ID: Final = re.compile(r"^workflow_[0-9a-f]{32}$")
 _REVISION_ID: Final = re.compile(r"^rev_[0-9a-f]{32}$")
 _SHA256: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -218,7 +223,7 @@ def _build_request(
     normalized_generation_prompt = drawing.generation_prompt.casefold()
     if any(
         forbidden in normalized_generation_prompt for forbidden in _FORBIDDEN_GENERATION_STYLE_TERMS
-    ):
+    ) or _FORBIDDEN_GPU_HUMAN_SUBJECT.search(drawing.generation_prompt):
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
     prefix = (
         _SAFE_RASTER_PREFIX
