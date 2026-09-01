@@ -1,14 +1,15 @@
 # Local GPU image provider rollout
 
-Status: reviewed rollout draft; no model download or installation authorized by this document
+Status: reviewed V1 rollout; source contracts and isolated provider are implemented
 
 Last reviewed: 2026-09-01 UTC
 
 ## Boundary
 
 This rollout prepares EOM to run a local open-source image model for non-authoritative background
-generation. It does not authorize a live item workflow, HWPX build, model download, package
-installation, service restart, or external API call.
+generation. Operator authorization is still required for package/model installation and the local
+GPU smoke. This document never authorizes a live Item workflow, HWPX build, production route
+activation, service restart, or hosted inference API.
 
 The first candidate is `segmind/SSD-1B`. `FLUX.1-schnell` is a later quality target after the
 provider contract is proven with the lighter model.
@@ -47,7 +48,7 @@ Expected current baseline before provider installation:
 - `eom-image`: no PyTorch/Diffusers provider stack yet.
 - Existing EOM services remain active; no service restart is required for the design phase.
 
-## Installation plan, not yet executed
+## Installation plan
 
 Use a protected plan file before doing any network or package installation:
 
@@ -71,13 +72,13 @@ The plan must include:
 10. artifact/provenance receipt schema;
 11. rollback plan that removes only provider runtime/model-store additions.
 
-## Recommended model-store contract
+## Model-store contract
 
-The exact root should be confirmed during deployment. The contract should look like:
+The reviewed root is `/srv/eom/models/image`. It contains no mutable `latest` pointer:
 
 ```text
 /srv/eom/models/image/
-  ssd-1b/
+  <model_id>/
     <model_revision_id>/
       manifest.json
       files/
@@ -98,8 +99,10 @@ contract version.
 
 ## Package installation boundary
 
-For RTX 5080/Blackwell, the package plan should start from a CUDA 12.8 compatible PyTorch release.
-Do not rely on an older CUDA wheel simply because the host driver is new.
+For RTX 5080/Blackwell, use PyTorch 2.7.1 from the official CUDA 12.8 wheel index, followed by the
+exact versions recorded in `services/image_provider/pyproject.toml`. Do not rely on an older CUDA
+wheel simply because the host driver is new. Install the contracts and provider from locally built,
+hash-recorded wheels with `--no-deps` after the reviewed dependency set is present.
 
 The installation command set must be reviewed as an operator block before execution. It should not
 use `curl | sh`, random third-party binaries, or ambient `pip`. It must use the explicit

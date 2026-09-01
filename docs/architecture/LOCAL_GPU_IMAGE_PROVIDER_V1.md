@@ -1,6 +1,6 @@
 # Local GPU image provider V1
 
-Status: design draft for protocol-first implementation
+Status: V1 contracts and isolated SSD-1B adapter implemented; production route remains disabled
 
 Last reviewed: 2026-09-01 UTC
 
@@ -19,8 +19,8 @@ overlay and are composed deterministically by Catalog.
 ## Current hardware and runtime boundary
 
 The current EOM server has one NVIDIA GeForce RTX 5080 with 16 GiB VRAM and compute capability
-12.0. The existing `eom-image` Conda environment does not yet contain PyTorch, Diffusers,
-Transformers, Accelerate, Safetensors, or Pillow.
+12.0. The dedicated `eom-image` Conda environment is the only approved runtime target. API, Web,
+HWPX, Catalog, and Codex worker environments must not receive the GPU dependency stack.
 
 Blackwell support should be treated as a runtime dependency boundary. PyTorch 2.7 introduced
 Blackwell support and CUDA 12.8 wheels, so the first installation plan should use a CUDA 12.8
@@ -42,6 +42,20 @@ Operational recommendation:
    non-authoritative-background policy are already enforced.
 3. Do not install several model families at once. One model revision should be accepted, hashed, and
    smoked before the next candidate is introduced.
+
+The first pinned runtime set is PyTorch 2.7.1 with CUDA 12.8, Diffusers 0.35.2, Transformers
+4.56.2, Accelerate 1.10.1, Safetensors 0.6.2, Pillow 11.3.0, and Hugging Face Hub 0.35.3. These
+versions are isolated in the `eom-local-image-provider` wheel and are not platform dependencies.
+
+The implemented source boundaries are:
+
+- `eom-image-contracts`: JSON Schema 2020-12 plus frozen Pydantic value contracts;
+- `eom-local-image-provider`: model resolver, file hash verification, Diffusers adapter, and CLI;
+- `scripts/image_provider`: reviewed download, atomic model revision installation, and smoke request.
+
+The exact SSD-1B upstream revision is
+`60987f37e94cd59c36b1cba832b9f97b57395a10`. Only the reviewed fp16 Safetensors pipeline files
+are accepted; pickle weights and unreviewed extra members fail closed.
 
 ## Responsibility and system boundary
 

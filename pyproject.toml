@@ -55,6 +55,7 @@ where = [
   "packages/operator_identity",
   "services/identity_service",
   "packages/catalog_contracts",
+  "packages/image_contracts",
   "services/catalog_service",
 ]
 
@@ -78,6 +79,7 @@ eom_catalog_contracts = [
   "resources/legacy-knowledge/*.json",
   "resources/legacy-usage/*.json",
 ]
+eom_image_contracts = ["schemas/*.json"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
@@ -125,7 +127,9 @@ mypy_path = [
   "apps/application_api",
   "apps/web_gui",
   "packages/catalog_contracts",
+  "packages/image_contracts",
   "services/catalog_service",
+  "services/image_provider",
   "apps/eomctl",
   "tools/dev_reporter",
   "tools/textbook_analysis",
@@ -150,5 +154,7 @@ packages = [
   "eom_api",
   "eom_web_gui",
   "eom_catalog_contracts",
+  "eom_image_contracts",
+  "eom_image_provider",
   "eom_catalog_service",
 ]

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-local-image-provider"
+version = "0.1.0"
+description = "Isolated SSD-1B local GPU provider for EOM background generation"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  # Separate Blackwell/CUDA runtime; never install these into API, Web, or HWPX environments.
+  "accelerate==1.10.1",
+  "diffusers==0.35.2",
+  "eom-image-contracts==0.1.0",
+  "huggingface-hub==0.35.3",
+  "Pillow==11.3.0",
+  "safetensors==0.6.2",
+  "torch==2.7.1",
+  "transformers==4.56.2",
+]
+
+[project.scripts]
+eom-local-image = "eom_image_provider.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_image_provider*"]

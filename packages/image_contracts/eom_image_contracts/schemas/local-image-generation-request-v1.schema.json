@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-generation-request/1.0",
+  "title": "EOM local image generation request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "idempotency_key",
+    "model",
+    "prompt",
+    "prompt_sha256",
+    "negative_prompt",
+    "negative_prompt_sha256",
+    "seed",
+    "sampler",
+    "generation_canvas",
+    "delivery_canvas",
+    "output_member",
+    "timeout_seconds",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "local-image-generation-request/1.0"},
+    "request_id": {"type": "string", "pattern": "^imgreq_[0-9a-f]{32}$"},
+    "idempotency_key": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[!-~]+$"},
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_id", "model_revision_id", "manifest_sha256", "provider_family", "runtime_contract_version"],
+      "properties": {
+        "model_id": {"type": "string", "pattern": "^imgmodel_[0-9a-f]{32}$"},
+        "model_revision_id": {"type": "string", "pattern": "^imgmodelrev_[0-9a-f]{32}$"},
+        "manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "provider_family": {"const": "diffusers-ssd-1b"},
+        "runtime_contract_version": {"const": "eom-local-image-provider/1.0"}
+      }
+    },
+    "prompt": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "prompt_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "negative_prompt": {"type": ["string", "null"], "minLength": 1, "maxLength": 2000},
+    "negative_prompt_sha256": {
+      "oneOf": [
+        {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "sampler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "inference_steps", "guidance_scale", "dtype"],
+      "properties": {
+        "contract": {"const": "euler-discrete/ssd-1b-v1"},
+        "inference_steps": {"type": "integer", "minimum": 1, "maximum": 50},
+        "guidance_scale": {"type": "number", "minimum": 0, "maximum": 20},
+        "dtype": {"const": "float16"}
+      }
+    },
+    "generation_canvas": {"const": {"width_px": 800, "height_px": 504}},
+    "delivery_canvas": {"const": {"width_px": 800, "height_px": 500}},
+    "output_member": {"const": "generated-background.png"},
+    "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 900},
+    "request_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

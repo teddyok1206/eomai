@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-model-manifest/1.0",
+  "title": "EOM local image model manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "model_id",
+    "model_revision_id",
+    "provider_family",
+    "runtime_contract_version",
+    "state",
+    "upstream",
+    "files",
+    "created_at",
+    "approved_at",
+    "approved_by",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "local-image-model-manifest/1.0"},
+    "model_id": {"type": "string", "pattern": "^imgmodel_[0-9a-f]{32}$"},
+    "model_revision_id": {"type": "string", "pattern": "^imgmodelrev_[0-9a-f]{32}$"},
+    "provider_family": {"const": "diffusers-ssd-1b"},
+    "runtime_contract_version": {"const": "eom-local-image-provider/1.0"},
+    "state": {"const": "APPROVED"},
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo_id", "revision", "source_url", "license_id"],
+      "properties": {
+        "repo_id": {"const": "segmind/SSD-1B"},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "source_url": {"const": "https://huggingface.co/segmind/SSD-1B"},
+        "license_id": {"const": "Apache-2.0"}
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["relative_path", "size_bytes", "sha256"],
+        "properties": {
+          "relative_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)[A-Za-z0-9._/-]+$"
+          },
+          "size_bytes": {"type": "integer", "minimum": 1, "maximum": 8589934592},
+          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "approved_at": {"type": "string", "format": "date-time"},
+    "approved_by": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._:@-]+$"},
+    "manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-generation-receipt/1.0",
+  "title": "EOM local image generation receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "request_sha256",
+    "model",
+    "prompt_sha256",
+    "negative_prompt_sha256",
+    "seed",
+    "sampler",
+    "output",
+    "runtime",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "local-image-generation-receipt/1.0"},
+    "request_id": {"type": "string", "pattern": "^imgreq_[0-9a-f]{32}$"},
+    "request_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_id", "model_revision_id", "manifest_sha256", "provider_family", "runtime_contract_version"],
+      "properties": {
+        "model_id": {"type": "string", "pattern": "^imgmodel_[0-9a-f]{32}$"},
+        "model_revision_id": {"type": "string", "pattern": "^imgmodelrev_[0-9a-f]{32}$"},
+        "manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "provider_family": {"const": "diffusers-ssd-1b"},
+        "runtime_contract_version": {"const": "eom-local-image-provider/1.0"}
+      }
+    },
+    "prompt_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "negative_prompt_sha256": {
+      "oneOf": [
+        {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "sampler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "inference_steps", "guidance_scale", "dtype"],
+      "properties": {
+        "contract": {"const": "euler-discrete/ssd-1b-v1"},
+        "inference_steps": {"type": "integer", "minimum": 1, "maximum": 50},
+        "guidance_scale": {"type": "number", "minimum": 0, "maximum": 20},
+        "dtype": {"const": "float16"}
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["member_path", "media_type", "width_px", "height_px", "mode", "size_bytes", "sha256"],
+      "properties": {
+        "member_path": {"const": "generated-background.png"},
+        "media_type": {"const": "image/png"},
+        "width_px": {"const": 800},
+        "height_px": {"const": 500},
+        "mode": {"const": "RGB"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 8388608},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_version", "python_version", "torch_version", "diffusers_version", "transformers_version", "cuda_version", "gpu_name", "compute_capability", "peak_gpu_memory_bytes"],
+      "properties": {
+        "provider_version": {"const": "eom-local-image-provider/1.0"},
+        "python_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "torch_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "diffusers_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "transformers_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "cuda_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "gpu_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "compute_capability": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+        "peak_gpu_memory_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "duration_ms": {"type": "integer", "minimum": 1, "maximum": 900000},
+    "receipt_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-image-contracts"
+version = "0.1.0"
+description = "Strict contracts for the EOM local image provider"
+requires-python = ">=3.11,<3.13"
+dependencies = ["jsonschema==4.25.1", "pydantic==2.13.4"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_image_contracts*"]
+
+[tool.setuptools.package-data]
+eom_image_contracts = ["schemas/*.json"]
