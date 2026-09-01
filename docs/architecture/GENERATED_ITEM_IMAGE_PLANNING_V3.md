@@ -23,7 +23,9 @@ Two routes are executable:
 The word `realistic` in a route reason describes the presence of a natural object or scene; it does
 not authorize photorealistic rendering. Both routes share one reviewed presentation language:
 pure-white background, simplified anonymous forms, minimal facial detail, crisp dark outlines,
-flat shapes, and restrained grayscale or limited flat color. The fixed local-provider adapter
+flat shapes, and restrained grayscale or limited flat color. It also requires one coherent
+single-panel composition with the exact requested subject count and forbids collage/contact-sheet
+layouts or duplicate subjects. The fixed local-provider adapter
 prepends that style contract to every GPU request. Worker-authored generation text describes only
 the subject, pose, and placement. Conflicting photo, detailed-face, 3D, gradient, shadow, dramatic
 lighting, or cinematic directives fail before the fixed GPU unit starts.

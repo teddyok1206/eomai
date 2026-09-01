@@ -228,11 +228,15 @@ def test_v6_hybrid_request_describes_a_semantic_raster_not_a_background(tmp_path
     assert "deterministic Python/SVG figure" in request.generation.prompt
     assert "simplified generic figures" in request.generation.prompt
     assert "pure white background" in request.generation.prompt
+    assert "one coherent single-panel composition" in request.generation.prompt
+    assert "never make a collage" in request.generation.prompt
     assert "one student" in request.generation.prompt
     assert "background layer only" not in request.generation.prompt
     assert "text" in request.generation.negative_prompt
     assert "photorealistic" in request.generation.negative_prompt
     assert "uncanny face" in request.generation.negative_prompt
+    assert "duplicate person" in request.generation.negative_prompt
+    assert "contact sheet" in request.generation.negative_prompt
 
 
 @pytest.mark.parametrize(

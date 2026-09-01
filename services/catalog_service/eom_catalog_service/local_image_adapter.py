@@ -45,9 +45,10 @@ _EOM_TEXTBOOK_ILLUSTRATION_STYLE: Final = (
     "Use exactly the visual language of an EOM deterministic Python/SVG figure: a clean Korean "
     "high-school science assessment illustration with simplified generic figures, minimal facial "
     "features, crisp dark outlines, flat shapes, restrained grayscale or limited flat colors, a "
-    "pure white background, and a clear front or side view. Do not create photorealism, "
-    "photographic texture, gradients, shadows, glossy highlights, dramatic lighting, detailed "
-    "skin, or cinematic composition. "
+    "pure white background, and a clear front or side view. Use one coherent single-panel "
+    "composition with exactly the requested subject count; never make a collage, contact sheet, "
+    "or duplicated subject. Do not create photorealism, photographic texture, gradients, shadows, "
+    "glossy highlights, dramatic lighting, detailed skin, or cinematic composition. "
 )
 _SAFE_BACKGROUND_PREFIX: Final = (
     "Non-authoritative background layer only. "
@@ -64,6 +65,8 @@ _SAFE_RASTER_PREFIX: Final = (
 )
 _SAFE_NEGATIVE_PROMPT: Final = (
     "photorealistic, photograph, photographic texture, detailed face, detailed skin, uncanny face, "
+    "multiple people, duplicate person, duplicate subject, collage, contact sheet, multiple "
+    "panels, "
     "3d render, gradient, shadow, glossy highlight, dramatic lighting, cinematic composition, "
     "text, letters, labels, numbers, symbols, equations, graph axes, scale marks, measurement "
     "marks, logo, watermark"
