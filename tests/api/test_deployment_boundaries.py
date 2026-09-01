@@ -217,6 +217,28 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         assert required in source
 
 
+def test_api_release_verifies_local_image_runtime_and_contract_resources() -> None:
+    source = _source("scripts/api/deploy_release.sh")
+
+    for required in (
+        "eom_image_contracts/models.py",
+        "eom_image_contracts/validation.py",
+        "eom_catalog_service/generated_stimulus.py",
+        "eom_catalog_service/local_image_adapter.py",
+        "eom_catalog_service/vector_stimulus.py",
+        "eom_catalog_service/workflow_catalog.py",
+        "local-image-model-manifest-v1.schema.json",
+        "local-image-generation-request-v1.schema.json",
+        "local-image-generation-receipt-v1.schema.json",
+        "local-image-provider-binding-v1.schema.json",
+        "local-image-composite-request-v1.schema.json",
+        "local-image-composite-receipt-v1.schema.json",
+        "Image Contract schema wheel resources mismatch",
+        "Image Contract schema resource drift",
+    ):
+        assert required in source
+
+
 def test_release_migration_wrapper_pins_source_and_database_owner() -> None:
     source = _source("scripts/api/migrate_release.sh")
 

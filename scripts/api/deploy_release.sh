@@ -279,6 +279,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eomctl/knowledge.py",
     }
     catalog_staging_runtime = {
+        "eom_image_contracts/models.py",
+        "eom_image_contracts/validation.py",
         "eom_catalog_contracts/assessment_item.py",
         "eom_catalog_contracts/application.py",
         "eom_catalog_contracts/knowledge.py",
@@ -296,6 +298,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/knowledge_analysis_service.py",
         "eom_catalog_service/knowledge_analysis_sources.py",
         "eom_catalog_service/knowledge_stimulus.py",
+        "eom_catalog_service/local_image_adapter.py",
         "eom_catalog_service/legacy_usage_models.py",
         "eom_catalog_service/legacy_usage_service.py",
         "eom_catalog_service/legacy_xlsx.py",
@@ -303,6 +306,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/legacy_source_inventory.py",
         "eom_catalog_service/settings.py",
         "eom_catalog_service/staging.py",
+        "eom_catalog_service/vector_stimulus.py",
+        "eom_catalog_service/workflow_catalog.py",
         "eom_catalog_service/registry_service.py",
         "eom_catalog_service/runtime_privileges.py",
     }
@@ -551,6 +556,37 @@ with zipfile.ZipFile(platform_wheel) as archive:
             raise SystemExit(f"Catalog Contract schema resource drift: {resource_name}")
         if member not in record:
             raise SystemExit(f"Catalog Contract resource missing from RECORD: {resource_name}")
+
+image_prefix = "eom_image_contracts/schemas/"
+image_resources = {
+    "local-image-model-manifest-v1.schema.json": "schemas/image-provider/local-image-model-manifest-v1.schema.json",
+    "local-image-generation-request-v1.schema.json": "schemas/image-provider/local-image-generation-request-v1.schema.json",
+    "local-image-generation-receipt-v1.schema.json": "schemas/image-provider/local-image-generation-receipt-v1.schema.json",
+    "local-image-provider-binding-v1.schema.json": "schemas/image-provider/local-image-provider-binding-v1.schema.json",
+    "local-image-composite-request-v1.schema.json": "schemas/image-provider/local-image-composite-request-v1.schema.json",
+    "local-image-composite-receipt-v1.schema.json": "schemas/image-provider/local-image-composite-receipt-v1.schema.json",
+}
+with zipfile.ZipFile(platform_wheel) as archive:
+    names = set(archive.namelist())
+    packaged = {
+        name.removeprefix(image_prefix)
+        for name in names
+        if name.startswith(image_prefix) and name.endswith(".schema.json")
+    }
+    if packaged != set(image_resources):
+        raise SystemExit(
+            "Image Contract schema wheel resources mismatch: "
+            f"expected={sorted(image_resources)} actual={sorted(packaged)}"
+        )
+    record_name = next(name for name in names if name.endswith(".dist-info/RECORD"))
+    record = archive.read(record_name).decode("utf-8")
+    repository_root = Path(os.environ["REPOSITORY_ROOT"])
+    for resource_name, canonical_name in sorted(image_resources.items()):
+        member = image_prefix + resource_name
+        if archive.read(member) != (repository_root / canonical_name).read_bytes():
+            raise SystemExit(f"Image Contract schema resource drift: {resource_name}")
+        if member not in record:
+            raise SystemExit(f"Image Contract resource missing from RECORD: {resource_name}")
 
 with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporary:
     root = Path(temporary)
