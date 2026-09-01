@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import grp
 import json
 import os
 import pwd
@@ -30,7 +31,12 @@ STATE_ROOT = Path("/var/lib/eom-workflow-runner")
 
 def _require_runner_identity() -> None:
     account = pwd.getpwnam("eom-workflow-runner")
-    if os.geteuid() != account.pw_uid or os.getegid() != account.pw_gid:
+    provider_group = grp.getgrnam("eom-image")
+    if (
+        os.geteuid() != account.pw_uid
+        or os.getegid() != account.pw_gid
+        or provider_group.gr_gid not in os.getgroups()
+    ):
         raise SystemExit("LOCAL_IMAGE_SMOKE_IDENTITY_INVALID")
     metadata = STATE_ROOT.lstat()
     if (

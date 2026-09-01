@@ -52,7 +52,7 @@ After the active-lease guard passes:
    overlay, never an Item workflow:
 
    ```bash
-   sudo -n runuser -u eom-workflow-runner -g eom -- \
+   sudo -n runuser -u eom-workflow-runner -g eom -G eom-image -- \
      /srv/eom/conda/envs/eom-api/bin/python -I \
      /home/eom/EOM/scripts/image_provider/run_fixed_composite_smoke.py
    ```
