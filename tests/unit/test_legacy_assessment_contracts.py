@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from eom_catalog_contracts import (
@@ -14,6 +16,10 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_identifiers import content_sha256
+from eom_orchestrator.errors import PlatformError
+from eom_orchestrator.legacy_item_extraction_artifact import (
+    stage_legacy_item_extraction_result,
+)
 from pydantic import ValidationError
 
 ZERO_SHA = "sha256:" + "0" * 64
@@ -239,11 +245,190 @@ def _result(*, item_content: dict[str, object] | None = None) -> dict[str, objec
     return _hashed(value, "result_sha256")
 
 
+def _staging_request() -> LegacyItemExtractionRequest:
+    value: dict[str, object] = {
+        "schema_version": "legacy-item-extraction-request/1.0",
+        "extraction_request_id": "itemextractreq_" + "8" * 32,
+        "bundle": {
+            "assessment_source_bundle_id": "assessbundle_" + "8" * 32,
+            "assessment_source_bundle_revision_id": "assessbundlerev_" + "8" * 32,
+            "bundle_manifest_sha256": "sha256:" + "8" * 64,
+        },
+        "occurrence": {
+            "assessment_occurrence_id": "occurrence_" + "8" * 32,
+            "assessment_occurrence_revision_id": "occurrev_" + "8" * 32,
+            "occurrence_revision_sha256": "sha256:" + "8" * 64,
+        },
+        "layout_observation": {
+            "assessment_layout_observation_id": "assessmentlayout_" + "8" * 32,
+            "artifact": _artifact(
+                "8",
+                "assessment-layout.json",
+                "application/json",
+                schema_ref=("eom://schemas/legacy-assessment/assessment-layout-observation/1.0"),
+            ),
+            "workspace_relative_path": "source/layout-observation.json",
+            "observation_sha256": "sha256:" + "8" * 64,
+        },
+        "work_unit_ordinal": 0,
+        "expected_item_numbers": [1],
+        "page_inputs": [
+            {
+                "page_input_id": "assessmentpage_" + "8" * 32,
+                "source_role": "PROBLEM_DOCUMENT",
+                "physical_page": 1,
+                "source": _artifact("3", "problem.pdf", "application/pdf"),
+                "image": _artifact(
+                    "4",
+                    "pages/problem-1.png",
+                    "image/png",
+                    schema_ref="eom://schemas/legacy-assessment/page-image/1.0",
+                ),
+                "workspace_relative_path": ("source/pages/assessmentpage_" + "8" * 32 + ".png"),
+                "width_px": 1653,
+                "height_px": 2337,
+            },
+            {
+                "page_input_id": "assessmentpage_" + "9" * 32,
+                "source_role": "ANSWER_EXPLANATION_DOCUMENT",
+                "physical_page": 1,
+                "source": _artifact("5", "answer.pdf", "application/pdf"),
+                "image": _artifact(
+                    "6",
+                    "pages/answer-1.png",
+                    "image/png",
+                    schema_ref="eom://schemas/legacy-assessment/page-image/1.0",
+                ),
+                "workspace_relative_path": ("source/pages/assessmentpage_" + "9" * 32 + ".png"),
+                "width_px": 1653,
+                "height_px": 2337,
+            },
+        ],
+        "source_materializations": [
+            {
+                "materialization_id": "assessmaterial_" + "7" * 32,
+                "source_role": "OTHER_REVIEWED_EVIDENCE",
+                "source": _artifact("7", "reference.json", "application/json"),
+                "workspace_relative_path": "source/reference.json",
+            }
+        ],
+        "execution_preset_id": "execpreset_" + "8" * 32,
+        "execution_preset_revision_id": "execpresetrev_" + "8" * 32,
+        "execution_preset_sha256": "sha256:" + "8" * 64,
+        "worker_result_schema_ref": (
+            "eom://schemas/legacy-assessment/legacy-item-extraction-result/1.0"
+        ),
+        "created_at": NOW,
+    }
+    return LegacyItemExtractionRequest.model_validate(_hashed(value, "request_sha256"))
+
+
+def _staging_result(request: LegacyItemExtractionRequest) -> LegacyItemExtractionResult:
+    value = _result()
+    value["extraction_request_id"] = request.extraction_request_id
+    value["request_sha256"] = request.request_sha256
+    value["observed_page_input_ids"] = [page.page_input_id for page in request.page_inputs]
+    items = value["items"]
+    assert isinstance(items, list) and isinstance(items[0], dict)
+    anchors = items[0]["source_anchors"]
+    assert isinstance(anchors, list)
+    for anchor, page in zip(anchors, request.page_inputs, strict=True):
+        assert isinstance(anchor, dict)
+        anchor["source"] = page.image.model_dump(mode="json")
+    materialization = request.source_materializations[0]
+    anchors.append(
+        {
+            "anchor_id": "assessmentanchor_" + "3" * 32,
+            "source": materialization.source.model_dump(mode="json"),
+            "source_role": materialization.source_role,
+            "physical_page": None,
+            "bounding_box": None,
+            "locator_detail": "검토된 보조 자료",
+        }
+    )
+    value["result_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "result_sha256"}
+    )
+    return LegacyItemExtractionResult.model_validate(value)
+
+
 def test_extraction_result_schema_and_typed_contract_accept_table_only_item() -> None:
     value = _result()
     validate_contract("legacy-item-extraction-result", value)
     parsed = LegacyItemExtractionResult.model_validate(value)
     assert parsed.items[0].visual_patterns[0].representation_kind == "TABLE"
+
+
+def test_extraction_staging_accepts_pinned_page_images_and_materialized_source(
+    tmp_path: Path,
+) -> None:
+    request = _staging_request()
+    result = _staging_result(request)
+
+    staged, receipt = stage_legacy_item_extraction_result(
+        result=result,
+        request=request,
+        completed_at=datetime(2026, 9, 2, tzinfo=UTC),
+        job_id="job_" + "8" * 32,
+        logical_artifact_id="artifact_" + "9" * 32,
+        revision_id="rev_" + "a" * 32,
+        staging=tmp_path,
+    )
+
+    assert staged.primary_hash == receipt.result_artifact.sha256
+    assert receipt.observed_page_input_ids == tuple(
+        page.page_input_id for page in request.page_inputs
+    )
+
+
+def test_extraction_staging_rejects_pdf_source_as_page_anchor(tmp_path: Path) -> None:
+    request = _staging_request()
+    result = _staging_result(request)
+    document = result.model_dump(mode="json")
+    document["items"][0]["source_anchors"][0]["source"] = request.page_inputs[0].source.model_dump(
+        mode="json"
+    )
+    document["result_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "result_sha256"}
+    )
+
+    with pytest.raises(PlatformError, match="outside the pinned page inputs"):
+        stage_legacy_item_extraction_result(
+            result=LegacyItemExtractionResult.model_validate(document),
+            request=request,
+            completed_at=datetime(2026, 9, 2, tzinfo=UTC),
+            job_id="job_" + "8" * 32,
+            logical_artifact_id="artifact_" + "9" * 32,
+            revision_id="rev_" + "a" * 32,
+            staging=tmp_path,
+        )
+    assert not (tmp_path / "legacy-item-extraction-artifact").exists()
+
+
+def test_extraction_staging_still_rejects_unpinned_materialized_source(
+    tmp_path: Path,
+) -> None:
+    request = _staging_request()
+    result = _staging_result(request)
+    document = result.model_dump(mode="json")
+    document["items"][0]["source_anchors"][2]["source"] = _artifact(
+        "f", "foreign.json", "application/json"
+    )
+    document["result_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "result_sha256"}
+    )
+
+    with pytest.raises(PlatformError, match="outside the pinned materializations"):
+        stage_legacy_item_extraction_result(
+            result=LegacyItemExtractionResult.model_validate(document),
+            request=request,
+            completed_at=datetime(2026, 9, 2, tzinfo=UTC),
+            job_id="job_" + "8" * 32,
+            logical_artifact_id="artifact_" + "9" * 32,
+            revision_id="rev_" + "a" * 32,
+            staging=tmp_path,
+        )
+    assert not (tmp_path / "legacy-item-extraction-artifact").exists()
 
 
 def test_extraction_contract_preserves_multiple_images_and_required_statement_set_shape() -> None:

@@ -34,7 +34,7 @@ def _validate_closed_source_anchors(
     *, result: LegacyItemExtractionResult, request: LegacyItemExtractionRequest
 ) -> None:
     page_sources = {
-        (_pointer_identity(page.source), page.source_role, page.physical_page)
+        (_pointer_identity(page.image), page.source_role, page.physical_page)
         for page in request.page_inputs
     }
     materialized_sources = {
@@ -157,7 +157,8 @@ def stage_legacy_item_extraction_result(
         "result_sha256": result.result_sha256,
         "observed_page_input_ids": list(result.observed_page_input_ids),
         "item_numbers": list(item_numbers),
-        "completed_at": completed_at,
+        # Hash the same RFC 3339 value that Pydantic serializes for the receipt.
+        "completed_at": completed_at.isoformat().replace("+00:00", "Z"),
         "receipt_sha256": "sha256:" + "0" * 64,
     }
     receipt_document["receipt_sha256"] = content_sha256(
