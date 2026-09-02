@@ -230,23 +230,11 @@ def bootstrap_legacy_item_extraction_control_plane(
                 )
         released = draft
     else:
-        report_document: dict[str, object] = {
-            "schema_version": "execution-preset-evaluation-report/1.0",
-            "evaluated_preset_revision_id": draft.preset_revision_id,
-            "evaluated_policy_sha256": policy_sha256,
-            "scope": "NON_LIVE",
-            "outcome": "PASS",
-            "summary_code": "LEGACY_EXTRACTION_CONTRACT_ACCEPTANCE",
-            "cases_total": evaluation_cases_total,
-            "cases_passed": evaluation_cases_total,
-            "quality_score_permille": 1000,
-            "completed_at": (manifest.created_at + timedelta(minutes=1))
-            .isoformat()
-            .replace("+00:00", "Z"),
-            "report_sha256": "sha256:" + "0" * 64,
-        }
-        report_document["report_sha256"] = compute_control_document_hash(
-            report_document, "report_sha256"
+        report_document = _build_non_live_evaluation_report(
+            preset_revision_id=draft.preset_revision_id,
+            policy_sha256=policy_sha256,
+            evaluation_cases_total=evaluation_cases_total,
+            completed_at=manifest.created_at + timedelta(minutes=1),
         )
         payload = canonical_json_bytes(report_document) + b"\n"
         report_artifact = publisher.publish_bytes(
@@ -285,6 +273,34 @@ def bootstrap_legacy_item_extraction_control_plane(
         auth_binding_id=auth_binding_id,
         source_commit=source_commit,
     )
+
+
+def _build_non_live_evaluation_report(
+    *,
+    preset_revision_id: str,
+    policy_sha256: str,
+    evaluation_cases_total: int,
+    completed_at: datetime,
+) -> dict[str, object]:
+    """Build the existing V1 non-live contract-validation evidence."""
+
+    report_document: dict[str, object] = {
+        "schema_version": "execution-preset-evaluation-report/1.0",
+        "evaluated_preset_revision_id": preset_revision_id,
+        "evaluated_policy_sha256": policy_sha256,
+        "scope": "NON_LIVE",
+        "outcome": "PASS",
+        "summary_code": "CONTRACT_VALIDATION",
+        "cases_total": evaluation_cases_total,
+        "cases_passed": evaluation_cases_total,
+        "quality_score_permille": 1000,
+        "completed_at": completed_at.isoformat().replace("+00:00", "Z"),
+        "report_sha256": "sha256:" + "0" * 64,
+    }
+    report_document["report_sha256"] = compute_control_document_hash(
+        report_document, "report_sha256"
+    )
+    return report_document
 
 
 def _publish_extraction_capacity_policy(

@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from eom_orchestrator.control_service import ControlPlaneError
+from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
 from eom_orchestrator.legacy_item_extraction_bootstrap import (
     LegacyItemExtractionBootstrapManifest,
+    _build_non_live_evaluation_report,
     _require_exact_six_slot_registry,
     load_legacy_item_extraction_bootstrap_manifest,
 )
 from eom_orchestrator.worker_registry import WorkerSlot
+from eom_workflow import ExecutionPresetEvaluationReport
 from eom_workflow.control_schemas import validate_control_contract
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
@@ -36,6 +39,23 @@ def test_legacy_item_extraction_bootstrap_is_schema_first_and_exact() -> None:
     assert hashlib.sha256((CONFIG / "bootstrap.yaml").read_bytes()).hexdigest() == (
         "4d63661cc051c3eec1a8f56a7deaefa8350d993922e571f38db37d090826d4b6"
     )
+
+
+def test_legacy_item_extraction_evaluation_uses_existing_v1_contract_code() -> None:
+    document = _build_non_live_evaluation_report(
+        preset_revision_id="execpresetrev_" + "a" * 32,
+        policy_sha256="sha256:" + "b" * 64,
+        evaluation_cases_total=49,
+        completed_at=datetime(2026, 9, 1, 0, 1, tzinfo=UTC),
+    )
+
+    validate_control_contract("execution-preset-evaluation-report", document)
+    report = ExecutionPresetEvaluationReport.model_validate(document)
+
+    assert report.scope == "NON_LIVE"
+    assert report.summary_code == "CONTRACT_VALIDATION"
+    assert report.cases_total == report.cases_passed == 49
+    assert report.report_sha256 == compute_control_document_hash(document, "report_sha256")
 
 
 @pytest.mark.parametrize(
