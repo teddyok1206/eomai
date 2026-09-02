@@ -610,18 +610,23 @@ def _bind_result_string_const(
 ) -> None:
     """Bind one exact string without creating a response-format-invalid ref sibling."""
 
+    visited_references: set[str] = set()
     reference = property_schema.get("$ref")
-    if reference is not None:
+    while reference is not None:
         prefix = "#/$defs/"
         if set(property_schema) != {"$ref"} or not isinstance(reference, str):
             raise WorkflowSchemaError("result string reference is not independently projectable")
         if not reference.startswith(prefix):
             raise WorkflowSchemaError("result string reference is not local")
+        if reference in visited_references:
+            raise WorkflowSchemaError("result string reference cycle is not projectable")
+        visited_references.add(reference)
         definition = copy.deepcopy(
             _mapping(_mapping(schema, "$defs"), reference.removeprefix(prefix))
         )
         property_schema.clear()
         property_schema.update(definition)
+        reference = property_schema.get("$ref")
     if property_schema.get("type") != "string" or "$ref" in property_schema:
         raise WorkflowSchemaError("result const binding requires an inline string schema")
     property_schema["const"] = value

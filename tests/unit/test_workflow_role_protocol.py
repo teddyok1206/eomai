@@ -4,12 +4,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from eom_catalog_contracts import AssessmentPageImageInput, LegacyItemExtractionRequest
 from eom_identifiers import content_sha256
 from eom_workflow.compiler import compile_definition
 from eom_workflow.models import (
     ArtifactPointer,
     ArtifactSpec,
     KnowledgeAnalysisWorkerRequest,
+    LegacyItemExtractionWorkerRequest,
     RoleWorkerInput,
     WorkflowRequest,
 )
@@ -178,6 +180,41 @@ def test_constrained_result_schema_fixes_all_execution_identifiers() -> None:
     assert properties["job_id"]["const"] == JOB_ID
     assert properties["workflow_id"]["const"] == WORKFLOW_ID
     assert properties["step_run_id"]["const"] == STEP_RUN_ID
+
+
+def test_constrained_legacy_extraction_schema_resolves_nested_string_references() -> None:
+    page = AssessmentPageImageInput.model_construct(
+        page_input_id="assessmentpage_" + "1" * 32,
+    )
+    extraction_request = LegacyItemExtractionRequest.model_construct(
+        extraction_request_id="itemextractreq_" + "2" * 32,
+        request_sha256="sha256:" + "3" * 64,
+        page_inputs=(page,),
+        expected_item_numbers=(7,),
+    )
+    worker_input = RoleWorkerInput.model_construct(
+        job_id=JOB_ID,
+        workflow_id=WORKFLOW_ID,
+        step_run_id=STEP_RUN_ID,
+        attempt=1,
+        role="support",
+        request=LegacyItemExtractionWorkerRequest.model_construct(
+            extraction_request=extraction_request,
+        ),
+        upstream_artifacts=(),
+        artifact=ArtifactSpec(logical_artifact_id=ARTIFACT_ID, revision_id=REVISION_ID),
+    )
+
+    schema = constrained_result_schema("legacy-item-extraction-result@1.0", worker_input)
+    properties = schema["$defs"]["LegacyItemExtractionResult"]["properties"]
+
+    assert properties["extraction_request_id"]["const"] == extraction_request.extraction_request_id
+    assert properties["request_sha256"] == {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$",
+        "const": extraction_request.request_sha256,
+    }
+    validate_codex_structured_output_schema(schema)
 
 
 def test_constrained_knowledge_analysis_schema_fixes_request_identity() -> None:
