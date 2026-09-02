@@ -157,8 +157,9 @@ def test_item_origin_and_legacy_assessment_migrations_install_fail_closed_guards
     required_constraints = {
         "fk_organization_current_revision",
         "fk_assessment_occurrence_organization_revision_identity",
+        "fk_assessment_occ_source_evidence_artifact_revision_identity",
         "fk_item_origin_profile_item_revision_identity",
-        "fk_assessment_source_bundle_inventory_artifact_revision_identity",
+        "fk_assessment_bundle_inventory_artifact_revision_identity",
         "fk_assessment_source_bundle_member_artifact_revision_identity",
         "fk_assessment_layout_bundle_revision_identity",
         "fk_legacy_item_acceptance_result_artifact_revision_identity",

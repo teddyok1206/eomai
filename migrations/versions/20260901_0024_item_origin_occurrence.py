@@ -164,6 +164,7 @@ def upgrade() -> None:
         "organization_revisions",
         "organization_revision_id",
         "uq_organization_source_evidence",
+        "fk_organization_source_evidence_artifact_revision_identity",
     )
     op.create_table(
         "assessment_occurrences",
@@ -279,6 +280,7 @@ def upgrade() -> None:
         "assessment_occurrence_revisions",
         "assessment_occurrence_revision_id",
         "uq_assessment_occurrence_source_evidence",
+        "fk_assessment_occ_source_evidence_artifact_revision_identity",
     )
     _create_item_origin_tables()
     for table_name in _IMMUTABLE_TABLES:
@@ -412,6 +414,7 @@ def _create_source_evidence_table(
     owner_table: str,
     owner_target: str,
     unique_name: str,
+    artifact_revision_foreign_key_name: str,
 ) -> None:
     op.create_table(
         table_name,
@@ -436,7 +439,7 @@ def _create_source_evidence_table(
                 "artifact_revisions.logical_artifact_id",
                 "artifact_revisions.revision_id",
             ],
-            name=f"fk_{table_name}_artifact_revision_identity",
+            name=artifact_revision_foreign_key_name,
         ),
         sa.UniqueConstraint(owner_column, "artifact_revision_id", "member_path", name=unique_name),
     )

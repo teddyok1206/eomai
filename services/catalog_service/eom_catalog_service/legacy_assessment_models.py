@@ -80,7 +80,7 @@ class AssessmentSourceBundleRevisionRecord(Base):
                 "artifact_revisions.logical_artifact_id",
                 "artifact_revisions.revision_id",
             ],
-            name="fk_assessment_source_bundle_inventory_artifact_revision_identity",
+            name="fk_assessment_bundle_inventory_artifact_revision_identity",
         ),
         Index(
             "ix_assessment_source_bundle_revisions_occurrence",

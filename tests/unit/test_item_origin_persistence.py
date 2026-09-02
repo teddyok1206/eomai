@@ -30,6 +30,14 @@ def _foreign_key_targets(table_name: str) -> set[tuple[str, ...]]:
     }
 
 
+def _foreign_key_names(table_name: str) -> set[str]:
+    return {
+        str(constraint.name)
+        for constraint in Base.metadata.tables[table_name].foreign_key_constraints
+        if constraint.name is not None
+    }
+
+
 def _unique_constraint(table_name: str, constraint_name: str) -> UniqueConstraint:
     constraint = next(
         constraint
@@ -109,6 +117,9 @@ def test_item_origin_metadata_closes_revision_identity_pointers() -> None:
     )
     assert artifact_revision in _foreign_key_targets("organization_source_evidence")
     assert artifact_revision in _foreign_key_targets("assessment_occurrence_source_evidence")
+    assert "fk_assessment_occ_source_evidence_artifact_revision_identity" in _foreign_key_names(
+        "assessment_occurrence_source_evidence"
+    )
     assert (
         "item_revisions.item_id",
         "item_revisions.item_revision_id",

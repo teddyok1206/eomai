@@ -304,7 +304,7 @@ class AssessmentOccurrenceSourceEvidenceRecord(Base):
                 "artifact_revisions.logical_artifact_id",
                 "artifact_revisions.revision_id",
             ],
-            name="fk_assessment_occurrence_source_evidence_artifact_revision_identity",
+            name="fk_assessment_occ_source_evidence_artifact_revision_identity",
         ),
         Index(
             "ix_assessment_occurrence_source_evidence_owner",

@@ -179,7 +179,7 @@ def _create_bundle_tables() -> None:
                 "artifact_revisions.logical_artifact_id",
                 "artifact_revisions.revision_id",
             ],
-            name="fk_assessment_source_bundle_inventory_artifact_revision_identity",
+            name="fk_assessment_bundle_inventory_artifact_revision_identity",
         ),
         sa.ForeignKeyConstraint(
             ["assessment_occurrence_id", "assessment_occurrence_revision_id"],

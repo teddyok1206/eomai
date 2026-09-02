@@ -25,6 +25,14 @@ def _foreign_key_targets(table_name: str) -> set[tuple[str, ...]]:
     }
 
 
+def _foreign_key_names(table_name: str) -> set[str]:
+    return {
+        str(constraint.name)
+        for constraint in Base.metadata.tables[table_name].foreign_key_constraints
+        if constraint.name is not None
+    }
+
+
 def test_legacy_assessment_metadata_is_pointer_only_and_indexed() -> None:
     assert item_origin_models.__name__.endswith("item_origin_models")
     assert legacy_assessment_models.__name__.endswith("legacy_assessment_models")
@@ -85,6 +93,9 @@ def test_legacy_assessment_metadata_uses_closed_composite_pointers() -> None:
     )
     assert occurrence_revision in _foreign_key_targets("assessment_source_bundle_revisions")
     assert artifact_revision in _foreign_key_targets("assessment_source_bundle_revisions")
+    assert "fk_assessment_bundle_inventory_artifact_revision_identity" in _foreign_key_names(
+        "assessment_source_bundle_revisions"
+    )
     assert artifact_revision in _foreign_key_targets("assessment_source_bundle_members")
     assert artifact_revision in _foreign_key_targets("assessment_layout_observations")
     assert bundle_revision in _foreign_key_targets("assessment_layout_observations")
@@ -124,7 +135,7 @@ def test_legacy_assessment_migration_is_additive_immutable_and_gap_safe() -> Non
     assert "legacy assessment history prevents safe downgrade" in source
     for constraint_name in (
         "fk_assessment_source_bundle_occurrence_revision_identity",
-        "fk_assessment_source_bundle_inventory_artifact_revision_identity",
+        "fk_assessment_bundle_inventory_artifact_revision_identity",
         "fk_assessment_source_bundle_member_artifact_revision_identity",
         "fk_assessment_layout_bundle_revision_identity",
         "fk_assessment_layout_artifact_revision_identity",
