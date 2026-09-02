@@ -140,6 +140,57 @@ def test_codex_result_projection_rejects_regex_lookaround(lookaround: str) -> No
         validate_codex_structured_output_schema(projected)
 
 
+def test_legacy_extraction_codex_projection_rejects_empty_item_title() -> None:
+    projected = load_codex_result_schema("legacy-item-extraction-result@1.0")
+    item_content = projected["$defs"]["AssessmentItemContent"]
+    title_reference = item_content["properties"]["title"]["$ref"]
+    title_schema = projected["$defs"][title_reference.removeprefix("#/$defs/")]
+
+    validator = Draft202012Validator(title_schema)
+    assert not validator.is_valid("")
+    assert validator.is_valid("원소 A")
+
+
+def test_legacy_extraction_codex_projection_preserves_reachable_nonempty_strings() -> None:
+    canonical = load_role_result_schema("legacy-item-extraction-result@1.0")
+    projected = load_codex_result_schema("legacy-item-extraction-result@1.0")
+    checked_paths: list[tuple[str | int, ...]] = []
+
+    def visit(value: object, path: tuple[str | int, ...] = ()) -> None:
+        if isinstance(value, dict):
+            canonical_value: object = canonical
+            for part in path:
+                if isinstance(part, str):
+                    if not isinstance(canonical_value, dict):
+                        raise AssertionError(f"canonical schema path is not a mapping: {path}")
+                    canonical_key = (
+                        "oneOf" if part == "anyOf" and part not in canonical_value else part
+                    )
+                    canonical_value = canonical_value[canonical_key]
+                else:
+                    if not isinstance(canonical_value, list):
+                        raise AssertionError(f"canonical schema path is not a sequence: {path}")
+                    canonical_value = canonical_value[part]
+            if (
+                isinstance(canonical_value, dict)
+                and canonical_value.get("type") == "string"
+                and isinstance(canonical_value.get("minLength"), int)
+                and canonical_value["minLength"] >= 1
+            ):
+                checked_paths.append(path)
+                assert not Draft202012Validator(value).is_valid(""), path
+            for key, child in value.items():
+                visit(child, (*path, key))
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                visit(child, (*path, index))
+
+    visit(projected)
+
+    assert ("$defs", "AssessmentItemContent_text") in checked_paths
+    assert len(checked_paths) == 16
+
+
 @pytest.mark.parametrize(
     "member",
     ["/diagram.png", ".", "source/./diagram.png", "../diagram.png", "a//b", "a\\b"],

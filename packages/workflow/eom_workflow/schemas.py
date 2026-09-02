@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from importlib import metadata, resources
 from importlib.resources.abc import Traversable
 from typing import Any, Literal, cast
@@ -70,6 +71,8 @@ _CODEX_SAFE_ARTIFACT_MEMBER_PATTERN = (
     r"^([^./\\][^/\\]*|\.[^./\\][^/\\]*|\.\.[^/\\][^/\\]*)"
     r"(/([^./\\][^/\\]*|\.[^./\\][^/\\]*|\.\.[^/\\][^/\\]*))*$"
 )
+_CANONICAL_SAFE_TEXT_PATTERN = r"^[^\u0000-\u0008\u000B\u000C\u000E-\u001F]*$"
+_CODEX_NONEMPTY_SAFE_TEXT_PATTERN = r"^[^\u0000-\u0008\u000B\u000C\u000E-\u001F]+$"
 ROLE_RESULT_SCHEMAS: dict[str, str] = {
     "authoring": "authoring-result@1.0",
     "image": "image-result@1.0",
@@ -1452,6 +1455,34 @@ def _normalize_codex_schema(value: object) -> None:
         # equivalent regular expression. Canonical JSON Schema and Pydantic validation still run
         # after generation at the application boundary.
         value["pattern"] = _CODEX_SAFE_ARTIFACT_MEMBER_PATTERN
+    minimum_length = value.get("minLength")
+    if minimum_length is not None:
+        if (
+            not isinstance(minimum_length, int)
+            or isinstance(minimum_length, bool)
+            or minimum_length < 0
+            or value.get("type") != "string"
+        ):
+            raise WorkflowSchemaError("Codex result string minimum is not projectable")
+        if minimum_length > 0:
+            pattern = value.get("pattern")
+            if pattern is None:
+                value["pattern"] = rf"[\s\S]{{{minimum_length},}}"
+            elif pattern == _CANONICAL_SAFE_TEXT_PATTERN and minimum_length == 1:
+                value["pattern"] = _CODEX_NONEMPTY_SAFE_TEXT_PATTERN
+            elif not isinstance(pattern, str):
+                raise WorkflowSchemaError("Codex result string pattern is not projectable")
+            else:
+                try:
+                    accepts_empty = re.search(pattern, "") is not None
+                except re.error as exc:
+                    raise WorkflowSchemaError(
+                        "Codex result string pattern cannot be checked for emptiness"
+                    ) from exc
+                if accepts_empty:
+                    raise WorkflowSchemaError(
+                        "Codex result string pattern does not preserve its non-empty contract"
+                    )
     value.pop("minLength", None)
     value.pop("maxLength", None)
     value.pop("uniqueItems", None)
