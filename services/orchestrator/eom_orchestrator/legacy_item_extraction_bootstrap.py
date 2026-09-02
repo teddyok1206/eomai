@@ -412,22 +412,44 @@ def _find_or_create_draft(
             if logical is not None
             else ()
         )
+        if logical is not None and logical.state != "ACTIVE":
+            raise ControlPlaneError("CONTROL_PRESET_RETIRED", "legacy extraction preset is retired")
+        if logical is not None and logical.current_revision_id is not None:
+            current = session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
+            if (
+                current is None
+                or current.preset_id != logical.preset_id
+                or current.state != "RELEASED"
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_CONFLICT",
+                    "released legacy extraction preset pointer differs",
+                )
+            if execution_preset_policy_sha256(current.canonical_document) == expected_hash:
+                return current
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_CONFLICT",
+                "released legacy extraction preset policy differs",
+            )
+        if any(revision.state == "RELEASED" for revision in revisions):
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_CONFLICT",
+                "released legacy extraction preset lacks its current pointer",
+            )
         matching = [
             revision
             for revision in revisions
-            if revision.state in {"DRAFT", "RELEASED"}
+            if revision.state == "DRAFT"
             and execution_preset_policy_sha256(revision.canonical_document) == expected_hash
         ]
-        if len(matching) > 1:
+        if len(matching) > 1 or any(
+            revision.state == "DRAFT" and revision not in matching for revision in revisions
+        ):
             raise ControlPlaneError(
-                "CONTROL_BOOTSTRAP_CONFLICT", "legacy extraction preset history is ambiguous"
+                "CONTROL_BOOTSTRAP_CONFLICT", "legacy extraction preset draft history differs"
             )
         if matching:
             return matching[0]
-        if any(revision.state == "DRAFT" for revision in revisions):
-            raise ControlPlaneError(
-                "CONTROL_BOOTSTRAP_CONFLICT", "legacy extraction has another unresolved draft"
-            )
         return create_execution_preset_draft(
             session,
             preset_key=manifest.preset_key,

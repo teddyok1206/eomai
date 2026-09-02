@@ -17,6 +17,7 @@ import eom_catalog_service.models  # noqa: F401
 import eom_hwpx_manager.models  # noqa: F401
 import eom_identity_service.models  # noqa: F401
 import eom_orchestrator.knowledge_analysis_models  # noqa: F401
+import eom_orchestrator.legacy_item_extraction_bootstrap as legacy_extraction_bootstrap
 import eom_workflow_runner.models  # noqa: F401
 import pytest
 from alembic.autogenerate import compare_metadata
@@ -120,6 +121,10 @@ from eom_orchestrator.execution_resolver import (
 from eom_orchestrator.knowledge_item_bootstrap import (
     KnowledgeItemBootstrapResult,
     bootstrap_knowledge_item_control_plane,
+)
+from eom_orchestrator.legacy_item_extraction_bootstrap import (
+    LegacyItemExtractionBootstrapResult,
+    bootstrap_legacy_item_extraction_control_plane,
 )
 from eom_orchestrator.models import (
     ArtifactRecord,
@@ -2484,6 +2489,175 @@ def test_standard_bootstrap_is_idempotent_and_materializes_only_pinned_markdown(
         ]
         assert all(bundle is not None for bundle in bundles)
         assert {bundle.revision_number for bundle in bundles if bundle is not None} == {3}
+
+
+def test_legacy_extraction_bootstrap_recovers_partial_failure_and_replays_exactly(
+    integration_engine: Engine,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    staging_root = tmp_path / "staging"
+    nas_root = tmp_path / "nas"
+    staging_root.mkdir()
+    nas_root.mkdir()
+    settings = Settings(
+        worker_config=Path("config/worker-slots.example.yaml").resolve(),
+        staging_root=staging_root,
+        workspace_root=tmp_path / "worker-workspaces",
+        worker_home_root=tmp_path / "worker-homes",
+        nas_artifact_root=nas_root.resolve(),
+        codex_binary=Path("/usr/local/bin/codex"),
+        codex_capability_policy=Path("config/codex-capabilities.example.yaml").resolve(),
+        worker_timeout_seconds=1800,
+    )
+    sessions = build_session_factory(integration_engine)
+    source_commit = "e" * 40
+
+    def bootstrap() -> LegacyItemExtractionBootstrapResult:
+        return bootstrap_legacy_item_extraction_control_plane(
+            integration_engine,
+            config_directory=Path("config/control-plane/legacy-item-extraction-v1").resolve(),
+            source_commit=source_commit,
+            actor_id="legacy-extraction-integration",
+            evaluation_cases_total=49,
+            settings=settings,
+        )
+
+    original_builder = legacy_extraction_bootstrap._build_non_live_evaluation_report
+
+    def invalid_report(**kwargs: Any) -> dict[str, object]:
+        document = original_builder(**kwargs)
+        document["summary_code"] = "LEGACY_EXTRACTION_CONTRACT_ACCEPTANCE"
+        document["report_sha256"] = "sha256:" + "0" * 64
+        document["report_sha256"] = compute_control_document_hash(document, "report_sha256")
+        return document
+
+    monkeypatch.setattr(
+        legacy_extraction_bootstrap,
+        "_build_non_live_evaluation_report",
+        invalid_report,
+    )
+    with pytest.raises(ControlPlaneError) as captured:
+        bootstrap()
+    assert captured.value.code == "CONTROL_EVALUATION_INVALID"
+
+    with sessions() as session:
+        logical = session.scalar(
+            select(ExecutionPresetRecord).where(
+                ExecutionPresetRecord.preset_key == "legacy-item-extraction"
+            )
+        )
+        assert logical is not None
+        partial_revisions = tuple(
+            session.scalars(
+                select(ExecutionPresetRevisionRecord).where(
+                    ExecutionPresetRevisionRecord.preset_id == logical.preset_id
+                )
+            )
+        )
+        partial_evaluations = tuple(
+            session.scalars(
+                select(ExecutionPresetEvaluationRecord).where(
+                    ExecutionPresetEvaluationRecord.preset_id == logical.preset_id
+                )
+            )
+        )
+        invalid_artifacts = tuple(
+            session.scalars(
+                select(ArtifactRecord)
+                .join(JobRecord, JobRecord.job_id == ArtifactRecord.job_id)
+                .where(
+                    ArtifactRecord.artifact_type == "control_preset_evaluation",
+                    JobRecord.request["source_commit"].as_string() == source_commit,
+                )
+            )
+        )
+        invalid_artifact_revision_ids = {
+            revision_id
+            for artifact in invalid_artifacts
+            for revision_id in session.scalars(
+                select(ArtifactRevisionRecord.revision_id).where(
+                    ArtifactRevisionRecord.logical_artifact_id == artifact.logical_artifact_id
+                )
+            )
+        }
+        assert logical.current_revision_id is None
+        assert len(partial_revisions) == 1
+        assert partial_revisions[0].state == "DRAFT"
+        assert partial_evaluations == ()
+        assert len(invalid_artifacts) == 1
+        assert invalid_artifact_revision_ids
+
+    monkeypatch.setattr(
+        legacy_extraction_bootstrap,
+        "_build_non_live_evaluation_report",
+        original_builder,
+    )
+    completed = bootstrap()
+    with sessions() as session:
+        logical = session.get(ExecutionPresetRecord, completed.preset_id)
+        assert logical is not None
+        revisions = tuple(
+            session.scalars(
+                select(ExecutionPresetRevisionRecord)
+                .where(ExecutionPresetRevisionRecord.preset_id == completed.preset_id)
+                .order_by(ExecutionPresetRevisionRecord.revision_number)
+            )
+        )
+        evaluations = tuple(
+            session.scalars(
+                select(ExecutionPresetEvaluationRecord).where(
+                    ExecutionPresetEvaluationRecord.preset_id == completed.preset_id
+                )
+            )
+        )
+        evaluation_artifacts = tuple(
+            session.scalars(
+                select(ArtifactRecord)
+                .join(JobRecord, JobRecord.job_id == ArtifactRecord.job_id)
+                .where(
+                    ArtifactRecord.artifact_type == "control_preset_evaluation",
+                    JobRecord.request["source_commit"].as_string() == source_commit,
+                )
+            )
+        )
+        assert logical.current_revision_id == completed.preset_revision_id
+        assert [revision.state for revision in revisions] == ["DRAFT", "RELEASED"]
+        assert len(evaluations) == 1
+        assert evaluations[0].evaluation_id == completed.evaluation_id
+        assert evaluations[0].summary_code == "CONTRACT_VALIDATION"
+        assert evaluations[0].report_artifact_revision_id not in invalid_artifact_revision_ids
+        assert len(evaluation_artifacts) == 2
+        stable_counts = {
+            "preset_revisions": len(revisions),
+            "evaluations": len(evaluations),
+            "artifacts": session.scalar(select(func.count()).select_from(ArtifactRecord)),
+            "artifact_revisions": session.scalar(
+                select(func.count()).select_from(ArtifactRevisionRecord)
+            ),
+            "jobs": session.scalar(select(func.count()).select_from(JobRecord)),
+        }
+
+    replay = bootstrap()
+    assert replay == completed
+    with sessions() as session:
+        assert {
+            "preset_revisions": session.scalar(
+                select(func.count())
+                .select_from(ExecutionPresetRevisionRecord)
+                .where(ExecutionPresetRevisionRecord.preset_id == completed.preset_id)
+            ),
+            "evaluations": session.scalar(
+                select(func.count())
+                .select_from(ExecutionPresetEvaluationRecord)
+                .where(ExecutionPresetEvaluationRecord.preset_id == completed.preset_id)
+            ),
+            "artifacts": session.scalar(select(func.count()).select_from(ArtifactRecord)),
+            "artifact_revisions": session.scalar(
+                select(func.count()).select_from(ArtifactRevisionRecord)
+            ),
+            "jobs": session.scalar(select(func.count()).select_from(JobRecord)),
+        } == stable_counts
 
 
 def test_knowledge_item_bootstrap_pins_standard_policy_and_is_idempotent(
