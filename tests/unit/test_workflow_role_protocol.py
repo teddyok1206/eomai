@@ -130,6 +130,34 @@ def test_all_codex_result_projections_use_the_supported_strict_subset() -> None:
         assert "$id" not in projected
 
 
+@pytest.mark.parametrize("lookaround", ["(?=x)", "(?!x)", "(?<=x)", "(?<!x)"])
+def test_codex_result_projection_rejects_regex_lookaround(lookaround: str) -> None:
+    projected = load_codex_result_schema("legacy-item-extraction-result@1.0")
+    artifact_pointer = projected["$defs"]["AssessmentItemContent_artifactPointer"]
+    artifact_pointer["properties"]["artifact_member"]["pattern"] = f"^{lookaround}x$"
+
+    with pytest.raises(WorkflowSchemaError, match="unsupported regex lookaround"):
+        validate_codex_structured_output_schema(projected)
+
+
+@pytest.mark.parametrize(
+    "member",
+    ["/diagram.png", ".", "source/./diagram.png", "../diagram.png", "a//b", "a\\b"],
+)
+def test_codex_result_projection_rejects_unsafe_artifact_member(member: str) -> None:
+    projected = load_codex_result_schema("legacy-item-extraction-result@1.0")
+    artifact_pointer = projected["$defs"]["AssessmentItemContent_artifactPointer"]
+    value = {
+        "artifact_id": ARTIFACT_ID,
+        "artifact_revision_id": REVISION_ID,
+        "artifact_member": member,
+        "sha256": "sha256:" + "a" * 64,
+        "media_type": "image/png",
+    }
+
+    assert not Draft202012Validator(artifact_pointer).is_valid(value)
+
+
 def test_codex_result_projection_rejects_a_property_without_an_explicit_type() -> None:
     projected = load_codex_result_schema("authoring-result@1.0")
     artifact = projected["$defs"]["artifact"]
@@ -214,6 +242,10 @@ def test_constrained_legacy_extraction_schema_resolves_nested_string_references(
         "pattern": "^sha256:[0-9a-f]{64}$",
         "const": extraction_request.request_sha256,
     }
+    artifact_member_pattern = schema["$defs"]["AssessmentItemContent_artifactPointer"][
+        "properties"
+    ]["artifact_member"]["pattern"]
+    assert not any(token in artifact_member_pattern for token in ("(?=", "(?!", "(?<=", "(?<!"))
     validate_codex_structured_output_schema(schema)
 
 

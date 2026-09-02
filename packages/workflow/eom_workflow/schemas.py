@@ -63,6 +63,13 @@ from eom_workflow.models import (
 
 WORKFLOW_RESOURCE_ROOT = resources.files("eom_workflow").joinpath("resources")
 ROLE_RESOURCE_ROOT = WORKFLOW_RESOURCE_ROOT.joinpath("roles")
+_CANONICAL_SAFE_ARTIFACT_MEMBER_PATTERN = (
+    r"^(?!/)(?!.*(?:^|/)\.{1,2}(?:/|$))(?!.*\\)[^/]+(?:/[^/]+)*$"
+)
+_CODEX_SAFE_ARTIFACT_MEMBER_PATTERN = (
+    r"^([^./\\][^/\\]*|\.[^./\\][^/\\]*|\.\.[^/\\][^/\\]*)"
+    r"(/([^./\\][^/\\]*|\.[^./\\][^/\\]*|\.\.[^/\\][^/\\]*))*$"
+)
 ROLE_RESULT_SCHEMAS: dict[str, str] = {
     "authoring": "authoring-result@1.0",
     "image": "image-result@1.0",
@@ -877,6 +884,7 @@ def validate_codex_structured_output_schema(schema: dict[str, Any]) -> None:
         "maxLength",
         "uniqueItems",
     }
+    unsupported_pattern_tokens = ("(?=", "(?!", "(?<=", "(?<!")
 
     def visit(value: object, path: tuple[str, ...]) -> None:
         if not isinstance(value, dict):
@@ -890,6 +898,13 @@ def validate_codex_structured_output_schema(schema: dict[str, Any]) -> None:
             raise WorkflowSchemaError(
                 f"Codex result schema uses unsupported keyword at {'.'.join(path) or '$'}: "
                 f"{sorted(found)[0]}"
+            )
+        pattern = value.get("pattern")
+        if isinstance(pattern, str) and any(
+            token in pattern for token in unsupported_pattern_tokens
+        ):
+            raise WorkflowSchemaError(
+                f"Codex result schema uses unsupported regex lookaround at {'.'.join(path) or '$'}"
             )
         if "properties" in value:
             properties = _mapping(value, "properties")
@@ -1431,6 +1446,12 @@ def _rewrite_item_references(value: object) -> object:
 def _normalize_codex_schema(value: object) -> None:
     if not isinstance(value, dict):
         return
+    if value.get("pattern") == _CANONICAL_SAFE_ARTIFACT_MEMBER_PATTERN:
+        # The canonical contract retains its full traversal guard. Codex's structured-output
+        # regex engine does not accept lookaround, so its generation-only projection uses an
+        # equivalent regular expression. Canonical JSON Schema and Pydantic validation still run
+        # after generation at the application boundary.
+        value["pattern"] = _CODEX_SAFE_ARTIFACT_MEMBER_PATTERN
     value.pop("minLength", None)
     value.pop("maxLength", None)
     value.pop("uniqueItems", None)
