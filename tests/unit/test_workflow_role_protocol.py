@@ -293,6 +293,16 @@ def test_constrained_legacy_extraction_schema_resolves_nested_string_references(
         "pattern": "^sha256:[0-9a-f]{64}$",
         "const": extraction_request.request_sha256,
     }
+    proposal = properties["items"]["items"]
+    content_anchor_map = proposal["properties"]["content_anchor_map"]
+    assert content_anchor_map["minItems"] == 2
+    assert (
+        'first mapping MUST use content_path exactly "title"' in content_anchor_map["description"]
+    )
+    assert (
+        'later mapping MUST use a content_path beginning with "body["'
+        in content_anchor_map["description"]
+    )
     artifact_member_pattern = schema["$defs"]["AssessmentItemContent_artifactPointer"][
         "properties"
     ]["artifact_member"]["pattern"]

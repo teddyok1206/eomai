@@ -594,8 +594,20 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
         items["minItems"] = len(request.expected_item_numbers)
         items["maxItems"] = len(request.expected_item_numbers)
         item_schema = _mapping(items, "items")
-        _mapping(_mapping(item_schema, "properties"), "item_number")["enum"] = list(
-            request.expected_item_numbers
+        item_properties = _mapping(item_schema, "properties")
+        _mapping(item_properties, "item_number")["enum"] = list(request.expected_item_numbers)
+        content_anchor_map = _mapping(item_properties, "content_anchor_map")
+        # Codex's supported Structured Outputs subset cannot express the canonical
+        # cross-item existential rule with `contains` or positional array schemas.
+        # Strengthen the supported part of the projection and state the remaining
+        # ordering contract explicitly; canonical Pydantic validation below the
+        # worker boundary remains the authoritative fail-closed check.
+        content_anchor_map["minItems"] = 2
+        content_anchor_map["description"] = (
+            "Return mappings in deterministic source order. The first mapping MUST use "
+            'content_path exactly "title". At least one later mapping MUST use a '
+            'content_path beginning with "body[". Reuse only source_anchor_ids declared '
+            "in this item, and add mappings for every other grounded content element."
         )
         _prune_unreferenced_definitions(schema)
     validate_codex_structured_output_schema(schema)
