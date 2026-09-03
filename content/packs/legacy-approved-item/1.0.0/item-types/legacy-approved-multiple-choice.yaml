@@ -1,0 +1,6 @@
+schema_version: "1.0"
+item_type:
+  key: "legacy-approved-multiple-choice"
+  display_name: "검토 승인 레거시 선택형 문항"
+  required_components:
+    - "ITEM_CONTENT"

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/legacy-item-editorial-compatibility-policy/1.0",
+  "title": "EOM Legacy Item Editorial Compatibility Policy V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "compatibility_policy_revision_id",
+    "state",
+    "required_authorities",
+    "required_checks",
+    "maximum_issue_count",
+    "maximum_result_bytes",
+    "automatic_retry",
+    "close_compatible_tuple",
+    "released_at",
+    "released_by",
+    "content_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-item-editorial-compatibility-policy/1.0"},
+    "compatibility_policy_revision_id": {
+      "type": "string",
+      "pattern": "^editorialcompatpolicyrev_[0-9a-f]{32}$"
+    },
+    "state": {"const": "RELEASED"},
+    "required_authorities": {
+      "const": ["CONTENT_TEAM_PROMPT", "HWP_QUESTION_EDITOR_PROFILE"]
+    },
+    "required_checks": {
+      "const": [
+        "CONTENT_CONTRACT",
+        "MARKDOWN_PROJECTION",
+        "HWPX_RENDERABILITY",
+        "LOSSLESSNESS"
+      ]
+    },
+    "maximum_issue_count": {"const": 128},
+    "maximum_result_bytes": {"type": "integer", "minimum": 4096, "maximum": 2097152},
+    "automatic_retry": {"const": false},
+    "close_compatible_tuple": {"const": true},
+    "released_at": {"type": "string", "format": "date-time"},
+    "released_by": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "content_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

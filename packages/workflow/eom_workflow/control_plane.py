@@ -17,6 +17,7 @@ from eom_catalog_contracts import (
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphSnapshotPointer,
     KnowledgeSourceClass,
+    LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionRequest,
 )
 from eom_identifiers import content_sha256
@@ -574,6 +575,47 @@ class ResolvedExecutionPlanV6(FrozenModel):
         body = self.model_dump(mode="json", exclude={"plan_sha256"})
         if content_sha256(body) != self.plan_sha256:
             raise ValueError("legacy item extraction plan hash does not match canonical content")
+        return self
+
+
+class ResolvedExecutionPlanV7(FrozenModel):
+    """One exact approved Item and two immutable content-team authorities."""
+
+    schema_version: Literal["resolved-execution-plan/7.0"] = "resolved-execution-plan/7.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["KNOWLEDGE_ANALYSIS"] = "KNOWLEDGE_ANALYSIS"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["legacy-item-editorial-compatibility"] = (
+        "legacy-item-editorial-compatibility"
+    )
+    workflow_definition_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    workflow_definition_sha256: Sha256
+    compatibility_request: LegacyItemEditorialCompatibilityRequest
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
+    resolver_version: Literal["7.0.0"] = "7.0.0"
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def one_compatibility_support_step_and_exact_hash(self) -> ResolvedExecutionPlanV7:
+        step = self.steps[0]
+        if (
+            step.step_key != "assess"
+            or step.role != WorkerRole.SUPPORT
+            or step.worker_pool_key != "support"
+            or step.reference_bundle is not None
+            or step.general_knowledge_mode != "DENIED"
+        ):
+            raise ValueError("editorial compatibility plan requires its source-only support step")
+        body = self.model_dump(mode="json", exclude={"plan_sha256"})
+        if content_sha256(body) != self.plan_sha256:
+            raise ValueError("editorial compatibility plan hash does not match canonical content")
         return self
 
 

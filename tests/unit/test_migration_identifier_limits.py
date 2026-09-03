@@ -11,6 +11,7 @@ POSTGRESQL_IDENTIFIER_MAX_BYTES = 63
 MIGRATION_MODULES = (
     "migrations.versions.20260901_0024_item_origin_occurrence",
     "migrations.versions.20260901_0025_legacy_assessment_bundle",
+    "migrations.versions.20260903_0026_legacy_item_editorial_compatibility",
 )
 
 
@@ -45,6 +46,9 @@ class _MigrationOperationRecorder:
         self._record("constraint", name)
 
     def create_index(self, name: str, *_: object, **__: object) -> None:
+        self._record("index", name)
+
+    def drop_index(self, name: str, *_: object, **__: object) -> None:
         self._record("index", name)
 
     def drop_constraint(self, name: str, *_: object, **__: object) -> None:

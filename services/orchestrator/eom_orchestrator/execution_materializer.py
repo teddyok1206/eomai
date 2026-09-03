@@ -10,12 +10,12 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from eom_catalog_contracts import (
-    AssessmentArtifactMemberPointer,
     AssessmentLayoutObservation,
     EvidenceBundleManifestV2,
     EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
     KnowledgeArtifactMemberPointer,
+    OriginArtifactMemberPointer,
 )
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -31,6 +31,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV4,
     ResolvedExecutionPlanV5,
     ResolvedExecutionPlanV6,
+    ResolvedExecutionPlanV7,
     ResolvedStepExecutionV3,
     validate_control_contract,
 )
@@ -136,6 +137,7 @@ def materialize_execution_step(
         "resolved-execution-plan/4.0",
         "resolved-execution-plan/5.0",
         "resolved-execution-plan/6.0",
+        "resolved-execution-plan/7.0",
     }
     plan: (
         ResolvedExecutionPlan
@@ -144,6 +146,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV4
         | ResolvedExecutionPlanV5
         | ResolvedExecutionPlanV6
+        | ResolvedExecutionPlanV7
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -155,6 +158,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV5.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/6.0":
         plan = ResolvedExecutionPlanV6.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/7.0":
+        plan = ResolvedExecutionPlanV7.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -278,6 +283,24 @@ def materialize_execution_step(
         total_bytes += extraction_bytes
         member_count += extraction_members
         _require_total_size(total_bytes, analysis=True)
+    elif isinstance(plan, ResolvedExecutionPlanV7):
+        compatibility_bytes, compatibility_members = (
+            _materialize_legacy_editorial_compatibility_source(
+                session,
+                plan=plan,
+                workspace=workspace,
+                artifact_root=artifact_root,
+                worker_group_id=worker_group_id,
+                authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            )
+        )
+        total_bytes += compatibility_bytes
+        member_count += compatibility_members
+        _require_total_size(total_bytes, analysis=True)
+        source_artifact_revision_id = (
+            plan.compatibility_request.source.item_content.artifact_revision_id
+        )
+        source_sha256 = plan.compatibility_request.source.item_content.sha256
 
     agents_bytes = _agents_document(instruction_docs)
     total_bytes += len(agents_bytes)
@@ -439,6 +462,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV4
             | ResolvedExecutionPlanV5
             | ResolvedExecutionPlanV6
+            | ResolvedExecutionPlanV7
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -448,6 +472,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV5.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/6.0":
         plan = ResolvedExecutionPlanV6.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/7.0":
+        plan = ResolvedExecutionPlanV7.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -487,6 +513,13 @@ def authorized_execution_artifact_revisions(
         revision_ids.update(page.image.artifact_revision_id for page in request.page_inputs)
         revision_ids.update(
             material.source.artifact_revision_id for material in request.source_materializations
+        )
+    elif isinstance(plan, ResolvedExecutionPlanV7):
+        compatibility_request = plan.compatibility_request
+        revision_ids.add(compatibility_request.source.item_content.artifact_revision_id)
+        revision_ids.update(
+            authority.artifact_member.artifact_revision_id
+            for authority in compatibility_request.authorities
         )
     bundles: list[tuple[BundleRevisionPointer, str]] = [(step.instruction_bundle, "INSTRUCTION")]
     if step.reference_bundle is not None:
@@ -920,10 +953,86 @@ def _materialize_legacy_extraction_source(
     return total_bytes, member_count
 
 
+def _materialize_legacy_editorial_compatibility_source(
+    session: Session,
+    *,
+    plan: ResolvedExecutionPlanV7,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> tuple[int, int]:
+    """Materialize one approved Item plus exactly the two request-pinned team authorities."""
+
+    request = plan.compatibility_request
+    materials = (
+        (
+            request.source.item_content,
+            "source/item/item-content.json",
+            16 * 1024 * 1024,
+        ),
+        (
+            request.authorities[0].artifact_member,
+            "source/authorities/content-team-integrated-science-authoring-v05.md",
+            MAX_MARKDOWN_MEMBER_BYTES,
+        ),
+        (
+            request.authorities[1].artifact_member,
+            "source/authorities/content-team-hwp-question-editor-handoff-v1.md",
+            MAX_MARKDOWN_MEMBER_BYTES,
+        ),
+    )
+    total_bytes = 0
+    for pointer, relative_path, maximum_bytes in materials:
+        payload = _materialize_assessment_member(
+            session,
+            pointer=pointer,
+            relative_path=relative_path,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=maximum_bytes,
+        )
+        if pointer.media_type == "text/markdown":
+            try:
+                payload.decode("utf-8")
+            except UnicodeError as exc:
+                raise ControlPlaneError(
+                    "CONTROL_POINTER_ENCODING_INVALID",
+                    "content-team authority is not UTF-8 Markdown",
+                ) from exc
+        elif pointer.media_type == "application/json":
+            try:
+                value = json.loads(payload)
+            except (UnicodeError, json.JSONDecodeError) as exc:
+                raise ControlPlaneError(
+                    "CONTROL_POINTER_ENCODING_INVALID",
+                    "approved Item content is not UTF-8 JSON",
+                ) from exc
+            if not isinstance(value, dict):
+                raise ControlPlaneError(
+                    "CONTROL_POINTER_MEDIA_MISMATCH",
+                    "approved Item content is not an object",
+                )
+        else:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_MEDIA_MISMATCH",
+                "editorial compatibility material has an unexpected media type",
+            )
+        total_bytes += len(payload)
+
+    request_bytes = canonical_json_bytes(request) + b"\n"
+    request_path = workspace / "source" / "compatibility-request.json"
+    _ensure_parent(request_path.parent, workspace=workspace, group_id=worker_group_id)
+    _write_exclusive(request_path, request_bytes, group_id=worker_group_id)
+    return total_bytes + len(request_bytes), len(materials) + 1
+
+
 def _assessment_member_expected_bytes(
     session: Session,
     *,
-    pointer: AssessmentArtifactMemberPointer,
+    pointer: OriginArtifactMemberPointer,
     authorized_artifact_revision_ids: frozenset[str],
 ) -> int:
     """Return the pinned manifest size after validating immutable pointer identity."""
@@ -965,7 +1074,7 @@ def _assessment_member_expected_bytes(
 def _validate_assessment_member_pointer(
     session: Session,
     *,
-    pointer: AssessmentArtifactMemberPointer,
+    pointer: OriginArtifactMemberPointer,
     artifact_root: Path,
     authorized_artifact_revision_ids: frozenset[str],
 ) -> None:
@@ -991,7 +1100,7 @@ def _validate_assessment_member_pointer(
 def _materialize_assessment_member(
     session: Session,
     *,
-    pointer: AssessmentArtifactMemberPointer,
+    pointer: OriginArtifactMemberPointer,
     relative_path: str,
     workspace: Path,
     artifact_root: Path,

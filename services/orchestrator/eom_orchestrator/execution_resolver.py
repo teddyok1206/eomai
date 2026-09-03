@@ -19,6 +19,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisRequestV8,
+    LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionRequest,
 )
 from eom_identifiers import content_sha256, new_execution_plan_id
@@ -31,6 +32,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV4,
     ResolvedExecutionPlanV5,
     ResolvedExecutionPlanV6,
+    ResolvedExecutionPlanV7,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     WorkerRole,
@@ -603,6 +605,137 @@ def resolve_legacy_item_extraction_plan(
     document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
     validate_control_contract("resolved-execution-plan-v6", document)
     model = ResolvedExecutionPlanV6.model_validate(document)
+    session.add(
+        ResolvedExecutionPlanRecord(
+            plan_id=model.plan_id,
+            workflow_id=model.workflow_id,
+            preset_id=model.preset_id,
+            preset_revision_id=model.preset_revision_id,
+            capacity_policy_revision_id=model.capacity_policy_revision_id,
+            graph_snapshot_revision_id=None,
+            evidence_bundle_revision_id=None,
+            plan_sha256=model.plan_sha256,
+            resolver_version=model.resolver_version,
+            canonical_document=model.model_dump(mode="json"),
+            resolved_at=model.resolved_at,
+        )
+    )
+    session.flush()
+    session.add(
+        ResolvedExecutionPlanStepRecord(
+            plan_id=model.plan_id,
+            step_key=step.step_key,
+            role=step.role,
+            model=step.model,
+            reasoning_effort=step.reasoning_effort,
+            instruction_bundle_revision_id=step.instruction_bundle.bundle_revision_id,
+            reference_bundle_revision_id=None,
+            worker_pool_key=step.worker_pool_key,
+            timeout_seconds=step.timeout_seconds,
+            sandbox=step.sandbox,
+            network=step.network,
+            general_knowledge_mode=step.general_knowledge_mode,
+        )
+    )
+    session.flush()
+    return model
+
+
+def resolve_legacy_item_editorial_compatibility_plan(
+    session: Session,
+    *,
+    workflow_id: str,
+    workflow_definition_version: str,
+    workflow_definition_sha256: str,
+    workflow_role_schema_version: str,
+    request: LegacyItemEditorialCompatibilityRequest,
+    resolved_at: datetime | None = None,
+) -> ResolvedExecutionPlanV7:
+    """Resolve one source-only support plan over an approved Item and exact team authorities."""
+
+    existing = session.scalar(
+        select(ResolvedExecutionPlanRecord).where(
+            ResolvedExecutionPlanRecord.workflow_id == workflow_id
+        )
+    )
+    if existing is not None:
+        return ResolvedExecutionPlanV7.model_validate(existing.canonical_document)
+    logical = session.scalar(
+        select(ExecutionPresetRecord).where(
+            ExecutionPresetRecord.preset_key == "legacy-item-editorial-compatibility"
+        )
+    )
+    preset_record = (
+        session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
+        if logical is not None and logical.current_revision_id is not None
+        else None
+    )
+    if (
+        logical is None
+        or logical.state != "ACTIVE"
+        or preset_record is None
+        or preset_record.preset_id != logical.preset_id
+        or preset_record.state != "RELEASED"
+        or workflow_role_schema_version not in preset_record.compatible_workflow_protocols
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POINTER_INVALID",
+            "editorial compatibility preset is not published",
+        )
+    preset = ExecutionPresetRevision.model_validate(preset_record.canonical_document)
+    support_policies = [policy for policy in preset.role_policies if policy.role == "support"]
+    if len(support_policies) != 1:
+        raise ControlPlaneError(
+            "CONTROL_PRESET_ROLE_MISSING",
+            "editorial compatibility preset needs one support policy",
+        )
+    policy = support_policies[0]
+    if (
+        policy.worker_pool_key != "support"
+        or policy.reference_bundle is not None
+        or preset.general_knowledge_policy != "DENY"
+        or policy.sandbox != "read-only"
+        or policy.network != "disabled"
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID",
+            "editorial compatibility must use a source-only support policy",
+        )
+    candidate = policy.model_candidates[0]
+    step = ResolvedStepExecution(
+        step_key="assess",
+        role=WorkerRole.SUPPORT,
+        model=candidate.model,
+        reasoning_effort=candidate.reasoning_effort,
+        instruction_bundle=policy.instruction_bundle,
+        reference_bundle=None,
+        worker_pool_key="support",
+        timeout_seconds=policy.timeout_seconds,
+        sandbox=policy.sandbox,
+        network=policy.network,
+        general_knowledge_mode="DENIED",
+    )
+    document: dict[str, object] = {
+        "schema_version": "resolved-execution-plan/7.0",
+        "plan_id": new_execution_plan_id(),
+        "workflow_id": workflow_id,
+        "workload_class": "KNOWLEDGE_ANALYSIS",
+        "preset_id": preset.preset_id,
+        "preset_revision_id": preset.preset_revision_id,
+        "preset_sha256": preset.content_sha256,
+        "workflow_definition_key": "legacy-item-editorial-compatibility",
+        "workflow_definition_version": workflow_definition_version,
+        "workflow_definition_sha256": workflow_definition_sha256,
+        "compatibility_request": request.model_dump(mode="json"),
+        "capacity_policy_revision_id": preset.capacity_policy_revision_id,
+        "steps": [step.model_dump(mode="json")],
+        "resolver_version": "7.0.0",
+        "resolved_at": (resolved_at or datetime.now(UTC)).isoformat().replace("+00:00", "Z"),
+        "plan_sha256": "sha256:" + "0" * 64,
+    }
+    document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
+    validate_control_contract("resolved-execution-plan-v7", document)
+    model = ResolvedExecutionPlanV7.model_validate(document)
     session.add(
         ResolvedExecutionPlanRecord(
             plan_id=model.plan_id,

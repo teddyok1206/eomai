@@ -490,6 +490,153 @@ def _legacy_extraction_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     return fixture
 
 
+def _legacy_editorial_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    fixture = _fixture(tmp_path, monkeypatch)
+    session = fixture["session"]
+    assert isinstance(session, FakeSession)
+    old_record = session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+    old_plan = old_record.canonical_document
+    instruction_pointer = old_plan["steps"][0]["instruction_bundle"]
+    instruction_record = session.records[
+        (ExecutionBundleRevisionRecord, instruction_pointer["bundle_revision_id"])
+    ]
+    instruction_record.manifest_artifact_revision_id = instruction_pointer["manifest_artifact"][
+        "artifact_revision_id"
+    ]
+
+    item_payload = canonical_json_bytes(
+        {
+            "schema_version": "assessment-item-content-v2/1.0",
+            "title": "승인된 레거시 문항",
+        }
+    )
+    item_pointer = _assessment_pointer(
+        fixture,
+        seed="d",
+        member_path="item/item-content.json",
+        payload=item_payload,
+        media_type="application/json",
+        schema_ref="eom://schemas/item-registry/assessment-item-content-v2",
+    )
+    prompt_payload = b"# Content-team authoring authority\n\nExact reviewed rules.\n"
+    prompt_pointer = _assessment_pointer(
+        fixture,
+        seed="e",
+        member_path="guidance/content-team-authoring.md",
+        payload=prompt_payload,
+        media_type="text/markdown",
+        schema_ref="eom://schemas/knowledge/reference-markdown/1.0",
+    )
+    hwpx_payload = b"# HwpQuestionEditor authority\n\nExact reviewed handoff profile.\n"
+    hwpx_pointer = _assessment_pointer(
+        fixture,
+        seed="f",
+        member_path="guidance/hwp-question-editor.md",
+        payload=hwpx_payload,
+        media_type="text/markdown",
+        schema_ref="eom://schemas/knowledge/reference-markdown/1.0",
+    )
+    request: dict[str, object] = {
+        "schema_version": "legacy-item-editorial-compatibility-request/1.0",
+        "compatibility_request_id": "editorialcompatreq_" + "1" * 32,
+        "predecessor_compatibility_run_id": None,
+        "source": {
+            "item_id": "item_" + "2" * 32,
+            "item_revision_id": "itemrev_" + "3" * 32,
+            "item_manifest_sha256": "sha256:" + "4" * 64,
+            "item_content": item_pointer,
+            "extraction_acceptance_id": "itemacceptance_" + "5" * 32,
+            "extraction_acceptance_sha256": "sha256:" + "6" * 64,
+            "item_origin_profile_id": "originprofile_" + "7" * 32,
+            "item_origin_profile_sha256": "sha256:" + "8" * 64,
+            "lifecycle_state": "APPROVED",
+        },
+        "authorities": [
+            {
+                "authority_kind": "CONTENT_TEAM_PROMPT",
+                "reference_key": "content-team-integrated-science-authoring-v05",
+                "reference_revision": "5.0",
+                "artifact_member": prompt_pointer,
+            },
+            {
+                "authority_kind": "HWP_QUESTION_EDITOR_PROFILE",
+                "reference_key": "content-team-hwp-question-editor-handoff-v1",
+                "reference_revision": "1.0",
+                "artifact_member": hwpx_pointer,
+            },
+        ],
+        "renderer_profile": {
+            "renderer_profile": "content-team-hwp-question-editor-v1",
+            "artifact_id": "artifact_" + "0" * 32,
+            "artifact_revision_id": "rev_" + "1" * 32,
+            "archive_member_path": "handoff-source.zip",
+            "archive_schema_ref": "eom://schemas/hwpx/content-team-handoff-archive/1.0",
+            "archive_media_type": "application/zip",
+            "archive_sha256": "sha256:" + "2" * 64,
+            "profile_sha256": "sha256:" + "3" * 64,
+        },
+        "compatibility_policy_revision_id": "editorialcompatpolicyrev_" + "9" * 32,
+        "compatibility_policy_sha256": "sha256:" + "a" * 64,
+        "requested_checks": [
+            "CONTENT_CONTRACT",
+            "MARKDOWN_PROJECTION",
+            "HWPX_RENDERABILITY",
+            "LOSSLESSNESS",
+        ],
+        "created_at": "2026-09-03T00:00:00Z",
+    }
+    request["request_sha256"] = content_sha256(request)
+    plan = {
+        "schema_version": "resolved-execution-plan/7.0",
+        "plan_id": old_plan["plan_id"],
+        "workflow_id": old_plan["workflow_id"],
+        "workload_class": "KNOWLEDGE_ANALYSIS",
+        "preset_id": old_plan["preset_id"],
+        "preset_revision_id": old_plan["preset_revision_id"],
+        "preset_sha256": old_plan["preset_sha256"],
+        "workflow_definition_key": "legacy-item-editorial-compatibility",
+        "workflow_definition_version": "1.0.0",
+        "workflow_definition_sha256": old_plan["workflow_definition_sha256"],
+        "compatibility_request": request,
+        "capacity_policy_revision_id": old_plan["capacity_policy_revision_id"],
+        "steps": [
+            {
+                "step_key": "assess",
+                "role": "support",
+                "model": "gpt-5.6-terra",
+                "reasoning_effort": "high",
+                "instruction_bundle": instruction_pointer,
+                "reference_bundle": None,
+                "worker_pool_key": "support",
+                "timeout_seconds": 1800,
+                "sandbox": "read-only",
+                "network": "disabled",
+                "general_knowledge_mode": "DENIED",
+            }
+        ],
+        "resolver_version": "7.0.0",
+        "resolved_at": "2026-09-03T00:00:00Z",
+        "plan_sha256": ZERO_SHA,
+    }
+    plan["plan_sha256"] = compute_control_document_hash(plan, "plan_sha256")
+    session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))] = SimpleNamespace(
+        canonical_document=plan,
+        plan_sha256=plan["plan_sha256"],
+    )
+    fixture.update(
+        {
+            "compatibility_request": request,
+            "item_payload": item_payload,
+            "prompt_payload": prompt_payload,
+            "hwpx_payload": hwpx_payload,
+            "item_revision_id": item_pointer["artifact_revision_id"],
+            "prompt_revision_id": prompt_pointer["artifact_revision_id"],
+            "hwpx_revision_id": hwpx_pointer["artifact_revision_id"],
+        }
+    )
+    return fixture
+
+
 def _analysis_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     fixture = _fixture(tmp_path, monkeypatch)
     session = fixture["session"]
@@ -1288,6 +1435,51 @@ def test_legacy_extraction_materializer_rejects_page_hash_drift(
         "CONTROL_POINTER_FILE_INVALID",
         "CONTROL_POINTER_HASH_MISMATCH",
     }
+
+
+def test_legacy_editorial_materializer_stages_only_item_and_exact_team_authorities(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _legacy_editorial_fixture(tmp_path, monkeypatch)
+    authorized = authorized_execution_artifact_revisions(
+        fixture["session"], plan_id=str(fixture["plan_id"]), step_key="assess"
+    )
+    assert {
+        fixture["item_revision_id"],
+        fixture["prompt_revision_id"],
+        fixture["hwpx_revision_id"],
+    }.issubset(authorized)
+
+    workspace = _workspace(tmp_path, "legacy-editorial")
+    result = materialize_execution_step(
+        fixture["session"],
+        plan_id=str(fixture["plan_id"]),
+        step_key="assess",
+        workspace=workspace,
+        canonical_artifact_root=fixture["artifact_root"],
+        worker_group_id=GROUP_ID,
+        authorized_artifact_revision_ids=authorized,
+    )
+
+    assert (workspace / "source/item/item-content.json").read_bytes() == fixture["item_payload"]
+    assert (
+        workspace / "source/authorities/content-team-integrated-science-authoring-v05.md"
+    ).read_bytes() == fixture["prompt_payload"]
+    assert (
+        workspace / "source/authorities/content-team-hwp-question-editor-handoff-v1.md"
+    ).read_bytes() == fixture["hwpx_payload"]
+    staged_request = json.loads((workspace / "source/compatibility-request.json").read_bytes())
+    assert (
+        staged_request["compatibility_request_id"]
+        == fixture["compatibility_request"]["compatibility_request_id"]
+    )
+    assert staged_request["request_sha256"] == fixture["compatibility_request"]["request_sha256"]
+    assert [item["artifact_member"] for item in staged_request["authorities"]] == [
+        item["artifact_member"] for item in fixture["compatibility_request"]["authorities"]
+    ]
+    assert not (workspace / "references").exists()
+    assert result.source_artifact_revision_id == fixture["item_revision_id"]
+    assert result.materialized_member_count == 6
 
 
 def test_analysis_materializer_rejects_hardlinked_source(

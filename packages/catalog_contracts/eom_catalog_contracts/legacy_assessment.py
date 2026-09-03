@@ -776,7 +776,12 @@ class LegacyItemDecision(FrozenModel):
     rejected_content_paths: tuple[str, ...] = Field(max_length=512)
     required_corrections: tuple[str, ...] = Field(max_length=128)
 
-    _text = field_validator("required_corrections")(_safe_text)
+    @field_validator("required_corrections")
+    @classmethod
+    def safe_required_corrections(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        for correction in value:
+            _safe_text(correction)
+        return value
 
     @model_validator(mode="after")
     def coherent_decision(self) -> LegacyItemDecision:

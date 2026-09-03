@@ -210,6 +210,36 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:cc998174aaccc487c8449f91c4156c8caaf23ec294d06fa905b39bad7d8a11a6",
         ),
+        "legacy-item-promotion-request": CatalogSchemaResource(
+            "schemas/legacy-assessment/legacy-item-promotion-request-v1.schema.json",
+            "resources/legacy-assessment/legacy-item-promotion-request-v1.schema.json",
+            "1.0",
+            "sha256:d0273a9367abff2d2fa5ed5f7af6b4424521c97fb4a615c18156e6c584585fce",
+        ),
+        "legacy-item-editorial-compatibility-request": CatalogSchemaResource(
+            "schemas/legacy-assessment/legacy-item-editorial-compatibility-request-v1.schema.json",
+            "resources/legacy-assessment/legacy-item-editorial-compatibility-request-v1.schema.json",
+            "1.0",
+            "sha256:0d9809e4faf8b06f5c17d6db3d2ad54dfb505367d2346839ea69670141f57bea",
+        ),
+        "legacy-item-editorial-compatibility-policy": CatalogSchemaResource(
+            "schemas/legacy-assessment/legacy-item-editorial-compatibility-policy-v1.schema.json",
+            "resources/legacy-assessment/legacy-item-editorial-compatibility-policy-v1.schema.json",
+            "1.0",
+            "sha256:2c61e37fa9f2087ae52f552d7f40d6a36207680d111f6dd89b695c3128443a0d",
+        ),
+        "legacy-item-editorial-compatibility-result": CatalogSchemaResource(
+            "schemas/legacy-assessment/legacy-item-editorial-compatibility-result-v1.schema.json",
+            "resources/legacy-assessment/legacy-item-editorial-compatibility-result-v1.schema.json",
+            "1.0",
+            "sha256:5d64ac1e1d3210cb5541502794c5e9f1293a589a011cb7af744ba5fe53110260",
+        ),
+        "legacy-item-editorial-compatibility-proposal": CatalogSchemaResource(
+            "schemas/legacy-assessment/legacy-item-editorial-compatibility-proposal-v1.schema.json",
+            "resources/legacy-assessment/legacy-item-editorial-compatibility-proposal-v1.schema.json",
+            "1.0",
+            "sha256:f4fc79d5ce7986f06a84fd8246561aff0599da95b527ade592c15bebfd91055e",
+        ),
         "legacy-item-corpus-coverage": CatalogSchemaResource(
             "schemas/legacy-assessment/legacy-item-corpus-coverage-v1.schema.json",
             "resources/legacy-assessment/legacy-item-corpus-coverage-v1.schema.json",
@@ -244,7 +274,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/content-pack/content-pack-v2.schema.json",
             "resources/content-pack/content-pack-v2.schema.json",
             "1.1",
-            "sha256:c2f7e5456ac15eaa2526a33ba9de8bef81e9640925a05b1531e9abf80744a664",
+            "sha256:c1d2576b5cf8e52e4590dedb2f8950d8c1bf62450062d2ef7a9f7b0e3a7e51d3",
         ),
         "integrated-science-editorial-outline": CatalogSchemaResource(
             "schemas/curriculum/integrated-science-editorial-outline-v1.schema.json",

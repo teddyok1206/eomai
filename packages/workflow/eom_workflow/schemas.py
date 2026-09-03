@@ -61,6 +61,8 @@ from eom_workflow.models import (
     KnowledgeImageRoleResult,
     KnowledgeRegistrationRoleResult,
     KnowledgeReviewRoleResult,
+    LegacyItemEditorialCompatibilityRoleResult,
+    LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionRoleResult,
     LegacyItemExtractionWorkerRequest,
     RegistrationRoleResult,
@@ -141,6 +143,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "knowledge-analysis-proposal-result@7.0",
             "knowledge-analysis-proposal-result@8.0",
             "legacy-item-extraction-result@1.0",
+            "legacy-item-editorial-compatibility-result@1.0",
         }
     ),
 }
@@ -181,6 +184,9 @@ RESULT_SCHEMA_FILES = {
     "knowledge-analysis-proposal-result@7.0": ("knowledge-analysis-proposal-result-v7.schema.json"),
     "knowledge-analysis-proposal-result@8.0": ("knowledge-analysis-proposal-result-v8.schema.json"),
     "legacy-item-extraction-result@1.0": "legacy-item-extraction-result-v1.schema.json",
+    "legacy-item-editorial-compatibility-result@1.0": (
+        "legacy-item-editorial-compatibility-result-v1.schema.json"
+    ),
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -203,6 +209,7 @@ INPUT_SCHEMA_FILES_V1_15 = {
     "review": "review-input.schema.json",
     "item_management": "registration-input.schema.json",
 }
+INPUT_SCHEMA_FILES_V1_16 = {"support": "legacy-item-editorial-compatibility-input-v1.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -240,6 +247,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "authoring-result@7.0": "workflow-role/1.15.0",
     "review-result@7.0": "workflow-role/1.15.0",
     "registration-result@7.0": "workflow-role/1.15.0",
+    "legacy-item-editorial-compatibility-result@1.0": "workflow-role/1.16.0",
 }
 PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.0.1": INPUT_SCHEMA_FILES,
@@ -258,6 +266,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.13.0": INPUT_SCHEMA_FILES_V1_1,
     "workflow-role/1.14.0": INPUT_SCHEMA_FILES_V1_14,
     "workflow-role/1.15.0": INPUT_SCHEMA_FILES_V1_15,
+    "workflow-role/1.16.0": INPUT_SCHEMA_FILES_V1_16,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -276,6 +285,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.13.0",
     "workflow-role/1.14.0",
     "workflow-role/1.15.0",
+    "workflow-role/1.16.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -293,6 +303,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_11.values(),
             *INPUT_SCHEMA_FILES_V1_14.values(),
             *INPUT_SCHEMA_FILES_V1_15.values(),
+            *INPUT_SCHEMA_FILES_V1_16.values(),
         }
     )
 )
@@ -380,6 +391,7 @@ def load_role_input_schema(
             "workflow-role/1.10.0",
             "workflow-role/1.11.0",
             "workflow-role/1.14.0",
+            "workflow-role/1.16.0",
         },
     )
 
@@ -399,6 +411,7 @@ def load_role_result_schema(schema_id: str) -> dict[str, Any]:
             "knowledge-analysis-proposal-result@7.0",
             "knowledge-analysis-proposal-result@8.0",
             "legacy-item-extraction-result@1.0",
+            "legacy-item-editorial-compatibility-result@1.0",
         },
     )
 
@@ -479,6 +492,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return KnowledgeAnalysisProposalRoleResultV8.model_validate(value)
         if schema_id == "legacy-item-extraction-result@1.0" and role == "support":
             return LegacyItemExtractionRoleResult.model_validate(value)
+        if schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
+            return LegacyItemEditorialCompatibilityRoleResult.model_validate(value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":
@@ -715,8 +730,70 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
             "in this item, and add mappings for every other grounded content element."
         )
         _prune_unreferenced_definitions(schema)
+    if schema_id == "legacy-item-editorial-compatibility-result@1.0":
+        if not isinstance(
+            worker_input.request,
+            LegacyItemEditorialCompatibilityWorkerRequest,
+        ):
+            raise WorkflowSchemaError(
+                "legacy editorial compatibility result requires its typed worker request"
+            )
+        output = _mapping(_mapping(schema, "properties"), "output")
+        if output.get("$ref") != "#/$defs/output":
+            raise WorkflowSchemaError(
+                "legacy editorial compatibility output reference is not projectable"
+            )
+        output_definition = _mapping(definitions, "output")
+        proposal_ref = _mapping(_mapping(output_definition, "properties"), "proposal")
+        if proposal_ref.get("$ref") != "#/$defs/LegacyItemEditorialCompatibilityProposal":
+            raise WorkflowSchemaError(
+                "legacy editorial compatibility proposal reference is not projectable"
+            )
+        proposal_definition = _mapping(
+            definitions,
+            "LegacyItemEditorialCompatibilityProposal",
+        )
+        proposal_properties = _mapping(proposal_definition, "properties")
+        compatibility_request = worker_input.request.compatibility_request
+        _bind_result_string_const(
+            schema,
+            _mapping(proposal_properties, "compatibility_request_id"),
+            compatibility_request.compatibility_request_id,
+        )
+        _bind_result_string_const(
+            schema,
+            _mapping(proposal_properties, "request_sha256"),
+            compatibility_request.request_sha256,
+        )
+        compatibility_source_properties = _local_definition_properties(
+            schema,
+            _mapping(proposal_properties, "source"),
+        )
+        for key, value in (
+            ("item_id", compatibility_request.source.item_id),
+            ("item_revision_id", compatibility_request.source.item_revision_id),
+            ("item_manifest_sha256", compatibility_request.source.item_manifest_sha256),
+        ):
+            _bind_result_string_const(
+                schema,
+                _mapping(compatibility_source_properties, key),
+                value,
+            )
+        _prune_unreferenced_definitions(schema)
     validate_codex_structured_output_schema(schema)
     return schema
+
+
+def _local_definition_properties(
+    schema: dict[str, Any],
+    value: dict[str, Any],
+) -> dict[str, Any]:
+    reference = value.get("$ref")
+    prefix = "#/$defs/"
+    if set(value) != {"$ref"} or not isinstance(reference, str) or not reference.startswith(prefix):
+        raise WorkflowSchemaError("local object reference is not independently projectable")
+    definition = _mapping(_mapping(schema, "$defs"), reference.removeprefix(prefix))
+    return _mapping(definition, "properties")
 
 
 def _knowledge_analysis_anchor_properties(
@@ -833,9 +910,86 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         _prune_unreferenced_definitions(schema)
     if schema_id == "legacy-item-extraction-result@1.0":
         _prune_unreferenced_definitions(schema)
+    if schema_id == "legacy-item-editorial-compatibility-result@1.0":
+        _project_legacy_editorial_compatibility_codex_contract(schema)
+        _prune_unreferenced_definitions(schema)
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
     return schema
+
+
+def _project_legacy_editorial_compatibility_codex_contract(
+    schema: dict[str, Any],
+) -> None:
+    """Flatten canonical refinements that Structured Outputs cannot express.
+
+    The canonical proposal schema and Pydantic model remain the authoritative boundary after
+    generation. This projection changes only representation: object refinements are merged into
+    their local base definition, the ordered two-authority tuple becomes a bounded union, and the
+    status/issues conditional is left to the canonical post-generation validator.
+    """
+
+    definitions = _mapping(schema, "$defs")
+    prefix = "#/$defs/"
+
+    def flatten_refinement(target: dict[str, Any], *, expected_base: str) -> None:
+        composition = target.get("allOf")
+        if not isinstance(composition, list) or len(composition) != 2:
+            raise WorkflowSchemaError("legacy editorial object refinement is invalid")
+        base_reference, refinement = composition
+        if (
+            base_reference != {"$ref": f"{prefix}{expected_base}"}
+            or not isinstance(refinement, dict)
+            or set(refinement) != {"properties"}
+        ):
+            raise WorkflowSchemaError("legacy editorial object refinement is not projectable")
+        base = copy.deepcopy(_mapping(definitions, expected_base))
+        base_properties = _mapping(base, "properties")
+        refinement_properties = _mapping(refinement, "properties")
+        for name, value in refinement_properties.items():
+            if name not in base_properties or not isinstance(value, dict):
+                raise WorkflowSchemaError("legacy editorial field refinement is invalid")
+            base_properties[name] = copy.deepcopy(value)
+        target.clear()
+        target.update(base)
+
+    learned_item = _mapping(definitions, "LegacyItemEditorialCompatibilityProposal_learnedItem")
+    flatten_refinement(
+        _mapping(_mapping(learned_item, "properties"), "item_content"),
+        expected_base="LegacyItemEditorialCompatibilityProposal_artifactMember",
+    )
+    authority_base = _mapping(
+        definitions,
+        "LegacyItemEditorialCompatibilityProposal_authorityBase",
+    )
+    flatten_refinement(
+        _mapping(_mapping(authority_base, "properties"), "artifact_member"),
+        expected_base="LegacyItemEditorialCompatibilityProposal_artifactMember",
+    )
+    flatten_refinement(
+        _mapping(definitions, "LegacyItemEditorialCompatibilityProposal_contentTeamPrompt"),
+        expected_base="LegacyItemEditorialCompatibilityProposal_authorityBase",
+    )
+    flatten_refinement(
+        _mapping(definitions, "LegacyItemEditorialCompatibilityProposal_hwpxProfile"),
+        expected_base="LegacyItemEditorialCompatibilityProposal_authorityBase",
+    )
+
+    proposal = _mapping(definitions, "LegacyItemEditorialCompatibilityProposal")
+    conditional_guards = proposal.pop("allOf", None)
+    if not isinstance(conditional_guards, list) or len(conditional_guards) != 2:
+        raise WorkflowSchemaError("legacy editorial proposal conditional contract is invalid")
+    authorities = _mapping(_mapping(proposal, "properties"), "authorities")
+    prefix_items = authorities.pop("prefixItems", None)
+    if (
+        not isinstance(prefix_items, list)
+        or len(prefix_items) != 2
+        or authorities.pop("items", None) is not False
+        or authorities.get("minItems") != 2
+        or authorities.get("maxItems") != 2
+    ):
+        raise WorkflowSchemaError("legacy editorial authority tuple is not projectable")
+    authorities["items"] = {"anyOf": prefix_items}
 
 
 def _project_content_team_authoring_contract(schema: dict[str, Any]) -> None:
@@ -1237,6 +1391,16 @@ def _inline_catalog_schema(
             "eom://schemas/legacy-assessment/legacy-item-extraction-result/1.0",
             "legacy-item-extraction-result",
             "LegacyItemExtractionResult",
+        ),
+        (
+            "eom://schemas/legacy-assessment/legacy-item-editorial-compatibility-request/1.0",
+            "legacy-item-editorial-compatibility-request",
+            "LegacyItemEditorialCompatibilityRequest",
+        ),
+        (
+            "eom://schemas/legacy-assessment/legacy-item-editorial-compatibility-proposal/1.0",
+            "legacy-item-editorial-compatibility-proposal",
+            "LegacyItemEditorialCompatibilityProposal",
         ),
     )
     for contract_reference, catalog_name, definition_name in legacy_contracts:

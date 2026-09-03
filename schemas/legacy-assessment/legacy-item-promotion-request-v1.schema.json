@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/legacy-item-promotion-request/1.0",
+  "title": "Legacy Item Promotion Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "acceptance_id",
+    "acceptance_sha256",
+    "item_proposal_id",
+    "item_number",
+    "content_pack_release_id",
+    "primary_taxonomy_ref",
+    "difficulty_band",
+    "requested_by",
+    "idempotency_key",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-item-promotion-request/1.0"},
+    "acceptance_id": {
+      "type": "string",
+      "pattern": "^itemacceptance_[0-9a-f]{32}$"
+    },
+    "acceptance_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "item_proposal_id": {
+      "type": "string",
+      "pattern": "^itemproposal_[0-9a-f]{32}$"
+    },
+    "item_number": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "content_pack_release_id": {
+      "type": "string",
+      "pattern": "^packrel_[0-9a-f]{32}$"
+    },
+    "primary_taxonomy_ref": {
+      "oneOf": [
+        {"type": "string", "maxLength": 256},
+        {"type": "null"}
+      ]
+    },
+    "difficulty_band": {
+      "oneOf": [
+        {"type": "string", "maxLength": 64},
+        {"type": "null"}
+      ]
+    },
+    "requested_by": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 128,
+      "pattern": "^[!-~]+$"
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

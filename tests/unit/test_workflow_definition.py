@@ -7,7 +7,7 @@ import pytest
 import yaml
 from eom_workflow import WorkflowDefinitionError, compile_definition, compile_definition_data
 from eom_workflow.compiler import evaluate_decision
-from eom_workflow.models import DecisionStep
+from eom_workflow.models import AgentStep, DecisionStep
 
 DEFINITION_PATH = Path("config/workflows/generic-item-development.v1.yaml")
 ROLES = {"authoring", "image", "review", "item_management", "support"}
@@ -26,6 +26,20 @@ def test_generic_definition_compiles_with_stable_hash() -> None:
     assert first.definition.definition_version == "1.0.0"
     assert first.sha256 == second.sha256
     assert first.sha256.startswith("sha256:")
+
+
+def test_legacy_editorial_compatibility_definition_is_one_shot_support() -> None:
+    compiled = compile_definition(
+        Path("config/workflows/legacy-item-editorial-compatibility.v1.yaml"),
+        ROLES,
+    )
+
+    assert compiled.definition.definition_key == "legacy-item-editorial-compatibility"
+    assert compiled.definition.limits.max_step_attempts == 1
+    assert compiled.definition.limits.max_rework_cycles == 0
+    step = compiled.steps_by_key["assess"]
+    assert isinstance(step, AgentStep)
+    assert step.result_schema == ("legacy-item-editorial-compatibility-result@1.0")
 
 
 def test_duplicate_step_is_rejected() -> None:

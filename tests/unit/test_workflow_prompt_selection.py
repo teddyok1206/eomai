@@ -2,6 +2,7 @@ from pathlib import Path
 
 from eom_workflow import (
     KnowledgeAnalysisWorkerRequest,
+    LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionWorkerRequest,
     WorkerRequest,
 )
@@ -25,6 +26,21 @@ def test_legacy_extraction_prompt_requires_title_and_body_anchor_coverage() -> N
 
     assert "`content_path` is exactly `title` first" in prompt
     assert "`content_path` begins with `body[`" in prompt
+
+
+def test_editorial_compatibility_uses_only_its_team_authority_prompt() -> None:
+    request = LegacyItemEditorialCompatibilityWorkerRequest.model_construct(
+        compatibility_request=None
+    )
+
+    assert _prompt_name_for_request(worker_role="support", request=request) == (
+        "legacy-item-editorial-compatibility"
+    )
+    prompt = (
+        ROOT / "content/prompt-templates/placeholders/legacy-item-editorial-compatibility.txt"
+    ).read_text(encoding="utf-8")
+    assert "Read both authority documents in full" in prompt
+    assert "do not invent, add, or silently import EOM editorial" in " ".join(prompt.split())
 
 
 def test_other_support_requests_keep_existing_support_prompt() -> None:

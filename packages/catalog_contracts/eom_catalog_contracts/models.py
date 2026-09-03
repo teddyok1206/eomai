@@ -207,7 +207,7 @@ class PackCompatibility(FrozenModel):
     protocol: ProtocolCompatibility
     workflow_definitions: tuple[WorkflowCompatibility, ...] = Field(min_length=1)
     required_worker_roles: tuple[
-        Literal["authoring", "review", "image", "item_management"], ...
+        Literal["authoring", "review", "image", "item_management", "support"], ...
     ] = Field(min_length=1)
 
 

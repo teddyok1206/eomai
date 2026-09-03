@@ -228,7 +228,11 @@ def create_workflow_instance(
         stage=(
             WorkflowStage.KNOWLEDGE_ANALYSIS.value
             if request.request_name
-            in {"KNOWLEDGE_ANALYSIS_REQUEST", "LEGACY_ITEM_EXTRACTION_REQUEST"}
+            in {
+                "KNOWLEDGE_ANALYSIS_REQUEST",
+                "LEGACY_ITEM_EXTRACTION_REQUEST",
+                "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST",
+            }
             else WorkflowStage.AUTHORING.value
         ),
         current_step_key=start_step,

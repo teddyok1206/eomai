@@ -59,6 +59,18 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:487d26ccd825de39737f202cfa336896ecfdb0bbec128cc274cd72c35dc60dbb",
         ),
+        "legacy-item-editorial-compatibility-control-bootstrap": ControlSchemaResource(
+            (
+                "schemas/workflow/control-plane/"
+                "legacy-item-editorial-compatibility-control-bootstrap-v1.schema.json"
+            ),
+            (
+                "resources/control-plane/"
+                "legacy-item-editorial-compatibility-control-bootstrap-v1.schema.json"
+            ),
+            "1.0",
+            "sha256:e4bf8a32be224b531368ff137bf11e2b0cf6b8c3f2bd3cae4cabb7cdaa0d1ba9",
+        ),
         "standard-control-bootstrap-v3": ControlSchemaResource(
             "schemas/workflow/control-plane/standard-control-bootstrap-v3.schema.json",
             "resources/control-plane/standard-control-bootstrap-v3.schema.json",
@@ -130,6 +142,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/resolved-execution-plan-v6.schema.json",
             "6.0",
             "sha256:89a1b022d15e0d62fd5716a40119cb6dd2f15fd36daddc2ffbd80eec231db308",
+        ),
+        "resolved-execution-plan-v7": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v7.schema.json",
+            "resources/control-plane/resolved-execution-plan-v7.schema.json",
+            "7.0",
+            "sha256:4b382782c736cb1250c2d6ca609a0ff7332b10b7c1c3430c299a0bf095faad3f",
         ),
         "codex-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-invocation-v1.schema.json",

@@ -1,0 +1,19 @@
+schema_version: "1.0"
+definition_key: "legacy-item-editorial-compatibility"
+definition_version: "1.0.0"
+start_step: "assess"
+
+limits:
+  max_rework_cycles: 0
+  max_step_attempts: 1
+
+steps:
+  - key: "assess"
+    type: "agent"
+    worker_role: "support"
+    result_schema: "legacy-item-editorial-compatibility-result@1.0"
+    on_success: "complete"
+
+  - key: "complete"
+    type: "terminal"
+    terminal_status: "COMPLETED"

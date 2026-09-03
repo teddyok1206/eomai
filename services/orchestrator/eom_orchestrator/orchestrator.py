@@ -32,6 +32,8 @@ from eom_workflow.models import (
     KnowledgeAnalysisProposalRoleResultV7,
     KnowledgeAnalysisProposalRoleResultV8,
     KnowledgeAnalysisWorkerRequest,
+    LegacyItemEditorialCompatibilityRoleResult,
+    LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionRoleResult,
     LegacyItemExtractionWorkerRequest,
     RoleWorkerInput,
@@ -68,6 +70,9 @@ from eom_orchestrator.execution_materializer import (
     materialize_execution_step,
 )
 from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
+from eom_orchestrator.legacy_item_editorial_compatibility_artifact import (
+    stage_legacy_item_editorial_compatibility_proposal,
+)
 from eom_orchestrator.legacy_item_extraction_artifact import (
     stage_legacy_item_extraction_result,
 )
@@ -233,7 +238,12 @@ class Orchestrator:
         step_key: str,
         attempt: int,
         role: str,
-        request: WorkerRequest | KnowledgeAnalysisWorkerRequest | LegacyItemExtractionWorkerRequest,
+        request: (
+            WorkerRequest
+            | KnowledgeAnalysisWorkerRequest
+            | LegacyItemExtractionWorkerRequest
+            | LegacyItemEditorialCompatibilityWorkerRequest
+        ),
         upstream_artifacts: tuple[ArtifactPointer, ...],
         result_schema: str,
         idempotency_key: str,
@@ -351,6 +361,7 @@ class Orchestrator:
                             in {
                                 "KNOWLEDGE_ANALYSIS_REQUEST",
                                 "LEGACY_ITEM_EXTRACTION_REQUEST",
+                                "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST",
                             }
                             else "CODEX"
                         ),
@@ -539,6 +550,33 @@ class Orchestrator:
                 content_bytes = staged_file_set.primary_bytes
                 manifest_document = staged_file_set.manifest
                 database_result = receipt.model_dump(mode="json")
+            elif result_schema == "legacy-item-editorial-compatibility-result@1.0":
+                if not isinstance(
+                    result, LegacyItemEditorialCompatibilityRoleResult
+                ) or not isinstance(
+                    worker_input.request, LegacyItemEditorialCompatibilityWorkerRequest
+                ):
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "editorial compatibility typed boundary is inconsistent",
+                    )
+                staged_file_set = stage_legacy_item_editorial_compatibility_proposal(
+                    proposal=result.output.proposal,
+                    request=worker_input.request.compatibility_request,
+                    job_id=job_id,
+                    logical_artifact_id=artifact.logical_artifact_id,
+                    revision_id=artifact.revision_id,
+                    staging=staging,
+                )
+                self._transition(job_id, JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED")
+                final_path = commit_file_set_artifact(
+                    staged_file_set, self.settings.nas_artifact_root
+                )
+                content_hash = staged_file_set.primary_hash
+                manifest_hash = staged_file_set.manifest_hash
+                content_bytes = staged_file_set.primary_bytes
+                manifest_document = staged_file_set.manifest
+                database_result = result.output.proposal.model_dump(mode="json")
             else:
                 staged = stage_structured_artifact(
                     result=result_document,

@@ -11,9 +11,15 @@ from eom_catalog_contracts import (
     AssessmentSourceBundleRevision,
     LegacyAssessmentItemProposal,
     LegacyItemCorpusCoverage,
+    LegacyItemExtractionAcceptance,
     LegacyItemExtractionRequest,
     LegacyItemExtractionResult,
+    LegacyItemPromotionRequest,
     validate_contract,
+)
+from eom_catalog_service.legacy_item_promotion_service import (
+    LegacyItemPromotionError,
+    LegacyItemPromotionService,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.errors import PlatformError
@@ -245,6 +251,66 @@ def _result(*, item_content: dict[str, object] | None = None) -> dict[str, objec
     return _hashed(value, "result_sha256")
 
 
+def _acceptance(
+    result: LegacyItemExtractionResult,
+    *,
+    decision: str = "ACCEPT",
+) -> LegacyItemExtractionAcceptance:
+    proposal = result.items[0]
+    value: dict[str, object] = {
+        "schema_version": "legacy-item-extraction-acceptance/1.0",
+        "acceptance_id": "itemacceptance_" + "3" * 32,
+        "extraction_result": {
+            "artifact": _artifact(
+                "4",
+                "result.json",
+                "application/json",
+                schema_ref=("eom://schemas/legacy-assessment/legacy-item-extraction-result/1.0"),
+            ),
+            "extraction_result_id": result.extraction_result_id,
+            "result_sha256": result.result_sha256,
+        },
+        "state": "ACCEPTED" if decision == "ACCEPT" else "ACCEPTED_WITH_CORRECTIONS",
+        "item_decisions": [
+            {
+                "item_proposal_id": proposal.item_proposal_id,
+                "item_number": proposal.item_number,
+                "decision": decision,
+                "accepted_content_paths": [
+                    item.content_path for item in proposal.content_anchor_map
+                ],
+                "rejected_content_paths": [],
+                "required_corrections": (
+                    [] if decision == "ACCEPT" else ["검토된 교정 아티팩트가 필요하다."]
+                ),
+            }
+        ],
+        "coverage_state": "COMPLETE",
+        "reviewed_at": NOW,
+        "reviewed_by": "operator_reviewer",
+    }
+    return LegacyItemExtractionAcceptance.model_validate(_hashed(value, "acceptance_sha256"))
+
+
+def _promotion_request(
+    acceptance: LegacyItemExtractionAcceptance,
+) -> LegacyItemPromotionRequest:
+    decision = acceptance.item_decisions[0]
+    value: dict[str, object] = {
+        "schema_version": "legacy-item-promotion-request/1.0",
+        "acceptance_id": acceptance.acceptance_id,
+        "acceptance_sha256": acceptance.acceptance_sha256,
+        "item_proposal_id": decision.item_proposal_id,
+        "item_number": decision.item_number,
+        "content_pack_release_id": "packrel_" + "5" * 32,
+        "primary_taxonomy_ref": None,
+        "difficulty_band": None,
+        "requested_by": "operator_reviewer",
+        "idempotency_key": "legacy-item-promotion-test",
+    }
+    return LegacyItemPromotionRequest.model_validate(_hashed(value, "request_sha256"))
+
+
 def _staging_request() -> LegacyItemExtractionRequest:
     value: dict[str, object] = {
         "schema_version": "legacy-item-extraction-request/1.0",
@@ -357,6 +423,35 @@ def test_extraction_result_schema_and_typed_contract_accept_table_only_item() ->
     validate_contract("legacy-item-extraction-result", value)
     parsed = LegacyItemExtractionResult.model_validate(value)
     assert parsed.items[0].visual_patterns[0].representation_kind == "TABLE"
+
+
+def test_promotion_accepts_only_the_exact_fully_reviewed_proposal() -> None:
+    result = LegacyItemExtractionResult.model_validate(_result())
+    acceptance = _acceptance(result)
+    command = _promotion_request(acceptance)
+
+    assert (
+        LegacyItemPromotionService._accepted_proposal_index(
+            acceptance,
+            result,
+            command,
+        )
+        == 0
+    )
+
+
+def test_promotion_rejects_correct_and_accept_without_corrected_artifact() -> None:
+    result = LegacyItemExtractionResult.model_validate(_result())
+    acceptance = _acceptance(result, decision="CORRECT_AND_ACCEPT")
+
+    with pytest.raises(LegacyItemPromotionError) as error:
+        LegacyItemPromotionService._accepted_proposal_index(
+            acceptance,
+            result,
+            _promotion_request(acceptance),
+        )
+
+    assert error.value.code == "LEGACY_ITEM_PROMOTION_REVIEW_INCOMPLETE"
 
 
 def test_extraction_staging_accepts_pinned_page_images_and_materialized_source(

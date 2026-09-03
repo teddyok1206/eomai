@@ -21,6 +21,7 @@ from eom_workflow import (
     DecisionStep,
     HumanGateStep,
     KnowledgeAnalysisWorkerRequest,
+    LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionWorkerRequest,
     TerminalStep,
     WorkerRequest,
@@ -92,12 +93,21 @@ TERMINAL_WORKFLOW_STATES = {
 def _prompt_name_for_request(
     *,
     worker_role: str,
-    request: WorkerRequest | KnowledgeAnalysisWorkerRequest | LegacyItemExtractionWorkerRequest,
+    request: (
+        WorkerRequest
+        | KnowledgeAnalysisWorkerRequest
+        | LegacyItemExtractionWorkerRequest
+        | LegacyItemEditorialCompatibilityWorkerRequest
+    ),
 ) -> str:
     """Select the fixed prompt without conflating support workloads."""
 
     if worker_role == "support" and isinstance(request, LegacyItemExtractionWorkerRequest):
         return "legacy-item-extraction"
+    if worker_role == "support" and isinstance(
+        request, LegacyItemEditorialCompatibilityWorkerRequest
+    ):
+        return "legacy-item-editorial-compatibility"
     if worker_role == "item_management":
         return "registration"
     return worker_role
@@ -120,7 +130,12 @@ class RoleJobExecutor(Protocol):
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkerRequest | KnowledgeAnalysisWorkerRequest | LegacyItemExtractionWorkerRequest,
+        request: (
+            WorkerRequest
+            | KnowledgeAnalysisWorkerRequest
+            | LegacyItemExtractionWorkerRequest
+            | LegacyItemEditorialCompatibilityWorkerRequest
+        ),
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
@@ -153,7 +168,12 @@ class PlatformRoleJobExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkerRequest | KnowledgeAnalysisWorkerRequest | LegacyItemExtractionWorkerRequest,
+        request: (
+            WorkerRequest
+            | KnowledgeAnalysisWorkerRequest
+            | LegacyItemExtractionWorkerRequest
+            | LegacyItemEditorialCompatibilityWorkerRequest
+        ),
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,

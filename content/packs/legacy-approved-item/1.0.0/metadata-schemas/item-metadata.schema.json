@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://metadata/legacy-approved-item@1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "item_type_key",
+    "source_kind",
+    "extraction_acceptance_id",
+    "extraction_result_id",
+    "item_proposal_id",
+    "item_number"
+  ],
+  "properties": {
+    "item_type_key": {"const": "legacy-approved-multiple-choice"},
+    "source_kind": {"const": "PAST_EXAM"},
+    "extraction_acceptance_id": {
+      "type": "string",
+      "pattern": "^itemacceptance_[0-9a-f]{32}$"
+    },
+    "extraction_result_id": {
+      "type": "string",
+      "pattern": "^itemextractresult_[0-9a-f]{32}$"
+    },
+    "item_proposal_id": {
+      "type": "string",
+      "pattern": "^itemproposal_[0-9a-f]{32}$"
+    },
+    "item_number": {"type": "integer", "minimum": 1, "maximum": 10000}
+  }
+}

@@ -29,6 +29,8 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV4,
     KnowledgeAnalysisWorkerProposalV5,
     KnowledgeAnalysisWorkerProposalV6,
+    LegacyItemEditorialCompatibilityProposal,
+    LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionRequest,
     LegacyItemExtractionResult,
     ParagraphBlock,
@@ -161,6 +163,13 @@ class LegacyItemExtractionWorkerRequest(FrozenModel):
     extraction_request: LegacyItemExtractionRequest
 
 
+class LegacyItemEditorialCompatibilityWorkerRequest(FrozenModel):
+    request_name: Literal["LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST"] = (
+        "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST"
+    )
+    compatibility_request: LegacyItemEditorialCompatibilityRequest
+
+
 class ItemBrief(FrozenModel):
     subject: str = Field(min_length=1, max_length=80)
     topic: str = Field(min_length=1, max_length=160)
@@ -268,6 +277,7 @@ class WorkflowRequest(FrozenModel):
         "GENERATED_KNOWLEDGE_ITEM_REQUEST",
         "KNOWLEDGE_ANALYSIS_REQUEST",
         "LEGACY_ITEM_EXTRACTION_REQUEST",
+        "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST",
     ]
     image_mode: Literal["skip", "required"]
     content_pack: ContentPackSelection | None = None
@@ -289,6 +299,7 @@ class WorkflowRequest(FrozenModel):
         | None
     ) = None
     legacy_extraction_request: LegacyItemExtractionRequest | None = None
+    legacy_editorial_compatibility_request: LegacyItemEditorialCompatibilityRequest | None = None
 
     @model_validator(mode="after")
     def validate_catalog_request(self) -> WorkflowRequest:
@@ -378,6 +389,10 @@ class WorkflowRequest(FrozenModel):
                 )
             if self.legacy_extraction_request is not None:
                 raise ValueError("knowledge analysis cannot include a legacy extraction request")
+            if self.legacy_editorial_compatibility_request is not None:
+                raise ValueError(
+                    "knowledge analysis cannot include an editorial compatibility request"
+                )
         elif self.request_name == "LEGACY_ITEM_EXTRACTION_REQUEST":
             if (
                 self.legacy_extraction_request is None
@@ -400,8 +415,39 @@ class WorkflowRequest(FrozenModel):
                 raise ValueError(
                     "legacy item extraction requires one pinned request and no item fields"
                 )
+            if self.legacy_editorial_compatibility_request is not None:
+                raise ValueError(
+                    "legacy item extraction cannot include an editorial compatibility request"
+                )
+        elif self.request_name == "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST":
+            if (
+                self.legacy_editorial_compatibility_request is None
+                or self.analysis_request is not None
+                or self.legacy_extraction_request is not None
+                or self.image_mode != "skip"
+                or any(
+                    value is not None
+                    for value in (
+                        self.content_pack,
+                        self.profiles,
+                        self.source_intake,
+                        self.registry_intent,
+                        self.item_brief,
+                        self.stimulus_asset,
+                        self.execution_preset_key,
+                        self.educational_retrieval,
+                    )
+                )
+            ):
+                raise ValueError(
+                    "legacy editorial compatibility requires one pinned request and no item fields"
+                )
         else:
-            if self.analysis_request is not None or self.legacy_extraction_request is not None:
+            if (
+                self.analysis_request is not None
+                or self.legacy_extraction_request is not None
+                or self.legacy_editorial_compatibility_request is not None
+            ):
                 raise ValueError("non-analysis workflow cannot include an analysis request")
             if self.item_brief is not None or self.stimulus_asset is not None:
                 raise ValueError("placeholder workflow cannot include a knowledge item brief")
@@ -413,7 +459,16 @@ class WorkflowRequest(FrozenModel):
 
     def worker_request(
         self,
-    ) -> WorkerRequest | KnowledgeAnalysisWorkerRequest | LegacyItemExtractionWorkerRequest:
+    ) -> (
+        WorkerRequest
+        | KnowledgeAnalysisWorkerRequest
+        | LegacyItemExtractionWorkerRequest
+        | LegacyItemEditorialCompatibilityWorkerRequest
+    ):
+        if self.legacy_editorial_compatibility_request is not None:
+            return LegacyItemEditorialCompatibilityWorkerRequest(
+                compatibility_request=self.legacy_editorial_compatibility_request
+            )
         if self.legacy_extraction_request is not None:
             return LegacyItemExtractionWorkerRequest(
                 extraction_request=self.legacy_extraction_request
@@ -424,6 +479,8 @@ class WorkflowRequest(FrozenModel):
             raise ValueError("knowledge analysis worker request is missing its pinned request")
         if self.request_name == "LEGACY_ITEM_EXTRACTION_REQUEST":
             raise ValueError("legacy extraction worker request is missing its pinned request")
+        if self.request_name == "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST":
+            raise ValueError("editorial compatibility worker request is missing its pinned request")
         return WorkerRequest(request_name=self.request_name, image_mode=self.image_mode)
 
 
@@ -463,13 +520,19 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.13.0",
         "workflow-role/1.14.0",
         "workflow-role/1.15.0",
+        "workflow-role/1.16.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
     step_run_id: StepRunId
     attempt: int = Field(ge=1, le=10)
     role: Literal["authoring", "image", "review", "item_management", "support"]
-    request: WorkerRequest | KnowledgeAnalysisWorkerRequest | LegacyItemExtractionWorkerRequest
+    request: (
+        WorkerRequest
+        | KnowledgeAnalysisWorkerRequest
+        | LegacyItemExtractionWorkerRequest
+        | LegacyItemEditorialCompatibilityWorkerRequest
+    )
     upstream_artifacts: tuple[ArtifactPointer, ...]
     artifact: ArtifactSpec
 
@@ -477,7 +540,12 @@ class RoleWorkerInput(FrozenModel):
     @classmethod
     def normalize_worker_request(
         cls, value: object
-    ) -> WorkerRequest | KnowledgeAnalysisWorkerRequest | LegacyItemExtractionWorkerRequest:
+    ) -> (
+        WorkerRequest
+        | KnowledgeAnalysisWorkerRequest
+        | LegacyItemExtractionWorkerRequest
+        | LegacyItemEditorialCompatibilityWorkerRequest
+    ):
         if isinstance(value, BaseModel):
             value = value.model_dump(mode="json")
         if not isinstance(value, dict):
@@ -486,6 +554,8 @@ class RoleWorkerInput(FrozenModel):
             return KnowledgeAnalysisWorkerRequest.model_validate(value)
         if value.get("request_name") == "LEGACY_ITEM_EXTRACTION_REQUEST":
             return LegacyItemExtractionWorkerRequest.model_validate(value)
+        if value.get("request_name") == "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST":
+            return LegacyItemEditorialCompatibilityWorkerRequest.model_validate(value)
         return WorkerRequest.model_validate(
             {"request_name": value.get("request_name"), "image_mode": value.get("image_mode")}
         )
@@ -552,6 +622,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.13.0",
         "workflow-role/1.14.0",
         "workflow-role/1.15.0",
+        "workflow-role/1.16.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1278,6 +1349,16 @@ class LegacyItemExtractionRoleResult(RoleResultBase):
     output: LegacyItemExtractionOutput
 
 
+class LegacyItemEditorialCompatibilityOutput(FrozenModel):
+    proposal: LegacyItemEditorialCompatibilityProposal
+
+
+class LegacyItemEditorialCompatibilityRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.16.0"] = "workflow-role/1.16.0"
+    role: Literal["support"] = "support"
+    output: LegacyItemEditorialCompatibilityOutput
+
+
 RoleResult = (
     AuthoringRoleResult
     | ImageRoleResult
@@ -1315,4 +1396,5 @@ RoleResult = (
     | KnowledgeAnalysisProposalRoleResultV7
     | KnowledgeAnalysisProposalRoleResultV8
     | LegacyItemExtractionRoleResult
+    | LegacyItemEditorialCompatibilityRoleResult
 )

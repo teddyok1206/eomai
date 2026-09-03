@@ -464,6 +464,8 @@ def test_release_verifies_legacy_item_extraction_runtime_and_contracts() -> None
     for runtime_member in (
         "eom_orchestrator/legacy_item_extraction_artifact.py",
         "eom_orchestrator/legacy_item_extraction_bootstrap.py",
+        "eom_orchestrator/legacy_item_editorial_compatibility_artifact.py",
+        "eom_orchestrator/legacy_item_editorial_compatibility_bootstrap.py",
         "eom_catalog_contracts/item_origin.py",
         "eom_catalog_contracts/legacy_assessment.py",
         "eom_catalog_service/item_origin_models.py",
@@ -473,7 +475,14 @@ def test_release_verifies_legacy_item_extraction_runtime_and_contracts() -> None
         "eom_catalog_service/legacy_assessment_packages.py",
         "eom_catalog_service/legacy_assessment_registry.py",
         "eom_catalog_service/legacy_assessment_rights.py",
+        "eom_catalog_service/legacy_item_acceptance_service.py",
         "eom_catalog_service/legacy_item_extraction_service.py",
+        "eom_catalog_service/legacy_item_editorial_compatibility_service.py",
+        "eom_catalog_service/legacy_item_editorial_validation.py",
+        "eom_catalog_service/legacy_item_learning_models.py",
+        "eom_catalog_service/legacy_item_learning_service.py",
+        "eom_catalog_service/legacy_item_promotion_service.py",
+        "eom_hwpx_manager/content_team_compatibility_evidence.py",
         "eomctl/legacy_assessment.py",
     ):
         assert f'"{runtime_member}"' in deployment
@@ -491,13 +500,22 @@ def test_release_verifies_legacy_item_extraction_runtime_and_contracts() -> None
         "legacy-assessment/legacy-item-extraction-result-v1.schema.json",
         "legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json",
         "legacy-assessment/legacy-item-corpus-coverage-v1.schema.json",
+        "legacy-assessment/legacy-item-promotion-request-v1.schema.json",
+        "legacy-assessment/legacy-item-editorial-compatibility-policy-v1.schema.json",
+        "legacy-assessment/legacy-item-editorial-compatibility-request-v1.schema.json",
+        "legacy-assessment/legacy-item-editorial-compatibility-proposal-v1.schema.json",
+        "legacy-assessment/legacy-item-editorial-compatibility-result-v1.schema.json",
     ):
         assert f'"{resource}"' in deployment
         assert f'"schemas/{resource}"' in deployment
     assert '"config/workflows/legacy-item-extraction.v1.yaml"' in deployment
+    assert '"config/workflows/legacy-item-editorial-compatibility.v1.yaml"' in deployment
     assert 'load_role_input_schema("support", "workflow-role/1.14.0")' in deployment
+    assert 'load_role_input_schema("support", "workflow-role/1.16.0")' in deployment
     assert 'legacy.definition_key != "legacy-item-extraction"' in deployment
     assert 'legacy.definition_version != "1.0.0"' in deployment
+    assert 'editorial.definition_key != "legacy-item-editorial-compatibility"' in deployment
+    assert 'editorial.definition_version != "1.0.0"' in deployment
 
 
 def test_release_install_normalizes_restrictive_operator_umask() -> None:

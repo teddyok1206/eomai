@@ -147,6 +147,33 @@ def new_item_origin_profile_id() -> str:
     return f"originprofile_{uuid4().hex}"
 
 
+def item_origin_profile_id_for_revision(item_revision_id: str) -> str:
+    """Return the replay-stable origin-profile ID owned by one Item Revision."""
+
+    digest = hashlib.sha256(f"item-origin-profile:{item_revision_id}".encode()).hexdigest()
+    return f"originprofile_{digest[:32]}"
+
+
+def new_editorial_compatibility_policy_revision_id() -> str:
+    return f"editorialcompatpolicyrev_{uuid4().hex}"
+
+
+def new_editorial_compatibility_request_id() -> str:
+    return f"editorialcompatreq_{uuid4().hex}"
+
+
+def new_editorial_compatibility_run_id() -> str:
+    return f"editorialcompatrun_{uuid4().hex}"
+
+
+def new_editorial_compatibility_result_id() -> str:
+    return f"editorialcompatresult_{uuid4().hex}"
+
+
+def new_editorial_compatibility_issue_id() -> str:
+    return f"editorialissue_{uuid4().hex}"
+
+
 def new_assessment_source_bundle_id() -> str:
     return f"assessbundle_{uuid4().hex}"
 
