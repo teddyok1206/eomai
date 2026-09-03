@@ -51,6 +51,15 @@ prepare_runtime_dependencies() {
   sudo -n /usr/bin/bash "${REPOSITORY_ROOT}/scripts/api/bootstrap_runtime_role.sh"
 }
 
+reconcile_installed_catalog_runtime_privileges() {
+  # The Catalog runner has its own DB role and its privilege matrix ships in
+  # the platform wheel. Reconcile it after installing the wheel so a release
+  # that introduces new pointer-only tables cannot restart Catalog against the
+  # preceding release's grant set.
+  sudo -n "${API_PYTHON}" \
+    "${REPOSITORY_ROOT}/scripts/catalog/bootstrap_runtime_role.py"
+}
+
 cleanup() {
   if [[ -n "${STAGING_ROOT}" && -d "${STAGING_ROOT}" ]]; then
     rm -rf "${STAGING_ROOT}"
@@ -1177,6 +1186,7 @@ case "${ACTION}" in
     prepare_runtime_dependencies
     build_release
     install_wheels
+    reconcile_installed_catalog_runtime_privileges
     install_service
     ;;
   verify)

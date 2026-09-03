@@ -81,6 +81,10 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert 'scripts/api/migrate_release.sh"' in source
     assert '--verify "${COMMIT}"' in source
     assert 'scripts/api/bootstrap_runtime_role.sh"' in source
+    assert 'scripts/catalog/bootstrap_runtime_role.py"' in source
+    assert source.index("install_wheels\n") < source.index(
+        "reconcile_installed_catalog_runtime_privileges\n"
+    ) < source.index("install_service\n")
 
 
 def test_all_release_builders_accept_reviewed_main_commits() -> None:
