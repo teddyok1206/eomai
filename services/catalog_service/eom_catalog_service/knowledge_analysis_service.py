@@ -55,6 +55,7 @@ from eom_identifiers import (
     new_knowledge_analysis_run_id,
     sha256_bytes,
 )
+from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.control_models import (
     ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
@@ -1021,6 +1022,12 @@ class KnowledgeAnalysisApplicationService:
                 raise KnowledgeAnalysisServiceError(
                     "KNOWLEDGE_ANALYSIS_REVIEW_CONFLICT",
                     "knowledge analysis run already has a decision",
+                )
+            reviewer = session.get(OperatorRecord, command.decided_by)
+            if reviewer is None or reviewer.status != "ACTIVE":
+                raise KnowledgeAnalysisServiceError(
+                    "KNOWLEDGE_ANALYSIS_REVIEWER_INVALID",
+                    "knowledge analysis reviewer is absent or inactive",
                 )
             policy = self.risk_policy(session, run.risk_policy_revision_id)
             request = _analysis_request(run.canonical_request)
