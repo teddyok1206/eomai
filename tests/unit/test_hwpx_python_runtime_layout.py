@@ -91,6 +91,21 @@ def test_normalization_is_idempotent(tmp_path: Path) -> None:
     assert second.changes == 0
 
 
+def test_normalization_repairs_console_script_mode(tmp_path: Path) -> None:
+    root, _dependency, _module, console = _fixture(tmp_path)
+    console.chmod(0o775)
+
+    result = normalize_layout(
+        root,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+        console_scripts=(console,),
+    )
+
+    assert result.changes == 5
+    assert stat.S_IMODE(console.stat().st_mode) == 0o755
+
+
 def test_contained_symlink_is_preserved_and_escape_is_rejected(tmp_path: Path) -> None:
     root, dependency, module, console = _fixture(tmp_path)
     normalize_layout(

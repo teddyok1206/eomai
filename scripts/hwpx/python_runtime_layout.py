@@ -503,12 +503,15 @@ def normalize_layout(
     """Normalize only a fully validated inventory and return the change count."""
 
     entries = inventory_layout(root, expected_uid=expected_uid, expected_gid=expected_gid)
-    _verify_console_scripts(
-        console_scripts,
-        expected_uid=expected_uid,
-        expected_gid=expected_gid,
-    )
     changes = sum(_normalize_entry(entry) for entry in entries)
+    for console_script in console_scripts:
+        result = normalize_runtime_executables(
+            (console_script,),
+            boundary=console_script.parent.parent,
+            expected_uid=expected_uid,
+            expected_gid=expected_gid,
+        )
+        changes += result.changes
     verify_layout(
         root,
         expected_uid=expected_uid,
