@@ -169,6 +169,11 @@ staged, untrusted read-only files. Its output records:
 - deterministic Markdown/HWPX projection checks and any required lossless adaptation;
 - whether the exact revision tuple is `OPEN` or `CLOSED`.
 
+Issue locations use one canonical dot-path representation into Item content (for example `title`,
+`body.0.text`, or `solution.correct_choice_ids`). JSON Pointer spellings such as `/title` are not a
+second identity and are rejected at both the JSON Schema and Pydantic boundaries. This is a typed
+pointer representation rule, not an EOM-authored content or format preference.
+
 `COMPATIBLE` is valid only with no issues, no lossy transformation, and all four deterministic
 checks passing. For legacy V1 Item content, content-contract validation may pass, but Markdown
 projection and losslessness fail until a reviewed V2 Item Revision exists; EOM never fabricates the

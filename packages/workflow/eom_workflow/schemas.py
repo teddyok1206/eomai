@@ -779,6 +779,17 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
                 _mapping(compatibility_source_properties, key),
                 value,
             )
+        issue_definition = _mapping(
+            definitions,
+            "LegacyItemEditorialCompatibilityProposal_issue",
+        )
+        issue_properties = _mapping(issue_definition, "properties")
+        content_paths = _mapping(issue_properties, "item_content_paths")
+        content_paths["description"] = (
+            "Use canonical dot paths into Item content, for example title, body.0.text, "
+            "interaction.choices, or solution.correct_choice_ids. JSON Pointer paths that "
+            "start with '/' are invalid."
+        )
         _prune_unreferenced_definitions(schema)
     validate_codex_structured_output_schema(schema)
     return schema

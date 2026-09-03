@@ -319,6 +319,27 @@ def test_noncompatible_tuple_stays_open_with_exact_authority_pointer() -> None:
     assert parsed.issues[0].authority_kind == "CONTENT_TEAM_PROMPT"
 
 
+@pytest.mark.parametrize(
+    "unsafe_path",
+    ["/title", "/body/0/text", "body..text", "body/text"],
+)
+def test_editorial_issue_rejects_noncanonical_item_content_path(
+    unsafe_path: str,
+) -> None:
+    value = _result(compatible=False)
+    issues = value["issues"]
+    assert isinstance(issues, list) and isinstance(issues[0], dict)
+    issues[0]["item_content_paths"] = [unsafe_path]
+    value["result_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "result_sha256"}
+    )
+
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("legacy-item-editorial-compatibility-result", value)
+    with pytest.raises(ValidationError, match="Item content path is unsafe"):
+        LegacyItemEditorialCompatibilityResult.model_validate(value)
+
+
 def test_worker_proposal_cannot_claim_server_owned_deterministic_checks() -> None:
     value = _proposal()
 
@@ -562,6 +583,34 @@ def test_editorial_compatibility_role_protocol_is_closed_and_request_bound() -> 
     assert isinstance(source, dict)
     source["item_id"] = "item_" + "f" * 32
     assert tuple(Draft202012Validator(schema).iter_errors(result))
+
+
+def test_editorial_worker_schema_exposes_canonical_dot_path_contract() -> None:
+    worker_input = _compatibility_worker_input()
+    schema = constrained_result_schema(
+        "legacy-item-editorial-compatibility-result@1.0", worker_input
+    )
+    issue = schema["$defs"]["LegacyItemEditorialCompatibilityProposal_issue"]
+    content_paths = issue["properties"]["item_content_paths"]
+
+    assert "canonical dot paths" in content_paths["description"]
+    assert content_paths["items"]["pattern"] == (r"^[^./\u0000-\u001f]+(?:\.[^./\u0000-\u001f]+)*$")
+
+    invalid = _compatibility_role_result()
+    output = invalid["output"]
+    assert isinstance(output, dict)
+    proposal = output["proposal"]
+    assert isinstance(proposal, dict)
+    proposal["status"] = "NEEDS_ADAPTATION"
+    proposal["issues"] = deepcopy(_result(compatible=False)["issues"])
+    issues = proposal["issues"]
+    assert isinstance(issues, list) and isinstance(issues[0], dict)
+    issues[0]["item_content_paths"] = ["/title"]
+    proposal["proposal_sha256"] = content_sha256(
+        {key: item for key, item in proposal.items() if key != "proposal_sha256"}
+    )
+
+    assert tuple(Draft202012Validator(schema).iter_errors(invalid))
 
 
 def test_editorial_proposal_staging_keeps_self_hash_separate_from_artifact_hash(

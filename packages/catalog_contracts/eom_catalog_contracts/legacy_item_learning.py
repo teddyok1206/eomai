@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from eom_identifiers import content_sha256
@@ -17,6 +18,8 @@ EditorialCheckKind = Literal[
     "HWPX_RENDERABILITY",
     "LOSSLESSNESS",
 ]
+
+_ITEM_CONTENT_PATH_PATTERN = re.compile(r"[^./\x00-\x1f]+(?:\.[^./\x00-\x1f]+)*")
 
 
 def _require_self_hash(model: FrozenModel, field_name: str) -> None:
@@ -214,12 +217,7 @@ class EditorialCompatibilityIssue(FrozenModel):
         if len(value) != len(set(value)):
             raise ValueError("editorial issue Item content paths must be unique")
         if any(
-            not path
-            or len(path) > 256
-            or any(ord(character) < 32 for character in path)
-            or path.startswith("/")
-            or ".." in path.split(".")
-            for path in value
+            len(path) > 256 or _ITEM_CONTENT_PATH_PATTERN.fullmatch(path) is None for path in value
         ):
             raise ValueError("editorial issue Item content path is unsafe")
         return value
