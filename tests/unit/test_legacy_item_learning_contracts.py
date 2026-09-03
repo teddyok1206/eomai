@@ -24,6 +24,7 @@ from eom_identifiers import (
 from eom_orchestrator.legacy_item_editorial_compatibility_artifact import (
     stage_legacy_item_editorial_compatibility_proposal,
 )
+from eom_workflow.control_schemas import _control_schema_registry
 from eom_workflow.models import (
     ArtifactSpec,
     LegacyItemEditorialCompatibilityRoleResult,
@@ -264,6 +265,15 @@ def test_editorial_compatibility_request_validates_in_both_contract_layers() -> 
         "CONTENT_TEAM_PROMPT",
         "HWP_QUESTION_EDITOR_PROFILE",
     )
+
+
+def test_execution_plan_registry_resolves_editorial_compatibility_request() -> None:
+    resource = _control_schema_registry().get(
+        "eom://schemas/legacy-assessment/legacy-item-editorial-compatibility-request/1.0"
+    )
+
+    assert resource is not None
+    Draft202012Validator(resource.contents).validate(_request())
 
 
 def test_compatibility_policy_contains_only_lifecycle_bounds_and_team_authorities() -> None:

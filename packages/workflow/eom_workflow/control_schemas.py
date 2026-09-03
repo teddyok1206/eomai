@@ -384,6 +384,7 @@ def _control_schema_registry() -> Registry[Any]:
         "item-origin-types",
         "legacy-assessment-types",
         "legacy-item-extraction-request",
+        "legacy-item-editorial-compatibility-request",
     ):
         schema = load_schema(name)
         identifier = schema.get("$id")
