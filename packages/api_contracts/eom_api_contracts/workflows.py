@@ -49,6 +49,35 @@ class KnowledgeItemBriefRequestV2(KnowledgeItemBriefRequest):
         return self
 
 
+class ContentTeamItemBriefRequestV3(ApiModel):
+    """Presentation DTO for the reviewed content-team authoring contract."""
+
+    schema_version: Literal["3.0"] = "3.0"
+    subject: str = Field(min_length=1, max_length=80)
+    topic: str = Field(min_length=1, max_length=160)
+    task_type: str = Field(min_length=1, max_length=80)
+    difficulty: str = Field(min_length=1, max_length=80)
+    authoring_guidance: str = Field(min_length=10, max_length=2000)
+    authoring_guidance_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    curriculum_selected_unit_key: str | None = Field(
+        default=None,
+        pattern=r"^eom\.is\.(?:large\.[1-6]|middle\.[1-6]-[1-7])$",
+    )
+    original_request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("authoring_guidance")
+    @classmethod
+    def normalize_authoring_guidance(cls, value: str) -> str:
+        return normalize_reviewed_authoring_guidance(value)
+
+    @model_validator(mode="after")
+    def validate_authoring_guidance_hash(self) -> ContentTeamItemBriefRequestV3:
+        validate_reviewed_authoring_guidance(
+            self.authoring_guidance, self.authoring_guidance_sha256
+        )
+        return self
+
+
 class EducationalRetrievalIntentRequest(ApiModel):
     """Presentation-level intent; V2 curriculum roots are resolved after outer validation."""
 
@@ -95,7 +124,12 @@ class WorkflowStartRequest(ApiModel):
     registry_mode: Literal["CREATE_ITEM", "REVISE_ITEM"] = "CREATE_ITEM"
     item_id: str | None = Field(default=None, max_length=128)
     base_revision_id: str | None = Field(default=None, max_length=128)
-    item_brief: KnowledgeItemBriefRequest | KnowledgeItemBriefRequestV2 | None = None
+    item_brief: (
+        KnowledgeItemBriefRequest
+        | KnowledgeItemBriefRequestV2
+        | ContentTeamItemBriefRequestV3
+        | None
+    ) = None
     stimulus_asset_key: Literal["eom-question-template-reference-v1"] | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     educational_retrieval: EducationalRetrievalIntentRequest | None = None
@@ -114,7 +148,8 @@ class WorkflowStartRequest(ApiModel):
                 "educational retrieval requires a generated item request and execution preset"
             )
         if self.educational_retrieval is not None and isinstance(
-            self.item_brief, KnowledgeItemBriefRequestV2
+            self.item_brief,
+            (KnowledgeItemBriefRequestV2, ContentTeamItemBriefRequestV3),
         ):
             if (
                 self.item_brief.curriculum_selected_unit_key is None
@@ -148,14 +183,19 @@ class WorkflowStartRequest(ApiModel):
             ):
                 raise ValueError("knowledge item request is missing its fixed workflow contract")
         elif self.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST":
+            content_team_request = isinstance(self.item_brief, ContentTeamItemBriefRequestV3)
             if (
                 self.pack_key != "generated-knowledge-item"
-                or self.image_mode != "required"
                 or self.item_brief is None
                 or self.stimulus_asset_key is not None
                 or self.source_intake_batch_ids
             ):
                 raise ValueError("generated item request is missing its workflow contract")
+            if content_team_request:
+                if self.image_mode != "skip":
+                    raise ValueError("content-team generated items do not use an image worker")
+            elif self.image_mode != "required":
+                raise ValueError("legacy generated items require the image worker")
         elif self.item_brief is not None or self.stimulus_asset_key is not None:
             raise ValueError("placeholder request cannot include a knowledge item brief")
         return self

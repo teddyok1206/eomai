@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/hwpx/content-team-render-request-v1.schema.json",
+  "title": "ContentTeamRenderRequestV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "renderer_profile",
+    "build_id",
+    "item_revision_id",
+    "source",
+    "handoff",
+    "output_directory"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "renderer_profile": {"const": "content-team-hwp-question-editor-v1"},
+    "build_id": {"type": "string", "pattern": "^hwpxbuild_[a-f0-9]{32}$"},
+    "item_revision_id": {"type": "string", "pattern": "^itemrev_[a-z0-9]{8,55}$"},
+    "source": {"$ref": "#/$defs/itemSource"},
+    "handoff": {"$ref": "#/$defs/handoffSnapshot"},
+    "output_directory": {"const": "output"}
+  },
+  "$defs": {
+    "itemSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "schema_ref",
+        "json_sha256",
+        "json_file",
+        "markdown_sha256",
+        "markdown_file"
+      ],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[a-f0-9]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[a-f0-9]{32}$"},
+        "schema_ref": {"const": "eom.assessment.item-content/2.0"},
+        "json_sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "json_file": {"const": "input/item-content.json"},
+        "markdown_sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "markdown_file": {"const": "input/content-team-item.md"}
+      }
+    },
+    "handoffMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["purpose", "sha256", "size"],
+      "properties": {
+        "purpose": {
+          "enum": [
+            "automation-template",
+            "equation-prototypes",
+            "visual-slots-left-right",
+            "visual-slots-two-tables",
+            "labeled-data-condition",
+            "table-2-column",
+            "table-3-column",
+            "table-3-column-long-equation",
+            "table-4-column",
+            "inquiry-experiment-box"
+          ]
+        },
+        "sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "size": {"type": "integer", "minimum": 1, "maximum": 26214400}
+      }
+    },
+    "handoffSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "archive_sha256",
+        "archive_file",
+        "entry_count",
+        "uncompressed_bytes",
+        "profile_sha256",
+        "members"
+      ],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[a-f0-9]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[a-f0-9]{32}$"},
+        "archive_sha256": {"const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"},
+        "archive_file": {"const": "input/handoff.zip"},
+        "entry_count": {"const": 606},
+        "uncompressed_bytes": {"const": 49280719},
+        "profile_sha256": {"const": "sha256:ce08671ad433026ec51e68ddfc6a4d7ffe33ae8a792c1791dfa26b9b62e78863"},
+        "members": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/handoffMember"}
+        }
+      }
+    }
+  }
+}

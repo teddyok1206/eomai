@@ -51,6 +51,12 @@ def capability(request: Request) -> SingleResponse[HwpxCapabilityView]:
                     document_profile="eom-question-template-v1",
                     source_schema_ref="eom.assessment.item-content/1.0",
                 ),
+                HwpxDeliveryProfile(
+                    renderer="content-team",
+                    renderer_version="1.0.0",
+                    document_profile="content-team-hwp-question-editor-v1",
+                    source_schema_ref="eom.assessment.item-content/2.0",
+                ),
             ),
             manager_registered=value.manager_registered,
             detail_code=value.detail_code,

@@ -7,11 +7,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from eom_api.services.command_adapter import _workflow_request_from_api
+from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_catalog_contracts import (
     AssessmentItemContentV2,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
     ReviewedItemContentImportCommand,
+    resolve_integrated_science_curriculum_scope,
     validate_contract,
 )
 from eom_catalog_service.content_pack_files import compile_pack
@@ -382,6 +385,45 @@ def test_content_team_pack_uses_unconstrained_brief_and_no_image_role() -> None:
     authoring_prompt = (pack_root / "prompt-templates/authoring.md").read_text(encoding="utf-8")
     assert "처음부터 끝까지 그대로 읽고" in authoring_prompt
     assert "별도의 내용 규칙을 추가하지 마라" in authoring_prompt
+
+
+def test_api_v3_resolves_content_team_curriculum_without_adding_shape_defaults() -> None:
+    scope = resolve_integrated_science_curriculum_scope("eom.is.middle.3-2")
+    guidance = " > ".join(scope.breadcrumb)
+    request = WorkflowStartRequest.model_validate(
+        {
+            "definition_key": "generic-item-development",
+            "definition_version": "1.7.0",
+            "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+            "image_mode": "skip",
+            "pack_key": "generated-knowledge-item",
+            "execution_preset_key": "standard-item",
+            "item_brief": {
+                "schema_version": "3.0",
+                "subject": "통합과학",
+                "topic": scope.breadcrumb[-1],
+                "task_type": "문항 출제",
+                "difficulty": "중",
+                "authoring_guidance": guidance,
+                "authoring_guidance_sha256": (
+                    "sha256:" + hashlib.sha256(guidance.encode("utf-8")).hexdigest()
+                ),
+                "curriculum_selected_unit_key": scope.selected_unit_key,
+                "original_request_sha256": "0" * 64,
+            },
+        }
+    )
+
+    internal = _workflow_request_from_api(request)
+
+    assert isinstance(internal.item_brief, ContentTeamItemBrief)
+    assert internal.item_brief.curriculum_scope == scope
+    assert internal.image_mode == "skip"
+    assert internal.profiles is not None and internal.profiles.image is None
+    dumped = internal.item_brief.model_dump(mode="json")
+    assert {"choice_count", "equation_required", "image_required", "quality_profile"}.isdisjoint(
+        dumped
+    )
 
 
 def test_catalog_v10_carries_v1_or_v2_without_rewriting_old_protocol() -> None:

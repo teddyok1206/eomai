@@ -6,6 +6,7 @@ polkit.addRule(function(action, subject) {
     var loginUnit = /^eom-worker-login-(01|02|03|04|05|06)@authflow_[0-9a-f]{32}\.service$/;
     var kordocUnit = /^eom-hwpx-kordoc@hwpxbuild_[0-9a-f]{32}\.service$/;
     var questionTemplateUnit = /^eom-hwpx-builder@hwpxbuild_[0-9a-f]{32}\.service$/;
+    var contentTeamUnit = /^eom-hwpx-content-team@hwpxbuild_[0-9a-f]{32}\.service$/;
     var localImageUnit = /^eom-image-provider@imgreq_[0-9a-f]{32}\.service$/;
 
     if (action.id !== "org.freedesktop.systemd1.manage-units") {
@@ -20,7 +21,8 @@ polkit.addRule(function(action, subject) {
         return polkit.Result.YES;
     }
     if (verb === "start" && subject.user === "eom-hwpx-manager"
-        && (kordocUnit.test(unit) || questionTemplateUnit.test(unit))) {
+        && (kordocUnit.test(unit) || questionTemplateUnit.test(unit)
+            || contentTeamUnit.test(unit))) {
         return polkit.Result.YES;
     }
     if (verb === "start" && subject.user === "eom"

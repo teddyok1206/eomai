@@ -12,9 +12,11 @@ The reviewed source is `staging/HwpQuestionEditor_handoff_export.zip`, SHA-256
 `dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91`. It contains 606 ZIP
 entries and no committed Git history. Its historical test report records 598 passes and one stale
 equation-occurrence expectation failure, so the archive is evidence, not executable authority.
-The source snapshot does not declare a project license. EOM therefore does not vendor or execute
-its application source; this integration independently expresses the reviewed interoperability
-contract and treats the supplied binaries as user-provided immutable inputs.
+The source snapshot does not declare a project license. EOM therefore does not vendor its source
+into Git. The immutable user-provided archive is registered as one Catalog Artifact Revision and
+only its non-GUI rendering core is materialized and executed inside the fixed, networkless
+`eom-hwpx-content-team@.service` sandbox. The desktop application, ambient filesystem lookup, and
+save dialogs remain excluded.
 
 ## Content authority and system authority
 
@@ -120,8 +122,8 @@ bytes are required.
 | 탐구/실험 box | `ContentTeamInquiry` | Optional goal, ordered procedure/result, nested table text retained |
 | equation detection/preflight | `content_team_equations` | Every occurrence retained in order; supported handoff families accepted, unknown grammar fails explicitly |
 | answer and explanation semantics | typed statements/choices/answer/explanations | Exact choice/statement mapping and required content-team section partition |
-| mixed renderer/prototype cloning | future isolated HWPX builder adapter | Prototype IDs, z-order, style, table width, and line-segment invalidation documented and hash-pinned |
-| sample cleanup and HWPX validation | future isolated HWPX builder adapter | Clean cloned samples, validate package structure/relationships before orchestrator commit |
+| mixed renderer/prototype cloning | fixed isolated HWPX builder adapter | Archive-hash-bound program core clones reviewed prototypes with its native ID, z-order, style, table-width, and line-segment behavior |
+| sample cleanup and HWPX validation | fixed isolated HWPX builder adapter | Program validator plus EOM package analyzer reject active content/external links before orchestrator commit |
 | desktop GUI/file dialogs | none | Deliberately excluded; application service owns the use case |
 
 The immutable authoring path is Standard Item V6 + Content Pack 1.12.0 + workflow 1.7.0 +
@@ -179,17 +181,21 @@ layout/answer/explanation rejection, archive traversal/collision/compression rej
 JSON+Markdown materialization, V10 API transport, source/package schema equality, installed-wheel
 resources, workflow compilation, and deployment runtime allowlists.
 
-The final verification run used the explicit `eom-api` and `eom-hwpx` Conda environments. Ruff
-format/check and strict mypy passed for every changed Python source. The final groups passed 212
-focused protocol/control/API tests, 103 complete HWPX tests, 58 Catalog-related tests, and 10 real
-Unix-socket Catalog/API boundary tests. The only skipped check is the existing opt-in root ownership
-test; no privileged deployment or mutation is needed to validate this pre-injection change.
+Verification uses the explicit `eom-api` and `eom-hwpx` Conda environments. Besides the pure
+contract/parser matrix, an opt-in-local fixture runs the supplied parser, equation preflight,
+template engine, and validator from the exact archive against a V2 item and then applies EOM's
+package safety analyzer. Unit tests cover the fixed-unit command, polkit boundary, API profile, job
+idempotency, pointer resolution, and terminal artifact receipt.
 
 ## Deployment state
 
-The V2 content contract, V7 role contracts, Standard Item V6, Content Pack 1.12.0, workflow 1.7.0,
-strict parser/serializer, ZIP attestor, and Catalog JSON+Markdown materialization are prepared in Git
-only. No control preset, pack, workflow, DB row, service, NAS artifact, or worker job is activated by
-this change. Live HWPX rendering remains blocked until the ten binaries above are registered as one
-immutable NAS artifact revision and the isolated adapter implements and passes the complete
-prototype/fixture matrix plus EOM package validation. This is intentionally the pre-injection state.
+The source archive is registered as immutable Catalog Artifact
+`artifact_73e80b48f1054d8f8bb733dc1d13ae6f`, revision
+`rev_2801db879a4c4aaaa589f0cf2991b8c3`, with archive SHA-256
+`dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91` and manifest SHA-256
+`dd87d206b06d2508891b591df99f2b2146b39ff9ad8f61c17db446c063729169`. The application build
+service snapshots that exact revision together with each input Item/Artifact revision, submits one
+`hwpx-content-team-build` job, stages only validated workspace copies, starts the fixed renderer
+unit, validates its typed result, and commits the HWPX/report/request/result file set to NAS. The
+Application API exposes this closed pair as renderer `content-team`, document profile
+`content-team-hwp-question-editor-v1`, and source schema `eom.assessment.item-content/2.0`.

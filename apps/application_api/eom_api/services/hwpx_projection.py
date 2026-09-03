@@ -17,7 +17,7 @@ def project_hwpx_build(record: HwpxApplicationBuildRecord) -> HwpxBuildView:
         item_revision_id=record.item_revision_id,
         source_artifact_revision_id=record.source_artifact_revision_id,
         source_sha256=record.source_sha256,
-        renderer=cast(Literal["kordoc", "eom-template"], record.renderer),
+        renderer=cast(Literal["kordoc", "eom-template", "content-team"], record.renderer),
         renderer_version=cast(Literal["4.9.0", "1.0.0"], record.renderer_version),
         state=HwpxBuildState(record.state),
         validation_state=HwpxValidationState(record.validation_state),

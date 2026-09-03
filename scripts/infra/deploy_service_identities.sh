@@ -124,7 +124,8 @@ for service in "${SERVICES[@]}"; do
 done
 if systemctl list-units --no-legend --state=activating,active,deactivating \
   'eom-worker-*@*.service' 'eom-worker-auth-*.service' \
-  'eom-hwpx-kordoc@*.service' 'eom-hwpx-builder@*.service' | grep -q .; then
+  'eom-hwpx-kordoc@*.service' 'eom-hwpx-builder@*.service' \
+  'eom-hwpx-content-team@*.service' | grep -q .; then
   fail "a fixed child unit is active"
 fi
 [[ -f ${LEASE_GUARD} && ! -L ${LEASE_GUARD} ]] || fail "worker lease guard is unsafe"
@@ -159,12 +160,16 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
   "${REPOSITORY}/infra/systemd/eom-hwpx-application-runner.service" \
   /etc/systemd/system/eom-hwpx-application-runner.service
+install -o root -g root -m 0644 \
+  "${REPOSITORY}/infra/systemd/eom-hwpx-content-team@.service" \
+  /etc/systemd/system/eom-hwpx-content-team@.service
 /srv/eom/conda/envs/eom-api/bin/python \
   "${REPOSITORY}/scripts/catalog/install_application_runner.py" "${EXPECTED_COMMIT}"
 systemd-analyze verify \
   "${REPOSITORY}/infra/systemd/eom-workflow-runner.service" \
   "${REPOSITORY}/infra/systemd/eom-catalog-application-runner.service" \
-  "${REPOSITORY}/infra/systemd/eom-hwpx-application-runner.service"
+  "${REPOSITORY}/infra/systemd/eom-hwpx-application-runner.service" \
+  "${REPOSITORY}/infra/systemd/eom-hwpx-content-team@.service"
 
 systemctl daemon-reload
 systemctl stop "${SERVICES[@]}"
@@ -201,6 +206,9 @@ pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${WORKFLOW_
   --detail verb start
 pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${HWPX_PID}" \
   --detail unit eom-hwpx-builder@hwpxbuild_0123456789abcdef0123456789abcdef.service \
+  --detail verb start
+pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${HWPX_PID}" \
+  --detail unit eom-hwpx-content-team@hwpxbuild_0123456789abcdef0123456789abcdef.service \
   --detail verb start
 if pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${WORKFLOW_PID}" \
   --detail unit eom-hwpx-builder@hwpxbuild_0123456789abcdef0123456789abcdef.service \

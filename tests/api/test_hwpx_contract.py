@@ -34,11 +34,25 @@ def test_hwpx_protocol_schema_is_draft_2020_12_and_rejects_commands() -> None:
     }
     assert not list(validator.iter_errors(template_request))
     assert CreateHwpxBuildRequest.model_validate(template_request).options.item_number == 7
+    content_team_request = {
+        "renderer": "content-team",
+        "options": {"document_profile": "content-team-hwp-question-editor-v1"},
+    }
+    assert not list(validator.iter_errors(content_team_request))
+    assert CreateHwpxBuildRequest.model_validate(content_team_request).renderer == "content-team"
     assert list(
         validator.iter_errors(
             {
                 "renderer": "eom-template",
                 "options": {"document_profile": "kordoc-report"},
+            }
+        )
+    )
+    assert list(
+        validator.iter_errors(
+            {
+                "renderer": "content-team",
+                "options": {"document_profile": "eom-question-template-v1"},
             }
         )
     )

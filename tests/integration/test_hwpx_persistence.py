@@ -8,8 +8,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from eom_hwpx_contracts import KordocExpectedStructure, KordocSourcePointer
+from eom_hwpx_contracts import (
+    ContentTeamItemSource,
+    KordocExpectedStructure,
+    KordocSourcePointer,
+    parse_content_team_markdown,
+    serialize_content_team_markdown,
+)
 from eom_hwpx_manager.adapter import BuilderRun, HwpxBuilderAdapter
+from eom_hwpx_manager.content_team_service import ContentTeamHwpxService
 from eom_hwpx_manager.errors import HwpxManagerError
 from eom_hwpx_manager.kordoc_service import KordocHwpxService
 from eom_hwpx_manager.models import HwpxBuildRecord, HwpxTemplateRevisionRecord
@@ -47,6 +54,35 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
 
 pytestmark = pytest.mark.integration
+
+CONTENT_TEAM_MARKDOWN_FIXTURE = """1. 다음은 요청에서 주어진 분류 자료이다.
+
+자료에 대한 설명으로 알맞은 것은? [2점]
+
+① 첫 번째 설명
+② 두 번째 설명
+③ 세 번째 설명
+④ 네 번째 설명
+⑤ 다섯 번째 설명
+
+정답 : ② (두 번째 설명)
+
+[출제의도]
+
+주어진 자료의 분류 기준을 적용한다.
+
+[개념출처]
+
+요청에 고정된 근거를 사용한다.
+
+[풀이 및 정답 해설]
+
+분류 기준에 따르면 두 번째 설명이 알맞다.
+
+[오답 해설]
+
+나머지 설명은 주어진 분류 기준과 일치하지 않는다.
+"""
 
 
 def _artifact_job(
@@ -226,6 +262,61 @@ class _FakeKordocBuilderAdapter(_FakeBuilderAdapter):
         stdout.write_bytes(b"")
         stderr.write_bytes(b"")
         return BuilderRun(0, workspace, stdout, stderr, "fake-kordoc-builder")
+
+
+class _FakeContentTeamBuilderAdapter(_FakeBuilderAdapter):
+    def run(
+        self, workspace: Path, operation: str, arguments: list[str], log_root: Path
+    ) -> BuilderRun:
+        assert operation == "render-content-team"
+        assert arguments == ["--request", "request.json", "--result", "result.json"]
+        self.run_count += 1
+        request = json.loads((workspace / "request.json").read_text())
+        output_root = workspace / "output"
+        output_root.mkdir()
+        output = output_root / "content-team-item.hwpx"
+        output.write_bytes(b"SYNTHETIC_CONTENT_TEAM_HWPX")
+        output_sha = sha256_file(output)
+        (output_root / "package-manifest.json").write_text(
+            json.dumps({"manifest_version": "content-team-hwpx/1.0", "package_sha256": output_sha}),
+            encoding="utf-8",
+        )
+        (output_root / "content-team-validation.json").write_text(
+            json.dumps({"status": "PASS"}),
+            encoding="utf-8",
+        )
+        result = {
+            "schema_version": "1.0",
+            "renderer_profile": "content-team-hwp-question-editor-v1",
+            "renderer_version": "1.0.0",
+            "build_id": request["build_id"],
+            "item_revision_id": request["item_revision_id"],
+            "source_artifact_id": request["source"]["artifact_id"],
+            "source_artifact_revision_id": request["source"]["artifact_revision_id"],
+            "source_json_sha256": request["source"]["json_sha256"],
+            "source_markdown_sha256": request["source"]["markdown_sha256"],
+            "handoff_archive_sha256": request["handoff"]["archive_sha256"],
+            "status": "SUCCEEDED",
+            "output_file": "output/content-team-item.hwpx",
+            "output_sha256": output_sha,
+            "package_manifest_file": "output/package-manifest.json",
+            "renderer_report_file": "output/content-team-validation.json",
+            "equation_count": 5,
+            "table_count": 1,
+            "visual_count": 2,
+            "labeled_block_count": 0,
+            "warnings": [],
+            "errors": [],
+            "started_at": "2026-09-03T00:00:00Z",
+            "completed_at": "2026-09-03T00:00:01Z",
+        }
+        (workspace / "result.json").write_text(json.dumps(result), encoding="utf-8")
+        log_root.mkdir(parents=True, exist_ok=True)
+        stdout = log_root / "stdout.log"
+        stderr = log_root / "stderr.log"
+        stdout.write_bytes(b"")
+        stderr.write_bytes(b"")
+        return BuilderRun(0, workspace, stdout, stderr, "fake-content-team-builder")
 
 
 def test_hwpx_template_build_idempotency_transition_validation_and_immutability(
@@ -528,6 +619,121 @@ def test_kordoc_service_pins_source_and_reuses_immutable_result(
     assert revision is not None
     assert revision.content_bytes == len(b"SYNTHETIC_KORDOC_HWPX")
     assert "SYNTHETIC_KORDOC_HWPX" not in json.dumps(revision.result)
+
+
+def test_content_team_service_pins_both_item_members_and_handoff_then_commits(
+    db_session: Session, integration_engine: Engine, tmp_path: Path
+) -> None:
+    draft = parse_content_team_markdown(CONTENT_TEAM_MARKDOWN_FIXTURE.encode("utf-8"))
+    markdown = serialize_content_team_markdown(draft)
+    item_value = {
+        "schema_version": "2.0",
+        **draft.model_dump(mode="json", exclude={"schema_version", "source_sha256"}),
+    }
+    item_root = tmp_path / "content-team-item"
+    item_root.mkdir()
+    item_path = item_root / "assessment-item-content.json"
+    item_path.write_text(
+        json.dumps(item_value, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    markdown_path = item_root / "content-team-item.md"
+    markdown_path.write_bytes(markdown)
+    item_sha = sha256_file(item_path)
+    markdown_sha = sha256_file(markdown_path)
+    item_job = _artifact_job(
+        db_session,
+        "content-team-source-artifact",
+        nas_path=str(item_root),
+        content_hash=item_sha,
+        manifest={
+            "primary_file": item_path.name,
+            "files": [
+                {
+                    "file_name": item_path.name,
+                    "sha256": item_sha,
+                    "bytes": item_path.stat().st_size,
+                    "media_type": "application/json",
+                    "schema_ref": "eom.assessment.item-content/2.0",
+                },
+                {
+                    "file_name": markdown_path.name,
+                    "sha256": markdown_sha,
+                    "bytes": markdown_path.stat().st_size,
+                    "media_type": "text/markdown",
+                    "schema_ref": "eom://schemas/hwpx/content-team-editorial-markdown/1.0",
+                },
+            ],
+        },
+    )
+    handoff_root = tmp_path / "content-team-handoff"
+    handoff_root.mkdir()
+    handoff_path = handoff_root / "handoff-source.zip"
+    shutil.copyfile(Path("staging/HwpQuestionEditor_handoff_export.zip"), handoff_path)
+    handoff_sha = sha256_file(handoff_path)
+    handoff_job = _artifact_job(
+        db_session,
+        "content-team-handoff-artifact",
+        nas_path=str(handoff_root),
+        content_hash=handoff_sha,
+        manifest={
+            "primary_file": handoff_path.name,
+            "files": [
+                {
+                    "file_name": handoff_path.name,
+                    "sha256": handoff_sha,
+                    "bytes": handoff_path.stat().st_size,
+                    "media_type": "application/zip",
+                    "schema_ref": "eom://schemas/hwpx/content-team-handoff-archive/1.0",
+                }
+            ],
+        },
+    )
+    settings = HwpxSettings(
+        workspace_root=tmp_path / "workspaces",
+        staging_root=tmp_path / "staging",
+        nas_artifact_root=tmp_path / "nas",
+        content_team_handoff_artifact_id=handoff_job.logical_artifact_id,
+        content_team_handoff_artifact_revision_id=handoff_job.revision_id,
+        content_team_handoff_archive_sha256=handoff_sha,
+    )
+    settings.workspace_root.mkdir()
+    settings.nas_artifact_root.mkdir()
+    adapter = _FakeContentTeamBuilderAdapter(settings.workspace_root)
+    service = ContentTeamHwpxService(integration_engine, settings)
+    service.sessions = sessionmaker(bind=db_session.get_bind(), expire_on_commit=False)
+    service.adapter = adapter  # type: ignore[assignment]
+    source = ContentTeamItemSource(
+        artifact_id=item_job.logical_artifact_id,
+        artifact_revision_id=item_job.revision_id,
+        json_sha256=item_sha,
+        markdown_sha256=markdown_sha,
+    )
+    snapshot = service.snapshot()
+
+    receipt = service.build(
+        item_path,
+        source,
+        item_revision_id="itemrev_" + "9" * 32,
+        idempotency_key="content-team-build",
+        build_id="hwpxbuild_" + "8" * 32,
+        handoff_snapshot=snapshot,
+    )
+    replay = service.build(
+        item_path,
+        source,
+        item_revision_id="itemrev_" + "9" * 32,
+        idempotency_key="content-team-build",
+        build_id="hwpxbuild_" + "8" * 32,
+        handoff_snapshot=snapshot,
+    )
+
+    assert replay == receipt
+    assert adapter.run_count == 1
+    assert receipt.native_equation_count == 5
+    assert receipt.native_table_count == 1
+    final = settings.nas_artifact_root / receipt.artifact_id / receipt.artifact_revision_id
+    assert (final / "content-team-item.hwpx").read_bytes() == b"SYNTHETIC_CONTENT_TEAM_HWPX"
 
 
 def test_question_template_service_resolves_canonical_content_and_commits_output(

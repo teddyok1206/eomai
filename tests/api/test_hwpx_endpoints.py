@@ -223,7 +223,13 @@ def test_hwpx_capability_and_not_deployed_build_boundary(tmp_path: Path) -> None
                     "renderer_version": "1.0.0",
                     "document_profile": "eom-question-template-v1",
                     "source_schema_ref": "eom.assessment.item-content/1.0",
-                }
+                },
+                {
+                    "renderer": "content-team",
+                    "renderer_version": "1.0.0",
+                    "document_profile": "content-team-hwp-question-editor-v1",
+                    "source_schema_ref": "eom.assessment.item-content/2.0",
+                },
             ]
             refused = client.post(
                 f"/api/v1/item-revisions/{REVISION_ID}/hwpx-builds",
@@ -305,6 +311,26 @@ def test_hwpx_build_accepts_closed_question_template_profile(tmp_path: Path) -> 
             assert services.hwpx.last_request is not None
             assert services.hwpx.last_request["renderer"] == "eom-template"
             assert services.hwpx.last_request["options"]["item_number"] == 3
+    finally:
+        services.engine.dispose()
+
+
+def test_hwpx_build_accepts_closed_content_team_profile(tmp_path: Path) -> None:
+    client, services = _client(tmp_path)
+    body = {
+        "renderer": "content-team",
+        "options": {"document_profile": "content-team-hwp-question-editor-v1"},
+    }
+    try:
+        with client:
+            response = client.post(
+                f"/api/v1/item-revisions/{REVISION_ID}/hwpx-builds",
+                headers={"Idempotency-Key": "hwpx-api-content-team-0001"},
+                json=body,
+            )
+            assert response.status_code == 202
+            assert services.hwpx.last_request is not None
+            assert services.hwpx.last_request["renderer"] == "content-team"
     finally:
         services.engine.dispose()
 

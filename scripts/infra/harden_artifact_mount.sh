@@ -112,7 +112,8 @@ for service in "${SERVICES[@]}"; do
   systemctl is-enabled --quiet "${service}" || fail "${service} is not enabled"
 done
 if systemctl list-units --no-legend --state=activating,active,deactivating \
-  'eom-worker-*@*.service' 'eom-hwpx-kordoc@*.service' 'eom-hwpx-builder@*.service' | grep -q .; then
+  'eom-worker-*@*.service' 'eom-hwpx-kordoc@*.service' \
+  'eom-hwpx-builder@*.service' 'eom-hwpx-content-team@*.service' | grep -q .; then
   fail "a fixed child unit is active"
 fi
 

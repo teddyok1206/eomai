@@ -15,6 +15,7 @@ from eom_hwpx_manager.application_adapter import (
     WORKSPACE_DIRECTORY_MODE,
     WORKSPACE_FILE_MODE,
     WORKSPACE_ROOT_MODE,
+    FixedContentTeamBuilderAdapter,
     FixedKordocBuilderAdapter,
     FixedQuestionTemplateBuilderAdapter,
 )
@@ -114,6 +115,7 @@ def test_isolation_preflight_rejects_non_root_or_wrong_mode_units(
 ) -> None:
     builder = tmp_path / "eom-hwpx-kordoc@.service"
     question_builder = tmp_path / "eom-hwpx-builder@.service"
+    content_team_builder = tmp_path / "eom-hwpx-content-team@.service"
     runner_unit = tmp_path / "eom-hwpx-application-runner.service"
     builder.write_text(
         "\n".join(sorted(capability_module.REQUIRED_BUILDER_DIRECTIVES)) + "\n",
@@ -129,12 +131,22 @@ def test_isolation_preflight_rejects_non_root_or_wrong_mode_units(
         encoding="utf-8",
     )
     question_builder.chmod(0o644)
+    content_team_builder.write_text(
+        "\n".join(sorted(capability_module.REQUIRED_CONTENT_TEAM_BUILDER_DIRECTIVES)) + "\n",
+        encoding="utf-8",
+    )
+    content_team_builder.chmod(0o644)
     runner_unit.chmod(0o644)
     monkeypatch.setattr(capability_module, "BUILDER_UNIT_PATH", builder)
     monkeypatch.setattr(
         capability_module,
         "QUESTION_TEMPLATE_BUILDER_UNIT_PATH",
         question_builder,
+    )
+    monkeypatch.setattr(
+        capability_module,
+        "CONTENT_TEAM_BUILDER_UNIT_PATH",
+        content_team_builder,
     )
     monkeypatch.setattr(capability_module, "RUNNER_UNIT_PATH", runner_unit)
     monkeypatch.setattr(capability_module, "SYSTEMCTL", Path("/usr/bin/true"))
@@ -373,6 +385,45 @@ def test_application_adapter_uses_only_fixed_unit_and_arguments(
     with pytest.raises(HwpxManagerError):
         adapter.run(workspace, "render-kordoc", ["--request", "../../secret"], log_root)
     assert len(calls) == 1
+
+
+def test_content_team_adapter_uses_only_its_fixed_unit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace_root = tmp_path / "workspaces"
+    workspace_root.mkdir()
+    build_id = "hwpxbuild_" + "b" * 32
+    workspace = workspace_root / build_id
+    workspace.mkdir()
+    workspace.chmod(WORKSPACE_DIRECTORY_MODE)
+    calls: list[list[str]] = []
+
+    def run_fixed(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+    monkeypatch.setattr("eom_hwpx_manager.application_adapter.subprocess.run", run_fixed)
+    adapter = FixedContentTeamBuilderAdapter(
+        HwpxSettings(workspace_root=workspace_root, timeout_seconds=300)
+    )
+
+    result = adapter.run(
+        workspace,
+        "render-content-team",
+        ["--request", "request.json", "--result", "result.json"],
+        tmp_path / "logs",
+    )
+
+    assert result.exit_code == 0
+    assert calls == [
+        [
+            "/usr/bin/systemctl",
+            "--no-ask-password",
+            "--wait",
+            "start",
+            f"eom-hwpx-content-team@{build_id}.service",
+        ]
+    ]
 
 
 def test_application_adapter_has_no_transient_or_chown_fallback() -> None:

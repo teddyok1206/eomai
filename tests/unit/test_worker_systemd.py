@@ -1079,6 +1079,13 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             "yes",
         ),
         (
+            "eom-hwpx-manager",
+            "org.freedesktop.systemd1.manage-units",
+            "eom-hwpx-content-team@hwpxbuild_0123456789abcdef0123456789abcdef.service",
+            "start",
+            "yes",
+        ),
+        (
             "eom",
             "org.freedesktop.systemd1.manage-units",
             "eom-worker-probe-05@probe_0123456789abcdef0123456789abcdef.service",

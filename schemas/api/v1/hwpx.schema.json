@@ -15,7 +15,7 @@
       "additionalProperties": false,
       "required": ["renderer", "options"],
       "properties": {
-        "renderer": {"enum": ["kordoc", "eom-template"]},
+        "renderer": {"enum": ["kordoc", "eom-template", "content-team"]},
         "options": {
           "type": "object",
           "additionalProperties": false,
@@ -24,7 +24,13 @@
             "require_native_equations": {"type": "boolean"},
             "require_native_tables": {"type": "boolean"},
             "document_preset": {"enum": ["report"]},
-            "document_profile": {"enum": ["kordoc-report", "eom-question-template-v1"]},
+            "document_profile": {
+              "enum": [
+                "kordoc-report",
+                "eom-question-template-v1",
+                "content-team-hwp-question-editor-v1"
+              ]
+            },
             "item_number": {"type": "integer", "minimum": 1, "maximum": 999}
           }
         }
@@ -49,6 +55,19 @@
             "properties": {
               "options": {
                 "properties": {"document_profile": {"const": "kordoc-report"}}
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"renderer": {"const": "content-team"}}},
+          "then": {
+            "properties": {
+              "options": {
+                "required": ["document_profile"],
+                "properties": {
+                  "document_profile": {"const": "content-team-hwp-question-editor-v1"}
+                }
               }
             }
           }

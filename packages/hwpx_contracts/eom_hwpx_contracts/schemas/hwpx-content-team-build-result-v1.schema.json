@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/hwpx/content-team-build-result-v1.schema.json",
+  "title": "ContentTeamBuildResultV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "renderer_profile",
+    "renderer_version",
+    "build_id",
+    "item_revision_id",
+    "source_artifact_id",
+    "source_artifact_revision_id",
+    "source_json_sha256",
+    "source_markdown_sha256",
+    "handoff_archive_sha256",
+    "status",
+    "output_file",
+    "output_sha256",
+    "package_manifest_file",
+    "renderer_report_file",
+    "equation_count",
+    "table_count",
+    "visual_count",
+    "labeled_block_count",
+    "warnings",
+    "errors",
+    "started_at",
+    "completed_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "renderer_profile": {"const": "content-team-hwp-question-editor-v1"},
+    "renderer_version": {"const": "1.0.0"},
+    "build_id": {"type": "string", "pattern": "^hwpxbuild_[a-f0-9]{32}$"},
+    "item_revision_id": {"type": "string", "pattern": "^itemrev_[a-z0-9]{8,55}$"},
+    "source_artifact_id": {"type": "string", "pattern": "^artifact_[a-f0-9]{32}$"},
+    "source_artifact_revision_id": {"type": "string", "pattern": "^rev_[a-f0-9]{32}$"},
+    "source_json_sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "source_markdown_sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "handoff_archive_sha256": {"const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"},
+    "status": {"enum": ["SUCCEEDED", "FAILED"]},
+    "output_file": {"type": ["string", "null"], "enum": ["output/content-team-item.hwpx", null]},
+    "output_sha256": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+    "package_manifest_file": {"type": ["string", "null"], "enum": ["output/package-manifest.json", null]},
+    "renderer_report_file": {"type": ["string", "null"], "enum": ["output/content-team-validation.json", null]},
+    "equation_count": {"type": "integer", "minimum": 0, "maximum": 128},
+    "table_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "visual_count": {"type": "integer", "minimum": 0, "maximum": 2},
+    "labeled_block_count": {"type": "integer", "minimum": 0, "maximum": 2},
+    "warnings": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 200}},
+    "errors": {"type": "array", "maxItems": 20, "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,79}$"}},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "SUCCEEDED"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "output_file": {"const": "output/content-team-item.hwpx"},
+          "output_sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+          "package_manifest_file": {"const": "output/package-manifest.json"},
+          "renderer_report_file": {"const": "output/content-team-validation.json"},
+          "errors": {"maxItems": 0}
+        }
+      },
+      "else": {
+        "properties": {
+          "output_file": {"type": "null"},
+          "output_sha256": {"type": "null"},
+          "package_manifest_file": {"type": "null"},
+          "renderer_report_file": {"type": "null"},
+          "errors": {"minItems": 1}
+        }
+      }
+    }
+  ]
+}

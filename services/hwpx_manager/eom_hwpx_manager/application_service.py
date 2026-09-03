@@ -11,7 +11,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from eom_hwpx_contracts import KordocExpectedStructure, KordocRenderOptions, KordocSourcePointer
+from eom_hwpx_contracts import (
+    ContentTeamHandoffSnapshot,
+    ContentTeamItemSource,
+    KordocExpectedStructure,
+    KordocRenderOptions,
+    KordocSourcePointer,
+)
 from eom_identifiers import content_sha256, new_hwpx_build_id
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
@@ -21,6 +27,12 @@ from eom_hwpx_manager.application_adapter import FixedKordocBuilderAdapter
 from eom_hwpx_manager.application_state import (
     ApplicationBuildState,
     require_application_transition,
+)
+from eom_hwpx_manager.content_team_service import (
+    CONTENT_TEAM_RENDERER,
+    CONTENT_TEAM_RENDERER_VERSION,
+    ContentTeamBuildReceipt,
+    ContentTeamHwpxService,
 )
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.kordoc_service import KordocBuildReceipt, KordocHwpxService
@@ -43,6 +55,12 @@ ITEM_CONTENT_SCHEMA_REFS = frozenset(
     {
         "eom.assessment.item-content/1.0",
         "eom://schemas/item-registry/assessment-item-content-v1",
+    }
+)
+CONTENT_TEAM_ITEM_CONTENT_SCHEMA_REFS = frozenset(
+    {
+        "eom.assessment.item-content/2.0",
+        "eom://schemas/item-registry/assessment-item-content-v2",
     }
 )
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
@@ -87,6 +105,21 @@ class QuestionTemplateRenderer(Protocol):
     ) -> QuestionTemplateBuildReceipt: ...
 
 
+class ContentTeamRenderer(Protocol):
+    def snapshot(self) -> ContentTeamHandoffSnapshot: ...
+
+    def build(
+        self,
+        source_path: Path,
+        source: ContentTeamItemSource,
+        *,
+        item_revision_id: str,
+        idempotency_key: str,
+        build_id: str,
+        handoff_snapshot: ContentTeamHandoffSnapshot,
+    ) -> ContentTeamBuildReceipt: ...
+
+
 @dataclass(frozen=True)
 class SecureHwpxDownload:
     fd: int
@@ -112,6 +145,7 @@ class HwpxApplicationService:
         registry: ItemRevisionResolver,
         renderer: HwpxRenderer | None = None,
         template_renderer: QuestionTemplateRenderer | None = None,
+        content_team_renderer: ContentTeamRenderer | None = None,
     ) -> None:
         self.engine = engine
         self.sessions = build_session_factory(engine)
@@ -121,6 +155,7 @@ class HwpxApplicationService:
             adapter=FixedKordocBuilderAdapter(HwpxSettings.from_environment()),
         )
         self.template_renderer = template_renderer or QuestionTemplateHwpxService(engine)
+        self.content_team_renderer = content_team_renderer or ContentTeamHwpxService(engine)
 
     def request_build(
         self,
@@ -138,9 +173,32 @@ class HwpxApplicationService:
             renderer_version = "4.9.0"
         elif renderer == QUESTION_TEMPLATE_RENDERER:
             component = self._item_content_component(revision)
-            snapshot = self.template_renderer.snapshot()
-            normalized_options = dict(options) | snapshot.request_identity()
+            template_snapshot = self.template_renderer.snapshot()
+            normalized_options = dict(options) | template_snapshot.request_identity()
             renderer_version = QUESTION_TEMPLATE_RENDERER_VERSION
+        elif renderer == CONTENT_TEAM_RENDERER:
+            component = self._content_team_item_component(revision)
+            metadata = component.get("metadata")
+            if not isinstance(metadata, dict):
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                    "content-team ITEM_CONTENT metadata is missing",
+                )
+            markdown_member = metadata.get("editorial_markdown_member")
+            markdown_sha256 = metadata.get("editorial_markdown_sha256")
+            if markdown_member != "content-team-item.md" or not isinstance(markdown_sha256, str):
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                    "content-team Markdown member pointer is incomplete",
+                )
+            handoff_snapshot = self.content_team_renderer.snapshot()
+            normalized_options = dict(options) | {
+                "document_profile": "content-team-hwp-question-editor-v1",
+                "editorial_markdown_member": markdown_member,
+                "editorial_markdown_sha256": markdown_sha256,
+                "handoff": handoff_snapshot.model_dump(mode="json"),
+            }
+            renderer_version = CONTENT_TEAM_RENDERER_VERSION
         else:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
@@ -243,7 +301,7 @@ class HwpxApplicationService:
             session.expunge(record)
         try:
             source_path = self._source_path(record)
-            receipt: KordocBuildReceipt | QuestionTemplateBuildReceipt
+            receipt: KordocBuildReceipt | QuestionTemplateBuildReceipt | ContentTeamBuildReceipt
             if record.renderer == "kordoc":
                 structure = inspect_markdown_structure(source_path.read_bytes())
                 if record.options.get("require_native_equations") and not (
@@ -288,6 +346,26 @@ class HwpxApplicationService:
                     idempotency_key=record.idempotency_key,
                     build_id=record.build_id,
                     template_snapshot=QuestionTemplateSnapshot.from_request_options(record.options),
+                )
+            elif record.renderer == CONTENT_TEAM_RENDERER:
+                handoff_raw = record.options.get("handoff")
+                if not isinstance(handoff_raw, dict):
+                    raise HwpxManagerError(
+                        HwpxManagerErrorCode.HWPX_REFERENCE_MISSING,
+                        "stored content-team handoff snapshot is incomplete",
+                    )
+                receipt = self.content_team_renderer.build(
+                    source_path,
+                    ContentTeamItemSource(
+                        artifact_id=record.source_artifact_id,
+                        artifact_revision_id=record.source_artifact_revision_id,
+                        json_sha256=record.source_sha256,
+                        markdown_sha256=str(record.options["editorial_markdown_sha256"]),
+                    ),
+                    item_revision_id=record.item_revision_id,
+                    idempotency_key=record.idempotency_key,
+                    build_id=record.build_id,
+                    handoff_snapshot=ContentTeamHandoffSnapshot.model_validate(handoff_raw),
                 )
             else:
                 raise HwpxManagerError(
@@ -400,6 +478,25 @@ class HwpxApplicationService:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
                 "Item Revision must have exactly one canonical ITEM_CONTENT component",
+            )
+        return eligible[0]
+
+    @staticmethod
+    def _content_team_item_component(revision: dict[str, Any]) -> dict[str, Any]:
+        components = revision.get("components", [])
+        eligible = [
+            component
+            for component in components
+            if isinstance(component, dict)
+            and component.get("component_type") == "ITEM_CONTENT"
+            and component.get("ordinal") == 0
+            and component.get("media_type") == ITEM_CONTENT_MEDIA_TYPE
+            and component.get("schema_ref") in CONTENT_TEAM_ITEM_CONTENT_SCHEMA_REFS
+        ]
+        if len(eligible) != 1:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "Item Revision must have exactly one V2 content-team ITEM_CONTENT component",
             )
         return eligible[0]
 

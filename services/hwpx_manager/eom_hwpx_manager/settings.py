@@ -29,6 +29,11 @@ class HwpxSettings:
     question_template_binding_manifest_sha256: str = (
         "sha256:770f07c9f710870c45b4e4bad8cbe49781ec8e3eff9ea6229ddd1b6145c8598c"
     )
+    content_team_handoff_artifact_id: str = "artifact_73e80b48f1054d8f8bb733dc1d13ae6f"
+    content_team_handoff_artifact_revision_id: str = "rev_2801db879a4c4aaaa589f0cf2991b8c3"
+    content_team_handoff_archive_sha256: str = (
+        "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    )
     timeout_seconds: int = 180
     memory_max: str = "1G"
 
@@ -73,6 +78,18 @@ class HwpxSettings:
             question_template_binding_manifest_sha256=os.environ.get(
                 "EOM_HWPX_QUESTION_TEMPLATE_BINDING_MANIFEST_SHA256",
                 "sha256:770f07c9f710870c45b4e4bad8cbe49781ec8e3eff9ea6229ddd1b6145c8598c",
+            ),
+            content_team_handoff_artifact_id=os.environ.get(
+                "EOM_HWPX_CONTENT_TEAM_HANDOFF_ARTIFACT_ID",
+                "artifact_73e80b48f1054d8f8bb733dc1d13ae6f",
+            ),
+            content_team_handoff_artifact_revision_id=os.environ.get(
+                "EOM_HWPX_CONTENT_TEAM_HANDOFF_ARTIFACT_REVISION_ID",
+                "rev_2801db879a4c4aaaa589f0cf2991b8c3",
+            ),
+            content_team_handoff_archive_sha256=os.environ.get(
+                "EOM_HWPX_CONTENT_TEAM_HANDOFF_ARCHIVE_SHA256",
+                "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
             ),
             timeout_seconds=int(os.environ.get("EOM_HWPX_TIMEOUT_SECONDS", "180")),
         )

@@ -286,3 +286,11 @@ class FixedQuestionTemplateBuilderAdapter(_FixedApplicationBuilderAdapter):
     operation = "render"
     unit_template = "eom-hwpx-builder"
     log_name = "hwpx-render-question-template"
+
+
+class FixedContentTeamBuilderAdapter(_FixedApplicationBuilderAdapter):
+    """Execute the reviewed content-team handoff in its fixed isolated unit."""
+
+    operation = "render-content-team"
+    unit_template = "eom-hwpx-content-team"
+    log_name = "hwpx-render-content-team"

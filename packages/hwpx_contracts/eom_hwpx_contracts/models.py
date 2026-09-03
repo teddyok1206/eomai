@@ -281,6 +281,172 @@ class ContentTeamEditorialQuestion(ContentTeamEditorialDraft):
     source_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
 
 
+class ContentTeamItemSource(StrictModel):
+    """Pinned JSON and Markdown members of one canonical Catalog artifact revision."""
+
+    artifact_id: str = Field(pattern=r"^artifact_[a-f0-9]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
+    schema_ref: Literal["eom.assessment.item-content/2.0"] = "eom.assessment.item-content/2.0"
+    json_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    json_file: Literal["input/item-content.json"] = "input/item-content.json"
+    markdown_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    markdown_file: Literal["input/content-team-item.md"] = "input/content-team-item.md"
+
+
+class ContentTeamHandoffMember(StrictModel):
+    purpose: Literal[
+        "automation-template",
+        "equation-prototypes",
+        "visual-slots-left-right",
+        "visual-slots-two-tables",
+        "labeled-data-condition",
+        "table-2-column",
+        "table-3-column",
+        "table-3-column-long-equation",
+        "table-4-column",
+        "inquiry-experiment-box",
+    ]
+    sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    size: int = Field(ge=1, le=25 * 1024 * 1024)
+
+
+CONTENT_TEAM_HANDOFF_MEMBERS: tuple[tuple[str, str, int], ...] = (
+    (
+        "automation-template",
+        "sha256:22ded5c8de95a8c9659544749fd21a109f40a1c7b5963e123887c0d9ca51a687",
+        77187,
+    ),
+    (
+        "equation-prototypes",
+        "sha256:2a493d5e90f1d80cb28805f2f9fecf9c18853cbc0521d7acc7a64cc249c1c45a",
+        32507,
+    ),
+    (
+        "visual-slots-left-right",
+        "sha256:65674a863762e29230bab2010b6a38e52a1f44d50cb6b0509c1205ce44c4c593",
+        76918,
+    ),
+    (
+        "visual-slots-two-tables",
+        "sha256:3d5f54f3915d071d978f05037dffc03cec7385a87cb5a16fa460414f43cbbb13",
+        77215,
+    ),
+    (
+        "labeled-data-condition",
+        "sha256:cf517788ed36fe388e2580a1455dc5e343fcb68aeca5e007194180aafbf91e76",
+        79483,
+    ),
+    (
+        "table-2-column",
+        "sha256:d29e2891481554869540dfd3c62f5217cd589b3bb3197f89b3126ced9f8332eb",
+        79032,
+    ),
+    (
+        "table-3-column",
+        "sha256:9812ab156524e34f51d10123a0a8bb7991947cba95e960da1a03b5fdb5d5d3b9",
+        79257,
+    ),
+    (
+        "table-3-column-long-equation",
+        "sha256:5521c89d0772e59a963994db09c946e6407ca2664c51de7e738033645e192335",
+        87409,
+    ),
+    (
+        "table-4-column",
+        "sha256:dae3a87c48c36bc3fdaf4efd3e746f7a9d00f70217876a700e320cafc110e9d9",
+        79649,
+    ),
+    (
+        "inquiry-experiment-box",
+        "sha256:b11841cbc812f6d0179d8ce59fb2d0d4c60706445b12e03726d5819e35f70d6f",
+        58238,
+    ),
+)
+
+
+class ContentTeamHandoffSnapshot(StrictModel):
+    """Immutable source/archive identity used by every renderer attempt."""
+
+    artifact_id: str = Field(pattern=r"^artifact_[a-f0-9]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
+    archive_sha256: Literal[
+        "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    ] = "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    archive_file: Literal["input/handoff.zip"] = "input/handoff.zip"
+    entry_count: Literal[606] = 606
+    uncompressed_bytes: Literal[49280719] = 49280719
+    profile_sha256: Literal[
+        "sha256:ce08671ad433026ec51e68ddfc6a4d7ffe33ae8a792c1791dfa26b9b62e78863"
+    ] = "sha256:ce08671ad433026ec51e68ddfc6a4d7ffe33ae8a792c1791dfa26b9b62e78863"
+    members: tuple[ContentTeamHandoffMember, ...] = Field(min_length=10, max_length=10)
+
+    @model_validator(mode="after")
+    def exact_reviewed_members(self) -> ContentTeamHandoffSnapshot:
+        actual = tuple((member.purpose, member.sha256, member.size) for member in self.members)
+        if actual != CONTENT_TEAM_HANDOFF_MEMBERS:
+            raise ValueError("content-team handoff member profile is not the reviewed snapshot")
+        return self
+
+
+class ContentTeamRenderRequest(StrictModel):
+    schema_version: Literal["1.0"] = "1.0"
+    renderer_profile: Literal["content-team-hwp-question-editor-v1"] = (
+        "content-team-hwp-question-editor-v1"
+    )
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
+    source: ContentTeamItemSource
+    handoff: ContentTeamHandoffSnapshot
+    output_directory: Literal["output"] = "output"
+
+
+class ContentTeamBuildResult(StrictModel):
+    schema_version: Literal["1.0"] = "1.0"
+    renderer_profile: Literal["content-team-hwp-question-editor-v1"] = (
+        "content-team-hwp-question-editor-v1"
+    )
+    renderer_version: Literal["1.0.0"] = "1.0.0"
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
+    source_artifact_id: str = Field(pattern=r"^artifact_[a-f0-9]{32}$")
+    source_artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
+    source_json_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    source_markdown_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    handoff_archive_sha256: Literal[
+        "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    ] = "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    status: Literal["SUCCEEDED", "FAILED"]
+    output_file: Literal["output/content-team-item.hwpx"] | None
+    output_sha256: str | None = Field(default=None, pattern=r"^sha256:[a-f0-9]{64}$")
+    package_manifest_file: Literal["output/package-manifest.json"] | None
+    renderer_report_file: Literal["output/content-team-validation.json"] | None
+    equation_count: int = Field(ge=0, le=128)
+    table_count: int = Field(ge=0, le=20)
+    visual_count: int = Field(ge=0, le=2)
+    labeled_block_count: int = Field(ge=0, le=2)
+    warnings: tuple[str, ...] = Field(max_length=20)
+    errors: tuple[str, ...] = Field(max_length=20)
+    started_at: datetime
+    completed_at: datetime
+
+    @model_validator(mode="after")
+    def terminal_files_match_status(self) -> ContentTeamBuildResult:
+        materialized = (
+            self.output_file,
+            self.output_sha256,
+            self.package_manifest_file,
+            self.renderer_report_file,
+        )
+        if self.status == "SUCCEEDED":
+            if any(value is None for value in materialized) or self.errors:
+                raise ValueError("successful content-team build requires validated output")
+        elif any(value is not None for value in materialized) or not self.errors:
+            raise ValueError("failed content-team build cannot expose output")
+        if self.completed_at < self.started_at:
+            raise ValueError("content-team build completion precedes its start")
+        return self
+
+
 class TableData(StrictModel):
     rows: tuple[tuple[str, str, str], tuple[str, str, str]]
 

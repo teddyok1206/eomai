@@ -10,6 +10,7 @@ from eom_api_contracts.deliverables import CreateDeliverableRequest
 from eom_api_contracts.items import ItemRetirementRequest, StructuredItemContentImportRequest
 from eom_api_contracts.usage import CreateUsagePlanRequest, FulfillUsagePlanRequest
 from eom_api_contracts.workflows import (
+    ContentTeamItemBriefRequestV3,
     KnowledgeItemBriefRequestV2,
     WorkflowActionRequest,
     WorkflowStartRequest,
@@ -74,7 +75,10 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
     curriculum_scope: IntegratedScienceCurriculumScope | None = None
     if request.item_brief is not None:
         item_brief_data = request.item_brief.model_dump(mode="json")
-        if isinstance(request.item_brief, KnowledgeItemBriefRequestV2):
+        if isinstance(
+            request.item_brief,
+            (KnowledgeItemBriefRequestV2, ContentTeamItemBriefRequestV3),
+        ):
             item_brief_data.pop("curriculum_selected_unit_key")
             selected_unit_key = request.item_brief.curriculum_selected_unit_key
             if selected_unit_key is not None:
@@ -97,7 +101,13 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
         if request.educational_retrieval is not None
         else None
     )
-    if isinstance(request.item_brief, KnowledgeItemBriefRequestV2) and retrieval_data is not None:
+    if (
+        isinstance(
+            request.item_brief,
+            (KnowledgeItemBriefRequestV2, ContentTeamItemBriefRequestV3),
+        )
+        and retrieval_data is not None
+    ):
         if curriculum_scope is None:
             raise ApiError(
                 422,
@@ -120,6 +130,7 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
     if request.pack_key is not None:
         knowledge_request = request.request_name == "KNOWLEDGE_ITEM_REQUEST"
         generated_request = request.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
+        content_team_request = isinstance(request.item_brief, ContentTeamItemBriefRequestV3)
         request_data.update(
             {
                 "content_pack": {
@@ -147,7 +158,9 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
                         "fixed-stimulus-review"
                         if knowledge_request
                         else (
-                            "generated-stimulus-drawing"
+                            None
+                            if content_team_request
+                            else "generated-stimulus-drawing"
                             if generated_request
                             else "image-placeholder"
                         )
