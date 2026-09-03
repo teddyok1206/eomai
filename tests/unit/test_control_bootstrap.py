@@ -13,6 +13,7 @@ import pytest
 from eom_orchestrator.control_bootstrap import (
     EXPECTED_ROLE_SLOTS,
     EXPECTED_STANDARD_V2_REFERENCE_KEYS,
+    EXPECTED_STANDARD_V5_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_GUIDANCE_BUNDLE_CREATED_AT,
@@ -30,6 +31,7 @@ CONFIG = ROOT / "config/control-plane/standard-item-v1"
 CONFIG_V2 = ROOT / "config/control-plane/standard-item-v2"
 CONFIG_V3 = ROOT / "config/control-plane/standard-item-v3"
 CONFIG_V4 = ROOT / "config/control-plane/standard-item-v4"
+CONFIG_V5 = ROOT / "config/control-plane/standard-item-v5"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -325,10 +327,34 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/2.0": 2,
         "standard-control-bootstrap/3.0": 3,
         "standard-control-bootstrap/4.0": 4,
+        "standard-control-bootstrap/5.0": 5,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v4.schema_version] == 4
+
+
+def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V5)
+    source_prompt = next((ROOT / "staging").glob("*v05.md"))
+    pinned_prompt = (
+        CONFIG_V5 / "references/guidance/content-team-integrated-science-authoring-v05.md"
+    )
+
+    assert manifest.schema_version == "standard-control-bootstrap/5.0"
+    assert manifest.reasoning_effort == "high"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.13.0",)
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V5_REFERENCE_KEYS
+    )
+    assert source_prompt.read_bytes() == pinned_prompt.read_bytes()
+    assert hashlib.sha256(pinned_prompt.read_bytes()).hexdigest() == (
+        "62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435"
+    )
+    authoring = (CONFIG_V5 / "instructions/authoring.md").read_text(encoding="utf-8")
+    assert "read the complete content-team source prompt" in authoring
+    assert "do not rely on a summary or\nmemory of it" in authoring
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 5
 
 
 def test_standard_bootstrap_v4_rejects_legacy_protocol() -> None:

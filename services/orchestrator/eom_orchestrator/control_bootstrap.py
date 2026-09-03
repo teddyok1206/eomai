@@ -85,12 +85,36 @@ EXPECTED_STANDARD_V2_REFERENCE_KEYS = MappingProxyType(
         "item_management": ("general-knowledge-provenance",),
     }
 )
+EXPECTED_STANDARD_V5_REFERENCE_KEYS = MappingProxyType(
+    {
+        "authoring": (
+            "general-knowledge-provenance",
+            "content-team-integrated-science-authoring-v05",
+            "integrated-science-item-authoring-v2",
+            "integrated-science-single-item-authoring",
+            "kice-integrated-science-illustration",
+        ),
+        "image": (
+            "general-knowledge-provenance",
+            "kice-integrated-science-illustration",
+        ),
+        "review": (
+            "general-knowledge-provenance",
+            "content-team-integrated-science-authoring-v05",
+            "integrated-science-item-authoring-v2",
+            "integrated-science-single-item-authoring",
+            "kice-integrated-science-illustration",
+        ),
+        "item_management": ("general-knowledge-provenance",),
+    }
+)
 STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS = MappingProxyType(
     {
         "standard-control-bootstrap/1.0": 1,
         "standard-control-bootstrap/2.0": 2,
         "standard-control-bootstrap/3.0": 3,
         "standard-control-bootstrap/4.0": 4,
+        "standard-control-bootstrap/5.0": 5,
     }
 )
 KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(
@@ -163,6 +187,7 @@ class StandardBootstrapManifest(BaseModel):
         "standard-control-bootstrap/2.0",
         "standard-control-bootstrap/3.0",
         "standard-control-bootstrap/4.0",
+        "standard-control-bootstrap/5.0",
     ]
     preset_key: Literal["standard-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -194,18 +219,20 @@ class StandardBootstrapManifest(BaseModel):
             ):
                 raise ValueError("standard bootstrap V1 reference contract differs")
             return self
-        if self.reference_path is not None or len(self.references) != 3:
-            raise ValueError(
-                "standard bootstrap with reviewed references requires exactly three definitions"
-            )
+        expected_reference_keys = (
+            EXPECTED_STANDARD_V5_REFERENCE_KEYS
+            if self.schema_version == "standard-control-bootstrap/5.0"
+            else EXPECTED_STANDARD_V2_REFERENCE_KEYS
+        )
+        expected_reference_count = len(set().union(*expected_reference_keys.values()))
+        if self.reference_path is not None or len(self.references) != expected_reference_count:
+            raise ValueError("standard bootstrap reviewed reference definition count differs")
         reference_keys = tuple(reference.reference_key for reference in self.references)
         if len(reference_keys) != len(set(reference_keys)):
             raise ValueError("standard bootstrap reference definitions must be unique")
-        if {role.role: role.reference_keys for role in self.roles} != dict(
-            EXPECTED_STANDARD_V2_REFERENCE_KEYS
-        ):
+        if {role.role: role.reference_keys for role in self.roles} != dict(expected_reference_keys):
             raise ValueError("standard bootstrap reviewed role reference map differs")
-        if set(reference_keys) != set().union(*EXPECTED_STANDARD_V2_REFERENCE_KEYS.values()):
+        if set(reference_keys) != set().union(*expected_reference_keys.values()):
             raise ValueError("standard bootstrap has missing or unused reviewed references")
         if self.schema_version == "standard-control-bootstrap/3.0" and (
             self.compatible_workflow_protocols != ("workflow-role/1.12.0",)
@@ -215,6 +242,10 @@ class StandardBootstrapManifest(BaseModel):
             self.compatible_workflow_protocols != ("workflow-role/1.13.0",)
         ):
             raise ValueError("standard bootstrap V4 protocol differs")
+        if self.schema_version == "standard-control-bootstrap/5.0" and (
+            self.compatible_workflow_protocols != ("workflow-role/1.13.0",)
+        ):
+            raise ValueError("standard bootstrap V5 protocol differs")
         return self
 
 
@@ -959,6 +990,7 @@ def load_standard_bootstrap_manifest(config_directory: Path) -> StandardBootstra
             contract_name = {
                 "standard-control-bootstrap/3.0": "standard-control-bootstrap-v3",
                 "standard-control-bootstrap/4.0": "standard-control-bootstrap-v4",
+                "standard-control-bootstrap/5.0": "standard-control-bootstrap-v5",
             }.get(schema_version if isinstance(schema_version, str) else "")
             if contract_name is not None:
                 validate_control_contract(contract_name, value)

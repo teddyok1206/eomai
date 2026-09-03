@@ -1,0 +1,871 @@
+{
+  "schema_version": "legacy-source-inventory-policy/1.0",
+  "policy_revision_id": "legacyinventorypolicyrev_0613c0a5e551f11ec0a5e00000000001",
+  "scanner_version": "1.0.0",
+  "limits": {
+    "max_observations": 5000,
+    "max_candidate_bytes": 4294967296,
+    "max_file_bytes": 536870912,
+    "max_depth": 16,
+    "max_path_length": 500,
+    "signature_scan_bytes": 65536
+  },
+  "classification_rules": [
+    {
+      "rule_id": "legacyinventoryrule_9dbfd01ede81cfdad075c5465035e7c2",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "1806_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_0e4f166ff5e8f1bc34413185dbff2354",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "1809_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_414c44c16c0431255d7c4fc67e737bed",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "1811_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_3ab92a35e0e63f240aa42c1ce70196f9",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "1903_02(물)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_91d889039e89656e2f26f8d4374b325f",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "1903_02(생)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_fbf56e98ae99b070fede6de5a8901920",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "1903_02(지)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_cc06ef664ce3876eedb8cb183043094f",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "1903_02(화)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_35aa507193370be24074e4cc9d1f1ca0",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "1906_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_7f5125a69706c81ba7e1237d4efe844d",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "1909_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_da91bafb171e204b57e7ee1d31250266",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "1911_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_f3bbf28213dfabf24665b2a77894e1c2",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2003_02(물)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_95f4b12678c03ca45774152661970fc1",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2003_02(생)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_49d36dd4043250f05539d13dd662e912",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2003_02(지)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_8385c407258048418b0832f3ef589499",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2003_02(화)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_3df22985ba6489468cdd06d3050361f9",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2006_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_829b1b780709b7601933aa5c97c2b8f7",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2009_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_2075342998c7a0df594857fe05c90a1c",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2011_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_04b002e61d6fd20e864f5e84ac6a58e2",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2020년(2021학년도) 고3 기출",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_de81d83bf091162d8d154e8e14e9abd3",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2021년(2022학년도) 고3 기출",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_d351708c80047f22e2cf55a1f8ec5f1b",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2103_02(물)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_bb301c74f243be4d7db7ecba072c3dc5",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2103_02(생)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_6d0e35dfcfb0fe85d767367bb0a3e3f0",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2103_02(지)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_7db4ea79db1b2e289e9fa3a416bf0bb9",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2103_02(화)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_44b412bb63f6c42121aa4401a05e89a3",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2106_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_e7ce2a5e2d6c7c0e667130fb4175c9e6",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2109_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_2128412260d5892fb1d599f5adaee37f",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2111_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_ab24aced4bb304d4047d72c973c85c81",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2203_02(물)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_35f7b6c93a54a3d443c39ec934fa9037",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2203_02(생)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_8e1e9bf6a0dbda227ad6793c3d48bda5",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2203_02(지)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_0350d2f83f60a47b49496df4591c9bf3",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2203_02(화)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_4411444b9bcc00f25d7faad240c67b7f",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2206_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_01dfa83ee184c5ab5c122a05c30e7514",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2209_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_bd40ea691bac077b73f3315ea6aa38ef",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2211_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_1b00aaa1e6576f6cc91beecc96d51ddc",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2303_02(물)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_9a99083da625082a6b1ada2df670446c",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2303_02(생)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_98cfa46be12ce31a77ac318004b22458",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2303_02(지)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_2daab95f007a5b3e6890f3ec96a7e528",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2303_02(화)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_1f15076b5c4c64cdc6da0313ab57caa7",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2306_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_b0b86cf54f6027c2ff883da1d8fcf9c4",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2309_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_89e7c736c00e9a26cc849761a119c69e",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2311_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_eab40c8049e57e4f67fbd13e020a3835",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2403_02(물)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_f15ede247c115a5993b9d23ec972622f",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2403_02(생)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_5b50e029639a9eefa165ba4e20f24ac9",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2403_02(지)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_555e7a92dfe973ad06b8e06be248cbe9",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2403_02(화)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_06cf8b266d28087314baccb74279b69c",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2406_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_aaff68e7d6153e1cdbeeafd0f79ac846",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2409_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_fd6140142c492528276e4ef62deec217",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2411_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_ce0591dd7ebc294523c93b61423062d1",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2506_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_546c21245382e7636d9905cfef603353",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2509_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_30b5f75c908e4404a65297c24c5cba55",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "2511_01",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_4a468404b204156cce66426187ccad55",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "고2_2503 (물)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_0755cf5bfce7c4dff25a93b1a82913bb",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "고2_2503 (생)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_d10a44c3e47b5c68ebf16db5caf87ffd",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "고2_2503 (지)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    },
+    {
+      "rule_id": "legacyinventoryrule_5f866a7be0bd82d303e3e8cc81121df3",
+      "root_alias": "EOM_AI_SERVER_LEGACY_SOURCE",
+      "relative_prefix": "고2_2503 (화)",
+      "preliminary_class": "ORIGINAL_SOURCE_CANDIDATE",
+      "source_family": "ITEM",
+      "allowed_suffixes": [
+        ".csv",
+        ".hwp",
+        ".hwpx",
+        ".pdf",
+        ".xlsx"
+      ]
+    }
+  ],
+  "exclusion_rules": [
+    {
+      "match_kind": "BASENAME",
+      "value": ".env",
+      "reason": "SECRET_OR_CREDENTIAL"
+    },
+    {
+      "match_kind": "BASENAME",
+      "value": "credentials.json",
+      "reason": "SECRET_OR_CREDENTIAL"
+    },
+    {
+      "match_kind": "PATH_SEGMENT",
+      "value": ".cache",
+      "reason": "CACHE_TEMP_OR_LOCK"
+    },
+    {
+      "match_kind": "PATH_SEGMENT",
+      "value": ".git",
+      "reason": "VERSION_CONTROL_METADATA"
+    },
+    {
+      "match_kind": "PATH_SEGMENT",
+      "value": "__pycache__",
+      "reason": "CACHE_TEMP_OR_LOCK"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".bak",
+      "reason": "CACHE_TEMP_OR_LOCK"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".ckpt",
+      "reason": "MODEL_OR_CHECKPOINT"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".db",
+      "reason": "RUNTIME_DATABASE_OR_INDEX"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".index",
+      "reason": "RUNTIME_DATABASE_OR_INDEX"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".key",
+      "reason": "SECRET_OR_CREDENTIAL"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".lock",
+      "reason": "CACHE_TEMP_OR_LOCK"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".pem",
+      "reason": "SECRET_OR_CREDENTIAL"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".pt",
+      "reason": "MODEL_OR_CHECKPOINT"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".pth",
+      "reason": "MODEL_OR_CHECKPOINT"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".safetensors",
+      "reason": "MODEL_OR_CHECKPOINT"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".sqlite",
+      "reason": "RUNTIME_DATABASE_OR_INDEX"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".sqlite-shm",
+      "reason": "RUNTIME_DATABASE_OR_INDEX"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".sqlite-wal",
+      "reason": "RUNTIME_DATABASE_OR_INDEX"
+    },
+    {
+      "match_kind": "SUFFIX",
+      "value": ".tmp",
+      "reason": "CACHE_TEMP_OR_LOCK"
+    }
+  ],
+  "policy_sha256": "sha256:95095aa111d6b4171d4482233c1be5d048738c3165c7cd02fa9190ff7ebf291a"
+}
+
+

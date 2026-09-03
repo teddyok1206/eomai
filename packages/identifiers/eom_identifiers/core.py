@@ -167,6 +167,14 @@ def new_legacy_item_extraction_request_id() -> str:
     return f"itemextractreq_{uuid4().hex}"
 
 
+def new_legacy_item_extraction_batch_id() -> str:
+    return f"legacybatch_{uuid4().hex}"
+
+
+def new_legacy_item_extraction_work_unit_id() -> str:
+    return f"legacyworkunit_{uuid4().hex}"
+
+
 def new_legacy_item_extraction_result_id() -> str:
     return f"itemextractresult_{uuid4().hex}"
 
