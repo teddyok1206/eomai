@@ -17,6 +17,7 @@ from eom_orchestrator.control_bootstrap import (
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
+    STANDARD_COMPATIBLE_CURRENT_CAPACITY_REVISIONS,
     STANDARD_GUIDANCE_BUNDLE_CREATED_AT,
     KnowledgeAnalysisBootstrapManifest,
     StandardBootstrapManifest,
@@ -153,6 +154,20 @@ def test_parallel_bootstrap_preserves_an_operator_assigned_account_label(
 
     assert binding_ids == (binding.binding_id,)
     assert binding.account_label == "textbook-analysis-slot06"
+
+
+def test_standard_capacity_accepts_only_hash_pinned_shared_policy_revisions() -> None:
+    assert {
+        control_bootstrap._stable_id("capacityrev_", "fixed-host:v1"): (
+            "sha256:6bac3c91a521c918f56b31cbb37b4d46ded100c0503988c10c7d53573ba59cd3"
+        ),
+        control_bootstrap._stable_id("capacityrev_", "fixed-host:v2"): (
+            "sha256:392782a3811351199890a837b065d9bfa0a03a0578a47b32fd51e2dce716f806"
+        ),
+        control_bootstrap._stable_id("capacityrev_", "fixed-host:v3"): (
+            "sha256:0d57aca8671aebd1f487bb1d39ef1bbfb75b07f618bd26a38e863d69920f1660"
+        ),
+    } == STANDARD_COMPATIBLE_CURRENT_CAPACITY_REVISIONS
 
 
 def test_standard_bootstrap_manifest_is_bounded_and_credential_free() -> None:

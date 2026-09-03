@@ -126,6 +126,22 @@ STANDARD_BOOTSTRAP_REFERENCE_REVISIONS = MappingProxyType(
         "standard-control-bootstrap/5.0": 2,
     }
 )
+STANDARD_COMPATIBLE_CURRENT_CAPACITY_REVISIONS = MappingProxyType(
+    {
+        # Standard executions stay pinned to V1. These later immutable shared-policy
+        # revisions only add independently bounded support capacity and must not be
+        # moved backward when a Standard preset is published.
+        "capacityrev_335b8a238f3755b9dc14d902598ee520": (
+            "sha256:6bac3c91a521c918f56b31cbb37b4d46ded100c0503988c10c7d53573ba59cd3"
+        ),
+        "capacityrev_ddfe2f3071ac10a66944a3ce8185bec6": (
+            "sha256:392782a3811351199890a837b065d9bfa0a03a0578a47b32fd51e2dce716f806"
+        ),
+        "capacityrev_d8ce74ff203d225081fe8e9686457dd9": (
+            "sha256:0d57aca8671aebd1f487bb1d39ef1bbfb75b07f618bd26a38e863d69920f1660"
+        ),
+    }
+)
 KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(
     {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 15)}
 )
@@ -1254,7 +1270,6 @@ def _publish_capacity_policy(
 ) -> str:
     policy_id = _stable_id("capacity_", "fixed-host")
     revision_id = _stable_id("capacityrev_", "fixed-host:v1")
-    additive_revision_id = _stable_id("capacityrev_", "fixed-host:v2")
     pools = [
         {
             "pool_key": role.worker_pool_key,
@@ -1285,10 +1300,34 @@ def _publish_capacity_policy(
                 ) from exc
             expected_pools = tuple(pools)
             actual_pools = tuple(pool.model_dump(mode="json") for pool in existing_model.pools)
+            current_revision = (
+                session.get(
+                    WorkerCapacityPolicyRevisionRecord,
+                    logical.current_revision_id,
+                )
+                if logical is not None and logical.current_revision_id is not None
+                else None
+            )
+            expected_current_hash = (
+                STANDARD_COMPATIBLE_CURRENT_CAPACITY_REVISIONS.get(logical.current_revision_id)
+                if logical is not None and logical.current_revision_id is not None
+                else None
+            )
+            current_is_compatible = (
+                current_revision is not None
+                and expected_current_hash is not None
+                and current_revision.capacity_policy_id == policy_id
+                and current_revision.state == "RELEASED"
+                and current_revision.content_sha256 == expected_current_hash
+                and current_revision.content_sha256
+                == compute_control_document_hash(
+                    current_revision.canonical_document, "content_sha256"
+                )
+            )
             if (
                 logical is None
                 or logical.policy_key != "fixed-host"
-                or logical.current_revision_id not in {revision_id, additive_revision_id}
+                or not current_is_compatible
                 or logical.state != "ACTIVE"
                 or existing.capacity_policy_id != policy_id
                 or existing.state != "RELEASED"
