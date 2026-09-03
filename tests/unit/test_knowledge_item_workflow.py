@@ -438,6 +438,34 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
     assert "모든 값은 반드시\n-1000 이상 1000 이하" in authoring_prompt
     assert "결과 JSON 바이트에는 `\\\\frac`" in authoring_prompt
 
+    generated_print_safe_pack = compile_pack(ROOT / "content/packs/generated-knowledge-item/1.10.0")
+    assert generated_print_safe_pack.manifest.pack.version == "1.10.0"
+    assert generated_print_safe_pack.source_tree_sha256 == (
+        "sha256:0e4e66e36e48ed2fbbd4e6f3443af20a22a4c1a5643897a0f36acaaec35fa6d5"
+    )
+    authoring_profile = next(
+        profile
+        for profile in generated_print_safe_pack.profiles
+        if profile.profile.type == "authoring"
+    )
+    review_profile = next(
+        profile
+        for profile in generated_print_safe_pack.profiles
+        if profile.profile.type == "review"
+    )
+    assert authoring_profile.profile.version == "6.2.0"
+    assert review_profile.profile.version == "6.1.0"
+    prompts = {
+        value.relative_path: value.path.read_text(encoding="utf-8")
+        for value in generated_print_safe_pack.files
+        if value.relative_path.startswith("prompt-templates/")
+    }
+    assert "`J=DELTA p`" in prompts["prompt-templates/authoring.md"]
+    assert "kind=`diagram`" in prompts["prompt-templates/authoring.md"]
+    assert "`F (10^3 N)`" in prompts["prompt-templates/authoring.md"]
+    assert "raw HwpQuestionEditor Markdown" in prompts["prompt-templates/review.md"]
+    assert "그 자체로 blocking 사유가 아니" in prompts["prompt-templates/review.md"]
+
 
 def test_content_pack_provenance_never_fakes_a_source_pointer() -> None:
     pack_path = ROOT / "content/packs/general-knowledge-item/1.0.0/pack.yaml"

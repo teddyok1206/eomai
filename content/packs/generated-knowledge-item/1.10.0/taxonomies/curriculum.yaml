@@ -1,0 +1,5 @@
+schema_version: "1.0"
+taxonomy_key: "GENERAL_SCIENCE_KNOWLEDGE"
+nodes:
+  - key: "GENERAL_SCIENCE"
+    label: "일반 과학"

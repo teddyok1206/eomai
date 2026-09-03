@@ -844,6 +844,7 @@ class WorkflowCatalogService:
             "1.7.0",
             "1.8.0",
             "1.9.0",
+            "1.10.0",
         }
         if expects_v2 != is_v2:
             raise ContentPackError(
