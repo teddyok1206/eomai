@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
 from eom_orchestrator.legacy_item_editorial_compatibility_bootstrap import (
+    EDITORIAL_COMPATIBILITY_EVALUATION_ARTIFACT_KEY,
     EDITORIAL_COMPATIBILITY_PLATFORM_ARTIFACT_KEY,
     EDITORIAL_COMPATIBILITY_ROLE_ARTIFACT_KEY,
     _build_non_live_evaluation_report,
@@ -41,6 +42,7 @@ def test_editorial_compatibility_bootstrap_is_schema_first_and_source_only() -> 
     for artifact_key in (
         EDITORIAL_COMPATIBILITY_PLATFORM_ARTIFACT_KEY,
         EDITORIAL_COMPATIBILITY_ROLE_ARTIFACT_KEY,
+        EDITORIAL_COMPATIBILITY_EVALUATION_ARTIFACT_KEY,
     ):
         assert len(f"control-bootstrap:{artifact_key}:{'a' * 64}") <= 128
 

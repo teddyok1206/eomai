@@ -56,6 +56,7 @@ from eom_orchestrator.worker_registry import WorkerSlot
 EDITORIAL_COMPATIBILITY_CAPACITY_CREATED_AT = datetime(2026, 9, 1, tzinfo=UTC)
 EDITORIAL_COMPATIBILITY_PLATFORM_ARTIFACT_KEY = "legacy-editorial-platform-v1"
 EDITORIAL_COMPATIBILITY_ROLE_ARTIFACT_KEY = "legacy-editorial-role-v1"
+EDITORIAL_COMPATIBILITY_EVALUATION_ARTIFACT_KEY = "legacy-editorial-compat-evaluation"
 
 
 class LegacyItemEditorialCompatibilityBootstrapManifest(BaseModel):
@@ -246,7 +247,7 @@ def bootstrap_legacy_item_editorial_compatibility_control_plane(
             media_type="application/json",
             artifact_type="control_preset_evaluation",
             idempotency_key=(
-                "control-bootstrap:legacy-item-editorial-compatibility-evaluation:"
+                f"control-bootstrap:{EDITORIAL_COMPATIBILITY_EVALUATION_ARTIFACT_KEY}:"
                 f"{hashlib.sha256(payload).hexdigest()}"
             ),
             created_at=manifest.created_at + timedelta(minutes=1),
