@@ -15,11 +15,41 @@ from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
     KnowledgeRetrievalServiceError,
+    _bounded_seed_scores,
     _Candidate,
+    _rank_lexical_seed_rows,
 )
 from eom_identifiers import content_sha256
 
 NOW = "2026-08-24T00:00:00Z"
+
+
+def test_lexical_seed_ranking_prefers_distinct_term_overlap() -> None:
+    assert _rank_lexical_seed_rows(
+        (
+            ("lithium", "knode_single"),
+            ("lithium", "knode_single"),
+            ("lithium", "knode_multi"),
+            ("element", "knode_multi"),
+            ("periodicity", "knode_multi"),
+            ("lithium", "knode_tie_a"),
+            ("element", "knode_tie_a"),
+            ("lithium", "knode_tie_b"),
+            ("element", "knode_tie_b"),
+        ),
+        limit=3,
+    ) == (
+        ("knode_multi", 850),
+        ("knode_tie_a", 800),
+        ("knode_tie_b", 800),
+    )
+
+
+def test_seed_budget_preserves_strongest_scores_before_node_id() -> None:
+    assert _bounded_seed_scores({"knode_a": 700, "knode_z": 1000, "knode_b": 950}, limit=2) == {
+        "knode_z": 1000,
+        "knode_b": 950,
+    }
 
 
 def _member(

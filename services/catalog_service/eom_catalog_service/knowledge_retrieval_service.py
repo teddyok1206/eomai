@@ -140,6 +140,25 @@ class KnowledgeRetrievalServiceError(RuntimeError):
         self.code = code
 
 
+def _rank_lexical_seed_rows(
+    rows: tuple[tuple[str, str], ...], *, limit: int
+) -> tuple[tuple[str, int], ...]:
+    """Rank lexical seeds by distinct query-term overlap, then stable node identity."""
+    terms_by_node: dict[str, set[str]] = {}
+    for term, node_id in rows:
+        terms_by_node.setdefault(node_id, set()).add(term)
+    ranked = (
+        (node_id, min(1000, 700 + (50 * len(matched_terms))))
+        for node_id, matched_terms in terms_by_node.items()
+    )
+    return tuple(sorted(ranked, key=lambda item: (-item[1], item[0]))[:limit])
+
+
+def _bounded_seed_scores(seed_scores: dict[str, int], *, limit: int) -> dict[str, int]:
+    """Keep the strongest deterministic seeds when the evidence budget is bounded."""
+    return dict(sorted(seed_scores.items(), key=lambda item: (-item[1], item[0]))[:limit])
+
+
 @dataclass(frozen=True)
 class _Candidate:
     analysis_run_id: str
@@ -776,16 +795,20 @@ class KnowledgeRetrievalApplicationService:
             }
         )
         if terms:
-            for node_id in session.scalars(
-                select(KnowledgeNodeTermRecord.node_id)
-                .where(
-                    KnowledgeNodeTermRecord.graph_snapshot_revision_id == snapshot_id,
-                    KnowledgeNodeTermRecord.term.in_(terms),
+            lexical_rows = tuple(
+                (str(term), str(node_id))
+                for term, node_id in session.execute(
+                    select(KnowledgeNodeTermRecord.term, KnowledgeNodeTermRecord.node_id)
+                    .where(
+                        KnowledgeNodeTermRecord.graph_snapshot_revision_id == snapshot_id,
+                        KnowledgeNodeTermRecord.term.in_(terms),
+                    )
+                    .order_by(KnowledgeNodeTermRecord.term, KnowledgeNodeTermRecord.node_id)
+                    .limit(max_nodes * max(len(terms), 1))
                 )
-                .order_by(KnowledgeNodeTermRecord.node_id)
-                .limit(max_nodes)
-            ):
-                seed_scores[node_id] = max(seed_scores.get(node_id, 0), 1000)
+            )
+            for node_id, score in _rank_lexical_seed_rows(lexical_rows, limit=max_nodes):
+                seed_scores[node_id] = max(seed_scores.get(node_id, 0), score)
 
         if command.required_item_elements:
             element_filter = [str(value) for value in command.required_item_elements]
@@ -831,7 +854,7 @@ class KnowledgeRetrievalApplicationService:
                 "KNOWLEDGE_RETRIEVAL_INSUFFICIENT_EVIDENCE",
                 "retrieval query matched no graph seed",
             )
-        scores = dict(sorted(seed_scores.items())[:max_nodes])
+        scores = _bounded_seed_scores(seed_scores, limit=max_nodes)
         frontier = set(scores)
         visited = set(frontier)
         for _hop, hop_score in ((1, 850), (2, 700)):
