@@ -18,7 +18,12 @@ from eom_catalog_contracts import (
     validate_eom_question_template_content,
 )
 from eom_content_pack import ContentPackError, ContentPackErrorCode, render_prompt
-from eom_hwpx_contracts import ContentTeamEditorialDraft, serialize_content_team_markdown
+from eom_hwpx_contracts import (
+    ContentTeamEditorialDraft,
+    derive_content_team_equation_sources,
+    normalize_content_team_stem,
+    serialize_content_team_markdown,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_image_contracts import LocalImageProviderBinding, content_json_bytes
 from eom_item_registry import ComponentPointer, RegistrationRequest
@@ -1105,6 +1110,12 @@ class WorkflowCatalogService:
         if not isinstance(parsed, ContentTeamAuthoringRoleResultV7):
             raise ValueError("content-team authoring result type is invalid")
         content: AssessmentItemContentV2 = parsed.output.draft
+        content_data = content.model_dump(mode="json")
+        content_data["stem"] = normalize_content_team_stem(content.item_number, content.stem)
+        content_data["equation_sources"] = []
+        content = AssessmentItemContentV2.model_validate(content_data)
+        content_data["equation_sources"] = list(derive_content_team_equation_sources(content))
+        content = AssessmentItemContentV2.model_validate(content_data)
         content_data = content.model_dump(mode="json")
         validate_contract("assessment-item-content-v2", content_data)
         editorial_data = dict(content_data)

@@ -62,6 +62,18 @@ class ContentTeamMarkdownError(ValueError):
     """Raised when authoring Markdown is outside the reviewed handoff grammar."""
 
 
+def normalize_content_team_stem(item_number: int, stem: str) -> str:
+    """Remove only the Markdown item marker duplicated inside the typed stem."""
+
+    prefix = f"{item_number}. "
+    if not stem.startswith(prefix):
+        return stem
+    normalized = stem.removeprefix(prefix)
+    if not normalized:
+        raise ContentTeamMarkdownError("content-team stem is empty after item marker normalization")
+    return normalized
+
+
 def _fail(message: str) -> NoReturn:
     raise ContentTeamMarkdownError(message)
 
@@ -320,6 +332,37 @@ def _equations(value: str) -> tuple[str, ...]:
     return tuple(sources)
 
 
+def derive_content_team_equation_sources(
+    draft: ContentTeamEditorialDraft,
+) -> tuple[str, ...]:
+    """Derive the ordered equation occurrence index from authored fields."""
+
+    authored_text = [draft.stem]
+    authored_text.extend(block.content for block in draft.labeled_blocks)
+    if draft.inquiry is not None:
+        if draft.inquiry.goal is not None:
+            authored_text.append(draft.inquiry.goal)
+        authored_text.extend((draft.inquiry.procedure, draft.inquiry.result))
+    else:
+        for visual in draft.visuals:
+            if isinstance(visual, ContentTeamTable):
+                authored_text.extend(visual.headers)
+                authored_text.extend(cell for row in visual.rows for cell in row)
+    authored_text.append(draft.bottom_stem)
+    authored_text.extend(statement.text for statement in draft.statements)
+    authored_text.extend(choice.text for choice in draft.choices)
+    authored_text.append(draft.answer.raw_line)
+    authored_text.extend(
+        (
+            draft.explanations.authoring_intent,
+            draft.explanations.concept_source,
+            draft.explanations.correct_answer,
+            draft.explanations.wrong_answer,
+        )
+    )
+    return _equations("\n".join(authored_text))
+
+
 def _labels_in_explanation(value: str) -> tuple[str, ...]:
     return tuple(match.group("label") for match in STATEMENT.finditer(value))
 
@@ -518,6 +561,11 @@ def _table_markdown(table: ContentTeamTable) -> tuple[str, ...]:
 
 def serialize_content_team_markdown(draft: ContentTeamEditorialDraft) -> bytes:
     """Materialize the one canonical Markdown spelling and prove its lossless round trip."""
+
+    if draft.equation_sources != derive_content_team_equation_sources(draft):
+        raise ContentTeamMarkdownError(
+            "content-team equation source index differs from authored occurrences"
+        )
 
     lines: list[str] = [f"{draft.item_number}. {draft.stem}", ""]
     for block in draft.labeled_blocks:

@@ -22,6 +22,8 @@ from eom_hwpx_contracts import (
     ContentTeamImageSlot,
     ContentTeamInquiry,
     ContentTeamTable,
+    derive_content_team_equation_sources,
+    normalize_content_team_stem,
 )
 from eom_hwpx_contracts.content_team_markdown import (
     parse_content_team_markdown,
@@ -347,6 +349,67 @@ def test_v7_authoring_result_is_schema_first_and_codex_compatible() -> None:
     )
 
 
+def test_content_team_stem_normalizes_only_its_duplicate_item_marker() -> None:
+    assert normalize_content_team_stem(11, "11. 문항의 발문") == "문항의 발문"
+    assert normalize_content_team_stem(11, "12. 비교 대상의 번호") == "12. 비교 대상의 번호"
+    assert normalize_content_team_stem(11, "11.문항의 발문") == "11.문항의 발문"
+    with pytest.raises(ValueError, match="empty after item marker"):
+        normalize_content_team_stem(11, "11. ")
+
+
+def test_content_team_equation_sources_are_an_ordered_derived_occurrence_index() -> None:
+    content = _content(
+        stem="첫 $x$를 해석한다.",
+        equations=("x", "x"),
+    )
+    value = content.model_dump(mode="json")
+    value["explanations"]["concept_source"] = "두 번째 $x$를 확인한다."
+    content = AssessmentItemContentV2.model_validate(value)
+
+    assert derive_content_team_equation_sources(content) == ("x", "x")
+
+    value["equation_sources"] = ["$x$"]
+    with pytest.raises(ValueError, match="index differs"):
+        serialize_content_team_markdown(AssessmentItemContentV2.model_validate(value))
+
+
+def test_v7_projected_authoring_derives_markdown_representation_fields() -> None:
+    result = ContentTeamAuthoringRoleResultV7(
+        job_id="job_" + "1" * 32,
+        workflow_id="workflow_" + "2" * 32,
+        step_run_id="steprun_" + "3" * 32,
+        role="authoring",
+        artifact=ArtifactSpec(
+            logical_artifact_id="artifact_" + "4" * 32,
+            revision_id="rev_" + "5" * 32,
+        ),
+        completed_at=datetime(2026, 9, 3, tzinfo=UTC),
+        output={
+            "draft": _content(
+                stem="관계 $x$를 해석하여 물음에 답하시오.",
+                equations=("$x$",),
+            ),
+            "metadata": {
+                "subject": "통합과학",
+                "topic": "요청으로 정해지는 주제",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+    )
+    projected = result.model_dump(mode="json")
+    draft = projected["output"]["draft"]
+    del draft["visual_layout"]
+    draft["stem"] = f"{draft['item_number']}. {draft['stem']}"
+
+    parsed = validate_role_result(projected, "authoring", "authoring-result@7.0")
+
+    assert isinstance(parsed, ContentTeamAuthoringRoleResultV7)
+    assert parsed.output.draft.stem == "관계 $x$를 해석하여 물음에 답하시오."
+    assert parsed.output.draft.equation_sources == ("x",)
+    serialize_content_team_markdown(parsed.output.draft)
+
+
 @pytest.mark.parametrize(
     ("visuals", "layout", "inquiry"),
     [
@@ -454,11 +517,15 @@ def test_v7_projected_authoring_derives_one_canonical_visual_layout(
     )
     projected = result.model_dump(mode="json")
     del projected["output"]["draft"]["visual_layout"]
+    projected["output"]["draft"]["stem"] = f"{result.output.draft.item_number}. " + str(
+        projected["output"]["draft"]["stem"]
+    )
 
     parsed = validate_role_result(projected, "authoring", "authoring-result@7.0")
 
     assert isinstance(parsed, ContentTeamAuthoringRoleResultV7)
     assert parsed.output.draft.visual_layout == layout
+    assert parsed.output.draft.stem == result.output.draft.stem
 
 
 def test_v7_explicit_canonical_layout_is_never_rewritten() -> None:

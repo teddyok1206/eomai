@@ -7,6 +7,8 @@ from eom_hwpx_contracts.content_team_equations import (
 )
 from eom_hwpx_contracts.content_team_markdown import (
     ContentTeamMarkdownError,
+    derive_content_team_equation_sources,
+    normalize_content_team_stem,
     parse_content_team_markdown,
     serialize_content_team_markdown,
     statement_texts,
@@ -90,7 +92,9 @@ __all__ = [
     "TableData",
     "assert_content_team_equations_supported",
     "classify_content_team_equation",
+    "derive_content_team_equation_sources",
     "load_schema",
+    "normalize_content_team_stem",
     "parse_content_team_markdown",
     "serialize_content_team_markdown",
     "statement_texts",

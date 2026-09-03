@@ -53,6 +53,17 @@ then validates the complete canonical JSON Schema and Pydantic model. An explici
 is never rewritten, and an unrecognized ordering fails rather than selecting a nearby layout. This
 keeps tables keyed and rectangular and costs O(v) time/O(1) space for `v <= 2`.
 
+The team Markdown spells an item marker as `<item_number>. ` while the typed value stores
+`item_number` separately from `stem`. At the projected-authoring and Catalog materialization
+boundaries, EOM removes exactly one matching leading marker (including its following space) and no
+other numeric text. The immutable authoring result remains provenance; the registered content is
+the deterministic normalized derivative. The same boundary derives the ordered
+`equation_sources` occurrence index from the authored fields; equation spelling inside the authored
+text is unchanged and the lossless Markdown round trip proves the index matches it. The direct
+content-team workflow also records the explicit `AUTHORING -> IMAGE_SKIPPED -> REVIEWING` stage
+path even though it has no image step, so reconciliation can resume a completed review job without
+invoking a worker again.
+
 ## Required pointers and resolution
 
 A production renderer profile must pin the handoff archive Artifact and Artifact Revision, archive

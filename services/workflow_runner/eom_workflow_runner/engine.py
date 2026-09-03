@@ -528,6 +528,39 @@ class WorkflowRunner:
             current = session.get(WorkflowInstanceRecord, workflow.workflow_id)
             if current is None:
                 raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "workflow disappeared")
+            direct_review_predecessor = any(
+                isinstance(step, AgentStep)
+                and step.worker_role == "authoring"
+                and step.on_success == definition.key
+                for step in compiled.definition.steps
+            )
+            if (
+                definition.worker_role == "review"
+                and WorkflowStage(current.stage) is WorkflowStage.AUTHORING
+                and direct_review_predecessor
+            ):
+                current = transition_stage(
+                    session,
+                    workflow.workflow_id,
+                    WorkflowStage.IMAGE_SKIPPED,
+                    definition.key,
+                    "IMAGE_DECISION_COMPLETED",
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    command_id=command_id,
+                    payload={"branch": definition.key, "entry": "direct_agent"},
+                )
+                current = transition_stage(
+                    session,
+                    workflow.workflow_id,
+                    WorkflowStage.REVIEWING,
+                    definition.key,
+                    "REVIEW_STAGE_ENTERED",
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    command_id=command_id,
+                    payload={"entry": "direct_agent"},
+                )
             entry_stage = direct_agent_entry_stage(
                 WorkflowStage(current.stage),
                 definition.worker_role,

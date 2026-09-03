@@ -391,7 +391,11 @@ def _execution(job: JobRecord, content_hash: str) -> RoleExecutionResult:
 
 
 def _environment(
-    engine: Engine, image_mode: str, idempotency_key: str
+    engine: Engine,
+    image_mode: str,
+    idempotency_key: str,
+    *,
+    definition_path: Path = Path("config/workflows/generic-item-development.v1.yaml"),
 ) -> tuple[
     WorkflowRunner,
     FakeRoleExecutor,
@@ -406,9 +410,7 @@ def _environment(
         expire_on_commit=False,
         join_transaction_mode="create_savepoint",
     )
-    compiled = compile_definition(
-        Path("config/workflows/generic-item-development.v1.yaml"), set(ROLE_SLOTS) | {"support"}
-    )
+    compiled = compile_definition(definition_path, set(ROLE_SLOTS) | {"support"})
     with transaction(sessions) as session:
         definition, _ = import_workflow_definition(session, compiled)
         workflow, created = create_workflow_instance(
@@ -519,6 +521,36 @@ def test_image_skip_approval_and_registration_flow(integration_engine: Engine) -
             assert final["registration"]["step_key"] == "registration"
             sequences = [event.sequence for event in list_workflow_events(session, workflow_id)]
             assert sequences == list(range(1, len(sequences) + 1))
+    finally:
+        _close(resources)
+
+
+def test_direct_authoring_to_review_records_image_skip_stage(
+    integration_engine: Engine,
+) -> None:
+    runner, executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "skip",
+        "workflow-content-team-direct-review",
+        definition_path=Path("config/workflows/generic-item-development.v1.7.yaml"),
+    )
+    try:
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            assert workflow.state == WorkflowState.AWAITING_HUMAN_APPROVAL.value
+            events = list_workflow_events(session, workflow_id)
+            stage_pairs = [
+                (event.payload["prior_stage"], event.payload["new_stage"])
+                for event in events
+                if event.event_type in {"IMAGE_DECISION_COMPLETED", "REVIEW_STAGE_ENTERED"}
+            ]
+            assert stage_pairs == [
+                ("AUTHORING", "IMAGE_SKIPPED"),
+                ("IMAGE_SKIPPED", "REVIEWING"),
+            ]
+        assert [role for _, _, role in executor.calls] == ["authoring", "review"]
     finally:
         _close(resources)
 

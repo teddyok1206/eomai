@@ -17,6 +17,10 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisRequestV8,
 )
+from eom_hwpx_contracts import (
+    derive_content_team_equation_sources,
+    normalize_content_team_stem,
+)
 from eom_identifiers import content_sha256
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
@@ -556,7 +560,16 @@ def _canonicalize_content_team_authoring_result(value: object) -> object:
     canonical = copy.deepcopy(value)
     canonical_output = _mapping(canonical, "output")
     canonical_draft = _mapping(canonical_output, "draft")
+    item_number = canonical_draft.get("item_number")
+    stem = canonical_draft.get("stem")
+    if isinstance(item_number, int) and isinstance(stem, str):
+        canonical_draft["stem"] = normalize_content_team_stem(item_number, stem)
     canonical_draft["visual_layout"] = derived_layout
+    canonical_draft["equation_sources"] = []
+    preliminary = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
+    canonical_draft["equation_sources"] = list(
+        derive_content_team_equation_sources(preliminary.output.draft)
+    )
     return canonical
 
 
