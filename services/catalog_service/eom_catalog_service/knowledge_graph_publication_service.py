@@ -15,6 +15,7 @@ from eom_catalog_contracts import (
     CurriculumUnitBinding,
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
+    EvidenceBundleManifestV4,
     KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV2,
     KnowledgeAnalysisProposalReceiptV3,
@@ -1270,7 +1271,6 @@ class KnowledgeGraphPublicationService:
                 or revision.state != "PUBLISHED"
                 or revision.manifest_artifact_id != manifest.artifact_id
                 or revision.manifest_artifact_revision_id != manifest.artifact_revision_id
-                or revision.manifest_sha256 != manifest.sha256
                 or request.request_sha256 != binding.retrieval_request_sha256
                 or request.graph_snapshot_revision_id != expected_snapshot_revision_id
                 or request.state != "PUBLISHED"
@@ -1289,6 +1289,34 @@ class KnowledgeGraphPublicationService:
                 manifest_artifact_type="evidence-bundle-manifest",
                 primary_file="evidence/manifest.json",
             )
+            evidence_manifest_value = self._read_json_member(
+                manifest,
+                max_bytes=8 * 1024 * 1024,
+            )
+            try:
+                validate_contract("evidence-bundle-manifest-v4", evidence_manifest_value)
+                evidence_manifest = EvidenceBundleManifestV4.model_validate(evidence_manifest_value)
+            except (ValidationError, ValueError) as exc:
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_EVIDENCE_INVALID",
+                    "approved Item alignment Evidence Bundle manifest is invalid",
+                ) from exc
+            if (
+                revision.manifest_sha256 != evidence_manifest.manifest_sha256
+                or evidence_manifest.evidence_bundle_id != binding.evidence_bundle_id
+                or evidence_manifest.evidence_bundle_revision_id
+                != binding.evidence_bundle_revision_id
+                or evidence_manifest.retrieval_request_id != binding.retrieval_request_id
+                or evidence_manifest.retrieval_request_sha256 != binding.retrieval_request_sha256
+                or evidence_manifest.graph_snapshot.graph_snapshot_revision_id
+                != expected_snapshot_revision_id
+                or {entry.evidence_id for entry in evidence_manifest.entries}
+                != {entry.evidence_id for entry in entries}
+            ):
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_EVIDENCE_INVALID",
+                    "approved Item alignment Evidence Bundle manifest differs from its records",
+                )
             evidence_node_ids = {node_id for entry in entries for node_id in entry.graph_node_ids}
             if not set(binding.evidence_node_ids).issubset(evidence_node_ids):
                 raise KnowledgeGraphPublicationError(

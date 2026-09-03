@@ -1134,6 +1134,8 @@ def test_multimodal_document_source_is_preserved_in_v4_evidence_contracts() -> N
     validate_contract("evidence-bundle-manifest-v4", manifest_value)
     manifest = EvidenceBundleManifestV4.model_validate(manifest_value)
     assert manifest.entries[0].source.document_revision_id == "edudocrev_" + "1" * 32
+    manifest_artifact_sha256 = content_sha256(manifest.model_dump(mode="json"))
+    assert manifest_artifact_sha256 != manifest.manifest_sha256
 
     result_value: dict[str, object] = {
         "schema_version": "evidence-bundle-publication-result/4.0",
@@ -1150,7 +1152,7 @@ def test_multimodal_document_source_is_preserved_in_v4_evidence_contracts() -> N
         "manifest_artifact": {
             "artifact_id": "artifact_" + "a" * 32,
             "artifact_revision_id": "rev_" + "a" * 32,
-            "sha256": manifest.manifest_sha256,
+            "sha256": manifest_artifact_sha256,
             "schema_ref": "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
             "media_type": "application/json",
             "logical_name": "manifest.json",
@@ -1164,6 +1166,8 @@ def test_multimodal_document_source_is_preserved_in_v4_evidence_contracts() -> N
     result_value["result_sha256"] = content_sha256(result_value)
     validate_contract("evidence-bundle-publication-result-v4", result_value)
     result = EvidenceBundlePublicationResultV4.model_validate(result_value)
+    assert result.manifest_artifact.sha256 == manifest_artifact_sha256
+    assert result.manifest_sha256 == manifest.manifest_sha256
     response = CatalogApplicationResponse(
         status="OK",
         operation="CREATE_ITEM_PRODUCTION_EVIDENCE",
