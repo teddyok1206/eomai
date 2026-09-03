@@ -17,6 +17,7 @@ from eom_orchestrator.control_models import (
     ExecutionPresetRevisionRecord,
 )
 from eom_orchestrator.database import build_session_factory
+from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from sqlalchemy import Engine, select
 
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
@@ -47,7 +48,7 @@ class LegacyItemLearningCoordinator:
         self,
         engine: Engine,
         *,
-        promotion: LegacyItemPromotionService,
+        promotion: LegacyItemPromotionService | None = None,
         analyses: KnowledgeAnalysisApplicationService | None = None,
     ) -> None:
         self.sessions = build_session_factory(engine)
@@ -61,6 +62,11 @@ class LegacyItemLearningCoordinator:
         risk_policy_revision_id: str,
         preset_key: str = "knowledge-analysis",
     ) -> LegacyItemLearningStart:
+        if self.promotion is None:
+            raise LegacyItemLearningError(
+                "LEGACY_ITEM_LEARNING_PROMOTION_UNAVAILABLE",
+                "legacy item promotion dependency is unavailable",
+            )
         promoted = self.promotion.promote(command)
         preset_id, preset_revision_id = self._released_preset(preset_key)
         analysis_command = self._analysis_command(
@@ -80,6 +86,52 @@ class LegacyItemLearningCoordinator:
             analysis=analysis,
             item_created=promoted.item_created,
             origin_created=promoted.origin_created,
+        )
+
+    def retry_failed_analysis(
+        self,
+        *,
+        predecessor_analysis_run_id: str,
+        requested_by: str,
+    ) -> KnowledgeAnalysisApplicationResult:
+        """Create one explicit successor while preserving the failed run and its exact pins."""
+
+        with self.sessions() as session:
+            predecessor = session.get(KnowledgeAnalysisRunRecord, predecessor_analysis_run_id)
+            preset = (
+                session.get(ExecutionPresetRecord, predecessor.preset_id)
+                if predecessor is not None
+                else None
+            )
+            request = predecessor.canonical_request if predecessor is not None else {}
+            source = request.get("source") if isinstance(request, dict) else None
+            if (
+                predecessor is None
+                or predecessor.state not in {"FAILED", "REJECTED", "CANCELLED"}
+                or predecessor.item_revision_id is None
+                or not isinstance(source, dict)
+                or source.get("source_kind") != "APPROVED_ITEM_REVISION"
+                or source.get("source_class") != "PAST_EXAM"
+                or request.get("general_knowledge_mode") != "DISABLED"
+                or preset is None
+            ):
+                raise LegacyItemLearningError(
+                    "LEGACY_ITEM_LEARNING_RETRY_INVALID",
+                    "legacy item analysis predecessor is not retryable",
+                )
+            command = self._retry_command(
+                item_revision_id=predecessor.item_revision_id,
+                risk_policy_revision_id=predecessor.risk_policy_revision_id,
+                predecessor_analysis_run_id=predecessor.analysis_run_id,
+                preset_key=preset.preset_key,
+                requested_by=requested_by,
+            )
+            preset_id = predecessor.preset_id
+            preset_revision_id = predecessor.preset_revision_id
+        return self.analyses.create_with_pinned_preset(
+            command,
+            preset_id=preset_id,
+            preset_revision_id=preset_revision_id,
         )
 
     def _released_preset(self, preset_key: str) -> tuple[str, str]:
@@ -135,4 +187,26 @@ class LegacyItemLearningCoordinator:
             predecessor_analysis_run_id=None,
             requested_by=requested_by,
             idempotency_key=f"legacy-item-learning:{identity}",
+        )
+
+    @staticmethod
+    def _retry_command(
+        *,
+        item_revision_id: str,
+        risk_policy_revision_id: str,
+        predecessor_analysis_run_id: str,
+        preset_key: str,
+        requested_by: str,
+    ) -> CreateKnowledgeAnalysisCommand:
+        return CreateKnowledgeAnalysisCommand(
+            source=ApprovedItemKnowledgeAnalysisSelection(
+                source_class="PAST_EXAM",
+                item_revision_id=item_revision_id,
+            ),
+            preset_key=preset_key,
+            general_knowledge_mode="DISABLED",
+            risk_policy_revision_id=risk_policy_revision_id,
+            predecessor_analysis_run_id=predecessor_analysis_run_id,
+            requested_by=requested_by,
+            idempotency_key=f"legacy-item-learning-retry:{predecessor_analysis_run_id}",
         )

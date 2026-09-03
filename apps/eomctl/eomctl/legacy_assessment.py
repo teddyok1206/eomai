@@ -303,6 +303,31 @@ def learning_reconcile(
         engine.dispose()
 
 
+@learning_app.command("retry")
+def learning_retry(
+    predecessor_analysis_run_id: Annotated[str, typer.Argument()],
+    actor_id: Annotated[str, typer.Option("--actor-id")],
+) -> None:
+    """Create one explicit successor for a terminal failed legacy-item analysis."""
+
+    engine = build_engine()
+    try:
+        try:
+            result = LegacyItemLearningCoordinator(engine).retry_failed_analysis(
+                predecessor_analysis_run_id=predecessor_analysis_run_id,
+                requested_by=actor_id,
+            )
+        except (
+            LegacyItemLearningError,
+            KnowledgeAnalysisServiceError,
+            ValueError,
+        ) as exc:
+            _operation_failure(exc)
+        _emit({"status": "SUCCEEDED", **result.model_dump(mode="json")})
+    finally:
+        engine.dispose()
+
+
 @compatibility_app.command("release-policy")
 def compatibility_release_policy(
     policy_file: Annotated[

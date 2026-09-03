@@ -60,3 +60,25 @@ def test_analysis_identity_replays_only_the_same_item_policy_and_preset_revision
     assert first.source.source_class == "PAST_EXAM"
     assert first.general_knowledge_mode == "DISABLED"
     assert changed.idempotency_key != first.idempotency_key
+
+
+def test_retry_identity_pins_one_predecessor_without_changing_source_semantics() -> None:
+    first = LegacyItemLearningCoordinator._retry_command(
+        item_revision_id="itemrev_" + "2" * 32,
+        risk_policy_revision_id="analysisriskrev_" + "b" * 32,
+        predecessor_analysis_run_id="analysisrun_" + "d" * 32,
+        preset_key="knowledge-analysis",
+        requested_by="operator_learning",
+    )
+    replay = LegacyItemLearningCoordinator._retry_command(
+        item_revision_id="itemrev_" + "2" * 32,
+        risk_policy_revision_id="analysisriskrev_" + "b" * 32,
+        predecessor_analysis_run_id="analysisrun_" + "d" * 32,
+        preset_key="knowledge-analysis",
+        requested_by="operator_learning",
+    )
+
+    assert first == replay
+    assert first.predecessor_analysis_run_id == "analysisrun_" + "d" * 32
+    assert first.source.source_class == "PAST_EXAM"
+    assert first.general_knowledge_mode == "DISABLED"
