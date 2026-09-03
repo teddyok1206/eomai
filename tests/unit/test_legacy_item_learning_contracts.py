@@ -557,6 +557,14 @@ def test_editorial_compatibility_role_protocol_is_closed_and_request_bound() -> 
         "legacy-item-editorial-compatibility-result@1.0", worker_input
     )
     result = _compatibility_role_result()
+    result_output = result["output"]
+    assert isinstance(result_output, dict)
+    result_proposal = result_output["proposal"]
+    assert isinstance(result_proposal, dict)
+    result_proposal.pop("proposal_sha256")
+    proposal_definition = schema["$defs"]["LegacyItemEditorialCompatibilityProposal"]
+    assert "proposal_sha256" not in proposal_definition["required"]
+    assert "proposal_sha256" not in proposal_definition["properties"]
     errors = tuple(Draft202012Validator(schema).iter_errors(result))
     assert errors == ()
     parsed = validate_role_result(
@@ -572,6 +580,9 @@ def test_editorial_compatibility_role_protocol_is_closed_and_request_bound() -> 
     assert parsed.output.proposal.request_sha256 == (
         worker_input.request.compatibility_request.request_sha256
     )
+    assert parsed.output.proposal.proposal_sha256 == content_sha256(
+        parsed.output.proposal.model_dump(mode="json", exclude={"proposal_sha256"})
+    )
 
     proposal = result["output"]
     assert isinstance(proposal, dict)
@@ -581,6 +592,25 @@ def test_editorial_compatibility_role_protocol_is_closed_and_request_bound() -> 
     assert isinstance(source, dict)
     source["item_id"] = "item_" + "f" * 32
     assert tuple(Draft202012Validator(schema).iter_errors(result))
+
+
+def test_editorial_role_result_replaces_untrusted_worker_self_hash() -> None:
+    result = _compatibility_role_result()
+    output = result["output"]
+    assert isinstance(output, dict)
+    proposal = output["proposal"]
+    assert isinstance(proposal, dict)
+    proposal["proposal_sha256"] = "sha256:" + "0" * 64
+
+    parsed = validate_role_result(
+        result,
+        "support",
+        "legacy-item-editorial-compatibility-result@1.0",
+    )
+
+    assert parsed.output.proposal.proposal_sha256 == content_sha256(
+        parsed.output.proposal.model_dump(mode="json", exclude={"proposal_sha256"})
+    )
 
 
 def test_editorial_worker_schema_exposes_canonical_dot_path_contract() -> None:
@@ -604,9 +634,7 @@ def test_editorial_worker_schema_exposes_canonical_dot_path_contract() -> None:
     issues = proposal["issues"]
     assert isinstance(issues, list) and isinstance(issues[0], dict)
     issues[0]["item_content_paths"] = ["/title"]
-    proposal["proposal_sha256"] = content_sha256(
-        {key: item for key, item in proposal.items() if key != "proposal_sha256"}
-    )
+    proposal.pop("proposal_sha256")
 
     assert tuple(Draft202012Validator(schema).iter_errors(invalid))
 

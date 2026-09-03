@@ -442,6 +442,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
     canonical_value = value
     if schema_id == "authoring-result@7.0" and role == "authoring":
         canonical_value = _canonicalize_content_team_authoring_result(value)
+    elif schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
+        canonical_value = _canonicalize_legacy_editorial_compatibility_result(value)
     validate_schema_message(load_role_result_schema(schema_id), canonical_value, schema_id)
     try:
         if schema_id == "authoring-result@4.0" and role == "authoring":
@@ -493,7 +495,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         if schema_id == "legacy-item-extraction-result@1.0" and role == "support":
             return LegacyItemExtractionRoleResult.model_validate(value)
         if schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
-            return LegacyItemEditorialCompatibilityRoleResult.model_validate(value)
+            return LegacyItemEditorialCompatibilityRoleResult.model_validate(canonical_value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":
@@ -584,6 +586,27 @@ def _canonicalize_content_team_authoring_result(value: object) -> object:
     preliminary = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
     canonical_draft["equation_sources"] = list(
         derive_content_team_equation_sources(preliminary.output.draft)
+    )
+    return canonical
+
+
+def _canonicalize_legacy_editorial_compatibility_result(value: object) -> object:
+    """Derive the immutable proposal hash at the trusted validation boundary."""
+
+    if not isinstance(value, dict):
+        return value
+    output = value.get("output")
+    if not isinstance(output, dict):
+        return value
+    proposal = output.get("proposal")
+    if not isinstance(proposal, dict):
+        return value
+
+    canonical = copy.deepcopy(value)
+    canonical_output = _mapping(canonical, "output")
+    canonical_proposal = _mapping(canonical_output, "proposal")
+    canonical_proposal["proposal_sha256"] = content_sha256(
+        {key: item for key, item in canonical_proposal.items() if key != "proposal_sha256"}
     )
     return canonical
 
@@ -754,6 +777,13 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
             "LegacyItemEditorialCompatibilityProposal",
         )
         proposal_properties = _mapping(proposal_definition, "properties")
+        proposal_required = proposal_definition.get("required")
+        if not isinstance(proposal_required, list) or "proposal_sha256" not in proposal_required:
+            raise WorkflowSchemaError(
+                "legacy editorial compatibility proposal hash is not projectable"
+            )
+        proposal_required.remove("proposal_sha256")
+        proposal_properties.pop("proposal_sha256")
         compatibility_request = worker_input.request.compatibility_request
         _bind_result_string_const(
             schema,

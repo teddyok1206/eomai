@@ -245,6 +245,13 @@ predecessor until the tuple closes. Automatic model retry is disabled. An `OPEN`
 is not retried against unchanged Item bytes: adaptation produces a new Item Revision and therefore
 a new tuple.
 
+The worker-authored projection excludes `proposal_sha256`. Dynamic proposal bytes are untrusted
+worker output, so the trusted role-result validator derives that hash from the schema-valid proposal
+payload before Pydantic and Artifact validation. The canonical proposal contract and stored Artifact
+still require the self-hash and keep it distinct from the Artifact member hash. Accepting an
+LLM-guessed self-hash, or requiring the LLM to reproduce canonical serialization, was rejected
+because neither proves byte identity and both make otherwise valid observations nondeterministic.
+
 Unit-analysis failures do not erase prior accepted evidence and do not block unrelated items.
 Compatibility failures do not block unit knowledge accumulation, but a blocking compatibility result
 may prevent HWPX delivery for that exact Item Revision.
