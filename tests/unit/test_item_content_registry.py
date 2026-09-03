@@ -95,6 +95,30 @@ def test_registry_validates_canonical_content_and_nested_media_pointer(tmp_path:
     RegistryService._validate_item_content_component(session, pointer, revision)  # type: ignore[arg-type]
 
 
+def test_registry_component_projection_preserves_pointer_metadata() -> None:
+    metadata = {
+        "editorial_markdown_member": "content-team-item.md",
+        "editorial_markdown_sha256": "sha256:" + "a" * 64,
+    }
+    component = SimpleNamespace(
+        item_component_id="itemcomponent_" + "1" * 32,
+        component_type="ITEM_CONTENT",
+        ordinal=0,
+        schema_ref="eom.assessment.item-content/2.0",
+        media_type="application/json",
+        artifact_id="artifact_" + "2" * 32,
+        artifact_revision_id="rev_" + "3" * 32,
+        sha256="sha256:" + "4" * 64,
+        logical_name="assessment-item-content.json",
+        required=True,
+        metadata_json=metadata,
+    )
+
+    projected = RegistryService.component_dict(component)
+
+    assert projected["metadata"] == metadata
+
+
 def test_registry_rejects_stale_pointer_and_media_type_mismatch(tmp_path: Path) -> None:
     pointer, revision, session = _fixture(tmp_path)
     media = session.values[(ArtifactRevisionRecord, "rev_" + "2" * 32)]

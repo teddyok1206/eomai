@@ -926,6 +926,7 @@ class RegistryService:
             "sha256": component.sha256,
             "logical_name": component.logical_name,
             "required": component.required,
+            "metadata": component.metadata_json,
         }
 
     @staticmethod
