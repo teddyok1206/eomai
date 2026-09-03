@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
 from eom_orchestrator.legacy_item_editorial_compatibility_bootstrap import (
+    EDITORIAL_COMPATIBILITY_PLATFORM_ARTIFACT_KEY,
+    EDITORIAL_COMPATIBILITY_ROLE_ARTIFACT_KEY,
     _build_non_live_evaluation_report,
     _require_exact_six_slot_registry,
     load_legacy_item_editorial_compatibility_bootstrap_manifest,
@@ -36,6 +38,11 @@ def test_editorial_compatibility_bootstrap_is_schema_first_and_source_only() -> 
     role = (CONFIG / manifest.role_instruction_path).read_text(encoding="utf-8")
     assert "Read both authority documents in full" in role
     assert "do not invent, add, or silently import EOM editorial" in " ".join(role.split())
+    for artifact_key in (
+        EDITORIAL_COMPATIBILITY_PLATFORM_ARTIFACT_KEY,
+        EDITORIAL_COMPATIBILITY_ROLE_ARTIFACT_KEY,
+    ):
+        assert len(f"control-bootstrap:{artifact_key}:{'a' * 64}") <= 128
 
 
 def test_editorial_compatibility_evaluation_uses_existing_non_live_contract() -> None:

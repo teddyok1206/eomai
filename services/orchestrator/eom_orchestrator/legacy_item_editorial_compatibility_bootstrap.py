@@ -54,6 +54,8 @@ from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerSlot
 
 EDITORIAL_COMPATIBILITY_CAPACITY_CREATED_AT = datetime(2026, 9, 1, tzinfo=UTC)
+EDITORIAL_COMPATIBILITY_PLATFORM_ARTIFACT_KEY = "legacy-editorial-platform-v1"
+EDITORIAL_COMPATIBILITY_ROLE_ARTIFACT_KEY = "legacy-editorial-role-v1"
 
 
 class LegacyItemEditorialCompatibilityBootstrapManifest(BaseModel):
@@ -164,7 +166,7 @@ def bootstrap_legacy_item_editorial_compatibility_control_plane(
         payload=_read_member(config_directory, manifest.platform_instruction_path),
         logical_name="platform.md",
         schema_ref="eom://schemas/workflow/instruction-member/1.0",
-        key="legacy-item-editorial-compatibility-platform-v1",
+        key=EDITORIAL_COMPATIBILITY_PLATFORM_ARTIFACT_KEY,
         source_commit=source_commit,
         created_at=manifest.created_at,
     )
@@ -173,7 +175,7 @@ def bootstrap_legacy_item_editorial_compatibility_control_plane(
         payload=_read_member(config_directory, manifest.role_instruction_path),
         logical_name="legacy-item-editorial-compatibility.md",
         schema_ref="eom://schemas/workflow/instruction-member/1.0",
-        key="legacy-item-editorial-compatibility-role-v1",
+        key=EDITORIAL_COMPATIBILITY_ROLE_ARTIFACT_KEY,
         source_commit=source_commit,
         created_at=manifest.created_at,
     )
