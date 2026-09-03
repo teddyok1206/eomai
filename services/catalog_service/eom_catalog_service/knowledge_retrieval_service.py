@@ -141,15 +141,26 @@ class KnowledgeRetrievalServiceError(RuntimeError):
 
 
 def _rank_lexical_seed_rows(
-    rows: tuple[tuple[str, str], ...], *, limit: int
+    rows: tuple[tuple[str, str, int], ...], *, limit: int
 ) -> tuple[tuple[str, int], ...]:
-    """Rank lexical seeds by distinct query-term overlap, then stable node identity."""
-    terms_by_node: dict[str, set[str]] = {}
-    for term, node_id in rows:
-        terms_by_node.setdefault(node_id, set()).add(term)
+    """Rank lexical seeds by bounded inverse-frequency evidence, then stable identity."""
+    term_frequencies_by_node: dict[str, dict[str, int]] = {}
+    for term, node_id, term_frequency in rows:
+        node_terms = term_frequencies_by_node.setdefault(node_id, {})
+        node_terms[term] = min(node_terms.get(term, term_frequency), term_frequency)
     ranked = (
-        (node_id, min(1000, 700 + (50 * len(matched_terms))))
-        for node_id, matched_terms in terms_by_node.items()
+        (
+            node_id,
+            min(
+                1000,
+                500
+                + sum(
+                    max(1, 1000 // max(term_frequency, 1))
+                    for term_frequency in frequencies.values()
+                ),
+            ),
+        )
+        for node_id, frequencies in term_frequencies_by_node.items()
     )
     return tuple(sorted(ranked, key=lambda item: (-item[1], item[0]))[:limit])
 
@@ -597,6 +608,7 @@ class KnowledgeRetrievalApplicationService:
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/3.0",
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/4.0",
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0",
+                    "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/6.0",
                 }
             ),
         )
@@ -795,15 +807,24 @@ class KnowledgeRetrievalApplicationService:
             }
         )
         if terms:
+            term_frequency = func.count().over(partition_by=KnowledgeNodeTermRecord.term)
             lexical_rows = tuple(
-                (str(term), str(node_id))
-                for term, node_id in session.execute(
-                    select(KnowledgeNodeTermRecord.term, KnowledgeNodeTermRecord.node_id)
+                (str(term), str(node_id), int(frequency))
+                for term, node_id, frequency in session.execute(
+                    select(
+                        KnowledgeNodeTermRecord.term,
+                        KnowledgeNodeTermRecord.node_id,
+                        term_frequency.label("term_frequency"),
+                    )
                     .where(
                         KnowledgeNodeTermRecord.graph_snapshot_revision_id == snapshot_id,
                         KnowledgeNodeTermRecord.term.in_(terms),
                     )
-                    .order_by(KnowledgeNodeTermRecord.term, KnowledgeNodeTermRecord.node_id)
+                    .order_by(
+                        term_frequency,
+                        KnowledgeNodeTermRecord.term,
+                        KnowledgeNodeTermRecord.node_id,
+                    )
                     .limit(max_nodes * max(len(terms), 1))
                 )
             )

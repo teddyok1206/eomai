@@ -20,6 +20,7 @@ from eom_catalog_contracts import (
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphStructureManifest,
     KnowledgeGraphStructureManifestV2,
+    KnowledgeGraphStructureManifestV3,
     KnowledgeNodeType,
     ProposedKnowledgeEdgeV2,
     validate_knowledge_edge_endpoint_types,
@@ -384,7 +385,7 @@ def _merge_edge(
 
 def _add_reviewed_curriculum_structure(
     analyses: tuple[AcceptedAnalysisProposal, ...],
-    structure: KnowledgeGraphStructureManifestV2,
+    structure: KnowledgeGraphStructureManifestV2 | KnowledgeGraphStructureManifestV3,
     node_accumulators: dict[str, _NodeAccumulator],
     local_node_ids: dict[tuple[str, str], str],
     edge_accumulators: dict[tuple[str, str, str], _EdgeAccumulator],
@@ -405,12 +406,30 @@ def _add_reviewed_curriculum_structure(
             "KNOWLEDGE_GRAPH_CURRICULUM_BINDING_COVERAGE_INVALID",
             "reviewed curriculum bindings must exactly cover classified source ranges",
         )
+    item_bindings_by_run = (
+        {
+            binding.analysis_run_id: binding
+            for binding in structure.approved_item_curriculum_bindings
+        }
+        if isinstance(structure, KnowledgeGraphStructureManifestV3)
+        else {}
+    )
+    expected_item_runs = {
+        analysis.analysis_run_id
+        for analysis in analyses
+        if isinstance(analysis.source, ApprovedItemKnowledgeSourceV2)
+    }
+    if set(item_bindings_by_run) != expected_item_runs:
+        raise KnowledgeGraphProjectionError(
+            "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_COVERAGE_INVALID",
+            "approved Item curriculum bindings must exactly cover Item source runs",
+        )
     direct_pointers: dict[str, set[GraphSourcePointer]] = {
         unit.curriculum_unit_id: set() for unit in structure.curriculum_units
     }
     node_pointers_by_run: dict[str, dict[str, set[GraphSourcePointer]]] = {}
 
-    for run_id, binding in bindings_by_run.items():
+    for run_id, document_binding in bindings_by_run.items():
         analysis = analysis_by_id[run_id]
         source = analysis.source
         if not isinstance(source, EducationalDocumentKnowledgeSourceV4):
@@ -418,7 +437,9 @@ def _add_reviewed_curriculum_structure(
                 "KNOWLEDGE_GRAPH_CURRICULUM_SOURCE_INVALID",
                 "reviewed curriculum bindings require a multimodal document source",
             )
-        bound_units = tuple(units_by_id[unit_id] for unit_id in binding.curriculum_unit_ids)
+        bound_units = tuple(
+            units_by_id[unit_id] for unit_id in document_binding.curriculum_unit_ids
+        )
         if tuple(sorted(unit.unit_code for unit in bound_units)) != source.curriculum_unit_keys:
             raise KnowledgeGraphProjectionError(
                 "KNOWLEDGE_GRAPH_CURRICULUM_SOURCE_MISMATCH",
@@ -439,6 +460,35 @@ def _add_reviewed_curriculum_structure(
         node_pointers_by_run[run_id] = pointers_by_stable_key
         for unit in bound_units:
             direct_pointers[unit.curriculum_unit_id].update(range_pointers)
+
+    for run_id, item_binding in item_bindings_by_run.items():
+        analysis = analysis_by_id[run_id]
+        source = analysis.source
+        if (
+            not isinstance(source, ApprovedItemKnowledgeSourceV2)
+            or source.item_id != item_binding.item_id
+            or source.item_revision_id != item_binding.item_revision_id
+            or analysis.accepted_result != item_binding.accepted_result
+        ):
+            raise KnowledgeGraphProjectionError(
+                "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_SOURCE_INVALID",
+                "approved Item curriculum binding differs from its accepted source",
+            )
+        proposal_nodes = {node.node_id: node for node in analysis.proposal.nodes}
+        item_pointers_by_stable_key: dict[str, set[GraphSourcePointer]] = {}
+        item_pointers: set[GraphSourcePointer] = set()
+        for node in proposal_nodes.values():
+            pointers = {_source_pointer(analysis, anchor_id) for anchor_id in node.anchor_ids}
+            item_pointers_by_stable_key[node.stable_key] = pointers
+            item_pointers.update(pointers)
+        if not item_pointers:
+            raise KnowledgeGraphProjectionError(
+                "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_SOURCE_MISSING",
+                "approved Item curriculum binding has no source evidence",
+            )
+        node_pointers_by_run[run_id] = item_pointers_by_stable_key
+        for unit_id in item_binding.curriculum_unit_ids:
+            direct_pointers[unit_id].update(item_pointers)
 
     children_by_parent: dict[str, list[str]] = {}
     for unit in structure.curriculum_units:
@@ -512,14 +562,32 @@ def _add_reviewed_curriculum_structure(
             source_pointers=set(pointers_by_unit[unit.curriculum_unit_id]),
         )
 
-    for run_id, binding in bindings_by_run.items():
+    for run_id, document_binding in bindings_by_run.items():
         analysis = analysis_by_id[run_id]
         pointers_by_stable_key = node_pointers_by_run[run_id]
         for proposed_node in analysis.proposal.nodes:
             if proposed_node.node_type not in _CURRICULUM_ALIGNED_NODE_TYPES:
                 continue
             from_node_id = local_node_ids[(run_id, proposed_node.node_id)]
-            for unit_id in binding.curriculum_unit_ids:
+            for unit_id in document_binding.curriculum_unit_ids:
+                _merge_edge(
+                    edge_accumulators,
+                    edge_type="ALIGNS_WITH_CURRICULUM",
+                    from_node_id=from_node_id,
+                    to_node_id=unit_node_ids[unit_id],
+                    confidence_milli=1000,
+                    source_pointers=set(pointers_by_stable_key[proposed_node.stable_key]),
+                )
+
+    for run_id, item_binding in item_bindings_by_run.items():
+        analysis = analysis_by_id[run_id]
+        pointers_by_stable_key = node_pointers_by_run[run_id]
+        aligned_types = _CURRICULUM_ALIGNED_NODE_TYPES | {KnowledgeNodeType.ASSESSMENT_PATTERN}
+        for proposed_node in analysis.proposal.nodes:
+            if proposed_node.node_type not in aligned_types:
+                continue
+            from_node_id = local_node_ids[(run_id, proposed_node.node_id)]
+            for unit_id in item_binding.curriculum_unit_ids:
                 _merge_edge(
                     edge_accumulators,
                     edge_type="ALIGNS_WITH_CURRICULUM",
@@ -532,7 +600,12 @@ def _add_reviewed_curriculum_structure(
 
 def build_education_graph_projection(
     analyses: tuple[AcceptedAnalysisProposal, ...],
-    structure: KnowledgeGraphStructureManifest | KnowledgeGraphStructureManifestV2 | None,
+    structure: (
+        KnowledgeGraphStructureManifest
+        | KnowledgeGraphStructureManifestV2
+        | KnowledgeGraphStructureManifestV3
+        | None
+    ),
 ) -> EducationGraphProjection:
     """Merge accepted proposals by stable identity and fail closed on conflicts."""
 

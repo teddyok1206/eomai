@@ -768,6 +768,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:58c3b6b0e671614ae6a88c27f3706f46d80b771edef35cadda5de13141c024a1",
         ),
+        "knowledge-graph-publication-v3": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-publication-v3.schema.json",
+            "resources/knowledge/knowledge-graph-publication-v3.schema.json",
+            "3.0",
+            "sha256:0508d4a90ac59f932dfccbcff5c208f53c782e5c64daddc6f35c95a983c209e3",
+        ),
         "knowledge-graph-publication-result": CatalogSchemaResource(
             "schemas/knowledge/knowledge-graph-publication-result-v1.schema.json",
             "resources/knowledge/knowledge-graph-publication-result-v1.schema.json",
@@ -804,6 +810,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:eec6563f952c8bc4cc03a57179910b47f04eccba83e3154b3bf8f13b151f72e3",
         ),
+        "knowledge-graph-structure-manifest-v3": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-structure-manifest-v3.schema.json",
+            "resources/knowledge/knowledge-graph-structure-manifest-v3.schema.json",
+            "3.0",
+            "sha256:7754599edffd9f71c7aec38c4457da321edce5787290da5e50b481a64eebf773",
+        ),
         "knowledge-graph-snapshot-manifest-v2": CatalogSchemaResource(
             "schemas/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
             "resources/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
@@ -827,6 +839,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/knowledge-graph-snapshot-manifest-v5.schema.json",
             "5.0",
             "sha256:c26c886601748fa6fb20849241837ac22c67d80f2fd2069c7f256d4132072a6b",
+        ),
+        "knowledge-graph-snapshot-manifest-v6": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-snapshot-manifest-v6.schema.json",
+            "resources/knowledge/knowledge-graph-snapshot-manifest-v6.schema.json",
+            "6.0",
+            "sha256:5b8cd0666e066fb1b1ae515117c9130c862ade8df0edbd5567bade8fa9d993cc",
         ),
         "education-retrieval-access-policy": CatalogSchemaResource(
             "schemas/knowledge/education-retrieval-access-policy-v1.schema.json",

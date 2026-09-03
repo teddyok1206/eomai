@@ -8,9 +8,11 @@ from typing import Literal, cast
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     AnalysisCurriculumBinding,
+    ApprovedItemCurriculumAlignmentBinding,
     CurriculumUnitBindingV2,
     EducationalDocumentKnowledgeSourceV4,
     KnowledgeGraphStructureManifestV2,
+    KnowledgeGraphStructureManifestV3,
     load_integrated_science_editorial_outline,
 )
 from eom_identifiers import content_sha256
@@ -177,3 +179,70 @@ def validate_integrated_science_structure_manifest(
         raise CurriculumGraphStructureError(
             "structure manifest differs from the reviewed Integrated Science outline"
         )
+
+
+def extend_integrated_science_structure_manifest_with_item_alignments(
+    base: KnowledgeGraphStructureManifestV2 | KnowledgeGraphStructureManifestV3,
+    additions: tuple[ApprovedItemCurriculumAlignmentBinding, ...],
+    *,
+    reviewed_by_operator_id: str,
+    created_at: datetime,
+) -> KnowledgeGraphStructureManifestV3:
+    """Append immutable approved-Item alignments while preserving reviewed framework data."""
+
+    validate_integrated_science_structure_manifest(base)
+    existing = (
+        base.approved_item_curriculum_bindings
+        if isinstance(base, KnowledgeGraphStructureManifestV3)
+        else ()
+    )
+    combined = tuple(sorted((*existing, *additions), key=lambda item: item.analysis_run_id))
+    run_ids = tuple(
+        sorted(
+            {
+                *base.source_analysis_run_ids,
+                *(binding.analysis_run_id for binding in additions),
+            }
+        )
+    )
+    if len(combined) != len({binding.analysis_run_id for binding in combined}) or len(
+        combined
+    ) != len({binding.item_revision_id for binding in combined}):
+        raise CurriculumGraphStructureError(
+            "approved Item alignment additions duplicate a run or Item revision"
+        )
+    structure_manifest_id = _typed_id(
+        "graphstructure_",
+        {
+            "framework_revision_id": base.framework_revision_id,
+            "source_analysis_run_ids": list(run_ids),
+            "approved_item_alignment_hashes": [binding.alignment_sha256 for binding in combined],
+        },
+    )
+    value = {
+        **base.model_dump(
+            mode="json",
+            exclude={
+                "schema_version",
+                "structure_manifest_id",
+                "source_analysis_run_ids",
+                "reviewed_by_operator_id",
+                "created_at",
+                "manifest_sha256",
+                "approved_item_curriculum_bindings",
+            },
+        ),
+        "schema_version": "knowledge-graph-structure-manifest/3.0",
+        "structure_manifest_id": structure_manifest_id,
+        "source_analysis_run_ids": list(run_ids),
+        "approved_item_curriculum_bindings": [
+            binding.model_dump(mode="json") for binding in combined
+        ],
+        "reviewed_by_operator_id": reviewed_by_operator_id,
+        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+        "manifest_sha256": "sha256:" + "0" * 64,
+    }
+    value["manifest_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "manifest_sha256"}
+    )
+    return KnowledgeGraphStructureManifestV3.model_validate(value)

@@ -1,0 +1,71 @@
+{
+  "$id": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/6.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analysis_results": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0#/properties/analysis_results"
+    },
+    "counts": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0#/properties/counts"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"
+    },
+    "graph_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0#/properties/graph_id"
+    },
+    "graph_snapshot_revision_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0#/properties/graph_snapshot_revision_id"
+    },
+    "ontology_version": {
+      "const": "education-knowledge-graph/1.0"
+    },
+    "previous_graph_snapshot_revision_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0#/properties/previous_graph_snapshot_revision_id"
+    },
+    "projections": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0#/properties/projections"
+    },
+    "publisher_version": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0#/properties/publisher_version"
+    },
+    "revision_number": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0#/properties/revision_number"
+    },
+    "schema_version": {
+      "const": "knowledge-graph-snapshot-manifest/6.0"
+    },
+    "snapshot_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+    },
+    "source_revisions": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0#/properties/source_revisions"
+    },
+    "state": {
+      "const": "PUBLISHED"
+    },
+    "structure_manifest": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "graph_id",
+    "graph_snapshot_revision_id",
+    "revision_number",
+    "previous_graph_snapshot_revision_id",
+    "state",
+    "ontology_version",
+    "publisher_version",
+    "source_revisions",
+    "analysis_results",
+    "structure_manifest",
+    "projections",
+    "counts",
+    "snapshot_sha256",
+    "created_at"
+  ],
+  "title": "EOM Knowledge Graph Snapshot Manifest V6",
+  "type": "object"
+}

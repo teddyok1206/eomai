@@ -134,6 +134,30 @@ curriculum observations as provisional evidence. It cannot enter a published Gra
 Acceptance and Item import are the sole promotion bridge; promotion schedules the ordinary approved-
 item Knowledge Analysis path rather than copying provisional text into Graph storage.
 
+An approved Item alignment is published only through
+`knowledge-graph-structure-manifest/3.0` and `knowledge-graph-snapshot-manifest/6.0`. The reviewed
+binding pins all of the following as separate identities:
+
+- the accepted Knowledge Analysis Run and accepted-result Artifact Revision;
+- the exact predecessor Graph Snapshot Revision;
+- one published Evidence Bundle Revision and its retrieval request hash;
+- the Evidence Bundle manifest Artifact Revision and the selected evidence node IDs; and
+- one or more reviewed `MINOR` curriculum unit IDs from that predecessor snapshot.
+
+The publisher resolves every pointer from Catalog state, requires the Evidence Bundle nodes to be
+members of the pinned bundle, and requires each selected curriculum unit to be reachable from those
+nodes by a bounded path in the predecessor graph. Only then does projection add direct source
+pointers and `ALIGNS_WITH_CURRICULUM` edges for the accepted Item knowledge. This is review, not an
+automatic classifier: lexical retrieval proposes bounded evidence, while the reviewed binding is
+the unit-alignment authority. A low-quality or irrelevant Evidence Bundle remains immutable history
+and is never silently substituted into a later binding.
+
+Lexical seed ranking uses distinct query-term membership and bounded inverse document frequency.
+Rare terms therefore outrank generic terms without introducing a mutable embedding index or an
+unreviewed curriculum label heuristic. Equal scores are ordered by immutable node ID. Candidate,
+edge-expansion, and result counts remain explicitly bounded; replay against one snapshot is
+deterministic.
+
 ## 6. Editorial and HWPX compatibility convergence
 
 The compatibility worker receives the exact Item content plus the two authority references as
@@ -164,6 +188,8 @@ projected into the Education Graph.
 | --- | --- | --- |
 | source history for one Item Revision | existing B-tree `(source_kind, source_revision_id, created_at DESC)` | `O(log n + k)` |
 | exact analysis replay | existing unique idempotency key | `O(log n)` |
+| lexical retrieval seed | B-tree `(snapshot_revision_id, term, node_id)` plus per-term frequency | `O(log n + k)`, bounded `k` |
+| reviewed unit-path proof | indexed immutable adjacency, maximum 3 hops | bounded by explicit frontier limit |
 | unit retrieval | immutable Graph adjacency plus curriculum closure | bounded by retrieval policy |
 | graph evidence deduplication | stable node/edge keys and source-pointer sets | expected `O(1)` in-memory membership |
 | compatibility exact tuple history | B-tree by canonical tuple SHA-256 and creation order | `O(log n + k)` |
@@ -176,6 +202,14 @@ lists for identity or deduplication. PostgreSQL stores only identities, states, 
 and Artifact pointers. Item JSON, Markdown, images, HWPX, and complete worker results remain Artifact
 members in NAS.
 
+The Item-alignment binding is a small frozen value object inside the reviewed structure manifest;
+no large evidence body or Item payload is duplicated in PostgreSQL. A new persistent table is not
+needed because publication already materializes source pointers and adjacency rows under the new
+snapshot revision. Frequent lookups continue to use the existing snapshot/node, snapshot/edge,
+curriculum-unit, Evidence Bundle revision, retrieval-request, and Artifact revision indexes. The
+publication pass is linear in accepted proposals plus emitted nodes and edges; the bounded path
+proof visits at most three explicitly capped frontiers.
+
 Expected scale is hundreds of thousands of Item Revisions, millions of source pointers, and many
 immutable Graph Snapshots. Snapshot materialization is linear in the selected accepted runs and
 edges; online retrieval is bounded by indexed adjacency and explicit evidence budgets.
@@ -185,6 +219,15 @@ edges; online retrieval is bounded by indexed adjacency and explicit evidence bu
 Knowledge Analysis retains its existing state machine and unique idempotency boundary. Proposal
 validation and Artifact commit finish before acceptance. Graph publication locks the logical corpus
 and commits one new immutable snapshot revision atomically.
+
+Approved Item publication additionally requires that the V3 structure's predecessor snapshot equal
+the corpus current snapshot at transaction time. Concurrent publication therefore fails instead of
+rebasing or resolving “latest.” An exact command replay returns the already-published result through
+the existing request idempotency boundary; a different structure or source set under the same key
+fails. Artifact publication, projection rows, snapshot state, and the corpus current pointer remain
+one application transaction/NAS commit boundary. A dangling bundle, stale predecessor, missing
+reviewer, non-`MINOR` target, missing evidence node, or unsupported path fails before current-pointer
+advance.
 
 Editorial compatibility uses the same pattern: idempotent request creation, one workflow
 submission, immutable proposal commit, deterministic validation, and terminal result commit. A
@@ -236,8 +279,10 @@ it contains no graph, compatibility, or editorial business rules.
    compatibility track independently.
 6. Import and approve the already validated one-item legacy extraction through the existing
    acceptance/origin/Item boundaries, then execute one real analysis pair.
-7. Review and publish the resulting unit analysis in a new Graph Snapshot and verify bounded RAG
-   retrieval includes its exact source pointer.
+7. Retrieve a fresh evidence bundle from the exact predecessor snapshot, review its bounded graph
+   path to the intended curriculum unit, append the V3 Item alignment, and publish a V6 Graph
+   Snapshot. Verify the new snapshot includes the exact accepted Item source pointer and direct unit
+   edge, while the predecessor remains byte-identical.
 8. Begin corpus processing from deterministic non-conflicting source-bundle proposals, continuing
    independently while conflicts remain in review.
 

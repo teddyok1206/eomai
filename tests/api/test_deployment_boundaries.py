@@ -82,9 +82,11 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert '--verify "${COMMIT}"' in source
     assert 'scripts/api/bootstrap_runtime_role.sh"' in source
     assert 'scripts/catalog/bootstrap_runtime_role.py"' in source
-    assert source.index("install_wheels\n") < source.index(
-        "reconcile_installed_catalog_runtime_privileges\n"
-    ) < source.index("install_service\n")
+    assert (
+        source.index("install_wheels\n")
+        < source.index("reconcile_installed_catalog_runtime_privileges\n")
+        < source.index("install_service\n")
+    )
 
 
 def test_all_release_builders_accept_reviewed_main_commits() -> None:
@@ -148,13 +150,16 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "knowledge/knowledge-graph-publication-result-v1.schema.json",
         "knowledge/knowledge-graph-publication-v1.schema.json",
         "knowledge/knowledge-graph-publication-v2.schema.json",
+        "knowledge/knowledge-graph-publication-v3.schema.json",
         "knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
         "knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
         "knowledge/knowledge-graph-snapshot-manifest-v3.schema.json",
         "knowledge/knowledge-graph-snapshot-manifest-v4.schema.json",
         "knowledge/knowledge-graph-snapshot-manifest-v5.schema.json",
+        "knowledge/knowledge-graph-snapshot-manifest-v6.schema.json",
         "knowledge/knowledge-graph-structure-manifest-v1.schema.json",
         "knowledge/knowledge-graph-structure-manifest-v2.schema.json",
+        "knowledge/knowledge-graph-structure-manifest-v3.schema.json",
         "knowledge/education-retrieval-access-policy-v1.schema.json",
         "knowledge/education-retrieval-request-v1.schema.json",
         "knowledge/education-retrieval-request-v2.schema.json",

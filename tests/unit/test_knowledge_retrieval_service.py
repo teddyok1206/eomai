@@ -27,21 +27,20 @@ NOW = "2026-08-24T00:00:00Z"
 def test_lexical_seed_ranking_prefers_distinct_term_overlap() -> None:
     assert _rank_lexical_seed_rows(
         (
-            ("lithium", "knode_single"),
-            ("lithium", "knode_single"),
-            ("lithium", "knode_multi"),
-            ("element", "knode_multi"),
-            ("periodicity", "knode_multi"),
-            ("lithium", "knode_tie_a"),
-            ("element", "knode_tie_a"),
-            ("lithium", "knode_tie_b"),
-            ("element", "knode_tie_b"),
+            ("lithium", "knode_specific", 4),
+            ("lithium", "knode_specific", 4),
+            ("concept", "knode_specific", 2000),
+            ("concept", "knode_generic", 2000),
+            ("assessment", "knode_generic", 1000),
+            ("pattern", "knode_generic", 1000),
+            ("periodicity", "knode_tie_a", 5),
+            ("periodicity", "knode_tie_b", 5),
         ),
         limit=3,
     ) == (
-        ("knode_multi", 850),
-        ("knode_tie_a", 800),
-        ("knode_tie_b", 800),
+        ("knode_specific", 751),
+        ("knode_tie_a", 700),
+        ("knode_tie_b", 700),
     )
 
 
