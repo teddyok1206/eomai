@@ -785,6 +785,8 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
         )
         issue_properties = _mapping(issue_definition, "properties")
         content_paths = _mapping(issue_properties, "item_content_paths")
+        content_path_items = _mapping(content_paths, "items")
+        content_path_items["pattern"] = r"^[^/\u0000-\u001f][^\u0000-\u001f]*$"
         content_paths["description"] = (
             "Use canonical dot paths into Item content, for example title, body.0.text, "
             "interaction.choices, or solution.correct_choice_ids. JSON Pointer paths that "

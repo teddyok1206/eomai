@@ -171,8 +171,10 @@ staged, untrusted read-only files. Its output records:
 
 Issue locations use one canonical dot-path representation into Item content (for example `title`,
 `body.0.text`, or `solution.correct_choice_ids`). JSON Pointer spellings such as `/title` are not a
-second identity and are rejected at both the JSON Schema and Pydantic boundaries. This is a typed
-pointer representation rule, not an EOM-authored content or format preference.
+second identity. The Codex generation Schema exposes this pre-existing Pydantic invariant so an
+invalid spelling is rejected before worker submission; canonical Pydantic validation remains the
+authoritative boundary. This is a typed pointer representation rule, not an EOM-authored content
+or format preference.
 
 `COMPATIBLE` is valid only with no issues, no lossy transformation, and all four deterministic
 checks passing. For legacy V1 Item content, content-contract validation may pass, but Markdown

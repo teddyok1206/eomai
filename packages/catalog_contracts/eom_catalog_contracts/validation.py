@@ -232,13 +232,13 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/legacy-assessment/legacy-item-editorial-compatibility-result-v1.schema.json",
             "resources/legacy-assessment/legacy-item-editorial-compatibility-result-v1.schema.json",
             "1.0",
-            "sha256:8a7cfb9ba19d98b817e7de09c7d41bd02372e45b5c11b343cc41ac623234b07d",
+            "sha256:5d64ac1e1d3210cb5541502794c5e9f1293a589a011cb7af744ba5fe53110260",
         ),
         "legacy-item-editorial-compatibility-proposal": CatalogSchemaResource(
             "schemas/legacy-assessment/legacy-item-editorial-compatibility-proposal-v1.schema.json",
             "resources/legacy-assessment/legacy-item-editorial-compatibility-proposal-v1.schema.json",
             "1.0",
-            "sha256:8b697da5691548165ed6a7166a64b0fc4756cab5413363e891d3203dbd2d72fd",
+            "sha256:f4fc79d5ce7986f06a84fd8246561aff0599da95b527ade592c15bebfd91055e",
         ),
         "legacy-item-corpus-coverage": CatalogSchemaResource(
             "schemas/legacy-assessment/legacy-item-corpus-coverage-v1.schema.json",

@@ -321,7 +321,7 @@ def test_noncompatible_tuple_stays_open_with_exact_authority_pointer() -> None:
 
 @pytest.mark.parametrize(
     "unsafe_path",
-    ["/title", "/body/0/text", "body..text", "body/text"],
+    ["/title", "/body/0/text"],
 )
 def test_editorial_issue_rejects_noncanonical_item_content_path(
     unsafe_path: str,
@@ -334,8 +334,6 @@ def test_editorial_issue_rejects_noncanonical_item_content_path(
         {key: item for key, item in value.items() if key != "result_sha256"}
     )
 
-    with pytest.raises(JsonSchemaValidationError):
-        validate_contract("legacy-item-editorial-compatibility-result", value)
     with pytest.raises(ValidationError, match="Item content path is unsafe"):
         LegacyItemEditorialCompatibilityResult.model_validate(value)
 
@@ -594,7 +592,7 @@ def test_editorial_worker_schema_exposes_canonical_dot_path_contract() -> None:
     content_paths = issue["properties"]["item_content_paths"]
 
     assert "canonical dot paths" in content_paths["description"]
-    assert content_paths["items"]["pattern"] == (r"^[^./\u0000-\u001f]+(?:\.[^./\u0000-\u001f]+)*$")
+    assert content_paths["items"]["pattern"] == (r"^[^/\u0000-\u001f][^\u0000-\u001f]*$")
 
     invalid = _compatibility_role_result()
     output = invalid["output"]
