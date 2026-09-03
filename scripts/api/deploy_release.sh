@@ -481,6 +481,7 @@ catalog_resources = {
     "legacy-assessment/legacy-item-extraction-receipt-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-receipt-v1.schema.json",
     "legacy-assessment/legacy-item-extraction-result-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-result-v1.schema.json",
     "legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json",
+    "legacy-assessment/legacy-item-extraction-batch-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-batch-v1.schema.json",
     "legacy-assessment/legacy-item-corpus-coverage-v1.schema.json": "schemas/legacy-assessment/legacy-item-corpus-coverage-v1.schema.json",
     "knowledge/knowledge-types-v1.schema.json": "schemas/knowledge/knowledge-types-v1.schema.json",
     "knowledge/knowledge-analysis-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-request-v1.schema.json",
