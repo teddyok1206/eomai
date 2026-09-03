@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Never
 
@@ -12,6 +13,7 @@ from eom_catalog_contracts import (
     LegacyItemEditorialCompatibilityPolicy,
     LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionAcceptance,
+    LegacyItemExtractionBatchManifestV2,
     LegacyItemExtractionRequest,
     LegacyItemPromotionRequest,
     LegacyRightsReviewPointerV2,
@@ -36,6 +38,11 @@ from eom_catalog_service.legacy_item_editorial_compatibility_service import (
 )
 from eom_catalog_service.legacy_item_editorial_validation import (
     LegacyItemEditorialDeterministicEvaluator,
+)
+from eom_catalog_service.legacy_item_extraction_batch_service import (
+    CreateLegacyItemExtractionBatchCommand,
+    LegacyItemExtractionBatchService,
+    LegacyItemExtractionBatchServiceError,
 )
 from eom_catalog_service.legacy_item_extraction_service import (
     CreateLegacyItemExtractionCommand,
@@ -63,10 +70,12 @@ from sqlalchemy import Engine
 
 legacy_assessment_app = typer.Typer(no_args_is_help=True)
 extraction_app = typer.Typer(no_args_is_help=True)
+extraction_batch_app = typer.Typer(no_args_is_help=True)
 acceptance_app = typer.Typer(no_args_is_help=True)
 learning_app = typer.Typer(no_args_is_help=True)
 compatibility_app = typer.Typer(no_args_is_help=True)
 legacy_assessment_app.add_typer(extraction_app, name="extraction")
+legacy_assessment_app.add_typer(extraction_batch_app, name="extraction-batch")
 legacy_assessment_app.add_typer(acceptance_app, name="acceptance")
 legacy_assessment_app.add_typer(learning_app, name="learning")
 legacy_assessment_app.add_typer(compatibility_app, name="compatibility")
@@ -170,6 +179,143 @@ def extraction_inspect(
         except LegacyItemExtractionServiceError as exc:
             _failure(exc)
         _emit({"status": "SUCCEEDED", **result.as_dict()})
+    finally:
+        engine.dispose()
+
+
+@extraction_batch_app.command("create")
+def extraction_batch_create(
+    manifest_file: Annotated[
+        Path,
+        typer.Option("--manifest-file", exists=True, dir_okay=False, resolve_path=True),
+    ],
+    actor_id: Annotated[str, typer.Option("--actor-id")],
+) -> None:
+    """Create one pointer-only batch after complete reviewed-source admission."""
+
+    try:
+        raw = load_strict_json(manifest_file)
+        validate_contract("legacy-item-extraction-batch-v2", raw)
+        manifest = LegacyItemExtractionBatchManifestV2.model_validate(raw)
+        command = CreateLegacyItemExtractionBatchCommand(
+            manifest=manifest,
+            requested_by=actor_id,
+        )
+    except (
+        JsonSchemaValidationError,
+        PydanticValidationError,
+        UnicodeError,
+        ValueError,
+    ) as exc:
+        raise typer.BadParameter("legacy extraction batch manifest is invalid") from exc
+    engine = build_engine()
+    try:
+        try:
+            result = LegacyItemExtractionBatchService(engine).create(command)
+        except LegacyItemExtractionBatchServiceError as exc:
+            _operation_failure(exc)
+        _emit({"status": "SUCCEEDED", **asdict(result)})
+    finally:
+        engine.dispose()
+
+
+@extraction_batch_app.command("inspect")
+def extraction_batch_inspect(
+    extraction_batch_id: Annotated[str, typer.Argument()],
+) -> None:
+    """Inspect one batch and its derived state counts."""
+
+    engine = build_engine()
+    try:
+        try:
+            result = LegacyItemExtractionBatchService(engine).inspect(extraction_batch_id)
+        except LegacyItemExtractionBatchServiceError as exc:
+            _operation_failure(exc)
+        _emit({"status": "SUCCEEDED", **asdict(result)})
+    finally:
+        engine.dispose()
+
+
+@extraction_batch_app.command("work-units")
+def extraction_batch_work_units(
+    extraction_batch_id: Annotated[str, typer.Argument()],
+) -> None:
+    """List small work-unit pointers in deterministic ordinal order."""
+
+    engine = build_engine()
+    try:
+        try:
+            values = LegacyItemExtractionBatchService(engine).work_units(extraction_batch_id)
+        except LegacyItemExtractionBatchServiceError as exc:
+            _operation_failure(exc)
+        _emit({"status": "SUCCEEDED", "work_units": [asdict(value) for value in values]})
+    finally:
+        engine.dispose()
+
+
+@extraction_batch_app.command("claim")
+def extraction_batch_claim(
+    lease_owner: Annotated[str, typer.Option("--lease-owner")],
+) -> None:
+    """Claim the oldest ready work unit without submitting it."""
+
+    engine = build_engine()
+    try:
+        try:
+            result = LegacyItemExtractionBatchService(engine).claim(
+                lease_owner=lease_owner,
+                observed_at=datetime.now(UTC),
+            )
+        except LegacyItemExtractionBatchServiceError as exc:
+            _operation_failure(exc)
+        _emit(
+            {
+                "status": "SUCCEEDED",
+                "work_unit": asdict(result) if result is not None else None,
+            }
+        )
+    finally:
+        engine.dispose()
+
+
+@extraction_batch_app.command("submit")
+def extraction_batch_submit(
+    work_unit_id: Annotated[str, typer.Argument()],
+    lease_owner: Annotated[str, typer.Option("--lease-owner")],
+) -> None:
+    """Submit one claimed unit through the existing extraction application service."""
+
+    engine = build_engine()
+    try:
+        try:
+            result = LegacyItemExtractionBatchService(engine).submit_claimed(
+                work_unit_id,
+                lease_owner=lease_owner,
+                observed_at=datetime.now(UTC),
+            )
+        except LegacyItemExtractionBatchServiceError as exc:
+            _operation_failure(exc)
+        _emit({"status": "SUCCEEDED", **asdict(result)})
+    finally:
+        engine.dispose()
+
+
+@extraction_batch_app.command("reconcile")
+def extraction_batch_reconcile(
+    extraction_batch_id: Annotated[str, typer.Argument()],
+) -> None:
+    """Reconcile submitted results and human acceptances without a worker retry."""
+
+    engine = build_engine()
+    try:
+        try:
+            result = LegacyItemExtractionBatchService(engine).reconcile_batch(
+                extraction_batch_id,
+                observed_at=datetime.now(UTC),
+            )
+        except LegacyItemExtractionBatchServiceError as exc:
+            _operation_failure(exc)
+        _emit({"status": "SUCCEEDED", **asdict(result)})
     finally:
         engine.dispose()
 

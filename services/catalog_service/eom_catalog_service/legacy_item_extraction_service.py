@@ -291,6 +291,13 @@ class LegacyItemExtractionApplicationService:
                 )
             return self._projection(session, workflow)
 
+    def validate_reviewed_request(
+        self, session: Session, request: LegacyItemExtractionRequest
+    ) -> None:
+        """Validate one exact reviewed request without creating a workflow."""
+
+        self._validate_reviewed_pointers(session, request)
+
     def _validate_reviewed_pointers(
         self, session: Session, request: LegacyItemExtractionRequest
     ) -> None:

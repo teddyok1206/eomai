@@ -192,6 +192,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:f3507d450aa77c8f90d8d500de185b9091e92ae556d1f3b4b075c13f75245180",
         ),
+        "legacy-item-extraction-batch-v2": CatalogSchemaResource(
+            "schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json",
+            "resources/legacy-assessment/legacy-item-extraction-batch-v2.schema.json",
+            "1.1",
+            "sha256:712855481c549fd52432282e92880cfd387fb9709f8123cc3a4b78756aafc500",
+        ),
         "legacy-item-extraction-receipt": CatalogSchemaResource(
             "schemas/legacy-assessment/legacy-item-extraction-receipt-v1.schema.json",
             "resources/legacy-assessment/legacy-item-extraction-receipt-v1.schema.json",

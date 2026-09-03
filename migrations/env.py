@@ -6,6 +6,7 @@ import eom_catalog_service.item_origin_models
 import eom_catalog_service.knowledge_analysis_batch_models
 import eom_catalog_service.knowledge_graph_models
 import eom_catalog_service.legacy_assessment_models
+import eom_catalog_service.legacy_item_extraction_batch_models
 import eom_catalog_service.legacy_item_learning_models
 import eom_catalog_service.legacy_usage_models
 import eom_catalog_service.models  # noqa: F401

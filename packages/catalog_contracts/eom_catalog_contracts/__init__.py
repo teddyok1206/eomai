@@ -261,9 +261,12 @@ from eom_catalog_contracts.legacy_assessment import (
     NormalizedBoundingBox,
 )
 from eom_catalog_contracts.legacy_extraction_batch import (
+    LegacyCorpusSourceBinding,
     LegacyExtractionAcceptancePointer,
     LegacyExtractionBatchWorkUnit,
+    LegacyExtractionBatchWorkUnitV2,
     LegacyItemExtractionBatchManifest,
+    LegacyItemExtractionBatchManifestV2,
 )
 from eom_catalog_contracts.legacy_item_learning import (
     EditorialAuthorityKind,
@@ -605,9 +608,11 @@ __all__ = [
     "KnowledgeSourceRevisionPointer",
     "LegacyArtifactMemberPointer",
     "LegacyAssessmentItemProposal",
+    "LegacyCorpusSourceBinding",
     "LegacyExclusionReason",
     "LegacyExtractionAcceptancePointer",
     "LegacyExtractionBatchWorkUnit",
+    "LegacyExtractionBatchWorkUnitV2",
     "LegacyExtractionResultPointer",
     "LegacyFileObservation",
     "LegacyInventoryClassificationRule",
@@ -622,6 +627,7 @@ __all__ = [
     "LegacyItemEditorialCompatibilityResult",
     "LegacyItemExtractionAcceptance",
     "LegacyItemExtractionBatchManifest",
+    "LegacyItemExtractionBatchManifestV2",
     "LegacyItemExtractionReceipt",
     "LegacyItemExtractionRequest",
     "LegacyItemExtractionResult",

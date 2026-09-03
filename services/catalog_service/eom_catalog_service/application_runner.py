@@ -19,6 +19,13 @@ from eom_catalog_service.knowledge_analysis_batch_models import (
 from eom_catalog_service.knowledge_analysis_batch_service import KnowledgeAnalysisBatchService
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
+from eom_catalog_service.legacy_item_extraction_batch_models import (
+    LegacyItemExtractionBatchRecord,
+    LegacyItemExtractionBatchWorkUnitRecord,
+)
+from eom_catalog_service.legacy_item_extraction_batch_service import (
+    LegacyItemExtractionBatchService,
+)
 from eom_catalog_service.legacy_usage_models import LegacyUsageImportRecord
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.runtime_privileges import catalog_runtime_privileges_ready
@@ -28,6 +35,8 @@ _RUNTIME_MODEL_TABLES = (
     LegacyUsageImportRecord.__table__,
     KnowledgeAnalysisBatchRecord.__table__,
     KnowledgeAnalysisBatchRangeRecord.__table__,
+    LegacyItemExtractionBatchRecord.__table__,
+    LegacyItemExtractionBatchWorkUnitRecord.__table__,
 )
 
 
@@ -52,6 +61,7 @@ def serve() -> int:
             engine,
             analysis=knowledge_analysis,
         )
+        legacy_extraction_batches = LegacyItemExtractionBatchService(engine)
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
             RegistryService(engine),
@@ -74,6 +84,11 @@ def serve() -> int:
             except Exception:
                 # The durable claim/idempotency contract owns recovery. Do not expose source data.
                 print("KNOWLEDGE_ANALYSIS_BATCH_RUNNER_ERROR", flush=True)
+            try:
+                legacy_extraction_batches.advance_once(runner_id=runner_id)
+            except Exception:
+                # The manifest, claim, and workflow receipts own recovery; keep logs content-free.
+                print("LEGACY_ITEM_EXTRACTION_BATCH_RUNNER_ERROR", flush=True)
         return 0
     except Exception:
         return 1

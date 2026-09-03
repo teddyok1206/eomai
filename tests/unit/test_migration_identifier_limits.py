@@ -12,6 +12,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20260901_0024_item_origin_occurrence",
     "migrations.versions.20260901_0025_legacy_assessment_bundle",
     "migrations.versions.20260903_0026_legacy_item_editorial_compatibility",
+    "migrations.versions.20260903_0027_legacy_item_extraction_batches",
 )
 
 
