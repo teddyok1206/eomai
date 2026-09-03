@@ -105,7 +105,10 @@ KNOWLEDGE_ANALYSIS_MULTIMODAL_DOCUMENT_WORKFLOW_VERSION = "5.0.0"
 KNOWLEDGE_ANALYSIS_SCHEMA_CLOSED_MULTIMODAL_WORKFLOW_VERSION = "6.0.0"
 KNOWLEDGE_ANALYSIS_TYPED_IDENTITY_MULTIMODAL_WORKFLOW_VERSION = "7.0.0"
 KNOWLEDGE_ANALYSIS_STABLE_IDENTITY_MULTIMODAL_WORKFLOW_VERSION = "8.0.0"
-KNOWLEDGE_ANALYSIS_CATALOG_PROTOCOL = "catalog/1.2"
+# ``catalog/1.2`` is the immutable Item-content V2 protocol in production.  Approved-Item
+# knowledge-analysis review/result artifacts have a different contract set, so they need their
+# own protocol identity instead of attempting to reuse that version with another schema hash.
+KNOWLEDGE_ANALYSIS_CATALOG_PROTOCOL = "catalog/1.9"
 KNOWLEDGE_ANALYSIS_CATALOG_SCHEMA_HASH = content_sha256(
     {
         "protocol": KNOWLEDGE_ANALYSIS_CATALOG_PROTOCOL,
