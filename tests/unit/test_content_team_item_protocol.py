@@ -329,13 +329,178 @@ def test_v7_authoring_result_is_schema_first_and_codex_compatible() -> None:
     )
     Draft202012Validator(load_role_result_schema("authoring-result@7.0")).validate(value)
     codex_schema = load_codex_result_schema("authoring-result@7.0")
-    Draft202012Validator(codex_schema).validate(value)
+    projected = json.loads(json.dumps(value))
+    del projected["output"]["draft"]["visual_layout"]
+    Draft202012Validator(codex_schema).validate(projected)
+    rehydrated = validate_role_result(projected, "authoring", "authoring-result@7.0")
+    assert isinstance(rehydrated, ContentTeamAuthoringRoleResultV7)
+    assert rehydrated.output.draft.visual_layout == "NONE"
+    draft_schema = codex_schema["$defs"]["AssessmentItemContentV2"]
+    assert "visual_layout" not in draft_schema["properties"]
+    assert "visual_layout" not in draft_schema["required"]
+    assert "actual headers and rows" in draft_schema["properties"]["visuals"]["description"]
     encoded = json.dumps(codex_schema, ensure_ascii=False, sort_keys=True)
     assert "prefixItems" not in encoded
     assert all(name not in encoded for name in ('"data_table"', '"image_brief"', '"equation"'))
     assert role_schema_bundle_hash("workflow-role/1.15.0") == (
         "sha256:bbdc8f4d62bbd5fbe576a55ee418b6477c8a6e5b03c10a0d517aa35b11f79144"
     )
+
+
+@pytest.mark.parametrize(
+    ("visuals", "layout", "inquiry"),
+    [
+        ((), "NONE", None),
+        ((ContentTeamImageSlot(),), "IMAGE_ONLY", None),
+        (
+            (
+                ContentTeamTable(
+                    headers=("구분", "값"),
+                    rows=(("A", "1"),),
+                    alignments=("default", "right"),
+                ),
+            ),
+            "TABLE_ONLY",
+            None,
+        ),
+        (
+            (ContentTeamImageSlot(label="(가)"), ContentTeamImageSlot(label="(나)")),
+            "IMAGE_IMAGE",
+            None,
+        ),
+        (
+            (
+                ContentTeamImageSlot(),
+                ContentTeamTable(
+                    headers=("구분", "값"),
+                    rows=(("A", "1"),),
+                    alignments=("default", "right"),
+                ),
+            ),
+            "IMAGE_TABLE",
+            None,
+        ),
+        (
+            (
+                ContentTeamTable(
+                    headers=("구분", "값"),
+                    rows=(("A", "1"),),
+                    alignments=("default", "right"),
+                ),
+                ContentTeamImageSlot(),
+            ),
+            "TABLE_IMAGE",
+            None,
+        ),
+        (
+            (
+                ContentTeamTable(
+                    label="(가)",
+                    headers=("구분", "값"),
+                    rows=(("A", "1"),),
+                    alignments=("default", "right"),
+                ),
+                ContentTeamTable(
+                    label="(나)",
+                    headers=("구분", "값"),
+                    rows=(("B", "2"),),
+                    alignments=("default", "right"),
+                ),
+            ),
+            "TABLE_TABLE",
+            None,
+        ),
+        (
+            (),
+            "INQUIRY_BOX",
+            ContentTeamInquiry(
+                kind="실험",
+                procedure=(
+                    "(가) 첫 과정을 수행한다.\n(나) 다음 과정을 수행한다.\n(다) 결과를 관찰한다."
+                ),
+                result="관찰 결과를 정리한다.",
+            ),
+        ),
+    ],
+)
+def test_v7_projected_authoring_derives_one_canonical_visual_layout(
+    visuals: tuple[ContentTeamImageSlot | ContentTeamTable, ...],
+    layout: str,
+    inquiry: ContentTeamInquiry | None,
+) -> None:
+    result = ContentTeamAuthoringRoleResultV7(
+        job_id="job_" + "1" * 32,
+        workflow_id="workflow_" + "2" * 32,
+        step_run_id="steprun_" + "3" * 32,
+        role="authoring",
+        artifact=ArtifactSpec(
+            logical_artifact_id="artifact_" + "4" * 32,
+            revision_id="rev_" + "5" * 32,
+        ),
+        completed_at=datetime(2026, 9, 3, tzinfo=UTC),
+        output={
+            "draft": _content(
+                visuals=visuals,
+                visual_layout=layout,
+                inquiry=inquiry,
+            ),
+            "metadata": {
+                "subject": "통합과학",
+                "topic": "요청으로 정해지는 주제",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+    )
+    projected = result.model_dump(mode="json")
+    del projected["output"]["draft"]["visual_layout"]
+
+    parsed = validate_role_result(projected, "authoring", "authoring-result@7.0")
+
+    assert isinstance(parsed, ContentTeamAuthoringRoleResultV7)
+    assert parsed.output.draft.visual_layout == layout
+
+
+def test_v7_explicit_canonical_layout_is_never_rewritten() -> None:
+    content = _content(
+        visuals=(
+            ContentTeamTable(
+                headers=("구분", "값"),
+                rows=(("A", "1"),),
+                alignments=("default", "right"),
+            ),
+        ),
+        visual_layout="TABLE_ONLY",
+    ).model_dump(mode="json")
+    content["visual_layout"] = "IMAGE_ONLY"
+    value = {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.15.0",
+        "job_id": "job_" + "1" * 32,
+        "workflow_id": "workflow_" + "2" * 32,
+        "step_run_id": "steprun_" + "3" * 32,
+        "role": "authoring",
+        "status": "ok",
+        "artifact": {
+            "logical_artifact_id": "artifact_" + "4" * 32,
+            "revision_id": "rev_" + "5" * 32,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+        "completed_at": "2026-09-03T00:00:00Z",
+        "output": {
+            "draft": content,
+            "metadata": {
+                "subject": "통합과학",
+                "topic": "요청으로 정해지는 주제",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="typed validation"):
+        validate_role_result(value, "authoring", "authoring-result@7.0")
 
 
 def test_v7_workflow_has_no_mandatory_image_step_and_one_protocol() -> None:

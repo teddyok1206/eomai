@@ -422,7 +422,10 @@ def validate_role_input(
 
 
 def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult:
-    validate_schema_message(load_role_result_schema(schema_id), value, schema_id)
+    canonical_value = value
+    if schema_id == "authoring-result@7.0" and role == "authoring":
+        canonical_value = _canonicalize_content_team_authoring_result(value)
+    validate_schema_message(load_role_result_schema(schema_id), canonical_value, schema_id)
     try:
         if schema_id == "authoring-result@4.0" and role == "authoring":
             return GeneratedAuthoringRoleResultV4.model_validate(value)
@@ -449,7 +452,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         if schema_id == "registration-result@6.0" and role == "item_management":
             return GeneratedRegistrationRoleResultV6.model_validate(value)
         if schema_id == "authoring-result@7.0" and role == "authoring":
-            return ContentTeamAuthoringRoleResultV7.model_validate(value)
+            return ContentTeamAuthoringRoleResultV7.model_validate(canonical_value)
         if schema_id == "review-result@7.0" and role == "review":
             return ContentTeamReviewRoleResultV7.model_validate(value)
         if schema_id == "registration-result@7.0" and role == "item_management":
@@ -499,6 +502,62 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         raise WorkflowSchemaError(f"result schema does not match worker role: {schema_id}")
     except ValidationError as exc:
         raise WorkflowSchemaError(f"{schema_id} failed typed validation") from exc
+
+
+def _canonicalize_content_team_authoring_result(value: object) -> object:
+    """Rehydrate the renderer route derived from the model-authored visual structure."""
+
+    if not isinstance(value, dict):
+        return value
+    output = value.get("output")
+    if not isinstance(output, dict):
+        return value
+    draft = output.get("draft")
+    if not isinstance(draft, dict) or "visual_layout" in draft:
+        return value
+
+    validate_schema_message(
+        load_codex_result_schema("authoring-result@7.0"),
+        value,
+        "authoring-result@7.0 projected",
+    )
+    inquiry = draft.get("inquiry")
+    visuals = draft.get("visuals")
+    if not isinstance(visuals, list):
+        raise WorkflowSchemaError("content-team projected visuals are invalid")
+    if inquiry is not None:
+        if visuals:
+            raise WorkflowSchemaError("content-team inquiry cannot include general visual slots")
+        derived_layout: str | None = "INQUIRY_BOX"
+    else:
+        signature_items: list[tuple[str, str]] = []
+        for visual in visuals:
+            if not isinstance(visual, dict):
+                raise WorkflowSchemaError("content-team projected visual entry is invalid")
+            kind = visual.get("kind")
+            label = visual.get("label")
+            if not isinstance(kind, str) or not isinstance(label, str):
+                raise WorkflowSchemaError("content-team projected visual identity is invalid")
+            signature_items.append((kind, label))
+        signature = tuple(signature_items)
+        layouts: dict[tuple[tuple[str, str], ...], str] = {
+            (): "NONE",
+            (("IMAGE", ""),): "IMAGE_ONLY",
+            (("TABLE", ""),): "TABLE_ONLY",
+            (("IMAGE", ""), ("TABLE", "")): "IMAGE_TABLE",
+            (("TABLE", ""), ("IMAGE", "")): "TABLE_IMAGE",
+            (("IMAGE", "(가)"), ("IMAGE", "(나)")): "IMAGE_IMAGE",
+            (("TABLE", "(가)"), ("TABLE", "(나)")): "TABLE_TABLE",
+        }
+        derived_layout = layouts.get(signature)
+        if derived_layout is None:
+            raise WorkflowSchemaError("content-team projected visual order is not canonical")
+
+    canonical = copy.deepcopy(value)
+    canonical_output = _mapping(canonical, "output")
+    canonical_draft = _mapping(canonical_output, "draft")
+    canonical_draft["visual_layout"] = derived_layout
+    return canonical
 
 
 def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> dict[str, Any]:
@@ -739,6 +798,8 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     schema.pop("$id", None)
     if schema_id == "authoring-result@2.0":
         _project_knowledge_authoring_content(schema)
+    if schema_id == "authoring-result@7.0":
+        _project_content_team_authoring_contract(schema)
     if schema_id in {
         "knowledge-analysis-proposal-result@1.0",
         "knowledge-analysis-proposal-result@2.0",
@@ -762,6 +823,34 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
     return schema
+
+
+def _project_content_team_authoring_contract(schema: dict[str, Any]) -> None:
+    """Make the model author semantic visuals while EOM derives their renderer route."""
+
+    definitions = _mapping(schema, "$defs")
+    draft = _mapping(definitions, "AssessmentItemContentV2")
+    properties = _mapping(draft, "properties")
+    visual_layout = properties.pop("visual_layout", None)
+    if not isinstance(visual_layout, dict):
+        raise WorkflowSchemaError("content-team visual layout is not projectable")
+    required = draft.get("required")
+    if not isinstance(required, list) or required.count("visual_layout") != 1:
+        raise WorkflowSchemaError("content-team visual layout requirement is not projectable")
+    draft["required"] = [name for name in required if name != "visual_layout"]
+
+    _mapping(properties, "visuals")["description"] = (
+        "Ordered semantic visual entries from the reviewed content-team program. A table mentioned "
+        "or required by the item must be a TABLE entry containing its actual headers and rows; an "
+        "IMAGE entry is only an image slot and must never substitute for table data. Use zero, "
+        "one, or two entries exactly as the item requires. For two equal kinds, labels must be "
+        "(가), then (나); every other visual label is empty. EOM derives the renderer layout from "
+        "this ordered structure."
+    )
+    _mapping(properties, "inquiry")["description"] = (
+        "Use the reviewed 탐구/실험 structure only when the item requires it. When present, keep "
+        "visuals empty because the program renders the inquiry box as its own layout."
+    )
 
 
 def _project_knowledge_analysis_codex_contract(schema: dict[str, Any], *, schema_id: str) -> None:

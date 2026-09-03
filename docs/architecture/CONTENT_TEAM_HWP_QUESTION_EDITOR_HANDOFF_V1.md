@@ -45,6 +45,14 @@ source, handoff archive, renderer profile, automation template, each prototype, 
 and output HWPX remain separate immutable identities. No renderer may resolve an implicit latest
 template or prototype.
 
+The persistent value retains `visual_layout` because it is a renderer route, but that route is a
+pure derived value rather than a second authoring decision. The model-facing authoring projection
+therefore omits `visual_layout`; after validating that projected JSON Schema, the orchestrator
+derives it from inquiry presence and the ordered `(kind, label)` tuple of at most two visual entries,
+then validates the complete canonical JSON Schema and Pydantic model. An explicit canonical message
+is never rewritten, and an unrecognized ordering fails rather than selecting a nearby layout. This
+keeps tables keyed and rectangular and costs O(v) time/O(1) space for `v <= 2`.
+
 ## Required pointers and resolution
 
 A production renderer profile must pin the handoff archive Artifact and Artifact Revision, archive
