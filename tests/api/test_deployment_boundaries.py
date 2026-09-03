@@ -80,6 +80,10 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert "eom-codex-auth identity must be deployed before the API unit" in source
     assert 'scripts/api/migrate_release.sh"' in source
     assert '--verify "${COMMIT}"' in source
+    assert (
+        '"legacy-assessment/legacy-item-extraction-batch-v2.schema.json": '
+        '"schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json"'
+    ) in source
     assert 'scripts/api/bootstrap_runtime_role.sh"' in source
     assert 'scripts/catalog/bootstrap_runtime_role.py"' in source
     assert (

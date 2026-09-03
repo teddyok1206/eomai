@@ -511,6 +511,7 @@ catalog_resources = {
     "legacy-assessment/legacy-item-extraction-result-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-result-v1.schema.json",
     "legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json",
     "legacy-assessment/legacy-item-extraction-batch-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-batch-v1.schema.json",
+    "legacy-assessment/legacy-item-extraction-batch-v2.schema.json": "schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json",
     "legacy-assessment/legacy-item-corpus-coverage-v1.schema.json": "schemas/legacy-assessment/legacy-item-corpus-coverage-v1.schema.json",
     "legacy-assessment/legacy-item-promotion-request-v1.schema.json": "schemas/legacy-assessment/legacy-item-promotion-request-v1.schema.json",
     "legacy-assessment/legacy-item-editorial-compatibility-policy-v1.schema.json": "schemas/legacy-assessment/legacy-item-editorial-compatibility-policy-v1.schema.json",
