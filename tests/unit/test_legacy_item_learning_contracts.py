@@ -12,6 +12,9 @@ from eom_catalog_contracts import (
     LegacyItemPromotionRequest,
     validate_contract,
 )
+from eom_catalog_service.legacy_item_editorial_compatibility_service import (
+    COMPATIBILITY_WORKFLOW_COMMAND_SOURCE,
+)
 from eom_catalog_service.legacy_item_editorial_validation import (
     LegacyItemEditorialDeterministicEvaluator,
 )
@@ -274,6 +277,10 @@ def test_execution_plan_registry_resolves_editorial_compatibility_request() -> N
 
     assert resource is not None
     Draft202012Validator(resource.contents).validate(_request())
+
+
+def test_editorial_workflow_command_source_fits_persistence_contract() -> None:
+    assert 1 <= len(COMPATIBILITY_WORKFLOW_COMMAND_SOURCE) <= 32
 
 
 def test_compatibility_policy_contains_only_lifecycle_bounds_and_team_authorities() -> None:

@@ -90,6 +90,7 @@ COMPATIBILITY_ROLE_RESULT_SCHEMA: Final = "legacy-item-editorial-compatibility-r
 COMPATIBILITY_WORKFLOW_KEY: Final = "legacy-item-editorial-compatibility"
 COMPATIBILITY_WORKFLOW_VERSION: Final = "1.0.0"
 COMPATIBILITY_WORKFLOW_PROTOCOL: Final = "workflow-role/1.16.0"
+COMPATIBILITY_WORKFLOW_COMMAND_SOURCE: Final = "legacy_editorial_compat"
 TRANSITIONS: Final = MappingProxyType(
     {
         "REQUESTED": frozenset({"RESOLVED", "FAILED", "CANCELLED"}),
@@ -477,7 +478,7 @@ class LegacyItemEditorialCompatibilityService:
                     payload={},
                     actor_type="human",
                     actor_id=requested_by,
-                    source="legacy_item_editorial_compatibility",
+                    source=COMPATIBILITY_WORKFLOW_COMMAND_SOURCE,
                     idempotency_key=f"start:{workflow.workflow_id}",
                 )
                 run.workflow_id = workflow.workflow_id
