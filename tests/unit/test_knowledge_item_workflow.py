@@ -406,6 +406,11 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
     assert {profile.profile.version for profile in generated_deterministic_human_pack.profiles} == {
         "6.0.0"
     }
+    assert all(
+        "local_image_provider.reviewed_binding_json" in profile.required_context
+        for profile in generated_deterministic_human_pack.profiles
+        if profile.profile.type in {"authoring", "image", "review"}
+    )
     human_policy_text = "\n".join(
         value.path.read_text(encoding="utf-8")
         for value in generated_deterministic_human_pack.files

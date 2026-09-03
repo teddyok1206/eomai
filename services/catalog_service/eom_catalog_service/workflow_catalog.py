@@ -329,10 +329,10 @@ class WorkflowCatalogService:
                 ),
                 "prompt_artifacts": [],
             }
-            if pack.pack_key == "generated-knowledge-item" and release.version in {
-                "1.4.0",
-                "1.5.0",
-            }:
+            if pack.pack_key == "generated-knowledge-item" and any(
+                "local_image_provider.reviewed_binding_json" in profile_snapshot["required_context"]
+                for profile_snapshot in profiles.values()
+            ):
                 binding = load_local_image_provider_binding(
                     self.settings.local_image_provider_binding
                 )
