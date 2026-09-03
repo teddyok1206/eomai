@@ -117,6 +117,15 @@ STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS = MappingProxyType(
         "standard-control-bootstrap/5.0": 5,
     }
 )
+STANDARD_BOOTSTRAP_REFERENCE_REVISIONS = MappingProxyType(
+    {
+        "standard-control-bootstrap/1.0": 1,
+        "standard-control-bootstrap/2.0": 1,
+        "standard-control-bootstrap/3.0": 1,
+        "standard-control-bootstrap/4.0": 1,
+        "standard-control-bootstrap/5.0": 2,
+    }
+)
 KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(
     {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 15)}
 )
@@ -618,6 +627,7 @@ def bootstrap_standard_control_plane(
                 actor_id=actor_id,
                 # The stable guidance Revision identity is shared by later compatible presets.
                 created_at=STANDARD_GUIDANCE_BUNDLE_CREATED_AT,
+                revision_number=STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version],
             )
     capacity_revision_id = _publish_capacity_policy(
         sessions,
@@ -1183,6 +1193,7 @@ def _publish_role_reference_bundle(
     source_commit: str,
     actor_id: str,
     created_at: datetime,
+    revision_number: int,
 ) -> BundleRevisionPointer:
     """Publish one immutable role-specific guidance view without duplicating source artifacts."""
 
@@ -1192,12 +1203,12 @@ def _publish_role_reference_bundle(
         )
     identity_key = f"standard-item:{role}:guidance"
     bundle_id = _stable_id("refbundle_", identity_key)
-    revision_id = _stable_id("refrev_", f"{identity_key}:v1")
+    revision_id = _stable_id("refrev_", f"{identity_key}:v{revision_number}")
     document: dict[str, object] = {
         "schema_version": "reference-bundle-manifest/1.0",
         "bundle_id": bundle_id,
         "bundle_revision_id": revision_id,
-        "revision_number": 1,
+        "revision_number": revision_number,
         "state": "RELEASED",
         "entries": list(entries),
         "content_sha256": "sha256:" + "0" * 64,

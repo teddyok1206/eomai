@@ -16,6 +16,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_STANDARD_V5_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
+    STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
     STANDARD_GUIDANCE_BUNDLE_CREATED_AT,
     KnowledgeAnalysisBootstrapManifest,
     StandardBootstrapManifest,
@@ -355,6 +356,13 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
     assert "read the complete content-team source prompt" in authoring
     assert "do not rely on a summary or\nmemory of it" in authoring
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 5
+    assert dict(STANDARD_BOOTSTRAP_REFERENCE_REVISIONS) == {
+        "standard-control-bootstrap/1.0": 1,
+        "standard-control-bootstrap/2.0": 1,
+        "standard-control-bootstrap/3.0": 1,
+        "standard-control-bootstrap/4.0": 1,
+        "standard-control-bootstrap/5.0": 2,
+    }
 
 
 def test_standard_bootstrap_v4_rejects_legacy_protocol() -> None:
