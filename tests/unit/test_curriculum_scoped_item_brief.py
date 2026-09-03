@@ -417,7 +417,7 @@ def test_v2_registration_metadata_pins_scope_and_actual_source_mode(
     Draft202012Validator(metadata_schema).validate(registry.request.metadata)
 
 
-def test_generated_pack_v12_through_v110_are_v2_only_and_keep_v11_release_separate() -> None:
+def test_generated_pack_v12_through_v111_are_v2_only_and_keep_v11_release_separate() -> None:
     v1_request = _workflow_request(grounded=False).model_copy(
         update={"item_brief": ItemBrief.model_validate(_brief_v1())}
     )
@@ -435,6 +435,7 @@ def test_generated_pack_v12_through_v110_are_v2_only_and_keep_v11_release_separa
         "1.8.0",
         "1.9.0",
         "1.10.0",
+        "1.11.0",
     ):
         WorkflowCatalogService._require_item_brief_release(
             "generated-knowledge-item", release_version, v2_request

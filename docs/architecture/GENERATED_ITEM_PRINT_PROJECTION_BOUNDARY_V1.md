@@ -24,9 +24,10 @@ validated without interpreting color.
 ## Transactions, failure, and idempotency
 
 Workers remain read-only. The orchestrator validates and commits each artifact once. Missing units,
-ambiguous Hancom equation syntax, physically implausible quantities, lost axis multipliers, or a drawing
-that depends on color fail review before human approval. Replaying the same workflow revision reuses its
-pinned inputs and does not rewrite released content-pack bytes.
+lost axis multipliers, or a drawing that depends on color fail review before human approval. Content
+Pack 1.11 does not add a subject-specific quantity-plausibility heuristic or force one concrete equation
+spelling around the pinned editorial prompt. Replaying the same workflow revision reuses its pinned
+inputs and does not rewrite released content-pack bytes.
 
 ## Simpler alternative
 

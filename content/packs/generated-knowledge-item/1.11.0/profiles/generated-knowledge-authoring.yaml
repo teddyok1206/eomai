@@ -1,0 +1,14 @@
+schema_version: "1.0"
+profile:
+  type: "authoring"
+  key: "generated-knowledge-authoring"
+  version: "6.3.0"
+template: "prompt-templates/authoring.md"
+input_schema_ref: "eom://workflow/authoring-input@1.13"
+output_schema_ref: "authoring-result@6.0"
+required_context:
+  - "workflow.id"
+  - "workflow.step_key"
+  - "brief.reviewed_item_brief_json"
+  - "local_image_provider.reviewed_binding_json"
+  - "pack.release_id"

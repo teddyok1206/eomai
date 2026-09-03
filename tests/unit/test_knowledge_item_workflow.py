@@ -466,6 +466,36 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
     assert "raw HwpQuestionEditor Markdown" in prompts["prompt-templates/review.md"]
     assert "그 자체로 blocking 사유가 아니" in prompts["prompt-templates/review.md"]
 
+    generated_editorial_prompt_pack = compile_pack(
+        ROOT / "content/packs/generated-knowledge-item/1.11.0"
+    )
+    assert generated_editorial_prompt_pack.manifest.pack.version == "1.11.0"
+    assert generated_editorial_prompt_pack.source_tree_sha256 == (
+        "sha256:4209b96b6ee7108ef2d4cc1b6c7e6e4c672964413b74e18cf816c2f1081bac53"
+    )
+    profiles = {
+        profile.profile.type: profile.profile.version
+        for profile in generated_editorial_prompt_pack.profiles
+    }
+    assert profiles["authoring"] == "6.3.0"
+    assert profiles["review"] == "6.2.0"
+    prompts = {
+        value.relative_path: value.path.read_text(encoding="utf-8")
+        for value in generated_editorial_prompt_pack.files
+        if value.relative_path.startswith("prompt-templates/")
+    }
+    active_prompt_text = "\n".join(prompts.values())
+    for removed_instruction in (
+        "J=DELTA p",
+        "delta_p",
+        "수치의 물리적 현실성",
+        "물리적으로 가능한 규모",
+        "계산 검산",
+    ):
+        assert removed_instruction not in active_prompt_text
+    assert "kind=`diagram`" in prompts["prompt-templates/authoring.md"]
+    assert "raw HwpQuestionEditor Markdown" in prompts["prompt-templates/review.md"]
+
 
 def test_content_pack_provenance_never_fakes_a_source_pointer() -> None:
     pack_path = ROOT / "content/packs/general-knowledge-item/1.0.0/pack.yaml"
