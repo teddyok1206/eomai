@@ -242,6 +242,14 @@ Unit-analysis failures do not erase prior accepted evidence and do not block unr
 Compatibility failures do not block unit knowledge accumulation, but a blocking compatibility result
 may prevent HWPX delivery for that exact Item Revision.
 
+The slot execution timeout is part of the immutable control-plane protocol and preset policy. The
+original `legacy-item-editorial-compatibility-control-bootstrap/1.0` contract remains historical at
+3,600 seconds. V2 fixes the policy at the host slot05 contract of 7,200 seconds. Activating V2 appends
+a newly evaluated DRAFT and RELEASED preset revision and advances only the logical current pointer;
+it never rewrites the V1 schema, config, draft, release, evaluation, or failed workflow evidence.
+Exact V2 replay returns the same current release. A stale config that targets a non-current released
+policy fails instead of rolling the pointer backward.
+
 ## 9. Dependency direction and ownership
 
 JSON Schema and Pydantic value objects live in Catalog contracts. Application commands and services

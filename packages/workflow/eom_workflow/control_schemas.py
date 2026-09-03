@@ -71,6 +71,18 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:e4bf8a32be224b531368ff137bf11e2b0cf6b8c3f2bd3cae4cabb7cdaa0d1ba9",
         ),
+        "legacy-item-editorial-compatibility-control-bootstrap-v2": ControlSchemaResource(
+            (
+                "schemas/workflow/control-plane/"
+                "legacy-item-editorial-compatibility-control-bootstrap-v2.schema.json"
+            ),
+            (
+                "resources/control-plane/"
+                "legacy-item-editorial-compatibility-control-bootstrap-v2.schema.json"
+            ),
+            "2.0",
+            "sha256:3190e33215b5a4b896695eaaabafd980c09ebd6ff169ee8a8e0e882637d11738",
+        ),
         "standard-control-bootstrap-v3": ControlSchemaResource(
             "schemas/workflow/control-plane/standard-control-bootstrap-v3.schema.json",
             "resources/control-plane/standard-control-bootstrap-v3.schema.json",

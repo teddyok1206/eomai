@@ -62,7 +62,10 @@ EDITORIAL_COMPATIBILITY_EVALUATION_ARTIFACT_KEY = "legacy-editorial-compat-evalu
 class LegacyItemEditorialCompatibilityBootstrapManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["legacy-item-editorial-compatibility-control-bootstrap/1.0"]
+    schema_version: Literal[
+        "legacy-item-editorial-compatibility-control-bootstrap/1.0",
+        "legacy-item-editorial-compatibility-control-bootstrap/2.0",
+    ]
     preset_key: Literal["legacy-item-editorial-compatibility"]
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=1000)
@@ -77,7 +80,7 @@ class LegacyItemEditorialCompatibilityBootstrapManifest(BaseModel):
     role_instruction_path: Literal["instructions/legacy-item-editorial-compatibility.md"]
     slot_key: Literal["slot05"]
     worker_pool_key: Literal["support"]
-    timeout_seconds: Literal[3600]
+    timeout_seconds: Literal[3600, 7200]
 
     @model_validator(mode="after")
     def exact_immutable_contract(self) -> LegacyItemEditorialCompatibilityBootstrapManifest:
@@ -85,6 +88,13 @@ class LegacyItemEditorialCompatibilityBootstrapManifest(BaseModel):
             raise ValueError("editorial compatibility bootstrap timestamp must use UTC")
         if self.compatible_workflow_protocols != ("workflow-role/1.16.0",):
             raise ValueError("editorial compatibility bootstrap protocol must be exact")
+        expected_timeout = (
+            3600
+            if self.schema_version == "legacy-item-editorial-compatibility-control-bootstrap/1.0"
+            else 7200
+        )
+        if self.timeout_seconds != expected_timeout:
+            raise ValueError("editorial compatibility timeout must match its protocol revision")
         return self
 
 
@@ -111,7 +121,20 @@ def load_legacy_item_editorial_compatibility_bootstrap_manifest(
         if isinstance(value, dict) and isinstance(value.get("created_at"), datetime):
             value = dict(value)
             value["created_at"] = value["created_at"].isoformat().replace("+00:00", "Z")
-        validate_control_contract("legacy-item-editorial-compatibility-control-bootstrap", value)
+        schema_version = value.get("schema_version") if isinstance(value, dict) else None
+        if not isinstance(schema_version, str):
+            raise ValueError("editorial compatibility bootstrap schema version is missing")
+        schema_name = {
+            "legacy-item-editorial-compatibility-control-bootstrap/1.0": (
+                "legacy-item-editorial-compatibility-control-bootstrap"
+            ),
+            "legacy-item-editorial-compatibility-control-bootstrap/2.0": (
+                "legacy-item-editorial-compatibility-control-bootstrap-v2"
+            ),
+        }.get(schema_version)
+        if schema_name is None:
+            raise ValueError("editorial compatibility bootstrap schema version is unsupported")
+        validate_control_contract(schema_name, value)
         return LegacyItemEditorialCompatibilityBootstrapManifest.model_validate(value)
     except (UnicodeError, yaml.YAMLError, JsonSchemaValidationError, ValueError) as exc:
         raise ControlPlaneError(
@@ -434,14 +457,38 @@ def _find_or_create_draft(
                 )
             if execution_preset_policy_sha256(current.canonical_document) == expected_hash:
                 return current
-            raise ControlPlaneError(
-                "CONTROL_BOOTSTRAP_CONFLICT",
-                "released editorial compatibility preset policy differs",
-            )
-        if any(revision.state == "RELEASED" for revision in revisions):
+            if (
+                manifest.schema_version
+                == "legacy-item-editorial-compatibility-control-bootstrap/1.0"
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_CONFLICT",
+                    "released editorial compatibility preset policy differs",
+                )
+        if (
+            logical is not None
+            and logical.current_revision_id is None
+            and any(revision.state == "RELEASED" for revision in revisions)
+        ):
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_CONFLICT",
                 "released editorial compatibility preset lacks its current pointer",
+            )
+        released_matching = [
+            revision
+            for revision in revisions
+            if revision.state == "RELEASED"
+            and execution_preset_policy_sha256(revision.canonical_document) == expected_hash
+        ]
+        if len(released_matching) > 1:
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_CONFLICT",
+                "editorial compatibility preset has duplicate released policy revisions",
+            )
+        if released_matching:
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_CONFLICT",
+                "editorial compatibility preset config targets a non-current released policy",
             )
         matching = [
             revision
@@ -449,9 +496,20 @@ def _find_or_create_draft(
             if revision.state == "DRAFT"
             and execution_preset_policy_sha256(revision.canonical_document) == expected_hash
         ]
-        if len(matching) > 1 or any(
-            revision.state == "DRAFT" and revision not in matching for revision in revisions
-        ):
+        released_policy_hashes = {
+            execution_preset_policy_sha256(revision.canonical_document)
+            for revision in revisions
+            if revision.state == "RELEASED"
+        }
+        unresolved_other_drafts = [
+            revision
+            for revision in revisions
+            if revision.state == "DRAFT"
+            and revision not in matching
+            and execution_preset_policy_sha256(revision.canonical_document)
+            not in released_policy_hashes
+        ]
+        if len(matching) > 1 or unresolved_other_drafts:
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_CONFLICT", "editorial compatibility preset draft history differs"
             )

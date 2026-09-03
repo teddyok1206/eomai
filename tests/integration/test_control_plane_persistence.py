@@ -122,6 +122,9 @@ from eom_orchestrator.knowledge_item_bootstrap import (
     KnowledgeItemBootstrapResult,
     bootstrap_knowledge_item_control_plane,
 )
+from eom_orchestrator.legacy_item_editorial_compatibility_bootstrap import (
+    bootstrap_legacy_item_editorial_compatibility_control_plane,
+)
 from eom_orchestrator.legacy_item_extraction_bootstrap import (
     LegacyItemExtractionBootstrapResult,
     bootstrap_legacy_item_extraction_control_plane,
@@ -2658,6 +2661,94 @@ def test_legacy_extraction_bootstrap_recovers_partial_failure_and_replays_exactl
             ),
             "jobs": session.scalar(select(func.count()).select_from(JobRecord)),
         } == stable_counts
+
+
+def test_editorial_compatibility_v2_appends_and_replays_a_successor_release(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    staging_root = tmp_path / "staging"
+    nas_root = tmp_path / "nas"
+    staging_root.mkdir()
+    nas_root.mkdir()
+    settings = Settings(
+        worker_config=Path("config/worker-slots.example.yaml").resolve(),
+        staging_root=staging_root,
+        workspace_root=tmp_path / "worker-workspaces",
+        worker_home_root=tmp_path / "worker-homes",
+        nas_artifact_root=nas_root.resolve(),
+        codex_binary=Path("/usr/local/bin/codex"),
+        codex_capability_policy=Path("config/codex-capabilities.example.yaml").resolve(),
+        worker_timeout_seconds=1800,
+    )
+
+    first = bootstrap_legacy_item_editorial_compatibility_control_plane(
+        integration_engine,
+        config_directory=Path(
+            "config/control-plane/legacy-item-editorial-compatibility-v1"
+        ).resolve(),
+        source_commit="1" * 40,
+        actor_id="editorial-compatibility-integration",
+        evaluation_cases_total=65,
+        settings=settings,
+    )
+    successor = bootstrap_legacy_item_editorial_compatibility_control_plane(
+        integration_engine,
+        config_directory=Path(
+            "config/control-plane/legacy-item-editorial-compatibility-v2"
+        ).resolve(),
+        source_commit="2" * 40,
+        actor_id="editorial-compatibility-integration",
+        evaluation_cases_total=65,
+        settings=settings,
+    )
+    replay = bootstrap_legacy_item_editorial_compatibility_control_plane(
+        integration_engine,
+        config_directory=Path(
+            "config/control-plane/legacy-item-editorial-compatibility-v2"
+        ).resolve(),
+        source_commit="2" * 40,
+        actor_id="editorial-compatibility-integration",
+        evaluation_cases_total=65,
+        settings=settings,
+    )
+
+    assert successor == replay
+    assert successor.preset_id == first.preset_id
+    assert successor.preset_revision_id != first.preset_revision_id
+    sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        logical = session.get(ExecutionPresetRecord, first.preset_id)
+        revisions = tuple(
+            session.scalars(
+                select(ExecutionPresetRevisionRecord)
+                .where(ExecutionPresetRevisionRecord.preset_id == first.preset_id)
+                .order_by(ExecutionPresetRevisionRecord.revision_number)
+            )
+        )
+        evaluations = tuple(
+            session.scalars(
+                select(ExecutionPresetEvaluationRecord)
+                .where(ExecutionPresetEvaluationRecord.preset_id == first.preset_id)
+                .order_by(ExecutionPresetEvaluationRecord.completed_at)
+            )
+        )
+    assert logical is not None
+    assert logical.current_revision_id == successor.preset_revision_id
+    assert [revision.state for revision in revisions] == [
+        "DRAFT",
+        "RELEASED",
+        "DRAFT",
+        "RELEASED",
+    ]
+    assert [
+        revision.canonical_document["role_policies"][0]["timeout_seconds"] for revision in revisions
+    ] == [3600, 3600, 7200, 7200]
+    assert len(evaluations) == 2
+    assert {evaluation.evaluation_id for evaluation in evaluations} == {
+        first.evaluation_id,
+        successor.evaluation_id,
+    }
 
 
 def test_knowledge_item_bootstrap_pins_standard_policy_and_is_idempotent(
