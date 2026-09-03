@@ -419,6 +419,25 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
     assert "사람 형상은 반드시 익명화한 단순 SVG 선화" in human_policy_text
     assert "현재 비인간 동물에만 사용한다" in human_policy_text
 
+    generated_json_safe_pack = compile_pack(ROOT / "content/packs/generated-knowledge-item/1.9.0")
+    assert generated_json_safe_pack.manifest.pack.version == "1.9.0"
+    assert generated_json_safe_pack.source_tree_sha256 == (
+        "sha256:7726ad91d01b8e7a2c489d8312cdbf770ea7deb7da2e80d412ffc632e2e265d7"
+    )
+    authoring_profile = next(
+        profile
+        for profile in generated_json_safe_pack.profiles
+        if profile.profile.type == "authoring"
+    )
+    assert authoring_profile.profile.version == "6.1.0"
+    authoring_prompt = next(
+        value.path.read_text(encoding="utf-8")
+        for value in generated_json_safe_pack.files
+        if value.relative_path == "prompt-templates/authoring.md"
+    )
+    assert "모든 값은 반드시\n-1000 이상 1000 이하" in authoring_prompt
+    assert "결과 JSON 바이트에는 `\\\\frac`" in authoring_prompt
+
 
 def test_content_pack_provenance_never_fakes_a_source_pointer() -> None:
     pack_path = ROOT / "content/packs/general-knowledge-item/1.0.0/pack.yaml"
