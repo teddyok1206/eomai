@@ -799,7 +799,7 @@ class HwpxBuildView(WebModel):
     item_revision_id: str
     source_artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
     source_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
-    renderer: Literal["kordoc", "eom-template"]
+    renderer: Literal["kordoc", "eom-template", "content-team"]
     renderer_version: Literal["4.9.0", "1.0.0"]
     state: Literal["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]
     validation_state: Literal["PENDING", "PASS", "FAIL"]

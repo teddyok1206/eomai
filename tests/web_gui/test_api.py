@@ -406,6 +406,7 @@ def test_hwpx_ready_build_status_and_download_use_application_api_boundary() -> 
         assert response.status_code == 202
         build_id = response.json()["resource_id"]
         status = client.get(f"/studio/api/v1/hwpx/builds/{build_id}")
+        assert status.json()["renderer"] == "content-team"
         assert status.json()["native_equation_count"] == 5
         assert status.json()["native_table_count"] == 2
         assert status.json()["download_available"] is True

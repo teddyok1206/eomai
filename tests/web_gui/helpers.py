@@ -554,7 +554,7 @@ class FakeGateway:
             item_revision_id=REVISION_ID,
             source_artifact_revision_id="rev_" + "a" * 32,
             source_sha256="sha256:" + "a" * 64,
-            renderer="eom-template",
+            renderer="content-team",
             renderer_version="1.0.0",
             state="SUCCEEDED",
             validation_state="PASS",
