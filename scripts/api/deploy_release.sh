@@ -284,6 +284,10 @@ with zipfile.ZipFile(platform_wheel) as archive:
     catalog_staging_runtime = {
         "eom_image_contracts/models.py",
         "eom_image_contracts/validation.py",
+        "eom_hwpx_contracts/models.py",
+        "eom_hwpx_contracts/content_team_equations.py",
+        "eom_hwpx_contracts/content_team_markdown.py",
+        "eom_hwpx_contracts/validation.py",
         "eom_catalog_contracts/assessment_item.py",
         "eom_catalog_contracts/application.py",
         "eom_catalog_contracts/knowledge.py",
@@ -335,6 +339,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_manager/question_template_service.py",
         "eom_hwpx_manager/runner.py",
         "eom_hwpx_manager/runtime_privileges.py",
+        "eom_hwpx_builder/content_team_handoff.py",
     }
     if missing := (
         worker_runtime
@@ -440,9 +445,11 @@ catalog_resources = {
     "catalog-application/catalog-application-request-v7.schema.json": "schemas/catalog-application/catalog-application-request-v7.schema.json",
     "catalog-application/catalog-application-request-v8.schema.json": "schemas/catalog-application/catalog-application-request-v8.schema.json",
     "catalog-application/catalog-application-request-v9.schema.json": "schemas/catalog-application/catalog-application-request-v9.schema.json",
+    "catalog-application/catalog-application-request-v10.schema.json": "schemas/catalog-application/catalog-application-request-v10.schema.json",
     "catalog-application/catalog-application-response-v7.schema.json": "schemas/catalog-application/catalog-application-response-v7.schema.json",
     "catalog-application/catalog-application-response-v8.schema.json": "schemas/catalog-application/catalog-application-response-v8.schema.json",
     "catalog-application/catalog-application-response-v9.schema.json": "schemas/catalog-application/catalog-application-response-v9.schema.json",
+    "catalog-application/catalog-application-response-v10.schema.json": "schemas/catalog-application/catalog-application-response-v10.schema.json",
     "catalog-application/catalog-item-media-request-v1.schema.json": "schemas/catalog-application/catalog-item-media-request-v1.schema.json",
     "catalog-application/catalog-item-media-response-v1.schema.json": "schemas/catalog-application/catalog-item-media-response-v1.schema.json",
     "knowledge/knowledge-analysis-batch-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
@@ -468,6 +475,7 @@ catalog_resources = {
     "educational-document/educational-document-rights-attestation-v1.schema.json": "schemas/educational-document/educational-document-rights-attestation-v1.schema.json",
     "educational-document/educational-document-types-v1.schema.json": "schemas/educational-document/educational-document-types-v1.schema.json",
     "item-registry/assessment-item-content-v1.schema.json": "schemas/item-registry/assessment-item-content-v1.schema.json",
+    "item-registry/assessment-item-content-v2.schema.json": "schemas/item-registry/assessment-item-content-v2.schema.json",
     "item-registry/item-revision-manifest-v1.schema.json": "schemas/item-registry/item-revision-manifest-v1.schema.json",
     "item-origin/item-origin-types-v1.schema.json": "schemas/item-origin/item-origin-types-v1.schema.json",
     "item-origin/organization-revision-v1.schema.json": "schemas/item-origin/organization-revision-v1.schema.json",

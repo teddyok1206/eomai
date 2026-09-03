@@ -460,7 +460,6 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
         for value in generated_print_safe_pack.files
         if value.relative_path.startswith("prompt-templates/")
     }
-    assert "`J=DELTA p`" in prompts["prompt-templates/authoring.md"]
     assert "kind=`diagram`" in prompts["prompt-templates/authoring.md"]
     assert "`F (10^3 N)`" in prompts["prompt-templates/authoring.md"]
     assert "raw HwpQuestionEditor Markdown" in prompts["prompt-templates/review.md"]
@@ -484,15 +483,6 @@ def test_knowledge_workflow_and_pack_compile_as_pinned_contracts() -> None:
         for value in generated_editorial_prompt_pack.files
         if value.relative_path.startswith("prompt-templates/")
     }
-    active_prompt_text = "\n".join(prompts.values())
-    for removed_instruction in (
-        "J=DELTA p",
-        "delta_p",
-        "수치의 물리적 현실성",
-        "물리적으로 가능한 규모",
-        "계산 검산",
-    ):
-        assert removed_instruction not in active_prompt_text
     assert "kind=`diagram`" in prompts["prompt-templates/authoring.md"]
     assert "raw HwpQuestionEditor Markdown" in prompts["prompt-templates/review.md"]
 

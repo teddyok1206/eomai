@@ -141,7 +141,7 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 137
+    assert len(entries) == 140
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {
@@ -158,6 +158,7 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         "integrated-science-editorial-outline",
         "eom-guidance-markdown-control",
         "evidence-bundle-publication-result-v2",
+        "assessment-item-content-v2",
         "catalog-application-request-v4",
         "catalog-application-response-v4",
         "catalog-application-request-v5",
@@ -169,6 +170,8 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         "catalog-application-response-v7",
         "catalog-application-response-v8",
         "catalog-application-response-v9",
+        "catalog-application-request-v10",
+        "catalog-application-response-v10",
         "catalog-item-media-request",
         "catalog-item-media-response",
         "knowledge-analysis-batch-request",

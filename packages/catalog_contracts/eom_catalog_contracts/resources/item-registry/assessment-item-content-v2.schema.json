@@ -1,0 +1,564 @@
+{
+  "$defs": {
+    "ContentTeamAnswer": {
+      "discriminator": {
+        "mapping": {
+          "DIRECT_CHOICE": "#/$defs/ContentTeamDirectChoiceAnswer",
+          "STATEMENT_COMBINATION": "#/$defs/ContentTeamCombinationAnswer"
+        },
+        "propertyName": "answer_kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ContentTeamCombinationAnswer"
+        },
+        {
+          "$ref": "#/$defs/ContentTeamDirectChoiceAnswer"
+        }
+      ]
+    },
+    "ContentTeamChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "enum": [
+            "①",
+            "②",
+            "③",
+            "④",
+            "⑤"
+          ],
+          "title": "Number",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "number",
+        "text"
+      ],
+      "title": "ContentTeamChoice",
+      "type": "object"
+    },
+    "ContentTeamCombinationAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_content": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "title": "Answer Content",
+          "type": "string"
+        },
+        "answer_kind": {
+          "const": "STATEMENT_COMBINATION",
+          "title": "Answer Kind",
+          "type": "string"
+        },
+        "number": {
+          "enum": [
+            "①",
+            "②",
+            "③",
+            "④",
+            "⑤"
+          ],
+          "title": "Number",
+          "type": "string"
+        },
+        "raw_line": {
+          "maxLength": 2020,
+          "minLength": 9,
+          "pattern": "^정답 : [①②③④⑤] \\([^\\r\\n]+\\)$",
+          "title": "Raw Line",
+          "type": "string"
+        },
+        "statement_labels": {
+          "items": {
+            "enum": [
+              "ㄱ",
+              "ㄴ",
+              "ㄷ"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Statement Labels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "number",
+        "answer_content",
+        "raw_line",
+        "answer_kind",
+        "statement_labels"
+      ],
+      "title": "ContentTeamCombinationAnswer",
+      "type": "object"
+    },
+    "ContentTeamDirectChoiceAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_content": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "title": "Answer Content",
+          "type": "string"
+        },
+        "answer_kind": {
+          "const": "DIRECT_CHOICE",
+          "title": "Answer Kind",
+          "type": "string"
+        },
+        "number": {
+          "enum": [
+            "①",
+            "②",
+            "③",
+            "④",
+            "⑤"
+          ],
+          "title": "Number",
+          "type": "string"
+        },
+        "raw_line": {
+          "maxLength": 2020,
+          "minLength": 9,
+          "pattern": "^정답 : [①②③④⑤] \\([^\\r\\n]+\\)$",
+          "title": "Raw Line",
+          "type": "string"
+        },
+        "statement_labels": {
+          "items": {
+            "enum": [
+              "ㄱ",
+              "ㄴ",
+              "ㄷ"
+            ],
+            "type": "string"
+          },
+          "maxItems": 0,
+          "title": "Statement Labels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "number",
+        "answer_content",
+        "raw_line",
+        "answer_kind",
+        "statement_labels"
+      ],
+      "title": "ContentTeamDirectChoiceAnswer",
+      "type": "object"
+    },
+    "ContentTeamExplanationSections": {
+      "additionalProperties": false,
+      "properties": {
+        "authoring_intent": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Authoring Intent",
+          "type": "string"
+        },
+        "concept_source": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Concept Source",
+          "type": "string"
+        },
+        "correct_answer": {
+          "maxLength": 24000,
+          "minLength": 1,
+          "title": "Correct Answer",
+          "type": "string"
+        },
+        "wrong_answer": {
+          "maxLength": 24000,
+          "title": "Wrong Answer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "authoring_intent",
+        "concept_source",
+        "correct_answer",
+        "wrong_answer"
+      ],
+      "title": "ContentTeamExplanationSections",
+      "type": "object"
+    },
+    "ContentTeamImageSlot": {
+      "additionalProperties": false,
+      "description": "An empty image slot; image bytes remain a separately pinned artifact.",
+      "properties": {
+        "kind": {
+          "const": "IMAGE",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "enum": [
+            "",
+            "(가)",
+            "(나)"
+          ],
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "label"
+      ],
+      "title": "ContentTeamImageSlot",
+      "type": "object"
+    },
+    "ContentTeamInquiry": {
+      "additionalProperties": false,
+      "properties": {
+        "goal": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Goal"
+        },
+        "kind": {
+          "enum": [
+            "탐구",
+            "실험"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "procedure": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Procedure",
+          "type": "string"
+        },
+        "result": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Result",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "goal",
+        "procedure",
+        "result"
+      ],
+      "title": "ContentTeamInquiry",
+      "type": "object"
+    },
+    "ContentTeamLabeledBlock": {
+      "additionalProperties": false,
+      "description": "Prototype-backed 자료/조건 content, independent of subject matter.",
+      "properties": {
+        "content": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "DATA",
+            "CONDITION"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "content"
+      ],
+      "title": "ContentTeamLabeledBlock",
+      "type": "object"
+    },
+    "ContentTeamStatement": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "enum": [
+            "ㄱ",
+            "ㄴ",
+            "ㄷ"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "text"
+      ],
+      "title": "ContentTeamStatement",
+      "type": "object"
+    },
+    "ContentTeamTable": {
+      "additionalProperties": false,
+      "description": "Semantic Markdown table consumed by the reviewed content-team renderer.",
+      "properties": {
+        "alignments": {
+          "items": {
+            "enum": [
+              "default",
+              "left",
+              "right",
+              "center"
+            ],
+            "type": "string"
+          },
+          "title": "Alignments",
+          "type": "array"
+        },
+        "headers": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 2,
+          "title": "Headers",
+          "type": "array"
+        },
+        "kind": {
+          "const": "TABLE",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "enum": [
+            "",
+            "(가)",
+            "(나)"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "headers",
+        "rows",
+        "alignments"
+      ],
+      "title": "ContentTeamTable",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/item-registry/assessment-item-content-v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Content-team-first canonical item; HWPX is one deterministic projection of it.",
+  "properties": {
+    "answer": {
+      "$ref": "#/$defs/ContentTeamAnswer"
+    },
+    "authoring_prompt_sha256": {
+      "const": "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435",
+      "title": "Authoring Prompt Sha256",
+      "type": "string"
+    },
+    "bottom_stem": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Bottom Stem",
+      "type": "string"
+    },
+    "choices": {
+      "items": {
+        "$ref": "#/$defs/ContentTeamChoice"
+      },
+      "maxItems": 5,
+      "minItems": 5,
+      "title": "Choices",
+      "type": "array"
+    },
+    "equation_sources": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 128,
+      "title": "Equation Sources",
+      "type": "array"
+    },
+    "explanations": {
+      "$ref": "#/$defs/ContentTeamExplanationSections"
+    },
+    "handoff_archive_sha256": {
+      "const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+      "title": "Handoff Archive Sha256",
+      "type": "string"
+    },
+    "inquiry": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContentTeamInquiry"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "item_number": {
+      "maximum": 999,
+      "minimum": 1,
+      "title": "Item Number",
+      "type": "integer"
+    },
+    "labeled_blocks": {
+      "items": {
+        "$ref": "#/$defs/ContentTeamLabeledBlock"
+      },
+      "maxItems": 2,
+      "title": "Labeled Blocks",
+      "type": "array"
+    },
+    "renderer_profile": {
+      "const": "content-team-hwp-question-editor-v1",
+      "title": "Renderer Profile",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "score_display": {
+      "enum": [
+        "2",
+        "2.5",
+        "3"
+      ],
+      "title": "Score Display",
+      "type": "string"
+    },
+    "statements": {
+      "anyOf": [
+        {
+          "maxItems": 0,
+          "minItems": 0,
+          "type": "array"
+        },
+        {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/ContentTeamStatement"
+            },
+            {
+              "$ref": "#/$defs/ContentTeamStatement"
+            },
+            {
+              "$ref": "#/$defs/ContentTeamStatement"
+            }
+          ],
+          "type": "array"
+        }
+      ],
+      "title": "Statements"
+    },
+    "stem": {
+      "maxLength": 24000,
+      "minLength": 1,
+      "title": "Stem",
+      "type": "string"
+    },
+    "visual_layout": {
+      "enum": [
+        "NONE",
+        "IMAGE_ONLY",
+        "TABLE_ONLY",
+        "IMAGE_TABLE",
+        "TABLE_IMAGE",
+        "IMAGE_IMAGE",
+        "TABLE_TABLE",
+        "INQUIRY_BOX"
+      ],
+      "title": "Visual Layout",
+      "type": "string"
+    },
+    "visuals": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "IMAGE": "#/$defs/ContentTeamImageSlot",
+            "TABLE": "#/$defs/ContentTeamTable"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ContentTeamTable"
+          },
+          {
+            "$ref": "#/$defs/ContentTeamImageSlot"
+          }
+        ]
+      },
+      "maxItems": 2,
+      "title": "Visuals",
+      "type": "array"
+    }
+  },
+  "required": [
+    "renderer_profile",
+    "authoring_prompt_sha256",
+    "handoff_archive_sha256",
+    "item_number",
+    "score_display",
+    "stem",
+    "bottom_stem",
+    "inquiry",
+    "labeled_blocks",
+    "visuals",
+    "visual_layout",
+    "statements",
+    "choices",
+    "answer",
+    "explanations",
+    "equation_sources",
+    "schema_version"
+  ],
+  "title": "AssessmentItemContentV2",
+  "type": "object"
+}

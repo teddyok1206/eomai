@@ -10,6 +10,7 @@ from typing import Annotated, Any, Literal
 
 from eom_catalog_contracts import (
     AssessmentItemContent,
+    AssessmentItemContentV2,
     EducationalRetrievalRequirement,
     EquationBlock,
     IntegratedScienceCurriculumScope,
@@ -195,6 +196,34 @@ class ItemBriefV2(ItemBrief):
         return self
 
 
+class ContentTeamItemBrief(FrozenModel):
+    """Reviewed intent without EOM-authored content-shape requirements."""
+
+    schema_version: Literal["3.0"] = "3.0"
+    subject: str = Field(min_length=1, max_length=80)
+    topic: str = Field(min_length=1, max_length=160)
+    task_type: str = Field(min_length=1, max_length=80)
+    difficulty: str = Field(min_length=1, max_length=80)
+    authoring_guidance: str = Field(min_length=10, max_length=2000)
+    authoring_guidance_sha256: Sha256
+    curriculum_scope: IntegratedScienceCurriculumScope | None = None
+    original_request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("authoring_guidance")
+    @classmethod
+    def normalize_authoring_guidance(cls, value: str) -> str:
+        return normalize_reviewed_authoring_guidance(value)
+
+    @model_validator(mode="after")
+    def validate_authoring_guidance_hash(self) -> ContentTeamItemBrief:
+        validate_reviewed_authoring_guidance(
+            self.authoring_guidance, self.authoring_guidance_sha256
+        )
+        if self.curriculum_scope is not None:
+            validate_integrated_science_curriculum_scope(self.curriculum_scope)
+        return self
+
+
 class StimulusAssetSelection(FrozenModel):
     asset_key: Literal["eom-question-template-reference-v1"]
 
@@ -207,7 +236,7 @@ class ContentPackSelection(FrozenModel):
 class WorkflowProfiles(FrozenModel):
     authoring: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
     review: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
-    image: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
+    image: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,127}$")
     registration: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
 
 
@@ -245,7 +274,7 @@ class WorkflowRequest(FrozenModel):
     profiles: WorkflowProfiles | None = None
     source_intake: SourceIntakeSelection | None = None
     registry_intent: RegistryIntent | None = None
-    item_brief: ItemBrief | ItemBriefV2 | None = None
+    item_brief: ItemBrief | ItemBriefV2 | ContentTeamItemBrief | None = None
     stimulus_asset: StimulusAssetSelection | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     educational_retrieval: EducationalRetrievalRequirement | None = None
@@ -279,7 +308,9 @@ class WorkflowRequest(FrozenModel):
             raise ValueError(
                 "educational retrieval requires a generated item request and execution preset"
             )
-        if self.educational_retrieval is not None and isinstance(self.item_brief, ItemBriefV2):
+        if self.educational_retrieval is not None and isinstance(
+            self.item_brief, (ItemBriefV2, ContentTeamItemBrief)
+        ):
             scope = self.item_brief.curriculum_scope
             if (
                 scope is None
@@ -295,20 +326,35 @@ class WorkflowRequest(FrozenModel):
                 or self.item_brief is None
                 or self.stimulus_asset is None
                 or self.image_mode != "required"
+                or self.profiles is None
+                or self.profiles.image is None
             ):
                 raise ValueError(
                     "knowledge item workflow requires pack, brief, fixed stimulus, and image"
                 )
         elif self.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST":
+            content_team_request = isinstance(self.item_brief, ContentTeamItemBrief)
             if (
                 self.content_pack is None
                 or self.item_brief is None
                 or self.stimulus_asset is not None
-                or self.image_mode != "required"
-                or (self.source_intake is not None and self.source_intake.batch_ids)
             ):
                 raise ValueError(
-                    "generated knowledge workflow requires source-free pack, brief, and image role"
+                    "generated knowledge workflow requires a source-free pack and reviewed brief"
+                )
+            if self.source_intake is not None and self.source_intake.batch_ids:
+                raise ValueError("generated knowledge workflow cannot claim source Intake batches")
+            if self.profiles is None:
+                raise ValueError("generated knowledge workflow requires pinned profiles")
+            if content_team_request:
+                if self.image_mode != "skip" or self.profiles.image is not None:
+                    raise ValueError(
+                        "content-team authoring uses program-defined visual slots "
+                        "without an image role"
+                    )
+            elif self.image_mode != "required" or self.profiles.image is None:
+                raise ValueError(
+                    "legacy generated knowledge workflow requires the pinned image role"
                 )
         elif self.request_name == "KNOWLEDGE_ANALYSIS_REQUEST":
             if (
@@ -416,6 +462,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.12.0",
         "workflow-role/1.13.0",
         "workflow-role/1.14.0",
+        "workflow-role/1.15.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -504,6 +551,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.12.0",
         "workflow-role/1.13.0",
         "workflow-role/1.14.0",
+        "workflow-role/1.15.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1123,6 +1171,31 @@ class GeneratedRegistrationRoleResultV6(RoleResultBase):
     output: KnowledgeRegistrationOutput
 
 
+class ContentTeamAuthoringOutputV7(FrozenModel):
+    """No fixed table/image/equation cardinality; the editorial contract owns the shape."""
+
+    draft: AssessmentItemContentV2
+    metadata: KnowledgeAuthoringMetadata
+
+
+class ContentTeamAuthoringRoleResultV7(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.15.0"] = "workflow-role/1.15.0"
+    role: Literal["authoring"]
+    output: ContentTeamAuthoringOutputV7
+
+
+class ContentTeamReviewRoleResultV7(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.15.0"] = "workflow-role/1.15.0"
+    role: Literal["review"]
+    output: KnowledgeReviewOutput
+
+
+class ContentTeamRegistrationRoleResultV7(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.15.0"] = "workflow-role/1.15.0"
+    role: Literal["item_management"]
+    output: KnowledgeRegistrationOutput
+
+
 class KnowledgeAnalysisProposalOutput(FrozenModel):
     proposal: KnowledgeAnalysisWorkerProposal
 
@@ -1230,6 +1303,9 @@ RoleResult = (
     | GeneratedImageRoleResultV6
     | GeneratedReviewRoleResultV6
     | GeneratedRegistrationRoleResultV6
+    | ContentTeamAuthoringRoleResultV7
+    | ContentTeamReviewRoleResultV7
+    | ContentTeamRegistrationRoleResultV7
     | KnowledgeAnalysisProposalRoleResult
     | KnowledgeAnalysisProposalRoleResultV2
     | KnowledgeAnalysisProposalRoleResultV3

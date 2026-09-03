@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/hwpx/content-team-editorial-question-v1.schema.json",
+  "title": "Content-team HwpQuestionEditor editorial question V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "renderer_profile", "source_sha256", "authoring_prompt_sha256",
+    "handoff_archive_sha256", "item_number", "score_display", "stem", "bottom_stem",
+    "inquiry", "labeled_blocks", "visuals", "visual_layout", "statements", "choices", "answer",
+    "explanations", "equation_sources"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "renderer_profile": {"const": "content-team-hwp-question-editor-v1"},
+    "source_sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "authoring_prompt_sha256": {
+      "const": "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435"
+    },
+    "handoff_archive_sha256": {
+      "const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    },
+    "item_number": {"type": "integer", "minimum": 1, "maximum": 999},
+    "score_display": {"enum": ["2", "2.5", "3"]},
+    "stem": {"type": "string", "minLength": 1, "maxLength": 24000},
+    "bottom_stem": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "inquiry": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/inquiry"}]
+    },
+    "labeled_blocks": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/labeledBlock"}
+    },
+    "visuals": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {
+        "oneOf": [{"$ref": "#/$defs/image"}, {"$ref": "#/$defs/table"}]
+      }
+    },
+    "visual_layout": {
+      "enum": [
+        "NONE", "IMAGE_ONLY", "TABLE_ONLY", "IMAGE_TABLE", "TABLE_IMAGE",
+        "IMAGE_IMAGE", "TABLE_TABLE", "INQUIRY_BOX"
+      ]
+    },
+    "statements": {
+      "type": "array",
+      "oneOf": [
+        {"maxItems": 0},
+        {
+          "prefixItems": [
+            {"$ref": "#/$defs/statementGa"},
+            {"$ref": "#/$defs/statementNa"},
+            {"$ref": "#/$defs/statementDa"}
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        }
+      ]
+    },
+    "choices": {
+      "type": "array",
+      "prefixItems": [
+        {"$ref": "#/$defs/choice1"}, {"$ref": "#/$defs/choice2"},
+        {"$ref": "#/$defs/choice3"}, {"$ref": "#/$defs/choice4"},
+        {"$ref": "#/$defs/choice5"}
+      ],
+      "minItems": 5,
+      "maxItems": 5
+    },
+    "answer": {"$ref": "#/$defs/answer"},
+    "explanations": {"$ref": "#/$defs/explanations"},
+    "equation_sources": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    }
+  },
+  "$defs": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "label"],
+      "properties": {
+        "kind": {"const": "IMAGE"},
+        "label": {"enum": ["", "(가)", "(나)"]}
+      }
+    },
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "label", "headers", "rows", "alignments"],
+      "properties": {
+        "kind": {"const": "TABLE"},
+        "label": {"enum": ["", "(가)", "(나)"]},
+        "headers": {
+          "type": "array", "minItems": 2, "maxItems": 5,
+          "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+        },
+        "rows": {
+          "type": "array", "minItems": 1, "maxItems": 100,
+          "items": {
+            "type": "array", "minItems": 2, "maxItems": 5,
+            "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+          }
+        },
+        "alignments": {
+          "type": "array", "minItems": 2, "maxItems": 5,
+          "items": {"enum": ["default", "left", "right", "center"]}
+        }
+      }
+    },
+    "inquiry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "goal", "procedure", "result"],
+      "properties": {
+        "kind": {"enum": ["탐구", "실험"]},
+        "goal": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 4000}
+          ]
+        },
+        "procedure": {"type": "string", "minLength": 1, "maxLength": 12000},
+        "result": {"type": "string", "minLength": 1, "maxLength": 12000}
+      }
+    },
+    "labeledBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "content"],
+      "properties": {
+        "kind": {"enum": ["DATA", "CONDITION"]},
+        "content": {"type": "string", "minLength": 1, "maxLength": 12000}
+      }
+    },
+    "statementBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "text"],
+      "properties": {
+        "label": {"enum": ["ㄱ", "ㄴ", "ㄷ"]},
+        "text": {"type": "string", "minLength": 1, "maxLength": 4000}
+      }
+    },
+    "statementGa": {"allOf": [{"$ref": "#/$defs/statementBase"}, {"properties": {"label": {"const": "ㄱ"}}}]},
+    "statementNa": {"allOf": [{"$ref": "#/$defs/statementBase"}, {"properties": {"label": {"const": "ㄴ"}}}]},
+    "statementDa": {"allOf": [{"$ref": "#/$defs/statementBase"}, {"properties": {"label": {"const": "ㄷ"}}}]},
+    "choiceBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "text"],
+      "properties": {
+        "number": {"enum": ["①", "②", "③", "④", "⑤"]},
+        "text": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "choice1": {"allOf": [{"$ref": "#/$defs/choiceBase"}, {"properties": {"number": {"const": "①"}}}]},
+    "choice2": {"allOf": [{"$ref": "#/$defs/choiceBase"}, {"properties": {"number": {"const": "②"}}}]},
+    "choice3": {"allOf": [{"$ref": "#/$defs/choiceBase"}, {"properties": {"number": {"const": "③"}}}]},
+    "choice4": {"allOf": [{"$ref": "#/$defs/choiceBase"}, {"properties": {"number": {"const": "④"}}}]},
+    "choice5": {"allOf": [{"$ref": "#/$defs/choiceBase"}, {"properties": {"number": {"const": "⑤"}}}]},
+    "answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["answer_kind", "number", "statement_labels", "answer_content", "raw_line"],
+      "properties": {
+        "answer_kind": {"enum": ["STATEMENT_COMBINATION", "DIRECT_CHOICE"]},
+        "number": {"enum": ["①", "②", "③", "④", "⑤"]},
+        "statement_labels": {
+          "type": "array", "maxItems": 3, "uniqueItems": true,
+          "items": {"enum": ["ㄱ", "ㄴ", "ㄷ"]}
+        },
+        "answer_content": {
+          "type": "string", "minLength": 1, "maxLength": 2000,
+          "pattern": "^[^\\r\\n]+$"
+        },
+        "raw_line": {
+          "type": "string", "minLength": 9, "maxLength": 2020,
+          "pattern": "^정답 : [①②③④⑤] \\([^\\r\\n]+\\)$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"answer_kind": {"const": "STATEMENT_COMBINATION"}}},
+          "then": {"properties": {"statement_labels": {"minItems": 1}}},
+          "else": {"properties": {"statement_labels": {"maxItems": 0}}}
+        }
+      ]
+    },
+    "explanations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authoring_intent", "concept_source", "correct_answer", "wrong_answer"],
+      "properties": {
+        "authoring_intent": {"type": "string", "minLength": 1, "maxLength": 12000},
+        "concept_source": {"type": "string", "minLength": 1, "maxLength": 12000},
+        "correct_answer": {"type": "string", "minLength": 1, "maxLength": 24000},
+        "wrong_answer": {"type": "string", "maxLength": 24000}
+      }
+    }
+  }
+}

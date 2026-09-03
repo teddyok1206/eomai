@@ -1,0 +1,70 @@
+schema_version: standard-control-bootstrap/6.0
+preset_key: standard-item
+display_name: 표준 문항 제작 · 콘텐츠팀 출제+HWPX Handoff V6
+description: 콘텐츠팀 출제 원문과 실제 HwpQuestionEditor handoff 규칙을 함께 해시 고정해 출제·검토·인쇄 투영이 동일 문법을 사용하는 표준 문항 제작 정책입니다.
+created_at: "2026-09-03T12:00:00Z"
+model: gpt-5.6-terra
+reasoning_effort: high
+general_knowledge_policy: ALLOW_WITH_PROVENANCE
+compatible_workflow_protocols:
+  - workflow-role/1.15.0
+references:
+  - reference_key: general-knowledge-provenance
+    source_root: CONTROL_CONFIG
+    source_path: standard-item-v5/references/general-knowledge-provenance.md
+    materialized_path: references/general-knowledge-provenance.md
+    reference_format: REFERENCE_MARKDOWN
+    sha256: sha256:ff3859cb40aa66e37bbac632b0b35df3e314cc6d56aca0145dfedbea847d51f7
+  - reference_key: content-team-integrated-science-authoring-v05
+    source_root: CONTROL_CONFIG
+    source_path: standard-item-v5/references/guidance/content-team-integrated-science-authoring-v05.md
+    materialized_path: references/guidance/content-team-integrated-science-authoring-v05.md
+    reference_format: REFERENCE_MARKDOWN
+    sha256: sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435
+  - reference_key: content-team-hwp-question-editor-handoff-v1
+    source_root: CONFIG
+    source_path: references/guidance/content-team-hwp-question-editor-handoff-v1.md
+    materialized_path: references/guidance/content-team-hwp-question-editor-handoff-v1.md
+    reference_format: REFERENCE_MARKDOWN
+    sha256: sha256:6fdfd8f9dbc67abfcac9ef2761059bbe841a8b994640925fef30388d95a00ee5
+  - reference_key: kice-integrated-science-illustration
+    source_root: CONTENT
+    source_path: image-specs/kice-integrated-science-illustration-v1.md
+    materialized_path: references/guidance/kice-integrated-science-illustration-v1.md
+    reference_format: EOM_GUIDANCE_MARKDOWN_V1
+    sha256: sha256:9acdb63cfbc69583d852b386fddb205dfc6efc493a6b68195375b222139396ed
+roles:
+  - role: authoring
+    slot_key: slot01
+    worker_pool_key: authoring
+    instruction_path: instructions/authoring.md
+    reference_keys:
+      - general-knowledge-provenance
+      - content-team-integrated-science-authoring-v05
+      - content-team-hwp-question-editor-handoff-v1
+    timeout_seconds: 1800
+  - role: image
+    slot_key: slot03
+    worker_pool_key: image
+    instruction_path: instructions/image.md
+    reference_keys:
+      - general-knowledge-provenance
+      - kice-integrated-science-illustration
+    timeout_seconds: 1800
+  - role: review
+    slot_key: slot02
+    worker_pool_key: review
+    instruction_path: instructions/review.md
+    reference_keys:
+      - general-knowledge-provenance
+      - content-team-integrated-science-authoring-v05
+      - content-team-hwp-question-editor-handoff-v1
+    timeout_seconds: 1800
+  - role: item_management
+    slot_key: slot04
+    worker_pool_key: item-management
+    instruction_path: instructions/item-management.md
+    reference_keys:
+      - general-knowledge-provenance
+    timeout_seconds: 1800
+support_slot_key: slot05

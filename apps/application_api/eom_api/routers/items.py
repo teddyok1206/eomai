@@ -12,7 +12,7 @@ from eom_api_contracts.items import (
     StructuredItemContentImportRequest,
 )
 from eom_api_contracts.usage import UsageRecordView
-from eom_catalog_contracts import AssessmentItemContent
+from eom_catalog_contracts import AssessmentItemContentContract
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from fastapi.responses import StreamingResponse
@@ -138,13 +138,13 @@ def get_revision(
 @router.get(
     "/item-revisions/{item_revision_id}/structured-content",
     operation_id="item_structured_content_get",
-    response_model=SingleResponse[AssessmentItemContent],
+    response_model=SingleResponse[AssessmentItemContentContract],
     dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
 )
 def get_structured_content(
     request: Request,
     item_revision_id: str,
-) -> SingleResponse[AssessmentItemContent]:
+) -> SingleResponse[AssessmentItemContentContract]:
     return one(
         request,
         request.app.state.services.catalog_application.load_item_content(item_revision_id),

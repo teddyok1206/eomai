@@ -12,8 +12,12 @@ from eom_catalog_service.settings import (
     CatalogSettings,
     CatalogStagingArea,
 )
-from eom_catalog_service.staging import stage_registry_item_content, stage_registry_manifest
-from eom_identifiers import canonical_json_bytes, content_sha256
+from eom_catalog_service.staging import (
+    stage_content_team_item_materialization,
+    stage_registry_item_content,
+    stage_registry_manifest,
+)
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -214,3 +218,35 @@ def test_registry_item_content_staging_rejects_stale_or_unsafe_materialization(
 
     assert captured.value.code == CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID.value
     assert path.lstat().st_mode & 0o777 == 0o600
+
+
+def test_content_team_staging_keeps_json_and_markdown_in_one_hash_keyed_boundary(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    content = {"schema_version": "2.0", "item_number": 19}
+    markdown = "19. 요청으로 정해지는 문항\n".encode()
+
+    first = stage_content_team_item_materialization(settings, content, markdown)
+    second = stage_content_team_item_materialization(settings, content, markdown)
+
+    assert first == second
+    content_path, content_hash, markdown_path, markdown_hash = first
+    assert content_path.parent == markdown_path.parent
+    assert content_path.read_bytes() == canonical_json_bytes(content)
+    assert markdown_path.read_bytes() == markdown
+    assert content_hash == content_sha256(content)
+    assert markdown_hash == sha256_bytes(markdown)
+    assert markdown_path.lstat().st_mode & 0o777 == 0o640
+
+
+def test_content_team_staging_rejects_a_stale_markdown_sidecar(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    content = {"schema_version": "2.0", "item_number": 23}
+    staged = stage_content_team_item_materialization(settings, content, b"original\n")
+    staged[2].chmod(0o600)
+
+    with pytest.raises(CatalogError) as captured:
+        stage_content_team_item_materialization(settings, content, b"original\n")
+
+    assert captured.value.code == CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID.value

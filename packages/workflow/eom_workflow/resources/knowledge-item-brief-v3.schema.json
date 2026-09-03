@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/knowledge-item-brief-v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "subject",
+    "topic",
+    "task_type",
+    "difficulty",
+    "authoring_guidance",
+    "authoring_guidance_sha256",
+    "curriculum_scope",
+    "original_request_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "subject": {"type": "string", "minLength": 1, "maxLength": 80},
+    "topic": {"type": "string", "minLength": 1, "maxLength": 160},
+    "task_type": {"type": "string", "minLength": 1, "maxLength": 80},
+    "difficulty": {"type": "string", "minLength": 1, "maxLength": 80},
+    "authoring_guidance": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 2000,
+      "pattern": "^(?!.*[\\u0000-\\u001f\\u007f])(?!\\s)(?!.*\\s$)(?!.*\\s{2}).+$"
+    },
+    "authoring_guidance_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "curriculum_scope": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/integrated_science_curriculum_scope"}
+      ]
+    },
+    "original_request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "integrated_science_curriculum_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outline_key",
+        "outline_revision",
+        "outline_sha256",
+        "selected_unit_key",
+        "selected_level",
+        "volume_key",
+        "large_unit_key",
+        "middle_unit_key",
+        "graph_root_stable_key",
+        "breadcrumb"
+      ],
+      "properties": {
+        "outline_key": {"const": "eom-integrated-science-editorial-outline"},
+        "outline_revision": {"const": "1.0"},
+        "outline_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "selected_unit_key": {
+          "type": "string",
+          "pattern": "^eom\\.is\\.(large\\.[1-6]|middle\\.[1-6]-[1-7])$"
+        },
+        "selected_level": {"enum": ["LARGE", "MIDDLE"]},
+        "volume_key": {"type": "string", "pattern": "^eom\\.is\\.volume\\.(i|ii)$"},
+        "large_unit_key": {"type": "string", "pattern": "^eom\\.is\\.large\\.[1-6]$"},
+        "middle_unit_key": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^eom\\.is\\.middle\\.[1-6]-[1-7]$"}
+          ]
+        },
+        "graph_root_stable_key": {
+          "type": "string",
+          "pattern": "^curriculum\\.eom\\.editorial\\.integrated-science\\.volume-(i|ii)\\.large-[1-6](?:\\.middle-[1-7])?$"
+        },
+        "breadcrumb": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": {"type": "string", "minLength": 1, "maxLength": 160}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"selected_level": {"const": "LARGE"}},
+            "required": ["selected_level"]
+          },
+          "then": {
+            "properties": {
+              "selected_unit_key": {"pattern": "^eom\\.is\\.large\\.[1-6]$"},
+              "middle_unit_key": {"type": "null"},
+              "graph_root_stable_key": {
+                "pattern": "^curriculum\\.eom\\.editorial\\.integrated-science\\.volume-(i|ii)\\.large-[1-6]$"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "selected_unit_key": {"pattern": "^eom\\.is\\.middle\\.[1-6]-[1-7]$"},
+              "middle_unit_key": {"type": "string"},
+              "graph_root_stable_key": {
+                "pattern": "^curriculum\\.eom\\.editorial\\.integrated-science\\.volume-(i|ii)\\.large-[1-6]\\.middle-[1-7]$"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -61,6 +61,7 @@ from eom_workflow.control_schemas import (
 from eom_workflow.models import (
     AgentStep,
     ArtifactPointer,
+    ContentTeamItemBrief,
     DecisionStep,
     HumanGateStep,
     ItemBrief,
@@ -105,6 +106,7 @@ __all__ = [
     "CodexImageInputManifest",
     "CodexInvocation",
     "CompiledWorkflowDefinition",
+    "ContentTeamItemBrief",
     "ControlArtifactPointer",
     "ControlSchemaError",
     "ControlSchemaResource",

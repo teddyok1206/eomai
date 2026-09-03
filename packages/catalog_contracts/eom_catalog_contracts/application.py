@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 from eom_identifiers import content_sha256
 from pydantic import Field, RootModel, field_validator, model_validator
 
-from eom_catalog_contracts.assessment_item import AssessmentItemContent
+from eom_catalog_contracts.assessment_item import AssessmentItemContentContract
 from eom_catalog_contracts.knowledge import (
     CurriculumRetrievalScope,
     EducationalRetrievalRequirement,
@@ -56,7 +56,7 @@ class ReviewedItemContentImportCommand(FrozenModel):
     expected_version: int = Field(ge=1)
     reviewed_by: ActorId
     review_reason: str = Field(min_length=10, max_length=2000)
-    content: AssessmentItemContent
+    content: AssessmentItemContentContract
 
     @field_validator("review_reason")
     @classmethod
@@ -332,7 +332,7 @@ class CatalogApplicationResponse(FrozenModel):
         | EvidenceBundlePublicationResultV4
         | None
     ) = None
-    content: AssessmentItemContent | None = None
+    content: AssessmentItemContentContract | None = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
 
     @model_validator(mode="after")

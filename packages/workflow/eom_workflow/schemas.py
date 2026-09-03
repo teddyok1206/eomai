@@ -24,6 +24,9 @@ from pydantic import ValidationError
 
 from eom_workflow.models import (
     AuthoringRoleResult,
+    ContentTeamAuthoringRoleResultV7,
+    ContentTeamRegistrationRoleResultV7,
+    ContentTeamReviewRoleResultV7,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
     GeneratedAuthoringRoleResultV5,
@@ -88,6 +91,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "authoring-result@4.0",
             "authoring-result@5.0",
             "authoring-result@6.0",
+            "authoring-result@7.0",
         }
     ),
     "image": frozenset(
@@ -108,6 +112,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "review-result@4.0",
             "review-result@5.0",
             "review-result@6.0",
+            "review-result@7.0",
         }
     ),
     "item_management": frozenset(
@@ -118,6 +123,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "registration-result@4.0",
             "registration-result@5.0",
             "registration-result@6.0",
+            "registration-result@7.0",
         }
     ),
     "support": frozenset(
@@ -159,6 +165,9 @@ RESULT_SCHEMA_FILES = {
     "image-result@6.0": "image-result-v6.schema.json",
     "review-result@6.0": "review-result-v6.schema.json",
     "registration-result@6.0": "registration-result-v6.schema.json",
+    "authoring-result@7.0": "authoring-result-v7.schema.json",
+    "review-result@7.0": "review-result-v7.schema.json",
+    "registration-result@7.0": "registration-result-v7.schema.json",
     "knowledge-analysis-proposal-result@1.0": ("knowledge-analysis-proposal-result-v1.schema.json"),
     "knowledge-analysis-proposal-result@2.0": ("knowledge-analysis-proposal-result-v2.schema.json"),
     "knowledge-analysis-proposal-result@3.0": ("knowledge-analysis-proposal-result-v3.schema.json"),
@@ -185,6 +194,11 @@ INPUT_SCHEMA_FILES_V1_9 = {"support": "knowledge-analysis-input-v6.schema.json"}
 INPUT_SCHEMA_FILES_V1_10 = {"support": "knowledge-analysis-input-v7.schema.json"}
 INPUT_SCHEMA_FILES_V1_11 = {"support": "knowledge-analysis-input-v8.schema.json"}
 INPUT_SCHEMA_FILES_V1_14 = {"support": "legacy-item-extraction-input-v1.schema.json"}
+INPUT_SCHEMA_FILES_V1_15 = {
+    "authoring": "authoring-input.schema.json",
+    "review": "review-input.schema.json",
+    "item_management": "registration-input.schema.json",
+}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -219,6 +233,9 @@ RESULT_SCHEMA_PROTOCOLS = {
     "review-result@6.0": "workflow-role/1.13.0",
     "registration-result@6.0": "workflow-role/1.13.0",
     "legacy-item-extraction-result@1.0": "workflow-role/1.14.0",
+    "authoring-result@7.0": "workflow-role/1.15.0",
+    "review-result@7.0": "workflow-role/1.15.0",
+    "registration-result@7.0": "workflow-role/1.15.0",
 }
 PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.0.1": INPUT_SCHEMA_FILES,
@@ -236,6 +253,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.12.0": INPUT_SCHEMA_FILES_V1_1,
     "workflow-role/1.13.0": INPUT_SCHEMA_FILES_V1_1,
     "workflow-role/1.14.0": INPUT_SCHEMA_FILES_V1_14,
+    "workflow-role/1.15.0": INPUT_SCHEMA_FILES_V1_15,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -253,6 +271,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.12.0",
     "workflow-role/1.13.0",
     "workflow-role/1.14.0",
+    "workflow-role/1.15.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -269,6 +288,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_10.values(),
             *INPUT_SCHEMA_FILES_V1_11.values(),
             *INPUT_SCHEMA_FILES_V1_14.values(),
+            *INPUT_SCHEMA_FILES_V1_15.values(),
         }
     )
 )
@@ -307,6 +327,11 @@ def load_knowledge_item_brief_v2_schema() -> dict[str, Any]:
     return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
 
 
+def load_knowledge_item_brief_v3_schema() -> dict[str, Any]:
+    logical_name = "knowledge-item-brief-v3.schema.json"
+    return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
+
+
 def load_role_input_schema(
     role: str, protocol_version: str = "workflow-role/1.0.1"
 ) -> dict[str, Any]:
@@ -324,6 +349,7 @@ def load_role_input_schema(
         "workflow-role/1.3.0",
         "workflow-role/1.12.0",
         "workflow-role/1.13.0",
+        "workflow-role/1.15.0",
     }:
         schema = copy.deepcopy(schema)
         _mapping(_mapping(schema, "properties"), "protocol_version")["const"] = protocol_version
@@ -338,6 +364,7 @@ def load_role_input_schema(
                 "workflow-role/1.3.0",
                 "workflow-role/1.12.0",
                 "workflow-role/1.13.0",
+                "workflow-role/1.15.0",
             }
             else "KNOWLEDGE_ITEM_REQUEST"
         )
@@ -421,6 +448,12 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return GeneratedReviewRoleResultV6.model_validate(value)
         if schema_id == "registration-result@6.0" and role == "item_management":
             return GeneratedRegistrationRoleResultV6.model_validate(value)
+        if schema_id == "authoring-result@7.0" and role == "authoring":
+            return ContentTeamAuthoringRoleResultV7.model_validate(value)
+        if schema_id == "review-result@7.0" and role == "review":
+            return ContentTeamReviewRoleResultV7.model_validate(value)
+        if schema_id == "registration-result@7.0" and role == "item_management":
+            return ContentTeamRegistrationRoleResultV7.model_validate(value)
         if schema_id == "knowledge-analysis-proposal-result@1.0" and role == "support":
             return KnowledgeAnalysisProposalRoleResult.model_validate(value)
         if schema_id == "knowledge-analysis-proposal-result@2.0" and role == "support":
@@ -943,6 +976,10 @@ def validate_codex_structured_output_schema(schema: dict[str, Any]) -> None:
                 visit(child, (*path, "properties", name))
         if isinstance(value.get("items"), dict):
             visit(value["items"], (*path, "items"))
+        elif value.get("type") == "array":
+            raise WorkflowSchemaError(
+                f"Codex result array has no item schema at {'.'.join(path) or '$'}"
+            )
         if isinstance(value.get("anyOf"), list):
             for index, child in enumerate(value["anyOf"]):
                 visit(child, (*path, "anyOf", str(index)))
@@ -1500,6 +1537,19 @@ def _normalize_codex_schema(value: object) -> None:
     value.pop("uniqueItems", None)
     if "oneOf" in value:
         value["anyOf"] = value.pop("oneOf")
+    prefix_items = value.get("prefixItems")
+    if isinstance(prefix_items, list):
+        if (
+            not prefix_items
+            or value.get("minItems") != len(prefix_items)
+            or value.get("maxItems") != len(prefix_items)
+            or any(item != prefix_items[0] for item in prefix_items[1:])
+        ):
+            raise WorkflowSchemaError(
+                "Codex result projection cannot preserve a heterogeneous fixed tuple"
+            )
+        value["items"] = prefix_items[0]
+        value.pop("prefixItems")
     if "allOf" in value or "prefixItems" in value:
         raise WorkflowSchemaError("Codex result projection retained unsupported composition")
 
@@ -1539,6 +1589,24 @@ def _normalize_codex_schema(value: object) -> None:
     if isinstance(alternatives, list):
         for child in alternatives:
             _normalize_codex_schema(child)
+        array_item_schemas = [
+            child["items"]
+            for child in alternatives
+            if isinstance(child, dict)
+            and child.get("type") == "array"
+            and isinstance(child.get("items"), dict)
+        ]
+        if array_item_schemas and all(
+            candidate == array_item_schemas[0] for candidate in array_item_schemas[1:]
+        ):
+            for child in alternatives:
+                if (
+                    isinstance(child, dict)
+                    and child.get("type") == "array"
+                    and child.get("maxItems") == 0
+                    and "items" not in child
+                ):
+                    child["items"] = array_item_schemas[0]
     definitions = value.get("$defs")
     if isinstance(definitions, dict):
         for child in definitions.values():

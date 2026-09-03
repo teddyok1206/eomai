@@ -9,19 +9,23 @@ from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_FILE_NAME,
     ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
     ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+    ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
     AssessmentItemContent,
+    AssessmentItemContentV2,
     ImageBlock,
     MediaArtifactPointer,
     validate_contract,
     validate_eom_question_template_content,
 )
 from eom_content_pack import ContentPackError, ContentPackErrorCode, render_prompt
+from eom_hwpx_contracts import ContentTeamEditorialDraft, serialize_content_team_markdown
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_image_contracts import LocalImageProviderBinding, content_json_bytes
 from eom_item_registry import ComponentPointer, RegistrationRequest
 from eom_orchestrator.database import build_session_factory
-from eom_workflow import ArtifactPointer, ItemBriefV2, WorkflowRequest
+from eom_workflow import ArtifactPointer, ContentTeamItemBrief, ItemBriefV2, WorkflowRequest
 from eom_workflow.models import (
+    ContentTeamAuthoringRoleResultV7,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
     GeneratedAuthoringRoleResultV5,
@@ -48,7 +52,11 @@ from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRe
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import (
+    CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION,
+    CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH,
+    CatalogArtifactService,
+)
 from eom_catalog_service.generated_stimulus import (
     BACKGROUND_MEMBER,
     LOCAL_IMAGE_RECEIPT_MEMBER,
@@ -78,6 +86,7 @@ from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.staging import (
     create_catalog_operation_directory,
     require_catalog_runtime_directory,
+    stage_content_team_item_materialization,
     stage_registry_item_content,
 )
 from eom_catalog_service.vector_stimulus import (
@@ -127,6 +136,9 @@ ROLE_BY_RESULT_SCHEMA = {
     "image-result@6.0": "image",
     "review-result@6.0": "review",
     "registration-result@6.0": "item_management",
+    "authoring-result@7.0": "authoring",
+    "review-result@7.0": "review",
+    "registration-result@7.0": "item_management",
     "knowledge-analysis-proposal-result@1.0": "support",
     "knowledge-analysis-proposal-result@2.0": "support",
     "knowledge-analysis-proposal-result@3.0": "support",
@@ -291,7 +303,7 @@ class WorkflowCatalogService:
                 )
             self._require_compatibility(release, definition_key, definition_version)
             self._require_item_brief_release(pack.pack_key, release.version, request)
-            profile_keys = request.profiles.model_dump(mode="json")
+            profile_keys = request.profiles.model_dump(mode="json", exclude_none=True)
             profiles = self._profile_snapshots(session, release, profile_keys)
             intake_ids = request.source_intake.batch_ids if request.source_intake else ()
             batches = (
@@ -755,7 +767,19 @@ class WorkflowCatalogService:
                 "knowledge_source_mode": source_mode,
                 "request_sha256": brief.original_request_sha256,
             }
-            if isinstance(brief, ItemBriefV2):
+            if isinstance(brief, ContentTeamItemBrief):
+                metadata_schema = "eom://metadata/content-team-item@1.0"
+                metadata.update(
+                    {
+                        "authoring_guidance_sha256": brief.authoring_guidance_sha256,
+                        "curriculum_scope": (
+                            brief.curriculum_scope.model_dump(mode="json")
+                            if brief.curriculum_scope is not None
+                            else None
+                        ),
+                    }
+                )
+            elif isinstance(brief, ItemBriefV2):
                 metadata_schema = "eom://metadata/general-knowledge-item@2.0"
                 metadata.update(
                     {
@@ -834,6 +858,22 @@ class WorkflowCatalogService:
     ) -> None:
         if request.item_brief is None:
             return
+        is_content_team = isinstance(request.item_brief, ContentTeamItemBrief)
+        expects_content_team = (
+            pack_key == "generated-knowledge-item" and release_version == "1.12.0"
+        )
+        if expects_content_team:
+            if not is_content_team:
+                raise ContentPackError(
+                    ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                    "content-team pack requires the V3 item brief",
+                )
+            return
+        if is_content_team:
+            raise ContentPackError(
+                ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                "V3 item brief requires the content-team pack",
+            )
         is_v2 = isinstance(request.item_brief, ItemBriefV2)
         expects_v2 = pack_key == "generated-knowledge-item" and release_version in {
             "1.2.0",
@@ -937,7 +977,7 @@ class WorkflowCatalogService:
         }
         if request.item_brief is not None:
             brief = request.item_brief.model_dump(mode="json")
-            if isinstance(request.item_brief, ItemBriefV2):
+            if isinstance(request.item_brief, (ItemBriefV2, ContentTeamItemBrief)):
                 reviewed_brief = request.item_brief.model_dump(mode="json")
                 reviewed_brief["knowledge_source_mode"] = self._knowledge_source_mode(request)
                 brief["reviewed_item_brief_json"] = canonical_json_bytes(reviewed_brief).decode(
@@ -968,6 +1008,11 @@ class WorkflowCatalogService:
         request: WorkflowRequest,
         artifacts: tuple[ArtifactPointer, ...],
     ) -> ComponentPointer:
+        if any(
+            pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@7.0"
+            for pointer in artifacts
+        ):
+            return self._content_team_knowledge_item_content(workflow, request, artifacts)
         if request.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST":
             return self._generated_knowledge_item_content(workflow, request, artifacts)
         authoring = next(
@@ -1033,6 +1078,89 @@ class WorkflowCatalogService:
             logical_name=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             metadata={
                 "authoring_artifact_revision_id": authoring.revision_id,
+                **self._brief_provenance_metadata(request),
+            },
+        )
+
+    def _content_team_knowledge_item_content(
+        self,
+        workflow: WorkflowInstanceRecord,
+        request: WorkflowRequest,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> ComponentPointer:
+        """Commit V2 JSON plus the lossless Markdown materialization as one artifact."""
+
+        authoring = next(
+            (
+                pointer
+                for pointer in artifacts
+                if pointer.step_key == "authoring"
+                and pointer.result_schema == "authoring-result@7.0"
+            ),
+            None,
+        )
+        if authoring is None:
+            raise ValueError("content-team workflow has no authoring result")
+        _, parsed = self._load_upstream_result(workflow, authoring)
+        if not isinstance(parsed, ContentTeamAuthoringRoleResultV7):
+            raise ValueError("content-team authoring result type is invalid")
+        content: AssessmentItemContentV2 = parsed.output.draft
+        content_data = content.model_dump(mode="json")
+        validate_contract("assessment-item-content-v2", content_data)
+        editorial_data = dict(content_data)
+        editorial_data.pop("schema_version")
+        editorial = ContentTeamEditorialDraft.model_validate(editorial_data)
+        markdown = serialize_content_team_markdown(editorial)
+        staged, staged_hash, staged_markdown, markdown_hash = (
+            stage_content_team_item_materialization(self.settings, content_data, markdown)
+        )
+        expected_hash = content_sha256(content_data)
+        if staged_hash != expected_hash:
+            raise ValueError("content-team item content changed during staging")
+        artifact = self.artifacts.commit_file_set(
+            files={
+                ASSESSMENT_ITEM_CONTENT_FILE_NAME: staged,
+                "content-team-item.md": staged_markdown,
+            },
+            primary_file=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
+            artifact_type="assessment-item-content",
+            idempotency_key=f"workflow-item-content-v2:{workflow.workflow_id}:{expected_hash}",
+            request={"workflow_id": workflow.workflow_id, "schema_version": "2.0"},
+            result={
+                "content_sha256": expected_hash,
+                "editorial_markdown_sha256": markdown_hash,
+            },
+            file_metadata={
+                ASSESSMENT_ITEM_CONTENT_FILE_NAME: {
+                    "schema_ref": ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+                    "media_type": ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+                },
+                "content-team-item.md": {
+                    "schema_ref": "eom://schemas/hwpx/content-team-editorial-markdown/1.0",
+                    "media_type": "text/markdown",
+                },
+            },
+            expected_file_sha256={
+                ASSESSMENT_ITEM_CONTENT_FILE_NAME: expected_hash,
+                "content-team-item.md": markdown_hash,
+            },
+            protocol_version=CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION,
+            protocol_schema_hash=CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH,
+        )
+        return ComponentPointer(
+            component_type="ITEM_CONTENT",
+            ordinal=0,
+            schema_ref=ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+            media_type=ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+            artifact_id=artifact.artifact_id,
+            artifact_revision_id=artifact.revision_id,
+            sha256=artifact.content_hash,
+            logical_name=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
+            metadata={
+                "authoring_artifact_revision_id": authoring.revision_id,
+                "editorial_markdown_member": "content-team-item.md",
+                "editorial_markdown_sha256": markdown_hash,
+                "renderer_profile": content.renderer_profile,
                 **self._brief_provenance_metadata(request),
             },
         )
@@ -1145,10 +1273,14 @@ class WorkflowCatalogService:
         brief = request.item_brief
         metadata: dict[str, Any] = {
             "knowledge_source_mode": self._knowledge_source_mode(request),
-            "delivery_profile": "eom-question-template-v1",
+            "delivery_profile": (
+                "content-team-hwp-question-editor-v1"
+                if isinstance(brief, ContentTeamItemBrief)
+                else "eom-question-template-v1"
+            ),
             "request_sha256": brief.original_request_sha256 if brief is not None else "",
         }
-        if isinstance(brief, ItemBriefV2):
+        if isinstance(brief, (ItemBriefV2, ContentTeamItemBrief)):
             metadata.update(
                 {
                     "authoring_guidance_sha256": brief.authoring_guidance_sha256,
@@ -1166,7 +1298,7 @@ class WorkflowCatalogService:
         request: WorkflowRequest,
     ) -> Literal["general_model_knowledge", "graph_grounded"]:
         if (
-            isinstance(request.item_brief, ItemBriefV2)
+            isinstance(request.item_brief, (ItemBriefV2, ContentTeamItemBrief))
             and request.educational_retrieval is not None
         ):
             return GRAPH_GROUNDED_KNOWLEDGE_SOURCE_MODE

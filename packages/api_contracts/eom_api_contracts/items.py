@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from eom_catalog_contracts import AssessmentItemContent
+from eom_catalog_contracts import AssessmentItemContentContract
 from pydantic import Field
 
 from eom_api_contracts.common import ApiModel, ArtifactPointer, OpaqueId, UtcDatetime
@@ -57,4 +57,4 @@ class StructuredItemContentImportRequest(ApiModel):
 
     reviewed: Literal[True]
     review_reason: str = Field(min_length=10, max_length=2000)
-    content: AssessmentItemContent
+    content: AssessmentItemContentContract

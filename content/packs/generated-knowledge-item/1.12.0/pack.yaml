@@ -1,0 +1,37 @@
+schema_version: "1.1"
+pack:
+  key: "generated-knowledge-item"
+  name: "Generated Knowledge EOM Template Item"
+  version: "1.12.0"
+  locale: "ko-KR"
+  domain_key: "general-science"
+  description: "Content-team prompt and HwpQuestionEditor contract with typed deterministic materialization"
+provenance:
+  mode: "built_in_general_knowledge"
+  intake_batch_ids: []
+  mapping_proposal_ids: []
+compatibility:
+  protocol:
+    minimum: "1.15.0"
+    maximum_exclusive: "1.16.0"
+  workflow_definitions:
+    - key: "generic-item-development"
+      versions: ["1.7.0"]
+  required_worker_roles: ["authoring", "review", "item_management"]
+taxonomies:
+  curriculum: "taxonomies/curriculum.yaml"
+  tags: "taxonomies/tags.yaml"
+item_types:
+  - key: "eom-template-multiple-choice"
+    source: "item-types/eom-template-multiple-choice.yaml"
+profiles:
+  authoring:
+    generated-knowledge-authoring: "profiles/generated-knowledge-authoring.yaml"
+  review:
+    generated-knowledge-review: "profiles/generated-knowledge-review.yaml"
+  registration:
+    generated-structured-registration: "profiles/generated-structured-registration.yaml"
+metadata_schemas:
+  item: "metadata-schemas/item-metadata.schema.json"
+rubrics:
+  review: "rubrics/review-rubric.yaml"

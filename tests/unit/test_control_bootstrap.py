@@ -14,6 +14,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_ROLE_SLOTS,
     EXPECTED_STANDARD_V2_REFERENCE_KEYS,
     EXPECTED_STANDARD_V5_REFERENCE_KEYS,
+    EXPECTED_STANDARD_V6_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
@@ -34,6 +35,7 @@ CONFIG_V2 = ROOT / "config/control-plane/standard-item-v2"
 CONFIG_V3 = ROOT / "config/control-plane/standard-item-v3"
 CONFIG_V4 = ROOT / "config/control-plane/standard-item-v4"
 CONFIG_V5 = ROOT / "config/control-plane/standard-item-v5"
+CONFIG_V6 = ROOT / "config/control-plane/standard-item-v6"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -344,6 +346,7 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/3.0": 3,
         "standard-control-bootstrap/4.0": 4,
         "standard-control-bootstrap/5.0": 5,
+        "standard-control-bootstrap/6.0": 6,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
@@ -377,7 +380,50 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
         "standard-control-bootstrap/3.0": 1,
         "standard-control-bootstrap/4.0": 1,
         "standard-control-bootstrap/5.0": 2,
+        "standard-control-bootstrap/6.0": 3,
     }
+
+
+def test_standard_bootstrap_v6_pins_source_prompt_and_handoff_profile() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V6)
+    handoff = CONFIG_V6 / "references/guidance/content-team-hwp-question-editor-handoff-v1.md"
+
+    assert manifest.schema_version == "standard-control-bootstrap/6.0"
+    assert manifest.reasoning_effort == "high"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.15.0",)
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V6_REFERENCE_KEYS
+    )
+    assert hashlib.sha256(handoff.read_bytes()).hexdigest() == (
+        "6fdfd8f9dbc67abfcac9ef2761059bbe841a8b994640925fef30388d95a00ee5"
+    )
+    source_prompt = next(
+        reference
+        for reference in manifest.references
+        if reference.reference_key == "content-team-integrated-science-authoring-v05"
+    )
+    assert source_prompt.source_root == "CONTROL_CONFIG"
+    assert source_prompt.sha256 == (
+        "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435"
+    )
+    source_prompt_path = CONFIG_V6.parent / source_prompt.source_path
+    assert "sha256:" + hashlib.sha256(source_prompt_path.read_bytes()).hexdigest() == (
+        source_prompt.sha256
+    )
+    authoring = (CONFIG_V6 / "instructions/authoring.md").read_text(encoding="utf-8")
+    assert "These two files are the\nordered content-and-presentation reference set" in authoring
+    assert "do not skip the source prompt" in authoring
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 6
+    assert STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version] == 3
+
+
+def test_standard_bootstrap_v6_rejects_shared_config_escape() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V6)
+    forged = manifest.model_dump(mode="json")
+    forged["references"][0]["source_path"] = "../standard-item-v5/references/secret.md"
+
+    with pytest.raises(ValidationError, match="reference path is unsafe"):
+        StandardBootstrapManifest.model_validate(forged)
 
 
 def test_standard_bootstrap_v4_rejects_legacy_protocol() -> None:

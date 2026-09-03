@@ -6,6 +6,7 @@ import re
 from pathlib import PurePosixPath
 from typing import Annotated, Final, Literal
 
+from eom_hwpx_contracts import ContentTeamEditorialDraft
 from pydantic import Field, field_validator, model_validator
 
 from eom_catalog_contracts.models import FrozenModel, Sha256, _safe_text
@@ -17,6 +18,7 @@ BoundedAnswer = Annotated[str, Field(min_length=1, max_length=20_000)]
 ASSESSMENT_ITEM_CONTENT_FILE_NAME: Final = "assessment-item-content.json"
 ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE: Final = "application/json"
 ASSESSMENT_ITEM_CONTENT_SCHEMA_REF: Final = "eom.assessment.item-content/1.0"
+ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF: Final = "eom.assessment.item-content/2.0"
 
 
 class MediaArtifactPointer(FrozenModel):
@@ -216,6 +218,15 @@ class AssessmentItemContent(FrozenModel):
             solution=self.solution,
         )
         return self
+
+
+class AssessmentItemContentV2(ContentTeamEditorialDraft):
+    """Content-team-first canonical item; HWPX is one deterministic projection of it."""
+
+    schema_version: Literal["2.0"] = "2.0"
+
+
+type AssessmentItemContentContract = AssessmentItemContent | AssessmentItemContentV2
 
 
 def validate_item_reference_contract(

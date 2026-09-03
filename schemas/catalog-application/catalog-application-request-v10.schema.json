@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-request-v10",
+  "title": "EOM Catalog Application Item Content Request V10",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "base_revision_id", "expected_version", "reviewed_by", "review_reason", "content"],
+      "properties": {
+        "operation": {"const": "IMPORT_REVIEWED_ITEM_CONTENT"},
+        "base_revision_id": {"type": "string", "pattern": "^itemrev_[a-z0-9]{8,55}$"},
+        "expected_version": {"type": "integer", "minimum": 1},
+        "reviewed_by": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+        "review_reason": {"type": "string", "minLength": 10, "maxLength": 2000},
+        "content": {
+          "oneOf": [
+            {"$ref": "eom://schemas/item-registry/assessment-item-content-v1"},
+            {"$ref": "eom://schemas/item-registry/assessment-item-content-v2"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "item_revision_id"],
+      "properties": {
+        "operation": {"const": "GET_ITEM_CONTENT"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[a-z0-9]{8,55}$"}
+      }
+    }
+  ]
+}

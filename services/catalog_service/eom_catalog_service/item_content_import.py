@@ -9,9 +9,12 @@ from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_FILE_NAME,
     ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
     ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
-    AssessmentItemContent,
+    ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+    AssessmentItemContentContract,
+    AssessmentItemContentV2,
     validate_contract,
 )
+from eom_hwpx_contracts import ContentTeamEditorialDraft, serialize_content_team_markdown
 from eom_identifiers import content_sha256
 from eom_item_registry import (
     ComponentPointer,
@@ -25,7 +28,11 @@ from eom_workflow_runner.models import WorkflowInstanceRecord
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import (
+    CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION,
+    CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH,
+    CatalogArtifactService,
+)
 from eom_catalog_service.models import (
     ItemComponentRecord,
     ItemMetadataSnapshotRecord,
@@ -35,7 +42,10 @@ from eom_catalog_service.models import (
 )
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.settings import CatalogSettings
-from eom_catalog_service.staging import stage_registry_item_content
+from eom_catalog_service.staging import (
+    stage_content_team_item_materialization,
+    stage_registry_item_content,
+)
 
 
 @dataclass(frozen=True)
@@ -60,14 +70,21 @@ class StructuredItemContentImportService:
     def import_reviewed(
         self,
         base_revision_id: str,
-        content: AssessmentItemContent,
+        content: AssessmentItemContentContract,
         *,
         reviewed_by: str,
         review_reason: str,
         expected_version: int,
     ) -> StructuredItemContentImport:
         content_data = content.model_dump(mode="json")
-        validate_contract("assessment-item-content", content_data)
+        is_content_team = isinstance(content, AssessmentItemContentV2)
+        schema_name = "assessment-item-content-v2" if is_content_team else "assessment-item-content"
+        schema_ref = (
+            ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF
+            if is_content_team
+            else ASSESSMENT_ITEM_CONTENT_SCHEMA_REF
+        )
+        validate_contract(schema_name, content_data)
         content_hash = content_sha256(content_data)
         review_hash = content_sha256(
             {"reviewed_by": reviewed_by, "review_reason": review_reason}
@@ -174,36 +191,81 @@ class StructuredItemContentImportService:
                 "metadata": base.metadata_json,
             }
 
-        staged, staged_hash = stage_registry_item_content(self.settings, content_data)
+        markdown_hash: str | None = None
+        if is_content_team:
+            editorial_data = dict(content_data)
+            editorial_data.pop("schema_version")
+            editorial = ContentTeamEditorialDraft.model_validate(editorial_data)
+            markdown = serialize_content_team_markdown(editorial)
+            staged, staged_hash, staged_markdown, markdown_hash = (
+                stage_content_team_item_materialization(self.settings, content_data, markdown)
+            )
+            files = {
+                ASSESSMENT_ITEM_CONTENT_FILE_NAME: staged,
+                "content-team-item.md": staged_markdown,
+            }
+            file_metadata = {
+                ASSESSMENT_ITEM_CONTENT_FILE_NAME: {
+                    "schema_ref": schema_ref,
+                    "media_type": ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+                },
+                "content-team-item.md": {
+                    "schema_ref": "eom://schemas/hwpx/content-team-editorial-markdown/1.0",
+                    "media_type": "text/markdown",
+                },
+            }
+            expected_file_sha256 = {
+                ASSESSMENT_ITEM_CONTENT_FILE_NAME: content_hash,
+                "content-team-item.md": markdown_hash,
+            }
+        else:
+            staged, staged_hash = stage_registry_item_content(self.settings, content_data)
+            files = {ASSESSMENT_ITEM_CONTENT_FILE_NAME: staged}
+            file_metadata = {
+                ASSESSMENT_ITEM_CONTENT_FILE_NAME: {
+                    "schema_ref": schema_ref,
+                    "media_type": ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+                }
+            }
+            expected_file_sha256 = None
         if staged_hash != content_hash:
             raise RegistryError(
                 RegistryErrorCode.ITEM_COMPONENT_INVALID,
                 "canonical content hash changed during staging",
             )
         artifact = self.artifacts.commit_file_set(
-            files={ASSESSMENT_ITEM_CONTENT_FILE_NAME: staged},
+            files=files,
             primary_file=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             artifact_type="assessment-item-content",
             idempotency_key=f"reviewed-item-content-artifact:{content_hash}",
             request={
-                "schema_ref": ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+                "schema_ref": schema_ref,
                 "content_sha256": content_hash,
             },
             result={
-                "schema_ref": ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+                "schema_ref": schema_ref,
                 "content_sha256": content_hash,
+                **(
+                    {"editorial_markdown_sha256": markdown_hash}
+                    if markdown_hash is not None
+                    else {}
+                ),
             },
-            file_metadata={
-                ASSESSMENT_ITEM_CONTENT_FILE_NAME: {
-                    "schema_ref": ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
-                    "media_type": ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+            file_metadata=file_metadata,
+            expected_file_sha256=expected_file_sha256,
+            **(
+                {
+                    "protocol_version": CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION,
+                    "protocol_schema_hash": CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH,
                 }
-            },
+                if is_content_team
+                else {}
+            ),
         )
         content_pointer = ComponentPointer(
             component_type="ITEM_CONTENT",
             ordinal=0,
-            schema_ref=ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+            schema_ref=schema_ref,
             media_type=ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
             artifact_id=artifact.artifact_id,
             artifact_revision_id=artifact.revision_id,
@@ -211,10 +273,22 @@ class StructuredItemContentImportService:
             logical_name=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             required=True,
             metadata={
-                "import_protocol": "reviewed-structured-item-content/1.0",
+                "import_protocol": (
+                    "reviewed-content-team-item/2.0"
+                    if is_content_team
+                    else "reviewed-structured-item-content/1.0"
+                ),
                 "reviewed_by": reviewed_by,
                 "review_reason": review_reason,
                 "base_revision_id": base_revision_id,
+                **(
+                    {
+                        "editorial_markdown_member": "content-team-item.md",
+                        "editorial_markdown_sha256": markdown_hash,
+                    }
+                    if markdown_hash is not None
+                    else {}
+                ),
             },
         )
         request = RegistrationRequest(

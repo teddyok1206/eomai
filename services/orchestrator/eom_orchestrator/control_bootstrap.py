@@ -108,6 +108,25 @@ EXPECTED_STANDARD_V5_REFERENCE_KEYS = MappingProxyType(
         "item_management": ("general-knowledge-provenance",),
     }
 )
+EXPECTED_STANDARD_V6_REFERENCE_KEYS = MappingProxyType(
+    {
+        "authoring": (
+            "general-knowledge-provenance",
+            "content-team-integrated-science-authoring-v05",
+            "content-team-hwp-question-editor-handoff-v1",
+        ),
+        "image": (
+            "general-knowledge-provenance",
+            "kice-integrated-science-illustration",
+        ),
+        "review": (
+            "general-knowledge-provenance",
+            "content-team-integrated-science-authoring-v05",
+            "content-team-hwp-question-editor-handoff-v1",
+        ),
+        "item_management": ("general-knowledge-provenance",),
+    }
+)
 STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS = MappingProxyType(
     {
         "standard-control-bootstrap/1.0": 1,
@@ -115,6 +134,7 @@ STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS = MappingProxyType(
         "standard-control-bootstrap/3.0": 3,
         "standard-control-bootstrap/4.0": 4,
         "standard-control-bootstrap/5.0": 5,
+        "standard-control-bootstrap/6.0": 6,
     }
 )
 STANDARD_BOOTSTRAP_REFERENCE_REVISIONS = MappingProxyType(
@@ -124,6 +144,7 @@ STANDARD_BOOTSTRAP_REFERENCE_REVISIONS = MappingProxyType(
         "standard-control-bootstrap/3.0": 1,
         "standard-control-bootstrap/4.0": 1,
         "standard-control-bootstrap/5.0": 2,
+        "standard-control-bootstrap/6.0": 3,
     }
 )
 STANDARD_COMPATIBLE_CURRENT_CAPACITY_REVISIONS = MappingProxyType(
@@ -170,7 +191,7 @@ class StandardBootstrapReference(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     reference_key: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,127}$")
-    source_root: Literal["CONFIG", "CONTENT"]
+    source_root: Literal["CONFIG", "CONTROL_CONFIG", "CONTENT"]
     source_path: str = Field(min_length=3, max_length=240)
     materialized_path: str = Field(min_length=3, max_length=240)
     reference_format: Literal["REFERENCE_MARKDOWN", "EOM_GUIDANCE_MARKDOWN_V1"]
@@ -195,6 +216,14 @@ class StandardBootstrapReference(BaseModel):
             raise ValueError("bootstrap reference must materialize under references/")
         if self.source_root == "CONFIG" and not self.source_path.startswith("references/"):
             raise ValueError("config reference source must be under references/")
+        if (
+            self.source_root == "CONTROL_CONFIG"
+            and re.fullmatch(
+                r"standard-item-v[1-9][0-9]*/references/[a-z0-9._/-]+\.md", self.source_path
+            )
+            is None
+        ):
+            raise ValueError("shared control-config reference source is unsafe")
         if self.source_root == "CONTENT" and not self.source_path.startswith(
             ("authoring-rules/", "image-specs/", "review-rules/")
         ):
@@ -213,6 +242,7 @@ class StandardBootstrapManifest(BaseModel):
         "standard-control-bootstrap/3.0",
         "standard-control-bootstrap/4.0",
         "standard-control-bootstrap/5.0",
+        "standard-control-bootstrap/6.0",
     ]
     preset_key: Literal["standard-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -245,7 +275,9 @@ class StandardBootstrapManifest(BaseModel):
                 raise ValueError("standard bootstrap V1 reference contract differs")
             return self
         expected_reference_keys = (
-            EXPECTED_STANDARD_V5_REFERENCE_KEYS
+            EXPECTED_STANDARD_V6_REFERENCE_KEYS
+            if self.schema_version == "standard-control-bootstrap/6.0"
+            else EXPECTED_STANDARD_V5_REFERENCE_KEYS
             if self.schema_version == "standard-control-bootstrap/5.0"
             else EXPECTED_STANDARD_V2_REFERENCE_KEYS
         )
@@ -271,6 +303,10 @@ class StandardBootstrapManifest(BaseModel):
             self.compatible_workflow_protocols != ("workflow-role/1.13.0",)
         ):
             raise ValueError("standard bootstrap V5 protocol differs")
+        if self.schema_version == "standard-control-bootstrap/6.0" and (
+            self.compatible_workflow_protocols != ("workflow-role/1.15.0",)
+        ):
+            raise ValueError("standard bootstrap V6 protocol differs")
         return self
 
 
@@ -434,6 +470,11 @@ def bootstrap_standard_control_plane(
         raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "bootstrap operator input is invalid")
     manifest = load_standard_bootstrap_manifest(config_directory)
     config_root = _safe_root(config_directory)
+    control_config_root = (
+        _safe_root(config_root.parent)
+        if manifest.schema_version == "standard-control-bootstrap/6.0"
+        else config_root
+    )
     content_root = (
         _safe_root(content_directory)
         if manifest.schema_version != "standard-control-bootstrap/1.0"
@@ -464,7 +505,13 @@ def bootstrap_standard_control_plane(
     else:
         assert content_root is not None
         for reference in manifest.references:
-            source_root = config_root if reference.source_root == "CONFIG" else content_root
+            source_root = (
+                config_root
+                if reference.source_root == "CONFIG"
+                else control_config_root
+                if reference.source_root == "CONTROL_CONFIG"
+                else content_root
+            )
             payload = _read_member(source_root, reference.source_path)
             if "sha256:" + hashlib.sha256(payload).hexdigest() != reference.sha256:
                 raise ControlPlaneError(
@@ -1017,6 +1064,7 @@ def load_standard_bootstrap_manifest(config_directory: Path) -> StandardBootstra
                 "standard-control-bootstrap/3.0": "standard-control-bootstrap-v3",
                 "standard-control-bootstrap/4.0": "standard-control-bootstrap-v4",
                 "standard-control-bootstrap/5.0": "standard-control-bootstrap-v5",
+                "standard-control-bootstrap/6.0": "standard-control-bootstrap-v6",
             }.get(schema_version if isinstance(schema_version, str) else "")
             if contract_name is not None:
                 validate_control_contract(contract_name, value)

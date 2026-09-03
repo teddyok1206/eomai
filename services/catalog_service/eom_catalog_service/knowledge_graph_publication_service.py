@@ -1121,12 +1121,18 @@ class KnowledgeGraphPublicationService:
             content = content_by_revision.get(binding.item_revision_id)
             if content is None:
                 try:
-                    content = self.registry.load_item_content(binding.item_revision_id)
+                    loaded_content = self.registry.load_item_content(binding.item_revision_id)
                 except RegistryError as exc:
                     raise KnowledgeGraphPublicationError(
                         "KNOWLEDGE_GRAPH_ITEM_POINTER_INVALID",
                         "Item element canonical content is invalid",
                     ) from exc
+                if not isinstance(loaded_content, AssessmentItemContent):
+                    raise KnowledgeGraphPublicationError(
+                        "KNOWLEDGE_GRAPH_ITEM_POINTER_INVALID",
+                        "Item element bindings require assessment item content schema 1.0",
+                    )
+                content = loaded_content
                 content_by_revision[binding.item_revision_id] = content
             answer_bearing = self._resolve_item_element(
                 content, binding.element_kind, binding.element_id

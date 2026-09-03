@@ -212,3 +212,61 @@ def stage_registry_item_content(
             "item content staging verification failed",
         ) from exc
     return content_path, content_hash
+
+
+def stage_content_team_item_materialization(
+    settings: CatalogSettings,
+    content: dict[str, Any],
+    markdown: bytes,
+) -> tuple[Path, str, Path, str]:
+    """Stage canonical V2 JSON and its deterministic editor Markdown side by side."""
+
+    if not markdown or len(markdown) > 1024 * 1024:
+        raise CatalogError(
+            CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID,
+            "content-team Markdown size is outside the bounded profile",
+        )
+    content_path, content_hash = stage_registry_item_content(settings, content)
+    markdown_hash = sha256_bytes(markdown)
+    markdown_path = content_path.parent / "content-team-item.md"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(markdown_path, flags, 0o640)
+    except FileExistsError:
+        descriptor = None
+    except OSError as exc:
+        raise CatalogError(
+            CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID,
+            "content-team Markdown staging failed",
+        ) from exc
+    if descriptor is not None:
+        try:
+            with os.fdopen(descriptor, "wb") as output:
+                os.fchmod(output.fileno(), 0o640)
+                output.write(markdown)
+        except OSError as exc:
+            with suppress(OSError):
+                markdown_path.unlink()
+            raise CatalogError(
+                CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID,
+                "content-team Markdown staging failed",
+            ) from exc
+    try:
+        metadata = markdown_path.lstat()
+        if (
+            markdown_path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or metadata.st_gid != os.getegid()
+            or stat.S_IMODE(metadata.st_mode) != 0o640
+            or metadata.st_size != len(markdown)
+            or sha256_file(markdown_path) != markdown_hash
+            or markdown_path.read_bytes() != markdown
+        ):
+            raise OSError("staged content-team Markdown is stale or unsafe")
+    except OSError as exc:
+        raise CatalogError(
+            CatalogErrorCode.CATALOG_REGISTRY_STAGING_INVALID,
+            "content-team Markdown staging verification failed",
+        ) from exc
+    return content_path, content_hash, markdown_path, markdown_hash

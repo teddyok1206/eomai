@@ -192,6 +192,9 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "catalog-application/catalog-application-response-v7.schema.json",
         "catalog-application/catalog-application-response-v8.schema.json",
         "catalog-application/catalog-application-response-v9.schema.json",
+        "catalog-application/catalog-application-request-v10.schema.json",
+        "catalog-application/catalog-application-response-v10.schema.json",
+        "item-registry/assessment-item-content-v2.schema.json",
         "catalog-application/catalog-item-media-request-v1.schema.json",
         "catalog-application/catalog-item-media-response-v1.schema.json",
         "knowledge/knowledge-analysis-batch-request-v1.schema.json",
@@ -241,6 +244,21 @@ def test_api_release_verifies_local_image_runtime_and_contract_resources() -> No
         "Image Contract schema resource drift",
     ):
         assert required in source
+
+
+def test_api_release_verifies_content_team_contract_runtime() -> None:
+    source = _source("scripts/api/deploy_release.sh")
+
+    for required in (
+        "eom_hwpx_contracts/content_team_equations.py",
+        "eom_hwpx_contracts/content_team_markdown.py",
+        "eom_hwpx_contracts/models.py",
+        "eom_hwpx_contracts/validation.py",
+        "eom_hwpx_builder/content_team_handoff.py",
+    ):
+        assert required in source
+    assert "eom_hwpx_manager/content_team_markdown.py" not in source
+    assert "eom_hwpx_manager/content_team_equations.py" not in source
 
 
 def test_content_team_font_installer_pins_exact_files_and_never_depends_on_eomis() -> None:

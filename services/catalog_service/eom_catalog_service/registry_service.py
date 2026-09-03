@@ -16,6 +16,8 @@ from typing import Any, BinaryIO, Literal, cast
 from eom_catalog_contracts import (
     CATALOG_ITEM_MEDIA_MAX_BYTES,
     AssessmentItemContent,
+    AssessmentItemContentContract,
+    AssessmentItemContentV2,
     ImageBlock,
     MediaArtifactPointer,
     validate_contract,
@@ -336,7 +338,7 @@ class RegistryService:
                 "components": [self.component_dict(item) for item in components]
             }
 
-    def load_item_content(self, revision_id: str) -> AssessmentItemContent:
+    def load_item_content(self, revision_id: str) -> AssessmentItemContentContract:
         """Resolve and validate the exact canonical content pinned by one revision."""
 
         with self.sessions() as session:
@@ -360,7 +362,7 @@ class RegistryService:
             content = self._load_item_content(session, revision_id)
             matches = [
                 block
-                for block in content.body
+                for block in (content.body if isinstance(content, AssessmentItemContent) else ())
                 if isinstance(block, ImageBlock) and block.block_id == block_id
             ]
             if len(matches) != 1:
@@ -413,7 +415,7 @@ class RegistryService:
         )
 
     @staticmethod
-    def _load_item_content(session: Session, revision_id: str) -> AssessmentItemContent:
+    def _load_item_content(session: Session, revision_id: str) -> AssessmentItemContentContract:
         revision = session.get(ItemRevisionRecord, revision_id)
         if revision is None:
             raise RegistryError(
@@ -607,16 +609,22 @@ class RegistryService:
         session: Session,
         pointer: ComponentPointer,
         revision: ArtifactRevisionRecord,
-    ) -> AssessmentItemContent:
-        if (
-            pointer.ordinal != 0
-            or pointer.schema_ref
-            not in {
-                "eom.assessment.item-content/1.0",
-                "eom://schemas/item-registry/assessment-item-content-v1",
-            }
-            or pointer.media_type != "application/json"
-        ):
+    ) -> AssessmentItemContentContract:
+        schema_name: str
+        model: type[AssessmentItemContent] | type[AssessmentItemContentV2]
+        if pointer.schema_ref in {
+            "eom.assessment.item-content/1.0",
+            "eom://schemas/item-registry/assessment-item-content-v1",
+        }:
+            schema_name, model = "assessment-item-content", AssessmentItemContent
+        elif pointer.schema_ref in {
+            "eom.assessment.item-content/2.0",
+            "eom://schemas/item-registry/assessment-item-content-v2",
+        }:
+            schema_name, model = "assessment-item-content-v2", AssessmentItemContentV2
+        else:
+            schema_name, model = "", AssessmentItemContent
+        if pointer.ordinal != 0 or not schema_name or pointer.media_type != "application/json":
             raise RegistryError(
                 RegistryErrorCode.ITEM_COMPONENT_INVALID,
                 "canonical item content component identity is invalid",
@@ -626,15 +634,15 @@ class RegistryService:
             raw: object = json.loads(primary.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
                 raise ValueError("item content is not an object")
-            validate_contract("assessment-item-content", raw)
-            content = AssessmentItemContent.model_validate(raw)
+            validate_contract(schema_name, raw)
+            content = model.model_validate(raw)
         except (OSError, UnicodeError, ValueError) as exc:
             raise RegistryError(
                 RegistryErrorCode.ITEM_COMPONENT_INVALID,
                 "canonical item content artifact is invalid",
             ) from exc
 
-        for block in content.body:
+        for block in getattr(content, "body", ()):
             artifact_pointer = getattr(block, "artifact", None)
             if artifact_pointer is None:
                 continue

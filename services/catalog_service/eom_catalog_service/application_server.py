@@ -110,14 +110,18 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 operation = raw_operation
             validate_contract(
                 (
-                    "catalog-application-request-v9"
-                    if operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
-                    else "catalog-application-request-v4"
-                    if operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
+                    "catalog-application-request-v10"
+                    if operation in {"IMPORT_REVIEWED_ITEM_CONTENT", "GET_ITEM_CONTENT"}
                     else (
-                        "catalog-application-request-v5"
-                        if operation == "CREATE_KNOWLEDGE_ANALYSIS"
-                        else "catalog-application-request-v3"
+                        "catalog-application-request-v9"
+                        if operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
+                        else "catalog-application-request-v4"
+                        if operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
+                        else (
+                            "catalog-application-request-v5"
+                            if operation == "CREATE_KNOWLEDGE_ANALYSIS"
+                            else "catalog-application-request-v3"
+                        )
                     )
                 ),
                 value,
@@ -325,17 +329,27 @@ class CatalogApplicationServer(_ThreadingUnixServer):
 
     @staticmethod
     def write_response(stream: Any, response: CatalogApplicationResponse) -> None:
-        payload = response.model_dump(mode="json", exclude_none=True)
+        # Remove only inactive top-level response variants. Nested nullable contract fields such as
+        # a content-team inquiry must remain explicit for canonical JSON Schema validation.
+        payload = {
+            key: value
+            for key, value in response.model_dump(mode="json").items()
+            if value is not None
+        }
         validate_contract(
             (
-                "catalog-application-response-v7"
-                if response.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
-                else "catalog-application-response-v8"
-                if response.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
+                "catalog-application-response-v10"
+                if response.operation in {"IMPORT_REVIEWED_ITEM_CONTENT", "GET_ITEM_CONTENT"}
                 else (
-                    "catalog-application-response-v9"
-                    if response.operation == "CREATE_EVIDENCE_BUNDLE"
-                    else "catalog-application-response-v3"
+                    "catalog-application-response-v7"
+                    if response.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
+                    else "catalog-application-response-v8"
+                    if response.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
+                    else (
+                        "catalog-application-response-v9"
+                        if response.operation == "CREATE_EVIDENCE_BUNDLE"
+                        else "catalog-application-response-v3"
+                    )
                 )
             ),
             payload,

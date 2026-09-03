@@ -18,7 +18,7 @@ from eom_catalog_contracts import (
     CATALOG_APPLICATION_SOCKET_MODE,
     CATALOG_APPLICATION_SOCKET_PATH,
     CATALOG_ITEM_MEDIA_MAX_BYTES,
-    AssessmentItemContent,
+    AssessmentItemContentContract,
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
@@ -105,7 +105,7 @@ class CatalogApplicationClient:
             )
         return response.result
 
-    def load_item_content(self, item_revision_id: str) -> AssessmentItemContent:
+    def load_item_content(self, item_revision_id: str) -> AssessmentItemContentContract:
         command = ItemContentQuery(item_revision_id=item_revision_id)
         response = self._request(command)
         if response.operation != command.operation or response.content is None:

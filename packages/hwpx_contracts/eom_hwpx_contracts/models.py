@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from enum import StrEnum
 from pathlib import PurePosixPath
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -25,6 +26,259 @@ def _valid_xml_text(value: str) -> str:
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class ContentTeamTable(StrictModel):
+    """Semantic Markdown table consumed by the reviewed content-team renderer."""
+
+    kind: Literal["TABLE"] = "TABLE"
+    label: Literal["", "(가)", "(나)"] = ""
+    headers: tuple[str, ...] = Field(min_length=2, max_length=5)
+    rows: tuple[tuple[str, ...], ...] = Field(min_length=1, max_length=100)
+    alignments: tuple[Literal["default", "left", "right", "center"], ...]
+
+    @model_validator(mode="after")
+    def rectangular_xml_safe_table(self) -> ContentTeamTable:
+        width = len(self.headers)
+        if len(self.alignments) != width or any(len(row) != width for row in self.rows):
+            raise ValueError("content-team table rows and alignments must match header width")
+        for cell in (*self.headers, *(cell for row in self.rows for cell in row)):
+            if not cell or len(cell) > 2000:
+                raise ValueError("content-team table cell length is invalid")
+            _valid_xml_text(cell)
+        return self
+
+
+class ContentTeamImageSlot(StrictModel):
+    """An empty image slot; image bytes remain a separately pinned artifact."""
+
+    kind: Literal["IMAGE"] = "IMAGE"
+    label: Literal["", "(가)", "(나)"] = ""
+
+
+class ContentTeamLabeledBlock(StrictModel):
+    """Prototype-backed 자료/조건 content, independent of subject matter."""
+
+    kind: Literal["DATA", "CONDITION"]
+    content: str = Field(min_length=1, max_length=12000)
+
+    @field_validator("content")
+    @classmethod
+    def labeled_block_xml_text(cls, value: str) -> str:
+        return _valid_xml_text(value)
+
+
+ContentTeamVisual = Annotated[
+    ContentTeamTable | ContentTeamImageSlot,
+    Field(discriminator="kind"),
+]
+
+
+class ContentTeamInquiry(StrictModel):
+    kind: Literal["탐구", "실험"]
+    goal: str | None = Field(default=None, min_length=1, max_length=4000)
+    procedure: str = Field(min_length=1, max_length=12000)
+    result: str = Field(min_length=1, max_length=12000)
+
+    @field_validator("goal", "procedure", "result")
+    @classmethod
+    def inquiry_xml_text(cls, value: str | None) -> str | None:
+        return None if value is None else _valid_xml_text(value)
+
+    @model_validator(mode="after")
+    def ordered_procedure_steps(self) -> ContentTeamInquiry:
+        labels = tuple(
+            match.group(1) for match in re.finditer(r"(?m)^\s*\(([가-아])\)\s+", self.procedure)
+        )
+        expected = tuple("가나다라마바사아")[: len(labels)]
+        if len(labels) < 3 or labels != expected:
+            raise ValueError("content-team inquiry procedure requires three ordered steps")
+        return self
+
+
+class ContentTeamStatement(StrictModel):
+    label: Literal["ㄱ", "ㄴ", "ㄷ"]
+    text: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("text")
+    @classmethod
+    def statement_xml_text(cls, value: str) -> str:
+        return _valid_xml_text(value)
+
+
+class ContentTeamChoice(StrictModel):
+    number: Literal["①", "②", "③", "④", "⑤"]
+    text: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("text")
+    @classmethod
+    def choice_xml_text(cls, value: str) -> str:
+        return _valid_xml_text(value)
+
+
+class ContentTeamAnswerBase(StrictModel):
+    number: Literal["①", "②", "③", "④", "⑤"]
+    answer_content: str = Field(min_length=1, max_length=2000, pattern=r"^[^\r\n]+$")
+    raw_line: str = Field(
+        min_length=9,
+        max_length=2020,
+        pattern=r"^정답 : [①②③④⑤] \([^\r\n]+\)$",
+    )
+
+    @model_validator(mode="after")
+    def exact_answer_line(self) -> ContentTeamAnswerBase:
+        if self.raw_line != f"정답 : {self.number} ({self.answer_content})":
+            raise ValueError("content-team answer line and answer content differ")
+        return self
+
+
+class ContentTeamCombinationAnswer(ContentTeamAnswerBase):
+    answer_kind: Literal["STATEMENT_COMBINATION"] = "STATEMENT_COMBINATION"
+    statement_labels: tuple[Literal["ㄱ", "ㄴ", "ㄷ"], ...] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def exact_statement_combination(self) -> ContentTeamCombinationAnswer:
+        if tuple(dict.fromkeys(self.statement_labels)) != self.statement_labels:
+            raise ValueError("content-team answer statement labels must be unique")
+        if self.answer_content != ", ".join(self.statement_labels):
+            raise ValueError("content-team answer line and statement combination differ")
+        return self
+
+
+class ContentTeamDirectChoiceAnswer(ContentTeamAnswerBase):
+    answer_kind: Literal["DIRECT_CHOICE"] = "DIRECT_CHOICE"
+    statement_labels: tuple[Literal["ㄱ", "ㄴ", "ㄷ"], ...] = Field(max_length=0)
+
+
+type ContentTeamAnswer = Annotated[
+    ContentTeamCombinationAnswer | ContentTeamDirectChoiceAnswer,
+    Field(discriminator="answer_kind"),
+]
+
+
+class ContentTeamExplanationSections(StrictModel):
+    authoring_intent: str = Field(min_length=1, max_length=12000)
+    concept_source: str = Field(min_length=1, max_length=12000)
+    correct_answer: str = Field(min_length=1, max_length=24000)
+    wrong_answer: str = Field(max_length=24000)
+
+    @field_validator("authoring_intent", "concept_source", "correct_answer", "wrong_answer")
+    @classmethod
+    def explanation_xml_text(cls, value: str) -> str:
+        return _valid_xml_text(value)
+
+
+class ContentTeamEditorialDraft(StrictModel):
+    """Subject-neutral authoring data retained by the content-team editor profile."""
+
+    renderer_profile: Literal["content-team-hwp-question-editor-v1"] = (
+        "content-team-hwp-question-editor-v1"
+    )
+    authoring_prompt_sha256: Literal[
+        "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435"
+    ] = "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435"
+    handoff_archive_sha256: Literal[
+        "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    ] = "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    item_number: int = Field(ge=1, le=999)
+    score_display: Literal["2", "2.5", "3"]
+    stem: str = Field(min_length=1, max_length=24000)
+    bottom_stem: str = Field(min_length=1, max_length=4000)
+    inquiry: ContentTeamInquiry | None = None
+    labeled_blocks: tuple[ContentTeamLabeledBlock, ...] = Field(max_length=2)
+    visuals: tuple[ContentTeamVisual, ...] = Field(max_length=2)
+    visual_layout: Literal[
+        "NONE",
+        "IMAGE_ONLY",
+        "TABLE_ONLY",
+        "IMAGE_TABLE",
+        "TABLE_IMAGE",
+        "IMAGE_IMAGE",
+        "TABLE_TABLE",
+        "INQUIRY_BOX",
+    ]
+    statements: tuple[()] | tuple[ContentTeamStatement, ContentTeamStatement, ContentTeamStatement]
+    choices: tuple[ContentTeamChoice, ...] = Field(min_length=5, max_length=5)
+    answer: ContentTeamAnswer
+    explanations: ContentTeamExplanationSections
+    equation_sources: tuple[str, ...] = Field(max_length=128)
+
+    @field_validator("stem", "bottom_stem", "equation_sources")
+    @classmethod
+    def editorial_xml_text(cls, value: str | tuple[str, ...]) -> str | tuple[str, ...]:
+        if isinstance(value, tuple):
+            if any(not source or len(source) > 500 for source in value):
+                raise ValueError("content-team equation source length is invalid")
+            return tuple(_valid_xml_text(source) for source in value)
+        return _valid_xml_text(value)
+
+    @model_validator(mode="after")
+    def exact_order_and_visual_layout(self) -> ContentTeamEditorialDraft:
+        statement_labels = tuple(value.label for value in self.statements)
+        if statement_labels not in ((), ("ㄱ", "ㄴ", "ㄷ")):
+            raise ValueError("content-team statements must be absent or preserve ㄱ/ㄴ/ㄷ order")
+        if tuple(value.number for value in self.choices) != ("①", "②", "③", "④", "⑤"):
+            raise ValueError("content-team choices must preserve ① through ⑤ order")
+        if bool(self.statements) != (self.answer.answer_kind == "STATEMENT_COMBINATION"):
+            raise ValueError("content-team statement and answer forms differ")
+        if self.answer.answer_kind == "STATEMENT_COMBINATION":
+            selected = self.choices[("①", "②", "③", "④", "⑤").index(self.answer.number)].text
+            normalized = tuple(label for label in ("ㄱ", "ㄴ", "ㄷ") if label in selected)
+            if normalized != self.answer.statement_labels:
+                raise ValueError("content-team answer combination differs from the selected choice")
+        explanation_labels = {
+            name: tuple(
+                match.group(1)
+                for match in re.finditer(r"(?m)^([ㄱㄴㄷ])\.\s+", getattr(self.explanations, name))
+            )
+            for name in ("correct_answer", "wrong_answer")
+        }
+        if any(len(labels) != len(set(labels)) for labels in explanation_labels.values()):
+            raise ValueError("content-team explanation labels must be unique")
+        if self.answer.answer_kind == "STATEMENT_COMBINATION":
+            correct_labels = self.answer.statement_labels
+            wrong_labels = tuple(
+                label for label in ("ㄱ", "ㄴ", "ㄷ") if label not in correct_labels
+            )
+            if explanation_labels != {
+                "correct_answer": correct_labels,
+                "wrong_answer": wrong_labels,
+            }:
+                raise ValueError(
+                    "content-team explanation labels must partition the answer statements"
+                )
+            if not wrong_labels and self.explanations.wrong_answer:
+                raise ValueError("an all-correct item must keep the wrong-answer section empty")
+        labeled_kinds = tuple(value.kind for value in self.labeled_blocks)
+        if labeled_kinds not in ((), ("DATA",), ("CONDITION",), ("DATA", "CONDITION")):
+            raise ValueError(
+                "content-team labeled blocks must be unique and DATA precedes CONDITION"
+            )
+        if self.inquiry is not None:
+            if self.visuals or self.visual_layout != "INQUIRY_BOX":
+                raise ValueError("inquiry content cannot use the general visual-slot layout")
+            return self
+        kinds = tuple(value.kind for value in self.visuals)
+        labels = tuple(value.label for value in self.visuals)
+        expected = {
+            (): ("NONE", ()),
+            ("IMAGE",): ("IMAGE_ONLY", ("",)),
+            ("TABLE",): ("TABLE_ONLY", ("",)),
+            ("IMAGE", "TABLE"): ("IMAGE_TABLE", ("", "")),
+            ("TABLE", "IMAGE"): ("TABLE_IMAGE", ("", "")),
+            ("IMAGE", "IMAGE"): ("IMAGE_IMAGE", ("(가)", "(나)")),
+            ("TABLE", "TABLE"): ("TABLE_TABLE", ("(가)", "(나)")),
+        }.get(kinds)
+        if expected != (self.visual_layout, labels):
+            raise ValueError("content-team visual items do not match a canonical layout")
+        return self
+
+
+class ContentTeamEditorialQuestion(ContentTeamEditorialDraft):
+    """A draft bound to the exact Markdown materialization that produced it."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    source_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
 
 
 class TableData(StrictModel):
