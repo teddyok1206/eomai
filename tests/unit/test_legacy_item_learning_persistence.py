@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import eom_catalog_service.legacy_item_editorial_compatibility_service as _compatibility_service  # noqa: F401
 import eom_catalog_service.legacy_item_learning_models as _legacy_item_learning_models  # noqa: F401
 from eom_orchestrator.models import Base
 from sqlalchemy import LargeBinary
@@ -73,6 +74,14 @@ def test_editorial_compatibility_metadata_closes_composite_revision_pointers() -
         )
         == 6
     )
+
+
+def test_editorial_compatibility_metadata_resolves_every_foreign_key_target() -> None:
+    run = Base.metadata.tables["legacy_item_editorial_compatibility_runs"]
+    assert "operators" in Base.metadata.tables
+    for constraint in run.foreign_key_constraints:
+        for element in constraint.elements:
+            assert element.column.table is Base.metadata.tables[element.column.table.name]
 
 
 def test_editorial_compatibility_migration_is_additive_immutable_and_indexed() -> None:

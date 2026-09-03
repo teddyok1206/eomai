@@ -22,6 +22,7 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.control_models import (
     ExecutionBundleRecord,
     ExecutionBundleRevisionRecord,
@@ -251,6 +252,12 @@ class LegacyItemEditorialCompatibilityService:
                         )
                     return self._projection(latest)
                 self._validate_predecessor(request, latest)
+                operator = session.get(OperatorRecord, requested_by)
+                if operator is None or operator.status != "ACTIVE":
+                    self._raise(
+                        "LEGACY_EDITORIAL_OPERATOR_INVALID",
+                        "editorial compatibility requires an active operator",
+                    )
                 self._resolve_dependencies(session, request)
                 created_at = request.created_at.astimezone(UTC)
                 run = LegacyItemEditorialCompatibilityRunRecord(
