@@ -254,11 +254,17 @@ def test_api_release_verifies_content_team_contract_runtime() -> None:
         "eom_hwpx_contracts/content_team_markdown.py",
         "eom_hwpx_contracts/models.py",
         "eom_hwpx_contracts/validation.py",
-        "eom_hwpx_builder/content_team_handoff.py",
     ):
         assert required in source
+    assert "eom_hwpx_builder/content_team_handoff.py" not in source
     assert "eom_hwpx_manager/content_team_markdown.py" not in source
     assert "eom_hwpx_manager/content_team_equations.py" not in source
+
+
+def test_hwpx_release_verifies_content_team_handoff_runtime() -> None:
+    source = _source("scripts/hwpx/deploy_builder.sh")
+
+    assert "eom_hwpx_builder/content_team_handoff.py" in source
 
 
 def test_content_team_font_installer_pins_exact_files_and_never_depends_on_eomis() -> None:

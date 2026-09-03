@@ -231,6 +231,7 @@ required = {
     },
     "eom_hwpx_builder": {
         "eom_hwpx_builder/__init__.py",
+        "eom_hwpx_builder/content_team_handoff.py",
         "eom_hwpx_builder/handoff.py",
         "eom_hwpx_builder/renderer.py",
         "eom_hwpx_builder/kordoc_bridge.mjs",

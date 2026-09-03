@@ -339,7 +339,6 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_manager/question_template_service.py",
         "eom_hwpx_manager/runner.py",
         "eom_hwpx_manager/runtime_privileges.py",
-        "eom_hwpx_builder/content_team_handoff.py",
     }
     if missing := (
         worker_runtime
