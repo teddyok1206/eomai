@@ -232,6 +232,26 @@ def test_origin_profile_enforces_method_specific_provenance() -> None:
         ItemOriginProfile.model_validate(imported)
 
 
+def test_origin_profile_accepts_automatic_extraction_acceptance_provenance() -> None:
+    value = _origin_profile()
+    provenance = value["provenance"]
+    assert isinstance(provenance, list)
+    provenance.append(
+        {
+            "provenance_kind": "EXTRACTION_ACCEPTANCE",
+            "logical_id": "itemacceptance_" + "7" * 32,
+            "revision_id": "rev_" + "8" * 32,
+            "evidence_sha256": ZERO_SHA,
+        }
+    )
+    value["profile_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "profile_sha256"}
+    )
+
+    ItemOriginProfile.model_validate(value)
+    validate_contract("item-origin-profile", value)
+
+
 def test_origin_profile_rejects_duplicate_occurrence_revision_pointer() -> None:
     value = _origin_profile()
     occurrences = value["assessment_occurrences"]
@@ -285,6 +305,7 @@ def test_origin_profile_rejects_derivation_kind_pointer_mismatch(
         ("CONTENT_INTAKE", "intake_" + "1" * 32, None),
         ("ITEM_PROVENANCE", "provenance_" + "1" * 32, "rev_" + "1" * 32),
         ("MANUAL_REVIEW", "itemacceptance_" + "1" * 32, None),
+        ("EXTRACTION_ACCEPTANCE", "itemacceptance_" + "1" * 32, None),
     ),
 )
 def test_origin_profile_rejects_provenance_kind_pointer_mismatch(

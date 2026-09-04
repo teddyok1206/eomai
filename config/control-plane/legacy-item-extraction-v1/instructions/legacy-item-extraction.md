@@ -27,6 +27,8 @@ analysis.
 - Validate the complete result against `legacy-item-extraction-result@1.0`.
 - Recompute its canonical self-hash exactly as defined by the contract.
 - Confirm item numbers are unique and ascending.
+- Within each item, assign a different `anchor_id` to every source-anchor entry. Never reuse one
+  local anchor ID for the problem page and answer page, or for any two distinct source regions.
 - Confirm every anchor resolves to a supplied page input and stays inside its normalized bounds.
 - For page anchors, use the exact supplied PNG `page_inputs[].image` pointer, source role, and
   physical page; never substitute the original PDF `page_inputs[].source` pointer.

@@ -154,7 +154,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/item-origin/item-origin-profile-v1.schema.json",
             "resources/item-origin/item-origin-profile-v1.schema.json",
             "1.0",
-            "sha256:1a428b3ce8d0a09460cbefcb23384c2222e0fd3aa4c84a71ae76490cfff12d8d",
+            "sha256:38059059f8b2d95854ac14c969a2661d83dea3de9529e282386a3faaff2dd9e6",
         ),
         "legacy-assessment-types": CatalogSchemaResource(
             "schemas/legacy-assessment/legacy-assessment-types-v1.schema.json",

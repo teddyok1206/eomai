@@ -121,7 +121,13 @@
         "required": ["provenance_kind", "logical_id", "revision_id", "evidence_sha256"],
         "properties": {
           "provenance_kind": {
-            "enum": ["WORKFLOW", "CONTENT_INTAKE", "ITEM_PROVENANCE", "MANUAL_REVIEW"]
+            "enum": [
+              "WORKFLOW",
+              "CONTENT_INTAKE",
+              "ITEM_PROVENANCE",
+              "MANUAL_REVIEW",
+              "EXTRACTION_ACCEPTANCE"
+            ]
           },
           "logical_id": {
             "type": "string",
@@ -165,6 +171,15 @@
           },
           {
             "if": {"properties": {"provenance_kind": {"const": "MANUAL_REVIEW"}}},
+            "then": {
+              "properties": {
+                "logical_id": {"pattern": "^itemacceptance_[0-9a-f]{32}$"},
+                "revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"}
+              }
+            }
+          },
+          {
+            "if": {"properties": {"provenance_kind": {"const": "EXTRACTION_ACCEPTANCE"}}},
             "then": {
               "properties": {
                 "logical_id": {"pattern": "^itemacceptance_[0-9a-f]{32}$"},

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from copy import deepcopy
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from eom_catalog_contracts import (
@@ -11,6 +14,7 @@ from eom_catalog_contracts import (
 from eom_catalog_service.legacy_assessment_rights import (
     LegacyAssessmentRightsError,
     LegacyAssessmentRightsPolicyAdapter,
+    RegisteredAssessmentRightsPolicyResolver,
     rights_policy_pointer_from_review,
 )
 from eom_identifiers import content_sha256
@@ -135,3 +139,16 @@ def test_duplicate_review_binding_is_rejected() -> None:
         LegacyAssessmentRightsPolicyAdapter(
             resolver=_Resolver(review), review_pointers=(_pointer(), deepcopy(_pointer()))
         )
+
+
+def test_registered_bundle_rights_resolver_requires_one_reviewed_exact_match() -> None:
+    pointer = rights_policy_pointer_from_review(_review())
+    resolver = object.__new__(RegisteredAssessmentRightsPolicyResolver)
+    session = SimpleNamespace(scalars=lambda _statement: (SimpleNamespace(),))
+    resolver.sessions = cast(Any, lambda: nullcontext(session))
+
+    resolver.verify(pointer, intended_use="ORIGIN_REGISTRATION")
+
+    session.scalars = lambda _statement: ()
+    with pytest.raises(LegacyAssessmentRightsError, match="unavailable"):
+        resolver.verify(pointer, intended_use="ORIGIN_REGISTRATION")

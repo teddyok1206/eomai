@@ -320,6 +320,66 @@ def test_legacy_worker_result_hash_is_derived_at_trusted_boundary() -> None:
     assert extraction_result["result_sha256"] == ZERO_SHA
 
 
+def test_legacy_worker_result_normalizes_duplicate_local_anchor_ids_without_losing_evidence() -> (
+    None
+):
+    extraction_result = _result()
+    items = extraction_result["items"]
+    assert isinstance(items, list) and isinstance(items[0], dict)
+    item = items[0]
+    source_anchors = item["source_anchors"]
+    assert isinstance(source_anchors, list)
+    first_anchor = source_anchors[0]
+    second_anchor = source_anchors[1]
+    assert isinstance(first_anchor, dict) and isinstance(second_anchor, dict)
+    duplicated_id = first_anchor["anchor_id"]
+    second_anchor["anchor_id"] = duplicated_id
+    for collection_name in (
+        "content_anchor_map",
+        "linguistic_patterns",
+        "visual_patterns",
+    ):
+        collection = item[collection_name]
+        assert isinstance(collection, list)
+        for observation in collection:
+            assert isinstance(observation, dict)
+            observation["source_anchor_ids"] = [duplicated_id]
+    extraction_result["result_sha256"] = ZERO_SHA
+    value: dict[str, object] = {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.14.0",
+        "job_id": "job_" + "1" * 32,
+        "workflow_id": "workflow_" + "1" * 32,
+        "step_run_id": "steprun_" + "1" * 32,
+        "role": "support",
+        "status": "ok",
+        "artifact": {
+            "logical_artifact_id": "artifact_" + "1" * 32,
+            "revision_id": "rev_" + "1" * 32,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+        "output": {"extraction_result": extraction_result},
+        "completed_at": NOW,
+    }
+
+    validated = validate_role_result(value, "support", "legacy-item-extraction-result@1.0")
+
+    canonical = validated.output.extraction_result
+    canonical_item = canonical.items[0]
+    canonical_anchors = canonical_item.source_anchors
+    canonical_ids = tuple(anchor.anchor_id for anchor in canonical_anchors)
+    assert len(canonical_ids) == 2
+    assert len(set(canonical_ids)) == 2
+    assert all(
+        canonical_ids == mapping.source_anchor_ids for mapping in canonical_item.content_anchor_map
+    )
+    assert canonical_ids == canonical_item.linguistic_patterns[0].source_anchor_ids
+    assert canonical_ids == canonical_item.visual_patterns[0].source_anchor_ids
+    assert source_anchors[0]["anchor_id"] == duplicated_id
+    assert source_anchors[1]["anchor_id"] == duplicated_id
+
+
 def _acceptance(
     result: LegacyItemExtractionResult,
     *,

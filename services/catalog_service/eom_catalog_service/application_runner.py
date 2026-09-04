@@ -11,6 +11,7 @@ from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_engine
 
 from eom_catalog_service.application_server import CatalogApplicationServer
+from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.knowledge_analysis_batch_models import (
     KnowledgeAnalysisBatchRangeRecord,
@@ -19,6 +20,16 @@ from eom_catalog_service.knowledge_analysis_batch_models import (
 from eom_catalog_service.knowledge_analysis_batch_service import KnowledgeAnalysisBatchService
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
+from eom_catalog_service.legacy_assessment_rights import (
+    RegisteredAssessmentRightsPolicyResolver,
+)
+from eom_catalog_service.legacy_item_acceptance_service import (
+    AutomaticLegacyItemAcceptanceService,
+    LegacyItemAcceptanceService,
+)
+from eom_catalog_service.legacy_item_automation_service import (
+    LegacyItemAutomaticLearningService,
+)
 from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchRecord,
     LegacyItemExtractionBatchWorkUnitRecord,
@@ -26,6 +37,8 @@ from eom_catalog_service.legacy_item_extraction_batch_models import (
 from eom_catalog_service.legacy_item_extraction_batch_service import (
     LegacyItemExtractionBatchService,
 )
+from eom_catalog_service.legacy_item_learning_service import LegacyItemLearningCoordinator
+from eom_catalog_service.legacy_item_promotion_service import LegacyItemPromotionService
 from eom_catalog_service.legacy_usage_models import LegacyUsageImportRecord
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.runtime_privileges import catalog_runtime_privileges_ready
@@ -56,12 +69,64 @@ def serve() -> int:
             if not catalog_runtime_privileges_ready(connection):
                 print("CATALOG_RUNTIME_DATABASE_PRIVILEGES_UNAVAILABLE", flush=True)
                 return 1
+        automation_mode = os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_MODE", "DISABLED")
+        if automation_mode not in {"DISABLED", "AUTO_ACCEPT_AND_LEARN"}:
+            print("LEGACY_ITEM_AUTOMATION_MODE_INVALID", flush=True)
+            return 1
         knowledge_analysis = KnowledgeAnalysisApplicationService(engine)
         knowledge_analysis_batches = KnowledgeAnalysisBatchService(
             engine,
             analysis=knowledge_analysis,
         )
-        legacy_extraction_batches = LegacyItemExtractionBatchService(engine)
+        automatic_acceptance = None
+        automatic_learning = None
+        if automation_mode == "AUTO_ACCEPT_AND_LEARN":
+            extraction_batch_id = os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_BATCH_ID")
+            content_pack_release_id = os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_PACK_RELEASE_ID")
+            risk_policy_revision_id = os.environ.get(
+                "EOM_LEGACY_ITEM_AUTOMATION_RISK_POLICY_REVISION_ID"
+            )
+            if (
+                not extraction_batch_id
+                or not content_pack_release_id
+                or not risk_policy_revision_id
+            ):
+                print("LEGACY_ITEM_AUTOMATION_CONFIGURATION_INCOMPLETE", flush=True)
+                return 1
+            artifacts = CatalogArtifactService(engine)
+            rights = RegisteredAssessmentRightsPolicyResolver(engine)
+            acceptance = LegacyItemAcceptanceService(
+                engine,
+                rights=rights,
+                artifacts=artifacts,
+            )
+            automatic_acceptance = AutomaticLegacyItemAcceptanceService(
+                engine,
+                acceptance=acceptance,
+                artifacts=artifacts,
+            )
+            promotion = LegacyItemPromotionService(
+                engine,
+                rights=rights,
+                artifacts=artifacts,
+            )
+            learning = LegacyItemLearningCoordinator(
+                engine,
+                promotion=promotion,
+                analyses=knowledge_analysis,
+            )
+            automatic_learning = LegacyItemAutomaticLearningService(
+                engine,
+                extraction_batch_id=extraction_batch_id,
+                content_pack_release_id=content_pack_release_id,
+                risk_policy_revision_id=risk_policy_revision_id,
+                learning=learning,
+                analyses=knowledge_analysis,
+            )
+        legacy_extraction_batches = LegacyItemExtractionBatchService(
+            engine,
+            automatic_acceptance=automatic_acceptance,
+        )
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
             RegistryService(engine),
@@ -84,6 +149,12 @@ def serve() -> int:
             except Exception:
                 # The durable claim/idempotency contract owns recovery. Do not expose source data.
                 print("KNOWLEDGE_ANALYSIS_BATCH_RUNNER_ERROR", flush=True)
+            if automatic_learning is not None:
+                try:
+                    automatic_learning.advance_once()
+                except Exception:
+                    # Exact Artifact and request identities make this application step replayable.
+                    print("LEGACY_ITEM_AUTOMATION_RUNNER_ERROR", flush=True)
             try:
                 legacy_extraction_batches.advance_once(runner_id=runner_id)
             except Exception:

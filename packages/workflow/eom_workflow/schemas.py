@@ -639,10 +639,98 @@ def _canonicalize_legacy_item_extraction_result(value: object) -> object:
     canonical = copy.deepcopy(value)
     canonical_output = _mapping(canonical, "output")
     canonical_result = _mapping(canonical_output, "extraction_result")
+    _normalize_duplicate_legacy_source_anchor_ids(canonical_result)
     canonical_result["result_sha256"] = content_sha256(
         {key: item for key, item in canonical_result.items() if key != "result_sha256"}
     )
     return canonical
+
+
+def _normalize_duplicate_legacy_source_anchor_ids(
+    extraction_result: dict[str, Any],
+) -> None:
+    """Repair only ambiguous local IDs while preserving every source pointer.
+
+    Structured Outputs cannot express array-wide uniqueness.  If a model reuses one local
+    ``anchor_id`` for distinct source anchors, assign deterministic result-owned IDs and expand
+    each reference to the complete corresponding anchor set.  No source evidence is removed or
+    guessed; malformed or dangling references remain for the canonical validator to reject.
+    """
+
+    items = extraction_result.get("items")
+    if not isinstance(items, list):
+        return
+    reference_collections = (
+        "content_anchor_map",
+        "curriculum_observations",
+        "linguistic_patterns",
+        "visual_patterns",
+        "metadata_observations",
+        "conflicts",
+    )
+    for item_index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        anchors = item.get("source_anchors")
+        if not isinstance(anchors, list):
+            continue
+        counts: dict[str, int] = {}
+        for anchor in anchors:
+            if isinstance(anchor, dict) and isinstance(anchor.get("anchor_id"), str):
+                anchor_id = anchor["anchor_id"]
+                counts[anchor_id] = counts.get(anchor_id, 0) + 1
+        duplicated = {anchor_id for anchor_id, count in counts.items() if count > 1}
+        if not duplicated:
+            continue
+
+        replacements: dict[str, list[str]] = {}
+        used = {anchor_id for anchor_id, count in counts.items() if count == 1}
+        for anchor_index, anchor in enumerate(anchors):
+            if not isinstance(anchor, dict):
+                continue
+            original_id = anchor.get("anchor_id")
+            if not isinstance(original_id, str) or original_id not in duplicated:
+                continue
+            identity = {
+                "protocol": "legacy-source-anchor-local-id-normalization/1.0",
+                "item_index": item_index,
+                "item_proposal_id": item.get("item_proposal_id"),
+                "anchor_index": anchor_index,
+                "source_anchor": {
+                    key: item_value for key, item_value in anchor.items() if key != "anchor_id"
+                },
+            }
+            candidate = "assessmentanchor_" + content_sha256(identity).removeprefix("sha256:")[:32]
+            if candidate in used:  # pragma: no cover - cryptographic collision guard
+                identity["collision_ordinal"] = anchor_index
+                candidate = (
+                    "assessmentanchor_" + content_sha256(identity).removeprefix("sha256:")[:32]
+                )
+            used.add(candidate)
+            anchor["anchor_id"] = candidate
+            replacements.setdefault(original_id, []).append(candidate)
+
+        for collection_name in reference_collections:
+            collection = item.get(collection_name)
+            if not isinstance(collection, list):
+                continue
+            for observation in collection:
+                if not isinstance(observation, dict):
+                    continue
+                source_anchor_ids = observation.get("source_anchor_ids")
+                if not isinstance(source_anchor_ids, list):
+                    continue
+                expanded: list[object] = []
+                for anchor_id in source_anchor_ids:
+                    values: list[object] = (
+                        list(replacements[anchor_id])
+                        if isinstance(anchor_id, str) and anchor_id in replacements
+                        else [anchor_id]
+                    )
+                    for reference_id in values:
+                        if reference_id not in expanded:
+                            expanded.append(reference_id)
+                observation["source_anchor_ids"] = expanded
 
 
 def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> dict[str, Any]:

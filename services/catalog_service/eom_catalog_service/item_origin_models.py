@@ -474,7 +474,8 @@ class ItemOriginProvenanceRecord(Base):
             postgresql_nulls_not_distinct=True,
         ),
         CheckConstraint(
-            "provenance_kind IN ('WORKFLOW','CONTENT_INTAKE','ITEM_PROVENANCE','MANUAL_REVIEW')",
+            "provenance_kind IN ('WORKFLOW','CONTENT_INTAKE','ITEM_PROVENANCE',"
+            "'MANUAL_REVIEW','EXTRACTION_ACCEPTANCE')",
             name="ck_item_origin_provenance_kind",
         ),
         CheckConstraint(
@@ -485,6 +486,9 @@ class ItemOriginProvenanceRecord(Base):
             "(provenance_kind = 'ITEM_PROVENANCE' "
             "AND logical_id ~ '^provenance_[0-9a-f]{32}$' AND revision_id IS NULL) OR "
             "(provenance_kind = 'MANUAL_REVIEW' "
+            "AND logical_id ~ '^itemacceptance_[0-9a-f]{32}$' "
+            "AND revision_id ~ '^rev_[0-9a-f]{32}$') OR "
+            "(provenance_kind = 'EXTRACTION_ACCEPTANCE' "
             "AND logical_id ~ '^itemacceptance_[0-9a-f]{32}$' "
             "AND revision_id ~ '^rev_[0-9a-f]{32}$')",
             name="ck_item_origin_provenance_typed_pointer",

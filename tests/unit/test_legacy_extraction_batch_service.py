@@ -158,6 +158,28 @@ def test_runner_claims_pending_work_before_due_review_reconciliation_when_idle(
     assert calls == [("legacyworkunit-new", "runner-a")]
 
 
+def test_automatic_acceptance_reconciles_due_result_before_claiming_more_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service_without_init()
+    service.automatic_acceptance = cast(Any, SimpleNamespace())
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(service, "_reserve_reconciliation", lambda _now: "legacyworkunit-ready")
+    monkeypatch.setattr(
+        service,
+        "reconcile_work_unit",
+        lambda work_unit_id, *, observed_at: calls.append(("reconcile", work_unit_id)),
+    )
+    monkeypatch.setattr(
+        service,
+        "claim",
+        lambda **_values: pytest.fail("due automatic acceptance must be finalized first"),
+    )
+
+    assert service.advance_once(runner_id="runner-auto") is True
+    assert calls == [("reconcile", "legacyworkunit-ready")]
+
+
 def test_runner_reconciles_due_work_when_an_in_flight_handoff_blocks_claim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

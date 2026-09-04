@@ -16,7 +16,10 @@ from eom_catalog_contracts import (
     LegacySourceRightsReviewV2,
     RightsPolicyPointer,
 )
+from eom_orchestrator.database import build_session_factory
+from sqlalchemy import Engine, select
 
+from eom_catalog_service.legacy_assessment_models import AssessmentSourceBundleRevisionRecord
 from eom_catalog_service.legacy_source_selection_boundary import LegacyRightsReviewResolver
 
 
@@ -97,3 +100,42 @@ class LegacyAssessmentRightsPolicyAdapter:
             or "DATA_ANALYST_WORKER" not in allowed_roles
         ):
             raise LegacyAssessmentRightsError("rights review disallows assessment analysis")
+
+
+class RegisteredAssessmentRightsPolicyResolver:
+    """Resolve a policy only through an immutable, previously reviewed bundle revision.
+
+    Bundle registration already validates the exact rights-review Artifact.  This resolver is for
+    later promotion and origin-registration dereferences, where the dominant access is an indexed
+    exact policy tuple lookup rather than repeated filesystem pointer configuration.
+    """
+
+    def __init__(self, engine: Engine) -> None:
+        self.sessions = build_session_factory(engine)
+
+    def verify(
+        self,
+        pointer: RightsPolicyPointer,
+        *,
+        intended_use: Literal["ORIGIN_REGISTRATION", "ASSESSMENT_CORPUS_ANALYSIS"],
+    ) -> None:
+        with self.sessions() as session:
+            matches = tuple(
+                session.scalars(
+                    select(AssessmentSourceBundleRevisionRecord)
+                    .where(
+                        AssessmentSourceBundleRevisionRecord.rights_policy_id
+                        == pointer.rights_policy_id,
+                        AssessmentSourceBundleRevisionRecord.rights_policy_revision_id
+                        == pointer.rights_policy_revision_id,
+                        AssessmentSourceBundleRevisionRecord.rights_policy_sha256
+                        == pointer.rights_policy_sha256,
+                        AssessmentSourceBundleRevisionRecord.state.in_(("REVIEWED", "SUPERSEDED")),
+                    )
+                    .limit(1)
+                )
+            )
+        if len(matches) != 1:
+            raise LegacyAssessmentRightsError(
+                f"registered rights policy is unavailable for {intended_use.lower()}"
+            )

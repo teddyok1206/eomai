@@ -7,10 +7,12 @@ import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, Protocol
 
 from eom_catalog_contracts import (
+    AssessmentArtifactMemberPointer,
     LegacyExtractionBatchWorkUnitV2,
+    LegacyExtractionResultPointer,
     LegacyItemExtractionBatchManifestV2,
     LegacyItemExtractionResult,
     LegacySourceInventoryV2,
@@ -84,6 +86,12 @@ class LegacyItemExtractionBatchServiceError(RuntimeError):
         self.code = code
 
 
+class AutomaticAcceptanceBoundary(Protocol):
+    """Narrow application boundary for policy-authorized canonical acceptance."""
+
+    def register_validated_result(self, pointer: LegacyExtractionResultPointer) -> object: ...
+
+
 @dataclass(frozen=True)
 class CreateLegacyItemExtractionBatchCommand:
     manifest: LegacyItemExtractionBatchManifestV2
@@ -148,11 +156,13 @@ class LegacyItemExtractionBatchService:
         *,
         artifacts: CatalogArtifactService | None = None,
         extraction: LegacyItemExtractionApplicationService | None = None,
+        automatic_acceptance: AutomaticAcceptanceBoundary | None = None,
     ) -> None:
         self.settings = settings or CatalogSettings.from_environment()
         self.sessions = build_session_factory(engine)
         self.artifacts = artifacts or CatalogArtifactService(engine, self.settings)
         self.extraction = extraction or LegacyItemExtractionApplicationService(engine)
+        self.automatic_acceptance = automatic_acceptance
 
     def create(
         self, command: CreateLegacyItemExtractionBatchCommand
@@ -292,6 +302,12 @@ class LegacyItemExtractionBatchService:
         review polls from permanently starving pending work.
         """
 
+        automatic_acceptance = getattr(self, "automatic_acceptance", None)
+        if automatic_acceptance is not None:
+            reserved = self._reserve_reconciliation(datetime.now(UTC))
+            if reserved is not None:
+                self.reconcile_work_unit(reserved, observed_at=datetime.now(UTC))
+                return True
         claimed = self.claim(lease_owner=runner_id, observed_at=datetime.now(UTC))
         if claimed is not None:
             self.submit_claimed(
@@ -541,12 +557,20 @@ class LegacyItemExtractionBatchService:
                 )
             workflow_id = record.workflow_id
             current_state = record.state
+            persisted_result = self._result_pointer(record)
         inspected: LegacyItemExtractionApplicationResult | None = None
         if current_state == "SUBMITTED" and workflow_id is not None:
             try:
                 inspected = self.extraction.inspect(workflow_id)
             except LegacyItemExtractionServiceError as exc:
                 raise LegacyItemExtractionBatchServiceError(exc.code, str(exc)) from exc
+        automatic_acceptance = getattr(self, "automatic_acceptance", None)
+        if automatic_acceptance is not None:
+            result_pointer = persisted_result
+            if inspected is not None and self._is_successful_extraction(inspected):
+                result_pointer = self._inspected_result_pointer(inspected)
+            if result_pointer is not None:
+                automatic_acceptance.register_validated_result(result_pointer)
         now = observed_at.astimezone(UTC)
         with transaction(self.sessions) as session:
             record = session.get(
@@ -1121,6 +1145,80 @@ class LegacyItemExtractionBatchService:
                 LegacyItemExtractionAcceptanceRecord.acceptance_id,
             )
             .limit(1)
+        )
+
+    @staticmethod
+    def _is_successful_extraction(result: LegacyItemExtractionApplicationResult) -> bool:
+        return (
+            result.workflow_state == "COMPLETED"
+            and result.workflow_stage == "COMPLETED"
+            and result.job_status == "SUCCEEDED"
+            and result.receipt_artifact_id is not None
+            and result.receipt_artifact_revision_id is not None
+            and result.receipt_content_sha256 is not None
+            and result.extraction_result_id is not None
+            and result.result_sha256 is not None
+        )
+
+    @staticmethod
+    def _inspected_result_pointer(
+        result: LegacyItemExtractionApplicationResult,
+    ) -> LegacyExtractionResultPointer:
+        if not LegacyItemExtractionBatchService._is_successful_extraction(result):
+            raise ValueError("successful extraction pointer is incomplete")
+        assert result.receipt_artifact_id is not None
+        assert result.receipt_artifact_revision_id is not None
+        assert result.receipt_content_sha256 is not None
+        assert result.extraction_result_id is not None
+        assert result.result_sha256 is not None
+        return LegacyExtractionResultPointer(
+            artifact=AssessmentArtifactMemberPointer(
+                artifact_id=result.receipt_artifact_id,
+                artifact_revision_id=result.receipt_artifact_revision_id,
+                member_path="result.json",
+                schema_ref=("eom://schemas/legacy-assessment/legacy-item-extraction-result/1.0"),
+                media_type="application/json",
+                sha256=result.receipt_content_sha256,
+            ),
+            extraction_result_id=result.extraction_result_id,
+            result_sha256=result.result_sha256,
+        )
+
+    @staticmethod
+    def _result_pointer(
+        record: LegacyItemExtractionBatchWorkUnitRecord,
+    ) -> LegacyExtractionResultPointer | None:
+        values = (
+            record.receipt_artifact_id,
+            record.receipt_artifact_revision_id,
+            record.receipt_artifact_sha256,
+            record.extraction_result_id,
+            record.result_sha256,
+        )
+        if all(value is None for value in values):
+            return None
+        if any(value is None for value in values):
+            raise LegacyItemExtractionBatchServiceError(
+                "LEGACY_EXTRACTION_BATCH_RESULT_POINTER_INVALID",
+                "legacy extraction result pointer is incomplete",
+            )
+        artifact_id, revision_id, artifact_sha256, result_id, result_sha256 = values
+        assert artifact_id is not None
+        assert revision_id is not None
+        assert artifact_sha256 is not None
+        assert result_id is not None
+        assert result_sha256 is not None
+        return LegacyExtractionResultPointer(
+            artifact=AssessmentArtifactMemberPointer(
+                artifact_id=artifact_id,
+                artifact_revision_id=revision_id,
+                member_path="result.json",
+                schema_ref=("eom://schemas/legacy-assessment/legacy-item-extraction-result/1.0"),
+                media_type="application/json",
+                sha256=artifact_sha256,
+            ),
+            extraction_result_id=result_id,
+            result_sha256=result_sha256,
         )
 
     @staticmethod

@@ -13,6 +13,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20260901_0025_legacy_assessment_bundle",
     "migrations.versions.20260903_0026_legacy_item_editorial_compatibility",
     "migrations.versions.20260903_0027_legacy_item_extraction_batches",
+    "migrations.versions.20260904_0028_extraction_acceptance_provenance",
 )
 
 
@@ -44,6 +45,9 @@ class _MigrationOperationRecorder:
         self._record("constraint", name)
 
     def create_foreign_key(self, name: str, *_: object, **__: object) -> None:
+        self._record("constraint", name)
+
+    def create_check_constraint(self, name: str, *_: object, **__: object) -> None:
         self._record("constraint", name)
 
     def create_index(self, name: str, *_: object, **__: object) -> None:

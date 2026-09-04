@@ -583,7 +583,7 @@ class LegacyItemPromotionService:
                     evidence_sha256=source.plan_sha256,
                 ),
                 ItemOriginProvenance(
-                    provenance_kind="MANUAL_REVIEW",
+                    provenance_kind="EXTRACTION_ACCEPTANCE",
                     logical_id=source.acceptance.acceptance_id,
                     revision_id=source.acceptance_artifact_revision_id,
                     evidence_sha256=source.acceptance.acceptance_sha256,

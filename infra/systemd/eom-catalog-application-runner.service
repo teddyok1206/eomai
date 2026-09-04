@@ -17,6 +17,7 @@ Environment=HOME=/var/lib/eom-catalog-api
 Environment=TZ=UTC
 Environment=EOM_CATALOG_STAGING_ROOT=/var/lib/eom-catalog-api/staging
 EnvironmentFile=/etc/eom/secrets/catalog-manager.env
+EnvironmentFile=-/etc/eom/legacy-item-automation.env
 ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-catalog-api/staging
 ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-catalog-api/staging/content-packs
 ExecStartPre=/usr/bin/install -d -m 0750 /var/lib/eom-catalog-api/staging/registry
@@ -39,6 +40,7 @@ RestrictRealtime=true
 CapabilityBoundingSet=
 
 ReadOnlyPaths=/etc/eom/secrets/catalog-manager.env
+ReadOnlyPaths=-/etc/eom/legacy-item-automation.env
 ReadOnlyPaths=/srv/eom/conda/envs/eom-api
 ReadWritePaths=/mnt/nas/eom/artifacts
 ReadWritePaths=/run/eom-catalog-api

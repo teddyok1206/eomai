@@ -227,7 +227,13 @@ class ItemOriginDerivation(FrozenModel):
 
 
 class ItemOriginProvenance(FrozenModel):
-    provenance_kind: Literal["WORKFLOW", "CONTENT_INTAKE", "ITEM_PROVENANCE", "MANUAL_REVIEW"]
+    provenance_kind: Literal[
+        "WORKFLOW",
+        "CONTENT_INTAKE",
+        "ITEM_PROVENANCE",
+        "MANUAL_REVIEW",
+        "EXTRACTION_ACCEPTANCE",
+    ]
     logical_id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
     revision_id: str | None = Field(default=None, pattern=r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
     evidence_sha256: Sha256
@@ -238,6 +244,7 @@ class ItemOriginProvenance(FrozenModel):
             "WORKFLOW": ("workflow_", "execplan_"),
             "CONTENT_INTAKE": ("intake_", "rev_"),
             "MANUAL_REVIEW": ("itemacceptance_", "rev_"),
+            "EXTRACTION_ACCEPTANCE": ("itemacceptance_", "rev_"),
         }
         if self.provenance_kind == "ITEM_PROVENANCE":
             if not self.logical_id.startswith("provenance_") or self.revision_id is not None:
@@ -293,7 +300,7 @@ class ItemOriginProfile(FrozenModel):
         if self.creation_method == "ADAPTED" and not self.derivations:
             raise ValueError("adapted origin requires a derivation pointer")
         if self.source_domain == "EXTERNAL_INDIVIDUAL" and not provenance_kinds.intersection(
-            {"MANUAL_REVIEW", "CONTENT_INTAKE"}
+            {"MANUAL_REVIEW", "EXTRACTION_ACCEPTANCE", "CONTENT_INTAKE"}
         ):
             raise ValueError("individual origin requires reviewed source provenance")
         occurrences = tuple(
