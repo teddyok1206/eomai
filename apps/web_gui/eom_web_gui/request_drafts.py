@@ -114,9 +114,9 @@ def workflow_start_payload(
     """Map a reviewed draft to the source-optional knowledge-item workflow contract."""
     payload: dict[str, object] = {
         "definition_key": "generic-item-development",
-        "definition_version": "1.6.0",
+        "definition_version": "1.7.0",
         "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
-        "image_mode": "required",
+        "image_mode": "skip",
         "pack_key": "generated-knowledge-item",
         "execution_preset_key": (
             KNOWLEDGE_EXECUTION_PRESET_KEY
@@ -129,15 +129,11 @@ def workflow_start_payload(
         "item_id": None,
         "base_revision_id": None,
         "item_brief": {
-            "schema_version": "2.0",
+            "schema_version": "3.0",
             "subject": draft.subject,
             "topic": draft.topic,
             "task_type": draft.task_type,
             "difficulty": draft.difficulty,
-            "choice_count": 5,
-            "equation_required": True,
-            "image_required": True,
-            "quality_profile": draft.quality_profile,
             "original_request_sha256": draft.original_request_sha256,
             "authoring_guidance": draft.authoring_guidance,
             "authoring_guidance_sha256": draft.authoring_guidance_sha256,
@@ -158,7 +154,7 @@ def workflow_start_payload(
             "query_kind": "ITEM_PREPARATION",
             "curriculum_root_key": None,
             "topic_keys": [],
-            "required_item_elements": ["equation", "image", "statement_set", "table"],
+            "required_item_elements": ["choice"],
             "source_classes": ["APPROVED_ITEM", "TEXTBOOK"],
         }
     return payload

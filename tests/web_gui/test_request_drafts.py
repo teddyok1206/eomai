@@ -44,16 +44,57 @@ def test_request_text_becomes_reviewed_bounded_authoring_guidance() -> None:
     )
     payload = workflow_start_payload(draft)
     assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-    assert payload["definition_version"] == "1.6.0"
+    assert payload["definition_version"] == "1.7.0"
+    assert payload["image_mode"] == "skip"
     assert payload["pack_key"] == "generated-knowledge-item"
     assert payload["execution_preset_key"] == "standard-item"
     assert payload["source_intake_batch_ids"] == []
     brief = payload["item_brief"]
     assert isinstance(brief, dict)
-    assert brief["schema_version"] == "2.0"
+    assert brief["schema_version"] == "3.0"
     assert brief["authoring_guidance"] == DEMO_REQUEST
     assert brief["authoring_guidance_sha256"] == draft.authoring_guidance_sha256
+    assert {
+        "choice_count",
+        "equation_required",
+        "image_required",
+        "quality_profile",
+    }.isdisjoint(brief)
     assert "model" not in payload and "reasoning" not in payload and "slot" not in payload
+
+
+def test_grounded_content_team_request_does_not_add_visual_or_equation_requirements() -> None:
+    draft = normalize_request(
+        RequestDraftInput(original_request_text=DEMO_REQUEST), now=NOW, token="9" * 32
+    )
+    grounded = RequestDraftUpdate.model_validate(
+        {
+            **{
+                name: getattr(draft, name)
+                for name in RequestDraftUpdate.model_fields
+                if name not in {"knowledge_grounding", "curriculum_selected_unit_key"}
+            },
+            "knowledge_grounding": True,
+            "curriculum_selected_unit_key": "eom.is.middle.1-1",
+        }
+    )
+    payload = workflow_start_payload(
+        update_draft(draft, grounded, now=NOW),
+        graph_corpus_key="integrated-science-textbooks",
+    )
+
+    retrieval = payload["educational_retrieval"]
+    assert isinstance(retrieval, dict)
+    assert retrieval["required_item_elements"] == ["choice"]
+    assert payload["image_mode"] == "skip"
+    brief = payload["item_brief"]
+    assert isinstance(brief, dict)
+    assert {
+        "choice_count",
+        "equation_required",
+        "image_required",
+        "quality_profile",
+    }.isdisjoint(brief)
 
 
 def test_quality_profile_is_closed_policy_mapping() -> None:
@@ -171,7 +212,7 @@ def test_workflow_payload_exposes_only_bounded_educational_requirement() -> None
         "query_kind": "ITEM_PREPARATION",
         "curriculum_root_key": None,
         "topic_keys": [],
-        "required_item_elements": ["equation", "image", "statement_set", "table"],
+        "required_item_elements": ["choice"],
         "source_classes": ["APPROVED_ITEM", "TEXTBOOK"],
     }
     assert payload["execution_preset_key"] == "knowledge-grounded-item"
