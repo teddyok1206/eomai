@@ -133,46 +133,56 @@ def test_invalid_admission_never_crosses_manifest_artifact_commit(
     assert captured.value.code == "LEGACY_EXTRACTION_BATCH_OPERATOR_INVALID"
 
 
-def test_runner_advances_reconciliation_before_claiming(
+def test_runner_claims_pending_work_before_due_review_reconciliation_when_idle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = _service_without_init()
     calls: list[tuple[str, str]] = []
-    monkeypatch.setattr(service, "_reserve_reconciliation", lambda _now: "legacyworkunit-x")
-    monkeypatch.setattr(
-        service,
-        "reconcile_work_unit",
-        lambda work_unit_id, *, observed_at: calls.append(("reconcile", work_unit_id)),
-    )
     monkeypatch.setattr(
         service,
         "claim",
-        lambda **_values: pytest.fail("a due reconciliation must run before a new claim"),
-    )
-
-    assert service.advance_once(runner_id="runner-a") is True
-    assert calls == [("reconcile", "legacyworkunit-x")]
-
-
-def test_runner_claims_and_submits_one_unit_when_no_poll_is_due(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = _service_without_init()
-    calls: list[tuple[str, str]] = []
-    monkeypatch.setattr(service, "_reserve_reconciliation", lambda _now: None)
-    monkeypatch.setattr(
-        service,
-        "claim",
-        lambda **_values: SimpleNamespace(work_unit_id="legacyworkunit-y"),
+        lambda **_values: SimpleNamespace(work_unit_id="legacyworkunit-new"),
     )
     monkeypatch.setattr(
         service,
         "submit_claimed",
         lambda work_unit_id, *, lease_owner, observed_at: calls.append((work_unit_id, lease_owner)),
     )
+    monkeypatch.setattr(
+        service,
+        "_reserve_reconciliation",
+        lambda _now: pytest.fail("an idle worker slot must receive pending work first"),
+    )
+
+    assert service.advance_once(runner_id="runner-a") is True
+    assert calls == [("legacyworkunit-new", "runner-a")]
+
+
+def test_runner_reconciles_due_work_when_an_in_flight_handoff_blocks_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service_without_init()
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(service, "claim", lambda **_values: None)
+    monkeypatch.setattr(service, "_reserve_reconciliation", lambda _now: "legacyworkunit-x")
+    monkeypatch.setattr(
+        service,
+        "reconcile_work_unit",
+        lambda work_unit_id, *, observed_at: calls.append(("reconcile", work_unit_id)),
+    )
 
     assert service.advance_once(runner_id="runner-b") is True
-    assert calls == [("legacyworkunit-y", "runner-b")]
+    assert calls == [("reconcile", "legacyworkunit-x")]
+
+
+def test_runner_is_idle_when_no_claim_or_reconciliation_is_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service_without_init()
+    monkeypatch.setattr(service, "claim", lambda **_values: None)
+    monkeypatch.setattr(service, "_reserve_reconciliation", lambda _now: None)
+
+    assert service.advance_once(runner_id="runner-idle") is False
 
 
 def test_claim_does_not_consume_another_unit_while_one_handoff_is_in_flight(

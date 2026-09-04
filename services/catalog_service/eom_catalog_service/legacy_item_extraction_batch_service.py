@@ -284,21 +284,27 @@ class LegacyItemExtractionBatchService:
             ) from exc
 
     def advance_once(self, *, runner_id: str) -> bool:
-        """Advance one due reconciliation or submit one newly claimed unit."""
+        """Submit one idle-capacity unit, otherwise advance one due reconciliation.
 
+        A submitted unit blocks ``claim`` through the global in-flight invariant, so
+        its reconciliation still takes precedence while work is running.  Trying a
+        claim first when capacity is idle prevents a growing set of 30-second human
+        review polls from permanently starving pending work.
+        """
+
+        claimed = self.claim(lease_owner=runner_id, observed_at=datetime.now(UTC))
+        if claimed is not None:
+            self.submit_claimed(
+                claimed.work_unit_id,
+                lease_owner=runner_id,
+                observed_at=datetime.now(UTC),
+            )
+            return True
         reserved = self._reserve_reconciliation(datetime.now(UTC))
         if reserved is not None:
             self.reconcile_work_unit(reserved, observed_at=datetime.now(UTC))
             return True
-        claimed = self.claim(lease_owner=runner_id, observed_at=datetime.now(UTC))
-        if claimed is None:
-            return False
-        self.submit_claimed(
-            claimed.work_unit_id,
-            lease_owner=runner_id,
-            observed_at=datetime.now(UTC),
-        )
-        return True
+        return False
 
     def inspect(self, extraction_batch_id: str) -> LegacyItemExtractionBatchView:
         with self.sessions() as session:
