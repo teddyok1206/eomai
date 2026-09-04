@@ -31,10 +31,20 @@ COEFFICIENT_VARIABLE = re.compile(r"^\d+(?:\.\d+)?[A-Za-z]$")
 PRIME = re.compile(r"^[A-Za-z](?:'|\^\{\\prime(?:\\prime)?\})$")
 INDEX = r"(?:[A-Za-z0-9]+|\\max)"
 EXPONENT = r"(?:[A-Za-z0-9]+|[0-9]+[+-]|[+-][0-9]+|[+-]|\\prime(?:\\prime)?)"
+DECORATED_VARIABLE_SOURCE = (
+    rf"[A-Za-z]"
+    rf"(?:_(?:\{{{INDEX}\}}|[A-Za-z0-9]))?"
+    rf"(?:\^(?:\{{{EXPONENT}\}}|[A-Za-z0-9]))?"
+)
 DECORATED = re.compile(
     rf"^(?P<base>\d+(?:\.\d+)?|[A-Za-z])"
     rf"(?P<sub>_(?:\{{{INDEX}\}}|[A-Za-z0-9]))?"
     rf"(?P<sup>\^(?:\{{{EXPONENT}\}}|[A-Za-z0-9]))?$"
+)
+IMPLICIT_PRODUCT = re.compile(
+    rf"^(?:\d+(?:\.\d+)?)?"
+    rf"{DECORATED_VARIABLE_SOURCE}"
+    rf"(?:{DECORATED_VARIABLE_SOURCE})*$"
 )
 CHEMICAL = re.compile(
     rf"^(?:[A-Z][a-z]?(?:_(?:\{{{INDEX}\}}|[0-9]))?)+"
@@ -108,10 +118,15 @@ def _top_level_parts(value: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
                 start = index
                 continue
             if character in "+-=<>:/":
-                # A leading sign is part of one scalar.  A sign immediately after
-                # another top-level operator is ambiguous for the reviewed HWPX
-                # prototypes and must not be accepted as an implicit rewrite.
-                if character in "+-" and index == start and start == 0:
+                # A leading sign is part of one scalar.  The right side of a
+                # comparison may likewise begin with a signed scalar (v=-5),
+                # while repeated arithmetic operators such as 8--5 remain
+                # ambiguous and fail closed.
+                if (
+                    character in "+-"
+                    and index == start
+                    and (start == 0 or (operators and operators[-1] in {"=", "<", ">"}))
+                ):
                     index += 1
                     continue
                 parts.append(value[start:index])
@@ -140,7 +155,15 @@ def _term_supported(value: str) -> bool:
     if (
         any(
             pattern.fullmatch(value)
-            for pattern in (NUMBER, VARIABLE, SIGNED_ATOM, COEFFICIENT_VARIABLE, PRIME, CHEMICAL)
+            for pattern in (
+                NUMBER,
+                VARIABLE,
+                SIGNED_ATOM,
+                COEFFICIENT_VARIABLE,
+                PRIME,
+                CHEMICAL,
+                IMPLICIT_PRODUCT,
+            )
         )
         or _decorated_family(value) is not None
     ):
@@ -152,7 +175,7 @@ def _term_supported(value: str) -> bool:
     return (
         _expression_family(numerator) is not None
         and _expression_family(denominator) is not None
-        and (not suffix or VARIABLE.fullmatch(suffix) is not None)
+        and (not suffix or _term_supported(suffix))
     )
 
 
@@ -175,6 +198,8 @@ def _expression_family(value: str) -> ContentTeamEquationFamily | None:
     decorated = _decorated_family(compact)
     if decorated is not None:
         return decorated
+    if IMPLICIT_PRODUCT.fullmatch(compact):
+        return "MULTIPLICATIVE_EXPRESSION"
     fraction = _fraction(compact)
     if fraction is not None and _term_supported(compact):
         return "FRACTION"

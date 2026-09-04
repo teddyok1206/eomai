@@ -28,8 +28,18 @@ def _sha256(value: bytes) -> str:
 
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
-def test_reviewed_handoff_renders_v2_item_with_dynamic_program_layout(tmp_path: Path) -> None:
-    draft = parse_content_team_markdown(GENERAL_ITEM.encode("utf-8"))
+@pytest.mark.parametrize(
+    "source",
+    [
+        GENERAL_ITEM,
+        GENERAL_ITEM.replace("$3$", "$y=20+15t-5t^{2}$", 1).replace("$5$", "$v_{y}=-5$", 1),
+    ],
+    ids=("baseline", "implicit-decorated-product-and-signed-rhs"),
+)
+def test_reviewed_handoff_renders_v2_item_with_dynamic_program_layout(
+    tmp_path: Path, source: str
+) -> None:
+    draft = parse_content_team_markdown(source.encode("utf-8"))
     markdown = serialize_content_team_markdown(draft)
     item_value = {
         "schema_version": "2.0",
