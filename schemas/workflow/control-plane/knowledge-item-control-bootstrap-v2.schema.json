@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/knowledge-item-control-bootstrap/2.0",
+  "title": "Knowledge-backed item control bootstrap manifest V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "preset_key",
+    "display_name",
+    "description",
+    "created_at",
+    "base_preset_key",
+    "base_preset_schema_version",
+    "general_knowledge_policy",
+    "compatible_workflow_protocols",
+    "evidence_access_by_role",
+    "retrieval_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-item-control-bootstrap/2.0"},
+    "preset_key": {"const": "knowledge-grounded-item"},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "description": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "created_at": {"type": "string", "format": "date-time"},
+    "base_preset_key": {"const": "standard-item"},
+    "base_preset_schema_version": {"const": "execution-preset-revision/1.0"},
+    "general_knowledge_policy": {"const": "ALLOW_WITH_PROVENANCE"},
+    "compatible_workflow_protocols": {
+      "type": "array",
+      "prefixItems": [{"const": "workflow-role/1.15.0"}],
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true
+    },
+    "evidence_access_by_role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authoring", "image", "review", "item_management"],
+      "properties": {
+        "authoring": {"const": "EVIDENCE_CONTEXT"},
+        "image": {"const": "EVIDENCE_CONTEXT"},
+        "review": {"const": "EVIDENCE_CONTEXT"},
+        "item_management": {"const": "NONE"}
+      }
+    },
+    "retrieval_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "access_policy_revision_id",
+        "access_policy_sha256",
+        "allowed_corpus_keys",
+        "allowed_query_kinds",
+        "allowed_source_classes",
+        "maximum_budget"
+      ],
+      "properties": {
+        "access_policy_revision_id": {
+          "const": "accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9"
+        },
+        "access_policy_sha256": {
+          "const": "sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0"
+        },
+        "allowed_corpus_keys": {
+          "type": "array",
+          "prefixItems": [{"const": "integrated-science-textbooks"}],
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_query_kinds": {
+          "type": "array",
+          "prefixItems": [{"const": "ITEM_PREPARATION"}],
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_source_classes": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "APPROVED_ITEM"},
+            {"const": "TEXTBOOK"}
+          ],
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "maximum_budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_documents",
+            "max_item_revisions",
+            "max_graph_nodes",
+            "max_claims",
+            "max_context_tokens"
+          ],
+          "properties": {
+            "max_documents": {"const": 16},
+            "max_item_revisions": {"const": 32},
+            "max_graph_nodes": {"const": 128},
+            "max_claims": {"const": 64},
+            "max_context_tokens": {"const": 16000}
+          }
+        }
+      }
+    }
+  }
+}

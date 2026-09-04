@@ -16,6 +16,7 @@ from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "config/control-plane/knowledge-grounded-item-v1"
+CONFIG_V2 = ROOT / "config/control-plane/knowledge-grounded-item-v2"
 
 
 def test_knowledge_item_bootstrap_is_schema_first_and_exact() -> None:
@@ -41,6 +42,22 @@ def test_knowledge_item_bootstrap_is_schema_first_and_exact() -> None:
     assert hashlib.sha256((CONFIG / "bootstrap.yaml").read_bytes()).hexdigest() == (
         "70e9a8d580cfea28499be6cd3a8aa2f6b2777fabfaa2076a481aa8cf608a90cd"
     )
+
+
+def test_knowledge_item_v2_bootstrap_pins_current_authoring_protocol() -> None:
+    manifest = load_knowledge_item_bootstrap_manifest(CONFIG_V2)
+    value = manifest.model_dump(mode="json")
+
+    validate_control_contract("knowledge-item-control-bootstrap-v2", value)
+    assert manifest.schema_version == "knowledge-item-control-bootstrap/2.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.15.0",)
+    assert manifest.evidence_access_by_role == {
+        "authoring": "EVIDENCE_CONTEXT",
+        "image": "EVIDENCE_CONTEXT",
+        "review": "EVIDENCE_CONTEXT",
+        "item_management": "NONE",
+    }
+    assert manifest.retrieval_policy.allowed_corpus_keys == ("integrated-science-textbooks",)
 
 
 @pytest.mark.parametrize(

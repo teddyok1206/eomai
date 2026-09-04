@@ -53,6 +53,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:0b7d102659015fbbfdad0b81ecd0a0857198ca5d353758e4ca5382f3a583f4a4",
         ),
+        "knowledge-item-control-bootstrap-v2": ControlSchemaResource(
+            "schemas/workflow/control-plane/knowledge-item-control-bootstrap-v2.schema.json",
+            "resources/control-plane/knowledge-item-control-bootstrap-v2.schema.json",
+            "2.0",
+            "sha256:f2f11029321586e9fea0b043a94626521fde5c1fdbda5e412656961fd3633621",
+        ),
         "legacy-item-extraction-control-bootstrap": ControlSchemaResource(
             "schemas/workflow/control-plane/legacy-item-extraction-control-bootstrap-v1.schema.json",
             "resources/control-plane/legacy-item-extraction-control-bootstrap-v1.schema.json",

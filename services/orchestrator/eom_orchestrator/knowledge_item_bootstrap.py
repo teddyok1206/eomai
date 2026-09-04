@@ -76,7 +76,9 @@ class KnowledgeItemRetrievalBootstrapPolicy(BaseModel):
 class KnowledgeItemBootstrapManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["knowledge-item-control-bootstrap/1.0"]
+    schema_version: Literal[
+        "knowledge-item-control-bootstrap/1.0", "knowledge-item-control-bootstrap/2.0"
+    ]
     preset_key: Literal["knowledge-grounded-item"]
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=1000)
@@ -84,9 +86,9 @@ class KnowledgeItemBootstrapManifest(BaseModel):
     base_preset_key: Literal["standard-item"]
     base_preset_schema_version: Literal["execution-preset-revision/1.0"]
     general_knowledge_policy: Literal["ALLOW_WITH_PROVENANCE"]
-    compatible_workflow_protocols: tuple[Literal["workflow-role/1.12.0"], ...] = Field(
-        min_length=1, max_length=1
-    )
+    compatible_workflow_protocols: tuple[
+        Literal["workflow-role/1.12.0", "workflow-role/1.15.0"], ...
+    ] = Field(min_length=1, max_length=1)
     evidence_access_by_role: dict[str, Literal["NONE", "EVIDENCE_CONTEXT"]]
     retrieval_policy: KnowledgeItemRetrievalBootstrapPolicy
 
@@ -94,7 +96,11 @@ class KnowledgeItemBootstrapManifest(BaseModel):
     def exact_role_and_protocol_boundary(self) -> KnowledgeItemBootstrapManifest:
         if self.created_at.tzinfo is None or self.created_at.utcoffset() != timedelta(0):
             raise ValueError("knowledge item bootstrap timestamp must use UTC")
-        if self.compatible_workflow_protocols != ("workflow-role/1.12.0",):
+        expected_protocol = {
+            "knowledge-item-control-bootstrap/1.0": "workflow-role/1.12.0",
+            "knowledge-item-control-bootstrap/2.0": "workflow-role/1.15.0",
+        }[self.schema_version]
+        if self.compatible_workflow_protocols != (expected_protocol,):
             raise ValueError("knowledge item workflow protocol differs")
         if self.evidence_access_by_role != {
             "authoring": "EVIDENCE_CONTEXT",
@@ -129,7 +135,18 @@ def load_knowledge_item_bootstrap_manifest(
     raw = _read_manifest(root / "bootstrap.yaml", root=root)
     try:
         value: object = yaml.safe_load(raw.decode("utf-8"))
-        validate_control_contract("knowledge-item-control-bootstrap", value)
+        if not isinstance(value, dict):
+            raise ValueError("knowledge item bootstrap manifest must be an object")
+        schema_version = value.get("schema_version")
+        if not isinstance(schema_version, str):
+            raise ValueError("knowledge item bootstrap schema version is missing")
+        schema_name = {
+            "knowledge-item-control-bootstrap/1.0": "knowledge-item-control-bootstrap",
+            "knowledge-item-control-bootstrap/2.0": "knowledge-item-control-bootstrap-v2",
+        }.get(schema_version)
+        if schema_name is None:
+            raise ValueError("knowledge item bootstrap schema version is unsupported")
+        validate_control_contract(schema_name, value)
         return KnowledgeItemBootstrapManifest.model_validate(value)
     except (
         UnicodeError,
@@ -328,8 +345,28 @@ def _find_or_create_draft(
             )
         if execution_preset_policy_sha256(current.canonical_document) == expected_policy_sha256:
             return base, current
+        current_protocols = tuple(current.compatible_workflow_protocols)
+        requested_protocol = manifest.compatible_workflow_protocols[0]
+        protocol_rank = {"workflow-role/1.12.0": 1, "workflow-role/1.15.0": 2}
+        if (
+            len(current_protocols) != 1
+            or current_protocols[0] not in protocol_rank
+            or protocol_rank[current_protocols[0]] > protocol_rank[requested_protocol]
+        ):
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_CONFLICT",
+                "knowledge item preset succession cannot move backward",
+            )
+    released_matching = [
+        revision
+        for revision in revisions
+        if revision.state == "RELEASED"
+        and execution_preset_policy_sha256(revision.canonical_document) == expected_policy_sha256
+    ]
+    if released_matching:
         raise ControlPlaneError(
-            "CONTROL_BOOTSTRAP_CONFLICT", "released knowledge item policy differs"
+            "CONTROL_BOOTSTRAP_CONFLICT",
+            "matching released knowledge item policy is not current",
         )
     matching = [
         revision
@@ -337,9 +374,20 @@ def _find_or_create_draft(
         if revision.state == "DRAFT"
         and execution_preset_policy_sha256(revision.canonical_document) == expected_policy_sha256
     ]
-    if len(matching) > 1 or any(
-        revision.state == "DRAFT" and revision not in matching for revision in revisions
-    ):
+    released_policy_hashes = {
+        execution_preset_policy_sha256(revision.canonical_document)
+        for revision in revisions
+        if revision.state == "RELEASED"
+    }
+    unresolved_other_drafts = [
+        revision
+        for revision in revisions
+        if revision.state == "DRAFT"
+        and revision not in matching
+        and execution_preset_policy_sha256(revision.canonical_document)
+        not in released_policy_hashes
+    ]
+    if len(matching) > 1 or unresolved_other_drafts:
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_CONFLICT", "knowledge item preset draft history differs"
         )

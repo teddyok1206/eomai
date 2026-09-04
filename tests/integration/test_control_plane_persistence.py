@@ -2771,20 +2771,49 @@ def test_knowledge_item_bootstrap_pins_standard_policy_and_is_idempotent(
     )
     sessions = build_session_factory(integration_engine)
     with transaction(sessions) as session:
+        _complete_control_plane(
+            session,
+            roles=(
+                WorkerRole.AUTHORING,
+                WorkerRole.IMAGE,
+                WorkerRole.REVIEW,
+                WorkerRole.ITEM_MANAGEMENT,
+            ),
+        )
         ensure_protocol_version(
             session,
             "workflow-role/1.12.0",
             role_schema_bundle_hash("workflow-role/1.12.0"),
         )
-    standard = bootstrap_standard_control_plane(
-        integration_engine,
-        config_directory=Path("config/control-plane/standard-item-v3").resolve(),
-        content_directory=Path("content").resolve(),
-        source_commit="c" * 40,
-        actor_id="graph-item-integration",
-        evaluation_cases_total=5,
-        settings=settings,
-    )
+        template = session.scalar(
+            select(ExecutionPresetRevisionRecord).where(
+                ExecutionPresetRevisionRecord.display_name == "Phase 2 standard"
+            )
+        )
+        assert template is not None
+        standard_document = dict(template.canonical_document)
+        standard_document.update(
+            {
+                "preset_id": new_execution_preset_id(),
+                "preset_revision_id": new_execution_preset_revision_id(),
+                "compatible_workflow_protocols": ["workflow-role/1.12.0"],
+                "content_sha256": "sha256:" + "0" * 64,
+            }
+        )
+        standard_document["content_sha256"] = compute_control_document_hash(
+            standard_document, "content_sha256"
+        )
+        standard = record_execution_preset_revision(
+            session,
+            preset_key="standard-item",
+            document=standard_document,
+            created_by="graph-item-integration",
+        )
+        publish_execution_preset_revision(
+            session,
+            preset_id=standard.preset_id,
+            preset_revision_id=standard.preset_revision_id,
+        )
 
     def bootstrap() -> KnowledgeItemBootstrapResult:
         return bootstrap_knowledge_item_control_plane(
@@ -2837,6 +2866,81 @@ def test_knowledge_item_bootstrap_pins_standard_policy_and_is_idempotent(
             assert policy.evidence_access == (
                 "NONE" if policy.role == "item_management" else "EVIDENCE_CONTEXT"
             )
+
+    with transaction(sessions) as session:
+        ensure_protocol_version(
+            session,
+            "workflow-role/1.15.0",
+            role_schema_bundle_hash("workflow-role/1.15.0"),
+        )
+        base_record = session.get(ExecutionPresetRevisionRecord, standard.preset_revision_id)
+        assert base_record is not None
+        successor_document = dict(base_record.canonical_document)
+        successor_document.update(
+            {
+                "preset_revision_id": new_execution_preset_revision_id(),
+                "revision_number": 2,
+                "state": "RELEASED",
+                "compatible_workflow_protocols": ["workflow-role/1.15.0"],
+                "content_sha256": "sha256:" + "0" * 64,
+                "created_at": "2026-09-04T18:00:00Z",
+            }
+        )
+        successor_document["content_sha256"] = compute_control_document_hash(
+            successor_document, "content_sha256"
+        )
+        successor_base = record_execution_preset_revision(
+            session,
+            preset_key="standard-item",
+            document=successor_document,
+            created_by="graph-item-integration",
+        )
+        publish_execution_preset_revision(
+            session,
+            preset_id=successor_base.preset_id,
+            preset_revision_id=successor_base.preset_revision_id,
+        )
+
+    def bootstrap_successor() -> KnowledgeItemBootstrapResult:
+        return bootstrap_knowledge_item_control_plane(
+            integration_engine,
+            config_directory=Path("config/control-plane/knowledge-grounded-item-v2").resolve(),
+            source_commit="f" * 40,
+            actor_id="graph-item-integration",
+            evaluation_cases_total=7,
+            settings=settings,
+        )
+
+    successor = bootstrap_successor()
+    assert bootstrap_successor() == successor
+    assert successor.base_preset_revision_id == successor_base.preset_revision_id
+    assert successor.preset_revision_id != first.preset_revision_id
+    with pytest.raises(ControlPlaneError) as downgrade:
+        bootstrap()
+    assert downgrade.value.code == "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID"
+    with sessions() as session:
+        logical = session.get(ExecutionPresetRecord, successor.preset_id)
+        revisions = tuple(
+            session.scalars(
+                select(ExecutionPresetRevisionRecord)
+                .where(ExecutionPresetRevisionRecord.preset_id == successor.preset_id)
+                .order_by(ExecutionPresetRevisionRecord.revision_number)
+            )
+        )
+        assert logical is not None
+        assert logical.current_revision_id == successor.preset_revision_id
+        assert [revision.state for revision in revisions] == [
+            "DRAFT",
+            "RELEASED",
+            "DRAFT",
+            "RELEASED",
+        ]
+        successor_record = session.get(ExecutionPresetRevisionRecord, successor.preset_revision_id)
+        assert successor_record is not None
+        successor_model = ExecutionPresetRevisionV2.model_validate(
+            successor_record.canonical_document
+        )
+        assert successor_model.compatible_workflow_protocols == ("workflow-role/1.15.0",)
 
 
 def test_knowledge_analysis_bootstrap_is_idempotent_and_support_only(

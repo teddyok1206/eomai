@@ -32,7 +32,7 @@ from eom_catalog_service.usage_service import UsageLedgerService
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext
-from eom_orchestrator.control_service import ResolvedPlanDependencyEvidence
+from eom_orchestrator.control_service import ControlPlaneError, ResolvedPlanDependencyEvidence
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.execution_resolver import (
     ExecutionStepRequirement,
@@ -252,14 +252,22 @@ class CommandAdapter:
                         "Workflow definition invalid",
                         "The workflow definition has inconsistent role protocols.",
                     )
-                knowledge_preset = current_knowledge_backed_preset(
-                    preflight_session,
-                    preset_key=workflow_request.execution_preset_key,
-                    workflow_role_schema_version=str(next(iter(role_protocols))),
-                )
-                validate_educational_retrieval_policy(
-                    knowledge_preset, workflow_request.educational_retrieval
-                )
+                try:
+                    knowledge_preset = current_knowledge_backed_preset(
+                        preflight_session,
+                        preset_key=workflow_request.execution_preset_key,
+                        workflow_role_schema_version=str(next(iter(role_protocols))),
+                    )
+                    validate_educational_retrieval_policy(
+                        knowledge_preset, workflow_request.educational_retrieval
+                    )
+                except ControlPlaneError as exc:
+                    raise ApiError(
+                        409,
+                        exc.code,
+                        "Execution preset unavailable",
+                        "The selected execution preset is not published for this workflow.",
+                    ) from exc
                 preflight_definition_hash = preflight_definition.definition_hash
             requester_role = self._knowledge_requester_role(actor)
             requester_permission_keys = tuple(
