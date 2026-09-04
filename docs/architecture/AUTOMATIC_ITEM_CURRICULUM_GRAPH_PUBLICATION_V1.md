@@ -27,7 +27,9 @@ evidence entry, graph node, and curriculum unit, then recomputes the policy resu
 
 - Candidate lookup is an ordered indexed join from configured extraction batches to accepted
   analyses and the current snapshot membership.
-- Stable proposal-node keys are deduplicated with a set and sorted once.
+- Conceptual proposal-node keys are deduplicated with a set and sorted once. If an older accepted
+  analysis contains no conceptual node, the policy falls back only to its semantic Item-element and
+  assessment-pattern keys; the Item revision identity itself is never used as a topic.
 - Evidence-node membership and curriculum targets use sets/maps.
 - Three-hop alignment uses a multi-source frontier map (`node -> source seeds`) and indexed inbound
   and outbound graph-edge lookups. It performs at most three adjacency queries, `O(V+E)` over the

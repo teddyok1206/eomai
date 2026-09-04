@@ -35,9 +35,22 @@ def test_topic_selection_is_deduplicated_bounded_and_excludes_item_nodes() -> No
     assert automatic_item_alignment_topic_keys(nodes) == ("topic.alpha", "topic.beta")
 
 
-def test_topic_selection_rejects_item_only_proposals() -> None:
+def test_topic_selection_falls_back_to_semantic_item_nodes() -> None:
+    assert automatic_item_alignment_topic_keys(
+        (
+            ("ITEM_REVISION", "item_revision:ignored"),
+            ("ITEM_ELEMENT", "item_element:spectral-stimulus"),
+            ("ASSESSMENT_PATTERN", "assessment_pattern:comparison"),
+        )
+    ) == (
+        "assessment_pattern:comparison",
+        "item_element:spectral-stimulus",
+    )
+
+
+def test_topic_selection_rejects_proposals_without_semantic_topics() -> None:
     with pytest.raises(AutomaticCurriculumAlignmentError, match="no controlled topic"):
-        automatic_item_alignment_topic_keys((("ITEM_ELEMENT", "item.title"),))
+        automatic_item_alignment_topic_keys((("ITEM_REVISION", "item_revision:only"),))
 
 
 def test_alignment_walk_is_multi_source_bounded_and_returns_minor_units() -> None:

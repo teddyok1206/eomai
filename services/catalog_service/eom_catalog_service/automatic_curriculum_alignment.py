@@ -41,7 +41,10 @@ AUTOMATIC_ITEM_ALIGNMENT_POLICY = {
     "maximum_node_seed_associations": AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS,
     "retrieval": {
         "query_kind": "ITEM_PREPARATION",
-        "topic_selection": "SORTED_UNIQUE_NON_ITEM_STABLE_KEYS_FIRST_20",
+        "topic_selection": (
+            "SORTED_UNIQUE_CONCEPTUAL_STABLE_KEYS_FIRST_20_ELSE_"
+            "ITEM_ELEMENT_OR_ASSESSMENT_PATTERN_FIRST_20"
+        ),
         "source_classes": list(AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES),
         "requester_role": "ADMIN",
         "requester_permission_keys": list(AUTOMATIC_ITEM_ALIGNMENT_PERMISSION_KEYS),
@@ -49,7 +52,8 @@ AUTOMATIC_ITEM_ALIGNMENT_POLICY = {
     },
 }
 AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256 = content_sha256(AUTOMATIC_ITEM_ALIGNMENT_POLICY)
-_NON_TOPIC_NODE_TYPES = frozenset({"ITEM_REVISION", "ITEM_ELEMENT", "ASSESSMENT_PATTERN"})
+_ITEM_NODE_TYPES = frozenset({"ITEM_REVISION", "ITEM_ELEMENT", "ASSESSMENT_PATTERN"})
+_FALLBACK_TOPIC_NODE_TYPES = frozenset({"ITEM_ELEMENT", "ASSESSMENT_PATTERN"})
 
 
 class AutomaticCurriculumAlignmentError(ValueError):
@@ -63,12 +67,18 @@ def automatic_item_alignment_topic_keys(
 ) -> tuple[str, ...]:
     """Select the bounded controlled-topic keys declared by one accepted proposal."""
 
-    eligible = {
+    materialized = tuple(nodes)
+    primary = {
         stable_key
-        for node_type, stable_key in nodes
-        if node_type not in _NON_TOPIC_NODE_TYPES and len(stable_key) <= 128
+        for node_type, stable_key in materialized
+        if node_type not in _ITEM_NODE_TYPES and len(stable_key) <= 128
     }
-    values = tuple(sorted(eligible))[:20]
+    fallback = {
+        stable_key
+        for node_type, stable_key in materialized
+        if node_type in _FALLBACK_TOPIC_NODE_TYPES and len(stable_key) <= 128
+    }
+    values = tuple(sorted(primary or fallback))[:20]
     if not values:
         raise AutomaticCurriculumAlignmentError(
             "AUTOMATIC_ALIGNMENT_TOPIC_MISSING",
