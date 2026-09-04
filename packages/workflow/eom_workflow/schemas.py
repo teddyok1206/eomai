@@ -522,7 +522,14 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return RegistrationRoleResult.model_validate(value)
         raise WorkflowSchemaError(f"result schema does not match worker role: {schema_id}")
     except ValidationError as exc:
-        raise WorkflowSchemaError(f"{schema_id} failed typed validation") from exc
+        errors = exc.errors(include_url=False, include_context=False, include_input=False)
+        first = errors[0] if errors else None
+        if first is None:
+            detail = ""
+        else:
+            location = ".".join(str(part) for part in first["loc"]) or "$"
+            detail = f" at {location}: {first['msg']}"
+        raise WorkflowSchemaError(f"{schema_id} failed typed validation{detail}") from exc
 
 
 def _canonicalize_content_team_authoring_result(value: object) -> object:
@@ -733,12 +740,25 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
             "type": "string",
             "enum": [page.page_input_id for page in request.page_inputs],
         }
+        observed_pages["description"] = (
+            "Return every supplied page_input_id exactly once and in the same order as the "
+            "request. Do not repeat, omit, or reorder page IDs."
+        )
         items = _mapping(result_properties, "items")
         items["minItems"] = len(request.expected_item_numbers)
         items["maxItems"] = len(request.expected_item_numbers)
+        items["description"] = (
+            "Return exactly one proposal for each requested item number, with no duplicates, "
+            "in the same ascending order as expected_item_numbers."
+        )
         item_schema = _mapping(items, "items")
         item_properties = _mapping(item_schema, "properties")
         _mapping(item_properties, "item_number")["enum"] = list(request.expected_item_numbers)
+        _project_legacy_extraction_relations(
+            schema,
+            item_properties=item_properties,
+            request=worker_input.request,
+        )
         content_anchor_map = _mapping(item_properties, "content_anchor_map")
         # Codex's supported Structured Outputs subset cannot express the canonical
         # cross-item existential rule with `contains` or positional array schemas.
@@ -877,6 +897,156 @@ def _bind_result_string_const(
     if property_schema.get("type") != "string" or "$ref" in property_schema:
         raise WorkflowSchemaError("result const binding requires an inline string schema")
     property_schema["const"] = value
+
+
+def _inline_local_schema(schema: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
+    """Copy and fully inline one independently referenced local schema node."""
+
+    projected = copy.deepcopy(value)
+    visited_references: set[str] = set()
+    reference = projected.get("$ref")
+    while reference is not None:
+        prefix = "#/$defs/"
+        if set(projected) != {"$ref"} or not isinstance(reference, str):
+            raise WorkflowSchemaError("local schema reference is not independently projectable")
+        if not reference.startswith(prefix):
+            raise WorkflowSchemaError("local schema reference is not local")
+        if reference in visited_references:
+            raise WorkflowSchemaError("local schema reference cycle is not projectable")
+        visited_references.add(reference)
+        projected = copy.deepcopy(
+            _mapping(_mapping(schema, "$defs"), reference.removeprefix(prefix))
+        )
+        reference = projected.get("$ref")
+    return projected
+
+
+def _exact_legacy_source_pointer_schema(
+    schema: dict[str, Any],
+    template: dict[str, Any],
+    pointer: object,
+) -> dict[str, Any]:
+    projected = _inline_local_schema(schema, template)
+    properties = _mapping(projected, "properties")
+    model_dump = getattr(pointer, "model_dump", None)
+    if not callable(model_dump):
+        raise WorkflowSchemaError("legacy source pointer is not serializable")
+    value = model_dump(mode="json")
+    if not isinstance(value, dict) or set(value) != set(properties):
+        raise WorkflowSchemaError("legacy source pointer shape is not projectable")
+    for key, item in value.items():
+        if not isinstance(item, str):
+            raise WorkflowSchemaError("legacy source pointer field is not an exact string")
+        _bind_result_string_const(schema, _mapping(properties, key), item)
+    return projected
+
+
+def _legacy_source_anchor_variant(
+    schema: dict[str, Any],
+    template: dict[str, Any],
+    *,
+    pointer: object,
+    source_role: str,
+    physical_page: int | None,
+    page_image: bool,
+) -> dict[str, Any]:
+    projected = _inline_local_schema(schema, template)
+    properties = _mapping(projected, "properties")
+    properties["source"] = _exact_legacy_source_pointer_schema(
+        schema,
+        _mapping(properties, "source"),
+        pointer,
+    )
+    _mapping(properties, "source_role")["const"] = source_role
+    if page_image:
+        if physical_page is None:
+            raise WorkflowSchemaError("legacy page anchor is missing its physical page")
+        properties["physical_page"] = {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "const": physical_page,
+        }
+    return projected
+
+
+def _project_legacy_extraction_relations(
+    schema: dict[str, Any],
+    *,
+    item_properties: dict[str, Any],
+    request: LegacyItemExtractionWorkerRequest,
+) -> None:
+    """Project canonical cross-field rules as exact identities plus model instructions."""
+
+    extraction_request = request.extraction_request
+    source_anchors = _mapping(item_properties, "source_anchors")
+    source_anchor_template = _mapping(source_anchors, "items")
+    anchor_variants = [
+        _legacy_source_anchor_variant(
+            schema,
+            source_anchor_template,
+            pointer=page.image,
+            source_role=page.source_role,
+            physical_page=page.physical_page,
+            page_image=True,
+        )
+        for page in extraction_request.page_inputs
+    ]
+    anchor_variants.extend(
+        _legacy_source_anchor_variant(
+            schema,
+            source_anchor_template,
+            pointer=materialization.source,
+            source_role=materialization.source_role,
+            physical_page=None,
+            page_image=False,
+        )
+        for materialization in extraction_request.source_materializations
+    )
+    if not anchor_variants:
+        raise WorkflowSchemaError("legacy extraction request has no projectable anchor source")
+    source_anchors["items"] = {"anyOf": anchor_variants}
+    source_anchors["description"] = (
+        "Every source anchor MUST use one exact pointer/role pair offered by this schema. For "
+        "problem and answer pages, source MUST be the supplied page image pointer (PNG), never "
+        "the original PDF source pointer, and physical_page MUST match that page input."
+    )
+
+    content_properties = _local_definition_properties(
+        schema,
+        _mapping(item_properties, "item_content"),
+    )
+    _mapping(content_properties, "body")["description"] = (
+        "Preserve the observed body blocks in source order. If any statement_set block is "
+        "present, solution.statement_explanations MUST contain exactly one explanation for every "
+        "statement_id and no other IDs. With no statement_set, statement_explanations MUST be "
+        "empty."
+    )
+    _mapping(content_properties, "interaction")["description"] = (
+        "For single_choice, return exactly one correct_choice_id that resolves to a declared "
+        "choice and keep accepted_answers empty. For constructed_response, keep "
+        "correct_choice_ids empty and return at least one accepted answer."
+    )
+    solution_properties = _local_definition_properties(
+        schema,
+        _mapping(content_properties, "solution"),
+    )
+    _mapping(solution_properties, "correct_choice_ids")["description"] = (
+        "Exactly one declared choice ID for single_choice; empty for constructed_response."
+    )
+    _mapping(solution_properties, "accepted_answers")["description"] = (
+        "Empty for single_choice; one or more source-grounded answers for constructed_response."
+    )
+    _mapping(solution_properties, "statement_explanations")["description"] = (
+        "Use exactly the statement IDs declared across item_content.body statement_set blocks, "
+        "one explanation per ID and no extras. Return an empty array only when no statement_set "
+        "exists."
+    )
+    _mapping(item_properties, "linguistic_patterns")["description"] = (
+        "Each observation must be internally coherent: uses_statement_set=true requires "
+        "choice_grammar=STATEMENT_COMBINATION; prompt_form=SELECT_COMBINATION also requires "
+        "uses_statement_set=true."
+    )
 
 
 def _bind_page_image_observations(
@@ -1841,6 +2011,35 @@ def _normalize_codex_schema(value: object) -> None:
                     raise WorkflowSchemaError(
                         "Codex result string pattern does not preserve its non-empty contract"
                     )
+    maximum_length = value.get("maxLength")
+    if maximum_length is not None:
+        value_type = value.get("type")
+        string_type = value_type == "string" or (
+            isinstance(value_type, list)
+            and set(value_type) == {"string", "null"}
+            and len(value_type) == 2
+        )
+        if (
+            not isinstance(maximum_length, int)
+            or isinstance(maximum_length, bool)
+            or maximum_length < 0
+            or not string_type
+        ):
+            raise WorkflowSchemaError("Codex result string maximum is not projectable")
+        _append_projection_instruction(
+            value,
+            f"The value MUST contain at most {maximum_length} characters.",
+        )
+    if value.get("uniqueItems") is True:
+        value_type = value.get("type")
+        array_type = value_type == "array" or (
+            isinstance(value_type, list)
+            and set(value_type) == {"array", "null"}
+            and len(value_type) == 2
+        )
+        if not array_type:
+            raise WorkflowSchemaError("Codex result uniqueness constraint is not projectable")
+        _append_projection_instruction(value, "Every array entry MUST be unique.")
     value.pop("minLength", None)
     value.pop("maxLength", None)
     value.pop("uniqueItems", None)
@@ -1920,6 +2119,16 @@ def _normalize_codex_schema(value: object) -> None:
     if isinstance(definitions, dict):
         for child in definitions.values():
             _normalize_codex_schema(child)
+
+
+def _append_projection_instruction(value: dict[str, Any], instruction: str) -> None:
+    description = value.get("description")
+    if description is None:
+        value["description"] = instruction
+        return
+    if not isinstance(description, str):
+        raise WorkflowSchemaError("Codex result description is not a string")
+    value["description"] = f"{description.rstrip()} {instruction}"
 
 
 def _resource_error(logical_name: str) -> str:

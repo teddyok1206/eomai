@@ -9,6 +9,7 @@ from typing import cast
 import pytest
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
+from eom_orchestrator.orchestrator import RETRYABLE_CONTROL_ADMISSION_ERRORS
 from eom_orchestrator.settings import Settings, WorkerConfigSource
 from eom_workflow_runner import cli
 from eom_workflow_runner.actor_authorization import (
@@ -37,6 +38,19 @@ def _platform_settings(tmp_path: Path) -> Settings:
         worker_home_root=tmp_path / "homes",
         nas_artifact_root=tmp_path / "artifacts",
         codex_binary=Path("/usr/local/bin/codex"),
+    )
+
+
+def test_temporarily_unavailable_slot_keeps_the_platform_job_queued() -> None:
+    assert (
+        frozenset(
+            {
+                "CONTROL_CAPACITY_EXHAUSTED",
+                "CONTROL_KNOWLEDGE_CAPACITY_EXHAUSTED",
+                "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE",
+            }
+        )
+        == RETRYABLE_CONTROL_ADMISSION_ERRORS
     )
 
 

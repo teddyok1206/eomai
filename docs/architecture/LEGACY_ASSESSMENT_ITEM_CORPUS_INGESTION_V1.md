@@ -236,6 +236,17 @@ Returns a tuple of item proposals. Each proposal contains:
 
 The worker returns neither database IDs it is not given nor arbitrary relationship names.
 
+The Codex-facing generation projection keeps the canonical result schema authoritative while
+making relationships that the supported Structured Outputs subset cannot encode as explicit
+generation instructions. Page anchors are structurally narrowed to the exact request-bound PNG
+Artifact pointers. Statement/explanation coverage, interaction/solution exclusivity, linguistic
+pattern coherence, uniqueness, and maximum string lengths remain canonical Pydantic/JSON Schema
+rules and are mirrored in schema descriptions and the pinned worker instructions. This avoids a
+parallel legacy-only content model: one proposal still carries the existing immutable
+`AssessmentItemContent`, and the Orchestrator alone performs final typed validation and NAS commit.
+Validation errors report only the first typed field path and invariant message, never source or
+result content, so a failed terminal work unit can be diagnosed without an unsafe retry.
+
 ### 5.6 `legacy-item-extraction-acceptance/1.0`
 
 Records deterministic validator results, reviewer decisions, accepted/rejected fields, corrections,

@@ -54,6 +54,9 @@ SUBMITTED_POLL_INTERVAL = timedelta(seconds=5)
 REVIEW_POLL_INTERVAL = timedelta(seconds=30)
 ACTIVE_BATCH_STATES = frozenset({"QUEUED", "RUNNING"})
 ACTIVE_WORK_UNIT_STATES = frozenset({"PENDING", "CLAIMED", "SUBMITTED"})
+IN_FLIGHT_WORK_UNIT_STATES = frozenset({"CLAIMED", "SUBMITTED"})
+# One fixed legacy-extraction slot means one durable submission boundary at a time.
+LEGACY_EXTRACTION_BATCH_CLAIM_LOCK_ID = 4_609_259_983_361_590_172
 WORK_UNIT_TRANSITIONS: dict[str, frozenset[str]] = {
     "PENDING": frozenset({"CLAIMED"}),
     "CLAIMED": frozenset({"PENDING", "SUBMITTED", "FAILED"}),
@@ -338,7 +341,12 @@ class LegacyItemExtractionBatchService:
         self._validate_lease(lease_owner, lease_duration)
         now = observed_at.astimezone(UTC)
         with transaction(self.sessions) as session:
+            session.execute(
+                select(func.pg_advisory_xact_lock(LEGACY_EXTRACTION_BATCH_CLAIM_LOCK_ID))
+            )
             self._release_expired_claims(session, now)
+            if self._in_flight_work_unit_id(session) is not None:
+                return None
             record = session.scalar(
                 select(LegacyItemExtractionBatchWorkUnitRecord)
                 .join(
@@ -390,6 +398,29 @@ class LegacyItemExtractionBatchService:
                 payload={"lease_owner": lease_owner},
             )
             return self._work_unit_view(record)
+
+    @staticmethod
+    def _in_flight_work_unit_id(session: Session) -> str | None:
+        """Return the active handoff that must settle before another claim."""
+
+        return session.scalar(
+            select(LegacyItemExtractionBatchWorkUnitRecord.work_unit_id)
+            .join(
+                LegacyItemExtractionBatchRecord,
+                LegacyItemExtractionBatchRecord.extraction_batch_id
+                == LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+            )
+            .where(
+                LegacyItemExtractionBatchWorkUnitRecord.state.in_(IN_FLIGHT_WORK_UNIT_STATES),
+                LegacyItemExtractionBatchRecord.state.in_(ACTIVE_BATCH_STATES),
+            )
+            .order_by(
+                LegacyItemExtractionBatchRecord.created_at,
+                LegacyItemExtractionBatchRecord.extraction_batch_id,
+                LegacyItemExtractionBatchWorkUnitRecord.ordinal,
+            )
+            .limit(1)
+        )
 
     def submit_claimed(
         self,

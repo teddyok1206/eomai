@@ -57,6 +57,13 @@ process restart loses no work and multiple runners cannot claim the same row. Ba
 lock the aggregate before assigning the next append-only event sequence. This keeps lookup and
 claim indexed while serializing only the short event append for one batch.
 
+The extraction pool has one dedicated slot, so claims additionally take one transaction-scoped
+advisory lock and refuse a new claim while any active batch has a `CLAIMED` or `SUBMITTED` unit.
+This is an indexed membership lookup and deliberately bounds the corpus to one in-flight handoff.
+An expired pre-submission claim is returned to `PENDING` before that lookup. Temporary capacity or
+eligible-slot unavailability leaves the platform Job `QUEUED`; the Workflow runner retries the same
+idempotent Job, while the batch gate prevents subsequent units from being consumed as failures.
+
 A successful extraction is `AWAITING_REVIEW`, not accepted. It becomes `ACCEPTED` only after the
 existing human acceptance record resolves to the exact result pointer. `REUSE_ACCEPTED` admission
 requires that exact record up front and creates no worker workflow. Aggregate state is `SUCCEEDED`

@@ -4,7 +4,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from eom_catalog_contracts import AssessmentPageImageInput, LegacyItemExtractionRequest
+from eom_catalog_contracts import (
+    AssessmentArtifactMemberPointer,
+    AssessmentPageImageInput,
+    AssessmentSourceMaterialization,
+    LegacyItemExtractionRequest,
+)
 from eom_identifiers import content_sha256
 from eom_workflow.compiler import compile_definition
 from eom_workflow.models import (
@@ -262,13 +267,50 @@ def test_constrained_result_schema_fixes_all_execution_identifiers() -> None:
 
 
 def test_constrained_legacy_extraction_schema_resolves_nested_string_references() -> None:
+    source = AssessmentArtifactMemberPointer.model_construct(
+        artifact_id="artifact_" + "4" * 32,
+        artifact_revision_id="rev_" + "4" * 32,
+        member_path="source/problem.pdf",
+        schema_ref="eom://schemas/legacy-assessment/source-document/1.0",
+        media_type="application/pdf",
+        sha256="sha256:" + "4" * 64,
+    )
+    image = AssessmentArtifactMemberPointer.model_construct(
+        artifact_id="artifact_" + "5" * 32,
+        artifact_revision_id="rev_" + "5" * 32,
+        member_path="pages/problem-1.png",
+        schema_ref="eom://schemas/legacy-assessment/page-image/1.0",
+        media_type="image/png",
+        sha256="sha256:" + "5" * 64,
+    )
     page = AssessmentPageImageInput.model_construct(
         page_input_id="assessmentpage_" + "1" * 32,
+        source_role="PROBLEM_DOCUMENT",
+        physical_page=7,
+        source=source,
+        image=image,
+        workspace_relative_path="source/pages/assessmentpage_" + "1" * 32 + ".png",
+        width_px=1200,
+        height_px=1800,
+    )
+    materialization = AssessmentSourceMaterialization.model_construct(
+        materialization_id="assessmaterial_" + "6" * 32,
+        source_role="OTHER_REVIEWED_EVIDENCE",
+        source=AssessmentArtifactMemberPointer.model_construct(
+            artifact_id="artifact_" + "6" * 32,
+            artifact_revision_id="rev_" + "6" * 32,
+            member_path="source/review.json",
+            schema_ref="eom://schemas/legacy-assessment/review-evidence/1.0",
+            media_type="application/json",
+            sha256="sha256:" + "6" * 64,
+        ),
+        workspace_relative_path="source/review.json",
     )
     extraction_request = LegacyItemExtractionRequest.model_construct(
         extraction_request_id="itemextractreq_" + "2" * 32,
         request_sha256="sha256:" + "3" * 64,
         page_inputs=(page,),
+        source_materializations=(materialization,),
         expected_item_numbers=(7,),
     )
     worker_input = RoleWorkerInput.model_construct(
@@ -303,11 +345,50 @@ def test_constrained_legacy_extraction_schema_resolves_nested_string_references(
         'later mapping MUST use a content_path beginning with "body["'
         in content_anchor_map["description"]
     )
+    source_anchors = proposal["properties"]["source_anchors"]
+    assert len(source_anchors["items"]["anyOf"]) == 2
+    valid_page_anchor = {
+        "anchor_id": "assessmentanchor_" + "7" * 32,
+        "source": image.model_dump(mode="json"),
+        "source_role": "PROBLEM_DOCUMENT",
+        "physical_page": 7,
+        "bounding_box": None,
+        "locator_detail": "문항 근거",
+    }
+    anchor_validator = Draft202012Validator({"$defs": schema["$defs"], **source_anchors["items"]})
+    assert anchor_validator.is_valid(valid_page_anchor)
+    invalid_pdf_anchor = {**valid_page_anchor, "source": source.model_dump(mode="json")}
+    assert not anchor_validator.is_valid(invalid_pdf_anchor)
+
+    content_reference = proposal["properties"]["item_content"]["$ref"]
+    content = schema["$defs"][content_reference.removeprefix("#/$defs/")]
+    assert (
+        "statement_explanations MUST contain exactly one"
+        in content["properties"]["body"]["description"]
+    )
+    assert "keep accepted_answers empty" in content["properties"]["interaction"]["description"]
+    solution_reference = content["properties"]["solution"]["$ref"]
+    solution = schema["$defs"][solution_reference.removeprefix("#/$defs/")]
+    assert (
+        "one explanation per ID" in solution["properties"]["statement_explanations"]["description"]
+    )
+    assert "uses_statement_set=true" in proposal["properties"]["linguistic_patterns"]["description"]
     artifact_member_pattern = schema["$defs"]["AssessmentItemContent_artifactPointer"][
         "properties"
     ]["artifact_member"]["pattern"]
     assert not any(token in artifact_member_pattern for token in ("(?=", "(?!", "(?<=", "(?<!"))
     validate_codex_structured_output_schema(schema)
+
+
+def test_codex_projection_preserves_unsupported_bounds_as_instructions() -> None:
+    projected = load_codex_result_schema("legacy-item-extraction-result@1.0")
+    observed_pages = projected["$defs"]["LegacyItemExtractionResult"]["properties"][
+        "observed_page_input_ids"
+    ]
+    assert "Every array entry MUST be unique." in observed_pages["description"]
+    source_anchor = projected["$defs"]["LegacyAssessmentTypes_sourceAnchor"]
+    locator = source_anchor["properties"]["locator_detail"]
+    assert "at most 256 characters" in locator["description"]
 
 
 def test_constrained_knowledge_analysis_schema_fixes_request_identity() -> None:

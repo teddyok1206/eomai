@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -14,6 +15,7 @@ from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchWorkUnitRecord,
 )
 from eom_catalog_service.legacy_item_extraction_batch_service import (
+    IN_FLIGHT_WORK_UNIT_STATES,
     CreateLegacyItemExtractionBatchCommand,
     LegacyItemExtractionBatchService,
     LegacyItemExtractionBatchServiceError,
@@ -171,6 +173,34 @@ def test_runner_claims_and_submits_one_unit_when_no_poll_is_due(
 
     assert service.advance_once(runner_id="runner-b") is True
     assert calls == [("legacyworkunit-y", "runner-b")]
+
+
+def test_claim_does_not_consume_another_unit_while_one_handoff_is_in_flight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service_without_init()
+    session = SimpleNamespace(execute=lambda _statement: None)
+
+    class Sessions:
+        @staticmethod
+        def begin() -> object:
+            return nullcontext(session)
+
+    service.sessions = cast(Any, Sessions())
+    monkeypatch.setattr(service, "_release_expired_claims", lambda _session, _now: None)
+    monkeypatch.setattr(
+        service,
+        "_in_flight_work_unit_id",
+        lambda _session: "legacyworkunit-in-flight",
+    )
+
+    claimed = service.claim(
+        lease_owner="runner-c",
+        observed_at=datetime.now(UTC),
+    )
+
+    assert claimed is None
+    assert frozenset({"CLAIMED", "SUBMITTED"}) == IN_FLIGHT_WORK_UNIT_STATES
 
 
 def test_explicit_state_table_rejects_skipping_review() -> None:

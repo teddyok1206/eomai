@@ -26,6 +26,7 @@ from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.legacy_item_extraction_artifact import (
     stage_legacy_item_extraction_result,
 )
+from eom_workflow.schemas import WorkflowSchemaError, validate_role_result
 from pydantic import ValidationError
 
 ZERO_SHA = "sha256:" + "0" * 64
@@ -249,6 +250,41 @@ def _result(*, item_content: dict[str, object] | None = None) -> dict[str, objec
         "items": [_item_proposal(item_content=item_content)],
     }
     return _hashed(value, "result_sha256")
+
+
+def test_legacy_typed_validation_error_reports_only_field_and_invariant() -> None:
+    result = _result(item_content=_multiple_image_statement_item_content())
+    items = result["items"]
+    assert isinstance(items, list) and isinstance(items[0], dict)
+    item_content = items[0]["item_content"]
+    assert isinstance(item_content, dict)
+    solution = item_content["solution"]
+    assert isinstance(solution, dict)
+    solution["statement_explanations"] = []
+    value: dict[str, object] = {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.14.0",
+        "job_id": "job_" + "1" * 32,
+        "workflow_id": "workflow_" + "1" * 32,
+        "step_run_id": "steprun_" + "1" * 32,
+        "role": "support",
+        "status": "ok",
+        "artifact": {
+            "logical_artifact_id": "artifact_" + "1" * 32,
+            "revision_id": "rev_" + "1" * 32,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+        "output": {"extraction_result": result},
+        "completed_at": NOW,
+    }
+
+    with pytest.raises(WorkflowSchemaError) as raised:
+        validate_role_result(value, "support", "legacy-item-extraction-result@1.0")
+
+    message = str(raised.value)
+    assert "failed typed validation at output.extraction_result.items.0.item_content" in message
+    assert "statement explanations must exactly cover statement IDs" in message
 
 
 def _acceptance(

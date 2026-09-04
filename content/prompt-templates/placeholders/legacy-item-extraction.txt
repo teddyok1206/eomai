@@ -5,5 +5,13 @@ schema-valid legacy item extraction result for the exact request, page-input IDs
 numbers. Ground every reconstructed content element and observation in closed source anchors. For
 each item, put the `content_anchor_map` entry whose `content_path` is exactly `title` first, and
 include at least one subsequent entry whose `content_path` begins with `body[`. Do not invent missing
-source evidence or silently resolve conflicts. Do not access the network, database, NAS, another
-worker, or any path outside the current workspace.
+source evidence or silently resolve conflicts. For every `statement_set`, return exactly one
+`solution.statement_explanations` entry for each declared `statement_id`, with no missing or extra
+IDs; use an empty list only when there is no statement set. For `single_choice`, return exactly one
+declared `correct_choice_id` and keep `accepted_answers` empty. For `constructed_response`, keep
+`correct_choice_ids` empty and return at least one source-grounded accepted answer. Keep linguistic
+observations internally coherent: `uses_statement_set=true` requires
+`choice_grammar=STATEMENT_COMBINATION`, and `prompt_form=SELECT_COMBINATION` requires
+`uses_statement_set=true`. Page anchors must use the exact supplied PNG `page_inputs[].image`
+pointer, role, and physical page—not the source PDF pointer. Do not access the network, database,
+NAS, another worker, or any path outside the current workspace.

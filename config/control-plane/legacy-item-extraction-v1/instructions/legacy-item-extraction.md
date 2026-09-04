@@ -28,6 +28,15 @@ analysis.
 - Recompute its canonical self-hash exactly as defined by the contract.
 - Confirm item numbers are unique and ascending.
 - Confirm every anchor resolves to a supplied page input and stays inside its normalized bounds.
+- For page anchors, use the exact supplied PNG `page_inputs[].image` pointer, source role, and
+  physical page; never substitute the original PDF `page_inputs[].source` pointer.
 - Confirm all required statement, choice, answer, solution, and visual fields are present when they
   are visible; use typed ambiguity/conflict fields when evidence is insufficient.
+- For each `statement_set`, return exactly one `solution.statement_explanations` entry for every
+  declared `statement_id`, and no other IDs. Use an empty list only when there is no statement set.
+- For `single_choice`, return one declared `correct_choice_id` and no `accepted_answers`. For
+  `constructed_response`, return no choice IDs and at least one source-grounded accepted answer.
+- Keep every linguistic observation coherent: `uses_statement_set=true` requires
+  `choice_grammar=STATEMENT_COMBINATION`; `prompt_form=SELECT_COMBINATION` requires
+  `uses_statement_set=true`.
 - Return JSON only. Do not include Markdown fences, commentary, or file paths outside the contract.

@@ -94,6 +94,13 @@ from eom_orchestrator.worker_registry import WorkerSlot
 
 LOGGER = logging.getLogger("eom.orchestrator")
 TERMINAL_STATES = {JobState.SUCCEEDED, JobState.FAILED, JobState.CANCELLED}
+RETRYABLE_CONTROL_ADMISSION_ERRORS = frozenset(
+    {
+        "CONTROL_CAPACITY_EXHAUSTED",
+        "CONTROL_KNOWLEDGE_CAPACITY_EXHAUSTED",
+        "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE",
+    }
+)
 
 
 class Orchestrator:
@@ -621,10 +628,7 @@ class Orchestrator:
         except WorkflowSchemaError as exc:
             self._fail(job_id, ErrorCode.WORKER_RESULT_INVALID, str(exc), slot)
         except ControlPlaneError as exc:
-            if exc.code not in {
-                "CONTROL_CAPACITY_EXHAUSTED",
-                "CONTROL_KNOWLEDGE_CAPACITY_EXHAUSTED",
-            }:
+            if exc.code not in RETRYABLE_CONTROL_ADMISSION_ERRORS:
                 self._fail(job_id, ErrorCode.WORKER_UNAVAILABLE, exc.code, slot)
         except PlatformError as exc:
             self._fail(job_id, exc.code, str(exc), slot)
