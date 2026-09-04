@@ -84,7 +84,10 @@ class LegacyItemAutomaticLearningService:
         with self.sessions() as session:
             run = session.scalar(
                 select(KnowledgeAnalysisRunRecord)
-                .where(KnowledgeAnalysisRunRecord.state.in_(ACTIVE_ANALYSIS_STATES))
+                .where(
+                    KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
+                    KnowledgeAnalysisRunRecord.state.in_(ACTIVE_ANALYSIS_STATES),
+                )
                 .order_by(
                     KnowledgeAnalysisRunRecord.created_at,
                     KnowledgeAnalysisRunRecord.analysis_run_id,
@@ -93,10 +96,7 @@ class LegacyItemAutomaticLearningService:
             )
             if run is None:
                 return None
-            requested_by = run.canonical_request.get("requested_by")
-            if not isinstance(requested_by, str):
-                raise ValueError("active knowledge analysis has no typed requester")
-            return run.analysis_run_id, requested_by
+            return run.analysis_run_id, run.created_by_operator_id
 
     def _candidate(self) -> _LearningCandidate | None:
         registration_key = (
