@@ -48,9 +48,15 @@ def test_topic_selection_falls_back_to_semantic_item_nodes() -> None:
     )
 
 
-def test_topic_selection_rejects_proposals_without_semantic_topics() -> None:
+def test_topic_selection_uses_item_revision_as_the_last_resort() -> None:
+    assert automatic_item_alignment_topic_keys(
+        (("ITEM_REVISION", "item_revision:genetics-abo-item-16"),)
+    ) == ("item_revision:genetics-abo-item-16",)
+
+
+def test_topic_selection_rejects_proposals_without_nodes() -> None:
     with pytest.raises(AutomaticCurriculumAlignmentError, match="no controlled topic"):
-        automatic_item_alignment_topic_keys((("ITEM_REVISION", "item_revision:only"),))
+        automatic_item_alignment_topic_keys(())
 
 
 def test_alignment_walk_is_multi_source_bounded_and_returns_minor_units() -> None:

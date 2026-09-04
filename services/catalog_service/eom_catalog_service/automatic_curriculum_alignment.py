@@ -43,7 +43,7 @@ AUTOMATIC_ITEM_ALIGNMENT_POLICY = {
         "query_kind": "ITEM_PREPARATION",
         "topic_selection": (
             "SORTED_UNIQUE_CONCEPTUAL_STABLE_KEYS_FIRST_20_ELSE_"
-            "ITEM_ELEMENT_OR_ASSESSMENT_PATTERN_FIRST_20"
+            "ITEM_ELEMENT_OR_ASSESSMENT_PATTERN_FIRST_20_ELSE_ITEM_REVISION_FIRST_20"
         ),
         "source_classes": list(AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES),
         "requester_role": "ADMIN",
@@ -54,6 +54,7 @@ AUTOMATIC_ITEM_ALIGNMENT_POLICY = {
 AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256 = content_sha256(AUTOMATIC_ITEM_ALIGNMENT_POLICY)
 _ITEM_NODE_TYPES = frozenset({"ITEM_REVISION", "ITEM_ELEMENT", "ASSESSMENT_PATTERN"})
 _FALLBACK_TOPIC_NODE_TYPES = frozenset({"ITEM_ELEMENT", "ASSESSMENT_PATTERN"})
+_LAST_RESORT_TOPIC_NODE_TYPES = frozenset({"ITEM_REVISION"})
 
 
 class AutomaticCurriculumAlignmentError(ValueError):
@@ -78,7 +79,12 @@ def automatic_item_alignment_topic_keys(
         for node_type, stable_key in materialized
         if node_type in _FALLBACK_TOPIC_NODE_TYPES and len(stable_key) <= 128
     }
-    values = tuple(sorted(primary or fallback))[:20]
+    last_resort = {
+        stable_key
+        for node_type, stable_key in materialized
+        if node_type in _LAST_RESORT_TOPIC_NODE_TYPES and len(stable_key) <= 128
+    }
+    values = tuple(sorted(primary or fallback or last_resort))[:20]
     if not values:
         raise AutomaticCurriculumAlignmentError(
             "AUTOMATIC_ALIGNMENT_TOPIC_MISSING",

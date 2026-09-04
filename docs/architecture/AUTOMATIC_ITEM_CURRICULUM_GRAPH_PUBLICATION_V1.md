@@ -29,7 +29,8 @@ evidence entry, graph node, and curriculum unit, then recomputes the policy resu
   analyses and the current snapshot membership.
 - Conceptual proposal-node keys are deduplicated with a set and sorted once. If an older accepted
   analysis contains no conceptual node, the policy falls back only to its semantic Item-element and
-  assessment-pattern keys; the Item revision identity itself is never used as a topic.
+  assessment-pattern keys. A legacy analysis containing only its semantic Item-revision key uses
+  that key as the last resort, without inventing or hard-coding any subject content.
 - Evidence-node membership and curriculum targets use sets/maps.
 - Three-hop alignment uses a multi-source frontier map (`node -> source seeds`) and indexed inbound
   and outbound graph-edge lookups. It performs at most three adjacency queries, `O(V+E)` over the
