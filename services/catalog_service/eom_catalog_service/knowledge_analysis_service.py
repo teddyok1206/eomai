@@ -1204,6 +1204,27 @@ class KnowledgeAnalysisApplicationService:
             actor_id=actor_id,
         )
 
+    def accept_validated_without_review(
+        self,
+        *,
+        analysis_run_id: str,
+        requested_by: str,
+    ) -> KnowledgeAnalysisApplicationResult:
+        """Accept a canonically valid proposal under the explicit automation policy.
+
+        The run can reach this boundary only after proposal pointer, schema, Pydantic,
+        and ontology validation.  It records a system policy action and never creates
+        a human review decision.
+        """
+
+        return self._accept(
+            analysis_run_id,
+            acceptance_mode="AUTO_POLICY",
+            review_pointer=None,
+            actor_id=requested_by,
+            auto_policy_review_override=True,
+        )
+
     def _accept(
         self,
         run_id: str,
@@ -1211,6 +1232,7 @@ class KnowledgeAnalysisApplicationService:
         acceptance_mode: Literal["AUTO_POLICY", "HUMAN_APPROVED"],
         review_pointer: KnowledgeArtifactMemberPointer | None,
         actor_id: str,
+        auto_policy_review_override: bool = False,
     ) -> KnowledgeAnalysisApplicationResult:
         with self.sessions() as session:
             run = session.get(KnowledgeAnalysisRunRecord, run_id)
@@ -1220,8 +1242,14 @@ class KnowledgeAnalysisApplicationService:
                 )
             if run.state == "ACCEPTED":
                 return self._projection(run)
-            allowed = "VALIDATING" if acceptance_mode == "AUTO_POLICY" else "NEEDS_REVIEW"
-            if run.state != allowed:
+            allowed_states = (
+                frozenset({"VALIDATING", "NEEDS_REVIEW"})
+                if acceptance_mode == "AUTO_POLICY" and auto_policy_review_override
+                else frozenset(
+                    {"VALIDATING" if acceptance_mode == "AUTO_POLICY" else "NEEDS_REVIEW"}
+                )
+            )
+            if run.state not in allowed_states:
                 raise KnowledgeAnalysisServiceError(
                     "KNOWLEDGE_ANALYSIS_CONCURRENCY_CONFLICT",
                     "knowledge analysis acceptance state changed",
@@ -1434,8 +1462,14 @@ class KnowledgeAnalysisApplicationService:
                         "knowledge analysis accepted result pointer conflicts",
                     )
                 return self._projection(run)
-            expected_state = "VALIDATING" if acceptance_mode == "AUTO_POLICY" else "NEEDS_REVIEW"
-            if run.state != expected_state:
+            expected_states = (
+                frozenset({"VALIDATING", "NEEDS_REVIEW"})
+                if acceptance_mode == "AUTO_POLICY" and auto_policy_review_override
+                else frozenset(
+                    {"VALIDATING" if acceptance_mode == "AUTO_POLICY" else "NEEDS_REVIEW"}
+                )
+            )
+            if run.state not in expected_states:
                 raise KnowledgeAnalysisServiceError(
                     "KNOWLEDGE_ANALYSIS_CONCURRENCY_CONFLICT",
                     "knowledge analysis changed during accepted result commit",
@@ -1453,6 +1487,7 @@ class KnowledgeAnalysisApplicationService:
                 actor_id=actor_id,
                 payload={
                     "acceptance_mode": acceptance_mode,
+                    "review_requirement_overridden": auto_policy_review_override,
                     "accepted_result_artifact_revision_id": artifact.revision_id,
                 },
             )

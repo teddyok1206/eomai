@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, cast
 from unittest.mock import Mock
 
+from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.legacy_item_automation_service import (
     LegacyItemAutomaticLearningService,
     _LearningCandidate,
@@ -23,7 +24,10 @@ def test_automatic_learning_reconciles_existing_run_before_scheduling_another() 
     service = object.__new__(LegacyItemAutomaticLearningService)
     service.analyses = Mock()
     service.learning = Mock()
-    service._active_analysis = cast(Any, lambda: ("analysisrun_" + "4" * 32, "operator_owner"))
+    service._active_analysis = cast(
+        Any,
+        lambda: ("analysisrun_" + "4" * 32, "operator_owner", "RUNNING"),
+    )
     service._candidate = cast(Any, lambda: None)
 
     assert service.advance_once() is True
@@ -32,6 +36,46 @@ def test_automatic_learning_reconciles_existing_run_before_scheduling_another() 
     assert command.analysis_run_id == "analysisrun_" + "4" * 32
     assert command.requested_by == "operator_owner"
     service.learning.promote_and_schedule.assert_not_called()
+
+
+def test_automatic_learning_accepts_validated_review_state_without_human_record() -> None:
+    service = object.__new__(LegacyItemAutomaticLearningService)
+    service.analyses = Mock()
+    service.learning = Mock()
+    service._active_analysis = cast(
+        Any,
+        lambda: ("analysisrun_" + "4" * 32, "operator_owner", "NEEDS_REVIEW"),
+    )
+    service._candidate = cast(Any, lambda: None)
+
+    assert service.advance_once() is True
+
+    service.analyses.accept_validated_without_review.assert_called_once_with(
+        analysis_run_id="analysisrun_" + "4" * 32,
+        requested_by="operator_owner",
+    )
+    service.analyses.reconcile.assert_not_called()
+    service.learning.promote_and_schedule.assert_not_called()
+
+
+def test_validated_review_override_uses_system_policy_without_review_pointer() -> None:
+    service = object.__new__(KnowledgeAnalysisApplicationService)
+    service._accept = Mock(return_value="accepted")  # type: ignore[method-assign]
+
+    assert (
+        service.accept_validated_without_review(
+            analysis_run_id="analysisrun_" + "4" * 32,
+            requested_by="operator_owner",
+        )
+        == "accepted"
+    )
+    service._accept.assert_called_once_with(
+        "analysisrun_" + "4" * 32,
+        acceptance_mode="AUTO_POLICY",
+        review_pointer=None,
+        actor_id="operator_owner",
+        auto_policy_review_override=True,
+    )
 
 
 def test_automatic_learning_builds_replay_stable_promotion_and_pins_policy() -> None:

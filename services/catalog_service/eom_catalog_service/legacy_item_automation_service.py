@@ -22,7 +22,14 @@ from eom_catalog_service.legacy_item_extraction_batch_models import (
 from eom_catalog_service.legacy_item_learning_service import LegacyItemLearningCoordinator
 from eom_catalog_service.models import ItemRevisionRecord
 
-ACTIVE_ANALYSIS_STATES = ("REQUESTED", "RESOLVED", "QUEUED", "RUNNING", "VALIDATING")
+ACTIVE_ANALYSIS_STATES = (
+    "REQUESTED",
+    "RESOLVED",
+    "QUEUED",
+    "RUNNING",
+    "VALIDATING",
+    "NEEDS_REVIEW",
+)
 
 
 @dataclass(frozen=True)
@@ -59,13 +66,19 @@ class LegacyItemAutomaticLearningService:
 
         active = self._active_analysis()
         if active is not None:
-            analysis_run_id, requested_by = active
-            self.analyses.reconcile(
-                ReconcileKnowledgeAnalysisCommand(
+            analysis_run_id, requested_by, state = active
+            if state == "NEEDS_REVIEW":
+                self.analyses.accept_validated_without_review(
                     analysis_run_id=analysis_run_id,
                     requested_by=requested_by,
                 )
-            )
+            else:
+                self.analyses.reconcile(
+                    ReconcileKnowledgeAnalysisCommand(
+                        analysis_run_id=analysis_run_id,
+                        requested_by=requested_by,
+                    )
+                )
             return True
         candidate = self._candidate()
         if candidate is None:
@@ -80,11 +93,33 @@ class LegacyItemAutomaticLearningService:
         )
         return True
 
-    def _active_analysis(self) -> tuple[str, str] | None:
+    def _active_analysis(self) -> tuple[str, str, str] | None:
+        registration_key = (
+            literal("legacy-item-promotion:")
+            + LegacyItemExtractionAcceptanceRecord.acceptance_id
+            + literal(":")
+            + LegacyItemExtractionDecisionRecord.item_proposal_id
+        )
         with self.sessions() as session:
             run = session.scalar(
                 select(KnowledgeAnalysisRunRecord)
+                .join(
+                    ItemRevisionRecord,
+                    ItemRevisionRecord.item_revision_id
+                    == KnowledgeAnalysisRunRecord.source_revision_id,
+                )
+                .join(
+                    LegacyItemExtractionDecisionRecord,
+                    ItemRevisionRecord.registration_key == registration_key,
+                )
+                .join(
+                    LegacyItemExtractionBatchWorkUnitRecord,
+                    LegacyItemExtractionBatchWorkUnitRecord.acceptance_id
+                    == LegacyItemExtractionDecisionRecord.acceptance_id,
+                )
                 .where(
+                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id
+                    == self.extraction_batch_id,
                     KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
                     KnowledgeAnalysisRunRecord.state.in_(ACTIVE_ANALYSIS_STATES),
                 )
@@ -96,7 +131,7 @@ class LegacyItemAutomaticLearningService:
             )
             if run is None:
                 return None
-            return run.analysis_run_id, run.created_by_operator_id
+            return run.analysis_run_id, run.created_by_operator_id, run.state
 
     def _candidate(self) -> _LearningCandidate | None:
         registration_key = (

@@ -72,6 +72,9 @@ Contracts and identifiers do not import infrastructure.
 - Reconcile successful results to `ACCEPTED` before claiming more work.
 - Promote accepted proposals idempotently through the existing Item/origin service, then schedule
   the existing approved-item Knowledge Analysis path with pinned deployment policy inputs.
+- When that exact, canonically validated proposal reaches `NEEDS_REVIEW`, the explicit corpus
+  automation policy accepts it as `AUTO_POLICY`, records the system override in the transition
+  event, and creates no human review record.
 - Normalize the model-only dynamic edge/type gap by retaining only ontology-compatible edges at the
   Orchestrator Artifact boundary; never weaken the authoritative Graph validator.
 - Stop on a new systematic extraction or analysis failure; do not blind-retry the same workflow.
