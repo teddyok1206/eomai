@@ -287,6 +287,39 @@ def test_legacy_typed_validation_error_reports_only_field_and_invariant() -> Non
     assert "statement explanations must exactly cover statement IDs" in message
 
 
+def test_legacy_worker_result_hash_is_derived_at_trusted_boundary() -> None:
+    extraction_result = _result()
+    expected_hash = extraction_result["result_sha256"]
+    extraction_result["result_sha256"] = ZERO_SHA
+    value: dict[str, object] = {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.14.0",
+        "job_id": "job_" + "1" * 32,
+        "workflow_id": "workflow_" + "1" * 32,
+        "step_run_id": "steprun_" + "1" * 32,
+        "role": "support",
+        "status": "ok",
+        "artifact": {
+            "logical_artifact_id": "artifact_" + "1" * 32,
+            "revision_id": "rev_" + "1" * 32,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+        "output": {"extraction_result": extraction_result},
+        "completed_at": NOW,
+    }
+
+    validated = validate_role_result(value, "support", "legacy-item-extraction-result@1.0")
+
+    document = validated.model_dump(mode="json")
+    output = document["output"]
+    assert isinstance(output, dict)
+    canonical_result = output["extraction_result"]
+    assert isinstance(canonical_result, dict)
+    assert canonical_result["result_sha256"] == expected_hash
+    assert extraction_result["result_sha256"] == ZERO_SHA
+
+
 def _acceptance(
     result: LegacyItemExtractionResult,
     *,

@@ -335,6 +335,11 @@ def test_constrained_legacy_extraction_schema_resolves_nested_string_references(
         "pattern": "^sha256:[0-9a-f]{64}$",
         "const": extraction_request.request_sha256,
     }
+    assert properties["result_sha256"] == {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$",
+        "const": "sha256:" + "0" * 64,
+    }
     proposal = properties["items"]["items"]
     content_anchor_map = proposal["properties"]["content_anchor_map"]
     assert content_anchor_map["minItems"] == 2

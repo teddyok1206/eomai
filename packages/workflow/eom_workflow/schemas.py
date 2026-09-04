@@ -442,6 +442,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
     canonical_value = value
     if schema_id == "authoring-result@7.0" and role == "authoring":
         canonical_value = _canonicalize_content_team_authoring_result(value)
+    elif schema_id == "legacy-item-extraction-result@1.0" and role == "support":
+        canonical_value = _canonicalize_legacy_item_extraction_result(value)
     elif schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_editorial_compatibility_result(value)
     validate_schema_message(load_role_result_schema(schema_id), canonical_value, schema_id)
@@ -493,7 +495,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         if schema_id == "knowledge-analysis-proposal-result@8.0" and role == "support":
             return KnowledgeAnalysisProposalRoleResultV8.model_validate(value)
         if schema_id == "legacy-item-extraction-result@1.0" and role == "support":
-            return LegacyItemExtractionRoleResult.model_validate(value)
+            return LegacyItemExtractionRoleResult.model_validate(canonical_value)
         if schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
             return LegacyItemEditorialCompatibilityRoleResult.model_validate(canonical_value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
@@ -618,6 +620,31 @@ def _canonicalize_legacy_editorial_compatibility_result(value: object) -> object
     return canonical
 
 
+def _canonicalize_legacy_item_extraction_result(value: object) -> object:
+    """Derive the extraction self-hash at the trusted validation boundary.
+
+    Workers author the semantic extraction document. The orchestrator owns its canonical
+    serialization identity, so an untrusted model-provided digest is never authoritative.
+    """
+
+    if not isinstance(value, dict):
+        return value
+    output = value.get("output")
+    if not isinstance(output, dict):
+        return value
+    extraction_result = output.get("extraction_result")
+    if not isinstance(extraction_result, dict):
+        return value
+
+    canonical = copy.deepcopy(value)
+    canonical_output = _mapping(canonical, "output")
+    canonical_result = _mapping(canonical_output, "extraction_result")
+    canonical_result["result_sha256"] = content_sha256(
+        {key: item for key, item in canonical_result.items() if key != "result_sha256"}
+    )
+    return canonical
+
+
 def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> dict[str, Any]:
     schema = load_codex_result_schema(schema_id)
     properties = _mapping(schema, "properties")
@@ -732,6 +759,11 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
             schema,
             _mapping(result_properties, "request_sha256"),
             request.request_sha256,
+        )
+        _bind_result_string_const(
+            schema,
+            _mapping(result_properties, "result_sha256"),
+            "sha256:" + "0" * 64,
         )
         observed_pages = _mapping(result_properties, "observed_page_input_ids")
         observed_pages["minItems"] = len(request.page_inputs)
