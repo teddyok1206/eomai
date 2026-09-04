@@ -32,6 +32,8 @@ from eom_catalog_contracts import (
     KnowledgeProposalCountsV2,
     KnowledgeProposalMembers,
     KnowledgeProposalMembersV2,
+    ProposedKnowledgeEdgeV2,
+    validate_knowledge_edge_endpoint_types,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol import ErrorCode
@@ -96,6 +98,53 @@ MULTIMODAL_PROPOSAL_MEMBERS: tuple[tuple[str, str, ProposalMediaType, str], ...]
     PROPOSAL_MEMBERS[-1],
 )
 _DOCUMENT_ANCHOR_LOCATOR = re.compile(r"^physical_page=([1-9][0-9]{0,5})(?:;.{1,220})?$")
+
+
+def _without_incompatible_edges(
+    proposal: (
+        KnowledgeAnalysisWorkerProposal
+        | KnowledgeAnalysisWorkerProposalV2
+        | KnowledgeAnalysisWorkerProposalV3
+        | KnowledgeAnalysisWorkerProposalV4
+        | KnowledgeAnalysisWorkerProposalV5
+        | KnowledgeAnalysisWorkerProposalV6
+    ),
+) -> (
+    KnowledgeAnalysisWorkerProposal
+    | KnowledgeAnalysisWorkerProposalV2
+    | KnowledgeAnalysisWorkerProposalV3
+    | KnowledgeAnalysisWorkerProposalV4
+    | KnowledgeAnalysisWorkerProposalV5
+    | KnowledgeAnalysisWorkerProposalV6
+):
+    """Discard only edges that cannot exist in the closed education ontology.
+
+    JSON Schema can close the edge and node records, but it cannot compare each
+    referenced node's dynamic type with the edge-type compatibility matrix.  Nodes,
+    anchors, claims, and every compatible edge remain byte-for-byte model values;
+    acceptance still runs the authoritative ontology validator on the result.
+    """
+
+    node_types = {node.node_id: node.node_type for node in proposal.nodes}
+    compatible = []
+    for edge in proposal.edges:
+        edge_type = (
+            edge.relationship.edge_type
+            if isinstance(edge, ProposedKnowledgeEdgeV2)
+            else edge.edge_type
+        )
+        try:
+            validate_knowledge_edge_endpoint_types(
+                edge_type,
+                node_types[edge.from_node_id],
+                node_types[edge.to_node_id],
+            )
+        except ValueError:
+            continue
+        compatible.append(edge)
+    if len(compatible) == len(proposal.edges):
+        return proposal
+    return proposal.model_copy(update={"edges": tuple(compatible)})
 
 
 def _validate_observed_page_structured_evidence(
@@ -171,6 +220,8 @@ def stage_knowledge_analysis_proposal(
     | KnowledgeAnalysisProposalReceiptV7,
 ]:
     """Split one bounded worker value into deterministic immutable Artifact members."""
+
+    proposal = _without_incompatible_edges(proposal)
 
     if proposal.analysis_request_id != request.analysis_request_id:
         raise PlatformError(

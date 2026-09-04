@@ -28,6 +28,11 @@ media type, Artifact content hash, extraction result ID, and result self-hash. I
 validates the exact result before producing a deterministic acceptance. Promotion and learning use
 the existing acceptance, Item, origin, workflow, preset, risk-policy, and Artifact resolution
 checks. Missing, stale, non-approved, malformed, or hash-mismatched pointers fail explicitly.
+Knowledge proposal staging also applies the closed ontology compatibility table to every proposed
+edge. JSON Schema cannot compare an edge with the dynamic types of two referenced nodes, so the
+Orchestrator excludes only incompatible edges before hashing and committing proposal members; it
+preserves all nodes, anchors, claims, and compatible edges, then the application boundary runs the
+same ontology validator again before Graph publication.
 
 ## Access patterns and data structures
 
@@ -67,6 +72,8 @@ Contracts and identifiers do not import infrastructure.
 - Reconcile successful results to `ACCEPTED` before claiming more work.
 - Promote accepted proposals idempotently through the existing Item/origin service, then schedule
   the existing approved-item Knowledge Analysis path with pinned deployment policy inputs.
+- Normalize the model-only dynamic edge/type gap by retaining only ontology-compatible edges at the
+  Orchestrator Artifact boundary; never weaken the authoritative Graph validator.
 - Stop on a new systematic extraction or analysis failure; do not blind-retry the same workflow.
 
 ## Alternatives

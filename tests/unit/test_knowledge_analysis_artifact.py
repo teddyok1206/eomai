@@ -134,3 +134,46 @@ def test_proposal_request_identity_mismatch_publishes_no_stage(tmp_path: Path) -
             staging=tmp_path,
         )
     assert not (tmp_path / "knowledge-proposal-artifact").exists()
+
+
+def test_incompatible_dynamic_edge_is_excluded_before_artifact_commit(tmp_path: Path) -> None:
+    value = _proposal().model_dump(mode="json")
+    value["nodes"] = [
+        {
+            "node_id": "knode_process_source",
+            "node_type": "PROCESS",
+            "stable_key": "process.source",
+            "label": "source process",
+            "anchor_ids": ["anchor_page_1"],
+        },
+        {
+            "node_id": "knode_process_target",
+            "node_type": "PROCESS",
+            "stable_key": "process.target",
+            "label": "target process",
+            "anchor_ids": ["anchor_page_1"],
+        },
+    ]
+    value["edges"] = [
+        {
+            "edge_id": "kedge_invalid_requires_concept",
+            "edge_type": "REQUIRES_CONCEPT",
+            "from_node_id": "knode_process_source",
+            "to_node_id": "knode_process_target",
+            "confidence_milli": 900,
+            "anchor_ids": ["anchor_page_1"],
+        }
+    ]
+
+    staged, receipt = stage_knowledge_analysis_proposal(
+        proposal=KnowledgeAnalysisWorkerProposal.model_validate(value),
+        request=_request(),
+        job_id="job_" + "c" * 32,
+        logical_artifact_id="artifact_" + "d" * 32,
+        revision_id="rev_" + "e" * 32,
+        staging=tmp_path,
+    )
+
+    assert receipt.counts.nodes == 2
+    assert receipt.counts.edges == 0
+    assert (staged.directory / "normalized/edges.jsonl").read_bytes() == b""
