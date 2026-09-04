@@ -96,7 +96,7 @@ class LegacyItemAutomaticLearningService:
     def _active_analysis(self) -> tuple[str, str, str] | None:
         registration_key = (
             literal("legacy-item-promotion:")
-            + LegacyItemExtractionAcceptanceRecord.acceptance_id
+            + LegacyItemExtractionDecisionRecord.acceptance_id
             + literal(":")
             + LegacyItemExtractionDecisionRecord.item_proposal_id
         )
