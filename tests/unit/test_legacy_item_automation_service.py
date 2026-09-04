@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any, cast
 from unittest.mock import Mock
 
+import pytest
+from eom_catalog_service.application_runner import _legacy_automation_batch_ids
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.legacy_item_automation_service import (
     LegacyItemAutomaticLearningService,
@@ -112,3 +114,21 @@ def test_automatic_learning_is_idle_without_active_or_unlearned_work() -> None:
     service._candidate = cast(Any, lambda: None)
 
     assert service.advance_once() is False
+
+
+def test_automation_batch_ids_support_an_explicit_ordered_allowlist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = "legacybatch_" + "1" * 32
+    second = "legacybatch_" + "2" * 32
+    monkeypatch.setenv("EOM_LEGACY_ITEM_AUTOMATION_BATCH_IDS", f"{first},{second}")
+    monkeypatch.setenv("EOM_LEGACY_ITEM_AUTOMATION_BATCH_ID", "legacybatch_" + "3" * 32)
+
+    assert _legacy_automation_batch_ids() == (first, second)
+
+
+def test_automation_batch_ids_reject_duplicates(monkeypatch: pytest.MonkeyPatch) -> None:
+    batch_id = "legacybatch_" + "1" * 32
+    monkeypatch.setenv("EOM_LEGACY_ITEM_AUTOMATION_BATCH_IDS", f"{batch_id},{batch_id}")
+
+    assert _legacy_automation_batch_ids() == ()

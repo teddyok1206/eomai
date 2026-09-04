@@ -48,14 +48,16 @@ class LegacyItemAutomaticLearningService:
         self,
         engine: Engine,
         *,
-        extraction_batch_id: str,
+        extraction_batch_ids: tuple[str, ...],
         content_pack_release_id: str,
         risk_policy_revision_id: str,
         learning: LegacyItemLearningCoordinator,
         analyses: KnowledgeAnalysisApplicationService,
     ) -> None:
+        if not extraction_batch_ids or len(extraction_batch_ids) != len(set(extraction_batch_ids)):
+            raise ValueError("automation batch identities must be non-empty and unique")
         self.sessions = build_session_factory(engine)
-        self.extraction_batch_id = extraction_batch_id
+        self.extraction_batch_ids = extraction_batch_ids
         self.content_pack_release_id = content_pack_release_id
         self.risk_policy_revision_id = risk_policy_revision_id
         self.learning = learning
@@ -118,8 +120,9 @@ class LegacyItemAutomaticLearningService:
                     == LegacyItemExtractionDecisionRecord.acceptance_id,
                 )
                 .where(
-                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id
-                    == self.extraction_batch_id,
+                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
+                        self.extraction_batch_ids
+                    ),
                     KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
                     KnowledgeAnalysisRunRecord.state.in_(ACTIVE_ANALYSIS_STATES),
                 )
@@ -175,7 +178,9 @@ class LegacyItemAutomaticLearningService:
                     ),
                 )
                 .where(
-                    LegacyItemExtractionBatchRecord.extraction_batch_id == self.extraction_batch_id,
+                    LegacyItemExtractionBatchRecord.extraction_batch_id.in_(
+                        self.extraction_batch_ids
+                    ),
                     LegacyItemExtractionBatchWorkUnitRecord.state == "ACCEPTED",
                     LegacyItemExtractionAcceptanceRecord.state.in_(
                         ("ACCEPTED", "ACCEPTED_WITH_CORRECTIONS")
@@ -186,6 +191,8 @@ class LegacyItemAutomaticLearningService:
                     KnowledgeAnalysisRunRecord.analysis_run_id.is_(None),
                 )
                 .order_by(
+                    LegacyItemExtractionBatchRecord.created_at,
+                    LegacyItemExtractionBatchRecord.extraction_batch_id,
                     LegacyItemExtractionBatchWorkUnitRecord.ordinal,
                     LegacyItemExtractionDecisionRecord.item_number,
                     LegacyItemExtractionDecisionRecord.item_proposal_id,

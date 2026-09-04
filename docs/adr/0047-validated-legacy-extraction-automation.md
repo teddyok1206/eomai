@@ -65,6 +65,9 @@ Contracts and identifiers do not import infrastructure.
 ## Decision
 
 - Enable `AUTO_ACCEPT_VALIDATED` explicitly in the Catalog service unit.
+- Allow one ordered, explicit batch-ID allowlist so a fresh-ID continuation batch can inherit the
+  same acceptance, Item-promotion, and Graph-learning policy without a handoff gap. FIFO batch
+  ordering remains authoritative; the allowlist does not change or retry an immutable failed unit.
 - Construct an existing acceptance document with actor
   `system.legacy-item-auto-acceptance`, complete coverage, and one `ACCEPT` decision per exact
   proposal. Do not record a human review that did not happen.

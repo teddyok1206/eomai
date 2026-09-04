@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import signal
 import threading
 
@@ -51,6 +52,22 @@ _RUNTIME_MODEL_TABLES = (
     LegacyItemExtractionBatchRecord.__table__,
     LegacyItemExtractionBatchWorkUnitRecord.__table__,
 )
+_LEGACY_BATCH_ID_PATTERN = re.compile(r"\Alegacybatch_[0-9a-f]{32}\Z", re.ASCII)
+
+
+def _legacy_automation_batch_ids() -> tuple[str, ...]:
+    configured = os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_BATCH_IDS")
+    if configured is None:
+        configured = os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_BATCH_ID", "")
+    values = tuple(value.strip() for value in configured.split(",") if value.strip())
+    if (
+        not values
+        or len(values) > 32
+        or len(values) != len(set(values))
+        or any(_LEGACY_BATCH_ID_PATTERN.fullmatch(value) is None for value in values)
+    ):
+        return ()
+    return values
 
 
 def serve() -> int:
@@ -81,13 +98,13 @@ def serve() -> int:
         automatic_acceptance = None
         automatic_learning = None
         if automation_mode == "AUTO_ACCEPT_AND_LEARN":
-            extraction_batch_id = os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_BATCH_ID")
+            extraction_batch_ids = _legacy_automation_batch_ids()
             content_pack_release_id = os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_PACK_RELEASE_ID")
             risk_policy_revision_id = os.environ.get(
                 "EOM_LEGACY_ITEM_AUTOMATION_RISK_POLICY_REVISION_ID"
             )
             if (
-                not extraction_batch_id
+                not extraction_batch_ids
                 or not content_pack_release_id
                 or not risk_policy_revision_id
             ):
@@ -117,7 +134,7 @@ def serve() -> int:
             )
             automatic_learning = LegacyItemAutomaticLearningService(
                 engine,
-                extraction_batch_id=extraction_batch_id,
+                extraction_batch_ids=extraction_batch_ids,
                 content_pack_release_id=content_pack_release_id,
                 risk_policy_revision_id=risk_policy_revision_id,
                 learning=learning,
