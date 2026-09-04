@@ -1976,9 +1976,10 @@ class AutomaticItemCurriculumAlignmentBinding(FrozenModel):
     curriculum_unit_ids: tuple[Annotated[str, Field(pattern=r"^currunit_[0-9a-f]{32}$")], ...] = (
         Field(min_length=1, max_length=8)
     )
-    alignment_policy_version: Literal["integrated-science-auto-alignment/1.0"] = (
-        "integrated-science-auto-alignment/1.0"
-    )
+    alignment_policy_version: Literal[
+        "integrated-science-auto-alignment/1.0",
+        "integrated-science-auto-alignment/1.1",
+    ]
     alignment_policy_sha256: Sha256
     requested_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
     aligned_at: UtcDatetime

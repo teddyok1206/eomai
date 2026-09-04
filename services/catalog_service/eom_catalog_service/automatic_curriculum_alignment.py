@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from eom_identifiers import content_sha256
 from sqlalchemy import select
@@ -15,9 +16,8 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeNodeRecord,
 )
 
-AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION = "integrated-science-auto-alignment/1.0"
 AUTOMATIC_ITEM_ALIGNMENT_MAX_DEPTH = 3
-AUTOMATIC_ITEM_ALIGNMENT_MAX_UNITS = 8
+AUTOMATIC_ITEM_ALIGNMENT_MAX_UNITS = 3
 AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS = 32768
 AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES = ("CURRICULUM", "TEXTBOOK")
 AUTOMATIC_ITEM_ALIGNMENT_PERMISSION_KEYS = (
@@ -31,27 +31,76 @@ AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET = {
     "max_claims": 16,
     "max_context_tokens": 8000,
 }
-AUTOMATIC_ITEM_ALIGNMENT_POLICY = {
-    "schema_version": AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
-    "graph_walk": "UNDIRECTED_SHORTEST_PATH",
-    "maximum_depth": AUTOMATIC_ITEM_ALIGNMENT_MAX_DEPTH,
-    "target_unit_level": "MINOR",
-    "ranking": ["DESCENDING_EVIDENCE_SUPPORT", "ASCENDING_DISTANCE_SUM", "UNIT_ID"],
-    "maximum_units": AUTOMATIC_ITEM_ALIGNMENT_MAX_UNITS,
-    "maximum_node_seed_associations": AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS,
-    "retrieval": {
-        "query_kind": "ITEM_PREPARATION",
-        "topic_selection": (
-            "SORTED_UNIQUE_CONCEPTUAL_STABLE_KEYS_FIRST_20_ELSE_"
-            "ITEM_ELEMENT_OR_ASSESSMENT_PATTERN_FIRST_20_ELSE_ITEM_REVISION_FIRST_20"
+
+
+@dataclass(frozen=True)
+class AutomaticCurriculumAlignmentPolicy:
+    version: str
+    maximum_units: int
+    maximum_support_only: bool
+    document: dict[str, object]
+    sha256: str
+
+
+def _alignment_policy(
+    version: str,
+    *,
+    maximum_units: int,
+    maximum_support_only: bool,
+) -> AutomaticCurriculumAlignmentPolicy:
+    document: dict[str, object] = {
+        "schema_version": version,
+        "graph_walk": "UNDIRECTED_SHORTEST_PATH",
+        "maximum_depth": AUTOMATIC_ITEM_ALIGNMENT_MAX_DEPTH,
+        "target_unit_level": "MINOR",
+        "ranking": ["DESCENDING_EVIDENCE_SUPPORT", "ASCENDING_DISTANCE_SUM", "UNIT_ID"],
+        "maximum_units": maximum_units,
+        "maximum_node_seed_associations": AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS,
+        "retrieval": {
+            "query_kind": "ITEM_PREPARATION",
+            "topic_selection": (
+                "SORTED_UNIQUE_CONCEPTUAL_STABLE_KEYS_FIRST_20_ELSE_"
+                "ITEM_ELEMENT_OR_ASSESSMENT_PATTERN_FIRST_20_ELSE_ITEM_REVISION_FIRST_20"
+            ),
+            "source_classes": list(AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES),
+            "requester_role": "ADMIN",
+            "requester_permission_keys": list(AUTOMATIC_ITEM_ALIGNMENT_PERMISSION_KEYS),
+            "evidence_budget": AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET,
+        },
+    }
+    if maximum_support_only:
+        document["selection_threshold"] = "MAXIMUM_EVIDENCE_SUPPORT_ONLY"
+    return AutomaticCurriculumAlignmentPolicy(
+        version=version,
+        maximum_units=maximum_units,
+        maximum_support_only=maximum_support_only,
+        document=document,
+        sha256=content_sha256(document),
+    )
+
+
+_AUTOMATIC_ITEM_ALIGNMENT_POLICIES = {
+    policy.version: policy
+    for policy in (
+        _alignment_policy(
+            "integrated-science-auto-alignment/1.0",
+            maximum_units=8,
+            maximum_support_only=False,
         ),
-        "source_classes": list(AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES),
-        "requester_role": "ADMIN",
-        "requester_permission_keys": list(AUTOMATIC_ITEM_ALIGNMENT_PERMISSION_KEYS),
-        "evidence_budget": AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET,
-    },
+        _alignment_policy(
+            "integrated-science-auto-alignment/1.1",
+            maximum_units=AUTOMATIC_ITEM_ALIGNMENT_MAX_UNITS,
+            maximum_support_only=True,
+        ),
+    )
 }
-AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256 = content_sha256(AUTOMATIC_ITEM_ALIGNMENT_POLICY)
+AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION = "integrated-science-auto-alignment/1.1"
+AUTOMATIC_ITEM_ALIGNMENT_POLICY = _AUTOMATIC_ITEM_ALIGNMENT_POLICIES[
+    AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
+].document
+AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256 = _AUTOMATIC_ITEM_ALIGNMENT_POLICIES[
+    AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
+].sha256
 _ITEM_NODE_TYPES = frozenset({"ITEM_REVISION", "ITEM_ELEMENT", "ASSESSMENT_PATTERN"})
 _FALLBACK_TOPIC_NODE_TYPES = frozenset({"ITEM_ELEMENT", "ASSESSMENT_PATTERN"})
 _LAST_RESORT_TOPIC_NODE_TYPES = frozenset({"ITEM_REVISION"})
@@ -61,6 +110,18 @@ class AutomaticCurriculumAlignmentError(ValueError):
     def __init__(self, code: str, message: str) -> None:
         self.code = code
         super().__init__(message)
+
+
+def automatic_item_alignment_policy(version: str) -> AutomaticCurriculumAlignmentPolicy:
+    """Resolve one immutable supported policy revision for replay validation."""
+
+    policy = _AUTOMATIC_ITEM_ALIGNMENT_POLICIES.get(version)
+    if policy is None:
+        raise AutomaticCurriculumAlignmentError(
+            "AUTOMATIC_ALIGNMENT_POLICY_UNSUPPORTED",
+            "automatic alignment policy revision is unsupported",
+        )
+    return policy
 
 
 def automatic_item_alignment_topic_keys(
@@ -98,9 +159,11 @@ def derive_automatic_item_curriculum_unit_ids(
     *,
     graph_snapshot_revision_id: str,
     evidence_node_ids: tuple[str, ...],
+    alignment_policy_version: str = AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
 ) -> tuple[str, ...]:
     """Rank MINOR units over one bounded multi-source, three-hop graph traversal."""
 
+    policy = automatic_item_alignment_policy(alignment_policy_version)
     seeds = tuple(sorted(set(evidence_node_ids)))
     if not seeds or seeds != evidence_node_ids or len(seeds) > 64:
         raise AutomaticCurriculumAlignmentError(
@@ -202,4 +265,7 @@ def derive_automatic_item_curriculum_unit_ids(
             unit_id,
         ),
     )
-    return tuple(sorted(ranked[:AUTOMATIC_ITEM_ALIGNMENT_MAX_UNITS]))
+    if policy.maximum_support_only:
+        maximum_support = len(unit_distances[ranked[0]])
+        ranked = [unit_id for unit_id in ranked if len(unit_distances[unit_id]) == maximum_support]
+    return tuple(sorted(ranked[: policy.maximum_units]))

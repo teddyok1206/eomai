@@ -34,12 +34,14 @@ evidence entry, graph node, and curriculum unit, then recomputes the policy resu
 - Evidence-node membership and curriculum targets use sets/maps.
 - Three-hop alignment uses a multi-source frontier map (`node -> source seeds`) and indexed inbound
   and outbound graph-edge lookups. It performs at most three adjacency queries, `O(V+E)` over the
-  bounded neighborhood, with a hard association limit.
+  bounded neighborhood, with a hard association limit. Policy 1.1 retains only units with maximum
+  evidence-seed support and then applies distance/ID ordering, capped at three units.
 - Snapshot source membership uses existing unique constraints and indexed foreign keys.
 
 Expected scale is fewer than 10,000 accepted sources per snapshot, at most 64 evidence seeds per
-alignment, at most three traversal hops, and at most eight selected MINOR units. Publications group
-up to 16 pending Item analyses to avoid one full Graph materialization per Item.
+alignment, at most three traversal hops, and at most three selected MINOR units for policy 1.1.
+Published policy 1.0 bindings remain replayable with their historical eight-unit cap. Publications
+group up to 16 pending Item analyses to avoid one full Graph materialization per Item.
 
 ## Transaction, concurrency, failure, retry, and idempotency
 

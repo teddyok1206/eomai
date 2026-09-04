@@ -26,7 +26,10 @@
             "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
           },
           "alignment_policy_version": {
-            "const": "integrated-science-auto-alignment/1.0"
+            "enum": [
+              "integrated-science-auto-alignment/1.0",
+              "integrated-science-auto-alignment/1.1"
+            ]
           },
           "alignment_sha256": {
             "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"

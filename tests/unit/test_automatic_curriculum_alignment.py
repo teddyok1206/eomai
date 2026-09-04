@@ -8,7 +8,9 @@ import pytest
 from eom_catalog_service.automatic_curriculum_alignment import (
     AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET,
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
+    AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
     AutomaticCurriculumAlignmentError,
+    automatic_item_alignment_policy,
     automatic_item_alignment_topic_keys,
     derive_automatic_item_curriculum_unit_ids,
 )
@@ -101,6 +103,61 @@ def test_alignment_walk_rejects_dangling_evidence_nodes() -> None:
             graph_snapshot_revision_id="graphrev_" + "9" * 32,
             evidence_node_ids=(evidence_node_id,),
         )
+
+
+def test_policy_replay_preserves_v1_and_v11_selects_only_maximum_support() -> None:
+    first_seed = "knode_" + "1" * 32
+    second_seed = "knode_" + "2" * 32
+    shared = "knode_" + "3" * 32
+    lower_support_unit = "currunit_" + "a" * 32
+    maximum_support_unit = "currunit_" + "b" * 32
+
+    def session() -> Mock:
+        value = Mock()
+        value.scalars.side_effect = [
+            (first_seed, second_seed),
+            (
+                SimpleNamespace(
+                    curriculum_unit_id=lower_support_unit,
+                    node_id=first_seed,
+                ),
+            ),
+            (
+                SimpleNamespace(
+                    curriculum_unit_id=maximum_support_unit,
+                    node_id=shared,
+                ),
+            ),
+            (),
+            (),
+        ]
+        value.execute.side_effect = [
+            ((first_seed, shared), (second_seed, shared)),
+            (),
+            (),
+        ]
+        return value
+
+    legacy = derive_automatic_item_curriculum_unit_ids(
+        session(),
+        graph_snapshot_revision_id="graphrev_" + "9" * 32,
+        evidence_node_ids=(first_seed, second_seed),
+        alignment_policy_version="integrated-science-auto-alignment/1.0",
+    )
+    current = derive_automatic_item_curriculum_unit_ids(
+        session(),
+        graph_snapshot_revision_id="graphrev_" + "9" * 32,
+        evidence_node_ids=(first_seed, second_seed),
+        alignment_policy_version="integrated-science-auto-alignment/1.1",
+    )
+
+    assert legacy == (lower_support_unit, maximum_support_unit)
+    assert current == (maximum_support_unit,)
+    assert (
+        automatic_item_alignment_policy("integrated-science-auto-alignment/1.0").sha256
+        == "sha256:1558fd16414dbc5fcd290b72fa1bad22d53979902416c8fad0b9ec9919c92a2f"
+    )
+    assert AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION == "integrated-science-auto-alignment/1.1"
 
 
 def test_legacy_graph_retrieval_command_pins_policy_snapshot_and_budget() -> None:

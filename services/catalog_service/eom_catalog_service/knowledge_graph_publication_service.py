@@ -84,10 +84,9 @@ from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactServic
 from eom_catalog_service.automatic_curriculum_alignment import (
     AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET,
     AUTOMATIC_ITEM_ALIGNMENT_PERMISSION_KEYS,
-    AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
-    AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
     AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES,
     AutomaticCurriculumAlignmentError,
+    automatic_item_alignment_policy,
     automatic_item_alignment_topic_keys,
     derive_automatic_item_curriculum_unit_ids,
 )
@@ -1655,6 +1654,10 @@ class KnowledgeGraphPublicationService:
             )
         analysis_by_id = {analysis.analysis_run_id: analysis for analysis in analyses}
         for binding in structure.automatic_item_curriculum_bindings:
+            try:
+                alignment_policy = automatic_item_alignment_policy(binding.alignment_policy_version)
+            except AutomaticCurriculumAlignmentError as exc:
+                raise KnowledgeGraphPublicationError(exc.code, str(exc)) from exc
             analysis = analysis_by_id.get(binding.analysis_run_id)
             source = analysis.source if analysis is not None else None
             requester = session.get(OperatorRecord, binding.requested_by_operator_id)
@@ -1667,8 +1670,7 @@ class KnowledgeGraphPublicationService:
                 or source.item_revision_id != binding.item_revision_id
                 or analysis.accepted_result != binding.accepted_result
                 or binding.prior_graph_snapshot_revision_id not in ancestor_snapshot_ids
-                or binding.alignment_policy_version != AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
-                or binding.alignment_policy_sha256 != AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256
+                or binding.alignment_policy_sha256 != alignment_policy.sha256
             ):
                 raise KnowledgeGraphPublicationError(
                     "KNOWLEDGE_GRAPH_AUTOMATIC_ALIGNMENT_SOURCE_INVALID",
@@ -1906,6 +1908,7 @@ class KnowledgeGraphPublicationService:
                     session,
                     graph_snapshot_revision_id=binding.prior_graph_snapshot_revision_id,
                     evidence_node_ids=evidence_node_ids,
+                    alignment_policy_version=binding.alignment_policy_version,
                 )
             except AutomaticCurriculumAlignmentError as exc:
                 raise KnowledgeGraphPublicationError(exc.code, str(exc)) from exc

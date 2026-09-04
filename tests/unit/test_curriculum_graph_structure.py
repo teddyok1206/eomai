@@ -25,6 +25,7 @@ from eom_catalog_contracts import (
 )
 from eom_catalog_service.automatic_curriculum_alignment import (
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
+    AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
 )
 from eom_catalog_service.curriculum_graph_structure import (
     CurriculumGraphStructureError,
@@ -332,7 +333,7 @@ def _automatic_item_alignment(
     reviewed.update(
         {
             "alignment_mode": "AUTO_POLICY",
-            "alignment_policy_version": "integrated-science-auto-alignment/1.0",
+            "alignment_policy_version": AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
             "alignment_policy_sha256": AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
             "requested_by_operator_id": OPERATOR_ID,
             "aligned_at": NOW.isoformat().replace("+00:00", "Z"),

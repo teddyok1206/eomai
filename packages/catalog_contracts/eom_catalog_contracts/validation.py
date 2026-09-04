@@ -832,7 +832,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/knowledge/knowledge-graph-structure-manifest-v4.schema.json",
             "resources/knowledge/knowledge-graph-structure-manifest-v4.schema.json",
             "4.0",
-            "sha256:42aa4345357a01a74e61212d20c9ff098213be9ec88d1aab12b3ea2afb4c2b07",
+            "sha256:8d3b138f05ff132724251dfb31499a7c193a7f4e8545095ba339ef508b542c70",
         ),
         "knowledge-graph-snapshot-manifest-v2": CatalogSchemaResource(
             "schemas/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
