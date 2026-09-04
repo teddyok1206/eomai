@@ -40,8 +40,11 @@ OUTPUTS: dict[str, dict[str, object]] = {
 
 
 class FakeStructuredAdapter(CodexWorkerAdapter):
-    def __init__(self) -> None:
+    def __init__(self, *, lose_runner_after_result: bool = False) -> None:
         self.calls: list[str] = []
+        self.lose_runner_after_result = lose_runner_after_result
+        self.recovery_calls = 0
+        self.completed_run: WorkerRun | None = None
 
     def run_structured(
         self,
@@ -81,7 +84,27 @@ class FakeStructuredAdapter(CodexWorkerAdapter):
         stderr_path = staging / "worker.stderr.log"
         stdout_path.write_text("bounded diagnostic", encoding="utf-8")
         stderr_path.write_text("", encoding="utf-8")
-        return WorkerRun(0, result_path, stdout_path, stderr_path, "fake-structured-unit")
+        run = WorkerRun(0, result_path, stdout_path, stderr_path, "fake-structured-unit")
+        self.completed_run = run
+        if self.lose_runner_after_result:
+            self.lose_runner_after_result = False
+            raise SimulatedRunnerLoss
+        return run
+
+    def recover_completed_structured(
+        self,
+        *,
+        job_id: str,
+        slot: WorkerSlot,
+        staging: Path,
+    ) -> WorkerRun | None:
+        del job_id, slot, staging
+        self.recovery_calls += 1
+        return self.completed_run
+
+
+class SimulatedRunnerLoss(BaseException):
+    """Model process loss, which bypasses the in-process failure handler."""
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -189,6 +212,61 @@ def test_workflow_role_uses_existing_platform_job_and_artifact_path(
         revision = session.get(ArtifactRevisionRecord, job.revision_id)
         assert revision is not None
         assert revision.result["role"] == role
+        assert Path(revision.nas_path, "result.json").is_file()
+    finally:
+        session.close()
+        outer.rollback()
+        connection.close()
+
+
+def test_workflow_role_recovers_completed_worker_after_runner_loss(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    adapter = FakeStructuredAdapter(lose_runner_after_result=True)
+    orchestrator, session, resources = _orchestrator(integration_engine, tmp_path, adapter)
+    connection, outer = resources
+    workflow_id = "workflow_0123456789abcdef0123456789abcdef"
+    step_run_id = "steprun_0123456789abcdef0123456789abcdef"
+
+    def submit() -> JobRecord:
+        return orchestrator.submit_workflow_role(
+            workflow_id=workflow_id,
+            step_run_id=step_run_id,
+            step_key="authoring",
+            attempt=1,
+            role="authoring",
+            request=WorkflowRequest(
+                request_name="PLACEHOLDER_REQUEST",
+                image_mode="required",
+            ),
+            upstream_artifacts=(),
+            result_schema="authoring-result@1.0",
+            idempotency_key="workflow-bridge-recover-completed",
+            prompt_path=Path("content/prompt-templates/placeholders/authoring.txt"),
+        )
+
+    try:
+        with pytest.raises(SimulatedRunnerLoss):
+            submit()
+
+        running = (
+            session.query(JobRecord)
+            .filter_by(idempotency_key="workflow-bridge-recover-completed")
+            .one()
+        )
+        session.refresh(running)
+        assert running.status == "RUNNING"
+
+        recovered = submit()
+        duplicate = submit()
+
+        assert recovered.status == "SUCCEEDED"
+        assert duplicate.job_id == recovered.job_id
+        assert adapter.calls == ["authoring"]
+        assert adapter.recovery_calls == 1
+        revision = session.get(ArtifactRevisionRecord, recovered.revision_id)
+        assert revision is not None
         assert Path(revision.nas_path, "result.json").is_file()
     finally:
         session.close()

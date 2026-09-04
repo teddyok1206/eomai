@@ -1,6 +1,8 @@
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from eom_orchestrator.errors import PlatformError
@@ -14,7 +16,11 @@ from eom_orchestrator.worker import (
     worker_output_schema,
 )
 from eom_orchestrator.worker_registry import WorkerSlot
-from eom_orchestrator.worker_systemd import FixedUnitRun, FixedUnitStatus
+from eom_orchestrator.worker_systemd import (
+    FixedUnitRun,
+    FixedUnitStatus,
+    WorkerUnitActivity,
+)
 from eom_protocol import ArtifactSpec, ErrorCode, SmokePayload, WorkerInput
 from jsonschema import Draft202012Validator
 
@@ -268,3 +274,90 @@ def test_resolved_plan_timeout_reaches_prepared_launcher(
 
     assert result.materialization is materialized
     assert observed == [7200]
+
+
+def test_recover_completed_structured_reuses_exact_inactive_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    slot = WorkerSlot(
+        slot_id="01",
+        linux_user="eom-cdx-01",
+        role="authoring",
+        enabled=True,
+    )
+    workspace_root = tmp_path / "workspaces" / slot.linux_user
+    workspace_root.mkdir(parents=True)
+    workspace_root.chmod(0o2770)
+    workspace = workspace_root / JOB_ID
+    workspace.mkdir()
+    workspace.chmod(0o2770)
+    staging = tmp_path / "staging" / JOB_ID
+    staging.mkdir(parents=True)
+    staging.chmod(0o750)
+    for name, value in (
+        ("result.json", "{}"),
+        ("worker.stdout.log", "stdout"),
+        ("worker.stderr.log", "stderr"),
+    ):
+        path = workspace / name
+        path.write_text(value, encoding="utf-8")
+        path.chmod(0o640)
+
+    monkeypatch.setattr(
+        "eom_orchestrator.worker.pwd.getpwnam",
+        lambda _name: SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid()),
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.worker.grp.getgrnam",
+        lambda _name: SimpleNamespace(gr_gid=os.getegid()),
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.worker.inspect_worker_unit_activity",
+        lambda _slot, _job_id: WorkerUnitActivity(
+            "ABSENT", f"eom-worker-01@{JOB_ID}.service", None
+        ),
+    )
+    adapter = CodexWorkerAdapter(
+        Settings(workspace_root=tmp_path / "workspaces", staging_root=tmp_path / "staging")
+    )
+
+    recovered = adapter.recover_completed_structured(
+        job_id=JOB_ID,
+        slot=slot,
+        staging=staging,
+    )
+
+    assert recovered is not None
+    assert recovered.exit_code == 0
+    assert recovered.result_path == workspace / "result.json"
+    assert (staging / "worker.stdout.log").read_text(encoding="utf-8") == "stdout"
+    assert (staging / "worker.stderr.log").read_text(encoding="utf-8") == "stderr"
+
+
+def test_recover_completed_structured_does_not_touch_active_unit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    slot = WorkerSlot(
+        slot_id="01",
+        linux_user="eom-cdx-01",
+        role="authoring",
+        enabled=True,
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.worker.inspect_worker_unit_activity",
+        lambda _slot, _job_id: WorkerUnitActivity(
+            "RUNNING", f"eom-worker-01@{JOB_ID}.service", None
+        ),
+    )
+    adapter = CodexWorkerAdapter(
+        Settings(workspace_root=tmp_path / "workspaces", staging_root=tmp_path / "staging")
+    )
+
+    assert (
+        adapter.recover_completed_structured(
+            job_id=JOB_ID,
+            slot=slot,
+            staging=tmp_path / "staging" / JOB_ID,
+        )
+        is None
+    )

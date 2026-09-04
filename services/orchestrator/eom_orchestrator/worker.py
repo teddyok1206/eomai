@@ -20,6 +20,7 @@ from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerSlot
 from eom_orchestrator.worker_systemd import (
+    inspect_worker_unit_activity,
     launch_worker_unit,
     systemctl_start_argv,
     validate_job_id,
@@ -269,6 +270,74 @@ class CodexWorkerAdapter:
         )
         return ResolvedWorkerRun(run=run, materialization=materialization)
 
+    def recover_completed_structured(
+        self,
+        *,
+        job_id: str,
+        slot: WorkerSlot,
+        staging: Path,
+    ) -> WorkerRun | None:
+        """Recover one completed fixed-unit result without starting the worker again.
+
+        A workflow-runner process can stop after the fixed worker has written its result but
+        before the orchestrator commits it.  Recovery is deliberately narrow: the exact unit
+        must no longer be active, the original private workspace and staging directory must
+        retain their expected identities, and a bounded regular result file must exist.
+        """
+
+        validate_job_id(job_id)
+        activity = inspect_worker_unit_activity(slot, job_id)
+        if activity.state != "ABSENT":
+            return None
+
+        account = pwd.getpwnam(slot.linux_user)
+        private_group = grp.getgrnam(slot.linux_user)
+        if account.pw_gid != private_group.gr_gid:
+            raise PlatformError(
+                ErrorCode.WORKER_UNAVAILABLE,
+                "worker primary group does not match worker identity",
+            )
+
+        workspace_root = self.settings.workspace_root / slot.linux_user
+        workspace = workspace_root / job_id
+        _require_recovery_directory(
+            workspace_root,
+            expected_uid=account.pw_uid,
+            expected_gid=private_group.gr_gid,
+            required_mode=0o2770,
+        )
+        _require_recovery_directory(
+            workspace,
+            expected_uid=os.geteuid(),
+            expected_gid=private_group.gr_gid,
+            required_mode=0o2770,
+        )
+        _require_recovery_directory(
+            staging,
+            expected_uid=os.geteuid(),
+            expected_gid=os.getegid(),
+            required_mode=0o750,
+        )
+
+        result_path = workspace / "result.json"
+        _require_recovery_file(
+            result_path,
+            expected_uid=account.pw_uid,
+            expected_gid=private_group.gr_gid,
+            required_mode=0o640,
+        )
+        stdout_path = staging / "worker.stdout.log"
+        stderr_path = staging / "worker.stderr.log"
+        self._collect_capture(workspace / "worker.stdout.log", stdout_path, b"")
+        self._collect_capture(workspace / "worker.stderr.log", stderr_path, b"")
+        return WorkerRun(
+            exit_code=activity.exit_code or 0,
+            result_path=result_path,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            unit_name=activity.unit_name,
+        )
+
     def _execute(
         self,
         *,
@@ -376,3 +445,54 @@ def _schema_mapping(parent: dict[str, Any], key: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise RuntimeError(f"worker result schema is missing object: {key}")
     return value
+
+
+def _require_recovery_directory(
+    path: Path,
+    *,
+    expected_uid: int,
+    expected_gid: int,
+    required_mode: int,
+) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise PlatformError(
+            ErrorCode.WORKER_EXEC_FAILED, "worker recovery directory is unavailable"
+        ) from exc
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != expected_uid
+        or metadata.st_gid != expected_gid
+        or stat.S_IMODE(metadata.st_mode) != required_mode
+        or metadata.st_nlink < 2
+    ):
+        raise PlatformError(
+            ErrorCode.WORKER_EXEC_FAILED, "worker recovery directory identity is invalid"
+        )
+
+
+def _require_recovery_file(
+    path: Path,
+    *,
+    expected_uid: int,
+    expected_gid: int,
+    required_mode: int,
+) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise PlatformError(
+            ErrorCode.WORKER_RESULT_MISSING, "worker recovery result is unavailable"
+        ) from exc
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != expected_uid
+        or metadata.st_gid != expected_gid
+        or stat.S_IMODE(metadata.st_mode) != required_mode
+        or metadata.st_nlink != 1
+        or metadata.st_size > MAX_RESULT_BYTES
+    ):
+        raise PlatformError(
+            ErrorCode.WORKER_RESULT_INVALID, "worker recovery result identity is invalid"
+        )

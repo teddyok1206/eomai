@@ -60,7 +60,7 @@ from eom_orchestrator.artifacts import (
     stage_structured_artifact,
 )
 from eom_orchestrator.capacity_controller import CodexCapacityController, LeaseClaim
-from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
+from eom_orchestrator.control_models import ResolvedExecutionPlanRecord, WorkerLeaseRecord
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.errors import PlatformError
@@ -89,7 +89,7 @@ from eom_orchestrator.repository import (
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.state_machine import JobState, transition_job
-from eom_orchestrator.worker import CodexWorkerAdapter, load_worker_result
+from eom_orchestrator.worker import CodexWorkerAdapter, WorkerRun, load_worker_result
 from eom_orchestrator.worker_registry import WorkerSlot
 
 LOGGER = logging.getLogger("eom.orchestrator")
@@ -261,6 +261,7 @@ class Orchestrator:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
         existing = self._job_by_idempotency_key(idempotency_key)
+        recovery_state: JobState | None = None
         if existing is not None:
             stored = existing.request
             if (
@@ -270,7 +271,12 @@ class Orchestrator:
                 or stored.get("attempt") != attempt
             ):
                 raise ValueError("workflow role idempotency key conflicts with stored job")
-            if existing.status != JobState.QUEUED.value:
+            existing_state = JobState(existing.status)
+            if existing_state in TERMINAL_STATES:
+                return existing
+            if existing_state in {JobState.RUNNING, JobState.VALIDATING_RESULT}:
+                recovery_state = existing_state
+            elif existing_state is not JobState.QUEUED:
                 return existing
             job_id = existing.job_id
             worker_input = RoleWorkerInput.model_validate(existing.request)
@@ -323,13 +329,26 @@ class Orchestrator:
             self._transition(job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
             self._transition(job_id, JobState.QUEUED, "JOB_QUEUED")
 
-        if before_execute is not None:
-            before_execute(job_id)
-
         slot: WorkerSlot | None = None
         lease_id: str | None = None
         worker_start_attempted = False
         worker_terminal_confirmed = False
+        staging = self.settings.staging_root / job_id
+        recovered_run: WorkerRun | None = None
+        if recovery_state is not None:
+            if existing is None or existing.worker_slot_id is None:
+                return self.get_job(job_id)
+            slot = self._slot_by_key(f"slot{existing.worker_slot_id}")
+            recovered_run = self.worker_adapter.recover_completed_structured(
+                job_id=job_id,
+                slot=slot,
+                staging=staging,
+            )
+            if recovered_run is None:
+                return self.get_job(job_id)
+        elif before_execute is not None:
+            before_execute(job_id)
+
         try:
             with self.sessions() as session:
                 plan_record = session.scalar(
@@ -343,7 +362,24 @@ class Orchestrator:
                 else:
                     plan_document = None
                     plan_id = None
-            if plan_document is not None:
+                if recovered_run is not None:
+                    assert slot is not None
+                    held_lease = session.scalar(
+                        select(WorkerLeaseRecord).where(
+                            WorkerLeaseRecord.job_id == job_id,
+                            WorkerLeaseRecord.workflow_id == workflow_id,
+                            WorkerLeaseRecord.attempt == attempt,
+                            WorkerLeaseRecord.worker_slot_id == slot.slot_id,
+                            WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING")),
+                        )
+                    )
+                    if held_lease is not None:
+                        lease_id = held_lease.lease_id
+            if recovered_run is not None:
+                run = recovered_run
+                worker_start_attempted = True
+                worker_terminal_confirmed = True
+            elif plan_document is not None:
                 matching_steps = [
                     item
                     for item in plan_document.get("steps", [])
@@ -378,75 +414,77 @@ class Orchestrator:
                 )
                 lease_id = lease.lease_id
                 slot = self._slot_by_key(lease.slot_key)
-            else:
+            elif recovered_run is None:
                 plan_step = None
                 plan_id = None
                 slot = self.registry.select(role)
-            with transaction(self.sessions) as session:
-                claimed = session.get(JobRecord, job_id)
-                if claimed is None:
-                    raise RuntimeError("created workflow job disappeared")
-                claimed.worker_slot_id = slot.slot_id
-                transition_job(
-                    session,
-                    job_id,
-                    JobState.CLAIMED,
-                    "WORKER_CLAIMED",
-                    data={"worker_slot": slot.slot_id, "linux_user": slot.linux_user},
-                )
-            staging = self.settings.staging_root / job_id
-            staging.mkdir(mode=0o750, parents=False, exist_ok=False)
-            if plan_step is None or plan_id is None:
-                self._transition(job_id, JobState.RUNNING, "WORKER_STARTED")
-                run = self.worker_adapter.run_structured(
-                    job_id=job_id,
-                    input_document=input_document,
-                    output_schema=constrained_result_schema(result_schema, worker_input),
-                    prompt_text=prompt_text,
-                    slot=slot,
-                    staging=staging,
-                )
-            else:
-                private_group = grp.getgrnam(slot.linux_user)
-
-                def materialize(workspace: Path) -> MaterializedExecution:
-                    with self.sessions() as materialization_session:
-                        authorized = authorized_execution_artifact_revisions(
-                            materialization_session,
-                            plan_id=plan_id,
-                            step_key=str(plan_step["step_key"]),
-                        )
-                        evidence = materialize_execution_step(
-                            materialization_session,
-                            plan_id=plan_id,
-                            step_key=str(plan_step["step_key"]),
-                            workspace=workspace,
-                            canonical_artifact_root=self.settings.nas_artifact_root,
-                            worker_group_id=private_group.gr_gid,
-                            authorized_artifact_revision_ids=authorized,
-                        )
-                    event_data: dict[str, object] = dict(evidence.event_data())
-                    self._transition(
+            if recovered_run is None:
+                assert slot is not None
+                with transaction(self.sessions) as session:
+                    claimed = session.get(JobRecord, job_id)
+                    if claimed is None:
+                        raise RuntimeError("created workflow job disappeared")
+                    claimed.worker_slot_id = slot.slot_id
+                    transition_job(
+                        session,
                         job_id,
-                        JobState.RUNNING,
-                        "RESOLVED_WORKER_STARTED",
-                        data=event_data,
+                        JobState.CLAIMED,
+                        "WORKER_CLAIMED",
+                        data={"worker_slot": slot.slot_id, "linux_user": slot.linux_user},
                     )
-                    return evidence
+                staging.mkdir(mode=0o750, parents=False, exist_ok=False)
+                if plan_step is None or plan_id is None:
+                    self._transition(job_id, JobState.RUNNING, "WORKER_STARTED")
+                    run = self.worker_adapter.run_structured(
+                        job_id=job_id,
+                        input_document=input_document,
+                        output_schema=constrained_result_schema(result_schema, worker_input),
+                        prompt_text=prompt_text,
+                        slot=slot,
+                        staging=staging,
+                    )
+                else:
+                    private_group = grp.getgrnam(slot.linux_user)
 
-                worker_start_attempted = True
-                resolved_run = self.worker_adapter.run_resolved_structured(
-                    job_id=job_id,
-                    input_document=input_document,
-                    output_schema=constrained_result_schema(result_schema, worker_input),
-                    prompt_text=prompt_text,
-                    slot=slot,
-                    staging=staging,
-                    materialize=materialize,
-                    timeout_seconds=int(plan_step["timeout_seconds"]),
-                )
-                worker_terminal_confirmed = True
-                run = resolved_run.run
+                    def materialize(workspace: Path) -> MaterializedExecution:
+                        with self.sessions() as materialization_session:
+                            authorized = authorized_execution_artifact_revisions(
+                                materialization_session,
+                                plan_id=plan_id,
+                                step_key=str(plan_step["step_key"]),
+                            )
+                            evidence = materialize_execution_step(
+                                materialization_session,
+                                plan_id=plan_id,
+                                step_key=str(plan_step["step_key"]),
+                                workspace=workspace,
+                                canonical_artifact_root=self.settings.nas_artifact_root,
+                                worker_group_id=private_group.gr_gid,
+                                authorized_artifact_revision_ids=authorized,
+                            )
+                        event_data: dict[str, object] = dict(evidence.event_data())
+                        self._transition(
+                            job_id,
+                            JobState.RUNNING,
+                            "RESOLVED_WORKER_STARTED",
+                            data=event_data,
+                        )
+                        return evidence
+
+                    worker_start_attempted = True
+                    resolved_run = self.worker_adapter.run_resolved_structured(
+                        job_id=job_id,
+                        input_document=input_document,
+                        output_schema=constrained_result_schema(result_schema, worker_input),
+                        prompt_text=prompt_text,
+                        slot=slot,
+                        staging=staging,
+                        materialize=materialize,
+                        timeout_seconds=int(plan_step["timeout_seconds"]),
+                    )
+                    worker_terminal_confirmed = True
+                    run = resolved_run.run
+            assert slot is not None
             with transaction(self.sessions) as session:
                 running = session.get(JobRecord, job_id)
                 if running is None:
@@ -459,7 +497,8 @@ class Orchestrator:
                     ErrorCode.WORKER_EXEC_FAILED, f"worker exited with code {run.exit_code}"
                 )
 
-            self._transition(job_id, JobState.VALIDATING_RESULT, "WORKER_RESULT_RECEIVED")
+            if recovery_state is not JobState.VALIDATING_RESULT:
+                self._transition(job_id, JobState.VALIDATING_RESULT, "WORKER_RESULT_RECEIVED")
             raw_result = load_worker_result(run.result_path, run.result_path.parent)
             result = validate_role_result(raw_result, role, result_schema)
             if (
