@@ -352,6 +352,21 @@ def test_constrained_legacy_extraction_schema_resolves_nested_string_references(
     )
     source_anchors = proposal["properties"]["source_anchors"]
     assert len(source_anchors["items"]["anyOf"]) == 2
+    assert "Never reuse an anchor_id from another item" in source_anchors["description"]
+    for collection_name in (
+        "content_anchor_map",
+        "curriculum_observations",
+        "linguistic_patterns",
+        "visual_patterns",
+        "metadata_observations",
+        "conflicts",
+    ):
+        item_schema = proposal["properties"][collection_name]["items"]
+        while "$ref" in item_schema:
+            item_schema = schema["$defs"][item_schema["$ref"].removeprefix("#/$defs/")]
+        reference_description = item_schema["properties"]["source_anchor_ids"]["description"]
+        assert "byte-for-byte copy one anchor_id" in reference_description
+        assert "this same item's source_anchors" in reference_description
     valid_page_anchor = {
         "anchor_id": "assessmentanchor_" + "7" * 32,
         "source": image.model_dump(mode="json"),

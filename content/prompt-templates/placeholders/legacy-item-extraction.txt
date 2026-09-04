@@ -5,7 +5,12 @@ schema-valid legacy item extraction result for the exact request, page-input IDs
 numbers. Ground every reconstructed content element and observation in closed source anchors. For
 each item, put the `content_anchor_map` entry whose `content_path` is exactly `title` first, and
 include at least one subsequent entry whose `content_path` begins with `body[`. Do not invent missing
-source evidence or silently resolve conflicts. For every `statement_set`, return exactly one
+source evidence or silently resolve conflicts. For each item, first finish that item's unique
+`source_anchors[].anchor_id` registry. Then mechanically check every `source_anchor_ids` array in
+`content_anchor_map`, `curriculum_observations`, `linguistic_patterns`, `visual_patterns`,
+`metadata_observations`, and `conflicts`: every value must byte-for-byte equal an `anchor_id` present
+in that same item's registry. Never invent an anchor ID or reuse one from another item. For every
+`statement_set`, return exactly one
 `solution.statement_explanations` entry for each declared `statement_id`, with no missing or extra
 IDs; use an empty list only when there is no statement set. For `single_choice`, return exactly one
 declared `correct_choice_id` and keep `accepted_answers` empty. For `constructed_response`, keep

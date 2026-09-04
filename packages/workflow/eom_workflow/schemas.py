@@ -1039,10 +1039,41 @@ def _project_legacy_extraction_relations(
         raise WorkflowSchemaError("legacy extraction request has no projectable anchor source")
     source_anchors["items"] = {"anyOf": anchor_variants}
     source_anchors["description"] = (
-        "Every source anchor MUST use one exact pointer/role pair offered by this schema. For "
-        "problem and answer pages, source MUST be the supplied page image pointer (PNG), never "
-        "the original PDF source pointer, and physical_page MUST match that page input."
+        "First declare this item's complete source-anchor registry with unique anchor_id values. "
+        "Never reuse an anchor_id from another item. Every source anchor MUST use one exact "
+        "pointer/role pair offered by this schema. For problem and answer pages, source MUST be "
+        "the supplied page image pointer (PNG), never the original PDF source pointer, and "
+        "physical_page MUST match that page input. After declaring the registry, every "
+        "source_anchor_ids entry anywhere in this item MUST byte-for-byte copy an anchor_id from "
+        "this same registry."
     )
+
+    closed_reference_description = (
+        "Every entry MUST byte-for-byte copy one anchor_id already declared in this same item's "
+        "source_anchors array. Never invent an ID, reuse an ID from another item, or reference an "
+        "anchor that is not present in this item's source_anchors."
+    )
+    for collection_name in (
+        "content_anchor_map",
+        "curriculum_observations",
+        "linguistic_patterns",
+        "visual_patterns",
+        "metadata_observations",
+        "conflicts",
+    ):
+        collection = _mapping(item_properties, collection_name)
+        observation = _mapping(collection, "items")
+        if "$ref" in observation:
+            observation_properties = _local_definition_properties(schema, observation)
+        elif observation.get("type") == "object":
+            observation_properties = _mapping(observation, "properties")
+        else:
+            raise WorkflowSchemaError(
+                f"legacy {collection_name} observation is not independently projectable"
+            )
+        _mapping(observation_properties, "source_anchor_ids")["description"] = (
+            closed_reference_description
+        )
 
     content_properties = _local_definition_properties(
         schema,

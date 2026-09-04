@@ -26,6 +26,9 @@ def test_legacy_extraction_prompt_requires_title_and_body_anchor_coverage() -> N
 
     assert "`content_path` is exactly `title` first" in prompt
     assert "`content_path` begins with `body[`" in prompt
+    assert "first finish that item's unique" in prompt
+    assert "every value must byte-for-byte equal an `anchor_id`" in prompt
+    assert "Never invent an anchor ID or reuse one from another item" in prompt
 
 
 def test_editorial_compatibility_uses_only_its_team_authority_prompt() -> None:
