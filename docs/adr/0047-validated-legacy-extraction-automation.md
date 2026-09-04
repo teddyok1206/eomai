@@ -73,6 +73,10 @@ Contracts and identifiers do not import infrastructure.
   proposal. Do not record a human review that did not happen.
 - Preserve every canonical extraction validation and NAS boundary.
 - Reconcile successful results to `ACCEPTED` before claiming more work.
+- Permit only explicitly allowlisted terminal Knowledge Analysis run IDs to create one fresh
+  successor. The failed run and its immutable pointers remain unchanged; an indexed predecessor
+  lookup suppresses replay as soon as any successor exists, and active analysis always has
+  priority over creating another successor.
 - Promote accepted proposals idempotently through the existing Item/origin service, then schedule
   the existing approved-item Knowledge Analysis path with pinned deployment policy inputs.
 - When that exact, canonically validated proposal reaches `NEEDS_REVIEW`, the explicit corpus

@@ -4,7 +4,10 @@ from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
-from eom_catalog_service.application_runner import _legacy_automation_batch_ids
+from eom_catalog_service.application_runner import (
+    _legacy_automation_batch_ids,
+    _legacy_automation_retry_analysis_run_ids,
+)
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.legacy_item_automation_service import (
     LegacyItemAutomaticLearningService,
@@ -87,6 +90,7 @@ def test_automatic_learning_builds_replay_stable_promotion_and_pins_policy() -> 
     service.content_pack_release_id = "packrel_" + "5" * 32
     service.risk_policy_revision_id = "analysisriskrev_" + "6" * 32
     service._active_analysis = cast(Any, lambda: None)
+    service._retryable_analysis = cast(Any, lambda: None)
     service._candidate = cast(Any, _candidate)
 
     assert service.advance_once() is True
@@ -108,9 +112,30 @@ def test_automatic_learning_builds_replay_stable_promotion_and_pins_policy() -> 
     assert command == replay
 
 
+def test_automatic_learning_creates_one_fresh_successor_before_new_items() -> None:
+    service = object.__new__(LegacyItemAutomaticLearningService)
+    service.analyses = Mock()
+    service.learning = Mock()
+    service._active_analysis = cast(Any, lambda: None)
+    service._retryable_analysis = cast(
+        Any,
+        lambda: ("analysisrun_" + "4" * 32, "operator_owner"),
+    )
+    service._candidate = Mock()
+
+    assert service.advance_once() is True
+
+    service.learning.retry_failed_analysis.assert_called_once_with(
+        predecessor_analysis_run_id="analysisrun_" + "4" * 32,
+        requested_by="operator_owner",
+    )
+    service._candidate.assert_not_called()
+
+
 def test_automatic_learning_is_idle_without_active_or_unlearned_work() -> None:
     service = object.__new__(LegacyItemAutomaticLearningService)
     service._active_analysis = cast(Any, lambda: None)
+    service._retryable_analysis = cast(Any, lambda: None)
     service._candidate = cast(Any, lambda: None)
 
     assert service.advance_once() is False
@@ -132,3 +157,26 @@ def test_automation_batch_ids_reject_duplicates(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("EOM_LEGACY_ITEM_AUTOMATION_BATCH_IDS", f"{batch_id},{batch_id}")
 
     assert _legacy_automation_batch_ids() == ()
+
+
+def test_retry_analysis_ids_are_an_explicit_ordered_allowlist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = "analysisrun_" + "1" * 32
+    second = "analysisrun_" + "2" * 32
+    monkeypatch.setenv(
+        "EOM_LEGACY_ITEM_AUTOMATION_RETRY_ANALYSIS_RUN_IDS",
+        f"{first},{second}",
+    )
+
+    assert _legacy_automation_retry_analysis_run_ids() == (first, second)
+
+
+def test_retry_analysis_ids_reject_duplicates(monkeypatch: pytest.MonkeyPatch) -> None:
+    analysis_run_id = "analysisrun_" + "1" * 32
+    monkeypatch.setenv(
+        "EOM_LEGACY_ITEM_AUTOMATION_RETRY_ANALYSIS_RUN_IDS",
+        f"{analysis_run_id},{analysis_run_id}",
+    )
+
+    assert _legacy_automation_retry_analysis_run_ids() == ()

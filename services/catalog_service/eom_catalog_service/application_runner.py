@@ -53,6 +53,7 @@ _RUNTIME_MODEL_TABLES = (
     LegacyItemExtractionBatchWorkUnitRecord.__table__,
 )
 _LEGACY_BATCH_ID_PATTERN = re.compile(r"\Alegacybatch_[0-9a-f]{32}\Z", re.ASCII)
+_ANALYSIS_RUN_ID_PATTERN = re.compile(r"\Aanalysisrun_[0-9a-f]{32}\Z", re.ASCII)
 
 
 def _legacy_automation_batch_ids() -> tuple[str, ...]:
@@ -65,6 +66,18 @@ def _legacy_automation_batch_ids() -> tuple[str, ...]:
         or len(values) > 32
         or len(values) != len(set(values))
         or any(_LEGACY_BATCH_ID_PATTERN.fullmatch(value) is None for value in values)
+    ):
+        return ()
+    return values
+
+
+def _legacy_automation_retry_analysis_run_ids() -> tuple[str, ...]:
+    configured = os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_RETRY_ANALYSIS_RUN_IDS", "")
+    values = tuple(value.strip() for value in configured.split(",") if value.strip())
+    if (
+        len(values) > 32
+        or len(values) != len(set(values))
+        or any(_ANALYSIS_RUN_ID_PATTERN.fullmatch(value) is None for value in values)
     ):
         return ()
     return values
@@ -99,6 +112,7 @@ def serve() -> int:
         automatic_learning = None
         if automation_mode == "AUTO_ACCEPT_AND_LEARN":
             extraction_batch_ids = _legacy_automation_batch_ids()
+            retry_analysis_run_ids = _legacy_automation_retry_analysis_run_ids()
             content_pack_release_id = os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_PACK_RELEASE_ID")
             risk_policy_revision_id = os.environ.get(
                 "EOM_LEGACY_ITEM_AUTOMATION_RISK_POLICY_REVISION_ID"
@@ -135,6 +149,7 @@ def serve() -> int:
             automatic_learning = LegacyItemAutomaticLearningService(
                 engine,
                 extraction_batch_ids=extraction_batch_ids,
+                retry_analysis_run_ids=retry_analysis_run_ids,
                 content_pack_release_id=content_pack_release_id,
                 risk_policy_revision_id=risk_policy_revision_id,
                 learning=learning,

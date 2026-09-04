@@ -8,7 +8,8 @@ from eom_catalog_contracts import LegacyItemPromotionRequest, ReconcileKnowledge
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
-from sqlalchemy import Engine, literal, select
+from sqlalchemy import Engine, case, literal, select
+from sqlalchemy.orm import aliased
 
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.legacy_assessment_models import (
@@ -49,6 +50,7 @@ class LegacyItemAutomaticLearningService:
         engine: Engine,
         *,
         extraction_batch_ids: tuple[str, ...],
+        retry_analysis_run_ids: tuple[str, ...] = (),
         content_pack_release_id: str,
         risk_policy_revision_id: str,
         learning: LegacyItemLearningCoordinator,
@@ -56,8 +58,11 @@ class LegacyItemAutomaticLearningService:
     ) -> None:
         if not extraction_batch_ids or len(extraction_batch_ids) != len(set(extraction_batch_ids)):
             raise ValueError("automation batch identities must be non-empty and unique")
+        if len(retry_analysis_run_ids) != len(set(retry_analysis_run_ids)):
+            raise ValueError("analysis retry identities must be unique")
         self.sessions = build_session_factory(engine)
         self.extraction_batch_ids = extraction_batch_ids
+        self.retry_analysis_run_ids = retry_analysis_run_ids
         self.content_pack_release_id = content_pack_release_id
         self.risk_policy_revision_id = risk_policy_revision_id
         self.learning = learning
@@ -81,6 +86,14 @@ class LegacyItemAutomaticLearningService:
                         requested_by=requested_by,
                     )
                 )
+            return True
+        retry = self._retryable_analysis()
+        if retry is not None:
+            analysis_run_id, requested_by = retry
+            self.learning.retry_failed_analysis(
+                predecessor_analysis_run_id=analysis_run_id,
+                requested_by=requested_by,
+            )
             return True
         candidate = self._candidate()
         if candidate is None:
@@ -135,6 +148,64 @@ class LegacyItemAutomaticLearningService:
             if run is None:
                 return None
             return run.analysis_run_id, run.created_by_operator_id, run.state
+
+    def _retryable_analysis(self) -> tuple[str, str] | None:
+        """Select one explicitly allowlisted terminal run that has no successor."""
+
+        if not self.retry_analysis_run_ids:
+            return None
+        successor = aliased(KnowledgeAnalysisRunRecord)
+        registration_key = (
+            literal("legacy-item-promotion:")
+            + LegacyItemExtractionDecisionRecord.acceptance_id
+            + literal(":")
+            + LegacyItemExtractionDecisionRecord.item_proposal_id
+        )
+        retry_order = case(
+            {
+                analysis_run_id: ordinal
+                for ordinal, analysis_run_id in enumerate(self.retry_analysis_run_ids)
+            },
+            value=KnowledgeAnalysisRunRecord.analysis_run_id,
+            else_=len(self.retry_analysis_run_ids),
+        )
+        with self.sessions() as session:
+            run = session.scalar(
+                select(KnowledgeAnalysisRunRecord)
+                .join(
+                    ItemRevisionRecord,
+                    ItemRevisionRecord.item_revision_id
+                    == KnowledgeAnalysisRunRecord.source_revision_id,
+                )
+                .join(
+                    LegacyItemExtractionDecisionRecord,
+                    ItemRevisionRecord.registration_key == registration_key,
+                )
+                .join(
+                    LegacyItemExtractionBatchWorkUnitRecord,
+                    LegacyItemExtractionBatchWorkUnitRecord.acceptance_id
+                    == LegacyItemExtractionDecisionRecord.acceptance_id,
+                )
+                .outerjoin(
+                    successor,
+                    successor.predecessor_analysis_run_id
+                    == KnowledgeAnalysisRunRecord.analysis_run_id,
+                )
+                .where(
+                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
+                        self.extraction_batch_ids
+                    ),
+                    KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
+                    KnowledgeAnalysisRunRecord.analysis_run_id.in_(self.retry_analysis_run_ids),
+                    KnowledgeAnalysisRunRecord.state.in_(("FAILED", "REJECTED", "CANCELLED")),
+                    successor.analysis_run_id.is_(None),
+                )
+                .order_by(retry_order, KnowledgeAnalysisRunRecord.analysis_run_id)
+                .limit(1)
+            )
+            if run is None:
+                return None
+            return run.analysis_run_id, run.created_by_operator_id
 
     def _candidate(self) -> _LearningCandidate | None:
         registration_key = (
