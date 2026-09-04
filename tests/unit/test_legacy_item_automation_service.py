@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import pytest
 from eom_catalog_service.application_runner import (
     _legacy_automation_batch_ids,
+    _legacy_automation_graph_batch_size,
     _legacy_automation_retry_analysis_run_ids,
 )
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
@@ -13,6 +14,7 @@ from eom_catalog_service.legacy_item_automation_service import (
     LegacyItemAutomaticLearningService,
     _LearningCandidate,
 )
+from eom_catalog_service.legacy_item_graph_learning_service import LegacyItemGraphCandidate
 
 
 def _candidate() -> _LearningCandidate:
@@ -23,6 +25,11 @@ def _candidate() -> _LearningCandidate:
         item_number=7,
         requested_by="operator_batch_owner",
     )
+
+
+def _without_graph(service: LegacyItemAutomaticLearningService) -> None:
+    service.graph = None
+    service.graph_batch_size = 16
 
 
 def test_automatic_learning_reconciles_existing_run_before_scheduling_another() -> None:
@@ -89,6 +96,7 @@ def test_automatic_learning_builds_replay_stable_promotion_and_pins_policy() -> 
     service.learning = Mock()
     service.content_pack_release_id = "packrel_" + "5" * 32
     service.risk_policy_revision_id = "analysisriskrev_" + "6" * 32
+    _without_graph(service)
     service._active_analysis = cast(Any, lambda: None)
     service._retryable_analysis = cast(Any, lambda: None)
     service._candidate = cast(Any, _candidate)
@@ -116,6 +124,7 @@ def test_automatic_learning_creates_one_fresh_successor_before_new_items() -> No
     service = object.__new__(LegacyItemAutomaticLearningService)
     service.analyses = Mock()
     service.learning = Mock()
+    _without_graph(service)
     service._active_analysis = cast(Any, lambda: None)
     service._retryable_analysis = cast(
         Any,
@@ -134,11 +143,61 @@ def test_automatic_learning_creates_one_fresh_successor_before_new_items() -> No
 
 def test_automatic_learning_is_idle_without_active_or_unlearned_work() -> None:
     service = object.__new__(LegacyItemAutomaticLearningService)
+    _without_graph(service)
     service._active_analysis = cast(Any, lambda: None)
     service._retryable_analysis = cast(Any, lambda: None)
     service._candidate = cast(Any, lambda: None)
 
     assert service.advance_once() is False
+
+
+def test_automatic_learning_publishes_one_full_graph_batch_before_more_source_work() -> None:
+    service = object.__new__(LegacyItemAutomaticLearningService)
+    service.analyses = Mock()
+    service.learning = Mock()
+    service.graph_batch_size = 2
+    candidates = (
+        LegacyItemGraphCandidate(
+            "analysisrun_" + "1" * 32, "operator_owner", "graphrev_" + "1" * 32
+        ),
+        LegacyItemGraphCandidate(
+            "analysisrun_" + "2" * 32, "operator_owner", "graphrev_" + "1" * 32
+        ),
+    )
+    service.graph = Mock()
+    service.graph.pending_candidates.return_value = candidates
+    service._active_analysis = cast(Any, lambda: None)
+    service._retryable_analysis = Mock()
+    service._candidate = Mock()
+
+    assert service.advance_once() is True
+
+    service.graph.pending_candidates.assert_called_once_with(limit=2)
+    service.graph.publish.assert_called_once_with(candidates)
+    service._retryable_analysis.assert_not_called()
+    service._candidate.assert_not_called()
+
+
+def test_automatic_learning_flushes_partial_graph_batch_only_after_source_completion() -> None:
+    service = object.__new__(LegacyItemAutomaticLearningService)
+    service.analyses = Mock()
+    service.learning = Mock()
+    service.graph_batch_size = 16
+    candidates = (
+        LegacyItemGraphCandidate(
+            "analysisrun_" + "1" * 32, "operator_owner", "graphrev_" + "1" * 32
+        ),
+    )
+    service.graph = Mock()
+    service.graph.pending_candidates.return_value = candidates
+    service._active_analysis = cast(Any, lambda: None)
+    service._retryable_analysis = cast(Any, lambda: None)
+    service._candidate = cast(Any, lambda: None)
+    service._source_work_remaining = cast(Any, lambda: False)
+
+    assert service.advance_once() is True
+
+    service.graph.publish.assert_called_once_with(candidates)
 
 
 def test_automation_batch_ids_support_an_explicit_ordered_allowlist(
@@ -180,3 +239,21 @@ def test_retry_analysis_ids_reject_duplicates(monkeypatch: pytest.MonkeyPatch) -
     )
 
     assert _legacy_automation_retry_analysis_run_ids() == ()
+
+
+@pytest.mark.parametrize(("configured", "expected"), [("1", 1), ("8", 8), ("16", 16)])
+def test_graph_batch_size_accepts_bounded_values(
+    monkeypatch: pytest.MonkeyPatch,
+    configured: str,
+    expected: int,
+) -> None:
+    monkeypatch.setenv("EOM_LEGACY_ITEM_AUTOMATION_GRAPH_BATCH_SIZE", configured)
+    assert _legacy_automation_graph_batch_size() == expected
+
+
+@pytest.mark.parametrize("configured", ["0", "17", "not-an-integer"])
+def test_graph_batch_size_rejects_invalid_values(
+    monkeypatch: pytest.MonkeyPatch, configured: str
+) -> None:
+    monkeypatch.setenv("EOM_LEGACY_ITEM_AUTOMATION_GRAPH_BATCH_SIZE", configured)
+    assert _legacy_automation_graph_batch_size() is None

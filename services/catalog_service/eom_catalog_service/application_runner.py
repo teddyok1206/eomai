@@ -38,6 +38,10 @@ from eom_catalog_service.legacy_item_extraction_batch_models import (
 from eom_catalog_service.legacy_item_extraction_batch_service import (
     LegacyItemExtractionBatchService,
 )
+from eom_catalog_service.legacy_item_graph_learning_service import (
+    MAX_AUTOMATIC_GRAPH_BATCH_SIZE,
+    LegacyItemGraphLearningService,
+)
 from eom_catalog_service.legacy_item_learning_service import LegacyItemLearningCoordinator
 from eom_catalog_service.legacy_item_promotion_service import LegacyItemPromotionService
 from eom_catalog_service.legacy_usage_models import LegacyUsageImportRecord
@@ -83,6 +87,15 @@ def _legacy_automation_retry_analysis_run_ids() -> tuple[str, ...]:
     return values
 
 
+def _legacy_automation_graph_batch_size() -> int | None:
+    configured = os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_GRAPH_BATCH_SIZE", "16")
+    try:
+        value = int(configured)
+    except ValueError:
+        return None
+    return value if 1 <= value <= MAX_AUTOMATIC_GRAPH_BATCH_SIZE else None
+
+
 def serve() -> int:
     engine = build_engine()
     server: CatalogApplicationServer | None = None
@@ -117,10 +130,16 @@ def serve() -> int:
             risk_policy_revision_id = os.environ.get(
                 "EOM_LEGACY_ITEM_AUTOMATION_RISK_POLICY_REVISION_ID"
             )
+            graph_access_policy_revision_id = os.environ.get(
+                "EOM_LEGACY_ITEM_AUTOMATION_GRAPH_ACCESS_POLICY_REVISION_ID"
+            )
+            graph_batch_size = _legacy_automation_graph_batch_size()
             if (
                 not extraction_batch_ids
                 or not content_pack_release_id
                 or not risk_policy_revision_id
+                or not graph_access_policy_revision_id
+                or graph_batch_size is None
             ):
                 print("LEGACY_ITEM_AUTOMATION_CONFIGURATION_INCOMPLETE", flush=True)
                 return 1
@@ -146,12 +165,19 @@ def serve() -> int:
                 promotion=promotion,
                 analyses=knowledge_analysis,
             )
+            graph_learning = LegacyItemGraphLearningService(
+                engine,
+                extraction_batch_ids=extraction_batch_ids,
+                access_policy_revision_id=graph_access_policy_revision_id,
+            )
             automatic_learning = LegacyItemAutomaticLearningService(
                 engine,
                 extraction_batch_ids=extraction_batch_ids,
                 retry_analysis_run_ids=retry_analysis_run_ids,
                 content_pack_release_id=content_pack_release_id,
                 risk_policy_revision_id=risk_policy_revision_id,
+                graph=graph_learning,
+                graph_batch_size=graph_batch_size,
                 learning=learning,
                 analyses=knowledge_analysis,
             )

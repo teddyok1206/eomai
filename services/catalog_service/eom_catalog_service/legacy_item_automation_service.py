@@ -20,6 +20,10 @@ from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchRecord,
     LegacyItemExtractionBatchWorkUnitRecord,
 )
+from eom_catalog_service.legacy_item_graph_learning_service import (
+    MAX_AUTOMATIC_GRAPH_BATCH_SIZE,
+    LegacyItemGraphLearningService,
+)
 from eom_catalog_service.legacy_item_learning_service import LegacyItemLearningCoordinator
 from eom_catalog_service.models import ItemRevisionRecord
 
@@ -53,6 +57,8 @@ class LegacyItemAutomaticLearningService:
         retry_analysis_run_ids: tuple[str, ...] = (),
         content_pack_release_id: str,
         risk_policy_revision_id: str,
+        graph: LegacyItemGraphLearningService | None = None,
+        graph_batch_size: int = 16,
         learning: LegacyItemLearningCoordinator,
         analyses: KnowledgeAnalysisApplicationService,
     ) -> None:
@@ -60,11 +66,15 @@ class LegacyItemAutomaticLearningService:
             raise ValueError("automation batch identities must be non-empty and unique")
         if len(retry_analysis_run_ids) != len(set(retry_analysis_run_ids)):
             raise ValueError("analysis retry identities must be unique")
+        if graph_batch_size < 1 or graph_batch_size > MAX_AUTOMATIC_GRAPH_BATCH_SIZE:
+            raise ValueError("Graph publication batch size must be within 1..16")
         self.sessions = build_session_factory(engine)
         self.extraction_batch_ids = extraction_batch_ids
         self.retry_analysis_run_ids = retry_analysis_run_ids
         self.content_pack_release_id = content_pack_release_id
         self.risk_policy_revision_id = risk_policy_revision_id
+        self.graph = graph
+        self.graph_batch_size = graph_batch_size
         self.learning = learning
         self.analyses = analyses
 
@@ -87,6 +97,14 @@ class LegacyItemAutomaticLearningService:
                     )
                 )
             return True
+        graph_candidates = (
+            self.graph.pending_candidates(limit=self.graph_batch_size)
+            if self.graph is not None
+            else ()
+        )
+        if self.graph is not None and len(graph_candidates) == self.graph_batch_size:
+            self.graph.publish(graph_candidates)
+            return True
         retry = self._retryable_analysis()
         if retry is not None:
             analysis_run_id, requested_by = retry
@@ -97,6 +115,9 @@ class LegacyItemAutomaticLearningService:
             return True
         candidate = self._candidate()
         if candidate is None:
+            if self.graph is not None and graph_candidates and not self._source_work_remaining():
+                self.graph.publish(graph_candidates)
+                return True
             return False
         command = self._promotion_request(
             candidate,
@@ -107,6 +128,24 @@ class LegacyItemAutomaticLearningService:
             risk_policy_revision_id=self.risk_policy_revision_id,
         )
         return True
+
+    def _source_work_remaining(self) -> bool:
+        with self.sessions() as session:
+            return (
+                session.scalar(
+                    select(LegacyItemExtractionBatchWorkUnitRecord.work_unit_id)
+                    .where(
+                        LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
+                            self.extraction_batch_ids
+                        ),
+                        LegacyItemExtractionBatchWorkUnitRecord.state.in_(
+                            ("PENDING", "SUBMITTED", "RUNNING")
+                        ),
+                    )
+                    .limit(1)
+                )
+                is not None
+            )
 
     def _active_analysis(self) -> tuple[str, str, str] | None:
         registration_key = (

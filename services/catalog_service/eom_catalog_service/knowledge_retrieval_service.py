@@ -609,6 +609,7 @@ class KnowledgeRetrievalApplicationService:
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/4.0",
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0",
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/6.0",
+                    "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0",
                 }
             ),
         )

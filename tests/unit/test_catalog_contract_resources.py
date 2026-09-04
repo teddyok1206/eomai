@@ -110,7 +110,7 @@ ITEM_ORIGIN_SCHEMA_SHA256 = {
         "sha256:0ae2cdc2ddce804dbdec22a175847061ed096be561f07a5ffda0ac0167e1f722"
     ),
     "item-origin-profile": (
-        "sha256:1a428b3ce8d0a09460cbefcb23384c2222e0fd3aa4c84a71ae76490cfff12d8d"
+        "sha256:38059059f8b2d95854ac14c969a2661d83dea3de9529e282386a3faaff2dd9e6"
     ),
     "item-origin-types": (
         "sha256:51f25418d08cbc2c26848a6db129fee3e7b88e19dc9228ee149cfea05d040b0c"
@@ -141,7 +141,7 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 149
+    assert len(entries) == 152
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {
@@ -207,10 +207,13 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         "knowledge-graph-snapshot-manifest-v4",
         "knowledge-graph-snapshot-manifest-v5",
         "knowledge-graph-snapshot-manifest-v6",
+        "knowledge-graph-snapshot-manifest-v7",
         "knowledge-graph-publication-v2",
         "knowledge-graph-publication-v3",
+        "knowledge-graph-publication-v4",
         "knowledge-graph-structure-manifest-v2",
         "knowledge-graph-structure-manifest-v3",
+        "knowledge-graph-structure-manifest-v4",
         "evidence-bundle-manifest-v3",
         "evidence-bundle-manifest-v4",
         "evidence-bundle-publication-result-v3",

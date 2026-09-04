@@ -1956,6 +1956,63 @@ class ApprovedItemCurriculumAlignmentBinding(FrozenModel):
         return self
 
 
+class AutomaticItemCurriculumAlignmentBinding(FrozenModel):
+    """Policy-derived Graph-RAG alignment for one accepted immutable Item analysis."""
+
+    alignment_mode: Literal["AUTO_POLICY"] = "AUTO_POLICY"
+    analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    accepted_result: KnowledgeArtifactMemberPointer
+    prior_graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    retrieval_request_sha256: Sha256
+    evidence_manifest: KnowledgeArtifactMemberPointer
+    evidence_node_ids: tuple[Annotated[str, Field(pattern=r"^knode_[0-9a-f]{32}$")], ...] = Field(
+        min_length=1, max_length=64
+    )
+    curriculum_unit_ids: tuple[Annotated[str, Field(pattern=r"^currunit_[0-9a-f]{32}$")], ...] = (
+        Field(min_length=1, max_length=8)
+    )
+    alignment_policy_version: Literal["integrated-science-auto-alignment/1.0"] = (
+        "integrated-science-auto-alignment/1.0"
+    )
+    alignment_policy_sha256: Sha256
+    requested_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    aligned_at: UtcDatetime
+    alignment_sha256: Sha256
+
+    @model_validator(mode="after")
+    def automatic_item_alignment_is_closed(self) -> AutomaticItemCurriculumAlignmentBinding:
+        if (
+            self.accepted_result.member_path != "evidence/accepted-result.json"
+            or self.accepted_result.media_type != "application/json"
+            or self.accepted_result.schema_ref
+            != "eom://schemas/knowledge/knowledge-analysis-result/2.0"
+            or self.evidence_manifest.member_path != "evidence/manifest.json"
+            or self.evidence_manifest.media_type != "application/json"
+            or self.evidence_manifest.schema_ref
+            not in {
+                "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
+            }
+        ):
+            raise ValueError("automatic Item alignment Artifact pointer is incompatible")
+        for values, label in (
+            (self.evidence_node_ids, "evidence node IDs"),
+            (self.curriculum_unit_ids, "curriculum unit IDs"),
+        ):
+            if tuple(sorted(set(values))) != values:
+                raise ValueError(f"automatic Item alignment {label} must be sorted and unique")
+        body = self.model_dump(mode="json", exclude={"alignment_sha256"})
+        if content_sha256(body) != self.alignment_sha256:
+            raise ValueError("automatic Item curriculum alignment hash does not match content")
+        return self
+
+
 class ItemElementBinding(FrozenModel):
     node_stable_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$")
     item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
@@ -2157,6 +2214,43 @@ class KnowledgeGraphStructureManifestV3(KnowledgeGraphStructureManifestV2):
         return self
 
 
+class KnowledgeGraphStructureManifestV4(KnowledgeGraphStructureManifestV3):
+    """Reviewed framework plus separately identified automatic Item alignments."""
+
+    schema_version: Literal["knowledge-graph-structure-manifest/4.0"] = (
+        "knowledge-graph-structure-manifest/4.0"  # type: ignore[assignment]
+    )
+    automatic_item_curriculum_bindings: tuple[AutomaticItemCurriculumAlignmentBinding, ...] = Field(
+        min_length=1, max_length=10000
+    )
+
+    @model_validator(mode="after")
+    def automatic_item_bindings_are_closed(self) -> KnowledgeGraphStructureManifestV4:
+        automatic = self.automatic_item_curriculum_bindings
+        if tuple(sorted(automatic, key=lambda item: item.analysis_run_id)) != automatic:
+            raise ValueError("automatic Item bindings must be sorted by analysis run ID")
+        automatic_run_ids = tuple(item.analysis_run_id for item in automatic)
+        automatic_revision_ids = tuple(item.item_revision_id for item in automatic)
+        reviewed_run_ids = {item.analysis_run_id for item in self.approved_item_curriculum_bindings}
+        reviewed_revision_ids = {
+            item.item_revision_id for item in self.approved_item_curriculum_bindings
+        }
+        if (
+            len(automatic_run_ids) != len(set(automatic_run_ids))
+            or len(automatic_revision_ids) != len(set(automatic_revision_ids))
+            or reviewed_run_ids.intersection(automatic_run_ids)
+            or reviewed_revision_ids.intersection(automatic_revision_ids)
+            or not set(automatic_run_ids).issubset(self.source_analysis_run_ids)
+        ):
+            raise ValueError("automatic Item bindings must uniquely reference Item source runs")
+        units = {item.curriculum_unit_id: item for item in self.curriculum_units}
+        for binding in automatic:
+            targets = [units.get(unit_id) for unit_id in binding.curriculum_unit_ids]
+            if any(target is None or target.unit_level != "MINOR" for target in targets):
+                raise ValueError("automatic Item bindings require MINOR curriculum units")
+        return self
+
+
 class PublishKnowledgeGraphSnapshotCommand(FrozenModel):
     """Pointer-only command for publishing one immutable graph snapshot."""
 
@@ -2191,6 +2285,9 @@ class PublishKnowledgeGraphSnapshotCommand(FrozenModel):
             ),
             "knowledge-graph-publication/3.0": (
                 "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0"
+            ),
+            "knowledge-graph-publication/4.0": (
+                "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0"
             ),
         }[str(self.schema_version)]
         if self.structure_manifest is not None and (
@@ -2252,6 +2349,31 @@ class PublishKnowledgeGraphSnapshotCommandV3(PublishKnowledgeGraphSnapshotComman
             != "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0"
         ):
             raise ValueError("graph publication V3 requires the exact structure manifest V3")
+        return self
+
+
+class PublishKnowledgeGraphSnapshotCommandV4(PublishKnowledgeGraphSnapshotCommand):
+    """Publication command requiring an automatic-alignment structure manifest V4."""
+
+    schema_version: Literal["knowledge-graph-publication/4.0"] = "knowledge-graph-publication/4.0"  # type: ignore[assignment]
+    structure_manifest: KnowledgeArtifactMemberPointer
+
+    @field_validator("display_name")
+    @classmethod
+    def display_name_is_single_line_safe_text(cls, value: str) -> str:
+        if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in value):
+            raise ValueError("graph display name contains a control character")
+        return value
+
+    @model_validator(mode="after")
+    def exact_v4_structure_pointer(self) -> PublishKnowledgeGraphSnapshotCommandV4:
+        if (
+            self.structure_manifest.member_path != "evidence/graph-structure-manifest.json"
+            or self.structure_manifest.media_type != "application/json"
+            or self.structure_manifest.schema_ref
+            != "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0"
+        ):
+            raise ValueError("graph publication V4 requires the exact structure manifest V4")
         return self
 
 
@@ -2458,6 +2580,7 @@ class KnowledgeGraphSnapshotManifestV4(FrozenModel):
             if str(self.schema_version) in {
                 "knowledge-graph-snapshot-manifest/5.0",
                 "knowledge-graph-snapshot-manifest/6.0",
+                "knowledge-graph-snapshot-manifest/7.0",
             } and isinstance(source, EducationalDocumentKnowledgeSourceV4):
                 base_key = (
                     *base_key,
@@ -2516,6 +2639,28 @@ class KnowledgeGraphSnapshotManifestV6(KnowledgeGraphSnapshotManifestV4):
             raise ValueError("graph snapshot V6 requires the exact structure manifest V3")
         if self.projections.curriculum_closure is None:
             raise ValueError("graph snapshot V6 requires a curriculum closure projection")
+        return self
+
+
+class KnowledgeGraphSnapshotManifestV7(KnowledgeGraphSnapshotManifestV4):
+    """Snapshot pinning reviewed and automatic Item curriculum structure V4."""
+
+    schema_version: Literal["knowledge-graph-snapshot-manifest/7.0"] = (
+        "knowledge-graph-snapshot-manifest/7.0"  # type: ignore[assignment]
+    )
+    structure_manifest: KnowledgeArtifactMemberPointer
+
+    @model_validator(mode="after")
+    def exact_structure_pointer(self) -> KnowledgeGraphSnapshotManifestV7:
+        if (
+            self.structure_manifest.member_path != "evidence/graph-structure-manifest.json"
+            or self.structure_manifest.media_type != "application/json"
+            or self.structure_manifest.schema_ref
+            != "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0"
+        ):
+            raise ValueError("graph snapshot V7 requires the exact structure manifest V4")
+        if self.projections.curriculum_closure is None:
+            raise ValueError("graph snapshot V7 requires a curriculum closure projection")
         return self
 
 

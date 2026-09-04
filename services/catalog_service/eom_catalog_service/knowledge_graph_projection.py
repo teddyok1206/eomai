@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from eom_catalog_contracts import (
+    ApprovedItemCurriculumAlignmentBinding,
     ApprovedItemKnowledgeSourceV2,
+    AutomaticItemCurriculumAlignmentBinding,
     CurriculumUnitBinding,
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
@@ -21,6 +23,7 @@ from eom_catalog_contracts import (
     KnowledgeGraphStructureManifest,
     KnowledgeGraphStructureManifestV2,
     KnowledgeGraphStructureManifestV3,
+    KnowledgeGraphStructureManifestV4,
     KnowledgeNodeType,
     ProposedKnowledgeEdgeV2,
     validate_knowledge_edge_endpoint_types,
@@ -385,7 +388,11 @@ def _merge_edge(
 
 def _add_reviewed_curriculum_structure(
     analyses: tuple[AcceptedAnalysisProposal, ...],
-    structure: KnowledgeGraphStructureManifestV2 | KnowledgeGraphStructureManifestV3,
+    structure: (
+        KnowledgeGraphStructureManifestV2
+        | KnowledgeGraphStructureManifestV3
+        | KnowledgeGraphStructureManifestV4
+    ),
     node_accumulators: dict[str, _NodeAccumulator],
     local_node_ids: dict[tuple[str, str], str],
     edge_accumulators: dict[tuple[str, str, str], _EdgeAccumulator],
@@ -406,14 +413,21 @@ def _add_reviewed_curriculum_structure(
             "KNOWLEDGE_GRAPH_CURRICULUM_BINDING_COVERAGE_INVALID",
             "reviewed curriculum bindings must exactly cover classified source ranges",
         )
-    item_bindings_by_run = (
-        {
-            binding.analysis_run_id: binding
-            for binding in structure.approved_item_curriculum_bindings
-        }
-        if isinstance(structure, KnowledgeGraphStructureManifestV3)
-        else {}
+    item_bindings: tuple[
+        ApprovedItemCurriculumAlignmentBinding | AutomaticItemCurriculumAlignmentBinding, ...
+    ] = (
+        (
+            *structure.approved_item_curriculum_bindings,
+            *structure.automatic_item_curriculum_bindings,
+        )
+        if isinstance(structure, KnowledgeGraphStructureManifestV4)
+        else (
+            structure.approved_item_curriculum_bindings
+            if isinstance(structure, KnowledgeGraphStructureManifestV3)
+            else ()
+        )
     )
+    item_bindings_by_run = {binding.analysis_run_id: binding for binding in item_bindings}
     expected_item_runs = {
         analysis.analysis_run_id
         for analysis in analyses
@@ -604,6 +618,7 @@ def build_education_graph_projection(
         KnowledgeGraphStructureManifest
         | KnowledgeGraphStructureManifestV2
         | KnowledgeGraphStructureManifestV3
+        | KnowledgeGraphStructureManifestV4
         | None
     ),
 ) -> EducationGraphProjection:

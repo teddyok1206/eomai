@@ -9,10 +9,12 @@ from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     AnalysisCurriculumBinding,
     ApprovedItemCurriculumAlignmentBinding,
+    AutomaticItemCurriculumAlignmentBinding,
     CurriculumUnitBindingV2,
     EducationalDocumentKnowledgeSourceV4,
     KnowledgeGraphStructureManifestV2,
     KnowledgeGraphStructureManifestV3,
+    KnowledgeGraphStructureManifestV4,
     load_integrated_science_editorial_outline,
 )
 from eom_identifiers import content_sha256
@@ -182,12 +184,16 @@ def validate_integrated_science_structure_manifest(
 
 
 def extend_integrated_science_structure_manifest_with_item_alignments(
-    base: KnowledgeGraphStructureManifestV2 | KnowledgeGraphStructureManifestV3,
+    base: (
+        KnowledgeGraphStructureManifestV2
+        | KnowledgeGraphStructureManifestV3
+        | KnowledgeGraphStructureManifestV4
+    ),
     additions: tuple[ApprovedItemCurriculumAlignmentBinding, ...],
     *,
     reviewed_by_operator_id: str,
     created_at: datetime,
-) -> KnowledgeGraphStructureManifestV3:
+) -> KnowledgeGraphStructureManifestV3 | KnowledgeGraphStructureManifestV4:
     """Append immutable approved-Item alignments while preserving reviewed framework data."""
 
     validate_integrated_science_structure_manifest(base)
@@ -197,6 +203,11 @@ def extend_integrated_science_structure_manifest_with_item_alignments(
         else ()
     )
     combined = tuple(sorted((*existing, *additions), key=lambda item: item.analysis_run_id))
+    automatic = (
+        base.automatic_item_curriculum_bindings
+        if isinstance(base, KnowledgeGraphStructureManifestV4)
+        else ()
+    )
     run_ids = tuple(
         sorted(
             {
@@ -205,20 +216,28 @@ def extend_integrated_science_structure_manifest_with_item_alignments(
             }
         )
     )
-    if len(combined) != len({binding.analysis_run_id for binding in combined}) or len(
-        combined
-    ) != len({binding.item_revision_id for binding in combined}):
+    all_run_ids = [binding.analysis_run_id for binding in combined] + [
+        binding.analysis_run_id for binding in automatic
+    ]
+    all_revision_ids = [binding.item_revision_id for binding in combined] + [
+        binding.item_revision_id for binding in automatic
+    ]
+    if len(all_run_ids) != len(set(all_run_ids)) or len(all_revision_ids) != len(
+        set(all_revision_ids)
+    ):
         raise CurriculumGraphStructureError(
             "approved Item alignment additions duplicate a run or Item revision"
         )
-    structure_manifest_id = _typed_id(
-        "graphstructure_",
-        {
-            "framework_revision_id": base.framework_revision_id,
-            "source_analysis_run_ids": list(run_ids),
-            "approved_item_alignment_hashes": [binding.alignment_sha256 for binding in combined],
-        },
-    )
+    identity: dict[str, object] = {
+        "framework_revision_id": base.framework_revision_id,
+        "source_analysis_run_ids": list(run_ids),
+        "approved_item_alignment_hashes": [binding.alignment_sha256 for binding in combined],
+    }
+    if automatic:
+        identity["automatic_item_alignment_hashes"] = [
+            binding.alignment_sha256 for binding in automatic
+        ]
+    structure_manifest_id = _typed_id("graphstructure_", identity)
     value = {
         **base.model_dump(
             mode="json",
@@ -230,9 +249,14 @@ def extend_integrated_science_structure_manifest_with_item_alignments(
                 "created_at",
                 "manifest_sha256",
                 "approved_item_curriculum_bindings",
+                "automatic_item_curriculum_bindings",
             },
         ),
-        "schema_version": "knowledge-graph-structure-manifest/3.0",
+        "schema_version": (
+            "knowledge-graph-structure-manifest/4.0"
+            if isinstance(base, KnowledgeGraphStructureManifestV4)
+            else "knowledge-graph-structure-manifest/3.0"
+        ),
         "structure_manifest_id": structure_manifest_id,
         "source_analysis_run_ids": list(run_ids),
         "approved_item_curriculum_bindings": [
@@ -242,7 +266,101 @@ def extend_integrated_science_structure_manifest_with_item_alignments(
         "created_at": created_at.isoformat().replace("+00:00", "Z"),
         "manifest_sha256": "sha256:" + "0" * 64,
     }
+    if isinstance(base, KnowledgeGraphStructureManifestV4):
+        value["automatic_item_curriculum_bindings"] = [
+            binding.model_dump(mode="json") for binding in automatic
+        ]
     value["manifest_sha256"] = content_sha256(
         {key: item for key, item in value.items() if key != "manifest_sha256"}
     )
+    if isinstance(base, KnowledgeGraphStructureManifestV4):
+        return KnowledgeGraphStructureManifestV4.model_validate(value)
     return KnowledgeGraphStructureManifestV3.model_validate(value)
+
+
+def extend_integrated_science_structure_manifest_with_automatic_item_alignments(
+    base: (
+        KnowledgeGraphStructureManifestV2
+        | KnowledgeGraphStructureManifestV3
+        | KnowledgeGraphStructureManifestV4
+    ),
+    additions: tuple[AutomaticItemCurriculumAlignmentBinding, ...],
+    *,
+    created_at: datetime,
+) -> KnowledgeGraphStructureManifestV4:
+    """Append policy-derived Item alignments without representing them as human review."""
+
+    validate_integrated_science_structure_manifest(base)
+    if not additions:
+        raise CurriculumGraphStructureError("automatic Item alignment additions are required")
+    reviewed: tuple[ApprovedItemCurriculumAlignmentBinding, ...] = (
+        base.approved_item_curriculum_bindings
+        if isinstance(base, KnowledgeGraphStructureManifestV3)
+        else ()
+    )
+    existing_automatic: tuple[AutomaticItemCurriculumAlignmentBinding, ...] = (
+        base.automatic_item_curriculum_bindings
+        if isinstance(base, KnowledgeGraphStructureManifestV4)
+        else ()
+    )
+    automatic = tuple(
+        sorted((*existing_automatic, *additions), key=lambda item: item.analysis_run_id)
+    )
+    run_ids = tuple(
+        sorted(
+            {
+                *base.source_analysis_run_ids,
+                *(binding.analysis_run_id for binding in additions),
+            }
+        )
+    )
+    binding_run_ids = [binding.analysis_run_id for binding in reviewed] + [
+        binding.analysis_run_id for binding in automatic
+    ]
+    binding_revision_ids = [binding.item_revision_id for binding in reviewed] + [
+        binding.item_revision_id for binding in automatic
+    ]
+    if len(binding_run_ids) != len(set(binding_run_ids)) or len(binding_revision_ids) != len(
+        set(binding_revision_ids)
+    ):
+        raise CurriculumGraphStructureError(
+            "automatic Item alignment additions duplicate a run or Item revision"
+        )
+    structure_manifest_id = _typed_id(
+        "graphstructure_",
+        {
+            "framework_revision_id": base.framework_revision_id,
+            "source_analysis_run_ids": list(run_ids),
+            "reviewed_item_alignment_hashes": [binding.alignment_sha256 for binding in reviewed],
+            "automatic_item_alignment_hashes": [binding.alignment_sha256 for binding in automatic],
+        },
+    )
+    value = {
+        **base.model_dump(
+            mode="json",
+            exclude={
+                "schema_version",
+                "structure_manifest_id",
+                "source_analysis_run_ids",
+                "created_at",
+                "manifest_sha256",
+                "approved_item_curriculum_bindings",
+                "automatic_item_curriculum_bindings",
+            },
+        ),
+        "schema_version": "knowledge-graph-structure-manifest/4.0",
+        "structure_manifest_id": structure_manifest_id,
+        "source_analysis_run_ids": list(run_ids),
+        "approved_item_curriculum_bindings": [
+            binding.model_dump(mode="json") for binding in reviewed
+        ],
+        "automatic_item_curriculum_bindings": [
+            binding.model_dump(mode="json") for binding in automatic
+        ],
+        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+        "manifest_sha256": "sha256:" + "0" * 64,
+    }
+    value["manifest_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "manifest_sha256"}
+    )
+    return KnowledgeGraphStructureManifestV4.model_validate(value)

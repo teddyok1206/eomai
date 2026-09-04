@@ -1,0 +1,179 @@
+{
+  "$id": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analysis_curriculum_bindings": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/analysis_curriculum_bindings"
+    },
+    "approved_item_curriculum_bindings": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/approved_item_curriculum_bindings"
+    },
+    "automatic_item_curriculum_bindings": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted_result": {
+            "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+          },
+          "aligned_at": {
+            "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"
+          },
+          "alignment_mode": {
+            "const": "AUTO_POLICY"
+          },
+          "alignment_policy_sha256": {
+            "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+          },
+          "alignment_policy_version": {
+            "const": "integrated-science-auto-alignment/1.0"
+          },
+          "alignment_sha256": {
+            "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+          },
+          "analysis_run_id": {
+            "pattern": "^analysisrun_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "curriculum_unit_ids": {
+            "items": {
+              "pattern": "^currunit_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "evidence_bundle_id": {
+            "pattern": "^evidence_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "evidence_bundle_revision_id": {
+            "pattern": "^evidencerev_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "evidence_manifest": {
+            "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+          },
+          "evidence_node_ids": {
+            "items": {
+              "pattern": "^knode_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "item_id": {
+            "pattern": "^item_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "item_revision_id": {
+            "pattern": "^itemrev_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "prior_graph_snapshot_revision_id": {
+            "pattern": "^graphrev_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "requested_by_operator_id": {
+            "pattern": "^operator_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "retrieval_request_id": {
+            "pattern": "^retrieval_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "retrieval_request_sha256": {
+            "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+          }
+        },
+        "required": [
+          "alignment_mode",
+          "analysis_run_id",
+          "item_id",
+          "item_revision_id",
+          "accepted_result",
+          "prior_graph_snapshot_revision_id",
+          "evidence_bundle_id",
+          "evidence_bundle_revision_id",
+          "retrieval_request_id",
+          "retrieval_request_sha256",
+          "evidence_manifest",
+          "evidence_node_ids",
+          "curriculum_unit_ids",
+          "alignment_policy_version",
+          "alignment_policy_sha256",
+          "requested_by_operator_id",
+          "aligned_at",
+          "alignment_sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 10000,
+      "minItems": 1,
+      "type": "array"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/created_at"
+    },
+    "curriculum_units": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/curriculum_units"
+    },
+    "framework_key": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/framework_key"
+    },
+    "framework_revision_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/framework_revision_id"
+    },
+    "item_elements": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/item_elements"
+    },
+    "manifest_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/manifest_sha256"
+    },
+    "outline_key": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/outline_key"
+    },
+    "outline_revision": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/outline_revision"
+    },
+    "outline_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/outline_sha256"
+    },
+    "reviewed_by_operator_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/reviewed_by_operator_id"
+    },
+    "schema_version": {
+      "const": "knowledge-graph-structure-manifest/4.0"
+    },
+    "source_analysis_run_ids": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/source_analysis_run_ids"
+    },
+    "structure_manifest_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0#/properties/structure_manifest_id"
+    }
+  },
+  "required": [
+    "schema_version",
+    "structure_manifest_id",
+    "framework_key",
+    "framework_revision_id",
+    "outline_key",
+    "outline_revision",
+    "outline_sha256",
+    "source_analysis_run_ids",
+    "curriculum_units",
+    "analysis_curriculum_bindings",
+    "approved_item_curriculum_bindings",
+    "automatic_item_curriculum_bindings",
+    "item_elements",
+    "reviewed_by_operator_id",
+    "created_at",
+    "manifest_sha256"
+  ],
+  "title": "Knowledge Graph Automatic Item Structure Manifest V4",
+  "type": "object"
+}

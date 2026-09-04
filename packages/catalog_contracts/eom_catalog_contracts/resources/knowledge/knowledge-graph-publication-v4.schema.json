@@ -1,0 +1,55 @@
+{
+  "$id": "eom://schemas/knowledge/knowledge-graph-publication/4.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accepted_analysis_run_ids": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-publication/3.0#/properties/accepted_analysis_run_ids"
+    },
+    "corpus_key": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-publication/3.0#/properties/corpus_key"
+    },
+    "display_name": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-publication/3.0#/properties/display_name"
+    },
+    "expected_current_snapshot_revision_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-publication/3.0#/properties/expected_current_snapshot_revision_id"
+    },
+    "idempotency_key": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-publication/3.0#/properties/idempotency_key"
+    },
+    "published_by_operator_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-publication/3.0#/properties/published_by_operator_id"
+    },
+    "publisher_version": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-publication/3.0#/properties/publisher_version"
+    },
+    "request_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-publication/3.0#/properties/request_sha256"
+    },
+    "requested_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-publication/3.0#/properties/requested_at"
+    },
+    "schema_version": {
+      "const": "knowledge-graph-publication/4.0"
+    },
+    "structure_manifest": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "corpus_key",
+    "display_name",
+    "accepted_analysis_run_ids",
+    "structure_manifest",
+    "expected_current_snapshot_revision_id",
+    "publisher_version",
+    "published_by_operator_id",
+    "idempotency_key",
+    "requested_at",
+    "request_sha256"
+  ],
+  "title": "Knowledge Graph Publication Command V4",
+  "type": "object"
+}

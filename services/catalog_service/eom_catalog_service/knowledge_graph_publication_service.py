@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
 from typing import Any, cast
@@ -15,6 +16,10 @@ from eom_catalog_contracts import (
     CurriculumUnitBinding,
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
+    EducationRetrievalAccessPolicy,
+    EducationRetrievalRequestV2,
+    EvidenceBundleManifestV2,
+    EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
     KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV2,
@@ -52,13 +57,16 @@ from eom_catalog_contracts import (
     KnowledgeGraphSnapshotManifestV4,
     KnowledgeGraphSnapshotManifestV5,
     KnowledgeGraphSnapshotManifestV6,
+    KnowledgeGraphSnapshotManifestV7,
     KnowledgeGraphSnapshotPointer,
     KnowledgeGraphStructureManifest,
     KnowledgeGraphStructureManifestV2,
     KnowledgeGraphStructureManifestV3,
+    KnowledgeGraphStructureManifestV4,
     PublishKnowledgeGraphSnapshotCommand,
     PublishKnowledgeGraphSnapshotCommandV2,
     PublishKnowledgeGraphSnapshotCommandV3,
+    PublishKnowledgeGraphSnapshotCommandV4,
     validate_contract,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256
@@ -67,11 +75,22 @@ from eom_item_registry import RegistryError
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
+from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactService
+from eom_catalog_service.automatic_curriculum_alignment import (
+    AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET,
+    AUTOMATIC_ITEM_ALIGNMENT_PERMISSION_KEYS,
+    AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
+    AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
+    AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES,
+    AutomaticCurriculumAlignmentError,
+    automatic_item_alignment_topic_keys,
+    derive_automatic_item_curriculum_unit_ids,
+)
 from eom_catalog_service.curriculum_graph_structure import (
     CurriculumGraphStructureError,
     validate_integrated_science_structure_manifest,
@@ -86,6 +105,7 @@ from eom_catalog_service.knowledge_analysis_sources import (
 from eom_catalog_service.knowledge_graph_models import (
     CurriculumUnitClosureRecord,
     CurriculumUnitRecord,
+    EducationRetrievalAccessPolicyRevisionRecord,
     EducationRetrievalRequestRecord,
     EvidenceBundleEntryRecord,
     EvidenceBundleRecord,
@@ -188,6 +208,19 @@ KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL = "catalog-knowledge-graph/1.5"
+KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL,
+        "contracts": [
+            "knowledge-graph-publication/4.0",
+            "knowledge-graph-structure-manifest/4.0",
+            "knowledge-graph-snapshot-manifest/7.0",
+            "knowledge-graph-publication-result/1.0",
+            "knowledge-graph-projection/3.0",
+        ],
+    }
+)
 type KnowledgeAnalysisRequestContract = (
     KnowledgeAnalysisRequestV2
     | KnowledgeAnalysisRequestV3
@@ -212,16 +245,19 @@ type KnowledgeGraphSnapshotContract = (
     | KnowledgeGraphSnapshotManifestV4
     | KnowledgeGraphSnapshotManifestV5
     | KnowledgeGraphSnapshotManifestV6
+    | KnowledgeGraphSnapshotManifestV7
 )
 type KnowledgeGraphPublicationCommand = (
     PublishKnowledgeGraphSnapshotCommand
     | PublishKnowledgeGraphSnapshotCommandV2
     | PublishKnowledgeGraphSnapshotCommandV3
+    | PublishKnowledgeGraphSnapshotCommandV4
 )
 type KnowledgeGraphStructureContract = (
     KnowledgeGraphStructureManifest
     | KnowledgeGraphStructureManifestV2
     | KnowledgeGraphStructureManifestV3
+    | KnowledgeGraphStructureManifestV4
 )
 
 
@@ -229,6 +265,19 @@ class KnowledgeGraphPublicationError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+@dataclass(frozen=True)
+class CurrentKnowledgeGraphStructure:
+    corpus_key: str
+    display_name: str
+    graph_snapshot_revision_id: str
+    accepted_analysis_run_ids: tuple[str, ...]
+    structure: (
+        KnowledgeGraphStructureManifestV2
+        | KnowledgeGraphStructureManifestV3
+        | KnowledgeGraphStructureManifestV4
+    )
 
 
 def _typed_id(prefix: str, value: dict[str, object]) -> str:
@@ -299,6 +348,7 @@ def _manifest_member_schema_ref(revision: ArtifactRevisionRecord) -> str:
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/4.0",
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0",
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/6.0",
+        "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0",
     }
     if len(matches) != 1 or matches[0].get("schema_ref") not in allowed:
         raise KnowledgeGraphPublicationError(
@@ -330,17 +380,133 @@ class KnowledgeGraphPublicationService:
         self.artifacts = CatalogArtifactService(engine, self.settings)
         self.registry = RegistryService(engine, self.settings)
 
+    def current_structure_context(self, corpus_key: str) -> CurrentKnowledgeGraphStructure:
+        """Resolve the current structured snapshot and its exact accepted source membership."""
+
+        with self.sessions() as session:
+            corpus = session.scalar(
+                select(KnowledgeCorpusRecord).where(KnowledgeCorpusRecord.corpus_key == corpus_key)
+            )
+            snapshot = (
+                session.get(
+                    KnowledgeGraphSnapshotRecord,
+                    corpus.current_graph_snapshot_revision_id,
+                )
+                if corpus is not None and corpus.current_graph_snapshot_revision_id is not None
+                else None
+            )
+            if (
+                corpus is None
+                or corpus.lifecycle_state != "ACTIVE"
+                or snapshot is None
+                or snapshot.state != "PUBLISHED"
+                or snapshot.graph_id != corpus.graph_id
+            ):
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_CURRENT_INVALID",
+                    "knowledge corpus has no valid current structured snapshot",
+                )
+            revision = self._exact_artifact_revision(
+                session,
+                artifact_id=snapshot.manifest_artifact_id,
+                revision_id=snapshot.manifest_artifact_revision_id,
+                content_hash=snapshot.manifest_sha256,
+                logical_artifact_type="knowledge-graph-snapshot-manifest",
+                manifest_artifact_type="knowledge-graph-snapshot-manifest",
+                primary_file="projections/manifest.json",
+            )
+            schema_ref = _manifest_member_schema_ref(revision)
+            pointer = KnowledgeArtifactMemberPointer(
+                artifact_id=snapshot.manifest_artifact_id,
+                artifact_revision_id=snapshot.manifest_artifact_revision_id,
+                sha256=snapshot.manifest_sha256,
+                schema_ref=schema_ref,
+                media_type="application/json",
+                logical_name="manifest.json",
+                member_path="projections/manifest.json",
+            )
+            value = self._read_json_member(
+                pointer,
+                max_bytes=max(1, revision.content_bytes),
+                expected_bytes=revision.content_bytes,
+            )
+            try:
+                manifest: (
+                    KnowledgeGraphSnapshotManifestV5
+                    | KnowledgeGraphSnapshotManifestV6
+                    | KnowledgeGraphSnapshotManifestV7
+                )
+                if schema_ref.endswith("/7.0"):
+                    validate_contract("knowledge-graph-snapshot-manifest-v7", value)
+                    manifest = KnowledgeGraphSnapshotManifestV7.model_validate(value)
+                elif schema_ref.endswith("/6.0"):
+                    validate_contract("knowledge-graph-snapshot-manifest-v6", value)
+                    manifest = KnowledgeGraphSnapshotManifestV6.model_validate(value)
+                elif schema_ref.endswith("/5.0"):
+                    validate_contract("knowledge-graph-snapshot-manifest-v5", value)
+                    manifest = KnowledgeGraphSnapshotManifestV5.model_validate(value)
+                else:
+                    raise ValueError("current snapshot has no curriculum structure")
+            except (ValidationError, ValueError) as exc:
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_CURRENT_INVALID",
+                    "current Graph snapshot manifest is invalid or unstructured",
+                ) from exc
+            run_ids = tuple(
+                session.scalars(
+                    select(KnowledgeSnapshotAnalysisRecord.analysis_run_id)
+                    .where(
+                        KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id
+                        == snapshot.graph_snapshot_revision_id
+                    )
+                    .order_by(KnowledgeSnapshotAnalysisRecord.analysis_run_id)
+                )
+            )
+            structure = self._load_structure_manifest(manifest.structure_manifest)
+            if (
+                not isinstance(
+                    structure,
+                    (
+                        KnowledgeGraphStructureManifestV2,
+                        KnowledgeGraphStructureManifestV3,
+                        KnowledgeGraphStructureManifestV4,
+                    ),
+                )
+                or run_ids != structure.source_analysis_run_ids
+                or len(run_ids) != snapshot.source_count
+            ):
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_CURRENT_INVALID",
+                    "current Graph membership differs from its structure and snapshot counts",
+                )
+            return CurrentKnowledgeGraphStructure(
+                corpus_key=corpus.corpus_key,
+                display_name=corpus.display_name,
+                graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+                accepted_analysis_run_ids=run_ids,
+                structure=structure,
+            )
+
     def commit_structure_manifest(
-        self, structure: KnowledgeGraphStructureManifestV2 | KnowledgeGraphStructureManifestV3
+        self,
+        structure: (
+            KnowledgeGraphStructureManifestV2
+            | KnowledgeGraphStructureManifestV3
+            | KnowledgeGraphStructureManifestV4
+        ),
     ) -> KnowledgeArtifactMemberPointer:
         """Commit one reviewed structure manifest through the Catalog Artifact boundary."""
 
         try:
             validate_integrated_science_structure_manifest(structure)
             schema_key = (
-                "knowledge-graph-structure-manifest-v3"
-                if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                else "knowledge-graph-structure-manifest-v2"
+                "knowledge-graph-structure-manifest-v4"
+                if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                else (
+                    "knowledge-graph-structure-manifest-v3"
+                    if isinstance(structure, KnowledgeGraphStructureManifestV3)
+                    else "knowledge-graph-structure-manifest-v2"
+                )
             )
             validate_contract(schema_key, structure.model_dump(mode="json"))
         except (CurriculumGraphStructureError, ValidationError, ValueError) as exc:
@@ -384,23 +550,35 @@ class KnowledgeGraphPublicationService:
                     file_metadata={
                         "evidence/graph-structure-manifest.json": {
                             "schema_ref": (
-                                "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0"
-                                if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                                else "eom://schemas/knowledge/knowledge-graph-structure-manifest/2.0"
+                                "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0"
+                                if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                                else (
+                                    "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0"
+                                    if isinstance(structure, KnowledgeGraphStructureManifestV3)
+                                    else "eom://schemas/knowledge/knowledge-graph-structure-manifest/2.0"
+                                )
                             ),
                             "media_type": "application/json",
                         }
                     },
                     manifest_version="knowledge-graph-structure-file-set/1.0",
                     protocol_version=(
-                        KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
-                        if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                        else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
+                        KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
+                        if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                        else (
+                            KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
+                            if isinstance(structure, KnowledgeGraphStructureManifestV3)
+                            else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
+                        )
                     ),
                     protocol_schema_hash=(
-                        KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
-                        if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                        else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
+                        KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
+                        if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                        else (
+                            KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
+                            if isinstance(structure, KnowledgeGraphStructureManifestV3)
+                            else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
+                        )
                     ),
                 )
         except (OSError, RuntimeError, ValueError) as exc:
@@ -511,11 +689,28 @@ class KnowledgeGraphPublicationService:
                         "reviewed curriculum framework does not resolve exactly",
                     ) from exc
             if isinstance(structure, KnowledgeGraphStructureManifestV3):
+                if previous_snapshot_revision_id is None:
+                    raise KnowledgeGraphPublicationError(
+                        "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_PRIOR_MISSING",
+                        "Item curriculum alignment requires a prior Graph snapshot",
+                    )
+                ancestor_snapshot_ids = self._snapshot_ancestor_ids(
+                    session, previous_snapshot_revision_id
+                )
                 self._validate_approved_item_curriculum_bindings(
                     session,
                     structure,
                     analyses,
                     expected_snapshot_revision_id=previous_snapshot_revision_id,
+                    ancestor_snapshot_ids=ancestor_snapshot_ids,
+                )
+            if isinstance(structure, KnowledgeGraphStructureManifestV4):
+                self._validate_automatic_item_curriculum_bindings(
+                    session,
+                    structure,
+                    analyses,
+                    expected_snapshot_revision_id=previous_snapshot_revision_id,
+                    ancestor_snapshot_ids=ancestor_snapshot_ids,
                 )
             self._validate_item_elements(session, structure)
 
@@ -561,7 +756,15 @@ class KnowledgeGraphPublicationService:
             "created_at": command.requested_at,
         }
         manifest: KnowledgeGraphSnapshotContract
-        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV3):
+        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4):
+            manifest_value["structure_manifest"] = command.structure_manifest.model_dump(
+                mode="json"
+            )
+            manifest = KnowledgeGraphSnapshotManifestV7.model_validate(manifest_value)
+            validate_contract(
+                "knowledge-graph-snapshot-manifest-v7", manifest.model_dump(mode="json")
+            )
+        elif isinstance(command, PublishKnowledgeGraphSnapshotCommandV3):
             manifest_value["structure_manifest"] = command.structure_manifest.model_dump(
                 mode="json"
             )
@@ -1114,6 +1317,9 @@ class KnowledgeGraphPublicationService:
             return None
         value = self._read_json_member(pointer, max_bytes=8 * 1024 * 1024)
         try:
+            if pointer.schema_ref.endswith("/4.0"):
+                validate_contract("knowledge-graph-structure-manifest-v4", value)
+                return KnowledgeGraphStructureManifestV4.model_validate(value)
             if pointer.schema_ref.endswith("/3.0"):
                 validate_contract("knowledge-graph-structure-manifest-v3", value)
                 return KnowledgeGraphStructureManifestV3.model_validate(value)
@@ -1201,13 +1407,52 @@ class KnowledgeGraphPublicationService:
                     "Item element identity or answer-bearing classification differs",
                 )
 
+    @staticmethod
+    def _snapshot_ancestor_ids(
+        session: Session, current_snapshot_revision_id: str
+    ) -> frozenset[str]:
+        """Validate and return one bounded immutable Graph revision chain."""
+
+        seen: set[str] = set()
+        cursor: str | None = current_snapshot_revision_id
+        graph_id: str | None = None
+        expected_revision_number: int | None = None
+        while cursor is not None:
+            if cursor in seen or len(seen) >= 10000:
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_ANCESTRY_INVALID",
+                    "Graph snapshot ancestry is cyclic or exceeds the publication bound",
+                )
+            snapshot = session.get(KnowledgeGraphSnapshotRecord, cursor)
+            if (
+                snapshot is None
+                or snapshot.state != "PUBLISHED"
+                or (graph_id is not None and snapshot.graph_id != graph_id)
+                or (
+                    expected_revision_number is not None
+                    and snapshot.revision_number != expected_revision_number
+                )
+                or (snapshot.revision_number == 1)
+                != (snapshot.previous_graph_snapshot_revision_id is None)
+            ):
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_ANCESTRY_INVALID",
+                    "Graph snapshot ancestry is missing or non-contiguous",
+                )
+            graph_id = snapshot.graph_id
+            expected_revision_number = snapshot.revision_number - 1
+            seen.add(cursor)
+            cursor = snapshot.previous_graph_snapshot_revision_id
+        return frozenset(seen)
+
     def _validate_approved_item_curriculum_bindings(
         self,
         session: Session,
-        structure: KnowledgeGraphStructureManifestV3,
+        structure: KnowledgeGraphStructureManifestV3 | KnowledgeGraphStructureManifestV4,
         analyses: tuple[AcceptedAnalysisProposal, ...],
         *,
         expected_snapshot_revision_id: str | None,
+        ancestor_snapshot_ids: frozenset[str],
     ) -> None:
         """Resolve every reviewed Item alignment through its immutable evidence pointers."""
 
@@ -1223,10 +1468,21 @@ class KnowledgeGraphPublicationService:
             if isinstance(analysis.source, ApprovedItemKnowledgeSourceV2)
         }
         bindings = structure.approved_item_curriculum_bindings
-        if {binding.analysis_run_id for binding in bindings} != expected_item_runs:
+        reviewed_run_ids = {binding.analysis_run_id for binding in bindings}
+        if (
+            reviewed_run_ids.union(
+                binding.analysis_run_id
+                for binding in (
+                    structure.automatic_item_curriculum_bindings
+                    if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                    else ()
+                )
+            )
+            != expected_item_runs
+        ):
             raise KnowledgeGraphPublicationError(
                 "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_COVERAGE_INVALID",
-                "approved Item alignments must exactly cover accepted Item source runs",
+                "reviewed and automatic Item alignments must cover Item source runs exactly",
             )
         for binding in bindings:
             analysis = analysis_by_id[binding.analysis_run_id]
@@ -1239,7 +1495,7 @@ class KnowledgeGraphPublicationService:
                 or source.item_id != binding.item_id
                 or source.item_revision_id != binding.item_revision_id
                 or analysis.accepted_result != binding.accepted_result
-                or binding.prior_graph_snapshot_revision_id != expected_snapshot_revision_id
+                or binding.prior_graph_snapshot_revision_id not in ancestor_snapshot_ids
             ):
                 raise KnowledgeGraphPublicationError(
                     "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_SOURCE_INVALID",
@@ -1267,12 +1523,12 @@ class KnowledgeGraphPublicationService:
                 or bundle.retrieval_request_id != binding.retrieval_request_id
                 or revision.evidence_bundle_id != binding.evidence_bundle_id
                 or revision.retrieval_request_id != binding.retrieval_request_id
-                or revision.graph_snapshot_revision_id != expected_snapshot_revision_id
+                or revision.graph_snapshot_revision_id != binding.prior_graph_snapshot_revision_id
                 or revision.state != "PUBLISHED"
                 or revision.manifest_artifact_id != manifest.artifact_id
                 or revision.manifest_artifact_revision_id != manifest.artifact_revision_id
                 or request.request_sha256 != binding.retrieval_request_sha256
-                or request.graph_snapshot_revision_id != expected_snapshot_revision_id
+                or request.graph_snapshot_revision_id != binding.prior_graph_snapshot_revision_id
                 or request.state != "PUBLISHED"
                 or not entries
             ):
@@ -1309,7 +1565,7 @@ class KnowledgeGraphPublicationService:
                 or evidence_manifest.retrieval_request_id != binding.retrieval_request_id
                 or evidence_manifest.retrieval_request_sha256 != binding.retrieval_request_sha256
                 or evidence_manifest.graph_snapshot.graph_snapshot_revision_id
-                != expected_snapshot_revision_id
+                != binding.prior_graph_snapshot_revision_id
                 or {entry.evidence_id for entry in evidence_manifest.entries}
                 != {entry.evidence_id for entry in entries}
             ):
@@ -1327,7 +1583,7 @@ class KnowledgeGraphPublicationService:
                 session.scalars(
                     select(KnowledgeNodeRecord.node_id).where(
                         KnowledgeNodeRecord.graph_snapshot_revision_id
-                        == expected_snapshot_revision_id,
+                        == binding.prior_graph_snapshot_revision_id,
                         KnowledgeNodeRecord.node_id.in_(binding.evidence_node_ids),
                     )
                 )
@@ -1336,7 +1592,7 @@ class KnowledgeGraphPublicationService:
                 session.scalars(
                     select(CurriculumUnitRecord).where(
                         CurriculumUnitRecord.graph_snapshot_revision_id
-                        == expected_snapshot_revision_id,
+                        == binding.prior_graph_snapshot_revision_id,
                         CurriculumUnitRecord.curriculum_unit_id.in_(binding.curriculum_unit_ids),
                     )
                 )
@@ -1358,7 +1614,7 @@ class KnowledgeGraphPublicationService:
                     select(KnowledgeEdgeRecord.from_node_id, KnowledgeEdgeRecord.to_node_id)
                     .where(
                         KnowledgeEdgeRecord.graph_snapshot_revision_id
-                        == expected_snapshot_revision_id,
+                        == binding.prior_graph_snapshot_revision_id,
                         (
                             KnowledgeEdgeRecord.from_node_id.in_(frontier)
                             | KnowledgeEdgeRecord.to_node_id.in_(frontier)
@@ -1379,6 +1635,284 @@ class KnowledgeGraphPublicationService:
                 raise KnowledgeGraphPublicationError(
                     "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_UNSUPPORTED",
                     "reviewed curriculum unit lacks a bounded path from pinned Graph RAG evidence",
+                )
+
+    def _validate_automatic_item_curriculum_bindings(
+        self,
+        session: Session,
+        structure: KnowledgeGraphStructureManifestV4,
+        analyses: tuple[AcceptedAnalysisProposal, ...],
+        *,
+        expected_snapshot_revision_id: str | None,
+        ancestor_snapshot_ids: frozenset[str],
+    ) -> None:
+        """Recompute every policy-derived Item alignment from its immutable evidence."""
+
+        if expected_snapshot_revision_id is None:
+            raise KnowledgeGraphPublicationError(
+                "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_PRIOR_MISSING",
+                "automatic Item alignment requires a prior Graph snapshot",
+            )
+        analysis_by_id = {analysis.analysis_run_id: analysis for analysis in analyses}
+        for binding in structure.automatic_item_curriculum_bindings:
+            analysis = analysis_by_id.get(binding.analysis_run_id)
+            source = analysis.source if analysis is not None else None
+            requester = session.get(OperatorRecord, binding.requested_by_operator_id)
+            if (
+                analysis is None
+                or not isinstance(source, ApprovedItemKnowledgeSourceV2)
+                or requester is None
+                or requester.status != "ACTIVE"
+                or source.item_id != binding.item_id
+                or source.item_revision_id != binding.item_revision_id
+                or analysis.accepted_result != binding.accepted_result
+                or binding.prior_graph_snapshot_revision_id not in ancestor_snapshot_ids
+                or binding.alignment_policy_version != AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
+                or binding.alignment_policy_sha256 != AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256
+            ):
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_AUTOMATIC_ALIGNMENT_SOURCE_INVALID",
+                    "automatic Item alignment differs from its accepted source or policy",
+                )
+            bundle = session.get(EvidenceBundleRecord, binding.evidence_bundle_id)
+            revision = session.get(
+                EvidenceBundleRevisionRecord, binding.evidence_bundle_revision_id
+            )
+            request = session.get(EducationRetrievalRequestRecord, binding.retrieval_request_id)
+            policy = (
+                session.get(
+                    EducationRetrievalAccessPolicyRevisionRecord, request.access_policy_revision_id
+                )
+                if request is not None
+                else None
+            )
+            entries = tuple(
+                session.scalars(
+                    select(EvidenceBundleEntryRecord)
+                    .where(
+                        EvidenceBundleEntryRecord.evidence_bundle_revision_id
+                        == binding.evidence_bundle_revision_id
+                    )
+                    .order_by(EvidenceBundleEntryRecord.evidence_id)
+                )
+            )
+            try:
+                validate_contract(
+                    "education-retrieval-access-policy",
+                    policy.canonical_document if policy is not None else {},
+                )
+                policy_model = EducationRetrievalAccessPolicy.model_validate(
+                    policy.canonical_document if policy is not None else {}
+                )
+                validate_contract(
+                    "education-retrieval-request-v2",
+                    request.canonical_request if request is not None else {},
+                )
+                request_model = EducationRetrievalRequestV2.model_validate(
+                    request.canonical_request if request is not None else {}
+                )
+            except (JsonSchemaValidationError, ValidationError) as exc:
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_AUTOMATIC_ALIGNMENT_EVIDENCE_INVALID",
+                    "automatic alignment retrieval request is invalid",
+                ) from exc
+            requested_budget = request_model.evidence_budget
+            maximum_budget = policy_model.maximum_budget
+            budget_exceeds_policy = any(
+                requested > maximum
+                for requested, maximum in (
+                    (requested_budget.max_documents, maximum_budget.max_documents),
+                    (requested_budget.max_item_revisions, maximum_budget.max_item_revisions),
+                    (requested_budget.max_graph_nodes, maximum_budget.max_graph_nodes),
+                    (requested_budget.max_claims, maximum_budget.max_claims),
+                    (requested_budget.max_context_tokens, maximum_budget.max_context_tokens),
+                )
+            )
+            try:
+                expected_topics = automatic_item_alignment_topic_keys(
+                    (str(node.node_type), node.stable_key) for node in analysis.proposal.nodes
+                )
+            except AutomaticCurriculumAlignmentError as exc:
+                raise KnowledgeGraphPublicationError(exc.code, str(exc)) from exc
+            if (
+                bundle is None
+                or revision is None
+                or request is None
+                or policy is None
+                or policy.state != "RELEASED"
+                or policy.schema_version != "education-retrieval-access-policy/1.0"
+                or policy.content_sha256 != request_model.access_policy_sha256
+                or policy_model.access_policy_revision_id != request_model.access_policy_revision_id
+                or policy_model.content_sha256 != policy.content_sha256
+                or request_model.query_kind not in policy_model.allowed_query_kinds
+                or request_model.requester_role not in policy_model.allowed_requester_roles
+                or not set(request_model.source_classes).issubset(
+                    policy_model.allowed_source_classes
+                )
+                or budget_exceeds_policy
+                or bundle.current_revision_id != binding.evidence_bundle_revision_id
+                or bundle.retrieval_request_id != binding.retrieval_request_id
+                or bundle.created_by_operator_id != binding.requested_by_operator_id
+                or revision.evidence_bundle_id != binding.evidence_bundle_id
+                or revision.retrieval_request_id != binding.retrieval_request_id
+                or revision.graph_snapshot_revision_id != binding.prior_graph_snapshot_revision_id
+                or revision.access_policy_revision_id != request_model.access_policy_revision_id
+                or revision.requester_permissions_sha256
+                != request_model.requester_permissions_sha256
+                or revision.created_by_operator_id != binding.requested_by_operator_id
+                or revision.state != "PUBLISHED"
+                or revision.manifest_artifact_id != binding.evidence_manifest.artifact_id
+                or revision.manifest_artifact_revision_id
+                != binding.evidence_manifest.artifact_revision_id
+                or request.request_sha256 != binding.retrieval_request_sha256
+                or request.state != "PUBLISHED"
+                or request.graph_snapshot_revision_id != binding.prior_graph_snapshot_revision_id
+                or request.access_policy_revision_id != request_model.access_policy_revision_id
+                or request.query_kind != request_model.query_kind
+                or request.requester_role != request_model.requester_role
+                or request.requester_operator_id != request_model.requester_operator_id
+                or request.requester_permissions_sha256
+                != request_model.requester_permissions_sha256
+                or request_model.request_sha256 != binding.retrieval_request_sha256
+                or request_model.graph_snapshot.graph_snapshot_revision_id
+                != binding.prior_graph_snapshot_revision_id
+                or request_model.query_kind != "ITEM_PREPARATION"
+                or request_model.curriculum_scope is not None
+                or request_model.topic_keys != expected_topics
+                or request_model.target_item_revision_id is not None
+                or request_model.required_item_elements
+                or request_model.source_classes != AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES
+                or request_model.evidence_budget.model_dump(mode="json")
+                != AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET
+                or request_model.requester_role != "ADMIN"
+                or request_model.requester_permission_keys
+                != AUTOMATIC_ITEM_ALIGNMENT_PERMISSION_KEYS
+                or request_model.requester_operator_id != binding.requested_by_operator_id
+                or not entries
+            ):
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_AUTOMATIC_ALIGNMENT_EVIDENCE_INVALID",
+                    "automatic Item alignment Evidence Bundle does not resolve exactly",
+                )
+            self._exact_artifact_revision(
+                session,
+                artifact_id=binding.evidence_manifest.artifact_id,
+                revision_id=binding.evidence_manifest.artifact_revision_id,
+                content_hash=binding.evidence_manifest.sha256,
+                logical_artifact_type="evidence-bundle-manifest",
+                manifest_artifact_type="evidence-bundle-manifest",
+                primary_file="evidence/manifest.json",
+            )
+            evidence_manifest_value = self._read_json_member(
+                binding.evidence_manifest,
+                max_bytes=8 * 1024 * 1024,
+            )
+            evidence_manifest: (
+                EvidenceBundleManifestV2 | EvidenceBundleManifestV3 | EvidenceBundleManifestV4
+            )
+            try:
+                if binding.evidence_manifest.schema_ref.endswith("/4.0"):
+                    validate_contract("evidence-bundle-manifest-v4", evidence_manifest_value)
+                    evidence_manifest = EvidenceBundleManifestV4.model_validate(
+                        evidence_manifest_value
+                    )
+                elif binding.evidence_manifest.schema_ref.endswith("/3.0"):
+                    validate_contract("evidence-bundle-manifest-v3", evidence_manifest_value)
+                    evidence_manifest = EvidenceBundleManifestV3.model_validate(
+                        evidence_manifest_value
+                    )
+                else:
+                    validate_contract("evidence-bundle-manifest-v2", evidence_manifest_value)
+                    evidence_manifest = EvidenceBundleManifestV2.model_validate(
+                        evidence_manifest_value
+                    )
+            except (ValidationError, ValueError) as exc:
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_AUTOMATIC_ALIGNMENT_EVIDENCE_INVALID",
+                    "automatic alignment Evidence Bundle manifest is invalid",
+                ) from exc
+            manifest_entries = {
+                entry.evidence_id: cast(Any, entry) for entry in evidence_manifest.entries
+            }
+            rows_match_manifest = len(manifest_entries) == len(entries)
+            for entry_record in entries:
+                manifest_entry = manifest_entries.get(entry_record.evidence_id)
+                source = getattr(manifest_entry, "source", None)
+                member = getattr(source, "artifact_member", None)
+                if (
+                    manifest_entry is None
+                    or entry_record.evidence_kind != manifest_entry.evidence_kind
+                    or entry_record.evidence_use != manifest_entry.use
+                    or entry_record.source_kind != getattr(source, "source_kind", None)
+                    or entry_record.source_class != getattr(source, "source_class", None)
+                    or entry_record.intake_batch_id != getattr(source, "intake_batch_id", None)
+                    or entry_record.source_file_id != getattr(source, "source_file_id", None)
+                    or entry_record.item_id != getattr(source, "item_id", None)
+                    or entry_record.item_revision_id != getattr(source, "item_revision_id", None)
+                    or entry_record.educational_document_id != getattr(source, "document_id", None)
+                    or entry_record.educational_document_revision_id
+                    != getattr(source, "document_revision_id", None)
+                    or entry_record.source_artifact_id != getattr(member, "artifact_id", None)
+                    or entry_record.source_artifact_revision_id
+                    != getattr(member, "artifact_revision_id", None)
+                    or entry_record.source_member_path != getattr(member, "member_path", None)
+                    or entry_record.source_sha256 != getattr(member, "sha256", None)
+                    or entry_record.source_bytes != getattr(member, "bytes", None)
+                    or entry_record.source_schema_ref != getattr(member, "schema_ref", None)
+                    or entry_record.source_media_type != getattr(member, "media_type", None)
+                    or entry_record.source_logical_name != getattr(member, "logical_name", None)
+                    or tuple(entry_record.graph_node_ids) != manifest_entry.graph_node_ids
+                    or tuple(entry_record.anchor_ids) != manifest_entry.anchor_ids
+                    or entry_record.relevance_milli != manifest_entry.relevance_milli
+                    or entry_record.answer_bearing != manifest_entry.answer_bearing
+                ):
+                    rows_match_manifest = False
+                    break
+            evidence_node_ids = tuple(
+                sorted({node_id for entry in entries for node_id in entry.graph_node_ids})
+            )
+            if (
+                revision.manifest_sha256 != evidence_manifest.manifest_sha256
+                or evidence_manifest.evidence_bundle_id != binding.evidence_bundle_id
+                or evidence_manifest.evidence_bundle_revision_id
+                != binding.evidence_bundle_revision_id
+                or evidence_manifest.retrieval_request_id != binding.retrieval_request_id
+                or evidence_manifest.retrieval_request_sha256 != binding.retrieval_request_sha256
+                or evidence_manifest.graph_snapshot.graph_snapshot_revision_id
+                != binding.prior_graph_snapshot_revision_id
+                or evidence_manifest.access_policy_revision_id
+                != request_model.access_policy_revision_id
+                or evidence_manifest.access_policy_sha256 != request_model.access_policy_sha256
+                or evidence_manifest.requester_permissions_sha256
+                != request_model.requester_permissions_sha256
+                or evidence_manifest.revision_number != revision.revision_number
+                or evidence_manifest.budget.document_count != revision.document_count
+                or evidence_manifest.budget.item_revision_count != revision.item_revision_count
+                or evidence_manifest.budget.graph_node_count != revision.graph_node_count
+                or evidence_manifest.budget.claim_count != revision.claim_count
+                or evidence_manifest.budget.estimated_context_tokens
+                != revision.estimated_context_tokens
+                or not rows_match_manifest
+                or {entry.evidence_id for entry in evidence_manifest.entries}
+                != {entry.evidence_id for entry in entries}
+                or binding.evidence_node_ids != evidence_node_ids
+            ):
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_AUTOMATIC_ALIGNMENT_EVIDENCE_INVALID",
+                    "automatic alignment Evidence Bundle differs from its records",
+                )
+            try:
+                expected_units = derive_automatic_item_curriculum_unit_ids(
+                    session,
+                    graph_snapshot_revision_id=binding.prior_graph_snapshot_revision_id,
+                    evidence_node_ids=evidence_node_ids,
+                )
+            except AutomaticCurriculumAlignmentError as exc:
+                raise KnowledgeGraphPublicationError(exc.code, str(exc)) from exc
+            if binding.curriculum_unit_ids != expected_units:
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_AUTOMATIC_ALIGNMENT_TARGET_INVALID",
+                    "automatic curriculum units differ from the pinned policy result",
                 )
 
     @staticmethod
@@ -1442,21 +1976,37 @@ class KnowledgeGraphPublicationService:
                     file_metadata=files.metadata,
                     manifest_version="knowledge-graph-projection-file-set/1.0",
                     protocol_version=(
-                        KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
-                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV2)
+                        KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
+                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4)
                         else (
-                            KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL
-                            if document_projection
-                            else KNOWLEDGE_GRAPH_CATALOG_PROTOCOL
+                            KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
+                            if isinstance(command, PublishKnowledgeGraphSnapshotCommandV3)
+                            else (
+                                KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
+                                if isinstance(command, PublishKnowledgeGraphSnapshotCommandV2)
+                                else (
+                                    KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL
+                                    if document_projection
+                                    else KNOWLEDGE_GRAPH_CATALOG_PROTOCOL
+                                )
+                            )
                         )
                     ),
                     protocol_schema_hash=(
-                        KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
-                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV2)
+                        KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
+                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4)
                         else (
-                            KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH
-                            if document_projection
-                            else KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH
+                            KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
+                            if isinstance(command, PublishKnowledgeGraphSnapshotCommandV3)
+                            else (
+                                KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
+                                if isinstance(command, PublishKnowledgeGraphSnapshotCommandV2)
+                                else (
+                                    KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH
+                                    if document_projection
+                                    else KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH
+                                )
+                            )
                         )
                     ),
                 )
@@ -1520,7 +2070,11 @@ class KnowledgeGraphPublicationService:
                 source = Path(raw_directory) / "manifest.json"
                 source.write_bytes(canonical_json_bytes(manifest))
                 source.chmod(0o640)
-                if isinstance(manifest, KnowledgeGraphSnapshotManifestV6):
+                if isinstance(manifest, KnowledgeGraphSnapshotManifestV7):
+                    schema_ref = "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0"
+                    protocol_version = KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
+                    protocol_schema_hash = KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
+                elif isinstance(manifest, KnowledgeGraphSnapshotManifestV6):
                     schema_ref = "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/6.0"
                     protocol_version = KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
                     protocol_schema_hash = KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
