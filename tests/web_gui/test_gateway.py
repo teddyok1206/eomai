@@ -180,7 +180,49 @@ async def test_gateway_control_plane_preserves_etag_idempotency_and_no_credentia
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if request.url.path == "/api/v1/codex-accounts":
-            return httpx.Response(200, json=_list([]))
+            return httpx.Response(
+                200,
+                json=_list(
+                    [
+                        {
+                            "binding_id": "authbinding_" + "2" * 32,
+                            "slot_key": "slot01",
+                            "account_label": "teacher-account-01",
+                            "state": "READY",
+                            "reason_code": None,
+                            "codex_cli_version": "0.147.0",
+                            "observed_at": "2026-08-27T12:00:00Z",
+                            "valid_until": "2026-08-27T13:00:00Z",
+                            "resource_version": 7,
+                            "capabilities": [
+                                {
+                                    "model": "gpt-5.6-terra",
+                                    "reasoning_effort": "high",
+                                    "state": "READY",
+                                }
+                            ],
+                            "active_lease_count": 0,
+                            "last_successful_job_id": None,
+                            "active_auth_enrollment_id": None,
+                            "active_auth_enrollment_state": None,
+                            "usage_observation": {
+                                "plan_type": "pro",
+                                "observed_at": "2026-08-27T12:00:01Z",
+                                "windows": [
+                                    {
+                                        "limit_id": "codex",
+                                        "limit_name": None,
+                                        "window_kind": "PRIMARY",
+                                        "used_percent": 51,
+                                        "window_duration_minutes": 10080,
+                                        "resets_at": "2026-09-03T12:00:00Z",
+                                    }
+                                ],
+                            },
+                        }
+                    ]
+                ),
+            )
         if request.url.path.endswith("/reauthentications"):
             assert request.headers["if-match"] == '"v7"'
             assert request.headers["idempotency-key"] == "stable-reauth-key-0001"
@@ -254,6 +296,37 @@ async def test_gateway_control_plane_preserves_etag_idempotency_and_no_credentia
                     }
                 ),
             )
+        if request.url.path == "/api/v1/codex-control-commands/codexcmd_" + "1" * 32:
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "command_id": "codexcmd_" + "1" * 32,
+                        "command_type": "OBSERVE",
+                        "binding_id": "authbinding_" + "2" * 32,
+                        "state": "SUCCEEDED",
+                        "attempts": 1,
+                        "result_resource_version": 8,
+                        "error_code": None,
+                        "requested_at": "2026-08-27T12:00:00Z",
+                        "processed_at": "2026-08-27T12:00:02Z",
+                        "usage_observation": {
+                            "plan_type": "pro",
+                            "observed_at": "2026-08-27T12:00:01Z",
+                            "windows": [
+                                {
+                                    "limit_id": "codex",
+                                    "limit_name": None,
+                                    "window_kind": "PRIMARY",
+                                    "used_percent": 51,
+                                    "window_duration_minutes": 10080,
+                                    "resets_at": "2026-09-03T12:00:00Z",
+                                }
+                            ],
+                        },
+                    }
+                ),
+            )
         raise AssertionError(request.url.path)
 
     gateway = HttpApplicationGateway(
@@ -263,7 +336,10 @@ async def test_gateway_control_plane_preserves_etag_idempotency_and_no_credentia
         observability_access_token=None,
         transport=httpx.MockTransport(handler),
     )
-    assert await gateway.codex_accounts(_session()) == ()
+    accounts = await gateway.codex_accounts(_session())
+    assert accounts[0]["capabilities"][0]["model"] == "gpt-5.6-terra"
+    assert accounts[0]["usage_observation"]["plan_type"] == "pro"
+    assert accounts[0]["usage_observation"]["windows"][0]["used_percent"] == 51
     result = await gateway.codex_account_command(
         _session(),
         "authbinding_" + "2" * 32,
@@ -273,6 +349,8 @@ async def test_gateway_control_plane_preserves_etag_idempotency_and_no_credentia
         idempotency_key="stable-control-key-0001",
     )
     assert result["status"] == "ACCEPTED"
+    control_status = await gateway.codex_control_command(_session(), "codexcmd_" + "1" * 32)
+    assert control_status["usage_observation"]["windows"][0]["used_percent"] == 51
     enrollment = await gateway.start_codex_auth_enrollment(
         _session(),
         "authbinding_" + "2" * 32,
@@ -285,7 +363,7 @@ async def test_gateway_control_plane_preserves_etag_idempotency_and_no_credentia
     assert status.challenge_available is True
     challenge = await gateway.reveal_codex_auth_challenge(_session(), "authflow_" + "3" * 32)
     assert challenge.user_code == "ABC1-DEF2"
-    assert len(requests) == 5
+    assert len(requests) == 6
     await gateway.close()
 
 

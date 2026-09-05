@@ -395,6 +395,66 @@ class CodexAccountAdminCommand(WebModel):
         return self
 
 
+class CodexCapabilityStatusView(WebModel):
+    model: str = Field(min_length=1, max_length=128)
+    reasoning_effort: str = Field(min_length=1, max_length=64)
+    state: str = Field(min_length=1, max_length=64)
+
+
+class CodexUsageWindowStatusView(WebModel):
+    limit_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    limit_name: str | None = Field(default=None, min_length=1, max_length=128)
+    window_kind: Literal["PRIMARY", "SECONDARY"]
+    used_percent: int = Field(ge=0, le=100)
+    window_duration_minutes: int | None = Field(default=None, ge=1, le=525_600)
+    resets_at: UtcDatetime | None
+
+
+class CodexUsageStatusView(WebModel):
+    plan_type: str = Field(min_length=1, max_length=64)
+    windows: tuple[CodexUsageWindowStatusView, ...] = Field(min_length=1, max_length=32)
+    observed_at: UtcDatetime
+
+
+class CodexAccountStatusView(WebModel):
+    """Credential-free account projection accepted from the Application API."""
+
+    binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
+    slot_key: str = Field(pattern=r"^slot0[1-6]$")
+    account_label: str = Field(min_length=1, max_length=64)
+    state: str = Field(min_length=1, max_length=64)
+    reason_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    codex_cli_version: str | None = Field(default=None, min_length=1, max_length=64)
+    observed_at: UtcDatetime | None
+    valid_until: UtcDatetime | None
+    resource_version: int = Field(ge=1)
+    capabilities: tuple[CodexCapabilityStatusView, ...] = Field(max_length=128)
+    active_lease_count: int = Field(ge=0)
+    last_successful_job_id: str | None = Field(default=None, pattern=r"^job_[0-9a-f]{32}$")
+    active_auth_enrollment_id: str | None = Field(default=None, pattern=r"^authflow_[0-9a-f]{32}$")
+    active_auth_enrollment_state: str | None = Field(default=None, min_length=1, max_length=64)
+    usage_observation: CodexUsageStatusView | None = None
+
+    @model_validator(mode="after")
+    def coherent_active_enrollment(self) -> CodexAccountStatusView:
+        if (self.active_auth_enrollment_id is None) != (self.active_auth_enrollment_state is None):
+            raise ValueError("active auth enrollment identity and state must be paired")
+        return self
+
+
+class CodexControlCommandStatusView(WebModel):
+    command_id: str = Field(pattern=r"^codexcmd_[0-9a-f]{32}$")
+    command_type: Literal["OBSERVE", "ENABLE", "DRAIN", "DISABLE"]
+    binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
+    state: str = Field(min_length=1, max_length=64)
+    attempts: int = Field(ge=0, le=3)
+    result_resource_version: int | None = Field(default=None, ge=1)
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    requested_at: UtcDatetime
+    processed_at: UtcDatetime | None
+    usage_observation: CodexUsageStatusView | None = None
+
+
 class CodexAuthEnrollmentStart(WebModel):
     requested_account_label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
     acknowledge_drain: Literal[True]

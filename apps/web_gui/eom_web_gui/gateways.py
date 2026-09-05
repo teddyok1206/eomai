@@ -11,7 +11,9 @@ from typing import Any, Protocol
 import httpx
 
 from eom_web_gui.contracts import (
+    CodexAccountStatusView,
     CodexAuthEnrollmentStatusView,
+    CodexControlCommandStatusView,
     CodexDeviceChallengeView,
     ContentIntakeOption,
     ContentIntakeSourcePointer,
@@ -580,7 +582,7 @@ class HttpApplicationGateway:
 
     async def codex_accounts(self, session: WebSession) -> tuple[dict[str, Any], ...]:
         response = await self._authorized(session, "GET", "/api/v1/codex-accounts")
-        return tuple(sanitize_mapping(item) for item in self._list_data(response))
+        return tuple(_codex_account(item) for item in self._list_data(response))
 
     async def knowledge_analysis_batches(
         self, session: WebSession
@@ -700,7 +702,7 @@ class HttpApplicationGateway:
         response = await self._authorized(
             session, "GET", f"/api/v1/codex-control-commands/{command_id}"
         )
-        return sanitize_mapping(self._data(response))
+        return _codex_control_command(self._data(response))
 
     async def start_codex_auth_enrollment(
         self,
@@ -1526,6 +1528,20 @@ def _operator_view(value: dict[str, Any]) -> dict[str, Any]:
     result["roles"] = roles
     result["effective_permissions"] = permissions
     return result
+
+
+def _codex_account(value: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return CodexAccountStatusView.model_validate(value).model_dump(mode="json")
+    except ValueError as exc:
+        raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+
+def _codex_control_command(value: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return CodexControlCommandStatusView.model_validate(value).model_dump(mode="json")
+    except ValueError as exc:
+        raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
 
 def _require_id(value: str, prefix: str) -> None:
