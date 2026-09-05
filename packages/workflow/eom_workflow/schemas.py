@@ -22,6 +22,7 @@ from eom_hwpx_contracts import (
     derive_content_team_equation_sources,
     normalize_content_team_bottom_stem,
     normalize_content_team_inline_math,
+    normalize_content_team_labeled_block_content,
     normalize_content_team_stem,
     serialize_content_team_markdown,
 )
@@ -600,6 +601,11 @@ def _canonicalize_content_team_authoring_result(value: object) -> object:
     for key, item in tuple(canonical_draft.items()):
         if key != "equation_sources":
             canonical_draft[key] = _normalize_content_team_math_values(item)
+    labeled_blocks = canonical_draft.get("labeled_blocks")
+    if isinstance(labeled_blocks, list):
+        for block in labeled_blocks:
+            if isinstance(block, dict) and isinstance(block.get("content"), str):
+                block["content"] = normalize_content_team_labeled_block_content(block["content"])
     item_number = canonical_draft.get("item_number")
     stem = canonical_draft.get("stem")
     if isinstance(item_number, int) and isinstance(stem, str):

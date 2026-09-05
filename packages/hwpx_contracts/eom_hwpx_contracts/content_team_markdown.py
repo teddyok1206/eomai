@@ -131,6 +131,13 @@ def normalize_content_team_inline_math(value: str) -> str:
     )
 
 
+def normalize_content_team_labeled_block_content(value: str) -> str:
+    """Project labeled-block paragraphs onto the handoff program's line model."""
+
+    normalized = unicodedata.normalize("NFC", value.replace("\r\n", "\n").replace("\r", "\n"))
+    return "\n".join(line.rstrip() for line in normalized.splitlines() if line.strip()).strip()
+
+
 def _fail(message: str) -> NoReturn:
     raise ContentTeamMarkdownError(message)
 

@@ -10,6 +10,10 @@ The workflow protocol boundary canonicalizes only source spellings that the pinn
 Markdown/HWPX program cannot represent. It joins an ASCII unit or symbol to an immediately adjacent
 subscript/superscript math span and renders a pure numeric coordinate pair as ordinary visible text.
 The Markdown parser also preserves every paragraph inside a labeled data or condition block.
+At the final HWPX adapter boundary, blank paragraph separators inside those blocks become ordinary
+line separators because the pinned handoff program models each line as a prototype paragraph but
+ends a labeled block at a blank line. Historical immutable revisions receive the same deterministic
+materialization projection without changing their stored bytes.
 Workers still return the versioned authoring result; the orchestrator remains the only artifact
 committer and the HWPX adapter remains downstream infrastructure.
 

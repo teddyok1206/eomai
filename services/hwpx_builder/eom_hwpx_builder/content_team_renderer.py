@@ -16,6 +16,7 @@ from eom_hwpx_contracts import (
     ContentTeamBuildResult,
     ContentTeamEditorialDraft,
     ContentTeamRenderRequest,
+    normalize_content_team_labeled_block_content,
     parse_content_team_markdown,
     serialize_content_team_markdown,
     validate_contract,
@@ -298,6 +299,11 @@ def _external_render(
     output: Path,
     draft: ContentTeamEditorialDraft,
 ) -> dict[str, Any]:
+    handoff_value = draft.model_dump(mode="json")
+    for block in handoff_value["labeled_blocks"]:
+        block["content"] = normalize_content_team_labeled_block_content(block["content"])
+    handoff_draft = ContentTeamEditorialDraft.model_validate(handoff_value)
+    handoff_markdown = serialize_content_team_markdown(handoff_draft)
     source_root = runtime / "src"
     sys.path.insert(0, str(source_root))
     try:
@@ -306,8 +312,8 @@ def _external_render(
         engine_module = importlib.import_module("hwp_question_editor.services.hwpx_template_engine")
         validator_module = importlib.import_module("hwp_question_editor.services.hwpx_validator")
         question = parser_module.QuestionParser().parse(
-            markdown.decode("utf-8"),
-            question_name=f"item-{draft.item_number}",
+            handoff_markdown.decode("utf-8"),
+            question_name=f"item-{handoff_draft.item_number}",
         )
         equation_report = equation_module.EquationPreflight().assert_supported(question)
         dynamic_validator_module: Any = validator_module
@@ -332,6 +338,8 @@ def _external_render(
             "labeled_block_count": len(draft.labeled_blocks),
             "inquiry": draft.inquiry is not None,
             "visual_layout": draft.visual_layout,
+            "handoff_projection_applied": handoff_markdown != markdown,
+            "handoff_projection_sha256": sha256_bytes(handoff_markdown),
         }
     except Exception as exc:
         raise HwpxError(

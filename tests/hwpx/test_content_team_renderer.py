@@ -57,6 +57,17 @@ def _sha256(value: bytes) -> str:
             2,
             id="intentional-solution-reference-is-not-template-residue",
         ),
+        pytest.param(
+            LABELED_BLOCK_ITEM.replace(
+                "관측 과정에서 외부 조건은 일정하였다.",
+                "관측 과정에서 외부 조건은 일정하였다.\n\n추가 조건도 일정하였다.",
+                1,
+            ),
+            0,
+            0,
+            2,
+            id="labeled-block-blank-paragraph-projection",
+        ),
     ],
 )
 def test_reviewed_handoff_renders_v2_item_with_dynamic_program_layout(

@@ -26,6 +26,7 @@ from eom_hwpx_contracts import (
     derive_content_team_equation_sources,
     normalize_content_team_bottom_stem,
     normalize_content_team_inline_math,
+    normalize_content_team_labeled_block_content,
     normalize_content_team_stem,
 )
 from eom_hwpx_contracts.content_team_markdown import (
@@ -400,9 +401,22 @@ def test_content_team_labeled_block_preserves_multiple_paragraphs() -> None:
     reparsed = parse_content_team_markdown(serialize_content_team_markdown(draft))
 
     assert reparsed.labeled_blocks[0].content == block_content
+    assert normalize_content_team_labeled_block_content(block_content) == (
+        "첫 문단의 조건이다.\n둘째 문단의 조건이다."
+    )
 
 
 def test_v7_authoring_canonicalizes_equation_boundaries_and_rebuilds_the_index() -> None:
+    draft = _content(
+        stem="가속도 단위는 m/s$^{2}$이고 좌표는 $(15,-10)$이다.",
+        equations=("^{2}", "(15,-10)"),
+    ).model_dump(mode="json")
+    draft["labeled_blocks"] = [
+        {
+            "kind": "CONDITION",
+            "content": "첫 문단의 조건이다.\n\n둘째 문단의 조건이다.",
+        }
+    ]
     result = ContentTeamAuthoringRoleResultV7(
         job_id="job_" + "1" * 32,
         workflow_id="workflow_" + "2" * 32,
@@ -414,10 +428,7 @@ def test_v7_authoring_canonicalizes_equation_boundaries_and_rebuilds_the_index()
         ),
         completed_at=datetime(2026, 9, 3, tzinfo=UTC),
         output={
-            "draft": _content(
-                stem="가속도 단위는 m/s$^{2}$이고 좌표는 $(15,-10)$이다.",
-                equations=("^{2}", "(15,-10)"),
-            ),
+            "draft": draft,
             "metadata": {
                 "subject": "통합과학",
                 "topic": "요청으로 정해지는 주제",
@@ -434,6 +445,9 @@ def test_v7_authoring_canonicalizes_equation_boundaries_and_rebuilds_the_index()
     assert isinstance(parsed, ContentTeamAuthoringRoleResultV7)
     assert parsed.output.draft.stem == ("가속도 단위는 $m/s^{2}$이고 좌표는 (15, -10)이다.")
     assert parsed.output.draft.equation_sources == ("m/s^{2}",)
+    assert parsed.output.draft.labeled_blocks[0].content == (
+        "첫 문단의 조건이다.\n둘째 문단의 조건이다."
+    )
     serialize_content_team_markdown(parsed.output.draft)
 
 
