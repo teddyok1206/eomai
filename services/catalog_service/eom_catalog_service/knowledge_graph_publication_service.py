@@ -97,9 +97,9 @@ from eom_catalog_service.curriculum_graph_structure import (
 from eom_catalog_service.knowledge_analysis_sources import (
     EducationalDocumentSourceResolutionCache,
     KnowledgeAnalysisSourceError,
-    resolve_approved_item_source,
     resolve_content_intake_source,
     resolve_educational_document_source,
+    resolve_historically_approved_item_source,
 )
 from eom_catalog_service.knowledge_graph_models import (
     CurriculumUnitClosureRecord,
@@ -1185,7 +1185,7 @@ class KnowledgeGraphPublicationService:
                 source_class=source.source_class,
             )
         if isinstance(source, ApprovedItemKnowledgeSourceV2):
-            return resolve_approved_item_source(
+            return resolve_historically_approved_item_source(
                 session,
                 item_revision_id=source.item_revision_id,
                 source_class=source.source_class,

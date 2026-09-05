@@ -8,6 +8,7 @@ from eom_catalog_service.knowledge_analysis_sources import (
     KnowledgeAnalysisSourceError,
     resolve_approved_item_source,
     resolve_content_intake_source,
+    resolve_historically_approved_item_source,
 )
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
@@ -201,3 +202,86 @@ def test_approved_historical_item_revision_resolves_without_implicit_latest_look
     assert source.item_revision_id == ITEM_REVISION_ID
     assert source.artifact_member.artifact_revision_id == REVISION_ID
     assert source.artifact_member.materialized_path == "source/item-content.json"
+
+
+def test_published_analysis_re_resolves_its_exact_superseded_item_revision() -> None:
+    content_bytes = 512
+    component = SimpleNamespace(
+        required=True,
+        media_type="application/json",
+        schema_ref="eom.assessment.item-content/1.0",
+        artifact_id=ARTIFACT_ID,
+        artifact_revision_id=REVISION_ID,
+        logical_name="assessment-item-content.json",
+        sha256=SOURCE_SHA256,
+    )
+    session = cast(
+        Session,
+        _FakeSession(
+            {
+                (ItemRevisionRecord, ITEM_REVISION_ID): SimpleNamespace(
+                    revision_state="SUPERSEDED",
+                    item_id=ITEM_ID,
+                    approved_at=object(),
+                    approved_by="operator_approver",
+                    superseded_at=object(),
+                    superseded_by_revision_id="itemrev_" + "8" * 32,
+                ),
+                (ArtifactRecord, ARTIFACT_ID): SimpleNamespace(approved=True),
+                (ArtifactRevisionRecord, REVISION_ID): SimpleNamespace(
+                    approved=True,
+                    logical_artifact_id=ARTIFACT_ID,
+                    content_bytes=content_bytes,
+                    manifest={
+                        "files": [
+                            {
+                                "file_name": component.logical_name,
+                                "sha256": SOURCE_SHA256,
+                                "bytes": content_bytes,
+                                "media_type": component.media_type,
+                                "schema_ref": component.schema_ref,
+                            }
+                        ]
+                    },
+                ),
+            },
+            scalar_rows=(component,),
+        ),
+    )
+
+    source = resolve_historically_approved_item_source(
+        session,
+        item_revision_id=ITEM_REVISION_ID,
+        source_class="PAST_EXAM",
+    )
+
+    assert source.item_id == ITEM_ID
+    assert source.item_revision_id == ITEM_REVISION_ID
+    assert source.artifact_member.sha256 == SOURCE_SHA256
+
+
+def test_new_analysis_does_not_accept_a_superseded_item_revision() -> None:
+    session = cast(
+        Session,
+        _FakeSession(
+            {
+                (ItemRevisionRecord, ITEM_REVISION_ID): SimpleNamespace(
+                    revision_state="SUPERSEDED",
+                    item_id=ITEM_ID,
+                    approved_at=object(),
+                    approved_by="operator_approver",
+                    superseded_at=object(),
+                    superseded_by_revision_id="itemrev_" + "8" * 32,
+                ),
+            }
+        ),
+    )
+
+    with pytest.raises(KnowledgeAnalysisSourceError) as caught:
+        resolve_approved_item_source(
+            session,
+            item_revision_id=ITEM_REVISION_ID,
+            source_class="PAST_EXAM",
+        )
+
+    assert caught.value.code == "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE"

@@ -168,21 +168,39 @@ def resolve_content_intake_source(
         ) from exc
 
 
-def resolve_approved_item_source(
+def _resolve_item_source(
     session: Session,
     *,
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
+    eligible_revision_states: frozenset[str],
 ) -> ApprovedItemKnowledgeSourceV2:
     revision = session.get(ItemRevisionRecord, item_revision_id)
     if revision is None:
         raise KnowledgeAnalysisSourceError(
             "KNOWLEDGE_ANALYSIS_SOURCE_MISSING", "Item Revision source does not exist"
         )
-    if revision.revision_state != "APPROVED":
+    if revision.revision_state not in eligible_revision_states:
         raise KnowledgeAnalysisSourceError(
             "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
             "Item Revision source is not approved",
+        )
+    if revision.revision_state == "SUPERSEDED" and (
+        revision.approved_at is None
+        or revision.approved_by is None
+        or revision.superseded_at is None
+        or revision.superseded_by_revision_id is None
+    ):
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
+            "superseded Item Revision has incomplete approval history",
+        )
+    if revision.revision_state == "RETIRED" and (
+        revision.approved_at is None or revision.approved_by is None
+    ):
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
+            "retired Item Revision has incomplete approval history",
         )
     components = tuple(
         session.scalars(
@@ -248,6 +266,38 @@ def resolve_approved_item_source(
         raise KnowledgeAnalysisSourceError(
             "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE", "Item Revision source contract is invalid"
         ) from exc
+
+
+def resolve_approved_item_source(
+    session: Session,
+    *,
+    item_revision_id: str,
+    source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
+) -> ApprovedItemKnowledgeSourceV2:
+    """Resolve a currently approved Item Revision for a new analysis request."""
+
+    return _resolve_item_source(
+        session,
+        item_revision_id=item_revision_id,
+        source_class=source_class,
+        eligible_revision_states=frozenset({"APPROVED"}),
+    )
+
+
+def resolve_historically_approved_item_source(
+    session: Session,
+    *,
+    item_revision_id: str,
+    source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
+) -> ApprovedItemKnowledgeSourceV2:
+    """Re-resolve an immutable published source without substituting its current revision."""
+
+    return _resolve_item_source(
+        session,
+        item_revision_id=item_revision_id,
+        source_class=source_class,
+        eligible_revision_states=frozenset({"APPROVED", "SUPERSEDED", "RETIRED"}),
+    )
 
 
 def resolve_educational_document_source(

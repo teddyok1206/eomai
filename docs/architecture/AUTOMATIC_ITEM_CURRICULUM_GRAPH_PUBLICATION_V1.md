@@ -15,6 +15,14 @@ Each publication appends accepted analysis run IDs and creates a new immutable s
 revision and Graph snapshot revision. Logical corpus identity, snapshot revision, Artifact revision,
 and content hash remain separate.
 
+An accepted analysis and a published Graph snapshot pin the exact Item Revision they originally
+validated. A later Item Revision may supersede or retire that source revision; incremental Graph
+publication therefore re-resolves the pinned historical revision and its exact component Artifact
+and hash instead of requiring it to remain current or silently substituting the latest revision.
+New analyses still require a currently `APPROVED` Item Revision. Historical replay accepts only the
+terminal `APPROVED`, `SUPERSEDED`, or `RETIRED` lineage, with complete approval or supersession
+evidence where applicable.
+
 ## Pointers and resolution checks
 
 An automatic alignment pins the accepted result pointer, prior snapshot revision, Evidence Bundle
