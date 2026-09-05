@@ -14,7 +14,10 @@ crossed the worker-execution boundary. This does not add an automatic retry or a
 
 PostgreSQL workflow, step, job, job-event, lease, and artifact rows are canonical. Recovery retains
 the exact workflow ID, step-run ID, attempt, job ID, request hash, immutable upstream pointers, and
-workflow-definition snapshot. A filesystem path is not used as identity.
+workflow-definition snapshot. If prompt preparation already completed, reconciliation resolves the
+exact prompt artifact revision, manifest hash, prompt hash, and canonical envelope already pinned to
+that step attempt. It never renders or commits a replacement prompt. A filesystem path is not used
+as identity.
 
 ## Access patterns and structures
 
@@ -29,6 +32,9 @@ Recovery locks the workflow, failed step, and queued job in one transaction. It 
 when the job has exactly `JOB_CREATED -> REQUEST_VALIDATED -> JOB_QUEUED`, no slot, worker output,
 terminal fields, lease, or artifact, and no competing workflow command. The normal orchestrator
 idempotency key then continues that same job. Concurrent or stale commands fail explicitly.
+Prompt bytes are read only after the database pointer, approved lifecycle, file-set manifest, and
+runtime-context binding agree. Both small members are read through bounded `O_NOFOLLOW` descriptors
+and checked for stable file identity and exact hashes.
 
 ## Failure, retry, and idempotency
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,7 @@ from eom_identifiers import (
     new_job_id,
     new_logical_artifact_id,
     new_revision_id,
+    sha256_bytes,
     sha256_file,
 )
 from eom_orchestrator.artifacts import commit_file_set_artifact, stage_file_set_artifact
@@ -56,6 +58,62 @@ CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH = content_sha256(
     }
 )
 MAX_JOB_IDEMPOTENCY_KEY_LENGTH = 128
+
+
+def _stat_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_uid,
+        value.st_gid,
+        value.st_nlink,
+        value.st_size,
+        value.st_mtime_ns,
+    )
+
+
+def _read_exact_member(
+    directory_fd: int,
+    name: str,
+    *,
+    expected_size: int,
+    expected_sha256: str,
+    max_bytes: int,
+) -> bytes:
+    if Path(name).name != name or expected_size < 1 or expected_size > max_bytes:
+        raise ValueError("rendered prompt member pointer is invalid")
+    descriptor = os.open(
+        name,
+        os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+        dir_fd=directory_fd,
+    )
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_nlink != 1
+            or opened.st_size != expected_size
+        ):
+            raise ValueError("rendered prompt member materialization is invalid")
+        chunks: list[bytes] = []
+        remaining = expected_size + 1
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 64 * 1024))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        payload = b"".join(chunks)
+        if (
+            len(payload) != expected_size
+            or sha256_bytes(payload) != expected_sha256
+            or _stat_identity(opened) != _stat_identity(os.fstat(descriptor))
+        ):
+            raise ValueError("rendered prompt member content is invalid")
+        return payload
+    finally:
+        os.close(descriptor)
 
 
 def normalize_catalog_idempotency_key(value: str) -> str:
@@ -218,6 +276,111 @@ class CatalogArtifactService:
             max_bytes=max_bytes,
         )
         return target.read_bytes()
+
+    def load_rendered_prompt(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        prompt_sha256: str,
+        manifest_sha256: str,
+        envelope_sha256: str,
+        max_prompt_bytes: int = 256 * 1024,
+        max_envelope_bytes: int = 64 * 1024,
+    ) -> tuple[bytes, bytes]:
+        """Resolve one previously committed prompt through its immutable file-set pointer."""
+
+        with self.sessions() as session:
+            logical = session.get(ArtifactRecord, artifact_id)
+            revision = session.get(ArtifactRevisionRecord, revision_id)
+            job = session.get(JobRecord, revision.job_id) if revision is not None else None
+            if (
+                logical is None
+                or revision is None
+                or job is None
+                or not logical.approved
+                or not revision.approved
+                or logical.artifact_type != "rendered-workflow-prompt"
+                or logical.job_id != revision.job_id
+                or revision.logical_artifact_id != artifact_id
+                or revision.content_hash != prompt_sha256
+                or revision.manifest_hash != manifest_sha256
+                or content_sha256(revision.manifest) != manifest_sha256
+                or job.status != JobState.SUCCEEDED.value
+                or job.logical_artifact_id != artifact_id
+                or job.revision_id != revision_id
+            ):
+                raise ValueError("rendered prompt pointer does not resolve")
+            manifest = revision.manifest
+            files = manifest.get("files")
+            if (
+                manifest.get("logical_artifact_id") != artifact_id
+                or manifest.get("revision_id") != revision_id
+                or manifest.get("job_id") != revision.job_id
+                or manifest.get("artifact_type") != "rendered-workflow-prompt"
+                or manifest.get("primary_file") != "prompt.txt"
+                or manifest.get("content_hash") != prompt_sha256
+                or not isinstance(files, list)
+            ):
+                raise ValueError("rendered prompt manifest is invalid")
+            members = {
+                item.get("file_name"): item
+                for item in files
+                if isinstance(item, dict) and isinstance(item.get("file_name"), str)
+            }
+            prompt_entry = members.get("prompt.txt")
+            envelope_entry = members.get("prompt-envelope.json")
+            if (
+                set(members) != {"prompt.txt", "prompt-envelope.json"}
+                or len(files) != 2
+                or not isinstance(prompt_entry, dict)
+                or not isinstance(envelope_entry, dict)
+                or prompt_entry.get("sha256") != prompt_sha256
+                or envelope_entry.get("sha256") != envelope_sha256
+                or not isinstance(prompt_entry.get("bytes"), int)
+                or not isinstance(envelope_entry.get("bytes"), int)
+                or prompt_entry["bytes"] != revision.content_bytes
+                or prompt_entry["bytes"] > max_prompt_bytes
+                or envelope_entry["bytes"] > max_envelope_bytes
+            ):
+                raise ValueError("rendered prompt members do not match their pointer")
+            raw_artifact_root = Path(revision.nas_path)
+
+        storage_root = self.settings.nas_artifact_root.resolve(strict=True)
+        root_metadata = raw_artifact_root.lstat()
+        if raw_artifact_root.is_symlink() or not stat.S_ISDIR(root_metadata.st_mode):
+            raise ValueError("rendered prompt materialization is invalid")
+        artifact_root = raw_artifact_root.resolve(strict=True)
+        if not artifact_root.is_relative_to(storage_root):
+            raise ValueError("rendered prompt escaped storage root")
+        root_fd = os.open(
+            artifact_root,
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            opened_root = os.fstat(root_fd)
+            prompt_bytes = _read_exact_member(
+                root_fd,
+                "prompt.txt",
+                expected_size=prompt_entry["bytes"],
+                expected_sha256=prompt_sha256,
+                max_bytes=max_prompt_bytes,
+            )
+            envelope_bytes = _read_exact_member(
+                root_fd,
+                "prompt-envelope.json",
+                expected_size=envelope_entry["bytes"],
+                expected_sha256=envelope_sha256,
+                max_bytes=max_envelope_bytes,
+            )
+            if _stat_identity(opened_root) != _stat_identity(os.fstat(root_fd)):
+                raise ValueError("rendered prompt root changed while reading")
+        finally:
+            os.close(root_fd)
+        return prompt_bytes, envelope_bytes
 
     def verify_member(
         self,

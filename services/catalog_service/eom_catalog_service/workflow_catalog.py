@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -375,6 +376,9 @@ class WorkflowCatalogService:
         request: WorkflowRequest,
         upstream: tuple[ArtifactPointer, ...],
     ) -> PreparedPrompt:
+        pinned = self._resolve_pinned_prompt(workflow, step)
+        if pinned is not None:
+            return pinned
         pack_snapshot, profile_snapshot = self._snapshots(workflow, step)
         with self.sessions() as session:
             release = self._pinned_release(session, pack_snapshot)
@@ -457,6 +461,90 @@ class WorkflowCatalogService:
             "schema_ref": "eom://schemas/content-pack/prompt-envelope-v1",
         }
         return PreparedPrompt(rendered.text, pointer, envelope)
+
+    def _resolve_pinned_prompt(
+        self,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+    ) -> PreparedPrompt | None:
+        """Reuse the exact prompt already committed for this immutable step attempt."""
+
+        input_manifest = step.input_pointer_manifest
+        raw_pointer = input_manifest.get("prompt")
+        raw_envelope = input_manifest.get("prompt_envelope")
+        if raw_pointer is None and raw_envelope is None:
+            return None
+        if not isinstance(raw_pointer, dict) or not isinstance(raw_envelope, dict):
+            raise ValueError("pinned prompt manifest is incomplete")
+        pointer = cast(dict[str, Any], raw_pointer)
+        envelope = cast(dict[str, Any], raw_envelope)
+        required_pointer = {
+            "artifact_id",
+            "artifact_revision_id",
+            "sha256",
+            "manifest_sha256",
+            "schema_ref",
+        }
+        if set(pointer) != required_pointer or pointer.get("schema_ref") != (
+            "eom://schemas/content-pack/prompt-envelope-v1"
+        ):
+            raise ValueError("pinned prompt pointer is invalid")
+        validate_contract("prompt-envelope", envelope)
+        pack_snapshot, profile_snapshot = self._snapshots(workflow, step)
+        source_intake = workflow.runtime_context.get("source_intake")
+        expected_batch_ids = (
+            source_intake.get("batch_ids") if isinstance(source_intake, dict) else None
+        )
+        if (
+            envelope.get("workflow_id") != workflow.workflow_id
+            or envelope.get("step_run_id") != step.step_run_id
+            or envelope.get("pack_release_id") != pack_snapshot.get("release_id")
+            or envelope.get("pack_release_sha256") != pack_snapshot.get("release_sha256")
+            or envelope.get("profile_key") != profile_snapshot.get("profile_key")
+            or envelope.get("profile_version") != profile_snapshot.get("profile_version")
+            or envelope.get("profile_sha256") != profile_snapshot.get("profile_sha256")
+            or envelope.get("template_path") != profile_snapshot.get("template_relative_path")
+            or envelope.get("rendered_prompt_sha256") != pointer.get("sha256")
+            or envelope.get("source_intake_batch_ids") != expected_batch_ids
+        ):
+            raise ValueError("pinned prompt envelope does not match the workflow snapshot")
+        prompt_artifacts = workflow.runtime_context.get("prompt_artifacts")
+        matching = (
+            [
+                item
+                for item in prompt_artifacts
+                if isinstance(item, dict)
+                and item.get("step_key") == step.step_key
+                and item.get("attempt") == step.attempt
+            ]
+            if isinstance(prompt_artifacts, list)
+            else []
+        )
+        expected_runtime_pointer = {
+            "step_key": step.step_key,
+            "attempt": step.attempt,
+            **pointer,
+        }
+        if matching != [expected_runtime_pointer]:
+            raise ValueError("pinned prompt is not bound to the workflow runtime")
+        envelope_bytes = canonical_json_bytes(envelope)
+        prompt_bytes, stored_envelope_bytes = self.artifacts.load_rendered_prompt(
+            artifact_id=str(pointer["artifact_id"]),
+            revision_id=str(pointer["artifact_revision_id"]),
+            prompt_sha256=str(pointer["sha256"]),
+            manifest_sha256=str(pointer["manifest_sha256"]),
+            envelope_sha256=sha256_bytes(envelope_bytes),
+        )
+        if stored_envelope_bytes != envelope_bytes:
+            raise ValueError("pinned prompt envelope bytes changed")
+        try:
+            stored_envelope = json.loads(stored_envelope_bytes)
+            prompt_text = prompt_bytes.decode("utf-8")
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("pinned prompt encoding is invalid") from exc
+        if stored_envelope != envelope or sha256_bytes(prompt_bytes) != pointer["sha256"]:
+            raise ValueError("pinned prompt content does not match its envelope")
+        return PreparedPrompt(prompt_text, dict(pointer), dict(envelope))
 
     def materialize_generated_stimulus(
         self,
