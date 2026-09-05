@@ -98,8 +98,9 @@ def test_gui_uses_vocabulary_only_at_the_presentation_boundary() -> None:
     assert '["QUEUED", "RUNNING"].includes(value.state)' in javascript
     assert 'step.state === "SUCCEEDED"' in javascript
     assert "item_revision_id: revision" in javascript
-    assert "require_native_equations: true" in javascript
-    assert "require_native_tables: true" in javascript
+    assert "require_native_equations: false" in javascript
+    assert "require_native_tables: false" in javascript
+    assert 'value.renderer_key === "item-revision-auto"' in javascript
 
 
 def test_vocabulary_asset_contains_no_runtime_endpoint_or_secret_storage() -> None:

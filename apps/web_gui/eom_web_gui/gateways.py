@@ -881,11 +881,24 @@ class HttpApplicationGateway:
             and component.get("ordinal") == 0
             and component.get("required") is True
             and isinstance(component.get("artifact"), dict)
+            and component["artifact"].get("schema_ref")
+            in {
+                "eom.assessment.item-content/1.0",
+                "eom.assessment.item-content/2.0",
+            }
+            for component in components
+        )
+        structured_preview_available = any(
+            component.get("item_revision_id") == item_revision_id
+            and component.get("component_type") == "ITEM_CONTENT"
+            and component.get("ordinal") == 0
+            and component.get("required") is True
+            and isinstance(component.get("artifact"), dict)
             and component["artifact"].get("schema_ref") == "eom.assessment.item-content/1.0"
             for component in components
         )
         content: dict[str, Any] | None = None
-        if template_delivery_available:
+        if structured_preview_available:
             content_response = await self._authorized(
                 session,
                 "GET",
@@ -1061,7 +1074,15 @@ class HttpApplicationGateway:
             and profile.get("source_schema_ref") == "eom.assessment.item-content/1.0"
             for profile in profiles
         )
-        if state == "READY" and not template_ready:
+        content_team_ready = any(
+            isinstance(profile, dict)
+            and profile.get("renderer") == "content-team"
+            and profile.get("renderer_version") == "1.0.0"
+            and profile.get("document_profile") == "content-team-hwp-question-editor-v1"
+            and profile.get("source_schema_ref") == "eom.assessment.item-content/2.0"
+            for profile in profiles
+        )
+        if state == "READY" and not (template_ready and content_team_ready):
             state = "DEGRADED"
         supports_value = value.get("supports")
         supports: dict[str, Any] = supports_value if isinstance(supports_value, dict) else {}
@@ -1074,10 +1095,10 @@ class HttpApplicationGateway:
         return HwpxCapability.model_validate(
             {
                 "state": state,
-                "renderer_key": "eom-template",
+                "renderer_key": "item-revision-auto",
                 "renderer_version": "1.0.0",
-                "document_profile": "eom-question-template-v1",
-                "build_available": state == "READY" and template_ready,
+                "document_profile": "item-revision-auto",
+                "build_available": state == "READY" and template_ready and content_team_ready,
                 "native_equations": bool(supports.get("native_equations")),
                 "native_tables": bool(supports.get("native_tables")),
                 "detail_code": str(value.get("detail_code") or "HWPX_CAPABILITY_UNKNOWN"),
@@ -1094,13 +1115,13 @@ class HttpApplicationGateway:
             "POST",
             f"/api/v1/item-revisions/{value.item_revision_id}/hwpx-builds",
             json={
-                "renderer": "eom-template",
+                "renderer": "auto",
                 "options": {
                     "include_explanation": True,
-                    "require_native_equations": True,
-                    "require_native_tables": True,
+                    "require_native_equations": value.require_native_equations,
+                    "require_native_tables": value.require_native_tables,
                     "document_preset": "report",
-                    "document_profile": "eom-question-template-v1",
+                    "document_profile": "item-revision-auto",
                     "item_number": value.item_number,
                 },
             },

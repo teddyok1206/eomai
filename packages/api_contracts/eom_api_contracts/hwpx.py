@@ -83,6 +83,7 @@ class HwpxBuildOptions(ApiModel):
     document_preset: Literal["report"] = "report"
     document_profile: Literal[
         "kordoc-report",
+        "item-revision-auto",
         "eom-question-template-v1",
         "content-team-hwp-question-editor-v1",
     ] = "kordoc-report"
@@ -90,12 +91,13 @@ class HwpxBuildOptions(ApiModel):
 
 
 class CreateHwpxBuildRequest(ApiModel):
-    renderer: Literal["kordoc", "eom-template", "content-team"]
+    renderer: Literal["auto", "kordoc", "eom-template", "content-team"]
     options: HwpxBuildOptions
 
     @model_validator(mode="after")
     def renderer_profile_consistency(self) -> CreateHwpxBuildRequest:
         expected = {
+            "auto": "item-revision-auto",
             "kordoc": "kordoc-report",
             "eom-template": "eom-question-template-v1",
             "content-team": "content-team-hwp-question-editor-v1",

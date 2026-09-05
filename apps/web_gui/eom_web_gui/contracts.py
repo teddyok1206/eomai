@@ -776,7 +776,11 @@ class HwpxCapability(WebModel):
     state: Literal["READY", "PREPARED_NOT_DEPLOYED", "UNAVAILABLE", "DEGRADED"]
     renderer_key: str
     renderer_version: str
-    document_profile: Literal["eom-question-template-v1"]
+    document_profile: Literal[
+        "item-revision-auto",
+        "eom-question-template-v1",
+        "content-team-hwp-question-editor-v1",
+    ]
     boundary: Literal["APPLICATION_API_ONLY"] = "APPLICATION_API_ONLY"
     build_available: bool
     native_equations: bool
@@ -788,8 +792,8 @@ class HwpxCapability(WebModel):
 class HwpxBuildRequest(WebModel):
     item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
-    require_native_equations: Literal[True] = True
-    require_native_tables: Literal[True] = True
+    require_native_equations: bool = False
+    require_native_tables: bool = False
     item_number: int = Field(default=1, ge=1, le=999)
 
 

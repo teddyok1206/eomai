@@ -57,9 +57,14 @@ The team Markdown spells an item marker as `<item_number>. ` while the typed val
 `item_number` separately from `stem`. At the projected-authoring and Catalog materialization
 boundaries, EOM removes exactly one matching leading marker (including its following space) and no
 other numeric text. The immutable authoring result remains provenance; the registered content is
-the deterministic normalized derivative. The same boundary derives the ordered
+the deterministic normalized derivative. The source format also prints one trailing `[N점]`
+marker while the typed value keeps `score_display` separate from `bottom_stem`. The same boundary
+removes only a trailing marker run whose every score agrees with `score_display`; a disagreement
+fails, and deterministic Markdown prints that score exactly once. This is representation
+normalization, not a new editorial rule. The same boundary derives the ordered
 `equation_sources` occurrence index from the authored fields; equation spelling inside the authored
-text is unchanged and the lossless Markdown round trip proves the index matches it. The direct
+text is unchanged. Before an authoring artifact can commit, the pure content-team serializer proves
+the complete typed draft has a lossless Markdown round trip and valid equation grammar. The direct
 content-team workflow also records the explicit `AUTHORING -> IMAGE_SKIPPED -> REVIEWING` stage
 path even though it has no image step, so reconciliation can resume a completed review job without
 invoking a worker again.

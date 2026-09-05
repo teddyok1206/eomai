@@ -18,8 +18,11 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV8,
 )
 from eom_hwpx_contracts import (
+    ContentTeamMarkdownError,
     derive_content_team_equation_sources,
+    normalize_content_team_bottom_stem,
     normalize_content_team_stem,
+    serialize_content_team_markdown,
 )
 from eom_identifiers import content_sha256
 from jsonschema import Draft202012Validator, FormatChecker
@@ -534,23 +537,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         raise WorkflowSchemaError(f"{schema_id} failed typed validation{detail}") from exc
 
 
-def _canonicalize_content_team_authoring_result(value: object) -> object:
-    """Rehydrate the renderer route derived from the model-authored visual structure."""
-
-    if not isinstance(value, dict):
-        return value
-    output = value.get("output")
-    if not isinstance(output, dict):
-        return value
-    draft = output.get("draft")
-    if not isinstance(draft, dict) or "visual_layout" in draft:
-        return value
-
-    validate_schema_message(
-        load_codex_result_schema("authoring-result@7.0"),
-        value,
-        "authoring-result@7.0 projected",
-    )
+def _derive_content_team_visual_layout(draft: dict[str, Any]) -> str:
     inquiry = draft.get("inquiry")
     visuals = draft.get("visuals")
     if not isinstance(visuals, list):
@@ -558,30 +545,53 @@ def _canonicalize_content_team_authoring_result(value: object) -> object:
     if inquiry is not None:
         if visuals:
             raise WorkflowSchemaError("content-team inquiry cannot include general visual slots")
-        derived_layout: str | None = "INQUIRY_BOX"
-    else:
-        signature_items: list[tuple[str, str]] = []
-        for visual in visuals:
-            if not isinstance(visual, dict):
-                raise WorkflowSchemaError("content-team projected visual entry is invalid")
-            kind = visual.get("kind")
-            label = visual.get("label")
-            if not isinstance(kind, str) or not isinstance(label, str):
-                raise WorkflowSchemaError("content-team projected visual identity is invalid")
-            signature_items.append((kind, label))
-        signature = tuple(signature_items)
-        layouts: dict[tuple[tuple[str, str], ...], str] = {
-            (): "NONE",
-            (("IMAGE", ""),): "IMAGE_ONLY",
-            (("TABLE", ""),): "TABLE_ONLY",
-            (("IMAGE", ""), ("TABLE", "")): "IMAGE_TABLE",
-            (("TABLE", ""), ("IMAGE", "")): "TABLE_IMAGE",
-            (("IMAGE", "(가)"), ("IMAGE", "(나)")): "IMAGE_IMAGE",
-            (("TABLE", "(가)"), ("TABLE", "(나)")): "TABLE_TABLE",
-        }
-        derived_layout = layouts.get(signature)
-        if derived_layout is None:
-            raise WorkflowSchemaError("content-team projected visual order is not canonical")
+        return "INQUIRY_BOX"
+
+    signature_items: list[tuple[str, str]] = []
+    for visual in visuals:
+        if not isinstance(visual, dict):
+            raise WorkflowSchemaError("content-team projected visual entry is invalid")
+        kind = visual.get("kind")
+        label = visual.get("label")
+        if not isinstance(kind, str) or not isinstance(label, str):
+            raise WorkflowSchemaError("content-team projected visual identity is invalid")
+        signature_items.append((kind, label))
+    layouts: dict[tuple[tuple[str, str], ...], str] = {
+        (): "NONE",
+        (("IMAGE", ""),): "IMAGE_ONLY",
+        (("TABLE", ""),): "TABLE_ONLY",
+        (("IMAGE", ""), ("TABLE", "")): "IMAGE_TABLE",
+        (("TABLE", ""), ("IMAGE", "")): "TABLE_IMAGE",
+        (("IMAGE", "(가)"), ("IMAGE", "(나)")): "IMAGE_IMAGE",
+        (("TABLE", "(가)"), ("TABLE", "(나)")): "TABLE_TABLE",
+    }
+    derived_layout = layouts.get(tuple(signature_items))
+    if derived_layout is None:
+        raise WorkflowSchemaError("content-team projected visual order is not canonical")
+    return derived_layout
+
+
+def _canonicalize_content_team_authoring_result(value: object) -> object:
+    """Canonicalize source-format fields and prove the draft is editor-materializable."""
+
+    if not isinstance(value, dict):
+        return value
+    output = value.get("output")
+    if not isinstance(output, dict):
+        return value
+    draft = output.get("draft")
+    if not isinstance(draft, dict):
+        return value
+
+    projected = "visual_layout" not in draft
+    derived_layout: str | None = None
+    if projected:
+        validate_schema_message(
+            load_codex_result_schema("authoring-result@7.0"),
+            value,
+            "authoring-result@7.0 projected",
+        )
+        derived_layout = _derive_content_team_visual_layout(draft)
 
     canonical = copy.deepcopy(value)
     canonical_output = _mapping(canonical, "output")
@@ -590,12 +600,28 @@ def _canonicalize_content_team_authoring_result(value: object) -> object:
     stem = canonical_draft.get("stem")
     if isinstance(item_number, int) and isinstance(stem, str):
         canonical_draft["stem"] = normalize_content_team_stem(item_number, stem)
-    canonical_draft["visual_layout"] = derived_layout
-    canonical_draft["equation_sources"] = []
-    preliminary = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
-    canonical_draft["equation_sources"] = list(
-        derive_content_team_equation_sources(preliminary.output.draft)
-    )
+    score_display = canonical_draft.get("score_display")
+    bottom_stem = canonical_draft.get("bottom_stem")
+    if isinstance(score_display, str) and isinstance(bottom_stem, str):
+        canonical_draft["bottom_stem"] = normalize_content_team_bottom_stem(
+            score_display, bottom_stem
+        )
+    if projected:
+        canonical_draft["visual_layout"] = derived_layout
+        canonical_draft["equation_sources"] = []
+        preliminary = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
+        canonical_draft["equation_sources"] = list(
+            derive_content_team_equation_sources(preliminary.output.draft)
+        )
+    try:
+        validated = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
+        serialize_content_team_markdown(validated.output.draft)
+    except ValidationError as exc:
+        raise WorkflowSchemaError("authoring-result@7.0 failed typed validation") from exc
+    except ContentTeamMarkdownError as exc:
+        raise WorkflowSchemaError(
+            "authoring-result@7.0 cannot be materialized by the content-team profile"
+        ) from exc
     return canonical
 
 
@@ -1369,6 +1395,15 @@ def _project_content_team_authoring_contract(schema: dict[str, Any]) -> None:
     if not isinstance(required, list) or required.count("visual_layout") != 1:
         raise WorkflowSchemaError("content-team visual layout requirement is not projectable")
     draft["required"] = [name for name in required if name != "visual_layout"]
+
+    _mapping(properties, "bottom_stem")["description"] = (
+        "Final question sentence only. The reviewed source format shows a trailing score marker, "
+        "but this structured field must omit it; put only 2, 2.5, or 3 in score_display."
+    )
+    _mapping(properties, "score_display")["description"] = (
+        "The score printed once after bottom_stem; never repeat the bracketed score inside "
+        "bottom_stem."
+    )
 
     _mapping(properties, "visuals")["description"] = (
         "Ordered semantic visual entries from the reviewed content-team program. A table mentioned "

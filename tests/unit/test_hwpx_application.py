@@ -238,6 +238,49 @@ def test_markdown_component_requires_one_typed_pinned_pointer() -> None:
         HwpxApplicationService._markdown_component({"components": [component, component]})
 
 
+@pytest.mark.parametrize(
+    ("schema_ref", "expected_renderer"),
+    [
+        ("eom.assessment.item-content/1.0", "eom-template"),
+        ("eom.assessment.item-content/2.0", "content-team"),
+    ],
+)
+def test_automatic_renderer_resolves_from_one_canonical_item_component(
+    schema_ref: str, expected_renderer: str
+) -> None:
+    component: dict[str, Any] = {
+        "component_type": "ITEM_CONTENT",
+        "ordinal": 0,
+        "schema_ref": schema_ref,
+        "media_type": "application/json",
+        "artifact_id": "artifact_" + "a" * 32,
+        "artifact_revision_id": "rev_" + "b" * 32,
+        "sha256": "sha256:" + "c" * 64,
+    }
+
+    renderer, resolved = HwpxApplicationService._resolve_build_source(
+        {"components": [component]}, "auto"
+    )
+
+    assert renderer == expected_renderer
+    assert resolved is component
+
+
+def test_automatic_renderer_rejects_missing_or_mixed_canonical_sources() -> None:
+    first = {
+        "component_type": "ITEM_CONTENT",
+        "ordinal": 0,
+        "schema_ref": "eom.assessment.item-content/1.0",
+        "media_type": "application/json",
+    }
+    second = first | {"schema_ref": "eom.assessment.item-content/2.0"}
+
+    with pytest.raises(HwpxManagerError, match="exactly one automatic"):
+        HwpxApplicationService._resolve_build_source({"components": []}, "auto")
+    with pytest.raises(HwpxManagerError, match="exactly one automatic"):
+        HwpxApplicationService._resolve_build_source({"components": [first, second]}, "auto")
+
+
 def test_runner_returns_sanitized_failure_without_traceback(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

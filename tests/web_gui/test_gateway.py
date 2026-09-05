@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from eom_web_gui.contracts import ExplorerEntity, ExplorerQuery
+from eom_web_gui.contracts import ExplorerEntity, ExplorerQuery, HwpxBuildRequest
 from eom_web_gui.gateways import GatewayError, HttpApplicationGateway
 from eom_web_gui.sessions import ApiTokens, WebSession
 
@@ -438,6 +438,102 @@ async def test_gateway_accepts_complete_application_hwpx_build_view() -> None:
 
 
 @pytest.mark.anyio
+async def test_gateway_requests_revision_derived_hwpx_profile_without_shape_requirements() -> None:
+    revision_id = "itemrev_" + "3" * 32
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == f"/api/v1/item-revisions/{revision_id}/hwpx-builds"
+        assert request.headers["idempotency-key"] == "studio:hwpx:auto-profile"
+        assert json.loads(request.read()) == {
+            "renderer": "auto",
+            "options": {
+                "include_explanation": True,
+                "require_native_equations": False,
+                "require_native_tables": False,
+                "document_preset": "report",
+                "document_profile": "item-revision-auto",
+                "item_number": 4,
+            },
+        }
+        return httpx.Response(
+            202,
+            json=_single(
+                {
+                    "command_id": "hwpxcmd_" + "1" * 32,
+                    "resource_type": "hwpx_build",
+                    "resource_id": "hwpxbuild_" + "1" * 32,
+                    "status": "ACCEPTED",
+                    "resource_version": 1,
+                    "status_url": "/api/v1/hwpx-builds/hwpxbuild_" + "1" * 32,
+                }
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    value = HwpxBuildRequest(
+        item_revision_id=revision_id,
+        idempotency_key="studio:hwpx:auto-profile",
+        item_number=4,
+    )
+
+    await gateway.create_hwpx_build(_session(), value)
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_gateway_requires_both_closed_profiles_for_automatic_hwpx_delivery() -> None:
+    profiles = [
+        {
+            "renderer": "eom-template",
+            "renderer_version": "1.0.0",
+            "document_profile": "eom-question-template-v1",
+            "source_schema_ref": "eom.assessment.item-content/1.0",
+        },
+        {
+            "renderer": "content-team",
+            "renderer_version": "1.0.0",
+            "document_profile": "content-team-hwp-question-editor-v1",
+            "source_schema_ref": "eom.assessment.item-content/2.0",
+        },
+    ]
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=_single(
+                {
+                    "state": "READY",
+                    "supports": {"native_equations": True, "native_tables": True},
+                    "delivery_profiles": profiles,
+                    "detail_code": "HWPX_READY",
+                }
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+
+    capability = await gateway.hwpx_capability(_session())
+
+    assert capability.state == "READY"
+    assert capability.renderer_key == "item-revision-auto"
+    assert capability.document_profile == "item-revision-auto"
+    assert capability.build_available is True
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_gateway_projects_bounded_recent_hwpx_builds_for_admin_ui() -> None:
     build_id = "hwpxbuild_" + "1" * 32
 
@@ -742,6 +838,64 @@ async def test_item_preview_reports_exact_structured_template_component() -> Non
     assert equation.source == "a^2+b^2=c^2"
     image = next(block for block in preview.blocks if block.type == "image")
     assert image.media_url.endswith(f"/{revision_id}/media/block_image")
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_content_team_item_preview_exposes_hwpx_delivery_without_v1_projection() -> None:
+    item_id = "item_test0002"
+    revision_id = "itemrev_test0002"
+    paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        if request.url.path == f"/api/v1/items/{item_id}":
+            return httpx.Response(200, json=_single({"current_revision_id": revision_id}))
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}":
+            return httpx.Response(
+                200,
+                headers={"ETag": '"v1"'},
+                json=_single(
+                    {
+                        "item_id": item_id,
+                        "workflow_id": "workflow_test0002",
+                        "revision_state": "APPROVED",
+                        "content_pack_release_id": "packrel_test0002",
+                    }
+                ),
+            )
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}/components":
+            return httpx.Response(
+                200,
+                json=_list(
+                    [
+                        {
+                            "item_revision_id": revision_id,
+                            "component_type": "ITEM_CONTENT",
+                            "ordinal": 0,
+                            "required": True,
+                            "artifact": {
+                                "schema_ref": "eom.assessment.item-content/2.0",
+                            },
+                        }
+                    ]
+                ),
+            )
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+
+    preview = await gateway.item_preview(_session(), item_id, revision_id)
+
+    assert preview.preview_state == "METADATA_ONLY"
+    assert preview.template_delivery_available is True
+    assert f"/api/v1/item-revisions/{revision_id}/structured-content" not in paths
     await gateway.close()
 
 

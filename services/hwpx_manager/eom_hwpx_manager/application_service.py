@@ -64,6 +64,8 @@ CONTENT_TEAM_ITEM_CONTENT_SCHEMA_REFS = frozenset(
     }
 )
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
+AUTOMATIC_RENDERER = "auto"
+AUTOMATIC_DOCUMENT_PROFILE = "item-revision-auto"
 
 
 class ItemRevisionResolver(Protocol):
@@ -167,17 +169,16 @@ class HwpxApplicationService:
         idempotency_key: str,
     ) -> tuple[HwpxApplicationBuildRecord, bool]:
         revision = self._eligible_revision(item_revision_id)
+        requested_renderer = renderer
+        renderer, component = self._resolve_build_source(revision, renderer)
         if renderer == "kordoc":
-            component = self._markdown_component(revision)
             normalized_options = dict(options)
             renderer_version = "4.9.0"
         elif renderer == QUESTION_TEMPLATE_RENDERER:
-            component = self._item_content_component(revision)
             template_snapshot = self.template_renderer.snapshot()
             normalized_options = dict(options) | template_snapshot.request_identity()
             renderer_version = QUESTION_TEMPLATE_RENDERER_VERSION
         elif renderer == CONTENT_TEAM_RENDERER:
-            component = self._content_team_item_component(revision)
             metadata = component.get("metadata")
             if not isinstance(metadata, dict):
                 raise HwpxManagerError(
@@ -204,6 +205,8 @@ class HwpxApplicationService:
                 HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
                 "unsupported HWPX renderer profile",
             )
+        if requested_renderer == AUTOMATIC_RENDERER:
+            normalized_options["delivery_profile_selection"] = AUTOMATIC_DOCUMENT_PROFILE
         request_identity = {
             "item_revision_id": item_revision_id,
             "renderer": renderer,
@@ -499,6 +502,54 @@ class HwpxApplicationService:
                 "Item Revision must have exactly one V2 content-team ITEM_CONTENT component",
             )
         return eligible[0]
+
+    @classmethod
+    def _resolve_build_source(
+        cls, revision: dict[str, Any], renderer: str
+    ) -> tuple[str, dict[str, Any]]:
+        """Resolve an explicit or revision-derived renderer to one immutable source pointer."""
+
+        if renderer == "kordoc":
+            return renderer, cls._markdown_component(revision)
+        if renderer == QUESTION_TEMPLATE_RENDERER:
+            return renderer, cls._item_content_component(revision)
+        if renderer == CONTENT_TEAM_RENDERER:
+            return renderer, cls._content_team_item_component(revision)
+        if renderer != AUTOMATIC_RENDERER:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "unsupported HWPX renderer profile",
+            )
+
+        components = revision.get("components", [])
+        match: tuple[str, dict[str, Any]] | None = None
+        for component in components if isinstance(components, list) else []:
+            if (
+                not isinstance(component, dict)
+                or component.get("component_type") != "ITEM_CONTENT"
+                or component.get("ordinal") != 0
+                or component.get("media_type") != ITEM_CONTENT_MEDIA_TYPE
+            ):
+                continue
+            schema_ref = component.get("schema_ref")
+            if schema_ref in ITEM_CONTENT_SCHEMA_REFS:
+                candidate = (QUESTION_TEMPLATE_RENDERER, component)
+            elif schema_ref in CONTENT_TEAM_ITEM_CONTENT_SCHEMA_REFS:
+                candidate = (CONTENT_TEAM_RENDERER, component)
+            else:
+                continue
+            if match is not None:
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                    "Item Revision must resolve to exactly one automatic HWPX delivery profile",
+                )
+            match = candidate
+        if match is None:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "Item Revision must resolve to exactly one automatic HWPX delivery profile",
+            )
+        return match
 
     def _source_path(self, record: HwpxApplicationBuildRecord) -> Path:
         with self.sessions() as session:

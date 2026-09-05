@@ -515,9 +515,9 @@ class FakeGateway:
         return HwpxCapability.model_validate(
             {
                 "state": self.hwpx_state,
-                "renderer_key": "eom-template",
+                "renderer_key": "item-revision-auto",
                 "renderer_version": "1.0.0",
-                "document_profile": "eom-question-template-v1",
+                "document_profile": "item-revision-auto",
                 "build_available": self.hwpx_state == "READY",
                 "native_equations": self.hwpx_state == "READY",
                 "native_tables": self.hwpx_state == "READY",

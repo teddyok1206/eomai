@@ -15,7 +15,7 @@
       "additionalProperties": false,
       "required": ["renderer", "options"],
       "properties": {
-        "renderer": {"enum": ["kordoc", "eom-template", "content-team"]},
+        "renderer": {"enum": ["auto", "kordoc", "eom-template", "content-team"]},
         "options": {
           "type": "object",
           "additionalProperties": false,
@@ -27,6 +27,7 @@
             "document_profile": {
               "enum": [
                 "kordoc-report",
+                "item-revision-auto",
                 "eom-question-template-v1",
                 "content-team-hwp-question-editor-v1"
               ]
@@ -36,6 +37,19 @@
         }
       },
       "allOf": [
+        {
+          "if": {"properties": {"renderer": {"const": "auto"}}},
+          "then": {
+            "properties": {
+              "options": {
+                "required": ["document_profile"],
+                "properties": {
+                  "document_profile": {"const": "item-revision-auto"}
+                }
+              }
+            }
+          }
+        },
         {
           "if": {"properties": {"renderer": {"const": "eom-template"}}},
           "then": {

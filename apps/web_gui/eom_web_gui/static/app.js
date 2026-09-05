@@ -1036,7 +1036,7 @@ async function loadHwpx() {
     state.hwpxCapability = value;
     $("#hwpx-state-title").textContent = statePresentation("hwpx_capability", value.state).label;
     $("#hwpx-message").textContent = value.message;
-    $("#renderer-key").textContent = value.renderer_key === "eom-template" ? "EOM 문항 템플릿" : "검증된 문서 제작 방식";
+    $("#renderer-key").textContent = value.renderer_key === "item-revision-auto" ? "문항 형식 자동 선택" : "검증된 문서 제작 방식";
     $("#renderer-version").textContent = value.renderer_version ? `버전 ${value.renderer_version}` : "-";
     $("#hwpx-build-state").textContent = value.build_available ? "제작 가능" : "현재 제작 불가";
     $("#hwpx-validation").textContent = value.detail_code;
@@ -1124,8 +1124,8 @@ async function createHwpxBuild() {
       body: {
         item_revision_id: revision,
         idempotency_key: idempotency,
-        require_native_equations: true,
-        require_native_tables: true,
+        require_native_equations: false,
+        require_native_tables: false,
         item_number: itemNumber,
       },
     });

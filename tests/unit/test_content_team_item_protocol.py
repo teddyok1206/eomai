@@ -23,6 +23,7 @@ from eom_hwpx_contracts import (
     ContentTeamInquiry,
     ContentTeamTable,
     derive_content_team_equation_sources,
+    normalize_content_team_bottom_stem,
     normalize_content_team_stem,
 )
 from eom_hwpx_contracts.content_team_markdown import (
@@ -314,7 +315,10 @@ def test_v7_authoring_result_is_schema_first_and_codex_compatible() -> None:
         ),
         completed_at=datetime(2026, 9, 3, tzinfo=UTC),
         output={
-            "draft": _content(equations=("x", "x^{2}")),
+            "draft": _content(
+                stem="관계 $x$와 $x^{2}$을 해석하여 물음에 답하시오.",
+                equations=("x", "x^{2}"),
+            ),
             "metadata": {
                 "subject": "통합과학",
                 "topic": "요청으로 정해지는 주제",
@@ -355,6 +359,30 @@ def test_content_team_stem_normalizes_only_its_duplicate_item_marker() -> None:
     assert normalize_content_team_stem(11, "11.문항의 발문") == "11.문항의 발문"
     with pytest.raises(ValueError, match="empty after item marker"):
         normalize_content_team_stem(11, "11. ")
+
+
+def test_content_team_bottom_stem_separates_matching_source_score_markers() -> None:
+    assert (
+        normalize_content_team_bottom_stem("2.5", "옳은 것을 고른 것은? [2.5점]")
+        == "옳은 것을 고른 것은?"
+    )
+    assert (
+        normalize_content_team_bottom_stem("2.5", "옳은 것을 고른 것은? [2.5점] [2.5점]")
+        == "옳은 것을 고른 것은?"
+    )
+    assert normalize_content_team_bottom_stem("2.5", "옳은 것을 고른 것은?") == (
+        "옳은 것을 고른 것은?"
+    )
+    with pytest.raises(ValueError, match="differs from score_display"):
+        normalize_content_team_bottom_stem("2.5", "옳은 것을 고른 것은? [3점]")
+
+
+def test_content_team_serializer_rejects_noncanonical_embedded_score() -> None:
+    value = _content().model_dump(mode="json")
+    value["bottom_stem"] += " [2.5점]"
+
+    with pytest.raises(ValueError, match="score only in score_display"):
+        serialize_content_team_markdown(AssessmentItemContentV2.model_validate(value))
 
 
 def test_content_team_equation_sources_are_an_ordered_derived_occurrence_index() -> None:
@@ -408,6 +436,74 @@ def test_v7_projected_authoring_derives_markdown_representation_fields() -> None
     assert parsed.output.draft.stem == "관계 $x$를 해석하여 물음에 답하시오."
     assert parsed.output.draft.equation_sources == ("x",)
     serialize_content_team_markdown(parsed.output.draft)
+
+
+def test_v7_projected_authoring_canonicalizes_source_score_before_commit() -> None:
+    result = ContentTeamAuthoringRoleResultV7(
+        job_id="job_" + "1" * 32,
+        workflow_id="workflow_" + "2" * 32,
+        step_run_id="steprun_" + "3" * 32,
+        role="authoring",
+        artifact=ArtifactSpec(
+            logical_artifact_id="artifact_" + "4" * 32,
+            revision_id="rev_" + "5" * 32,
+        ),
+        completed_at=datetime(2026, 9, 3, tzinfo=UTC),
+        output={
+            "draft": _content(),
+            "metadata": {
+                "subject": "통합과학",
+                "topic": "요청으로 정해지는 주제",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+    )
+    projected = result.model_dump(mode="json")
+    draft = projected["output"]["draft"]
+    del draft["visual_layout"]
+    draft["bottom_stem"] += " [2.5점] [2.5점]"
+
+    parsed = validate_role_result(projected, "authoring", "authoring-result@7.0")
+
+    assert isinstance(parsed, ContentTeamAuthoringRoleResultV7)
+    assert parsed.output.draft.bottom_stem == "옳은 것만을 <보기>에서 있는 대로 고른 것은?"
+    rendered = serialize_content_team_markdown(parsed.output.draft).decode("utf-8")
+    assert rendered.count("[2.5점]") == 1
+    projected_schema = load_codex_result_schema("authoring-result@7.0")
+    bottom = projected_schema["$defs"]["AssessmentItemContentV2"]["properties"]["bottom_stem"]
+    assert "must omit" in bottom["description"]
+
+
+def test_v7_projected_authoring_rejects_unrenderable_equations_early() -> None:
+    result = ContentTeamAuthoringRoleResultV7(
+        job_id="job_" + "1" * 32,
+        workflow_id="workflow_" + "2" * 32,
+        step_run_id="steprun_" + "3" * 32,
+        role="authoring",
+        artifact=ArtifactSpec(
+            logical_artifact_id="artifact_" + "4" * 32,
+            revision_id="rev_" + "5" * 32,
+        ),
+        completed_at=datetime(2026, 9, 3, tzinfo=UTC),
+        output={
+            "draft": _content(
+                stem=r"관계 $\sqrt{2}$를 해석하여 물음에 답하시오.",
+                equations=(r"\sqrt{2}",),
+            ),
+            "metadata": {
+                "subject": "통합과학",
+                "topic": "요청으로 정해지는 주제",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+    )
+    projected = result.model_dump(mode="json")
+    del projected["output"]["draft"]["visual_layout"]
+
+    with pytest.raises(ValueError, match="cannot be materialized"):
+        validate_role_result(projected, "authoring", "authoring-result@7.0")
 
 
 @pytest.mark.parametrize(

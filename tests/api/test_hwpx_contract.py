@@ -40,6 +40,12 @@ def test_hwpx_protocol_schema_is_draft_2020_12_and_rejects_commands() -> None:
     }
     assert not list(validator.iter_errors(content_team_request))
     assert CreateHwpxBuildRequest.model_validate(content_team_request).renderer == "content-team"
+    automatic_request = {
+        "renderer": "auto",
+        "options": {"document_profile": "item-revision-auto", "item_number": 7},
+    }
+    assert not list(validator.iter_errors(automatic_request))
+    assert CreateHwpxBuildRequest.model_validate(automatic_request).renderer == "auto"
     assert list(
         validator.iter_errors(
             {
@@ -52,6 +58,14 @@ def test_hwpx_protocol_schema_is_draft_2020_12_and_rejects_commands() -> None:
         validator.iter_errors(
             {
                 "renderer": "content-team",
+                "options": {"document_profile": "eom-question-template-v1"},
+            }
+        )
+    )
+    assert list(
+        validator.iter_errors(
+            {
+                "renderer": "auto",
                 "options": {"document_profile": "eom-question-template-v1"},
             }
         )

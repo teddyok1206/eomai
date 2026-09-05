@@ -56,6 +56,10 @@ EXTERNAL_REFERENCE = re.compile(r"(?i)(?:https?|ftp|file|data|javascript|mailto)
 WINDOWS_OR_IMAGE_PATH = re.compile(
     r"(?i)(?:[A-Z]:[\\/]|(?:^|\s)(?:\.\.?/|/)[^\s]+|\.(?:png|jpe?g|gif|webp)\b)"
 )
+TRAILING_SCORE_MARKERS = re.compile(
+    r"(?P<suffix>(?:\s+\[(?:0|[1-9][0-9]*)(?:\.[0-9]+)?점\])+)[ \t]*$"
+)
+SCORE_MARKER = re.compile(r"\[(?P<score>(?:0|[1-9][0-9]*)(?:\.[0-9]+)?)점\]")
 
 
 class ContentTeamMarkdownError(ValueError):
@@ -71,6 +75,31 @@ def normalize_content_team_stem(item_number: int, stem: str) -> str:
     normalized = stem.removeprefix(prefix)
     if not normalized:
         raise ContentTeamMarkdownError("content-team stem is empty after item marker normalization")
+    return normalized
+
+
+def normalize_content_team_bottom_stem(score_display: str, bottom_stem: str) -> str:
+    """Separate trailing source-format score markers from the typed bottom stem.
+
+    The reviewed content-team source prompt writes the score at the end of the final stem line,
+    while the structured contract stores that value in ``score_display``.  Model output may
+    therefore repeat the source spelling in ``bottom_stem``.  Strip only a contiguous trailing
+    run whose values all agree with the typed score; a disagreement is a real content conflict.
+    """
+
+    match = TRAILING_SCORE_MARKERS.search(bottom_stem)
+    if match is None:
+        return bottom_stem
+    scores = tuple(value.group("score") for value in SCORE_MARKER.finditer(match.group("suffix")))
+    if not scores or any(value != score_display for value in scores):
+        raise ContentTeamMarkdownError(
+            "content-team bottom stem score marker differs from score_display"
+        )
+    normalized = bottom_stem[: match.start()].rstrip()
+    if not normalized:
+        raise ContentTeamMarkdownError(
+            "content-team bottom stem is empty after score marker normalization"
+        )
     return normalized
 
 
@@ -562,6 +591,12 @@ def _table_markdown(table: ContentTeamTable) -> tuple[str, ...]:
 def serialize_content_team_markdown(draft: ContentTeamEditorialDraft) -> bytes:
     """Materialize the one canonical Markdown spelling and prove its lossless round trip."""
 
+    if normalize_content_team_bottom_stem(draft.score_display, draft.bottom_stem) != (
+        draft.bottom_stem
+    ):
+        raise ContentTeamMarkdownError(
+            "content-team bottom stem must keep its score only in score_display"
+        )
     if draft.equation_sources != derive_content_team_equation_sources(draft):
         raise ContentTeamMarkdownError(
             "content-team equation source index differs from authored occurrences"

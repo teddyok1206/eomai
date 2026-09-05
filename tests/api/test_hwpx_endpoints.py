@@ -335,6 +335,33 @@ def test_hwpx_build_accepts_closed_content_team_profile(tmp_path: Path) -> None:
         services.engine.dispose()
 
 
+def test_hwpx_build_accepts_revision_derived_profile_selection(tmp_path: Path) -> None:
+    client, services = _client(tmp_path)
+    body = {
+        "renderer": "auto",
+        "options": {
+            "document_profile": "item-revision-auto",
+            "require_native_equations": False,
+            "require_native_tables": False,
+        },
+    }
+    try:
+        with client:
+            response = client.post(
+                f"/api/v1/item-revisions/{REVISION_ID}/hwpx-builds",
+                headers={"Idempotency-Key": "hwpx-api-auto-profile-0001"},
+                json=body,
+            )
+            assert response.status_code == 202
+            assert services.hwpx.last_request is not None
+            assert services.hwpx.last_request["renderer"] == "auto"
+            assert services.hwpx.last_request["options"]["document_profile"] == (
+                "item-revision-auto"
+            )
+    finally:
+        services.engine.dispose()
+
+
 def test_hwpx_admin_explorer_is_backend_enforced(tmp_path: Path) -> None:
     client, services = _client(tmp_path, admin=False)
     try:
