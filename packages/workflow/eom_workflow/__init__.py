@@ -1,5 +1,12 @@
 """Domain-neutral workflow contracts and compiler."""
 
+from eom_workflow.admission import (
+    MANAGED_WORKFLOW_DEFINITION_KEYS,
+    WORKFLOW_ADMISSION_BY_IDENTITY,
+    WorkflowAdmission,
+    workflow_admission,
+    workflow_definition_is_admitted,
+)
 from eom_workflow.compiler import (
     CompiledWorkflowDefinition,
     WorkflowDefinitionError,
@@ -84,6 +91,8 @@ from eom_workflow.models import (
 
 __all__ = [
     "CONTROL_SCHEMA_RESOURCES",
+    "MANAGED_WORKFLOW_DEFINITION_KEYS",
+    "WORKFLOW_ADMISSION_BY_IDENTITY",
     "AgentStep",
     "ArtifactPointer",
     "BundleRevisionPointer",
@@ -147,6 +156,7 @@ __all__ = [
     "WorkerCapacityPolicyV3",
     "WorkerLeaseView",
     "WorkerRequest",
+    "WorkflowAdmission",
     "WorkflowDefinition",
     "WorkflowDefinitionError",
     "WorkflowRequest",
@@ -156,4 +166,6 @@ __all__ = [
     "evaluate_decision",
     "load_control_schema",
     "validate_control_contract",
+    "workflow_admission",
+    "workflow_definition_is_admitted",
 ]

@@ -39,6 +39,7 @@ from eom_catalog_contracts import (
     ReviewedItemContentImportCommand,
     ReviewedItemContentImportResult,
     ReviewKnowledgeAnalysisCommand,
+    catalog_application_schema_route,
     validate_contract,
 )
 from eom_item_registry import RegistryError, RegistryErrorCode
@@ -245,37 +246,8 @@ class CatalogApplicationClient:
         | CreateItemProductionEvidenceCommand,
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
-        item_content_operation = command.operation in {
-            "IMPORT_REVIEWED_ITEM_CONTENT",
-            "GET_ITEM_CONTENT",
-        }
-        request_schema = (
-            "catalog-application-request-v10"
-            if item_content_operation
-            else "catalog-application-request-v9"
-            if command.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
-            else "catalog-application-request-v4"
-            if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
-            else (
-                "catalog-application-request-v5"
-                if command.operation == "CREATE_KNOWLEDGE_ANALYSIS"
-                else "catalog-application-request-v3"
-            )
-        )
-        response_schema = (
-            "catalog-application-response-v10"
-            if item_content_operation
-            else "catalog-application-response-v7"
-            if command.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
-            else "catalog-application-response-v8"
-            if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
-            else (
-                "catalog-application-response-v9"
-                if command.operation == "CREATE_EVIDENCE_BUNDLE"
-                else "catalog-application-response-v3"
-            )
-        )
-        validate_contract(request_schema, payload)
+        schemas = catalog_application_schema_route(command.operation)
+        validate_contract(schemas.request_schema, payload)
         self._validate_socket()
         connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
@@ -295,7 +267,7 @@ class CatalogApplicationClient:
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError
-            validate_contract(response_schema, value)
+            validate_contract(schemas.response_schema, value)
             response = CatalogApplicationResponse.model_validate(value)
         except CatalogApplicationClientError:
             raise

@@ -12,7 +12,7 @@ from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_engine, build_session_factory, transaction
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_registry import WorkerRegistry
-from eom_workflow import WorkflowRequest, compile_definition
+from eom_workflow import WORKFLOW_ADMISSION_BY_IDENTITY, WorkflowRequest, compile_definition
 from eom_workflow_runner.composition import build_workflow_runtime
 from eom_workflow_runner.models import (
     ApprovalRequestRecord,
@@ -28,8 +28,10 @@ from eom_workflow_runner.repository import (
     create_workflow_instance,
     enqueue_command,
     import_workflow_definition,
+    reconcile_workflow_definition_admission,
+    workflow_definition_admission_statuses,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -92,6 +94,54 @@ def definition_list() -> None:
     _emit(data)
 
 
+@definition_app.command("admission")
+def definition_admission(
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Atomically make active flags match the reviewed admission policy.",
+    ),
+) -> None:
+    """Audit or explicitly apply the new-work workflow admission policy."""
+
+    engine = build_engine()
+    sessions = build_session_factory(engine)
+    if apply:
+        with transaction(sessions) as session:
+            statuses = reconcile_workflow_definition_admission(session)
+            counts = _definition_instance_counts(session)
+    else:
+        with sessions() as session:
+            statuses = workflow_definition_admission_statuses(session)
+            counts = _definition_instance_counts(session)
+    present = {(status.definition_key, status.definition_version) for status in statuses}
+    missing = sorted(set(WORKFLOW_ADMISSION_BY_IDENTITY) - present)
+    rows = [
+        {
+            "definition_id": status.definition_id,
+            "definition_key": status.definition_key,
+            "definition_version": status.definition_version,
+            "role_protocol_version": status.role_protocol_version,
+            "active": status.active,
+            "admitted": status.admitted,
+            "aligned": status.active == status.admitted,
+            "historical_instance_count": counts.get(status.definition_id, 0),
+        }
+        for status in statuses
+    ]
+    engine.dispose()
+    _emit(
+        {
+            "applied": apply,
+            "consistent": not missing and all(row["aligned"] for row in rows),
+            "missing_admitted_definitions": [
+                {"definition_key": key, "definition_version": version} for key, version in missing
+            ],
+            "definitions": rows,
+        }
+    )
+
+
 @workflow_app.command("start")
 def workflow_start(
     definition: str = typer.Option(..., "--definition"),
@@ -101,10 +151,12 @@ def workflow_start(
     idempotency_key: str = typer.Option(..., "--idempotency-key"),
     pack_key: str | None = typer.Option(None, "--pack-key"),
     environment: str = typer.Option("development", "--environment"),
-    authoring_profile: str = typer.Option("authoring-default", "--authoring-profile"),
-    review_profile: str = typer.Option("review-default", "--review-profile"),
-    image_profile: str = typer.Option("image-placeholder", "--image-profile"),
-    registration_profile: str = typer.Option("registration-default", "--registration-profile"),
+    authoring_profile: str = typer.Option("generated-knowledge-authoring", "--authoring-profile"),
+    review_profile: str = typer.Option("generated-knowledge-review", "--review-profile"),
+    image_profile: str | None = typer.Option(None, "--image-profile"),
+    registration_profile: str = typer.Option(
+        "generated-structured-registration", "--registration-profile"
+    ),
     source_intake_batch: Annotated[list[str] | None, typer.Option("--source-intake-batch")] = None,
     registry_mode: str = typer.Option("CREATE_ITEM", "--registry-mode"),
     item_id: str | None = typer.Option(None, "--item-id"),
@@ -145,8 +197,8 @@ def workflow_start(
         raise typer.BadParameter("workflow 1.1.0 requires --pack-key and Intake input")
     if version == "1.2.0" and request.request_name != "KNOWLEDGE_ITEM_REQUEST":
         raise typer.BadParameter("workflow 1.2.0 requires the knowledge-item request contract")
-    if version in {"1.3.0", "1.4.0", "1.5.0", "1.6.0"} and request.request_name != (
-        "GENERATED_KNOWLEDGE_ITEM_REQUEST"
+    if version in {"1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0"} and (
+        request.request_name != "GENERATED_KNOWLEDGE_ITEM_REQUEST"
     ):
         raise typer.BadParameter("generated-item workflow requires its generated request contract")
     engine = build_engine()
@@ -462,6 +514,18 @@ def _definition_dict(definition: WorkflowDefinitionRecord) -> dict[str, Any]:
         "active": definition.active,
         "source_path": definition.source_path,
         "imported_at": definition.imported_at,
+    }
+
+
+def _definition_instance_counts(session: Session) -> dict[str, int]:
+    return {
+        definition_id: int(count)
+        for definition_id, count in session.execute(
+            select(
+                WorkflowInstanceRecord.definition_id,
+                func.count(WorkflowInstanceRecord.workflow_id),
+            ).group_by(WorkflowInstanceRecord.definition_id)
+        )
     }
 
 

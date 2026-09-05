@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 import yaml
 from eom_orchestrator.database import build_session_factory, transaction
-from eom_workflow import WorkflowRequest, compile_definition_data
+from eom_workflow import WorkflowRequest, compile_definition, compile_definition_data
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
     WorkflowDefinitionRecord,
@@ -20,6 +20,7 @@ from eom_workflow_runner.repository import (
     create_workflow_instance,
     enqueue_command,
     import_workflow_definition,
+    reconcile_workflow_definition_admission,
     workflow_business_fingerprint,
 )
 from eom_workflow_runner.state_machine import (
@@ -34,6 +35,15 @@ from sqlalchemy.orm import Session
 pytestmark = pytest.mark.integration
 ROLE_SLOTS = {"authoring", "review", "image", "item_management", "support"}
 
+ADMITTED_DEFINITION_PATHS = (
+    "config/workflows/generic-item-development.v1.7.yaml",
+    "config/workflows/knowledge-analysis.v1.yaml",
+    "config/workflows/knowledge-analysis.v4.yaml",
+    "config/workflows/knowledge-analysis.v8.yaml",
+    "config/workflows/legacy-item-extraction.v1.yaml",
+    "config/workflows/legacy-item-editorial-compatibility.v1.yaml",
+)
+
 
 def _definition(session: Session, suffix: str) -> WorkflowDefinitionRecord:
     raw = yaml.safe_load(
@@ -44,6 +54,40 @@ def _definition(session: Session, suffix: str) -> WorkflowDefinitionRecord:
     definition, created = import_workflow_definition(session, compiled)
     assert created
     return definition
+
+
+def test_admission_reconcile_preserves_historical_definition_and_instance(
+    db_session: Session,
+) -> None:
+    for path in ADMITTED_DEFINITION_PATHS:
+        import_workflow_definition(
+            db_session,
+            compile_definition(Path(path), ROLE_SLOTS),
+        )
+    historical, _ = import_workflow_definition(
+        db_session,
+        compile_definition(
+            Path("config/workflows/generic-item-development.v1.yaml"),
+            ROLE_SLOTS,
+        ),
+    )
+    historical.active = True  # represent the pre-convergence production registry
+    workflow, created = create_workflow_instance(
+        db_session,
+        definition=historical,
+        request=WorkflowRequest(request_name="PLACEHOLDER_REQUEST", image_mode="skip"),
+        idempotency_key=f"historical-admission:{uuid4().hex}",
+        actor_type="human",
+        actor_id="author_01",
+    )
+    assert created
+
+    statuses = reconcile_workflow_definition_admission(db_session)
+
+    assert all(status.active == status.admitted for status in statuses)
+    assert historical.active is False
+    assert workflow.definition_id == historical.definition_id
+    assert workflow.definition_version == "1.0.0"
 
 
 def _submit(

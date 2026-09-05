@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated, Literal
+from types import MappingProxyType
+from typing import Annotated, Final, Literal
 
 from eom_identifiers import content_sha256
 from pydantic import Field, RootModel, field_validator, model_validator
@@ -35,6 +37,23 @@ CATALOG_APPLICATION_MAX_MESSAGE_BYTES = 4 * 1024 * 1024
 CATALOG_APPLICATION_SOCKET_MODE = 0o660
 CATALOG_APPLICATION_RUNTIME_DIRECTORY_MODE = 0o750
 CATALOG_ITEM_MEDIA_MAX_BYTES = 16 * 1024 * 1024
+
+CatalogApplicationOperation = Literal[
+    "IMPORT_REVIEWED_ITEM_CONTENT",
+    "GET_ITEM_CONTENT",
+    "CREATE_KNOWLEDGE_ANALYSIS",
+    "RECONCILE_KNOWLEDGE_ANALYSIS",
+    "REVIEW_KNOWLEDGE_ANALYSIS",
+    "CREATE_KNOWLEDGE_ANALYSIS_BATCH",
+    "CREATE_EVIDENCE_BUNDLE",
+    "CREATE_ITEM_PRODUCTION_EVIDENCE",
+]
+
+
+@dataclass(frozen=True)
+class CatalogApplicationSchemaRoute:
+    request_schema: str
+    response_schema: str
 
 
 class CatalogApplicationErrorCode(StrEnum):
@@ -307,16 +326,7 @@ class KnowledgeAnalysisApplicationResult(FrozenModel):
 
 class CatalogApplicationResponse(FrozenModel):
     status: Literal["OK", "ERROR"]
-    operation: Literal[
-        "IMPORT_REVIEWED_ITEM_CONTENT",
-        "GET_ITEM_CONTENT",
-        "CREATE_KNOWLEDGE_ANALYSIS",
-        "RECONCILE_KNOWLEDGE_ANALYSIS",
-        "REVIEW_KNOWLEDGE_ANALYSIS",
-        "CREATE_KNOWLEDGE_ANALYSIS_BATCH",
-        "CREATE_EVIDENCE_BUNDLE",
-        "CREATE_ITEM_PRODUCTION_EVIDENCE",
-    ]
+    operation: CatalogApplicationOperation
     result: ReviewedItemContentImportResult | None = None
     analysis: KnowledgeAnalysisApplicationResult | None = None
     analysis_batch: KnowledgeAnalysisBatchApplicationResult | None = None
@@ -381,3 +391,50 @@ class CatalogApplicationResponse(FrozenModel):
         ):
             raise ValueError("item production evidence response requires publication result")
         return self
+
+
+CATALOG_APPLICATION_SCHEMA_ROUTES: Final = MappingProxyType(
+    {
+        "IMPORT_REVIEWED_ITEM_CONTENT": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v10",
+            "catalog-application-response-v10",
+        ),
+        "GET_ITEM_CONTENT": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v10",
+            "catalog-application-response-v10",
+        ),
+        "CREATE_KNOWLEDGE_ANALYSIS": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v5",
+            "catalog-application-response-v3",
+        ),
+        "RECONCILE_KNOWLEDGE_ANALYSIS": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v3",
+            "catalog-application-response-v3",
+        ),
+        "REVIEW_KNOWLEDGE_ANALYSIS": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v3",
+            "catalog-application-response-v3",
+        ),
+        "CREATE_KNOWLEDGE_ANALYSIS_BATCH": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v9",
+            "catalog-application-response-v7",
+        ),
+        "CREATE_EVIDENCE_BUNDLE": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v3",
+            "catalog-application-response-v9",
+        ),
+        "CREATE_ITEM_PRODUCTION_EVIDENCE": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v4",
+            "catalog-application-response-v8",
+        ),
+    }
+)
+
+
+def catalog_application_schema_route(operation: str) -> CatalogApplicationSchemaRoute:
+    """Resolve the single request/response schema pair for a socket operation."""
+
+    try:
+        return CATALOG_APPLICATION_SCHEMA_ROUTES[operation]
+    except KeyError as exc:
+        raise ValueError("unsupported catalog application operation") from exc

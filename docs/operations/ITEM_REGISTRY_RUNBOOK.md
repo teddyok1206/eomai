@@ -26,18 +26,18 @@ Retirement changes the logical Item lifecycle but preserves revisions and usage 
 eomctl item retire <ITEM_ID> --actor-id admin_01 --reason PLACEHOLDER_REASON
 ```
 
-Create and revise through workflow 1.1.0. A revise command must name both the logical Item and its
-exact current base revision:
+Create and revise new content through the Application API/GUI on the admitted
+`generic-item-development/1.7.0` path. A revise command must name both the logical Item and its exact
+current base revision. The former manual `1.1.0` placeholder command is historical and intentionally
+cannot accept new work. Before operational use, confirm:
 
 ```bash
-eomctl workflow start \
-  --definition generic-item-development --version 1.1.0 \
-  --request-name PLACEHOLDER_REQUEST --image-mode skip \
-  --idempotency-key <KEY> --pack-key generic-placeholder \
-  --environment development --source-intake-batch <INTAKE_BATCH_ID> \
-  --registry-mode REVISE_ITEM --item-id <ITEM_ID> \
-  --base-revision-id <CURRENT_ITEM_REVISION_ID>
+eomctl workflow definition admission
 ```
+
+The output must report `consistent: true`; new item requests use the active
+`generated-knowledge-item/1.12.0` Content Pack and preserve the supplied logical Item and pinned base
+revision identities.
 
 After approval, verify that the previous revision is `SUPERSEDED`, its immutable artifact pointers
 remain resolvable, and the new revision is `APPROVED` and current. Re-running `workflow reconcile`

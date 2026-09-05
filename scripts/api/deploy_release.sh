@@ -662,7 +662,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
     root = Path(temporary)
     installed_root = root / "site-packages"
     definitions = []
-    for version in ("1.1", "1.2", "1.3", "1.4", "1.5", "1.6"):
+    for version in ("1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"):
         definition = root / f"generic-item-development.v{version}.yaml"
         definition.write_bytes(
             (
@@ -741,12 +741,13 @@ import sys
 from pathlib import Path
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
 os.environ["EOM_WORKSPACE_ROOT"] = workspace_root
 os.environ["EOM_CODEX_BINARY"] = codex_binary
+from eom_workflow import AgentStep, WORKFLOW_ADMISSION_BY_IDENTITY
 from eom_workflow.compiler import compile_definition
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
@@ -755,6 +756,7 @@ from eom_workflow.schemas import (
     load_definition_schema,
     load_role_input_schema,
     load_role_result_schema,
+    result_schema_protocol,
 )
 from eom_catalog_contracts import catalog_schema_inventory, load_schema, validate_contract
 import eom_workflow_runner.actor_authorization
@@ -838,9 +840,10 @@ compiled_versions = {
         definition_v1_4,
         definition_v1_5,
         definition_v1_6,
+        definition_v1_7,
     )
 }
-if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0"}:
+if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0"}:
     raise SystemExit("generic workflow definition versions mismatch")
 analysis_versions = {
     compile_definition(Path(path), {"support"}).definition.definition_version
@@ -860,6 +863,26 @@ if (
     or editorial.definition_version != "1.0.0"
 ):
     raise SystemExit("legacy item editorial compatibility workflow definition mismatch")
+admitted_definitions = (
+    compile_definition(Path(definition_v1_7), {"authoring", "image", "review", "item_management"}),
+    compile_definition(Path(analysis_v1), {"support"}),
+    compile_definition(Path(analysis_v4), {"support"}),
+    compile_definition(Path(analysis_v8), {"support"}),
+    compile_definition(Path(legacy_definition), {"support"}),
+    compile_definition(Path(editorial_definition), {"support"}),
+)
+if {
+    (compiled.definition.definition_key, compiled.definition.definition_version): next(iter({
+        result_schema_protocol(step.result_schema)
+        for step in compiled.definition.steps
+        if isinstance(step, AgentStep)
+    }))
+    for compiled in admitted_definitions
+} != {
+    identity: admission.role_protocol_version
+    for identity, admission in WORKFLOW_ADMISSION_BY_IDENTITY.items()
+}:
+    raise SystemExit("workflow admission policy does not match the installed definitions")
 for name, _ in catalog_schema_inventory():
     load_schema(name)
 validate_contract(

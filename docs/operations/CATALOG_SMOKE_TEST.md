@@ -1,5 +1,10 @@
 # Catalog Smoke Test
 
+> Historical V0 compatibility record. `generic-item-development/1.1.0` is retained only to
+> reproduce its immutable workflows and is inactive for new work. Use the Application API/GUI
+> generated-item path on `1.7.0`, and verify the active set with
+> `eomctl workflow definition admission`.
+
 1. Run Intake, Content Pack, and Registry doctors.
 2. Verify an accepted placeholder Intake and released development pack.
 3. Run a `generic-item-development@1.1.0` placeholder workflow.

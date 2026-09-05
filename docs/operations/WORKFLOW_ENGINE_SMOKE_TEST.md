@@ -1,4 +1,10 @@
-# Workflow Engine V0 Smoke Test
+# Historical Workflow Engine V0 Smoke Test
+
+> Historical compatibility record. The `1.0.0` definition below is intentionally inactive for new
+> work and these submission commands must not be used as an operational smoke test. Audit the
+> current admission set with `eomctl workflow definition admission`; current item creation enters
+> through `generic-item-development/1.7.0` as documented in
+> `docs/architecture/ACTIVE_RUNTIME_VERSION_MATRIX.md`.
 
 ## Prerequisites
 

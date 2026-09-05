@@ -32,6 +32,7 @@ from eom_catalog_contracts import (
     ReviewedItemContentImportCommand,
     ReviewedItemContentImportResult,
     ReviewKnowledgeAnalysisCommand,
+    catalog_application_schema_route,
     validate_contract,
 )
 from eom_item_registry import RegistryError
@@ -108,24 +109,8 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 "CREATE_ITEM_PRODUCTION_EVIDENCE",
             }:
                 operation = raw_operation
-            validate_contract(
-                (
-                    "catalog-application-request-v10"
-                    if operation in {"IMPORT_REVIEWED_ITEM_CONTENT", "GET_ITEM_CONTENT"}
-                    else (
-                        "catalog-application-request-v9"
-                        if operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
-                        else "catalog-application-request-v4"
-                        if operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
-                        else (
-                            "catalog-application-request-v5"
-                            if operation == "CREATE_KNOWLEDGE_ANALYSIS"
-                            else "catalog-application-request-v3"
-                        )
-                    )
-                ),
-                value,
-            )
+            schemas = catalog_application_schema_route(operation)
+            validate_contract(schemas.request_schema, value)
             request = CatalogApplicationRequest.model_validate(value).root
         except (
             UnicodeError,
@@ -336,24 +321,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             for key, value in response.model_dump(mode="json").items()
             if value is not None
         }
-        validate_contract(
-            (
-                "catalog-application-response-v10"
-                if response.operation in {"IMPORT_REVIEWED_ITEM_CONTENT", "GET_ITEM_CONTENT"}
-                else (
-                    "catalog-application-response-v7"
-                    if response.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
-                    else "catalog-application-response-v8"
-                    if response.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
-                    else (
-                        "catalog-application-response-v9"
-                        if response.operation == "CREATE_EVIDENCE_BUNDLE"
-                        else "catalog-application-response-v3"
-                    )
-                )
-            ),
-            payload,
-        )
+        schemas = catalog_application_schema_route(response.operation)
+        validate_contract(schemas.response_schema, payload)
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         raw = encoded.encode("utf-8")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:
