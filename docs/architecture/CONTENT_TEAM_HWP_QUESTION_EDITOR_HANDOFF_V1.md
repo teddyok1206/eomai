@@ -152,6 +152,20 @@ authoring-result@7.0, Catalog stores V2 JSON plus deterministic Markdown under `
 uses review-result@7.0, and item management uses registration-result@7.0. There is no mandatory image
 step.
 
+The fixed adapter also preserves the Q_STEM paragraph identity across one reviewed handoff defect:
+when a leading stem paragraph contains native equations immediately before a 자료/조건 block, the
+program's mixed-content renderer replaces and detaches the marker node before its labeled-block
+path looks up the containing paragraph. EOM retains that already-validated paragraph reference for
+the subsequent insertion only. The archive bytes, parser, equation renderer, prototype cloning,
+and validator implementation remain unchanged; every other validator finding remains authoritative.
+
+The adapter also supplies the validator with the parsed input's exact per-statement explanation
+lines. The reviewed template uses `ㄱ. [풀이] 참조` and `ㄷ. [풀이] 참조` as sample text while the
+content-team prompt deliberately permits those same lines as authored references to a complete
+overall solution. Template cleanup still removes and verifies the original sample nodes first; the
+validator suppresses a sample-residue finding only when the regenerated paragraph is byte-equal to
+an explanation reference in the pinned input.
+
 ## Transaction, concurrency, failure, and retry
 
 Parsing is pure. A build claims one idempotency key, snapshots all immutable pointers, renders in a

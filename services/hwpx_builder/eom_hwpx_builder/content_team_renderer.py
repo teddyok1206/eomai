@@ -211,6 +211,86 @@ def _load_draft(raw: bytes) -> ContentTeamEditorialDraft:
         ) from exc
 
 
+def _content_team_engine(engine_module: Any) -> Any:
+    """Adapt one reviewed handoff defect without modifying its immutable source.
+
+    The handoff's labeled-block path asks for the Q_STEM marker's paragraph after
+    its mixed-content renderer has replaced (and detached) that marker element.
+    Other mixed-content paths retain the paragraph before rendering. Preserve
+    that same paragraph identity while leaving parsing, XML mutation, prototype
+    cloning, and validation owned by the reviewed handoff engine.
+    """
+
+    class CompatibleEngine(engine_module.HwpxTemplateEngine):  # type: ignore[misc]
+        def __init__(self) -> None:
+            super().__init__()
+            self._detached_marker_context: tuple[Any, Any] | None = None
+
+        def _render_q_stem_paragraph_prefix(
+            self,
+            *,
+            root: Any,
+            marker_text: Any,
+            marker: str,
+            paragraph_text: str,
+            template_path: Path,
+        ) -> None:
+            paragraph = self._paragraph_for_element(marker_text)
+            super()._render_q_stem_paragraph_prefix(
+                root=root,
+                marker_text=marker_text,
+                marker=marker,
+                paragraph_text=paragraph_text,
+                template_path=template_path,
+            )
+            if marker_text.getparent() is None:
+                self._detached_marker_context = (marker_text, paragraph)
+
+        def _paragraph_for_element(self, element: Any) -> Any:
+            try:
+                return super()._paragraph_for_element(element)
+            except engine_module.HwpxTemplateError:
+                context = self._detached_marker_context
+                if context is None or context[0] is not element:
+                    raise
+                return context[1]
+
+    return CompatibleEngine()
+
+
+def _content_team_validator_class(validator_module: Any, question: Any) -> Any:
+    """Disambiguate authored ``[풀이] 참조`` from removed template samples."""
+
+    intentional_references = frozenset(
+        f"{label}. [풀이] 참조"
+        for label, body in (
+            ("ㄱ", question.solution_ga),
+            ("ㄴ", question.solution_na),
+            ("ㄷ", question.solution_da),
+        )
+        if body.strip() == "[풀이] 참조"
+    )
+
+    class InputAwareValidator(validator_module.HwpxValidator):  # type: ignore[misc]
+        def validate(self, *args: Any, **kwargs: Any) -> Any:
+            result = super().validate(*args, **kwargs)
+            issues = tuple(
+                issue
+                for issue in result.issues
+                if not (
+                    issue.code == "SAMPLE_CONTENT_REMAINING"
+                    and issue.member == validator_module.SECTION_MEMBER
+                    and any(
+                        issue.message == f"table 7 sample explanation paragraph remains: {text!r}"
+                        for text in intentional_references
+                    )
+                )
+            )
+            return validator_module.ValidationResult(path=result.path, issues=issues)
+
+    return InputAwareValidator
+
+
 def _external_render(
     runtime: Path,
     template: Path,
@@ -230,9 +310,16 @@ def _external_render(
             question_name=f"item-{draft.item_number}",
         )
         equation_report = equation_module.EquationPreflight().assert_supported(question)
-        engine = engine_module.HwpxTemplateEngine()
-        engine.create_document(template, output, question)
-        validator_module.HwpxValidator(template).assert_valid(
+        dynamic_validator_module: Any = validator_module
+        validator_class = _content_team_validator_class(dynamic_validator_module, question)
+        engine = _content_team_engine(engine_module)
+        original_validator = dynamic_validator_module.HwpxValidator
+        dynamic_validator_module.HwpxValidator = validator_class
+        try:
+            engine.create_document(template, output, question)
+        finally:
+            dynamic_validator_module.HwpxValidator = original_validator
+        validator_class(template).assert_valid(
             output,
             expected_labeled_blocks=tuple(block.kind for block in draft.labeled_blocks),
             expected_answer_combination=question.answer_combination,

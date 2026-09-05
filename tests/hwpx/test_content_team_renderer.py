@@ -17,7 +17,7 @@ from eom_hwpx_contracts import (
     serialize_content_team_markdown,
 )
 
-from tests.hwpx.test_content_team_markdown import GENERAL_ITEM
+from tests.hwpx.test_content_team_markdown import GENERAL_ITEM, LABELED_BLOCK_ITEM
 
 ROOT = Path(__file__).resolve().parents[2]
 HANDOFF = ROOT / "staging/HwpQuestionEditor_handoff_export.zip"
@@ -29,15 +29,42 @@ def _sha256(value: bytes) -> str:
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
 @pytest.mark.parametrize(
-    "source",
+    ("source", "expected_table_count", "expected_visual_count", "expected_labeled_count"),
     [
-        GENERAL_ITEM,
-        GENERAL_ITEM.replace("$3$", "$y=20+15t-5t^{2}$", 1).replace("$5$", "$v_{y}=-5$", 1),
+        pytest.param(GENERAL_ITEM, 1, 2, 0, id="baseline"),
+        pytest.param(
+            GENERAL_ITEM.replace("$3$", "$y=20+15t-5t^{2}$", 1).replace("$5$", "$v_{y}=-5$", 1),
+            1,
+            2,
+            0,
+            id="implicit-decorated-product-and-signed-rhs",
+        ),
+        pytest.param(
+            LABELED_BLOCK_ITEM.replace("대상 X에", "대상 $X^{2+}$에", 1),
+            0,
+            0,
+            2,
+            id="mixed-equation-prefix-before-labeled-blocks",
+        ),
+        pytest.param(
+            LABELED_BLOCK_ITEM.replace(
+                "ㄱ. 자료에 특성 P가 명시되어 있으므로 옳다.",
+                "전체 풀이에서 자료의 판단 근거를 설명하였다.\n\nㄱ. [풀이] 참조",
+                1,
+            ),
+            0,
+            0,
+            2,
+            id="intentional-solution-reference-is-not-template-residue",
+        ),
     ],
-    ids=("baseline", "implicit-decorated-product-and-signed-rhs"),
 )
 def test_reviewed_handoff_renders_v2_item_with_dynamic_program_layout(
-    tmp_path: Path, source: str
+    tmp_path: Path,
+    source: str,
+    expected_table_count: int,
+    expected_visual_count: int,
+    expected_labeled_count: int,
 ) -> None:
     draft = parse_content_team_markdown(source.encode("utf-8"))
     markdown = serialize_content_team_markdown(draft)
@@ -85,7 +112,8 @@ def test_reviewed_handoff_renders_v2_item_with_dynamic_program_layout(
     assert result.status == "SUCCEEDED"
     assert result.output_sha256 == _sha256(output.read_bytes())
     assert result.equation_count == len(draft.equation_sources)
-    assert result.table_count == 1
-    assert result.visual_count == 2
+    assert result.table_count == expected_table_count
+    assert result.visual_count == expected_visual_count
+    assert result.labeled_block_count == expected_labeled_count
     assert stat.S_IMODE(output.stat().st_mode) == 0o640
     assert stat.S_IMODE(result_path.stat().st_mode) == 0o640
