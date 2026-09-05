@@ -245,8 +245,14 @@ class CatalogApplicationClient:
         | CreateItemProductionEvidenceCommand,
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
+        item_content_operation = command.operation in {
+            "IMPORT_REVIEWED_ITEM_CONTENT",
+            "GET_ITEM_CONTENT",
+        }
         request_schema = (
-            "catalog-application-request-v9"
+            "catalog-application-request-v10"
+            if item_content_operation
+            else "catalog-application-request-v9"
             if command.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
             else "catalog-application-request-v4"
             if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"
@@ -257,7 +263,9 @@ class CatalogApplicationClient:
             )
         )
         response_schema = (
-            "catalog-application-response-v7"
+            "catalog-application-response-v10"
+            if item_content_operation
+            else "catalog-application-response-v7"
             if command.operation == "CREATE_KNOWLEDGE_ANALYSIS_BATCH"
             else "catalog-application-response-v8"
             if command.operation == "CREATE_ITEM_PRODUCTION_EVIDENCE"

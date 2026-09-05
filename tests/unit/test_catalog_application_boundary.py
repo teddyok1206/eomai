@@ -13,6 +13,7 @@ from eom_api.services.catalog_application_client import (
 )
 from eom_catalog_contracts import (
     AssessmentItemContent,
+    AssessmentItemContentV2,
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
@@ -34,6 +35,7 @@ from eom_identifiers import content_sha256
 from jsonschema import ValidationError as JsonSchemaValidationError
 
 from tests.unit.test_assessment_item_content import item_content
+from tests.unit.test_content_team_item_protocol import _content as content_team_item
 
 
 class FakeImports:
@@ -65,6 +67,11 @@ class FakeRegistry:
             sha256="sha256:" + hashlib.sha256(content).hexdigest(),
             iter_chunks=iter_chunks,
         )
+
+
+class FakeContentTeamRegistry(FakeRegistry):
+    def load_item_content(self, _revision_id: str) -> AssessmentItemContentV2:
+        return content_team_item()
 
 
 class FakeKnowledgeAnalysis:
@@ -306,13 +313,18 @@ def _continuing_batch_command() -> CreateKnowledgeAnalysisBatchCommand:
     return CreateKnowledgeAnalysisBatchCommand.model_validate(value)
 
 
-def _server(tmp_path: Path, *, allowed_uid: int | None = None) -> CatalogApplicationServer:
+def _server(
+    tmp_path: Path,
+    *,
+    allowed_uid: int | None = None,
+    registry: FakeRegistry | None = None,
+) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
     runtime.chmod(0o750)
     return CatalogApplicationServer(  # type: ignore[arg-type]
         FakeImports(),
-        FakeRegistry(),
+        registry or FakeRegistry(),
         FakeKnowledgeAnalysis(),
         FakeKnowledgeAnalysisBatch(),
         FakeKnowledgeRetrieval(),
@@ -494,6 +506,29 @@ def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
         assert evidence.graph_snapshot.graph_snapshot_revision_id == "graphrev_" + "e" * 32
         item_evidence = client.create_item_production_evidence(_item_evidence_command())
         assert item_evidence.context_artifact.member_path == "evidence/context.md"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_catalog_socket_round_trip_uses_v10_for_content_team_items(tmp_path: Path) -> None:
+    server = _server(tmp_path, registry=FakeContentTeamRegistry())
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = _client(server)
+        imported = client.import_reviewed(
+            ReviewedItemContentImportCommand(
+                base_revision_id="itemrev_" + "6" * 32,
+                expected_version=1,
+                reviewed_by="operator_test_admin",
+                review_reason="콘텐츠팀 구조화 문항의 검토된 표현 정규화를 승인합니다.",
+                content=content_team_item(),
+            )
+        )
+        assert imported.item_revision_id == "itemrev_" + "2" * 32
+        assert client.load_item_content("itemrev_" + "2" * 32) == content_team_item()
     finally:
         server.shutdown()
         server.server_close()
