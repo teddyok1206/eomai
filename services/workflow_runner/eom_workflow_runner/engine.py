@@ -11,8 +11,14 @@ from uuid import uuid4
 
 from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
+from eom_orchestrator.control_models import WorkerLeaseRecord
 from eom_orchestrator.database import build_session_factory, transaction
-from eom_orchestrator.models import ArtifactRevisionRecord
+from eom_orchestrator.models import (
+    ArtifactRecord,
+    ArtifactRevisionRecord,
+    JobEventRecord,
+    JobRecord,
+)
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_workflow import (
     AgentStep,
@@ -77,6 +83,7 @@ from eom_workflow_runner.state_machine import (
     WorkflowState,
     direct_agent_entry_stage,
     record_workflow_event,
+    resume_capacity_queued_failure,
     transition_command,
     transition_stage,
     transition_step,
@@ -420,6 +427,7 @@ class WorkflowRunner:
                         WorkflowErrorCode.APPROVAL_UNAUTHORIZED,
                         "only an admin can reconcile a workflow",
                     )
+            self._resume_capacity_queued_failure(command)
             self._advance(
                 command.workflow_id,
                 command.command_id,
@@ -493,7 +501,7 @@ class WorkflowRunner:
                             step_key=step_definition.key,
                         )
                     continue
-                self._execute_agent(
+                should_continue = self._execute_agent(
                     workflow,
                     compiled,
                     step_definition,
@@ -501,6 +509,8 @@ class WorkflowRunner:
                     actor_type,
                     actor_id,
                 )
+                if not should_continue:
+                    return
             elif isinstance(step_definition, DecisionStep):
                 self._execute_decision(
                     workflow,
@@ -543,7 +553,7 @@ class WorkflowRunner:
         command_id: str | None,
         actor_type: str,
         actor_id: str,
-    ) -> None:
+    ) -> bool:
         with transaction(self.sessions) as session:
             current = session.get(WorkflowInstanceRecord, workflow.workflow_id)
             if current is None:
@@ -635,7 +645,7 @@ class WorkflowRunner:
                     actor_type,
                     actor_id,
                 )
-                return
+                return True
             if step.state == StepState.READY.value:
                 transition_step(step, StepState.RUNNING)
                 record_workflow_event(
@@ -804,7 +814,7 @@ class WorkflowRunner:
                         "retry_command_id": retry.command_id,
                     },
                 )
-            return
+            return False
 
         execution_failed = execution.status != "SUCCEEDED" or execution.content_hash is None
         with transaction(self.sessions) as session:
@@ -885,6 +895,7 @@ class WorkflowRunner:
                 WorkflowErrorCode.WORKFLOW_STEP_FAILED,
                 "platform role job failed",
             )
+        return True
 
     def _move_after_agent(
         self,
@@ -1113,6 +1124,151 @@ class WorkflowRunner:
                 actor_id=command.actor_id,
                 command_id=command.command_id,
             )
+
+    def _resume_capacity_queued_failure(self, command: WorkflowCommandRecord) -> bool:
+        """Reconcile a failed workflow only when its worker job never started."""
+
+        with transaction(self.sessions) as session:
+            workflow = session.execute(
+                select(WorkflowInstanceRecord)
+                .where(WorkflowInstanceRecord.workflow_id == command.workflow_id)
+                .with_for_update()
+            ).scalar_one_or_none()
+            if workflow is None:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_NOT_FOUND,
+                    "workflow not found",
+                )
+            if workflow.state != WorkflowState.FAILED.value:
+                return False
+            if (
+                workflow.stage != WorkflowStage.FAILED.value
+                or workflow.failure_code != WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
+                    "failed workflow is not a recoverable capacity-queued failure",
+                )
+            compiled = self._compiled_for_record(session, workflow)
+            definition = compiled.steps_by_key.get(workflow.current_step_key)
+            if not isinstance(definition, AgentStep):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
+                    "failed workflow is not positioned on an agent step",
+                )
+            step = self._latest_active_step(
+                session,
+                workflow.workflow_id,
+                definition.key,
+            )
+            if (
+                step is None
+                or step.state != StepState.FAILED.value
+                or step.error_code != WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
+                or step.platform_job_id is None
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
+                    "failed step is not a recoverable capacity-queued attempt",
+                )
+            job = session.execute(
+                select(JobRecord).where(JobRecord.job_id == step.platform_job_id).with_for_update()
+            ).scalar_one_or_none()
+            if job is None:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "failed step platform job is missing",
+                )
+            request = job.request
+            if (
+                job.status != "QUEUED"
+                or job.worker_slot_id is not None
+                or job.worker_exit_code is not None
+                or job.worker_stdout_path is not None
+                or job.worker_stderr_path is not None
+                or job.error_code is not None
+                or job.error_message is not None
+                or job.completed_at is not None
+                or request.get("workflow_id") != workflow.workflow_id
+                or request.get("step_run_id") != step.step_run_id
+                or request.get("attempt") != step.attempt
+                or request.get("role") != definition.worker_role
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
+                    "platform job has crossed the worker execution boundary",
+                )
+            events = tuple(
+                session.scalars(
+                    select(JobEventRecord)
+                    .where(JobEventRecord.job_id == job.job_id)
+                    .order_by(JobEventRecord.sequence)
+                )
+            )
+            event_contract = tuple(
+                (event.sequence, event.event, event.from_state, event.to_state) for event in events
+            )
+            if event_contract != (
+                (1, "JOB_CREATED", None, "CREATED"),
+                (2, "REQUEST_VALIDATED", "CREATED", "VALIDATED"),
+                (3, "JOB_QUEUED", "VALIDATED", "QUEUED"),
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
+                    "platform job event history is not an untouched queue",
+                )
+            if (
+                session.scalar(
+                    select(ArtifactRecord.logical_artifact_id).where(
+                        ArtifactRecord.job_id == job.job_id
+                    )
+                )
+                is not None
+                or session.scalar(
+                    select(WorkerLeaseRecord.lease_id).where(WorkerLeaseRecord.job_id == job.job_id)
+                )
+                is not None
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
+                    "queued platform job already has execution or artifact evidence",
+                )
+            competing_command = session.scalar(
+                select(WorkflowCommandRecord.command_id)
+                .where(
+                    WorkflowCommandRecord.workflow_id == workflow.workflow_id,
+                    WorkflowCommandRecord.command_id != command.command_id,
+                    WorkflowCommandRecord.state.in_(
+                        (
+                            CommandState.PENDING.value,
+                            CommandState.LEASED.value,
+                            CommandState.PROCESSING.value,
+                        )
+                    ),
+                )
+                .limit(1)
+            )
+            if competing_command is not None:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                    "workflow has another active command",
+                )
+            target_state, target_stage = _capacity_resume_target(
+                definition.worker_role,
+                workflow.definition_key,
+            )
+            resume_capacity_queued_failure(
+                session,
+                workflow_id=workflow.workflow_id,
+                step_run_id=step.step_run_id,
+                job_id=job.job_id,
+                target_state=target_state,
+                target_stage=target_stage,
+                actor_type=command.actor_type,
+                actor_id=command.actor_id,
+                command_id=command.command_id,
+            )
+            return True
 
     def _request_rework(self, command: WorkflowCommandRecord) -> None:
         authorization = self._authorize_actor(
@@ -1576,3 +1732,27 @@ def _stage_for_rework_target(target: str) -> WorkflowStage:
         "image": WorkflowStage.IMAGE_REQUIRED,
         "review": WorkflowStage.REVIEWING,
     }[target]
+
+
+def _capacity_resume_target(
+    worker_role: str,
+    definition_key: str,
+) -> tuple[WorkflowState, WorkflowStage]:
+    if worker_role == "authoring":
+        return WorkflowState.RUNNING, WorkflowStage.AUTHORING
+    if worker_role == "image":
+        return WorkflowState.RUNNING, WorkflowStage.IMAGE_REQUIRED
+    if worker_role == "review":
+        return WorkflowState.RUNNING, WorkflowStage.REVIEWING
+    if worker_role == "item_management":
+        return WorkflowState.REGISTERING, WorkflowStage.REGISTERING
+    if worker_role == "support" and definition_key in {
+        "knowledge-analysis",
+        "legacy-item-extraction",
+        "legacy-item-editorial-compatibility",
+    }:
+        return WorkflowState.RUNNING, WorkflowStage.KNOWLEDGE_ANALYSIS
+    raise WorkflowError(
+        WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
+        "failed workflow role has no capacity reconciliation target",
+    )

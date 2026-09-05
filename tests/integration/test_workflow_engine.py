@@ -64,8 +64,10 @@ from eom_workflow_runner.settings import WorkflowSettings
 from eom_workflow_runner.state_machine import (
     CommandState,
     StepState,
+    WorkflowStage,
     WorkflowState,
     transition_command,
+    transition_stage,
     transition_step,
     transition_workflow,
 )
@@ -231,6 +233,110 @@ class FakeRoleExecutor:
                 manifest_hash=content_sha256({"content_hash": content_hash}),
                 content_bytes=1,
                 nas_path=f"/tmp/{logical_artifact_id}/{revision_id}",
+                manifest={"content_hash": content_hash},
+                result=result,
+            )
+            transition_job(session, job.job_id, JobState.SUCCEEDED, "ARTIFACT_COMMITTED")
+            return _execution(job, content_hash)
+
+
+class CapacityQueuedThenSuccessExecutor(FakeRoleExecutor):
+    def __init__(self, sessions: sessionmaker[Session]) -> None:
+        super().__init__(sessions)
+        self.capacity_ready = False
+
+    def execute(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: WorkerRequest,
+        upstream: tuple[ArtifactPointer, ...],
+        idempotency_key: str,
+        prompt_text: str | None,
+    ) -> RoleExecutionResult:
+        del upstream
+        assert step.worker_role is not None
+        self.calls.append((step.step_key, step.attempt, step.worker_role))
+        self.worker_requests.append(request.model_dump(mode="json"))
+        self.prompts.append(prompt_text)
+        with transaction(self.sessions) as session:
+            job = session.scalar(
+                select(JobRecord).where(JobRecord.idempotency_key == idempotency_key)
+            )
+            if job is None:
+                job_id = new_job_id()
+                logical_artifact_id = new_logical_artifact_id()
+                revision_id = new_revision_id()
+                ensure_protocol_version(
+                    session,
+                    "workflow-role/1.0.1",
+                    role_schema_bundle_hash(),
+                )
+                job, created = submit_structured_job(
+                    session,
+                    job_id=job_id,
+                    protocol_version="workflow-role/1.0.1",
+                    idempotency_key=idempotency_key,
+                    task_type=f"workflow_{step.worker_role}",
+                    request={
+                        "workflow_id": workflow.workflow_id,
+                        "step_run_id": step.step_run_id,
+                        "role": step.worker_role,
+                        "attempt": step.attempt,
+                    },
+                    logical_artifact_id=logical_artifact_id,
+                    revision_id=revision_id,
+                )
+                assert created
+                transition_job(session, job.job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
+                transition_job(session, job.job_id, JobState.QUEUED, "JOB_QUEUED")
+                current = session.get(WorkflowStepRunRecord, step.step_run_id)
+                assert current is not None
+                current.platform_job_id = job.job_id
+            if not self.capacity_ready:
+                return RoleExecutionResult(
+                    job_id=job.job_id,
+                    status="QUEUED",
+                    worker_slot=None,
+                    logical_artifact_id=job.logical_artifact_id,
+                    revision_id=job.revision_id,
+                    content_hash=None,
+                    error_code=None,
+                )
+
+            slot_id, linux_user = ROLE_SLOTS[step.worker_role]
+            upsert_worker_slot(
+                session,
+                slot_id=slot_id,
+                linux_user=linux_user,
+                role=step.worker_role,
+                enabled=True,
+                gpu=step.worker_role == "image",
+            )
+            job.worker_slot_id = slot_id
+            transition_job(session, job.job_id, JobState.CLAIMED, "WORKER_CLAIMED")
+            transition_job(session, job.job_id, JobState.RUNNING, "WORKER_STARTED")
+            transition_job(
+                session,
+                job.job_id,
+                JobState.VALIDATING_RESULT,
+                "WORKER_RESULT_RECEIVED",
+            )
+            transition_job(session, job.job_id, JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED")
+            result = {
+                "status": "ok",
+                "role": step.worker_role,
+                "placeholder": "PLACEHOLDER_CONTENT",
+            }
+            content_hash = content_sha256(result)
+            create_artifact_records(
+                session,
+                job=job,
+                content_hash=content_hash,
+                manifest_hash=content_sha256({"content_hash": content_hash}),
+                content_bytes=1,
+                nas_path=f"/tmp/{job.logical_artifact_id}/{job.revision_id}",
                 manifest={"content_hash": content_hash},
                 result=result,
             )
@@ -551,6 +657,169 @@ def test_direct_authoring_to_review_records_image_skip_stage(
                 ("IMAGE_SKIPPED", "REVIEWING"),
             ]
         assert [role for _, _, role in executor.calls] == ["authoring", "review"]
+    finally:
+        _close(resources)
+
+
+def test_capacity_queue_yields_once_and_admin_reconcile_resumes_same_job(
+    integration_engine: Engine,
+) -> None:
+    runner, _executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "skip",
+        "workflow-capacity-queue-reconcile",
+    )
+    queued = CapacityQueuedThenSuccessExecutor(sessions)
+    runner.executor = queued
+    try:
+        processed = runner.run_once(workflow_id)
+        assert processed is not None
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            authoring = session.scalar(
+                select(WorkflowStepRunRecord).where(
+                    WorkflowStepRunRecord.workflow_id == workflow_id,
+                    WorkflowStepRunRecord.step_key == "authoring",
+                )
+            )
+            assert workflow is not None and authoring is not None
+            assert workflow.state == WorkflowState.RUNNING.value
+            assert authoring.state == StepState.RUNNING.value
+            assert authoring.platform_job_id is not None
+            original_job_id = authoring.platform_job_id
+            events = list_workflow_events(session, workflow_id)
+            assert [event.event_type for event in events].count("STEP_CAPACITY_QUEUED") == 1
+            assert queued.calls == [("authoring", 1, "authoring")]
+
+        with transaction(sessions) as session:
+            queued_advance = session.scalar(
+                select(WorkflowCommandRecord).where(
+                    WorkflowCommandRecord.workflow_id == workflow_id,
+                    WorkflowCommandRecord.command_type == CommandType.ADVANCE_WORKFLOW.value,
+                    WorkflowCommandRecord.state == CommandState.PENDING.value,
+                )
+            )
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            authoring = session.scalar(
+                select(WorkflowStepRunRecord).where(
+                    WorkflowStepRunRecord.workflow_id == workflow_id,
+                    WorkflowStepRunRecord.step_key == "authoring",
+                )
+            )
+            assert queued_advance is not None and workflow is not None and authoring is not None
+            transition_command(queued_advance, CommandState.CANCELLED)
+            authoring.error_code = WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
+            authoring.error_summary = "platform role execution raised an exception"
+            transition_step(authoring, StepState.FAILED)
+            workflow.failure_code = WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
+            workflow.failure_summary = "workflow step failed"
+            transition_stage(
+                session,
+                workflow_id,
+                WorkflowStage.FAILED,
+                "authoring",
+                "WORKFLOW_FAILURE_STAGE_ENTERED",
+                actor_type="system",
+                actor_id="test-runner",
+                command_id=None,
+            )
+            transition_workflow(
+                session,
+                workflow_id,
+                WorkflowState.FAILED,
+                "WORKFLOW_FAILED",
+                actor_type="system",
+                actor_id="test-runner",
+                command_id=None,
+                step_key="authoring",
+            )
+            reconcile, _ = enqueue_command(
+                session,
+                workflow_id=workflow_id,
+                command_type=CommandType.RECONCILE_WORKFLOW,
+                payload={},
+                actor_type="human",
+                actor_id="admin_01",
+                source="test",
+                idempotency_key="workflow-capacity-queue-admin-reconcile",
+            )
+            reconcile_id = reconcile.command_id
+
+        queued.capacity_ready = True
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            reconcile = session.get(WorkflowCommandRecord, reconcile_id)
+            authoring = session.scalar(
+                select(WorkflowStepRunRecord).where(
+                    WorkflowStepRunRecord.workflow_id == workflow_id,
+                    WorkflowStepRunRecord.step_key == "authoring",
+                )
+            )
+            assert workflow is not None and reconcile is not None and authoring is not None
+            assert workflow.state == WorkflowState.AWAITING_HUMAN_APPROVAL.value
+            assert reconcile.state == CommandState.SUCCEEDED.value
+            assert authoring.state == StepState.SUCCEEDED.value
+            assert authoring.platform_job_id == original_job_id
+            assert authoring.attempt == 1
+            assert [event.event_type for event in list_workflow_events(session, workflow_id)].count(
+                "WORKFLOW_CAPACITY_QUEUE_RECONCILED"
+            ) == 1
+            assert [role for _, _, role in queued.calls] == [
+                "authoring",
+                "authoring",
+                "review",
+            ]
+    finally:
+        _close(resources)
+
+
+def test_admin_reconcile_does_not_retry_a_terminal_platform_job(
+    integration_engine: Engine,
+) -> None:
+    runner, _executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "skip",
+        "workflow-terminal-job-reconcile-denied",
+    )
+    runner.executor = FailedRoleExecutor(sessions)
+    try:
+        runner.run_until_idle(workflow_id)
+        with transaction(sessions) as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            assert workflow.state == WorkflowState.FAILED.value
+            reconcile, _ = enqueue_command(
+                session,
+                workflow_id=workflow_id,
+                command_type=CommandType.RECONCILE_WORKFLOW,
+                payload={},
+                actor_type="human",
+                actor_id="admin_01",
+                source="test",
+                idempotency_key="workflow-terminal-job-admin-reconcile",
+            )
+            reconcile_id = reconcile.command_id
+
+        runner.run_once(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            reconcile = session.get(WorkflowCommandRecord, reconcile_id)
+            authoring = session.scalar(
+                select(WorkflowStepRunRecord).where(
+                    WorkflowStepRunRecord.workflow_id == workflow_id,
+                    WorkflowStepRunRecord.step_key == "authoring",
+                )
+            )
+            assert workflow is not None and reconcile is not None and authoring is not None
+            assert workflow.state == WorkflowState.FAILED.value
+            assert authoring.state == StepState.FAILED.value
+            assert authoring.attempt == 1
+            assert reconcile.state == CommandState.FAILED.value
+            assert reconcile.error_code == WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION.value
+            assert "WORKFLOW_CAPACITY_QUEUE_RECONCILED" not in {
+                event.event_type for event in list_workflow_events(session, workflow_id)
+            }
     finally:
         _close(resources)
 

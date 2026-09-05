@@ -342,6 +342,86 @@ def transition_step(step_run: WorkflowStepRunRecord, target: StepState) -> None:
         step_run.finished_at = now
 
 
+def resume_capacity_queued_failure(
+    session: Session,
+    *,
+    workflow_id: str,
+    step_run_id: str,
+    job_id: str,
+    target_state: WorkflowState,
+    target_stage: WorkflowStage,
+    actor_type: str,
+    actor_id: str,
+    command_id: str,
+) -> WorkflowInstanceRecord:
+    """Resume only a failed step whose platform job never left QUEUED.
+
+    This is a reconciliation boundary, not a worker retry: it retains the same step
+    attempt, platform job, immutable inputs, and idempotency key.
+    """
+
+    if target_state not in {WorkflowState.RUNNING, WorkflowState.REGISTERING}:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
+            "capacity reconciliation target state is invalid",
+        )
+    workflow = _lock_workflow(session, workflow_id)
+    step = session.execute(
+        select(WorkflowStepRunRecord)
+        .where(WorkflowStepRunRecord.step_run_id == step_run_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if (
+        WorkflowState(workflow.state) is not WorkflowState.FAILED
+        or WorkflowStage(workflow.stage) is not WorkflowStage.FAILED
+        or step is None
+        or step.workflow_id != workflow_id
+        or step.step_key != workflow.current_step_key
+        or StepState(step.state) is not StepState.FAILED
+        or step.platform_job_id != job_id
+    ):
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
+            "capacity reconciliation source state is invalid",
+        )
+
+    prior_failure_code = workflow.failure_code
+    prior_step_error_code = step.error_code
+    now = datetime.now(UTC)
+    step.state = StepState.RUNNING.value
+    step.finished_at = None
+    step.error_code = None
+    step.error_summary = None
+    workflow.state = target_state.value
+    workflow.stage = target_stage.value
+    workflow.completed_at = None
+    workflow.failure_code = None
+    workflow.failure_summary = None
+    workflow.lock_version += 1
+    workflow.updated_at = now
+    _append_event(
+        session,
+        workflow,
+        "WORKFLOW_CAPACITY_QUEUE_RECONCILED",
+        WorkflowState.FAILED.value,
+        target_state.value,
+        step.step_key,
+        actor_type,
+        actor_id,
+        command_id,
+        {
+            "job_id": job_id,
+            "step_run_id": step_run_id,
+            "attempt": step.attempt,
+            "prior_stage": WorkflowStage.FAILED.value,
+            "new_stage": target_stage.value,
+            "prior_failure_code": prior_failure_code,
+            "prior_step_error_code": prior_step_error_code,
+        },
+    )
+    return workflow
+
+
 def record_workflow_event(
     session: Session,
     workflow_id: str,
