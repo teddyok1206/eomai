@@ -1077,8 +1077,8 @@ class HttpApplicationGateway:
         content_team_ready = any(
             isinstance(profile, dict)
             and profile.get("renderer") == "content-team"
-            and profile.get("renderer_version") == "1.0.0"
-            and profile.get("document_profile") == "content-team-hwp-question-editor-v1"
+            and profile.get("renderer_version") == "2.0.0"
+            and profile.get("document_profile") == "content-team-hwp-question-editor-v2"
             and profile.get("source_schema_ref") == "eom.assessment.item-content/2.0"
             for profile in profiles
         )

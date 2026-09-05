@@ -1,0 +1,137 @@
+{
+  "$defs": {
+    "ArtifactSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "file_name": {
+          "const": "result.json",
+          "title": "File Name",
+          "type": "string"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Logical Artifact Id",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "application/json",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Revision Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "file_name",
+        "media_type"
+      ],
+      "title": "ArtifactSpec",
+      "type": "object"
+    },
+    "KnowledgeRegistration": {
+      "additionalProperties": false,
+      "properties": {
+        "result": {
+          "const": "ready_for_registration",
+          "title": "Result",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "result",
+        "summary"
+      ],
+      "title": "KnowledgeRegistration",
+      "type": "object"
+    },
+    "KnowledgeRegistrationOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "registration": {
+          "$ref": "#/$defs/KnowledgeRegistration"
+        }
+      },
+      "required": [
+        "registration"
+      ],
+      "title": "KnowledgeRegistrationOutput",
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/workflow/roles/registration-result-v8.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact": {
+      "$ref": "#/$defs/ArtifactSpec"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "job_id": {
+      "pattern": "^job_[0-9a-f]{32}$",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "output": {
+      "$ref": "#/$defs/KnowledgeRegistrationOutput"
+    },
+    "protocol_version": {
+      "const": "workflow-role/1.17.0",
+      "title": "Protocol Version",
+      "type": "string"
+    },
+    "role": {
+      "const": "item_management",
+      "title": "Role",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "const": "ok",
+      "title": "Status",
+      "type": "string"
+    },
+    "step_run_id": {
+      "pattern": "^steprun_[0-9a-f]{32}$",
+      "title": "Step Run Id",
+      "type": "string"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "title": "Workflow Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "job_id",
+    "workflow_id",
+    "step_run_id",
+    "status",
+    "artifact",
+    "completed_at",
+    "role",
+    "output"
+  ],
+  "title": "ContentTeamRegistrationRoleResultV8",
+  "type": "object"
+}

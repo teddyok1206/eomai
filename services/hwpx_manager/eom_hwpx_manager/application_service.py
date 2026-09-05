@@ -13,6 +13,7 @@ from typing import Any, Protocol
 
 from eom_hwpx_contracts import (
     ContentTeamHandoffSnapshot,
+    ContentTeamImageSource,
     ContentTeamItemSource,
     KordocExpectedStructure,
     KordocRenderOptions,
@@ -21,6 +22,7 @@ from eom_hwpx_contracts import (
 from eom_identifiers import content_sha256, new_hwpx_build_id
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from pydantic import ValidationError
 from sqlalchemy import Engine, select
 
 from eom_hwpx_manager.application_adapter import FixedKordocBuilderAdapter
@@ -116,6 +118,7 @@ class ContentTeamRenderer(Protocol):
         source: ContentTeamItemSource,
         *,
         item_revision_id: str,
+        image_sources: tuple[ContentTeamImageSource, ...],
         idempotency_key: str,
         build_id: str,
         handoff_snapshot: ContentTeamHandoffSnapshot,
@@ -194,10 +197,11 @@ class HwpxApplicationService:
                 )
             handoff_snapshot = self.content_team_renderer.snapshot()
             normalized_options = dict(options) | {
-                "document_profile": "content-team-hwp-question-editor-v1",
+                "document_profile": "content-team-hwp-question-editor-v2",
                 "editorial_markdown_member": markdown_member,
                 "editorial_markdown_sha256": markdown_sha256,
                 "handoff": handoff_snapshot.model_dump(mode="json"),
+                "content_team_images": self._content_team_image_sources(revision),
             }
             renderer_version = CONTENT_TEAM_RENDERER_VERSION
         else:
@@ -366,6 +370,10 @@ class HwpxApplicationService:
                         markdown_sha256=str(record.options["editorial_markdown_sha256"]),
                     ),
                     item_revision_id=record.item_revision_id,
+                    image_sources=tuple(
+                        ContentTeamImageSource.model_validate(value)
+                        for value in record.options.get("content_team_images", [])
+                    ),
                     idempotency_key=record.idempotency_key,
                     build_id=record.build_id,
                     handoff_snapshot=ContentTeamHandoffSnapshot.model_validate(handoff_raw),
@@ -502,6 +510,64 @@ class HwpxApplicationService:
                 "Item Revision must have exactly one V2 content-team ITEM_CONTENT component",
             )
         return eligible[0]
+
+    @staticmethod
+    def _content_team_image_sources(revision: dict[str, Any]) -> list[dict[str, Any]]:
+        components = revision.get("components", [])
+        candidates = tuple(
+            component
+            for component in components
+            if isinstance(component, dict) and component.get("component_type") == "IMAGE"
+        )
+        if any(
+            not isinstance(component.get("ordinal"), int)
+            or isinstance(component.get("ordinal"), bool)
+            for component in candidates
+        ):
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "content-team image component ordinal is invalid",
+            )
+        images = sorted(candidates, key=lambda component: component["ordinal"])
+        ordinals = tuple(component["ordinal"] for component in images)
+        if len(images) > 2 or ordinals != tuple(sorted(set(ordinals))):
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "content-team image component ordinals are ambiguous",
+            )
+        sources: list[dict[str, Any]] = []
+        for component in images:
+            metadata = component.get("metadata")
+            if not isinstance(metadata, dict):
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                    "content-team image metadata is missing",
+                )
+            ordinal = component.get("ordinal")
+            try:
+                source = ContentTeamImageSource.model_validate(
+                    {
+                        "visual_ordinal": ordinal,
+                        "label": metadata.get("label"),
+                        "artifact_id": component.get("artifact_id"),
+                        "artifact_revision_id": component.get("artifact_revision_id"),
+                        "artifact_member": metadata.get("artifact_member"),
+                        "sha256": component.get("sha256"),
+                        "schema_ref": component.get("schema_ref"),
+                        "media_type": component.get("media_type"),
+                        "width_px": metadata.get("width_px"),
+                        "height_px": metadata.get("height_px"),
+                        "alt_text": metadata.get("alt_text"),
+                        "file_name": f"input/visual-{ordinal}.png",
+                    }
+                )
+            except ValidationError as exc:
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                    "content-team image component is malformed",
+                ) from exc
+            sources.append(source.model_dump(mode="json"))
+        return sources
 
     @classmethod
     def _resolve_build_source(

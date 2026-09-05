@@ -43,6 +43,7 @@ from eom_workflow_runner.actor_authorization import (
     WorkflowActorDenialReason,
 )
 from eom_workflow_runner.catalog_port import (
+    ContentTeamStimulusPointer,
     GeneratedStimulusPointer,
     RegistrationOutcome,
     WorkflowCatalogPort,
@@ -676,6 +677,7 @@ class WorkflowRunner:
         full_request = load_persisted_workflow_request(workflow.initial_request)
         registration: RegistrationOutcome | None = None
         generated_stimulus: GeneratedStimulusPointer | None = None
+        content_team_stimuli: tuple[ContentTeamStimulusPointer, ...] | None = None
         result_pointer: ArtifactPointer | None = None
         try:
             prompt_text: str | None = None
@@ -744,10 +746,16 @@ class WorkflowRunner:
                     definition.worker_role == "image"
                     and full_request.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
                 ):
-                    generated_stimulus = self.catalog.materialize_generated_stimulus(
-                        workflow=workflow,
-                        artifacts=(*upstream, result_pointer),
-                    )
+                    if definition.result_schema == "image-result@8.0":
+                        content_team_stimuli = self.catalog.materialize_content_team_stimuli(
+                            workflow=workflow,
+                            artifacts=(*upstream, result_pointer),
+                        )
+                    else:
+                        generated_stimulus = self.catalog.materialize_generated_stimulus(
+                            workflow=workflow,
+                            artifacts=(*upstream, result_pointer),
+                        )
         except Exception as exc:
             with transaction(self.sessions) as session:
                 failed_step = session.execute(
@@ -854,6 +862,10 @@ class WorkflowRunner:
                 context["artifact_pointers"] = pointers
                 if generated_stimulus is not None:
                     context["generated_stimulus"] = generated_stimulus.as_dict()
+                if content_team_stimuli is not None:
+                    context["content_team_stimuli"] = [
+                        pointer.as_dict() for pointer in content_team_stimuli
+                    ]
                 if registration is not None:
                     context["item_registration"] = {
                         "item_id": registration.item_id,
@@ -949,7 +961,32 @@ class WorkflowRunner:
         actor_type: str,
         actor_id: str,
     ) -> None:
-        target = evaluate_decision(definition, workflow.initial_request)
+        if definition.operator == "step_result_image_count":
+            with self.sessions() as session:
+                upstream = self._upstream_pointers(
+                    session, workflow.workflow_id, compiled, definition.key
+                )
+            matches = tuple(
+                pointer for pointer in upstream if pointer.step_key == definition.source_step
+            )
+            if len(matches) != 1:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "image decision source result is missing or ambiguous",
+                )
+            count = self.catalog.content_team_image_slot_count(
+                workflow=workflow,
+                authoring=matches[0],
+            )
+            try:
+                target = definition.branches[str(count)]
+            except KeyError as exc:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
+                    "image-count decision has no exact branch",
+                ) from exc
+        else:
+            target = evaluate_decision(definition, workflow.initial_request)
         with transaction(self.sessions) as session:
             step = self._latest_active_step(session, workflow.workflow_id, definition.key)
             if step is None:
@@ -971,6 +1008,10 @@ class WorkflowRunner:
             workflow_record.current_step_key = target
             skipped_image: WorkflowStepRunRecord | None = None
             if target == "review":
+                if definition.operator == "step_result_image_count":
+                    context = dict(workflow_record.runtime_context)
+                    context["content_team_stimuli"] = []
+                    workflow_record.runtime_context = context
                 image_definition = compiled.steps_by_key.get("image")
                 if not isinstance(image_definition, AgentStep):
                     raise WorkflowError(

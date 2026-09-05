@@ -226,8 +226,8 @@ def test_hwpx_capability_and_not_deployed_build_boundary(tmp_path: Path) -> None
                 },
                 {
                     "renderer": "content-team",
-                    "renderer_version": "1.0.0",
-                    "document_profile": "content-team-hwp-question-editor-v1",
+                    "renderer_version": "2.0.0",
+                    "document_profile": "content-team-hwp-question-editor-v2",
                     "source_schema_ref": "eom.assessment.item-content/2.0",
                 },
             ]
@@ -319,7 +319,7 @@ def test_hwpx_build_accepts_closed_content_team_profile(tmp_path: Path) -> None:
     client, services = _client(tmp_path)
     body = {
         "renderer": "content-team",
-        "options": {"document_profile": "content-team-hwp-question-editor-v1"},
+        "options": {"document_profile": "content-team-hwp-question-editor-v2"},
     }
     try:
         with client:

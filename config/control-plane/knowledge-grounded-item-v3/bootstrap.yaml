@@ -1,0 +1,31 @@
+schema_version: knowledge-item-control-bootstrap/3.0
+preset_key: knowledge-grounded-item
+display_name: Graph 근거 통합과학 문항 제작 · 조건부 그림 V3
+description: 콘텐츠팀 출제 원문이 판단한 조건부 그림과 HWPX 규칙 및 검토된 교과서·문항 Graph 근거를 함께 고정하는 통합과학 정책입니다.
+created_at: "2026-09-05T09:10:00Z"
+base_preset_key: standard-item
+base_preset_schema_version: execution-preset-revision/1.0
+general_knowledge_policy: ALLOW_WITH_PROVENANCE
+compatible_workflow_protocols:
+  - workflow-role/1.17.0
+evidence_access_by_role:
+  authoring: EVIDENCE_CONTEXT
+  image: EVIDENCE_CONTEXT
+  review: EVIDENCE_CONTEXT
+  item_management: NONE
+retrieval_policy:
+  access_policy_revision_id: accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9
+  access_policy_sha256: sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0
+  allowed_corpus_keys:
+    - integrated-science-textbooks
+  allowed_query_kinds:
+    - ITEM_PREPARATION
+  allowed_source_classes:
+    - APPROVED_ITEM
+    - TEXTBOOK
+  maximum_budget:
+    max_documents: 16
+    max_item_revisions: 32
+    max_graph_nodes: 128
+    max_claims: 64
+    max_context_tokens: 16000

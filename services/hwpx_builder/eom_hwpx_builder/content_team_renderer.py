@@ -14,8 +14,10 @@ from typing import Any
 
 from eom_hwpx_contracts import (
     ContentTeamBuildResult,
+    ContentTeamBuildResultV2,
     ContentTeamEditorialDraft,
     ContentTeamRenderRequest,
+    ContentTeamRenderRequestV2,
     normalize_content_team_labeled_block_content,
     parse_content_team_markdown,
     serialize_content_team_markdown,
@@ -29,6 +31,7 @@ from eom_hwpx_builder.content_team_handoff import (
     ContentTeamHandoffEvidence,
     inspect_content_team_handoff,
 )
+from eom_hwpx_builder.content_team_images import inject_content_team_images
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 from eom_hwpx_builder.handoff import (
     finalize_failure_result,
@@ -36,9 +39,10 @@ from eom_hwpx_builder.handoff import (
     prepare_private_handoff_file,
     write_private_json,
 )
-from eom_hwpx_builder.util import sha256_bytes, sha256_file
+from eom_hwpx_builder.util import canonical_json_bytes, sha256_bytes, sha256_file
 
-CONTENT_TEAM_RENDERER_VERSION = "1.0.0"
+CONTENT_TEAM_RENDERER_VERSION = "2.0.0"
+MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_MARKDOWN_BYTES = 1024 * 1024
 MAX_SOURCE_MEMBER_BYTES = 1024 * 1024
@@ -353,7 +357,7 @@ def _external_render(
 
 def _manifest(
     output: Path,
-    request: ContentTeamRenderRequest,
+    request: ContentTeamRenderRequest | ContentTeamRenderRequestV2,
     report: dict[str, Any],
 ) -> dict[str, Any]:
     analysis = analyze_package(output)
@@ -368,9 +372,17 @@ def _manifest(
             "content-team HWPX failed the EOM package safety boundary",
         )
     return {
-        "manifest_version": "content-team-hwpx/1.0",
+        "manifest_version": (
+            "content-team-hwpx/2.0"
+            if isinstance(request, ContentTeamRenderRequestV2)
+            else "content-team-hwpx/1.0"
+        ),
         "renderer_profile": request.renderer_profile,
-        "renderer_version": CONTENT_TEAM_RENDERER_VERSION,
+        "renderer_version": (
+            CONTENT_TEAM_RENDERER_VERSION
+            if isinstance(request, ContentTeamRenderRequestV2)
+            else "1.0.0"
+        ),
         "source": request.source.model_dump(mode="json"),
         "handoff": request.handoff.model_dump(mode="json"),
         "file_name": output.name,
@@ -385,7 +397,7 @@ def _manifest(
 def render_content_team_workspace(
     request_path: Path,
     result_path: Path,
-) -> ContentTeamBuildResult:
+) -> ContentTeamBuildResult | ContentTeamBuildResultV2:
     started = datetime.now(UTC)
     workspace = request_path.parent.resolve(strict=True)
     if result_path.resolve(strict=False).parent != workspace or result_path.name != "result.json":
@@ -394,8 +406,14 @@ def render_content_team_workspace(
         request_raw: dict[str, Any] = json.loads(request_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise HwpxError(HwpxErrorCode.HWPX_REFERENCE_UNSAFE, "render request is invalid") from exc
-    validate_contract("content-team-render-request", request_raw)
-    request = ContentTeamRenderRequest.model_validate(request_raw)
+    if request_raw.get("schema_version") == "2.0":
+        validate_contract("content-team-render-request-v2", request_raw)
+        request: ContentTeamRenderRequest | ContentTeamRenderRequestV2 = (
+            ContentTeamRenderRequestV2.model_validate(request_raw)
+        )
+    else:
+        validate_contract("content-team-render-request", request_raw)
+        request = ContentTeamRenderRequest.model_validate(request_raw)
 
     source_json = _workspace_path(workspace, request.source.json_file)
     source_markdown = _workspace_path(workspace, request.source.markdown_file)
@@ -451,33 +469,81 @@ def render_content_team_workspace(
     output_dir.mkdir(mode=0o700)
     output = output_dir / "content-team-item.hwpx"
     report = _external_render(runtime, template, markdown_bytes, output, draft)
+    image_set_sha256 = sha256_bytes(canonical_json_bytes([]))
+    embedded_image_count = 0
+    if isinstance(request, ContentTeamRenderRequestV2):
+        expected_slots = tuple(
+            (ordinal, visual.label)
+            for ordinal, visual in enumerate(draft.visuals)
+            if visual.kind == "IMAGE"
+        )
+        actual_slots = tuple((image.visual_ordinal, image.label) for image in request.images)
+        if actual_slots != expected_slots:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_IMAGE_BINDING_FAILED,
+                "content-team image pointers differ from editorial visual slots",
+            )
+        image_payloads = tuple(
+            (
+                image,
+                _read_regular(
+                    _workspace_path(workspace, image.file_name),
+                    max_bytes=MAX_IMAGE_BYTES,
+                    expected_sha256=image.sha256,
+                ),
+            )
+            for image in request.images
+        )
+        inject_content_team_images(output, image_payloads)
+        image_set_sha256 = sha256_bytes(
+            canonical_json_bytes([image.model_dump(mode="json") for image in request.images])
+        )
+        embedded_image_count = len(request.images)
+        report["embedded_image_count"] = embedded_image_count
+        report["image_set_sha256"] = image_set_sha256
     package_manifest = _manifest(output, request, report)
     write_private_json(output_dir / "content-team-validation.json", report)
     write_private_json(output_dir / "package-manifest.json", package_manifest)
     prepare_private_handoff_file(output)
-    result = ContentTeamBuildResult(
-        build_id=request.build_id,
-        item_revision_id=request.item_revision_id,
-        source_artifact_id=request.source.artifact_id,
-        source_artifact_revision_id=request.source.artifact_revision_id,
-        source_json_sha256=request.source.json_sha256,
-        source_markdown_sha256=request.source.markdown_sha256,
-        handoff_archive_sha256=request.handoff.archive_sha256,
-        status="SUCCEEDED",
-        output_file="output/content-team-item.hwpx",
-        output_sha256=sha256_file(output),
-        package_manifest_file="output/package-manifest.json",
-        renderer_report_file="output/content-team-validation.json",
-        equation_count=int(report["equation_count"]),
-        table_count=int(report["table_count"]),
-        visual_count=int(report["visual_count"]),
-        labeled_block_count=int(report["labeled_block_count"]),
-        warnings=(),
-        errors=(),
-        started_at=started,
-        completed_at=datetime.now(UTC),
+    result_class = (
+        ContentTeamBuildResultV2
+        if isinstance(request, ContentTeamRenderRequestV2)
+        else ContentTeamBuildResult
     )
-    validate_contract("content-team-build-result", result.model_dump(mode="json"))
+    result_values: dict[str, Any] = {
+        "build_id": request.build_id,
+        "item_revision_id": request.item_revision_id,
+        "source_artifact_id": request.source.artifact_id,
+        "source_artifact_revision_id": request.source.artifact_revision_id,
+        "source_json_sha256": request.source.json_sha256,
+        "source_markdown_sha256": request.source.markdown_sha256,
+        "handoff_archive_sha256": request.handoff.archive_sha256,
+        "status": "SUCCEEDED",
+        "output_file": "output/content-team-item.hwpx",
+        "output_sha256": sha256_file(output),
+        "package_manifest_file": "output/package-manifest.json",
+        "renderer_report_file": "output/content-team-validation.json",
+        "equation_count": int(report["equation_count"]),
+        "table_count": int(report["table_count"]),
+        "visual_count": int(report["visual_count"]),
+        "labeled_block_count": int(report["labeled_block_count"]),
+        "warnings": (),
+        "errors": (),
+        "started_at": started,
+        "completed_at": datetime.now(UTC),
+    }
+    if isinstance(request, ContentTeamRenderRequestV2):
+        result_values.update(
+            image_set_sha256=image_set_sha256,
+            embedded_image_count=embedded_image_count,
+        )
+    result = result_class(**result_values)
+    result_contract = (
+        "content-team-build-result-v2"
+        if isinstance(result, ContentTeamBuildResultV2)
+        else "content-team-build-result"
+    )
+    validate_contract(result_contract, result.model_dump(mode="json"))
     write_private_json(result_path, result.model_dump(mode="json"))
     finalize_success_handoff(
         workspace,
@@ -496,37 +562,60 @@ def failed_content_team_result(
     result_path: Path,
     started: datetime,
     error: Exception,
-) -> ContentTeamBuildResult | None:
+) -> ContentTeamBuildResult | ContentTeamBuildResultV2 | None:
     try:
-        request = ContentTeamRenderRequest.model_validate_json(
-            request_path.read_text(encoding="utf-8")
-        )
+        request_raw: object = json.loads(request_path.read_text(encoding="utf-8"))
+        if not isinstance(request_raw, dict):
+            return None
+        request: ContentTeamRenderRequest | ContentTeamRenderRequestV2
+        if request_raw.get("schema_version") == "2.0":
+            request = ContentTeamRenderRequestV2.model_validate(request_raw)
+        else:
+            request = ContentTeamRenderRequest.model_validate(request_raw)
     except (OSError, ValidationError, ValueError):
         return None
     code = error.code.value if isinstance(error, HwpxError) else "HWPX_CONTENT_TEAM_RENDER_FAILED"
-    result = ContentTeamBuildResult(
-        build_id=request.build_id,
-        item_revision_id=request.item_revision_id,
-        source_artifact_id=request.source.artifact_id,
-        source_artifact_revision_id=request.source.artifact_revision_id,
-        source_json_sha256=request.source.json_sha256,
-        source_markdown_sha256=request.source.markdown_sha256,
-        handoff_archive_sha256=request.handoff.archive_sha256,
-        status="FAILED",
-        output_file=None,
-        output_sha256=None,
-        package_manifest_file=None,
-        renderer_report_file=None,
-        equation_count=0,
-        table_count=0,
-        visual_count=0,
-        labeled_block_count=0,
-        warnings=(),
-        errors=(code,),
-        started_at=started,
-        completed_at=datetime.now(UTC),
+    result_class = (
+        ContentTeamBuildResultV2
+        if isinstance(request, ContentTeamRenderRequestV2)
+        else ContentTeamBuildResult
     )
-    validate_contract("content-team-build-result", result.model_dump(mode="json"))
+    result_values: dict[str, Any] = {
+        "build_id": request.build_id,
+        "item_revision_id": request.item_revision_id,
+        "source_artifact_id": request.source.artifact_id,
+        "source_artifact_revision_id": request.source.artifact_revision_id,
+        "source_json_sha256": request.source.json_sha256,
+        "source_markdown_sha256": request.source.markdown_sha256,
+        "handoff_archive_sha256": request.handoff.archive_sha256,
+        "status": "FAILED",
+        "output_file": None,
+        "output_sha256": None,
+        "package_manifest_file": None,
+        "renderer_report_file": None,
+        "equation_count": 0,
+        "table_count": 0,
+        "visual_count": 0,
+        "labeled_block_count": 0,
+        "warnings": (),
+        "errors": (code,),
+        "started_at": started,
+        "completed_at": datetime.now(UTC),
+    }
+    if isinstance(request, ContentTeamRenderRequestV2):
+        result_values.update(
+            image_set_sha256=sha256_bytes(
+                canonical_json_bytes([image.model_dump(mode="json") for image in request.images])
+            ),
+            embedded_image_count=0,
+        )
+    result = result_class(**result_values)
+    validate_contract(
+        "content-team-build-result-v2"
+        if isinstance(result, ContentTeamBuildResultV2)
+        else "content-team-build-result",
+        result.model_dump(mode="json"),
+    )
     write_private_json(result_path, result.model_dump(mode="json"))
     finalize_failure_result(request_path.parent.resolve(strict=True), result_path)
     return result

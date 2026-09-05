@@ -84,6 +84,7 @@ class DecisionOperator(StrEnum):
     STEP_SUCCEEDED = "step_succeeded"
     STEP_SKIPPED = "step_skipped"
     APPROVAL_DECISION = "approval_decision"
+    STEP_RESULT_IMAGE_COUNT = "step_result_image_count"
 
 
 class WorkflowLimits(FrozenModel):
@@ -105,6 +106,16 @@ class DecisionStep(FrozenModel):
     operator: DecisionOperator
     field: str = Field(pattern=r"^(?:/(?:[^~/]|~[01])*)+$")
     branches: dict[str, str] = Field(min_length=1, max_length=10)
+    source_step: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,63}$")
+
+    @model_validator(mode="after")
+    def validate_source(self) -> DecisionStep:
+        if self.operator == DecisionOperator.STEP_RESULT_IMAGE_COUNT:
+            if self.source_step is None:
+                raise ValueError("step-result decisions require one source step")
+        elif self.source_step is not None:
+            raise ValueError("input decisions cannot declare a source step")
+        return self
 
 
 class HumanGateStep(FrozenModel):
@@ -358,10 +369,13 @@ class WorkflowRequest(FrozenModel):
             if self.profiles is None:
                 raise ValueError("generated knowledge workflow requires pinned profiles")
             if content_team_request:
-                if self.image_mode != "skip" or self.profiles.image is not None:
+                conditional_image = (
+                    self.image_mode == "required" and self.profiles.image is not None
+                )
+                historical_no_image = self.image_mode == "skip" and self.profiles.image is None
+                if not (conditional_image or historical_no_image):
                     raise ValueError(
-                        "content-team authoring uses program-defined visual slots "
-                        "without an image role"
+                        "content-team image mode and profile must describe one coherent release"
                     )
             elif self.image_mode != "required" or self.profiles.image is None:
                 raise ValueError(
@@ -521,6 +535,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.14.0",
         "workflow-role/1.15.0",
         "workflow-role/1.16.0",
+        "workflow-role/1.17.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -623,6 +638,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.14.0",
         "workflow-role/1.15.0",
         "workflow-role/1.16.0",
+        "workflow-role/1.17.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1267,6 +1283,75 @@ class ContentTeamRegistrationRoleResultV7(RoleResultBase):
     output: KnowledgeRegistrationOutput
 
 
+CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX = (
+    "아래의 요청사항에 대한 문제의 그림을 그려줘. 내가 소스에 넣어둔 이미지 규칙을 잊지 말고 지켜"
+)
+
+
+class ContentTeamAuthoringRoleResultV8(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.17.0"] = "workflow-role/1.17.0"
+    role: Literal["authoring"]
+    output: ContentTeamAuthoringOutputV7
+
+
+class ContentTeamIllustrationDrawingV8(FrozenModel):
+    visual_ordinal: int = Field(ge=0, le=1)
+    label: Literal["", "(가)", "(나)"]
+    illustration_prompt: str = Field(min_length=1, max_length=4000)
+    drawing: GeneratedDrawingV6
+
+    @field_validator("illustration_prompt", mode="after")
+    @classmethod
+    def exact_content_team_prefix(cls, value: str) -> str:
+        if not value.startswith(CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX):
+            raise ValueError("content-team illustration prompt prefix is missing")
+        if not value.removeprefix(CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX).strip():
+            raise ValueError("content-team illustration prompt details are missing")
+        if not _is_safe_generated_vector_text(value, allow_layout=True):
+            raise ValueError("content-team illustration prompt is unsafe")
+        return value
+
+    @model_validator(mode="after")
+    def bind_hybrid_provider_prompt(self) -> ContentTeamIllustrationDrawingV8:
+        if (
+            isinstance(self.drawing, GeneratedVectorDrawingV6)
+            and self.drawing.production_route == "HYBRID_LOCAL_GENERATIVE"
+            and self.drawing.generation_prompt != self.illustration_prompt
+        ):
+            raise ValueError("hybrid generation prompt differs from the content-team prompt")
+        return self
+
+
+class ContentTeamImageOutputV8(FrozenModel):
+    drawings: tuple[ContentTeamIllustrationDrawingV8, ...] = Field(min_length=1, max_length=2)
+    summary: str = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def ordered_unique_slots(self) -> ContentTeamImageOutputV8:
+        ordinals = tuple(item.visual_ordinal for item in self.drawings)
+        if ordinals != tuple(sorted(set(ordinals))):
+            raise ValueError("content-team image slots must be unique and ordered")
+        return self
+
+
+class ContentTeamImageRoleResultV8(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.17.0"] = "workflow-role/1.17.0"
+    role: Literal["image"]
+    output: ContentTeamImageOutputV8
+
+
+class ContentTeamReviewRoleResultV8(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.17.0"] = "workflow-role/1.17.0"
+    role: Literal["review"]
+    output: KnowledgeReviewOutput
+
+
+class ContentTeamRegistrationRoleResultV8(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.17.0"] = "workflow-role/1.17.0"
+    role: Literal["item_management"]
+    output: KnowledgeRegistrationOutput
+
+
 class KnowledgeAnalysisProposalOutput(FrozenModel):
     proposal: KnowledgeAnalysisWorkerProposal
 
@@ -1387,6 +1472,10 @@ RoleResult = (
     | ContentTeamAuthoringRoleResultV7
     | ContentTeamReviewRoleResultV7
     | ContentTeamRegistrationRoleResultV7
+    | ContentTeamAuthoringRoleResultV8
+    | ContentTeamImageRoleResultV8
+    | ContentTeamReviewRoleResultV8
+    | ContentTeamRegistrationRoleResultV8
     | KnowledgeAnalysisProposalRoleResult
     | KnowledgeAnalysisProposalRoleResultV2
     | KnowledgeAnalysisProposalRoleResultV3

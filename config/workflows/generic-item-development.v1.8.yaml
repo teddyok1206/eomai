@@ -1,0 +1,58 @@
+schema_version: "1.0"
+definition_key: "generic-item-development"
+definition_version: "1.8.0"
+start_step: "authoring"
+
+limits:
+  max_rework_cycles: 3
+  max_step_attempts: 4
+
+steps:
+  - key: "authoring"
+    type: "agent"
+    worker_role: "authoring"
+    result_schema: "authoring-result@8.0"
+    on_success: "image_decision"
+
+  - key: "image_decision"
+    type: "decision"
+    operator: "step_result_image_count"
+    source_step: "authoring"
+    field: "/output/draft/visuals"
+    branches:
+      "0": "review"
+      "1": "image"
+      "2": "image"
+
+  - key: "image"
+    type: "agent"
+    worker_role: "image"
+    result_schema: "image-result@8.0"
+    on_success: "review"
+
+  - key: "review"
+    type: "agent"
+    worker_role: "review"
+    result_schema: "review-result@8.0"
+    on_success: "human_approval"
+
+  - key: "human_approval"
+    type: "human_gate"
+    allowed_actor_roles:
+      - "reviewer"
+      - "admin"
+    allowed_rework_targets:
+      - "authoring"
+      - "image"
+      - "review"
+    on_approve: "registration"
+
+  - key: "registration"
+    type: "agent"
+    worker_role: "item_management"
+    result_schema: "registration-result@8.0"
+    on_success: "complete"
+
+  - key: "complete"
+    type: "terminal"
+    terminal_status: "COMPLETED"

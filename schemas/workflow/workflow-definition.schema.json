@@ -70,16 +70,27 @@
           "properties": {
             "key": {"$ref": "#/$defs/stepKey"},
             "type": {"const": "decision"},
-            "operator": {"enum": ["input_equals", "input_in", "step_succeeded", "step_skipped", "approval_decision"]},
+            "operator": {"enum": ["input_equals", "input_in", "step_succeeded", "step_skipped", "approval_decision", "step_result_image_count"]},
             "field": {"type": "string", "pattern": "^(?:/(?:[^~/]|~[01])*)+$"},
+            "source_step": {"$ref": "#/$defs/stepKey"},
             "branches": {
               "type": "object",
               "minProperties": 1,
               "maxProperties": 10,
               "additionalProperties": {"$ref": "#/$defs/stepKey"},
-              "propertyNames": {"pattern": "^[a-z][a-z0-9_-]{1,63}$"}
+              "propertyNames": {"pattern": "^(?:[a-z][a-z0-9_-]{1,63}|[0-2])$"}
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {"operator": {"const": "step_result_image_count"}},
+                "required": ["operator"]
+              },
+              "then": {"required": ["source_step"]},
+              "else": {"not": {"required": ["source_step"]}}
+            }
+          ]
         }
       ]
     },

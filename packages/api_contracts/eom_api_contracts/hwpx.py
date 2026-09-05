@@ -38,10 +38,11 @@ class HwpxSupports(ApiModel):
 
 class HwpxDeliveryProfile(ApiModel):
     renderer: Literal["eom-template", "content-team"]
-    renderer_version: Literal["1.0.0"]
+    renderer_version: Literal["1.0.0", "2.0.0"]
     document_profile: Literal[
         "eom-question-template-v1",
         "content-team-hwp-question-editor-v1",
+        "content-team-hwp-question-editor-v2",
     ]
     source_schema_ref: Literal[
         "eom.assessment.item-content/1.0",
@@ -51,13 +52,18 @@ class HwpxDeliveryProfile(ApiModel):
     @model_validator(mode="after")
     def exact_renderer_profile(self) -> HwpxDeliveryProfile:
         expected = {
-            "eom-template": ("eom-question-template-v1", "eom.assessment.item-content/1.0"),
+            "eom-template": (
+                "1.0.0",
+                "eom-question-template-v1",
+                "eom.assessment.item-content/1.0",
+            ),
             "content-team": (
-                "content-team-hwp-question-editor-v1",
+                "2.0.0",
+                "content-team-hwp-question-editor-v2",
                 "eom.assessment.item-content/2.0",
             ),
         }[self.renderer]
-        if (self.document_profile, self.source_schema_ref) != expected:
+        if (self.renderer_version, self.document_profile, self.source_schema_ref) != expected:
             raise ValueError("HWPX delivery profile mixes incompatible renderer identities")
         return self
 
@@ -69,7 +75,9 @@ class HwpxCapabilityView(ApiModel):
     renderer_version: Literal["4.9.0"] = "4.9.0"
     supports: HwpxSupports
     default_delivery_profile: Literal[
-        "eom-question-template-v1", "content-team-hwp-question-editor-v1"
+        "eom-question-template-v1",
+        "content-team-hwp-question-editor-v1",
+        "content-team-hwp-question-editor-v2",
     ]
     delivery_profiles: tuple[HwpxDeliveryProfile, ...] = Field(min_length=1, max_length=8)
     manager_registered: bool
@@ -86,6 +94,7 @@ class HwpxBuildOptions(ApiModel):
         "item-revision-auto",
         "eom-question-template-v1",
         "content-team-hwp-question-editor-v1",
+        "content-team-hwp-question-editor-v2",
     ] = "kordoc-report"
     item_number: int = Field(default=1, ge=1, le=999)
 
@@ -100,7 +109,7 @@ class CreateHwpxBuildRequest(ApiModel):
             "auto": "item-revision-auto",
             "kordoc": "kordoc-report",
             "eom-template": "eom-question-template-v1",
-            "content-team": "content-team-hwp-question-editor-v1",
+            "content-team": "content-team-hwp-question-editor-v2",
         }[self.renderer]
         if self.options.document_profile != expected:
             raise ValueError("renderer and document profile must identify the same closed adapter")
@@ -114,7 +123,7 @@ class HwpxBuildView(ApiModel):
     source_artifact_revision_id: OpaqueId
     source_sha256: Sha256
     renderer: Literal["kordoc", "eom-template", "content-team"]
-    renderer_version: Literal["4.9.0", "1.0.0"]
+    renderer_version: Literal["4.9.0", "1.0.0", "2.0.0"]
     state: HwpxBuildState
     validation_state: HwpxValidationState
     native_equation_count: int | None = Field(default=None, ge=0, le=128)

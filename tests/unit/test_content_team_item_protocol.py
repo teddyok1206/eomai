@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+import yaml
 from eom_api.services.command_adapter import _workflow_request_from_api
 from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_catalog_contracts import (
@@ -33,11 +34,15 @@ from eom_hwpx_contracts.content_team_markdown import (
     parse_content_team_markdown,
     serialize_content_team_markdown,
 )
-from eom_workflow.compiler import compile_definition
+from eom_workflow.compiler import compile_definition, compile_definition_data
 from eom_workflow.models import (
+    CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX,
     ArtifactSpec,
     ContentTeamAuthoringRoleResultV7,
+    ContentTeamAuthoringRoleResultV8,
+    ContentTeamImageRoleResultV8,
     ContentTeamItemBrief,
+    GeneratedVectorDrawingV6,
     WorkflowRequest,
 )
 from eom_workflow.schemas import (
@@ -759,6 +764,147 @@ def test_v7_workflow_has_no_mandatory_image_step_and_one_protocol() -> None:
     ] == ["authoring-result@7.0", "review-result@7.0", "registration-result@7.0"]
 
 
+def test_v8_authoring_and_image_results_bind_conditional_slots_and_prompt_prefix() -> None:
+    authoring = ContentTeamAuthoringRoleResultV8(
+        job_id="job_" + "1" * 32,
+        workflow_id="workflow_" + "2" * 32,
+        step_run_id="steprun_" + "3" * 32,
+        role="authoring",
+        artifact=ArtifactSpec(
+            logical_artifact_id="artifact_" + "4" * 32,
+            revision_id="rev_" + "5" * 32,
+        ),
+        completed_at=datetime(2026, 9, 5, tzinfo=UTC),
+        output={
+            "draft": _content(
+                visuals=(ContentTeamImageSlot(),),
+                visual_layout="IMAGE_ONLY",
+            ),
+            "metadata": {
+                "subject": "통합과학",
+                "topic": "요청으로 정해지는 주제",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+    )
+    drawing = GeneratedVectorDrawingV6(
+        kind="apparatus",
+        production_route="DETERMINISTIC_SVG",
+        route_reason="SCIENTIFIC_SCHEMATIC",
+        background_style="WHITE",
+        alt_text="문항에 필요한 관계를 나타낸 교과서형 선화",
+        scene_description="요청된 대상과 관계만 배치한다.",
+        scientific_constraints=("문항의 수치와 기호를 바꾸지 않는다.",),
+        required_labels=("A", "B"),
+        generation_prompt=None,
+        negative_prompt=None,
+        svg_overlay=(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" '
+            'viewBox="0 0 800 500"><line x1="100" y1="250" x2="700" y2="250" '
+            'stroke="#000000" stroke-width="4"></line><text x="120" y="220" '
+            'fill="#000000" font-family="Century Old Style" font-size="24">A</text>'
+            '<text x="650" y="220" fill="#000000" font-family="Century Old Style" '
+            'font-size="24">B</text></svg>'
+        ),
+    )
+    image = ContentTeamImageRoleResultV8(
+        job_id="job_" + "6" * 32,
+        workflow_id=authoring.workflow_id,
+        step_run_id="steprun_" + "7" * 32,
+        role="image",
+        artifact=ArtifactSpec(
+            logical_artifact_id="artifact_" + "8" * 32,
+            revision_id="rev_" + "9" * 32,
+        ),
+        completed_at=datetime(2026, 9, 5, 0, 1, tzinfo=UTC),
+        output={
+            "drawings": [
+                {
+                    "visual_ordinal": 0,
+                    "label": "",
+                    "illustration_prompt": (
+                        CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX
+                        + "\nA와 B의 관계를 흑백 선화로 배치한다."
+                    ),
+                    "drawing": drawing,
+                }
+            ],
+            "summary": "팀장 원문의 조건부 그림 슬롯 하나를 보존했다.",
+        },
+    )
+
+    projected = authoring.model_dump(mode="json")
+    del projected["output"]["draft"]["visual_layout"]
+    parsed = validate_role_result(projected, "authoring", "authoring-result@8.0")
+    assert isinstance(parsed, ContentTeamAuthoringRoleResultV8)
+    assert parsed.output.draft.visual_layout == "IMAGE_ONLY"
+    assert isinstance(
+        validate_role_result(image.model_dump(mode="json"), "image", "image-result@8.0"),
+        ContentTeamImageRoleResultV8,
+    )
+    invalid = image.model_dump(mode="json")
+    invalid["output"]["drawings"][0]["illustration_prompt"] = "접두문이 없는 그림 요청"
+    with pytest.raises(ValueError, match="typed validation"):
+        validate_role_result(invalid, "image", "image-result@8.0")
+
+    prefix_only = image.model_dump(mode="json")
+    prefix_only["output"]["drawings"][0]["illustration_prompt"] = (
+        CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX
+    )
+    with pytest.raises(ValueError, match="typed validation"):
+        validate_role_result(prefix_only, "image", "image-result@8.0")
+
+    hybrid_prompt = CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX + "\n두 생물의 외형 관계를 표현한다."
+    hybrid = image.model_dump(mode="json")
+    hybrid_drawing = hybrid["output"]["drawings"][0]["drawing"]
+    hybrid_drawing.update(
+        {
+            "kind": "natural_scene",
+            "production_route": "HYBRID_LOCAL_GENERATIVE",
+            "route_reason": "ORGANIC_OBJECT_REQUIRED",
+            "generation_prompt": hybrid_prompt,
+        }
+    )
+    hybrid["output"]["drawings"][0]["illustration_prompt"] = hybrid_prompt
+    assert isinstance(
+        validate_role_result(hybrid, "image", "image-result@8.0"),
+        ContentTeamImageRoleResultV8,
+    )
+    hybrid["output"]["drawings"][0]["drawing"]["generation_prompt"] += " 다른 요청"
+    with pytest.raises(ValueError, match="typed validation"):
+        validate_role_result(hybrid, "image", "image-result@8.0")
+
+
+def test_v8_workflow_branches_only_on_validated_image_slot_count() -> None:
+    compiled = compile_definition(
+        ROOT / "config/workflows/generic-item-development.v1.8.yaml",
+        ROLES,
+    )
+
+    assert compiled.definition.definition_version == "1.8.0"
+    decision = next(step for step in compiled.definition.steps if step.key == "image_decision")
+    assert decision.operator == "step_result_image_count"
+    assert decision.source_step == "authoring"
+    assert decision.branches == {"0": "review", "1": "image", "2": "image"}
+    assert [
+        step.result_schema for step in compiled.definition.steps if hasattr(step, "result_schema")
+    ] == [
+        "authoring-result@8.0",
+        "image-result@8.0",
+        "review-result@8.0",
+        "registration-result@8.0",
+    ]
+
+    raw = yaml.safe_load(
+        (ROOT / "config/workflows/generic-item-development.v1.8.yaml").read_text(encoding="utf-8")
+    )
+    decision_value = next(step for step in raw["steps"] if step["key"] == "image_decision")
+    decision_value["branches"]["extra"] = "review"
+    with pytest.raises(ValueError, match="zero, one, and two"):
+        compile_definition_data(raw, "forged-v1.8.yaml", ROLES)
+
+
 def test_content_team_pack_uses_unconstrained_brief_and_no_image_role() -> None:
     pack_root = ROOT / "content/packs/generated-knowledge-item/1.12.0"
     compiled = compile_pack(pack_root)
@@ -787,6 +933,61 @@ def test_content_team_pack_uses_unconstrained_brief_and_no_image_role() -> None:
     authoring_prompt = (pack_root / "prompt-templates/authoring.md").read_text(encoding="utf-8")
     assert "처음부터 끝까지 그대로 읽고" in authoring_prompt
     assert "별도의 내용 규칙을 추가하지 마라" in authoring_prompt
+
+
+def test_content_team_v113_pack_pins_conditional_image_profile_and_exact_source_prefix() -> None:
+    pack_root = ROOT / "content/packs/generated-knowledge-item/1.13.0"
+    compiled = compile_pack(pack_root)
+    request = WorkflowRequest.model_validate_json(
+        (pack_root / "fixtures/smoke-request.json").read_text(encoding="utf-8")
+    )
+
+    assert compiled.manifest.pack.version == "1.13.0"
+    assert compiled.manifest.compatibility.protocol.minimum == "1.17.0"
+    assert compiled.manifest.compatibility.required_worker_roles == (
+        "authoring",
+        "image",
+        "review",
+        "item_management",
+    )
+    assert request.image_mode == "required"
+    assert request.profiles is not None
+    assert request.profiles.image == "generated-stimulus-drawing"
+    image_prompt = (pack_root / "prompt-templates/image.md").read_text(encoding="utf-8")
+    assert CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX in image_prompt
+    assert "표·그림 슬롯·수식은 원문과 프로그램이 해당 문항에 요구하는 만큼만" in (
+        pack_root / "prompt-templates/authoring.md"
+    ).read_text(encoding="utf-8")
+
+
+def test_api_v8_enables_conditional_image_without_adding_shape_defaults() -> None:
+    request = WorkflowStartRequest.model_validate(
+        {
+            "definition_key": "generic-item-development",
+            "definition_version": "1.8.0",
+            "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+            "image_mode": "required",
+            "pack_key": "generated-knowledge-item",
+            "execution_preset_key": "standard-item",
+            "item_brief": {
+                "schema_version": "3.0",
+                "subject": "통합과학",
+                "topic": "요청으로 정해지는 단원",
+                "task_type": "문항 출제",
+                "difficulty": "중",
+                "authoring_guidance": "검토된 요청만 사용한다.",
+                "authoring_guidance_sha256": "sha256:"
+                + hashlib.sha256("검토된 요청만 사용한다.".encode()).hexdigest(),
+                "curriculum_selected_unit_key": None,
+                "original_request_sha256": "0" * 64,
+            },
+        }
+    )
+
+    internal = _workflow_request_from_api(request)
+    assert internal.image_mode == "required"
+    assert internal.profiles is not None
+    assert internal.profiles.image == "generated-stimulus-drawing"
 
 
 def test_api_v3_resolves_content_team_curriculum_without_adding_shape_defaults() -> None:

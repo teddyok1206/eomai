@@ -497,8 +497,8 @@ async def test_gateway_requires_both_closed_profiles_for_automatic_hwpx_delivery
         },
         {
             "renderer": "content-team",
-            "renderer_version": "1.0.0",
-            "document_profile": "content-team-hwp-question-editor-v1",
+            "renderer_version": "2.0.0",
+            "document_profile": "content-team-hwp-question-editor-v2",
             "source_schema_ref": "eom.assessment.item-content/2.0",
         },
     ]

@@ -29,7 +29,8 @@
                 "kordoc-report",
                 "item-revision-auto",
                 "eom-question-template-v1",
-                "content-team-hwp-question-editor-v1"
+                "content-team-hwp-question-editor-v1",
+                "content-team-hwp-question-editor-v2"
               ]
             },
             "item_number": {"type": "integer", "minimum": 1, "maximum": 999}
@@ -80,7 +81,7 @@
               "options": {
                 "required": ["document_profile"],
                 "properties": {
-                  "document_profile": {"const": "content-team-hwp-question-editor-v1"}
+                  "document_profile": {"const": "content-team-hwp-question-editor-v2"}
                 }
               }
             }

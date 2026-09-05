@@ -400,6 +400,49 @@ class ContentTeamRenderRequest(StrictModel):
     output_directory: Literal["output"] = "output"
 
 
+class ContentTeamImageSource(StrictModel):
+    visual_ordinal: int = Field(ge=0, le=1)
+    label: Literal["", "(가)", "(나)"]
+    artifact_id: str = Field(pattern=r"^artifact_[a-f0-9]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
+    artifact_member: Literal["generated-stimulus.png"] = "generated-stimulus.png"
+    sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    schema_ref: Literal["eom://schemas/generated-item/stimulus-png/3.0"] = (
+        "eom://schemas/generated-item/stimulus-png/3.0"
+    )
+    media_type: Literal["image/png"] = "image/png"
+    width_px: Literal[800] = 800
+    height_px: Literal[500] = 500
+    alt_text: str = Field(min_length=1, max_length=1000)
+    file_name: str = Field(pattern=r"^input/visual-[01]\.png$")
+
+    @model_validator(mode="after")
+    def file_matches_ordinal(self) -> ContentTeamImageSource:
+        if self.file_name != f"input/visual-{self.visual_ordinal}.png":
+            raise ValueError("content-team image file does not match its visual ordinal")
+        return self
+
+
+class ContentTeamRenderRequestV2(StrictModel):
+    schema_version: Literal["2.0"] = "2.0"
+    renderer_profile: Literal["content-team-hwp-question-editor-v2"] = (
+        "content-team-hwp-question-editor-v2"
+    )
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
+    source: ContentTeamItemSource
+    handoff: ContentTeamHandoffSnapshot
+    images: tuple[ContentTeamImageSource, ...] = Field(max_length=2)
+    output_directory: Literal["output"] = "output"
+
+    @model_validator(mode="after")
+    def ordered_unique_images(self) -> ContentTeamRenderRequestV2:
+        ordinals = tuple(image.visual_ordinal for image in self.images)
+        if ordinals != tuple(sorted(set(ordinals))):
+            raise ValueError("content-team images must be unique and ordered")
+        return self
+
+
 class ContentTeamBuildResult(StrictModel):
     schema_version: Literal["1.0"] = "1.0"
     renderer_profile: Literal["content-team-hwp-question-editor-v1"] = (
@@ -431,6 +474,55 @@ class ContentTeamBuildResult(StrictModel):
 
     @model_validator(mode="after")
     def terminal_files_match_status(self) -> ContentTeamBuildResult:
+        materialized = (
+            self.output_file,
+            self.output_sha256,
+            self.package_manifest_file,
+            self.renderer_report_file,
+        )
+        if self.status == "SUCCEEDED":
+            if any(value is None for value in materialized) or self.errors:
+                raise ValueError("successful content-team build requires validated output")
+        elif any(value is not None for value in materialized) or not self.errors:
+            raise ValueError("failed content-team build cannot expose output")
+        if self.completed_at < self.started_at:
+            raise ValueError("content-team build completion precedes its start")
+        return self
+
+
+class ContentTeamBuildResultV2(StrictModel):
+    schema_version: Literal["2.0"] = "2.0"
+    renderer_profile: Literal["content-team-hwp-question-editor-v2"] = (
+        "content-team-hwp-question-editor-v2"
+    )
+    renderer_version: Literal["2.0.0"] = "2.0.0"
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
+    source_artifact_id: str = Field(pattern=r"^artifact_[a-f0-9]{32}$")
+    source_artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
+    source_json_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    source_markdown_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    handoff_archive_sha256: Literal[
+        "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    ] = "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    status: Literal["SUCCEEDED", "FAILED"]
+    output_file: Literal["output/content-team-item.hwpx"] | None
+    output_sha256: str | None = Field(default=None, pattern=r"^sha256:[a-f0-9]{64}$")
+    package_manifest_file: Literal["output/package-manifest.json"] | None
+    renderer_report_file: Literal["output/content-team-validation.json"] | None
+    equation_count: int = Field(ge=0, le=128)
+    table_count: int = Field(ge=0, le=20)
+    visual_count: int = Field(ge=0, le=2)
+    labeled_block_count: int = Field(ge=0, le=2)
+    warnings: tuple[str, ...] = Field(max_length=20)
+    errors: tuple[str, ...] = Field(max_length=20)
+    started_at: datetime
+    completed_at: datetime
+    image_set_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    embedded_image_count: int = Field(ge=0, le=2)
+
+    @model_validator(mode="after")
+    def terminal_files_match_status(self) -> ContentTeamBuildResultV2:
         materialized = (
             self.output_file,
             self.output_sha256,

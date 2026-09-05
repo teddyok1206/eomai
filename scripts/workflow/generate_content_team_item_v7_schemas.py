@@ -10,8 +10,12 @@ from typing import Any
 from eom_catalog_contracts import AssessmentItemContentV2
 from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV7,
+    ContentTeamAuthoringRoleResultV8,
+    ContentTeamImageRoleResultV8,
     ContentTeamRegistrationRoleResultV7,
+    ContentTeamRegistrationRoleResultV8,
     ContentTeamReviewRoleResultV7,
+    ContentTeamReviewRoleResultV8,
 )
 from jsonschema import Draft202012Validator
 
@@ -61,6 +65,24 @@ def main() -> None:
     }
     for role, model in roles.items():
         file_name = f"{role}-result-v7.schema.json"
+        payload = _schema(
+            model,
+            f"https://eom.local/schemas/workflow/roles/{file_name}",
+        )
+        for root in (
+            ROOT / "schemas/workflow/roles",
+            ROOT / "packages/workflow/eom_workflow/resources/roles",
+        ):
+            (root / file_name).write_bytes(payload)
+
+    roles_v8 = {
+        "authoring": ContentTeamAuthoringRoleResultV8,
+        "image": ContentTeamImageRoleResultV8,
+        "review": ContentTeamReviewRoleResultV8,
+        "registration": ContentTeamRegistrationRoleResultV8,
+    }
+    for role, model in roles_v8.items():
+        file_name = f"{role}-result-v8.schema.json"
         payload = _schema(
             model,
             f"https://eom.local/schemas/workflow/roles/{file_name}",

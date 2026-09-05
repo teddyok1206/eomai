@@ -13,6 +13,8 @@ SCHEMA_FILES = {
     "content-team-editorial-question": "hwpx-content-team-editorial-question-v1.schema.json",
     "content-team-render-request": "hwpx-content-team-render-request-v1.schema.json",
     "content-team-build-result": "hwpx-content-team-build-result-v1.schema.json",
+    "content-team-render-request-v2": "hwpx-content-team-render-request-v2.schema.json",
+    "content-team-build-result-v2": "hwpx-content-team-build-result-v2.schema.json",
     "item-document": "hwpx-item-document-v1.schema.json",
     "build-result": "hwpx-build-result-v1.schema.json",
     "kordoc-render-request": "hwpx-kordoc-render-request-v1.schema.json",

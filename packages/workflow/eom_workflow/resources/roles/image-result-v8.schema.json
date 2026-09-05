@@ -1,0 +1,453 @@
+{
+  "$defs": {
+    "ArtifactSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "file_name": {
+          "const": "result.json",
+          "title": "File Name",
+          "type": "string"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Logical Artifact Id",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "application/json",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Revision Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "file_name",
+        "media_type"
+      ],
+      "title": "ArtifactSpec",
+      "type": "object"
+    },
+    "ContentTeamIllustrationDrawingV8": {
+      "additionalProperties": false,
+      "properties": {
+        "drawing": {
+          "discriminator": {
+            "mapping": {
+              "apparatus": "#/$defs/GeneratedVectorDrawingV6",
+              "composite": "#/$defs/GeneratedVectorDrawingV6",
+              "diagram": "#/$defs/GeneratedVectorDrawingV6",
+              "line_graph": "#/$defs/GeneratedLineGraphDrawingV6",
+              "map": "#/$defs/GeneratedVectorDrawingV6",
+              "natural_scene": "#/$defs/GeneratedVectorDrawingV6",
+              "particle_model": "#/$defs/GeneratedVectorDrawingV6"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/GeneratedLineGraphDrawingV6"
+            },
+            {
+              "$ref": "#/$defs/GeneratedVectorDrawingV6"
+            }
+          ],
+          "title": "Drawing"
+        },
+        "illustration_prompt": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Illustration Prompt",
+          "type": "string"
+        },
+        "label": {
+          "enum": [
+            "",
+            "(가)",
+            "(나)"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "visual_ordinal": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Visual Ordinal",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "visual_ordinal",
+        "label",
+        "illustration_prompt",
+        "drawing"
+      ],
+      "title": "ContentTeamIllustrationDrawingV8",
+      "type": "object"
+    },
+    "ContentTeamImageOutputV8": {
+      "additionalProperties": false,
+      "properties": {
+        "drawings": {
+          "items": {
+            "$ref": "#/$defs/ContentTeamIllustrationDrawingV8"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Drawings",
+          "type": "array"
+        },
+        "summary": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "drawings",
+        "summary"
+      ],
+      "title": "ContentTeamImageOutputV8",
+      "type": "object"
+    },
+    "GeneratedLineGraphDrawingV6": {
+      "additionalProperties": false,
+      "properties": {
+        "alt_text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Alt Text",
+          "type": "string"
+        },
+        "background_style": {
+          "enum": [
+            "WHITE",
+            "GRID",
+            "PAPER"
+          ],
+          "title": "Background Style",
+          "type": "string"
+        },
+        "block_id": {
+          "const": "block_image",
+          "title": "Block Id",
+          "type": "string"
+        },
+        "height_px": {
+          "const": 500,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "line_graph",
+          "title": "Kind",
+          "type": "string"
+        },
+        "point_style": {
+          "enum": [
+            "circle",
+            "square"
+          ],
+          "title": "Point Style",
+          "type": "string"
+        },
+        "production_route": {
+          "const": "DETERMINISTIC_SVG",
+          "title": "Production Route",
+          "type": "string"
+        },
+        "route_reason": {
+          "const": "DATA_VISUALIZATION",
+          "title": "Route Reason",
+          "type": "string"
+        },
+        "series_label": {
+          "pattern": "^[A-Za-z0-9 ()/_-]{1,24}$",
+          "title": "Series Label",
+          "type": "string"
+        },
+        "stroke_color": {
+          "enum": [
+            "blue",
+            "green",
+            "orange"
+          ],
+          "title": "Stroke Color",
+          "type": "string"
+        },
+        "width_px": {
+          "const": 800,
+          "title": "Width Px",
+          "type": "integer"
+        },
+        "x_axis_label": {
+          "pattern": "^[A-Za-z0-9 ()/_-]{1,24}$",
+          "title": "X Axis Label",
+          "type": "string"
+        },
+        "x_values": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "title": "X Values",
+          "type": "array"
+        },
+        "y_axis_label": {
+          "pattern": "^[A-Za-z0-9 ()/_-]{1,24}$",
+          "title": "Y Axis Label",
+          "type": "string"
+        },
+        "y_values": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "title": "Y Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "block_id",
+        "alt_text",
+        "x_axis_label",
+        "y_axis_label",
+        "series_label",
+        "x_values",
+        "y_values",
+        "production_route",
+        "background_style",
+        "route_reason",
+        "width_px",
+        "height_px",
+        "stroke_color",
+        "point_style"
+      ],
+      "title": "GeneratedLineGraphDrawingV6",
+      "type": "object"
+    },
+    "GeneratedVectorDrawingV6": {
+      "additionalProperties": false,
+      "properties": {
+        "alt_text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Alt Text",
+          "type": "string"
+        },
+        "background_style": {
+          "enum": [
+            "WHITE",
+            "GRID",
+            "PAPER"
+          ],
+          "title": "Background Style",
+          "type": "string"
+        },
+        "block_id": {
+          "const": "block_image",
+          "title": "Block Id",
+          "type": "string"
+        },
+        "generation_prompt": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Generation Prompt"
+        },
+        "height_px": {
+          "const": 500,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "diagram",
+            "apparatus",
+            "map",
+            "particle_model",
+            "natural_scene",
+            "composite"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "negative_prompt": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Negative Prompt"
+        },
+        "production_route": {
+          "enum": [
+            "DETERMINISTIC_SVG",
+            "HYBRID_LOCAL_GENERATIVE"
+          ],
+          "title": "Production Route",
+          "type": "string"
+        },
+        "required_labels": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Required Labels",
+          "type": "array"
+        },
+        "route_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "DATA_VISUALIZATION",
+                "SCIENTIFIC_SCHEMATIC",
+                "GEOMETRIC_DIAGRAM",
+                "MAP_OR_SPATIAL_DIAGRAM"
+              ],
+              "type": "string"
+            },
+            {
+              "enum": [
+                "HUMAN_OR_ANIMAL_REQUIRED",
+                "ORGANIC_OBJECT_REQUIRED",
+                "REALISTIC_NATURAL_SCENE_REQUIRED",
+                "COMPLEX_NATURAL_TEXTURE_REQUIRED"
+              ],
+              "type": "string"
+            }
+          ],
+          "title": "Route Reason"
+        },
+        "scene_description": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Scene Description",
+          "type": "string"
+        },
+        "scientific_constraints": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Scientific Constraints",
+          "type": "array"
+        },
+        "svg_overlay": {
+          "maxLength": 65536,
+          "minLength": 64,
+          "title": "Svg Overlay",
+          "type": "string"
+        },
+        "width_px": {
+          "const": 800,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "background_style",
+        "block_id",
+        "alt_text",
+        "scene_description",
+        "scientific_constraints",
+        "required_labels",
+        "production_route",
+        "route_reason",
+        "generation_prompt",
+        "negative_prompt",
+        "width_px",
+        "height_px",
+        "svg_overlay"
+      ],
+      "title": "GeneratedVectorDrawingV6",
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/workflow/roles/image-result-v8.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact": {
+      "$ref": "#/$defs/ArtifactSpec"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "job_id": {
+      "pattern": "^job_[0-9a-f]{32}$",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "output": {
+      "$ref": "#/$defs/ContentTeamImageOutputV8"
+    },
+    "protocol_version": {
+      "const": "workflow-role/1.17.0",
+      "title": "Protocol Version",
+      "type": "string"
+    },
+    "role": {
+      "const": "image",
+      "title": "Role",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "const": "ok",
+      "title": "Status",
+      "type": "string"
+    },
+    "step_run_id": {
+      "pattern": "^steprun_[0-9a-f]{32}$",
+      "title": "Step Run Id",
+      "type": "string"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "title": "Workflow Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "job_id",
+    "workflow_id",
+    "step_run_id",
+    "status",
+    "artifact",
+    "completed_at",
+    "role",
+    "output"
+  ],
+  "title": "ContentTeamImageRoleResultV8",
+  "type": "object"
+}

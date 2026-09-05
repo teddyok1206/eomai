@@ -263,7 +263,8 @@ class FakeGateway:
     ) -> dict[str, Any]:
         del session, idempotency_key
         assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-        assert payload["definition_version"] == "1.7.0"
+        assert payload["definition_version"] == "1.8.0"
+        assert payload["image_mode"] == "required"
         assert payload["pack_key"] == "generated-knowledge-item"
         expected_preset = (
             "knowledge-grounded-item" if "educational_retrieval" in payload else "standard-item"
@@ -555,7 +556,7 @@ class FakeGateway:
             source_artifact_revision_id="rev_" + "a" * 32,
             source_sha256="sha256:" + "a" * 64,
             renderer="content-team",
-            renderer_version="1.0.0",
+            renderer_version="2.0.0",
             state="SUCCEEDED",
             validation_state="PASS",
             native_equation_count=5,

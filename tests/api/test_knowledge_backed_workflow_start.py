@@ -25,7 +25,7 @@ def _request() -> WorkflowStartRequest:
     return WorkflowStartRequest.model_validate(
         {
             "definition_key": "generic-item-development",
-            "definition_version": "1.4.0",
+            "definition_version": "1.8.0",
             "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
             "image_mode": "required",
             "pack_key": "generated-knowledge-item",
@@ -77,7 +77,7 @@ def test_graph_miss_happens_before_workflow_transaction_or_worker_claim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     compiled = compile_definition(
-        ROOT / "config/workflows/generic-item-development.v1.4.yaml",
+        ROOT / "config/workflows/generic-item-development.v1.8.yaml",
         {"authoring", "image", "review", "item_management"},
     )
     definition = SimpleNamespace(

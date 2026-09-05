@@ -158,13 +158,11 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
                     "image": (
                         "fixed-stimulus-review"
                         if knowledge_request
-                        else (
-                            None
-                            if content_team_request
-                            else "generated-stimulus-drawing"
-                            if generated_request
-                            else "image-placeholder"
-                        )
+                        else None
+                        if content_team_request and request.image_mode == "skip"
+                        else "generated-stimulus-drawing"
+                        if generated_request
+                        else "image-placeholder"
                     ),
                     "registration": (
                         "structured-registration"

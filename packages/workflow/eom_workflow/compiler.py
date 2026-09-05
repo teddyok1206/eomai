@@ -127,6 +127,16 @@ def _validate_semantics(definition: WorkflowDefinition, available_worker_roles: 
                 )
             targets = (step.on_success,)
         elif isinstance(step, DecisionStep):
+            if step.operator == "step_result_image_count":
+                source = steps.get(step.source_step or "")
+                if not isinstance(source, AgentStep) or source.worker_role != "authoring":
+                    raise WorkflowDefinitionError(
+                        "image-count decision source must be one authoring step"
+                    )
+                if set(step.branches) != {"0", "1", "2"}:
+                    raise WorkflowDefinitionError(
+                        "image-count decision requires explicit zero, one, and two branches"
+                    )
             targets = tuple(step.branches.values())
         elif isinstance(step, HumanGateStep):
             targets = (step.on_approve,)

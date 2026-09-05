@@ -14,13 +14,21 @@ from eom_catalog_contracts import validate_contract as validate_catalog_contract
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
     ContentTeamBuildResult,
+    ContentTeamBuildResultV2,
     ContentTeamHandoffSnapshot,
+    ContentTeamImageSource,
     ContentTeamItemSource,
-    ContentTeamRenderRequest,
+    ContentTeamRenderRequestV2,
     serialize_content_team_markdown,
 )
 from eom_hwpx_contracts import validate_contract as validate_hwpx_contract
-from eom_identifiers import new_job_id, new_logical_artifact_id, new_revision_id, sha256_file
+from eom_identifiers import (
+    content_sha256,
+    new_job_id,
+    new_logical_artifact_id,
+    new_revision_id,
+    sha256_file,
+)
 from eom_orchestrator.artifacts import commit_file_set_artifact, stage_file_set_artifact
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
@@ -36,13 +44,13 @@ from eom_hwpx_manager.adapter import BuilderRun
 from eom_hwpx_manager.application_adapter import FixedContentTeamBuilderAdapter
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.protocol import (
-    HWPX_CONTENT_TEAM_PROTOCOL_VERSION,
-    content_team_schema_bundle_hash,
+    HWPX_CONTENT_TEAM_PROTOCOL_VERSION_V2,
+    content_team_schema_bundle_hash_v2,
 )
 from eom_hwpx_manager.settings import HwpxSettings
 
 CONTENT_TEAM_RENDERER = "content-team"
-CONTENT_TEAM_RENDERER_VERSION = "1.0.0"
+CONTENT_TEAM_RENDERER_VERSION = "2.0.0"
 ITEM_SCHEMA_REF = "eom.assessment.item-content/2.0"
 ITEM_JSON_MEMBER = "assessment-item-content.json"
 ITEM_MARKDOWN_MEMBER = "content-team-item.md"
@@ -54,6 +62,7 @@ HANDOFF_MEDIA_TYPE = "application/zip"
 MAX_ITEM_JSON_BYTES = 2 * 1024 * 1024
 MAX_MARKDOWN_BYTES = 1024 * 1024
 MAX_HANDOFF_BYTES = 64 * 1024 * 1024
+MAX_IMAGE_BYTES = 2 * 1024 * 1024
 LOGGER = logging.getLogger("eom.hwpx_manager.content_team")
 ARTIFACT_ID = re.compile(r"\Aartifact_[0-9a-f]{32}\Z", re.ASCII)
 REVISION_ID = re.compile(r"\Arev_[0-9a-f]{32}\Z", re.ASCII)
@@ -108,6 +117,7 @@ class ContentTeamHwpxService:
         source: ContentTeamItemSource,
         *,
         item_revision_id: str,
+        image_sources: tuple[ContentTeamImageSource, ...],
         idempotency_key: str,
         build_id: str,
         handoff_snapshot: ContentTeamHandoffSnapshot,
@@ -118,6 +128,7 @@ class ContentTeamHwpxService:
                 "content-team handoff release pin changed after request creation",
             )
         content = self._load_content(source_path, source)
+        image_inputs = self._resolve_images(image_sources, content)
         markdown_path = self._resolve_member(
             source.artifact_id,
             source.artifact_revision_id,
@@ -145,24 +156,25 @@ class ContentTeamHwpxService:
         job_id = new_job_id()
         artifact_id = new_logical_artifact_id()
         artifact_revision_id = new_revision_id()
-        request = ContentTeamRenderRequest(
+        request = ContentTeamRenderRequestV2(
             build_id=build_id,
             item_revision_id=item_revision_id,
             source=source,
             handoff=handoff_snapshot,
+            images=tuple(image for image, _path in image_inputs),
         )
         request_raw = request.model_dump(mode="json")
-        validate_hwpx_contract("content-team-render-request", request_raw)
+        validate_hwpx_contract("content-team-render-request-v2", request_raw)
         with transaction(self.sessions) as session:
             ensure_protocol_version(
                 session,
-                HWPX_CONTENT_TEAM_PROTOCOL_VERSION,
-                content_team_schema_bundle_hash(),
+                HWPX_CONTENT_TEAM_PROTOCOL_VERSION_V2,
+                content_team_schema_bundle_hash_v2(),
             )
             job, created = submit_structured_job(
                 session,
                 job_id=job_id,
-                protocol_version=HWPX_CONTENT_TEAM_PROTOCOL_VERSION,
+                protocol_version=HWPX_CONTENT_TEAM_PROTOCOL_VERSION_V2,
                 idempotency_key=f"hwpx-content-team:{idempotency_key}",
                 task_type="hwpx-content-team-build",
                 request=request_raw,
@@ -178,6 +190,8 @@ class ContentTeamHwpxService:
             self.adapter.stage_file(workspace, source.json_file, source_path)
             self.adapter.stage_file(workspace, source.markdown_file, markdown_path)
             self.adapter.stage_file(workspace, handoff_snapshot.archive_file, handoff_path)
+            for image, image_path in image_inputs:
+                self.adapter.stage_file(workspace, image.file_name, image_path)
             self.adapter.write_json(workspace, "request.json", request_raw)
             log_root = self.settings.staging_root / job_id
             for state, event in (
@@ -205,8 +219,8 @@ class ContentTeamHwpxService:
                 "HWPX_CONTENT_TEAM_RESULT_RECEIVED",
             )
             result_raw = self.adapter.load_json(workspace / "result.json", workspace)
-            validate_hwpx_contract("content-team-build-result", result_raw)
-            result = ContentTeamBuildResult.model_validate(result_raw)
+            validate_hwpx_contract("content-team-build-result-v2", result_raw)
+            result = ContentTeamBuildResultV2.model_validate(result_raw)
             output = workspace / "output/content-team-item.hwpx"
             self._verify_output(output, workspace)
             package_manifest = self.adapter.load_json(
@@ -226,6 +240,9 @@ class ContentTeamHwpxService:
                 or result.source_json_sha256 != source.json_sha256
                 or result.source_markdown_sha256 != source.markdown_sha256
                 or result.handoff_archive_sha256 != handoff_snapshot.archive_sha256
+                or result.image_set_sha256
+                != content_sha256([image.model_dump(mode="json") for image, _path in image_inputs])
+                or result.embedded_image_count != len(image_inputs)
                 or result.output_sha256 != sha256_file(output)
                 or package_manifest.get("package_sha256") != result.output_sha256
                 or renderer_report.get("status") != "PASS"
@@ -339,6 +356,48 @@ class ContentTeamHwpxService:
                 HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
                 "canonical content-team item artifact is invalid",
             ) from exc
+
+    def _resolve_images(
+        self,
+        image_sources: tuple[ContentTeamImageSource, ...],
+        content: AssessmentItemContentV2,
+    ) -> tuple[tuple[ContentTeamImageSource, Path], ...]:
+        slots = tuple(
+            (ordinal, visual.label)
+            for ordinal, visual in enumerate(content.visuals)
+            if visual.kind == "IMAGE"
+        )
+        if len(image_sources) != len(slots):
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "content-team image components differ from editorial slots",
+            )
+        resolved: list[tuple[ContentTeamImageSource, Path]] = []
+        for image, (ordinal, label) in zip(image_sources, slots, strict=True):
+            if (
+                image.visual_ordinal != ordinal
+                or image.label != label
+                or image.schema_ref != "eom://schemas/generated-item/stimulus-png/3.0"
+                or image.media_type != "image/png"
+                or image.artifact_member != "generated-stimulus.png"
+                or image.width_px != 800
+                or image.height_px != 500
+            ):
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                    "content-team image component is stale or malformed",
+                )
+            path = self._resolve_member(
+                image.artifact_id,
+                image.artifact_revision_id,
+                image.artifact_member,
+                image.sha256,
+                media_type=image.media_type,
+                schema_ref=image.schema_ref,
+                max_bytes=MAX_IMAGE_BYTES,
+            )
+            resolved.append((image, path))
+        return tuple(resolved)
 
     def _resolve_member(
         self,

@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ROLES = {"authoring", "image", "review", "item_management", "support"}
 
 ADMITTED_DEFINITIONS = {
-    ("generic-item-development", "1.7.0"): "generic-item-development.v1.7.yaml",
+    ("generic-item-development", "1.8.0"): "generic-item-development.v1.8.yaml",
     ("knowledge-analysis", "1.0.0"): "knowledge-analysis.v1.yaml",
     ("knowledge-analysis", "4.0.0"): "knowledge-analysis.v4.yaml",
     ("knowledge-analysis", "8.0.0"): "knowledge-analysis.v8.yaml",
@@ -61,6 +61,7 @@ def test_admission_matrix_matches_exact_checked_in_definition_protocols() -> Non
     ("definition_key", "definition_version"),
     [
         ("generic-item-development", "1.6.0"),
+        ("generic-item-development", "1.7.0"),
         ("knowledge-analysis", "2.0.0"),
         ("knowledge-analysis", "7.0.0"),
         ("unknown-workflow", "1.0.0"),
@@ -75,7 +76,7 @@ def test_historical_or_unknown_definition_is_not_admitted(
 
 def test_definition_import_sets_active_from_admission_policy() -> None:
     admitted = compile_definition(
-        ROOT / "config/workflows/generic-item-development.v1.7.yaml",
+        ROOT / "config/workflows/generic-item-development.v1.8.yaml",
         ROLES,
     )
     historical = compile_definition(
@@ -94,7 +95,7 @@ def test_definition_import_sets_active_from_admission_policy() -> None:
 
 def test_admitted_definition_rejects_a_different_role_protocol() -> None:
     raw = yaml.safe_load(
-        (ROOT / "config/workflows/generic-item-development.v1.7.yaml").read_text(encoding="utf-8")
+        (ROOT / "config/workflows/generic-item-development.v1.8.yaml").read_text(encoding="utf-8")
     )
     assert isinstance(raw, dict)
     for step in raw["steps"]:
@@ -125,7 +126,7 @@ def test_admission_lookup_rejects_historical_before_querying_storage() -> None:
 
 def test_admission_lookup_requires_the_stored_snapshot_to_be_active() -> None:
     compiled = compile_definition(
-        ROOT / "config/workflows/generic-item-development.v1.7.yaml",
+        ROOT / "config/workflows/generic-item-development.v1.8.yaml",
         ROLES,
     )
     record = WorkflowDefinitionRecord(
@@ -154,7 +155,7 @@ def test_admission_lookup_requires_the_stored_snapshot_to_be_active() -> None:
 
 def test_admission_lookup_rejects_a_stored_role_protocol_mismatch() -> None:
     compiled = compile_definition(
-        ROOT / "config/workflows/generic-item-development.v1.7.yaml",
+        ROOT / "config/workflows/generic-item-development.v1.8.yaml",
         ROLES,
     )
     canonical = compiled.as_dict()

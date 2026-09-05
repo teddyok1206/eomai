@@ -51,7 +51,29 @@ class GeneratedStimulusPointer:
         }
 
 
+@dataclass(frozen=True)
+class ContentTeamStimulusPointer(GeneratedStimulusPointer):
+    visual_ordinal: int
+    label: str
+    alt_text: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            **super().as_dict(),
+            "visual_ordinal": self.visual_ordinal,
+            "label": self.label,
+            "alt_text": self.alt_text,
+        }
+
+
 class WorkflowCatalogPort(Protocol):
+    def content_team_image_slot_count(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        authoring: ArtifactPointer,
+    ) -> int: ...
+
     def prepare_prompt(
         self,
         *,
@@ -76,3 +98,10 @@ class WorkflowCatalogPort(Protocol):
         workflow: WorkflowInstanceRecord,
         artifacts: tuple[ArtifactPointer, ...],
     ) -> GeneratedStimulusPointer: ...
+
+    def materialize_content_team_stimuli(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> tuple[ContentTeamStimulusPointer, ...]: ...

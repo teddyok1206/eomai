@@ -15,6 +15,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_STANDARD_V2_REFERENCE_KEYS,
     EXPECTED_STANDARD_V5_REFERENCE_KEYS,
     EXPECTED_STANDARD_V6_REFERENCE_KEYS,
+    EXPECTED_STANDARD_V7_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
@@ -36,6 +37,7 @@ CONFIG_V3 = ROOT / "config/control-plane/standard-item-v3"
 CONFIG_V4 = ROOT / "config/control-plane/standard-item-v4"
 CONFIG_V5 = ROOT / "config/control-plane/standard-item-v5"
 CONFIG_V6 = ROOT / "config/control-plane/standard-item-v6"
+CONFIG_V7 = ROOT / "config/control-plane/standard-item-v7"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -347,6 +349,7 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/4.0": 4,
         "standard-control-bootstrap/5.0": 5,
         "standard-control-bootstrap/6.0": 6,
+        "standard-control-bootstrap/7.0": 7,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
@@ -381,6 +384,7 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
         "standard-control-bootstrap/4.0": 1,
         "standard-control-bootstrap/5.0": 2,
         "standard-control-bootstrap/6.0": 3,
+        "standard-control-bootstrap/7.0": 4,
     }
 
 
@@ -415,6 +419,34 @@ def test_standard_bootstrap_v6_pins_source_prompt_and_handoff_profile() -> None:
     assert "do not skip the source prompt" in authoring
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 6
     assert STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version] == 3
+
+
+def test_standard_bootstrap_v7_gives_image_role_the_exact_team_prompt() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V7)
+
+    assert manifest.schema_version == "standard-control-bootstrap/7.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.17.0",)
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V7_REFERENCE_KEYS
+    )
+    source_prompt = next(
+        reference
+        for reference in manifest.references
+        if reference.reference_key == "content-team-integrated-science-authoring-v05"
+    )
+    source_path = CONFIG_V7.parent / source_prompt.source_path
+    assert "sha256:" + hashlib.sha256(source_path.read_bytes()).hexdigest() == (
+        source_prompt.sha256
+    )
+    image_role = next(role for role in manifest.roles if role.role == "image")
+    assert "content-team-integrated-science-authoring-v05" in image_role.reference_keys
+    image_instruction = (CONFIG_V7 / image_role.instruction_path).read_text(encoding="utf-8")
+    assert (
+        "아래의 요청사항에 대한 문제의 그림을 그려줘. "
+        "내가 소스에 넣어둔 이미지 규칙을 잊지 말고 지켜"
+    ) in image_instruction
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 7
+    assert STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version] == 4
 
 
 def test_standard_bootstrap_v6_rejects_shared_config_escape() -> None:

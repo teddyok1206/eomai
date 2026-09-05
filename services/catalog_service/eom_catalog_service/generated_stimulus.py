@@ -126,15 +126,17 @@ def render_generated_vector_stimulus(
         | GeneratedLineGraphDrawingV6
         | GeneratedVectorDrawingV6
     ),
+    operation_suffix: str | None = None,
 ) -> RenderedVectorStimulus:
     """Materialize one deterministic SVG-first stimulus beneath Catalog-owned staging."""
 
     if not workflow_id.startswith("workflow_") or not result_revision_id.startswith("rev_"):
         raise ValueError("generated vector stimulus identity is invalid")
     root = require_fixed_catalog_staging_root(settings, CatalogStagingArea.REGISTRY)
+    suffix = f"-{operation_suffix}" if operation_suffix else ""
     operation = create_catalog_operation_directory(
         root,
-        f"generated-vector-{workflow_id}-{result_revision_id}",
+        f"generated-vector-{workflow_id}-{result_revision_id}{suffix}",
         message="generated vector stimulus staging directory is unsafe",
     )
     svg_path = operation / SVG_MEMBER
@@ -178,15 +180,17 @@ def render_generated_local_vector_stimulus(
     drawing: GeneratedVectorDrawingV5 | GeneratedVectorDrawingV6,
     binding: LocalImageProviderBinding,
     adapter: FixedLocalImageProviderAdapter,
+    operation_suffix: str | None = None,
 ) -> RenderedLocalImageStimulus:
     """Materialize a transparent SVG overlay through the fixed local raster provider boundary."""
 
     if not workflow_id.startswith("workflow_") or not result_revision_id.startswith("rev_"):
         raise ValueError("generated vector stimulus identity is invalid")
     root = require_fixed_catalog_staging_root(settings, CatalogStagingArea.REGISTRY)
+    suffix = f"-{operation_suffix}" if operation_suffix else ""
     operation = create_catalog_operation_directory(
         root,
-        f"generated-vector-{workflow_id}-{result_revision_id}",
+        f"generated-vector-{workflow_id}-{result_revision_id}{suffix}",
         message="generated vector stimulus staging directory is unsafe",
     )
     svg_path = operation / SVG_MEMBER

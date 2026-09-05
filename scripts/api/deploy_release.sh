@@ -662,7 +662,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
     root = Path(temporary)
     installed_root = root / "site-packages"
     definitions = []
-    for version in ("1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"):
+    for version in ("1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"):
         definition = root / f"generic-item-development.v{version}.yaml"
         definition.write_bytes(
             (
@@ -741,7 +741,7 @@ import sys
 from pathlib import Path
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -826,6 +826,10 @@ load_role_input_schema("authoring", "workflow-role/1.15.0")
 load_role_input_schema("review", "workflow-role/1.15.0")
 load_role_input_schema("item_management", "workflow-role/1.15.0")
 load_role_input_schema("support", "workflow-role/1.16.0")
+load_role_input_schema("authoring", "workflow-role/1.17.0")
+load_role_input_schema("image", "workflow-role/1.17.0")
+load_role_input_schema("review", "workflow-role/1.17.0")
+load_role_input_schema("item_management", "workflow-role/1.17.0")
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
     load_codex_result_schema(schema_id)
@@ -841,9 +845,10 @@ compiled_versions = {
         definition_v1_5,
         definition_v1_6,
         definition_v1_7,
+        definition_v1_8,
     )
 }
-if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0"}:
+if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0"}:
     raise SystemExit("generic workflow definition versions mismatch")
 analysis_versions = {
     compile_definition(Path(path), {"support"}).definition.definition_version
@@ -864,7 +869,7 @@ if (
 ):
     raise SystemExit("legacy item editorial compatibility workflow definition mismatch")
 admitted_definitions = (
-    compile_definition(Path(definition_v1_7), {"authoring", "image", "review", "item_management"}),
+    compile_definition(Path(definition_v1_8), {"authoring", "image", "review", "item_management"}),
     compile_definition(Path(analysis_v1), {"support"}),
     compile_definition(Path(analysis_v4), {"support"}),
     compile_definition(Path(analysis_v8), {"support"}),

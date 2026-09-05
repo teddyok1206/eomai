@@ -36,7 +36,7 @@ pytestmark = pytest.mark.integration
 ROLE_SLOTS = {"authoring", "review", "image", "item_management", "support"}
 
 ADMITTED_DEFINITION_PATHS = (
-    "config/workflows/generic-item-development.v1.7.yaml",
+    "config/workflows/generic-item-development.v1.8.yaml",
     "config/workflows/knowledge-analysis.v1.yaml",
     "config/workflows/knowledge-analysis.v4.yaml",
     "config/workflows/knowledge-analysis.v8.yaml",
@@ -93,7 +93,7 @@ def test_admission_policy_preserves_historical_definition_and_instance(
     current = admitted_workflow_definition(
         db_session,
         definition_key="generic-item-development",
-        definition_version="1.7.0",
+        definition_version="1.8.0",
     )
     assert current is not None
     assert historical.active is True

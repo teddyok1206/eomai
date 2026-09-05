@@ -192,8 +192,13 @@ class WorkflowStartRequest(ApiModel):
             ):
                 raise ValueError("generated item request is missing its workflow contract")
             if content_team_request:
-                if self.image_mode != "skip":
-                    raise ValueError("content-team generated items do not use an image worker")
+                expected_image_mode = "required" if self.definition_version == "1.8.0" else "skip"
+                if self.definition_version not in {"1.7.0", "1.8.0"}:
+                    raise ValueError("content-team workflow definition is unsupported")
+                if self.image_mode != expected_image_mode:
+                    raise ValueError(
+                        "content-team image capability differs from the workflow definition"
+                    )
             elif self.image_mode != "required":
                 raise ValueError("legacy generated items require the image worker")
         elif self.item_brief is not None or self.stimulus_asset_key is not None:

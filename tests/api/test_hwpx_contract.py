@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from eom_api.app import create_app
 from eom_api.services.hwpx_projection import project_hwpx_build
-from eom_api_contracts.hwpx import CreateHwpxBuildRequest
+from eom_api_contracts.hwpx import CreateHwpxBuildRequest, HwpxDeliveryProfile
 from eom_operator_identity import ROLE_PERMISSIONS, PermissionKey, RoleKey
 from jsonschema import Draft202012Validator
 
@@ -36,10 +36,19 @@ def test_hwpx_protocol_schema_is_draft_2020_12_and_rejects_commands() -> None:
     assert CreateHwpxBuildRequest.model_validate(template_request).options.item_number == 7
     content_team_request = {
         "renderer": "content-team",
-        "options": {"document_profile": "content-team-hwp-question-editor-v1"},
+        "options": {"document_profile": "content-team-hwp-question-editor-v2"},
     }
     assert not list(validator.iter_errors(content_team_request))
     assert CreateHwpxBuildRequest.model_validate(content_team_request).renderer == "content-team"
+    assert (
+        HwpxDeliveryProfile(
+            renderer="content-team",
+            renderer_version="2.0.0",
+            document_profile="content-team-hwp-question-editor-v2",
+            source_schema_ref="eom.assessment.item-content/2.0",
+        ).renderer_version
+        == "2.0.0"
+    )
     automatic_request = {
         "renderer": "auto",
         "options": {"document_profile": "item-revision-auto", "item_number": 7},

@@ -13,8 +13,10 @@ from eom_catalog_service.workflow_catalog import (
     WorkflowCatalogService,
     _validate_generated_vector_artifact_manifest,
 )
+from eom_hwpx_contracts import ContentTeamImageSlot
 from eom_identifiers import content_sha256, sha256_file
 from eom_workflow import ArtifactPointer, WorkflowRequest
+from eom_workflow.models import CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX
 from eom_workflow.schemas import ROLE_ALLOWED_RESULT_SCHEMAS
 from eom_workflow_runner.models import WorkflowInstanceRecord
 
@@ -42,6 +44,8 @@ AUTHORING_V5 = _pointer("authoring", "6", "authoring-result@5.0")
 IMAGE_V5 = _pointer("image", "7", "image-result@5.0")
 AUTHORING_V6 = _pointer("authoring", "9", "authoring-result@6.0")
 IMAGE_V6 = _pointer("image", "4", "image-result@6.0")
+AUTHORING_V8 = _pointer("authoring", "2", "authoring-result@8.0")
+IMAGE_V8 = _pointer("image", "3", "image-result@8.0")
 
 
 def _image_brief() -> dict[str, object]:
@@ -327,6 +331,117 @@ def _image_result_v6(*, hybrid: bool = False) -> dict[str, object]:
     }
 
 
+def _content_team_authoring_result_v8(*, image_count: int = 2) -> dict[str, object]:
+    labels = ("(가)", "(나)")[:image_count]
+    return {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.17.0",
+        "job_id": AUTHORING_V8.job_id,
+        "workflow_id": WORKFLOW_ID,
+        "step_run_id": "steprun_" + "2" * 32,
+        "role": "authoring",
+        "status": "ok",
+        "artifact": {
+            "logical_artifact_id": AUTHORING_V8.logical_artifact_id,
+            "revision_id": AUTHORING_V8.revision_id,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+        "output": {
+            "draft": {
+                "schema_version": "2.0",
+                "renderer_profile": "content-team-hwp-question-editor-v1",
+                "authoring_prompt_sha256": (
+                    "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435"
+                ),
+                "handoff_archive_sha256": (
+                    "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+                ),
+                "item_number": 11,
+                "score_display": "2.5",
+                "stem": "제시된 정보를 해석하여 물음에 답하시오.",
+                "bottom_stem": "옳은 것만을 있는 대로 고른 것은?",
+                "inquiry": None,
+                "labeled_blocks": [],
+                "visuals": [
+                    ContentTeamImageSlot(label=label).model_dump(mode="json") for label in labels
+                ],
+                "visual_layout": "NONE"
+                if image_count == 0
+                else ("IMAGE_ONLY" if image_count == 1 else "IMAGE_IMAGE"),
+                "statements": [
+                    {"label": "ㄱ", "text": "첫째 진술은 자료와 일치한다."},
+                    {"label": "ㄴ", "text": "둘째 진술은 자료와 일치하지 않는다."},
+                    {"label": "ㄷ", "text": "셋째 진술은 자료와 일치한다."},
+                ],
+                "choices": [
+                    {"number": "①", "text": "ㄱ"},
+                    {"number": "②", "text": "ㄴ"},
+                    {"number": "③", "text": "ㄱ, ㄷ"},
+                    {"number": "④", "text": "ㄴ, ㄷ"},
+                    {"number": "⑤", "text": "ㄱ, ㄴ, ㄷ"},
+                ],
+                "answer": {
+                    "answer_kind": "STATEMENT_COMBINATION",
+                    "number": "③",
+                    "statement_labels": ["ㄱ", "ㄷ"],
+                    "answer_content": "ㄱ, ㄷ",
+                    "raw_line": "정답 : ③ (ㄱ, ㄷ)",
+                },
+                "explanations": {
+                    "authoring_intent": "제시된 정보의 관계를 해석한다.",
+                    "concept_source": "요청에 고정된 교육과정 근거를 사용한다.",
+                    "correct_answer": "ㄱ. 자료와 일치한다.\nㄷ. 자료와 일치한다.",
+                    "wrong_answer": "ㄴ. 자료와 일치하지 않는다.",
+                },
+                "equation_sources": [],
+            },
+            "metadata": {
+                "subject": "통합과학",
+                "topic": "요청으로 정해지는 주제",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+        "completed_at": "2026-09-05T00:00:00Z",
+    }
+
+
+def _content_team_image_result_v8() -> dict[str, object]:
+    drawing = _image_result_v6()["output"]["drawing"]
+    return {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.17.0",
+        "job_id": IMAGE_V8.job_id,
+        "workflow_id": WORKFLOW_ID,
+        "step_run_id": "steprun_" + "3" * 32,
+        "role": "image",
+        "status": "ok",
+        "artifact": {
+            "logical_artifact_id": IMAGE_V8.logical_artifact_id,
+            "revision_id": IMAGE_V8.revision_id,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+        "output": {
+            "drawings": [
+                {
+                    "visual_ordinal": ordinal,
+                    "label": label,
+                    "illustration_prompt": (
+                        CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX
+                        + f"\n{label} 슬롯에 필요한 교과서형 그림을 그린다."
+                    ),
+                    "drawing": drawing,
+                }
+                for ordinal, label in enumerate(("(가)", "(나)"))
+            ],
+            "summary": "팀장 프롬프트가 선택한 두 그림 슬롯을 보존했다.",
+        },
+        "completed_at": "2026-09-05T00:00:01Z",
+    }
+
+
 class _Artifacts:
     def __init__(self, *, changed_y: bool = False) -> None:
         self.values = {
@@ -338,6 +453,8 @@ class _Artifacts:
             IMAGE_V5.revision_id: _image_result_v5(),
             AUTHORING_V6.revision_id: _authoring_result_v6(),
             IMAGE_V6.revision_id: _image_result_v6(),
+            AUTHORING_V8.revision_id: _content_team_authoring_result_v8(),
+            IMAGE_V8.revision_id: _content_team_image_result_v8(),
         }
         self.commits: list[dict[str, Any]] = []
         self.verified: list[dict[str, str]] = []
@@ -447,6 +564,66 @@ def test_image_role_materializes_one_pinned_png_without_payload_in_result(tmp_pa
     assert commit["primary_file"] == "generated-stimulus.png"
     assert set(commit["result"]) == {"drawing_sha256"}
     assert "png" not in json.dumps(_image_result()).casefold()
+
+
+def test_content_team_v8_materializes_each_declared_image_as_one_pinned_component(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    svg = tmp_path / "content-team.svg"
+    png = tmp_path / "content-team.png"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"></svg>\n', encoding="utf-8")
+    png.write_bytes(b"content-team-png")
+
+    monkeypatch.setattr(
+        "eom_catalog_service.workflow_catalog.render_generated_vector_stimulus",
+        lambda *_args, **_kwargs: RenderedVectorStimulus(
+            svg,
+            png,
+            "eom-safe-svg-compositor/1.1",
+            "rsvg-convert version 2.58.0",
+            "sha256:" + "a" * 64,
+            "sha256:" + "b" * 64,
+            "sha256:" + "c" * 64,
+        ),
+    )
+
+    assert service.content_team_image_slot_count(workflow=_workflow(), authoring=AUTHORING_V8) == 2
+    pointers = service.materialize_content_team_stimuli(
+        workflow=_workflow(), artifacts=(AUTHORING_V8, IMAGE_V8)
+    )
+    components = service._content_team_image_components(
+        _workflow({"content_team_stimuli": [pointer.as_dict() for pointer in pointers]}),
+        (AUTHORING_V8, IMAGE_V8),
+    )
+
+    assert [(pointer.visual_ordinal, pointer.label) for pointer in pointers] == [
+        (0, "(가)"),
+        (1, "(나)"),
+    ]
+    assert len(artifacts.commits) == 2
+    assert all(commit["artifact_type"] == "generated-item-stimulus" for commit in artifacts.commits)
+    assert all("illustration_prompt" not in commit["result"] for commit in artifacts.commits)
+    assert [(component.component_type, component.ordinal) for component in components] == [
+        ("IMAGE", 0),
+        ("IMAGE", 1),
+    ]
+    assert [entry["member"] for entry in artifacts.verified] == [
+        "generated-stimulus.png",
+        "generated-stimulus.png",
+    ]
+
+
+def test_content_team_v8_zero_image_decision_never_materializes_an_artifact(
+    tmp_path: Path,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    artifacts.values[AUTHORING_V8.revision_id] = _content_team_authoring_result_v8(image_count=0)
+
+    assert service.content_team_image_slot_count(workflow=_workflow(), authoring=AUTHORING_V8) == 0
+    assert service._content_team_image_components(_workflow(), (AUTHORING_V8,)) == ()
+    assert artifacts.commits == []
 
 
 def test_image_role_cannot_change_the_authoring_drawing_contract(tmp_path: Path) -> None:

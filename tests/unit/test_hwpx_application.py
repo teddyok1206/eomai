@@ -281,6 +281,46 @@ def test_automatic_renderer_rejects_missing_or_mixed_canonical_sources() -> None
         HwpxApplicationService._resolve_build_source({"components": [first, second]}, "auto")
 
 
+def test_content_team_image_components_become_ordered_pinned_sources() -> None:
+    image = {
+        "component_type": "IMAGE",
+        "ordinal": 1,
+        "schema_ref": "eom://schemas/generated-item/stimulus-png/3.0",
+        "media_type": "image/png",
+        "artifact_id": "artifact_" + "a" * 32,
+        "artifact_revision_id": "rev_" + "b" * 32,
+        "sha256": "sha256:" + "c" * 64,
+        "metadata": {
+            "artifact_member": "generated-stimulus.png",
+            "label": "(나)",
+            "width_px": 800,
+            "height_px": 500,
+            "alt_text": "오른쪽에 배치할 교과서형 자료 그림",
+        },
+    }
+
+    sources = HwpxApplicationService._content_team_image_sources({"components": [image]})
+
+    assert sources == [
+        {
+            "visual_ordinal": 1,
+            "label": "(나)",
+            "artifact_id": image["artifact_id"],
+            "artifact_revision_id": image["artifact_revision_id"],
+            "artifact_member": "generated-stimulus.png",
+            "sha256": image["sha256"],
+            "schema_ref": image["schema_ref"],
+            "media_type": "image/png",
+            "width_px": 800,
+            "height_px": 500,
+            "alt_text": "오른쪽에 배치할 교과서형 자료 그림",
+            "file_name": "input/visual-1.png",
+        }
+    ]
+    with pytest.raises(HwpxManagerError, match="ordinals are ambiguous"):
+        HwpxApplicationService._content_team_image_sources({"components": [image, image]})
+
+
 def test_runner_returns_sanitized_failure_without_traceback(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

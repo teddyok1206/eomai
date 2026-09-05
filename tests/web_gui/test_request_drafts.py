@@ -44,8 +44,8 @@ def test_request_text_becomes_reviewed_bounded_authoring_guidance() -> None:
     )
     payload = workflow_start_payload(draft)
     assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-    assert payload["definition_version"] == "1.7.0"
-    assert payload["image_mode"] == "skip"
+    assert payload["definition_version"] == "1.8.0"
+    assert payload["image_mode"] == "required"
     assert payload["pack_key"] == "generated-knowledge-item"
     assert payload["execution_preset_key"] == "standard-item"
     assert payload["source_intake_batch_ids"] == []
@@ -86,7 +86,7 @@ def test_grounded_content_team_request_does_not_add_visual_or_equation_requireme
     retrieval = payload["educational_retrieval"]
     assert isinstance(retrieval, dict)
     assert retrieval["required_item_elements"] == ["choice"]
-    assert payload["image_mode"] == "skip"
+    assert payload["image_mode"] == "required"
     brief = payload["item_brief"]
     assert isinstance(brief, dict)
     assert {

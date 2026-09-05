@@ -32,6 +32,8 @@ from eom_orchestrator.database import build_session_factory
 from eom_workflow import ArtifactPointer, ContentTeamItemBrief, ItemBriefV2, WorkflowRequest
 from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV7,
+    ContentTeamAuthoringRoleResultV8,
+    ContentTeamImageRoleResultV8,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
     GeneratedAuthoringRoleResultV5,
@@ -50,6 +52,7 @@ from eom_workflow.models import (
 )
 from eom_workflow.schemas import validate_role_result
 from eom_workflow_runner.catalog_port import (
+    ContentTeamStimulusPointer,
     GeneratedStimulusPointer,
     PreparedPrompt,
     RegistrationOutcome,
@@ -116,7 +119,9 @@ COMPONENT_TYPES = {
     "review": "REVIEW_REPORT",
     "registration": "METADATA",
 }
-ComponentType = Literal["UPPER_STEM", "IMAGE_SPEC", "REVIEW_REPORT", "METADATA", "ITEM_CONTENT"]
+ComponentType = Literal[
+    "UPPER_STEM", "IMAGE_SPEC", "REVIEW_REPORT", "METADATA", "ITEM_CONTENT", "IMAGE"
+]
 ROLE_BY_RESULT_SCHEMA = {
     "authoring-result@1.0": "authoring",
     "authoring-result@2.0": "authoring",
@@ -143,6 +148,10 @@ ROLE_BY_RESULT_SCHEMA = {
     "review-result@6.0": "review",
     "registration-result@6.0": "item_management",
     "authoring-result@7.0": "authoring",
+    "authoring-result@8.0": "authoring",
+    "image-result@8.0": "image",
+    "review-result@8.0": "review",
+    "registration-result@8.0": "item_management",
     "review-result@7.0": "review",
     "registration-result@7.0": "item_management",
     "knowledge-analysis-proposal-result@1.0": "support",
@@ -803,6 +812,199 @@ class WorkflowCatalogService:
             source_result_revision_id=image.revision_id,
         )
 
+    def content_team_image_slot_count(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        authoring: ArtifactPointer,
+    ) -> int:
+        """Count only validated IMAGE slots in one pinned content-team authoring result."""
+
+        if authoring.step_key != "authoring" or authoring.result_schema != "authoring-result@8.0":
+            raise ValueError("image decision does not reference content-team authoring V8")
+        _, parsed = self._load_upstream_result(workflow, authoring)
+        if not isinstance(parsed, ContentTeamAuthoringRoleResultV8):
+            raise ValueError("content-team image decision result type is invalid")
+        return sum(visual.kind == "IMAGE" for visual in parsed.output.draft.visuals)
+
+    def materialize_content_team_stimuli(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> tuple[ContentTeamStimulusPointer, ...]:
+        """Render and commit the exact ordered IMAGE slots declared by authoring V8."""
+
+        authoring = next(
+            (
+                pointer
+                for pointer in artifacts
+                if pointer.step_key == "authoring"
+                and pointer.result_schema == "authoring-result@8.0"
+            ),
+            None,
+        )
+        image = next(
+            (
+                pointer
+                for pointer in artifacts
+                if pointer.step_key == "image" and pointer.result_schema == "image-result@8.0"
+            ),
+            None,
+        )
+        if authoring is None or image is None:
+            raise ValueError("content-team image artifacts are incomplete")
+        _, authoring_result = self._load_upstream_result(workflow, authoring)
+        _, image_result = self._load_upstream_result(workflow, image)
+        if not isinstance(authoring_result, ContentTeamAuthoringRoleResultV8) or not isinstance(
+            image_result, ContentTeamImageRoleResultV8
+        ):
+            raise ValueError("content-team image result types are invalid")
+        expected_slots = tuple(
+            (ordinal, visual.label)
+            for ordinal, visual in enumerate(authoring_result.output.draft.visuals)
+            if visual.kind == "IMAGE"
+        )
+        actual_slots = tuple(
+            (item.visual_ordinal, item.label) for item in image_result.output.drawings
+        )
+        if not expected_slots or actual_slots != expected_slots:
+            raise ValueError("content-team image output changed the ordered IMAGE slots")
+
+        provider_value = workflow.runtime_context.get("local_image_provider")
+        provider = (
+            LocalImageProviderBinding.model_validate(provider_value)
+            if isinstance(provider_value, dict)
+            else None
+        )
+        committed: list[ContentTeamStimulusPointer] = []
+        for item in image_result.output.drawings:
+            drawing = item.drawing
+            drawing_hash = content_sha256(drawing.model_dump(mode="json"))
+            suffix = f"visual-{item.visual_ordinal}"
+            if isinstance(drawing, GeneratedVectorDrawingV6) and drawing.production_route == (
+                "HYBRID_LOCAL_GENERATIVE"
+            ):
+                if provider is None:
+                    raise ValueError("pinned local image provider binding is missing")
+                local_rendered = render_generated_local_vector_stimulus(
+                    self.settings,
+                    workflow_id=workflow.workflow_id,
+                    result_revision_id=image.revision_id,
+                    drawing_hash=drawing_hash,
+                    drawing=drawing,
+                    binding=provider,
+                    adapter=self.local_image,
+                    operation_suffix=suffix,
+                )
+                files = {
+                    PNG_MEMBER: local_rendered.png_path,
+                    SVG_MEMBER: local_rendered.svg_path,
+                    RASTER_MEMBER: local_rendered.background_path,
+                    LOCAL_IMAGE_RECEIPT_MEMBER: local_rendered.receipt_path,
+                }
+                result = {
+                    "drawing_sha256": drawing_hash,
+                    "visual_ordinal": item.visual_ordinal,
+                    "label": item.label,
+                    "illustration_prompt_sha256": content_sha256(item.illustration_prompt),
+                    "production_route": drawing.production_route,
+                    "route_reason": drawing.route_reason,
+                    "local_image_binding_sha256": provider.binding_sha256,
+                    "local_image_request_sha256": local_rendered.request_sha256,
+                    "local_image_receipt_sha256": local_rendered.receipt.receipt_sha256,
+                }
+                file_metadata = {
+                    PNG_MEMBER: {
+                        "schema_ref": "eom://schemas/generated-item/stimulus-png/3.0",
+                        "media_type": "image/png",
+                    },
+                    SVG_MEMBER: {
+                        "schema_ref": "eom://schemas/generated-item/stimulus-svg-overlay/1.0",
+                        "media_type": SVG_MEDIA_TYPE,
+                    },
+                    RASTER_MEMBER: {
+                        "schema_ref": "eom://schemas/generated-item/semantic-raster-png/1.0",
+                        "media_type": "image/png",
+                    },
+                    LOCAL_IMAGE_RECEIPT_MEMBER: {
+                        "schema_ref": "eom://schemas/image-provider/local-image-composite-receipt/1.0",
+                        "media_type": "application/json",
+                    },
+                }
+                manifest_version = "generated-item-stimulus-file-set/4.0"
+            else:
+                vector_rendered = render_generated_vector_stimulus(
+                    self.settings,
+                    workflow_id=workflow.workflow_id,
+                    result_revision_id=image.revision_id,
+                    drawing=drawing,
+                    operation_suffix=suffix,
+                )
+                files = {PNG_MEMBER: vector_rendered.png_path, SVG_MEMBER: vector_rendered.svg_path}
+                result = {
+                    "drawing_sha256": drawing_hash,
+                    "visual_ordinal": item.visual_ordinal,
+                    "label": item.label,
+                    "illustration_prompt_sha256": content_sha256(item.illustration_prompt),
+                    "production_route": drawing.production_route,
+                    "route_reason": drawing.route_reason,
+                }
+                file_metadata = {
+                    PNG_MEMBER: {
+                        "schema_ref": "eom://schemas/generated-item/stimulus-png/3.0",
+                        "media_type": "image/png",
+                    },
+                    SVG_MEMBER: {
+                        "schema_ref": "eom://schemas/generated-item/stimulus-svg/2.0",
+                        "media_type": SVG_MEDIA_TYPE,
+                    },
+                }
+                manifest_version = "generated-item-stimulus-file-set/2.0"
+            expected_hashes = {name: sha256_file(source) for name, source in files.items()}
+            artifact = self.artifacts.commit_file_set(
+                files=files,
+                primary_file=PNG_MEMBER,
+                artifact_type="generated-item-stimulus",
+                idempotency_key=(
+                    f"content-team-stimulus:{workflow.workflow_id}:{image.revision_id}:"
+                    f"{item.visual_ordinal}:{drawing_hash}"
+                ),
+                request={
+                    "workflow_id": workflow.workflow_id,
+                    "source_result_revision_id": image.revision_id,
+                    "visual_ordinal": item.visual_ordinal,
+                    "drawing_schema": "eom.generated-vector-stimulus/4.0",
+                },
+                result=result,
+                file_metadata=file_metadata,
+                manifest_version=manifest_version,
+                expected_file_sha256=expected_hashes,
+            )
+            _validate_generated_vector_artifact_manifest(
+                artifact.manifest,
+                expected_file_sha256=expected_hashes,
+                file_metadata=file_metadata,
+                content_hash=artifact.content_hash,
+                manifest_version=manifest_version,
+            )
+            committed.append(
+                ContentTeamStimulusPointer(
+                    artifact_id=artifact.artifact_id,
+                    artifact_revision_id=artifact.revision_id,
+                    artifact_member=PNG_MEMBER,
+                    sha256=artifact.content_hash,
+                    media_type="image/png",
+                    width_px=PNG_WIDTH,
+                    height_px=PNG_HEIGHT,
+                    source_result_revision_id=image.revision_id,
+                    visual_ordinal=item.visual_ordinal,
+                    label=item.label,
+                    alt_text=drawing.alt_text,
+                )
+            )
+        return tuple(committed)
+
     def register_workflow(
         self,
         *,
@@ -843,6 +1045,14 @@ class WorkflowCatalogService:
             "GENERATED_KNOWLEDGE_ITEM_REQUEST",
         }:
             components = (*components, self._knowledge_item_content(workflow, request, artifacts))
+            if any(
+                pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@8.0"
+                for pointer in artifacts
+            ):
+                components = (
+                    *components,
+                    *self._content_team_image_components(workflow, artifacts),
+                )
             assert request.item_brief is not None
             brief = request.item_brief
             item_type_key = "eom-template-multiple-choice"
@@ -953,14 +1163,33 @@ class WorkflowCatalogService:
         if request.item_brief is None:
             return
         is_content_team = isinstance(request.item_brief, ContentTeamItemBrief)
-        expects_content_team = (
-            pack_key == "generated-knowledge-item" and release_version == "1.12.0"
-        )
+        expects_content_team = pack_key == "generated-knowledge-item" and release_version in {
+            "1.12.0",
+            "1.13.0",
+        }
         if expects_content_team:
             if not is_content_team:
                 raise ContentPackError(
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "content-team pack requires the V3 item brief",
+                )
+            if release_version == "1.13.0" and (
+                request.image_mode != "required"
+                or request.profiles is None
+                or request.profiles.image != "generated-stimulus-drawing"
+            ):
+                raise ContentPackError(
+                    ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                    "content-team V1.13 requires the conditional image profile",
+                )
+            if release_version == "1.12.0" and (
+                request.image_mode != "skip"
+                or request.profiles is None
+                or request.profiles.image is not None
+            ):
+                raise ContentPackError(
+                    ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                    "historical content-team V1.12 cannot use the image profile",
                 )
             return
         if is_content_team:
@@ -1103,7 +1332,8 @@ class WorkflowCatalogService:
         artifacts: tuple[ArtifactPointer, ...],
     ) -> ComponentPointer:
         if any(
-            pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@7.0"
+            pointer.step_key == "authoring"
+            and pointer.result_schema in {"authoring-result@7.0", "authoring-result@8.0"}
             for pointer in artifacts
         ):
             return self._content_team_knowledge_item_content(workflow, request, artifacts)
@@ -1176,6 +1406,103 @@ class WorkflowCatalogService:
             },
         )
 
+    def _content_team_image_components(
+        self,
+        workflow: WorkflowInstanceRecord,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> tuple[ComponentPointer, ...]:
+        authoring = next(
+            (
+                pointer
+                for pointer in artifacts
+                if pointer.step_key == "authoring"
+                and pointer.result_schema == "authoring-result@8.0"
+            ),
+            None,
+        )
+        if authoring is None:
+            raise ValueError("content-team V8 authoring result is missing")
+        _, parsed = self._load_upstream_result(workflow, authoring)
+        if not isinstance(parsed, ContentTeamAuthoringRoleResultV8):
+            raise ValueError("content-team V8 authoring result type is invalid")
+        slots = tuple(
+            (ordinal, visual.label)
+            for ordinal, visual in enumerate(parsed.output.draft.visuals)
+            if visual.kind == "IMAGE"
+        )
+        raw = workflow.runtime_context.get("content_team_stimuli")
+        if not slots:
+            if raw is not None and raw != [] and raw != ():
+                raise ValueError("no-image item unexpectedly has generated stimuli")
+            return ()
+        if not isinstance(raw, list) or len(raw) != len(slots):
+            raise ValueError("content-team generated stimuli are missing")
+        image_result = next(
+            (
+                pointer
+                for pointer in artifacts
+                if pointer.step_key == "image" and pointer.result_schema == "image-result@8.0"
+            ),
+            None,
+        )
+        if image_result is None:
+            raise ValueError("content-team image result is missing")
+        components: list[ComponentPointer] = []
+        for expected, value in zip(slots, raw, strict=True):
+            if not isinstance(value, dict):
+                raise ValueError("content-team generated stimulus pointer is invalid")
+            ordinal, label = expected
+            if (
+                value.get("visual_ordinal") != ordinal
+                or value.get("label") != label
+                or value.get("source_result_revision_id") != image_result.revision_id
+                or value.get("artifact_member") != PNG_MEMBER
+                or value.get("media_type") != "image/png"
+                or value.get("width_px") != PNG_WIDTH
+                or value.get("height_px") != PNG_HEIGHT
+            ):
+                raise ValueError("content-team generated stimulus does not match its slot")
+            alt_text = value.get("alt_text")
+            if not isinstance(alt_text, str) or not 0 < len(alt_text) <= 1000:
+                raise ValueError("content-team generated stimulus alt text is invalid")
+            pointer = MediaArtifactPointer.model_validate(
+                {
+                    "artifact_id": value.get("artifact_id"),
+                    "artifact_revision_id": value.get("artifact_revision_id"),
+                    "artifact_member": value.get("artifact_member"),
+                    "sha256": value.get("sha256"),
+                    "media_type": value.get("media_type"),
+                }
+            )
+            self.artifacts.verify_file_pointer(
+                artifact_id=pointer.artifact_id,
+                revision_id=pointer.artifact_revision_id,
+                content_hash=pointer.sha256,
+                member=pointer.artifact_member,
+            )
+            components.append(
+                ComponentPointer(
+                    component_type="IMAGE",
+                    ordinal=ordinal,
+                    schema_ref="eom://schemas/generated-item/stimulus-png/3.0",
+                    media_type="image/png",
+                    artifact_id=pointer.artifact_id,
+                    artifact_revision_id=pointer.artifact_revision_id,
+                    sha256=pointer.sha256,
+                    logical_name=f"content-team-visual-{ordinal}.png",
+                    metadata={
+                        "artifact_member": pointer.artifact_member,
+                        "visual_ordinal": ordinal,
+                        "label": label,
+                        "alt_text": alt_text,
+                        "width_px": PNG_WIDTH,
+                        "height_px": PNG_HEIGHT,
+                        "source_image_result_revision_id": image_result.revision_id,
+                    },
+                )
+            )
+        return tuple(components)
+
     def _content_team_knowledge_item_content(
         self,
         workflow: WorkflowInstanceRecord,
@@ -1189,14 +1516,16 @@ class WorkflowCatalogService:
                 pointer
                 for pointer in artifacts
                 if pointer.step_key == "authoring"
-                and pointer.result_schema == "authoring-result@7.0"
+                and pointer.result_schema in {"authoring-result@7.0", "authoring-result@8.0"}
             ),
             None,
         )
         if authoring is None:
             raise ValueError("content-team workflow has no authoring result")
         _, parsed = self._load_upstream_result(workflow, authoring)
-        if not isinstance(parsed, ContentTeamAuthoringRoleResultV7):
+        if not isinstance(
+            parsed, ContentTeamAuthoringRoleResultV7 | ContentTeamAuthoringRoleResultV8
+        ):
             raise ValueError("content-team authoring result type is invalid")
         content: AssessmentItemContentV2 = parsed.output.draft
         content_data = content.model_dump(mode="json")
@@ -1432,7 +1761,7 @@ class WorkflowCatalogService:
             raise ValueError("upstream result identity does not match its immutable pointer")
         canonical_result = (
             parsed.model_dump(mode="json")
-            if pointer.result_schema == "authoring-result@7.0"
+            if pointer.result_schema in {"authoring-result@7.0", "authoring-result@8.0"}
             else result
         )
         return canonical_result, parsed

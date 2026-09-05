@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Barrier
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -29,6 +30,7 @@ from eom_workflow.identifiers import new_approval_request_id, new_step_run_id
 from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.actor_authorization_adapters import StaticWorkflowActorAuthorizer
 from eom_workflow_runner.catalog_port import (
+    ContentTeamStimulusPointer,
     GeneratedStimulusPointer,
     PreparedPrompt,
     RegistrationOutcome,
@@ -349,6 +351,16 @@ class FakeWorkflowCatalog:
         self.prepared: list[tuple[str, int]] = []
         self.registrations: list[tuple[str, int]] = []
         self.materializations: list[tuple[str, str]] = []
+        self.content_team_image_count = 0
+
+    def content_team_image_slot_count(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        authoring: ArtifactPointer,
+    ) -> int:
+        del workflow, authoring
+        return self.content_team_image_count
 
     def prepare_prompt(
         self,
@@ -418,6 +430,15 @@ class FakeWorkflowCatalog:
             height_px=500,
             source_result_revision_id=image.revision_id,
         )
+
+    def materialize_content_team_stimuli(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> tuple[ContentTeamStimulusPointer, ...]:
+        del workflow, artifacts
+        return ()
 
 
 class FailedRoleExecutor:
@@ -657,6 +678,45 @@ def test_direct_authoring_to_review_records_image_skip_stage(
                 ("IMAGE_SKIPPED", "REVIEWING"),
             ]
         assert [role for _, _, role in executor.calls] == ["authoring", "review"]
+    finally:
+        _close(resources)
+
+
+@pytest.mark.parametrize(
+    ("image_count", "expected_roles", "expected_image_state"),
+    [
+        (0, ["authoring", "review"], StepState.SKIPPED.value),
+        (1, ["authoring", "image", "review"], StepState.SUCCEEDED.value),
+        (2, ["authoring", "image", "review"], StepState.SUCCEEDED.value),
+    ],
+)
+def test_content_team_v8_dispatches_only_the_validated_image_slot_count(
+    integration_engine: Engine,
+    image_count: int,
+    expected_roles: list[str],
+    expected_image_state: str,
+) -> None:
+    runner, executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "required",
+        f"workflow-content-team-image-count-{image_count}",
+        definition_path=Path("config/workflows/generic-item-development.v1.8.yaml"),
+    )
+    catalog = cast(FakeWorkflowCatalog, runner.catalog)
+    catalog.content_team_image_count = image_count
+    try:
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            assert workflow.state == WorkflowState.AWAITING_HUMAN_APPROVAL.value
+            image = next(
+                step for step in list_step_runs(session, workflow_id) if step.step_key == "image"
+            )
+            assert image.state == expected_image_state
+            if image_count == 0:
+                assert workflow.runtime_context["content_team_stimuli"] == []
+        assert [role for _, _, role in executor.calls] == expected_roles
     finally:
         _close(resources)
 

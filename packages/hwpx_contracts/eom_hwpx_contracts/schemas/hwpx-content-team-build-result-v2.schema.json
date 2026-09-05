@@ -1,0 +1,203 @@
+{
+  "$id": "https://eom.local/schemas/hwpx/hwpx-content-team-build-result-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "build_id": {
+      "pattern": "^hwpxbuild_[a-f0-9]{32}$",
+      "title": "Build Id",
+      "type": "string"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "embedded_image_count": {
+      "maximum": 2,
+      "minimum": 0,
+      "title": "Embedded Image Count",
+      "type": "integer"
+    },
+    "equation_count": {
+      "maximum": 128,
+      "minimum": 0,
+      "title": "Equation Count",
+      "type": "integer"
+    },
+    "errors": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Errors",
+      "type": "array"
+    },
+    "handoff_archive_sha256": {
+      "const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+      "title": "Handoff Archive Sha256",
+      "type": "string"
+    },
+    "image_set_sha256": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "title": "Image Set Sha256",
+      "type": "string"
+    },
+    "item_revision_id": {
+      "pattern": "^itemrev_[a-z0-9]{8,55}$",
+      "title": "Item Revision Id",
+      "type": "string"
+    },
+    "labeled_block_count": {
+      "maximum": 2,
+      "minimum": 0,
+      "title": "Labeled Block Count",
+      "type": "integer"
+    },
+    "output_file": {
+      "anyOf": [
+        {
+          "const": "output/content-team-item.hwpx",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Output File"
+    },
+    "output_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Output Sha256"
+    },
+    "package_manifest_file": {
+      "anyOf": [
+        {
+          "const": "output/package-manifest.json",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Package Manifest File"
+    },
+    "renderer_profile": {
+      "const": "content-team-hwp-question-editor-v2",
+      "title": "Renderer Profile",
+      "type": "string"
+    },
+    "renderer_report_file": {
+      "anyOf": [
+        {
+          "const": "output/content-team-validation.json",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Renderer Report File"
+    },
+    "renderer_version": {
+      "const": "2.0.0",
+      "title": "Renderer Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_artifact_id": {
+      "pattern": "^artifact_[a-f0-9]{32}$",
+      "title": "Source Artifact Id",
+      "type": "string"
+    },
+    "source_artifact_revision_id": {
+      "pattern": "^rev_[a-f0-9]{32}$",
+      "title": "Source Artifact Revision Id",
+      "type": "string"
+    },
+    "source_json_sha256": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "title": "Source Json Sha256",
+      "type": "string"
+    },
+    "source_markdown_sha256": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "title": "Source Markdown Sha256",
+      "type": "string"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "table_count": {
+      "maximum": 20,
+      "minimum": 0,
+      "title": "Table Count",
+      "type": "integer"
+    },
+    "visual_count": {
+      "maximum": 2,
+      "minimum": 0,
+      "title": "Visual Count",
+      "type": "integer"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "renderer_profile",
+    "renderer_version",
+    "build_id",
+    "item_revision_id",
+    "source_artifact_id",
+    "source_artifact_revision_id",
+    "source_json_sha256",
+    "source_markdown_sha256",
+    "handoff_archive_sha256",
+    "status",
+    "output_file",
+    "output_sha256",
+    "package_manifest_file",
+    "renderer_report_file",
+    "equation_count",
+    "table_count",
+    "visual_count",
+    "labeled_block_count",
+    "warnings",
+    "errors",
+    "started_at",
+    "completed_at",
+    "image_set_sha256",
+    "embedded_image_count"
+  ],
+  "title": "ContentTeamBuildResultV2",
+  "type": "object"
+}

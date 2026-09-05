@@ -77,7 +77,9 @@ class KnowledgeItemBootstrapManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal[
-        "knowledge-item-control-bootstrap/1.0", "knowledge-item-control-bootstrap/2.0"
+        "knowledge-item-control-bootstrap/1.0",
+        "knowledge-item-control-bootstrap/2.0",
+        "knowledge-item-control-bootstrap/3.0",
     ]
     preset_key: Literal["knowledge-grounded-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -87,7 +89,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
     base_preset_schema_version: Literal["execution-preset-revision/1.0"]
     general_knowledge_policy: Literal["ALLOW_WITH_PROVENANCE"]
     compatible_workflow_protocols: tuple[
-        Literal["workflow-role/1.12.0", "workflow-role/1.15.0"], ...
+        Literal["workflow-role/1.12.0", "workflow-role/1.15.0", "workflow-role/1.17.0"], ...
     ] = Field(min_length=1, max_length=1)
     evidence_access_by_role: dict[str, Literal["NONE", "EVIDENCE_CONTEXT"]]
     retrieval_policy: KnowledgeItemRetrievalBootstrapPolicy
@@ -99,6 +101,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
         expected_protocol = {
             "knowledge-item-control-bootstrap/1.0": "workflow-role/1.12.0",
             "knowledge-item-control-bootstrap/2.0": "workflow-role/1.15.0",
+            "knowledge-item-control-bootstrap/3.0": "workflow-role/1.17.0",
         }[self.schema_version]
         if self.compatible_workflow_protocols != (expected_protocol,):
             raise ValueError("knowledge item workflow protocol differs")
@@ -143,6 +146,7 @@ def load_knowledge_item_bootstrap_manifest(
         schema_name = {
             "knowledge-item-control-bootstrap/1.0": "knowledge-item-control-bootstrap",
             "knowledge-item-control-bootstrap/2.0": "knowledge-item-control-bootstrap-v2",
+            "knowledge-item-control-bootstrap/3.0": "knowledge-item-control-bootstrap-v3",
         }.get(schema_version)
         if schema_name is None:
             raise ValueError("knowledge item bootstrap schema version is unsupported")
@@ -347,7 +351,11 @@ def _find_or_create_draft(
             return base, current
         current_protocols = tuple(current.compatible_workflow_protocols)
         requested_protocol = manifest.compatible_workflow_protocols[0]
-        protocol_rank = {"workflow-role/1.12.0": 1, "workflow-role/1.15.0": 2}
+        protocol_rank = {
+            "workflow-role/1.12.0": 1,
+            "workflow-role/1.15.0": 2,
+            "workflow-role/1.17.0": 3,
+        }
         if (
             len(current_protocols) != 1
             or current_protocols[0] not in protocol_rank

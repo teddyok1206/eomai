@@ -780,6 +780,7 @@ class HwpxCapability(WebModel):
         "item-revision-auto",
         "eom-question-template-v1",
         "content-team-hwp-question-editor-v1",
+        "content-team-hwp-question-editor-v2",
     ]
     boundary: Literal["APPLICATION_API_ONLY"] = "APPLICATION_API_ONLY"
     build_available: bool
@@ -804,7 +805,7 @@ class HwpxBuildView(WebModel):
     source_artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
     source_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
     renderer: Literal["kordoc", "eom-template", "content-team"]
-    renderer_version: Literal["4.9.0", "1.0.0"]
+    renderer_version: Literal["4.9.0", "1.0.0", "2.0.0"]
     state: Literal["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]
     validation_state: Literal["PENDING", "PASS", "FAIL"]
     native_equation_count: int | None = Field(default=None, ge=0, le=32)
