@@ -1,4 +1,5 @@
 from pathlib import Path
+from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC = ROOT / "apps/web_gui/eom_web_gui/static"
@@ -6,6 +7,8 @@ HTML = (STATIC / "index.html").read_text(encoding="utf-8")
 CSS = (STATIC / "styles.css").read_text(encoding="utf-8")
 JAVASCRIPT = (STATIC / "app.js").read_text(encoding="utf-8")
 DESIGN_NOTE = ROOT / "docs/product/EOM_SCIENTIFIC_WORKBENCH_DESIGN_SYSTEM.md"
+LOGIN_HTML = (STATIC / "login.html").read_text(encoding="utf-8")
+MARK = STATIC / "eom-mark.svg"
 
 
 def test_scientific_workbench_decision_is_documented_as_presentation_only() -> None:
@@ -60,11 +63,31 @@ def test_semantic_tokens_and_accessibility_rules_are_part_of_the_css_contract() 
         "--eom-critical-vermilion",
     ):
         assert token in CSS
+    assert "--eom-brand: #4f46e5" in CSS
     assert 'html[data-ui-mode="human"]' in CSS
     assert 'html[data-ui-mode="engine"]' in CSS
     assert "@media (prefers-reduced-motion: reduce)" in CSS
     assert "border-radius: 16px" not in CSS
     assert "border-radius: 24px" not in CSS
+
+
+def test_brand_mark_is_one_color_vector_without_a_literal_letter() -> None:
+    root = ElementTree.fromstring(MARK.read_bytes())
+    assert root.tag == "{http://www.w3.org/2000/svg}svg"
+    assert root.attrib["viewBox"] == "0 0 64 64"
+    assert root.findall("{http://www.w3.org/2000/svg}text") == []
+    assert root.findall("{http://www.w3.org/2000/svg}image") == []
+    paths = root.findall("{http://www.w3.org/2000/svg}path")
+    assert len(paths) == 1
+    assert paths[0].attrib["stroke"] == "#4F46E5"
+    assert paths[0].attrib["fill"] == "none"
+    for document in (HTML, LOGIN_HTML):
+        assert (
+            '<link rel="icon" href="/studio/assets/eom-mark.svg" type="image/svg+xml">' in document
+        )
+        assert 'class="brand-seal" src="/studio/assets/eom-mark.svg" alt=""' in document
+        assert 'aria-hidden="true">E<' not in document
+    assert "background: linear-gradient(145deg" not in CSS
 
 
 def test_readable_type_scale_keeps_explanatory_text_out_of_micro_sizes() -> None:

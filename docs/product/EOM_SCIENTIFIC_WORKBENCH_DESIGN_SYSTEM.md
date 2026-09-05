@@ -69,16 +69,24 @@ Color names describe responsibility rather than a widget:
 | Mist | workbench background and quiet grouped surfaces |
 | Porcelain | navigation and document-adjacent surfaces |
 | Line | boundaries and table rules |
-| Signal Blue | user action, active process, information, and technical focus |
+| Signal Indigo | user action, active process, information, and technical focus |
 | Emerald | successful completion and validated output |
 | Amber | review or attention required |
 | Vermilion | failure, destructive consequence, or blocked state |
 
 Color is never the only state signal. Every state includes text and, where compact display helps, a
-shape or icon. Primary buttons and active navigation use signal blue. Emerald is reserved for
-successful completion; amber and vermilion retain their warning and failure meaning. World-facing
-product content remains on a pure white document surface so application chrome never tints item
-figures.
+shape or icon. Primary buttons and active navigation use signal indigo (`#4F46E5`). Emerald is
+reserved for successful completion; amber and vermilion retain their warning and failure meaning.
+World-facing product content remains on a pure white document surface so application chrome never
+tints item figures.
+
+### Brand mark
+
+The EOM mark is a single-color, three-segment hexagonal loop. Its three connected modules represent
+evidence, orchestration, and validated output around one shared aperture. It contains no letterform,
+keeps the same silhouette from the login surface through the favicon, and is stored as the canonical
+`eom-mark.svg` asset rather than duplicated raster sizes. The mark uses signal indigo while success,
+warning, and failure retain their independent semantic colors.
 
 ## 5. Structural components
 

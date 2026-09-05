@@ -43,6 +43,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
         assert client.get("/studio/assets/app.js").status_code == 200
         assert client.get("/studio/assets/curriculum-selector.js").status_code == 200
         assert client.get("/studio/assets/execution-preset-editor.js").status_code == 200
+        assert client.get("/studio/assets/eom-mark.svg").status_code == 200
         assert client.get("/studio/assets/item-preview.js").status_code == 200
         assert client.get("/studio/assets/presentation-vocabulary.ko-KR.json").status_code == 200
 
