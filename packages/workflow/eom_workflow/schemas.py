@@ -21,6 +21,7 @@ from eom_hwpx_contracts import (
     ContentTeamMarkdownError,
     derive_content_team_equation_sources,
     normalize_content_team_bottom_stem,
+    normalize_content_team_inline_math,
     normalize_content_team_stem,
     serialize_content_team_markdown,
 )
@@ -596,6 +597,9 @@ def _canonicalize_content_team_authoring_result(value: object) -> object:
     canonical = copy.deepcopy(value)
     canonical_output = _mapping(canonical, "output")
     canonical_draft = _mapping(canonical_output, "draft")
+    for key, item in tuple(canonical_draft.items()):
+        if key != "equation_sources":
+            canonical_draft[key] = _normalize_content_team_math_values(item)
     item_number = canonical_draft.get("item_number")
     stem = canonical_draft.get("stem")
     if isinstance(item_number, int) and isinstance(stem, str):
@@ -608,12 +612,12 @@ def _canonicalize_content_team_authoring_result(value: object) -> object:
         )
     if projected:
         canonical_draft["visual_layout"] = derived_layout
-        canonical_draft["equation_sources"] = []
+    canonical_draft["equation_sources"] = []
+    try:
         preliminary = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
         canonical_draft["equation_sources"] = list(
             derive_content_team_equation_sources(preliminary.output.draft)
         )
-    try:
         validated = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
         serialize_content_team_markdown(validated.output.draft)
     except ValidationError as exc:
@@ -623,6 +627,16 @@ def _canonicalize_content_team_authoring_result(value: object) -> object:
             "authoring-result@7.0 cannot be materialized by the content-team profile"
         ) from exc
     return canonical
+
+
+def _normalize_content_team_math_values(value: object) -> object:
+    if isinstance(value, str):
+        return normalize_content_team_inline_math(value)
+    if isinstance(value, list):
+        return [_normalize_content_team_math_values(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _normalize_content_team_math_values(item) for key, item in value.items()}
+    return value
 
 
 def _canonicalize_legacy_editorial_compatibility_result(value: object) -> object:

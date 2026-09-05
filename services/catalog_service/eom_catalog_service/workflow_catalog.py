@@ -1430,7 +1430,12 @@ class WorkflowCatalogService:
             or parsed.artifact.revision_id != pointer.revision_id
         ):
             raise ValueError("upstream result identity does not match its immutable pointer")
-        return result, parsed
+        canonical_result = (
+            parsed.model_dump(mode="json")
+            if pointer.result_schema == "authoring-result@7.0"
+            else result
+        )
+        return canonical_result, parsed
 
     @staticmethod
     def _pinned_release(session: Session, snapshot: dict[str, Any]) -> ContentPackReleaseRecord:

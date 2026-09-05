@@ -60,6 +60,16 @@ TRAILING_SCORE_MARKERS = re.compile(
     r"(?P<suffix>(?:\s+\[(?:0|[1-9][0-9]*)(?:\.[0-9]+)?점\])+)[ \t]*$"
 )
 SCORE_MARKER = re.compile(r"\[(?P<score>(?:0|[1-9][0-9]*)(?:\.[0-9]+)?)점\]")
+ADJACENT_POSTFIX_EQUATION = re.compile(
+    r"(?<![A-Za-z0-9_/])"
+    r"(?P<base>[A-Za-z][A-Za-z0-9]*(?:/[A-Za-z][A-Za-z0-9]*)*)"
+    r"\$(?P<decoration>_\{[A-Za-z0-9+\-]+\}(?:\^\{[A-Za-z0-9+\-]+\})?"
+    r"|\^\{[A-Za-z0-9+\-]+\})\$"
+)
+NUMERIC_TUPLE_EQUATION = re.compile(
+    r"\$\(\s*(?P<left>[+\-]?\d+(?:\.\d+)?)\s*,\s*"
+    r"(?P<right>[+\-]?\d+(?:\.\d+)?)\s*\)\$"
+)
 
 
 class ContentTeamMarkdownError(ValueError):
@@ -101,6 +111,24 @@ def normalize_content_team_bottom_stem(score_display: str, bottom_stem: str) -> 
             "content-team bottom stem is empty after score marker normalization"
         )
     return normalized
+
+
+def normalize_content_team_inline_math(value: str) -> str:
+    """Repair only source-format boundaries that the handoff parser cannot represent.
+
+    A postfix sub/superscript belongs inside the same inline equation as its adjacent ASCII
+    base. Pure numeric coordinate pairs remain ordinary visible text because the reviewed
+    equation prototype catalog has no coordinate-pair family.
+    """
+
+    normalized = ADJACENT_POSTFIX_EQUATION.sub(
+        lambda match: f"${match.group('base')}{match.group('decoration')}$",
+        value,
+    )
+    return NUMERIC_TUPLE_EQUATION.sub(
+        lambda match: f"({match.group('left')}, {match.group('right')})",
+        normalized,
+    )
 
 
 def _fail(message: str) -> NoReturn:
@@ -293,8 +321,11 @@ def _extract_labeled_blocks(
         label = marker.group("angle") or marker.group("bracket")
         index += 1
         content: list[str] = []
-        while index < len(lines) and lines[index].strip():
-            if LABELED_BLOCK.fullmatch(lines[index].strip()) is not None:
+        while index < len(lines):
+            stripped = lines[index].strip()
+            if LABELED_BLOCK.fullmatch(stripped) is not None:
+                break
+            if _starts_content_team_visual(lines, index):
                 break
             content.append(lines[index].rstrip())
             index += 1
@@ -311,6 +342,18 @@ def _extract_labeled_blocks(
     if kinds not in ((), ("DATA",), ("CONDITION",), ("DATA", "CONDITION")):
         _fail("content-team labeled blocks must be unique and DATA precedes CONDITION")
     return _clean("\n".join(kept)), tuple(blocks)
+
+
+def _starts_content_team_visual(lines: list[str], index: int) -> bool:
+    stripped = lines[index].strip()
+    if IMAGE_MARKER.fullmatch(stripped) is not None or TABLE_LABEL.fullmatch(stripped) is not None:
+        return True
+    if _parse_pipe_row(lines[index]) is None or index + 1 >= len(lines):
+        return False
+    separators = _parse_pipe_row(lines[index + 1])
+    return separators is not None and all(
+        TABLE_SEPARATOR_CELL.fullmatch(cell) for cell in separators
+    )
 
 
 def _extract_inquiry(value: str) -> tuple[str, ContentTeamInquiry | None]:

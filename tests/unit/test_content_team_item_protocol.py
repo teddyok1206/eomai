@@ -21,9 +21,11 @@ from eom_catalog_service.content_pack_files import compile_pack
 from eom_hwpx_contracts import (
     ContentTeamImageSlot,
     ContentTeamInquiry,
+    ContentTeamLabeledBlock,
     ContentTeamTable,
     derive_content_team_equation_sources,
     normalize_content_team_bottom_stem,
+    normalize_content_team_inline_math,
     normalize_content_team_stem,
 )
 from eom_hwpx_contracts.content_team_markdown import (
@@ -375,6 +377,64 @@ def test_content_team_bottom_stem_separates_matching_source_score_markers() -> N
     )
     with pytest.raises(ValueError, match="differs from score_display"):
         normalize_content_team_bottom_stem("2.5", "옳은 것을 고른 것은? [3점]")
+
+
+def test_content_team_inline_math_normalizes_handoff_unsupported_boundaries() -> None:
+    assert (
+        normalize_content_team_inline_math("가속도 단위는 m/s$^{2}$이고 좌표는 $(15,-10)$이다.")
+        == "가속도 단위는 $m/s^{2}$이고 좌표는 (15, -10)이다."
+    )
+    assert normalize_content_team_inline_math("관계 $x^{2}$은 그대로다.") == (
+        "관계 $x^{2}$은 그대로다."
+    )
+
+
+def test_content_team_labeled_block_preserves_multiple_paragraphs() -> None:
+    block_content = "첫 문단의 조건이다.\n\n둘째 문단의 조건이다."
+    draft = _content().model_copy(
+        update={
+            "labeled_blocks": (ContentTeamLabeledBlock(kind="CONDITION", content=block_content),)
+        }
+    )
+
+    reparsed = parse_content_team_markdown(serialize_content_team_markdown(draft))
+
+    assert reparsed.labeled_blocks[0].content == block_content
+
+
+def test_v7_authoring_canonicalizes_equation_boundaries_and_rebuilds_the_index() -> None:
+    result = ContentTeamAuthoringRoleResultV7(
+        job_id="job_" + "1" * 32,
+        workflow_id="workflow_" + "2" * 32,
+        step_run_id="steprun_" + "3" * 32,
+        role="authoring",
+        artifact=ArtifactSpec(
+            logical_artifact_id="artifact_" + "4" * 32,
+            revision_id="rev_" + "5" * 32,
+        ),
+        completed_at=datetime(2026, 9, 3, tzinfo=UTC),
+        output={
+            "draft": _content(
+                stem="가속도 단위는 m/s$^{2}$이고 좌표는 $(15,-10)$이다.",
+                equations=("^{2}", "(15,-10)"),
+            ),
+            "metadata": {
+                "subject": "통합과학",
+                "topic": "요청으로 정해지는 주제",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+    )
+
+    parsed = validate_role_result(
+        result.model_dump(mode="json"), "authoring", "authoring-result@7.0"
+    )
+
+    assert isinstance(parsed, ContentTeamAuthoringRoleResultV7)
+    assert parsed.output.draft.stem == ("가속도 단위는 $m/s^{2}$이고 좌표는 (15, -10)이다.")
+    assert parsed.output.draft.equation_sources == ("m/s^{2}",)
+    serialize_content_team_markdown(parsed.output.draft)
 
 
 def test_content_team_serializer_rejects_noncanonical_embedded_score() -> None:
