@@ -167,6 +167,10 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "최대 5개" not in html
     assert 'api("/admin/knowledge-analysis-batches")' in javascript
     assert 'const accounts = await api("/admin/codex-accounts")' in javascript
+    assert "상태·사용량 새로고침" in javascript
+    assert "주간 사용량" in javascript
+    assert "100 - window.used_percent" in javascript
+    assert 'timeZone: "Asia/Seoul"' in javascript
     assert "value.binding_id === openedAccount.binding_id" in javascript
     assert "account.active_auth_enrollment_id" in javascript
     assert "analysisBatchPollTimer" in javascript

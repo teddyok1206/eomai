@@ -752,6 +752,22 @@ function formatSeoul(value) {
   catch (_) { return "-"; }
 }
 
+function formatSeoulDateTime(value) {
+  if (!value) return "초기화 시각 미제공";
+  try {
+    return new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(value));
+  } catch (_) {
+    return "초기화 시각 확인 불가";
+  }
+}
+
 function installApproval() {
   $("#approval-load").addEventListener("click", async () => {
     $("#workflow-id").value = $("#approval-workflow-id").value.trim();
@@ -1500,11 +1516,66 @@ function workerSlotLabel(value) {
 
 function codexCommandLabel(value) {
   return {
-    OBSERVE: "상태 확인",
+    OBSERVE: "상태·사용량 확인",
     ENABLE: "사용 시작",
     DRAIN: "새 작업 중지",
     DISABLE: "사용 중지",
   }[value] || "계정 작업";
+}
+
+function usageWindowLabel(window, multipleLimits) {
+  const minutes = window.window_duration_minutes;
+  const duration = minutes === 10080
+    ? "주간 사용량"
+    : minutes === 300
+      ? "5시간 사용량"
+      : Number.isInteger(minutes) && minutes % 1440 === 0
+        ? `${minutes / 1440}일 사용량`
+        : Number.isInteger(minutes) && minutes % 60 === 0
+          ? `${minutes / 60}시간 사용량`
+          : Number.isInteger(minutes)
+            ? `${minutes}분 사용량`
+            : window.window_kind === "PRIMARY" ? "기본 사용량" : "추가 사용량";
+  const limit = window.limit_name || window.limit_id;
+  return multipleLimits ? `${limit} · ${duration}` : duration;
+}
+
+function renderCodexUsage(usage) {
+  const section = document.createElement("section");
+  section.className = "codex-usage";
+  const header = document.createElement("header");
+  const title = document.createElement("strong");
+  title.textContent = usage ? `Codex 사용량 · ${usage.plan_type}` : "Codex 사용량";
+  const observed = document.createElement("span");
+  observed.textContent = usage ? `조회 ${formatSeoulDateTime(usage.observed_at)}` : "아직 조회하지 않음";
+  header.append(title, observed);
+  section.append(header);
+  if (!usage) {
+    const empty = document.createElement("p");
+    empty.textContent = "아래 버튼으로 이 슬롯의 단기·주간 사용량을 확인할 수 있습니다.";
+    section.append(empty);
+    return section;
+  }
+  const limitIds = new Set((usage.windows || []).map((window) => window.limit_id));
+  for (const window of usage.windows || []) {
+    const row = document.createElement("div");
+    row.className = "codex-usage-window";
+    const label = document.createElement("div");
+    const name = document.createElement("span");
+    name.textContent = usageWindowLabel(window, limitIds.size > 1);
+    const percent = document.createElement("strong");
+    percent.textContent = `${window.used_percent}% 사용 · ${100 - window.used_percent}% 남음`;
+    label.append(name, percent);
+    const meter = document.createElement("progress");
+    meter.max = 100;
+    meter.value = window.used_percent;
+    meter.setAttribute("aria-label", `${name.textContent} ${window.used_percent}% 사용`);
+    const reset = document.createElement("small");
+    reset.textContent = `초기화 ${formatSeoulDateTime(window.resets_at)} (한국 시각)`;
+    row.append(label, meter, reset);
+    section.append(row);
+  }
+  return section;
 }
 
 function presetCapabilityOptions(draft, role) {
@@ -1739,14 +1810,20 @@ function renderCodexAccounts(accounts) {
     addControlDetail(details, "최근 성공 작업", account.last_successful_job_id);
     addControlDetail(details, "확인 시각", account.observed_at);
     addControlDetail(details, "로그인 변경", account.active_auth_enrollment_state ? statePresentation("generic", account.active_auth_enrollment_state).label : "없음");
+    card.append(renderCodexUsage(account.usage_observation));
     const actions = document.createElement("div");
     actions.className = "form-actions";
     actions.append(
-      actionButton("상태 확인", () => sendAccountCommand(account, "OBSERVE")),
+      actionButton("상태·사용량 새로고침", () => sendAccountCommand(account, "OBSERVE")),
       actionButton("사용 시작", () => sendAccountCommand(account, "ENABLE")),
       actionButton("새 작업 중지", () => sendAccountCommand(account, "DRAIN"), true),
       actionButton("사용 중지", () => sendAccountCommand(account, "DISABLE"), true),
     );
+    const usageButton = actions.firstElementChild;
+    if (account.active_lease_count > 0 && usageButton) {
+      usageButton.disabled = true;
+      usageButton.title = "현재 슬롯 작업이 끝난 뒤 사용량을 새로고침할 수 있습니다.";
+    }
     const reauth = account.active_auth_enrollment_id
       ? actionButton("로그인 변경 계속", () => resumeCodexReauthentication(account))
       : actionButton("계정 로그인 변경", () => openCodexReauthentication(account));
@@ -1949,7 +2026,7 @@ async function sendAccountCommand(account, commandType) {
 }
 
 async function pollControlCommand(commandId) {
-  for (let attempt = 0; attempt < 15; attempt += 1) {
+  for (let attempt = 0; attempt < 90; attempt += 1) {
     const value = await api(`/admin/codex-control-commands/${encodeURIComponent(commandId)}`);
     if (["SUCCEEDED", "FAILED"].includes(value.state)) {
       showMessage($("#codex-account-message"), `${codexCommandLabel(value.command_type)}: ${statePresentation("generic", value.state).label}${value.error_code ? ` · 기술 코드 ${value.error_code}` : ""}`, value.state === "SUCCEEDED" ? "success" : "error");

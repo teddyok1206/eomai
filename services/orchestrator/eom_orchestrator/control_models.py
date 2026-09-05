@@ -818,6 +818,17 @@ class CodexControlCommandRecord(Base):
             "requested_at",
             "command_id",
         ),
+        Index(
+            "ix_codex_control_command_latest_usage",
+            "binding_id",
+            "processed_at",
+            "command_id",
+            postgresql_where=text(
+                "command_type = 'OBSERVE' AND state = 'SUCCEEDED' "
+                "AND result_document ->> 'schema_version' = "
+                "'codex-control-command-result/1.1'"
+            ),
+        ),
     )
 
     command_id: Mapped[str] = mapped_column(String(41), primary_key=True)

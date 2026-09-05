@@ -37,13 +37,16 @@ from eom_orchestrator.worker_auth import (
     persist_worker_auth_observation,
 )
 from eom_orchestrator.worker_registry import FIXED_WORKER_SLOT_IDS, WorkerSlot
+from eom_orchestrator.worker_usage import observe_worker_usage
 
 if TYPE_CHECKING:
     from eom_orchestrator.auth_enrollment_processor import CodexAuthEnrollmentProcessor
 
 AUTH_OBSERVATION_TTL = timedelta(hours=1)
 CAPABILITY_OBSERVATION_TTL = timedelta(hours=1)
-CONTROL_COMMAND_LEASE_TTL = timedelta(minutes=2)
+# One OBSERVE claim may perform the bounded auth probe and then the bounded App Server
+# usage probe. Keep the durable claim alive across both fixed-unit boundaries.
+CONTROL_COMMAND_LEASE_TTL = timedelta(minutes=4)
 AUTOMATIC_OBSERVATION_CHECK_INTERVAL = timedelta(seconds=30)
 AUTOMATIC_OBSERVATION_REFRESH_LEAD = timedelta(minutes=30)
 AUTOMATIC_OBSERVATION_RETRY_INTERVAL = timedelta(minutes=5)
@@ -166,6 +169,7 @@ class CodexControlCommandProcessor:
                     binding_id=binding_id,
                     expected_resource_version=expected_resource_version,
                     require_ready=command_type == "ENABLE",
+                    collect_usage=command_type == "OBSERVE",
                 )
         except ControlPlaneError as exc:
             with transaction(self.sessions) as session:
@@ -235,6 +239,7 @@ class CodexControlCommandProcessor:
         binding_id: str,
         expected_resource_version: int,
         require_ready: bool,
+        collect_usage: bool,
     ) -> None:
         with self.sessions() as session:
             binding = session.get(CodexAuthBindingRecord, binding_id)
@@ -247,6 +252,10 @@ class CodexControlCommandProcessor:
                 raise ControlPlaneError("CONTROL_AUTH_SLOT_MISSING", "auth slot is missing")
             slot = _worker_slot(slot_record)
             account_label = binding.account_label
+            if collect_usage and _binding_has_held_lease(session, binding=binding):
+                raise ControlPlaneError(
+                    "CODEX_USAGE_SLOT_BUSY", "usage observation waits for the active worker"
+                )
 
         observed_at = self.now()
         collected = self._collect_observation(
@@ -259,6 +268,13 @@ class CodexControlCommandProcessor:
             observed_at=observed_at,
         )
         observation = collected.auth
+        usage_observation = None
+        if collect_usage and observation.state == "READY":
+            usage_observation = observe_worker_usage(
+                slot=slot,
+                command_id=command_id,
+                binding_id=binding_id,
+            )
 
         with transaction(self.sessions) as session:
             _locked_binding(
@@ -301,6 +317,7 @@ class CodexControlCommandProcessor:
                 binding_state=updated.state,
                 reason_code=None,
                 processed_at=self.now(),
+                usage_observation=usage_observation,
             )
 
     def _collect_observation(

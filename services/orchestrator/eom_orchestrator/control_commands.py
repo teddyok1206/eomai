@@ -11,6 +11,8 @@ from eom_identity_service.models import OperatorRecord
 from eom_workflow import (
     CodexControlCommand,
     CodexControlCommandResult,
+    CodexControlCommandResultV2,
+    CodexUsageObservation,
     validate_control_contract,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -209,6 +211,7 @@ def terminalize_codex_control_command(
     binding_state: str | None,
     reason_code: str | None,
     processed_at: datetime,
+    usage_observation: CodexUsageObservation | None = None,
 ) -> CodexControlCommandRecord:
     """Commit one schema-valid terminal result for the exact active claim owner."""
 
@@ -232,6 +235,7 @@ def terminalize_codex_control_command(
         binding_state=binding_state,
         reason_code=reason_code,
         processed_at=processed_at,
+        usage_observation=usage_observation,
     )
     session.flush()
     return record
@@ -245,9 +249,14 @@ def _terminalize_record(
     binding_state: str | None,
     reason_code: str | None,
     processed_at: datetime,
+    usage_observation: CodexUsageObservation | None = None,
 ) -> None:
     result: dict[str, object] = {
-        "schema_version": "codex-control-command-result/1.0",
+        "schema_version": (
+            "codex-control-command-result/1.1"
+            if usage_observation is not None
+            else "codex-control-command-result/1.0"
+        ),
         "command_id": record.command_id,
         "command_type": record.command_type,
         "binding_id": record.binding_id,
@@ -258,10 +267,20 @@ def _terminalize_record(
         "processed_at": processed_at,
         "result_sha256": "sha256:" + "0" * 64,
     }
-    normalized = CodexControlCommandResult.model_validate(result).model_dump(mode="json")
+    if usage_observation is not None:
+        result["usage_observation"] = usage_observation.model_dump(mode="json")
+    result_type = (
+        CodexControlCommandResultV2 if usage_observation is not None else CodexControlCommandResult
+    )
+    schema_name = (
+        "codex-control-command-result-v2"
+        if usage_observation is not None
+        else "codex-control-command-result"
+    )
+    normalized = result_type.model_validate(result).model_dump(mode="json")
     normalized["result_sha256"] = compute_control_document_hash(normalized, "result_sha256")
     try:
-        validate_control_contract("codex-control-command-result", normalized)
+        validate_control_contract(schema_name, normalized)
     except JsonSchemaValidationError as exc:
         raise ControlPlaneError(
             "CONTROL_COMMAND_RESULT_INVALID", "control command result is invalid"

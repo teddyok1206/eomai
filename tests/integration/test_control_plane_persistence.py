@@ -150,7 +150,7 @@ from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_auth import WorkerAuthObservation
 from eom_orchestrator.worker_registry import FIXED_WORKER_SLOT_IDS
 from eom_orchestrator.worker_systemd import WorkerUnitActivity
-from eom_workflow import ControlArtifactPointer, ExecutionPresetRevisionV2
+from eom_workflow import CodexUsageObservation, ControlArtifactPointer, ExecutionPresetRevisionV2
 from eom_workflow.control_plane import WorkerRole
 from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.models import (
@@ -746,6 +746,77 @@ def test_control_plane_records_are_idempotent_immutable_and_capacity_bounded(
         db_session.flush()
 
 
+def test_processing_usage_observation_reserves_its_exact_slot(
+    db_session: Session,
+) -> None:
+    plan_id, workflow_id, _ = _complete_control_plane(db_session)
+    binding = db_session.scalar(
+        select(CodexAuthBindingRecord).where(CodexAuthBindingRecord.worker_slot_id == "01")
+    )
+    assert binding is not None
+    operator = OperatorRecord(
+        operator_id="operator_" + uuid4().hex,
+        username=f"usage-race-{uuid4().hex[:12]}",
+        normalized_username=f"usage-race-{uuid4().hex}",
+        display_name="Usage race test operator",
+        status="ACTIVE",
+        must_change_password=False,
+        role_version=1,
+        created_by="usage-race-test",
+    )
+    db_session.add(operator)
+    db_session.flush()
+    document = build_codex_control_command(
+        command_type="OBSERVE",
+        binding_id=binding.binding_id,
+        expected_resource_version=binding.resource_version,
+        requested_by_operator_id=operator.operator_id,
+        requested_at=NOW + timedelta(minutes=1),
+        reason_code=None,
+    )
+    command = enqueue_codex_control_command(
+        db_session,
+        document=document,
+        idempotency_key=f"usage-race:{uuid4().hex}",
+    )
+    claimed = claim_next_codex_control_command(
+        db_session,
+        lease_owner="usage-race-runner",
+        claimed_at=NOW + timedelta(minutes=1),
+        lease_ttl=timedelta(minutes=4),
+    )
+    assert claimed is command
+    assert claimed.state == "PROCESSING"
+
+    job = _job(db_session, workflow_id=workflow_id)
+    with pytest.raises(ControlPlaneError) as unavailable:
+        acquire_worker_lease(
+            db_session,
+            plan_id=plan_id,
+            step_key="authoring",
+            job_id=job.job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=2),
+            ttl=timedelta(minutes=30),
+        )
+    assert unavailable.value.code == "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE"
+
+    claimed.lease_expires_at = NOW + timedelta(minutes=2, seconds=30)
+    db_session.flush()
+    lease = acquire_worker_lease(
+        db_session,
+        plan_id=plan_id,
+        step_key="authoring",
+        job_id=job.job_id,
+        attempt=1,
+        workload_class="CODEX",
+        acquired_at=NOW + timedelta(minutes=3),
+        ttl=timedelta(minutes=30),
+    )
+    assert lease.worker_slot_id == "01"
+
+
 def test_concurrent_claims_create_only_one_held_lease(integration_engine: Engine) -> None:
     sessions = build_session_factory(integration_engine)
     with transaction(sessions) as session:
@@ -1267,6 +1338,116 @@ def test_automatic_observation_renews_due_idle_binding_without_command(
     }
     assert db_session.scalar(select(func.count(CodexControlCommandRecord.command_id))) == 0
     assert observed_slots == ["01"]
+
+
+def test_operator_observe_persists_sanitized_usage_with_terminal_command(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _complete_control_plane(db_session)
+    binding = db_session.scalar(
+        select(CodexAuthBindingRecord).where(CodexAuthBindingRecord.worker_slot_id == "01")
+    )
+    assert binding is not None
+    operator = OperatorRecord(
+        operator_id="operator_" + uuid4().hex,
+        username=f"usage-{uuid4().hex[:12]}",
+        normalized_username=f"usage-{uuid4().hex}",
+        display_name="Usage observation operator",
+        status="ACTIVE",
+        must_change_password=False,
+        role_version=1,
+        created_by="usage-observation-test",
+    )
+    db_session.add(operator)
+    command_document = build_codex_control_command(
+        command_type="OBSERVE",
+        binding_id=binding.binding_id,
+        expected_resource_version=binding.resource_version,
+        requested_by_operator_id=operator.operator_id,
+        requested_at=NOW + timedelta(minutes=55),
+        reason_code=None,
+    )
+    command = enqueue_codex_control_command(
+        db_session,
+        document=command_document,
+        idempotency_key=f"usage-observe:{uuid4().hex}",
+    )
+    db_session.flush()
+    policy = ReviewedCapabilityPolicy.model_validate(
+        {
+            "version": 1,
+            "expected_codex_cli_version": "0.147.0",
+            "models": [{"model": "gpt-5.6-terra", "reasoning_efforts": ["high", "xhigh"]}],
+        }
+    )
+
+    def auth(**kwargs: Any) -> WorkerAuthObservation:
+        slot = kwargs["slot"]
+        return WorkerAuthObservation(
+            binding_id=kwargs["binding_id"],
+            slot_key=f"slot{slot.slot_id}",
+            account_label=kwargs["account_label"],
+            state="READY",
+            reason_code=None,
+            codex_cli_version="0.147.0",
+            observed_at=kwargs["observed_at"],
+            valid_until=kwargs["observed_at"] + kwargs["ttl"],
+            probe_unit_name=f"eom-worker-auth-{slot.slot_id}.service",
+        )
+
+    def usage(**kwargs: Any) -> CodexUsageObservation:
+        document: dict[str, Any] = {
+            "schema_version": "codex-usage-observation/1.0",
+            "command_id": kwargs["command_id"],
+            "binding_id": kwargs["binding_id"],
+            "slot_key": f"slot{kwargs['slot'].slot_id}",
+            "account_type": "chatgpt",
+            "plan_type": "plus",
+            "windows": [
+                {
+                    "limit_id": "codex",
+                    "limit_name": "Codex",
+                    "window_kind": "SECONDARY",
+                    "used_percent": 25,
+                    "window_duration_minutes": 10080,
+                    "resets_at": (NOW + timedelta(days=4)).isoformat().replace("+00:00", "Z"),
+                }
+            ],
+            "observed_at": (NOW + timedelta(minutes=55, seconds=1))
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "observation_sha256": "sha256:" + "0" * 64,
+        }
+        _self_hash(document, "observation_sha256")
+        return CodexUsageObservation.model_validate(document)
+
+    monkeypatch.setattr("eom_orchestrator.control_command_processor.observe_worker_auth", auth)
+    monkeypatch.setattr(
+        "eom_orchestrator.control_command_processor.load_reviewed_capability_policy",
+        lambda _path: policy,
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.control_command_processor.observe_codex_cli_surface",
+        lambda: ("0.147.0", REQUIRED_EXEC_HELP_FLAGS),
+    )
+    monkeypatch.setattr("eom_orchestrator.control_command_processor.observe_worker_usage", usage)
+    sessions = sessionmaker(bind=db_session.connection(), expire_on_commit=False)
+    processor = CodexControlCommandProcessor(
+        sessions,
+        capability_policy_path=Path("/reviewed/codex-capabilities.yaml"),
+        runner_id="runner-usage-observation-test",
+        now=lambda: NOW + timedelta(minutes=55, seconds=2),
+    )
+
+    assert processor.process_once() == command.command_id
+    db_session.expire_all()
+    terminal = db_session.get(CodexControlCommandRecord, command.command_id)
+    assert terminal is not None
+    assert terminal.state == "SUCCEEDED"
+    assert terminal.result_document is not None
+    assert terminal.result_document["schema_version"] == "codex-control-command-result/1.1"
+    assert terminal.result_document["usage_observation"]["plan_type"] == "plus"
+    assert "email" not in str(terminal.result_document).casefold()
 
 
 def test_automatic_observation_window_covers_every_fixed_slot() -> None:

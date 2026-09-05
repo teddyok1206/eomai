@@ -23,10 +23,12 @@ from eom_orchestrator.worker_systemd import (
     AUTH_TEMPLATE_SHA256,
     LOGIN_TEMPLATE_SHA256,
     PROBE_TEMPLATE_SHA256,
+    USAGE_TEMPLATE_SHA256,
     WORKER_AUTH_EXECUTABLE_SHA256,
     WORKER_DEVICE_LOGIN_EXECUTABLE_SHA256,
     WORKER_EXECUTABLE_SHA256,
     WORKER_TEMPLATE_SHA256,
+    WORKER_USAGE_EXECUTABLE_SHA256,
     FixedUnitRun,
     FixedUnitStatus,
     WorkerAuthSystemdObservation,
@@ -42,6 +44,7 @@ from eom_orchestrator.worker_systemd import (
     systemctl_show_argv,
     systemctl_start_argv,
     systemctl_start_async_argv,
+    usage_unit_name,
     worker_unit_name,
 )
 from eom_protocol import ErrorCode
@@ -88,6 +91,11 @@ def test_fixed_unit_name_accepts_only_canonical_job_identity() -> None:
     assert probe_unit_name(_slot(), "probe_0123456789abcdef0123456789abcdef") == (
         "eom-worker-probe-01@probe_0123456789abcdef0123456789abcdef.service"
     )
+    assert usage_unit_name(
+        _slot(),
+        "codexcmd_" + "1" * 32,
+        "authbinding_" + "2" * 32,
+    ) == ("eom-worker-usage-01@codexcmd_" + "1" * 32 + "-authbinding_" + "2" * 32 + ".service")
     assert auth_unit_name(_slot()) == "eom-worker-auth-01.service"
     for invalid in (
         "job_test",
@@ -770,10 +778,12 @@ def test_canonical_unit_and_helper_hashes_match_runtime_contract() -> None:
         probe = ROOT / "infra/systemd" / f"eom-worker-probe-{slot_id}@.service"
         auth = ROOT / "infra/systemd" / f"eom-worker-auth-{slot_id}.service"
         login = ROOT / "infra/systemd" / f"eom-worker-login-{slot_id}@.service"
+        usage = ROOT / "infra/systemd" / f"eom-worker-usage-{slot_id}@.service"
         assert hashlib.sha256(worker.read_bytes()).hexdigest() == WORKER_TEMPLATE_SHA256[slot_id]
         assert hashlib.sha256(probe.read_bytes()).hexdigest() == PROBE_TEMPLATE_SHA256[slot_id]
         assert hashlib.sha256(auth.read_bytes()).hexdigest() == AUTH_TEMPLATE_SHA256[slot_id]
         assert hashlib.sha256(login.read_bytes()).hexdigest() == LOGIN_TEMPLATE_SHA256[slot_id]
+        assert hashlib.sha256(usage.read_bytes()).hexdigest() == USAGE_TEMPLATE_SHA256[slot_id]
     executable = ROOT / "services/orchestrator/eom_orchestrator/worker_exec.py"
     assert hashlib.sha256(executable.read_bytes()).hexdigest() == WORKER_EXECUTABLE_SHA256
     auth_executable = ROOT / "services/orchestrator/eom_orchestrator/worker_auth_exec.py"
@@ -783,6 +793,28 @@ def test_canonical_unit_and_helper_hashes_match_runtime_contract() -> None:
         hashlib.sha256(login_executable.read_bytes()).hexdigest()
         == WORKER_DEVICE_LOGIN_EXECUTABLE_SHA256
     )
+    usage_executable = ROOT / "services/orchestrator/eom_orchestrator/worker_usage_exec.py"
+    assert (
+        hashlib.sha256(usage_executable.read_bytes()).hexdigest() == WORKER_USAGE_EXECUTABLE_SHA256
+    )
+
+
+def test_usage_templates_preserve_slot_identity_and_expose_no_other_worker_home() -> None:
+    for index in range(1, 7):
+        slot_id = f"{index:02d}"
+        source = (ROOT / "infra/systemd" / f"eom-worker-usage-{slot_id}@.service").read_text(
+            encoding="utf-8"
+        )
+        assert f"User=eom-cdx-{slot_id}" in source
+        assert f"Group=eom-cdx-{slot_id}" in source
+        assert f"RuntimeDirectory=eom-codex-usage-{slot_id}" in source
+        assert "RuntimeDirectoryMode=0770" in source
+        assert f"ReadWritePaths=/srv/eom/worker-homes/eom-cdx-{slot_id}" in source
+        assert "ProtectSystem=strict" in source
+        assert "KillMode=control-group" in source
+        for other in range(1, 7):
+            if other != index:
+                assert f"InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-{other:02d}" in source
 
 
 def test_standard_and_analysis_slots_have_their_reviewed_systemd_ceilings() -> None:
@@ -1047,6 +1079,13 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             "eom-workflow-runner",
             "org.freedesktop.systemd1.manage-units",
             f"eom-worker-01@{JOB_ID}.service",
+            "start",
+            "yes",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            "eom-worker-usage-01@codexcmd_" + "1" * 32 + "-authbinding_" + "2" * 32 + ".service",
             "start",
             "yes",
         ),

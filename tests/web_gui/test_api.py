@@ -467,6 +467,8 @@ def test_codex_control_plane_is_admin_only_and_never_accepts_credentials() -> No
         assert accounts.status_code == 200
         account = accounts.json()[0]
         assert account["state"] == "READY"
+        assert account["usage_observation"]["plan_type"] == "edu"
+        assert account["usage_observation"]["windows"][0]["window_duration_minutes"] == 10080
         assert not {"token", "password", "credential_path", "auth_json"}.intersection(account)
         response = client.post(
             f"/studio/api/v1/admin/codex-accounts/{account['binding_id']}/commands",
@@ -485,6 +487,7 @@ def test_codex_control_plane_is_admin_only_and_never_accepts_credentials() -> No
         )
         assert command.status_code == 200
         assert command.json()["state"] == "SUCCEEDED"
+        assert command.json()["usage_observation"]["windows"][0]["used_percent"] == 41
         enrollment = client.post(
             f"/studio/api/v1/admin/codex-accounts/{account['binding_id']}/reauthentications",
             headers={"X-CSRF-Token": session["csrf_token"]},

@@ -14,6 +14,8 @@ from eom_api_contracts.control_plane import (
     CodexCapabilityView,
     CodexControlCommandView,
     CodexDeviceChallengeView,
+    CodexUsageObservationView,
+    CodexUsageWindowView,
     CreateExecutionPresetDraftRequest,
     ExecutionPresetEvaluationView,
     ExecutionPresetRevisionView,
@@ -47,7 +49,7 @@ from eom_orchestrator.control_models import (
     ExecutionPresetRevisionRecord,
     WorkerLeaseRecord,
 )
-from eom_orchestrator.control_service import ControlPlaneError
+from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.preset_lifecycle import (
@@ -56,6 +58,7 @@ from eom_orchestrator.preset_lifecycle import (
     deprecate_execution_preset,
     release_execution_preset,
 )
+from eom_workflow import CodexControlCommandResultV2
 from sqlalchemy import Engine, func, select
 
 from eom_api.errors import ApiError
@@ -148,6 +151,45 @@ class ControlPlaneAdapter:
                     )
                 ).all()
             }
+            ranked_usage = (
+                select(
+                    CodexControlCommandRecord.command_id.label("command_id"),
+                    CodexControlCommandRecord.binding_id.label("binding_id"),
+                    func.row_number()
+                    .over(
+                        partition_by=CodexControlCommandRecord.binding_id,
+                        order_by=(
+                            CodexControlCommandRecord.processed_at.desc(),
+                            CodexControlCommandRecord.command_id.desc(),
+                        ),
+                    )
+                    .label("rank"),
+                )
+                .where(
+                    CodexControlCommandRecord.binding_id.in_(binding_ids),
+                    CodexControlCommandRecord.command_type == "OBSERVE",
+                    CodexControlCommandRecord.state == "SUCCEEDED",
+                    CodexControlCommandRecord.result_document["schema_version"].as_string()
+                    == "codex-control-command-result/1.1",
+                )
+                .subquery()
+            )
+            latest_usage_ids = tuple(
+                command_id
+                for command_id in session.scalars(
+                    select(ranked_usage.c.command_id).where(ranked_usage.c.rank == 1)
+                )
+            )
+            usage_by_binding: dict[str, CodexUsageObservationView] = {}
+            if latest_usage_ids:
+                for usage_command in session.scalars(
+                    select(CodexControlCommandRecord).where(
+                        CodexControlCommandRecord.command_id.in_(latest_usage_ids)
+                    )
+                ):
+                    usage = self._usage_from_result(usage_command.result_document)
+                    if usage is not None:
+                        usage_by_binding[usage_command.binding_id] = usage
             slot_ids = [row.worker_slot_id for row in bindings]
             ranked_jobs = (
                 select(
@@ -181,6 +223,7 @@ class ControlPlaneAdapter:
                     active_lease_count=int(lease_counts.get(binding.binding_id, 0)),
                     last_successful_job_id=last_jobs.get(binding.worker_slot_id),
                     active_auth_enrollment=active_enrollments.get(binding.binding_id),
+                    usage_observation=usage_by_binding.get(binding.binding_id),
                 )
                 for binding in bindings
             )
@@ -522,6 +565,7 @@ class ControlPlaneAdapter:
         active_lease_count: int,
         last_successful_job_id: str | None,
         active_auth_enrollment: tuple[str, str] | None,
+        usage_observation: CodexUsageObservationView | None,
     ) -> CodexAccountView:
         return CodexAccountView(
             binding_id=row.binding_id,
@@ -553,6 +597,7 @@ class ControlPlaneAdapter:
                 if active_auth_enrollment is not None
                 else None
             ),
+            usage_observation=usage_observation,
         )
 
     @staticmethod
@@ -567,6 +612,37 @@ class ControlPlaneAdapter:
             error_code=row.error_code,
             requested_at=row.requested_at,
             processed_at=row.processed_at,
+            usage_observation=ControlPlaneAdapter._usage_from_result(row.result_document),
+        )
+
+    @staticmethod
+    def _usage_from_result(
+        document: dict[str, object] | None,
+    ) -> CodexUsageObservationView | None:
+        if document is None or document.get("schema_version") != "codex-control-command-result/1.1":
+            return None
+        result = CodexControlCommandResultV2.model_validate(document)
+        if result.result_sha256 != compute_control_document_hash(document, "result_sha256"):
+            raise ValueError("Codex usage result hash differs")
+        usage_document = result.usage_observation.model_dump(mode="json")
+        if result.usage_observation.observation_sha256 != compute_control_document_hash(
+            usage_document, "observation_sha256"
+        ):
+            raise ValueError("Codex usage observation hash differs")
+        return CodexUsageObservationView(
+            plan_type=result.usage_observation.plan_type,
+            observed_at=result.usage_observation.observed_at,
+            windows=tuple(
+                CodexUsageWindowView(
+                    limit_id=window.limit_id,
+                    limit_name=window.limit_name,
+                    window_kind=window.window_kind,
+                    used_percent=window.used_percent,
+                    window_duration_minutes=window.window_duration_minutes,
+                    resets_at=window.resets_at,
+                )
+                for window in result.usage_observation.windows
+            ),
         )
 
     @staticmethod

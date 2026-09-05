@@ -287,6 +287,18 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:d6576027af477c9cfc9c96a578810d31731b3bc8196a430cfc8fccdf28ef76ee",
         ),
+        "codex-usage-observation": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-usage-observation-v1.schema.json",
+            "resources/control-plane/codex-usage-observation-v1.schema.json",
+            "1.0",
+            "sha256:d5da6cd6b2787dd0ad84222e942e18c4cc89895fc93e8c17ec8e6cb36b43d25b",
+        ),
+        "codex-control-command-result-v2": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-control-command-result-v2.schema.json",
+            "resources/control-plane/codex-control-command-result-v2.schema.json",
+            "1.1",
+            "sha256:b85c9fea99884c35a22516e532b774d0f2d0840ed7bed37fb7e228b55b0b140f",
+        ),
         "codex-capability-snapshot": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-capability-snapshot-v1.schema.json",
             "resources/control-plane/codex-capability-snapshot-v1.schema.json",

@@ -184,6 +184,21 @@ class CodexCapabilityView(ApiModel):
     state: str
 
 
+class CodexUsageWindowView(ApiModel):
+    limit_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    limit_name: str | None = Field(default=None, min_length=1, max_length=128)
+    window_kind: Literal["PRIMARY", "SECONDARY"]
+    used_percent: int = Field(ge=0, le=100)
+    window_duration_minutes: int | None = Field(default=None, ge=1, le=525_600)
+    resets_at: UtcDatetime | None
+
+
+class CodexUsageObservationView(ApiModel):
+    plan_type: str = Field(min_length=1, max_length=64)
+    windows: tuple[CodexUsageWindowView, ...] = Field(min_length=1, max_length=32)
+    observed_at: UtcDatetime
+
+
 class CodexAccountView(ApiModel):
     binding_id: OpaqueId
     slot_key: str
@@ -208,6 +223,7 @@ class CodexAccountView(ApiModel):
         ]
         | None
     ) = None
+    usage_observation: CodexUsageObservationView | None = None
 
     @model_validator(mode="after")
     def coherent_active_enrollment(self) -> CodexAccountView:
@@ -226,6 +242,7 @@ class CodexControlCommandView(ApiModel):
     error_code: str | None
     requested_at: UtcDatetime
     processed_at: UtcDatetime | None
+    usage_observation: CodexUsageObservationView | None = None
 
 
 class ExecutionPresetEvaluationView(ApiModel):

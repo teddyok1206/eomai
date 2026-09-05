@@ -20,10 +20,12 @@ SYSTEMD_UNIT_ROOT = Path("/etc/systemd/system")
 WORKER_EXECUTABLE = Path("/usr/local/libexec/eom-worker-exec")
 WORKER_AUTH_EXECUTABLE = Path("/usr/local/libexec/eom-worker-auth-status")
 WORKER_DEVICE_LOGIN_EXECUTABLE = Path("/usr/local/libexec/eom-worker-device-login")
+WORKER_USAGE_EXECUTABLE = Path("/usr/local/libexec/eom-worker-codex-usage")
 SYSTEMCTL_ENV = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
 JOB_ID_PATTERN = re.compile(r"\Ajob_[0-9a-f]{32}\Z", re.ASCII)
 PROBE_ID_PATTERN = re.compile(r"\Aprobe_[0-9a-f]{32}\Z", re.ASCII)
 AUTH_ENROLLMENT_ID_PATTERN = re.compile(r"\Aauthflow_[0-9a-f]{32}\Z", re.ASCII)
+USAGE_INSTANCE_PATTERN = re.compile(r"\Acodexcmd_[0-9a-f]{32}-authbinding_[0-9a-f]{32}\Z", re.ASCII)
 SLOT_IDS = frozenset({"01", "02", "03", "04", "05", "06"})
 ACTIVE_STATES = frozenset({"activating", "active", "deactivating", "reloading"})
 NON_ACTIVE_SYSTEMCTL_EXIT_CODES = frozenset({3, 4})
@@ -83,11 +85,20 @@ LOGIN_TEMPLATE_SHA256 = {
     "05": "5036d11960c3b45cbf9c199df1c6be995e7e6de7e2d41f6504f6aa0157aacfa1",
     "06": "6df179d670a1b299116bb59180d36b0bbbef7ec690b095d86add8b968850ea13",
 }
+USAGE_TEMPLATE_SHA256 = {
+    "01": "effffebe0d152c425a64f5fa703d028311394b6a0c3cea7a79d1c8b5544f5416",
+    "02": "ea6c7302fa2f56f931ceb1ea2951191ec894c11d2197d63f3eea9a71d8cb88a2",
+    "03": "ea1d3a01bf9a25f31be2cdd32e2312f86bd3259da01681abcfda57f51efbc19a",
+    "04": "089cb15b83afb430ec41f1c14c6a2e874013f938ca743218d35a08b474ac93d1",
+    "05": "1f6111362c44782f348148d14c26d212320f2c1c1ec342b6a2667ded65a70daa",
+    "06": "d0cb86d101fb7f6227d3e9c693581639d5753dcecf02adda6e410b82f4cb240a",
+}
 WORKER_EXECUTABLE_SHA256 = "2e012614b9aa2464e45aa99a588da3efbf8fd76d32d85833e4c065fc87e0d4f9"
 WORKER_AUTH_EXECUTABLE_SHA256 = "42951e21b4c54574d6402fc61139792ec8abf2b549d30867e792df7977f6b7e7"
 WORKER_DEVICE_LOGIN_EXECUTABLE_SHA256 = (
     "47ca1fb12d88d1f02ac4402b2e260e96d4ae78b3ceefdeedbee9da392650feec"
 )
+WORKER_USAGE_EXECUTABLE_SHA256 = "ad9e8c827985d2eef739af0323a3e31696590262e69f2a31273abd266ae3d33b"
 AUTH_REQUIRED_EXIT = 20
 AUTH_PROBE_INVALID_EXIT = 21
 AUTH_PROBE_TIMEOUT_EXIT = 22
@@ -193,6 +204,14 @@ def device_login_unit_name(slot: WorkerSlot, enrollment_id: str) -> str:
     if AUTH_ENROLLMENT_ID_PATTERN.fullmatch(enrollment_id) is None:
         raise ValueError("invalid Codex auth enrollment identity")
     return f"eom-worker-login-{slot_id}@{enrollment_id}.service"
+
+
+def usage_unit_name(slot: WorkerSlot, command_id: str, binding_id: str) -> str:
+    slot_id = validate_slot(slot)
+    instance = f"{command_id}-{binding_id}"
+    if USAGE_INSTANCE_PATTERN.fullmatch(instance) is None:
+        raise ValueError("invalid Codex usage observation identity")
+    return f"eom-worker-usage-{slot_id}@{instance}.service"
 
 
 def systemctl_start_argv(unit_name: str) -> tuple[str, ...]:
@@ -404,6 +423,16 @@ def inspect_worker_systemd_contract(slot: WorkerSlot) -> WorkerSystemdReadiness:
             expected_mode=0o755,
             expected_sha256=WORKER_DEVICE_LOGIN_EXECUTABLE_SHA256,
         )
+        _validate_root_owned_artifact(
+            SYSTEMD_UNIT_ROOT / f"eom-worker-usage-{slot_id}@.service",
+            expected_mode=0o644,
+            expected_sha256=USAGE_TEMPLATE_SHA256[slot_id],
+        )
+        _validate_root_owned_artifact(
+            WORKER_USAGE_EXECUTABLE,
+            expected_mode=0o755,
+            expected_sha256=WORKER_USAGE_EXECUTABLE_SHA256,
+        )
     except (KeyError, OSError, ValueError):
         return WorkerSystemdReadiness(
             False, "WORKER_SYSTEMD_TEMPLATE_INVALID", f"slot {slot.slot_id}"
@@ -439,6 +468,33 @@ def observe_worker_auth_systemd(slot: WorkerSlot) -> WorkerAuthSystemdObservatio
     }
     state, reason = reason_by_exit.get(status.exit_code, ("DEGRADED", "AUTH_PROBE_FAILED"))
     return WorkerAuthSystemdObservation(state, reason, unit_name)
+
+
+def launch_worker_usage_unit(slot: WorkerSlot, command_id: str, binding_id: str) -> FixedUnitRun:
+    """Run one fixed non-generating App Server usage observation instance."""
+
+    unit_name = usage_unit_name(slot, command_id, binding_id)
+    try:
+        run = _start_unit(unit_name, timeout_seconds=90)
+        lingering = _unit_is_lingering(run.active_returncode)
+    except subprocess.TimeoutExpired as exc:
+        raise OSError("Codex usage observation timed out") from exc
+    if lingering or (run.status is not None and run.status.process_lingering):
+        raise OSError("Codex usage observation unit is lingering")
+    if run.status is not None and run.status.need_daemon_reload:
+        raise OSError("Codex usage observation unit is stale")
+    if run.exit_code == 0 and (run.status is None or run.status.exit_code == 0):
+        return run
+    if run.status is None or not run.status.process_started:
+        raise OSError("Codex usage observation unit did not start")
+    return FixedUnitRun(
+        unit_name=run.unit_name,
+        exit_code=run.status.exit_code,
+        command_stdout=run.command_stdout,
+        command_stderr=run.command_stderr,
+        status=run.status,
+        active_returncode=run.active_returncode,
+    )
 
 
 def launch_device_login_unit(slot: WorkerSlot, enrollment_id: str) -> WorkerDeviceLoginActivity:

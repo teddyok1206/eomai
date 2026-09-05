@@ -23,12 +23,14 @@ from eom_workflow import (
     CodexCapabilitySnapshot,
     CodexControlCommand,
     CodexControlCommandResult,
+    CodexControlCommandResultV2,
     CodexDeviceChallenge,
     CodexDeviceChallengeV2,
     CodexDeviceLoginStatus,
     CodexDeviceLoginStatusV2,
     CodexImageInputManifest,
     CodexInvocation,
+    CodexUsageObservation,
     ExecutionPresetEvaluationReport,
     ExecutionPresetRevision,
     InstructionBundleManifest,
@@ -157,6 +159,41 @@ def _reference_manifest() -> dict[str, object]:
         "content_sha256": ZERO_SHA,
         "created_at": NOW.isoformat().replace("+00:00", "Z"),
     }
+
+
+def _usage_observation() -> dict[str, object]:
+    value: dict[str, object] = {
+        "schema_version": "codex-usage-observation/1.0",
+        "command_id": "codexcmd_" + "8" * 32,
+        "binding_id": "authbinding_" + "7" * 32,
+        "slot_key": "slot01",
+        "account_type": "chatgpt",
+        "plan_type": "plus",
+        "windows": [
+            {
+                "limit_id": "codex",
+                "limit_name": "Codex",
+                "window_kind": "PRIMARY",
+                "used_percent": 12,
+                "window_duration_minutes": 300,
+                "resets_at": (NOW + timedelta(hours=4)).isoformat().replace("+00:00", "Z"),
+            },
+            {
+                "limit_id": "codex",
+                "limit_name": "Codex",
+                "window_kind": "SECONDARY",
+                "used_percent": 34,
+                "window_duration_minutes": 10080,
+                "resets_at": (NOW + timedelta(days=5)).isoformat().replace("+00:00", "Z"),
+            },
+        ],
+        "observed_at": NOW.isoformat().replace("+00:00", "Z"),
+        "observation_sha256": ZERO_SHA,
+    }
+    value["observation_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "observation_sha256"}
+    )
+    return value
 
 
 def _resolved_plan() -> dict[str, object]:
@@ -373,7 +410,7 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 48
+    assert len(entries) == 50
     assert len({name for name, _ in entries}) == len(entries)
     assert {
         "execution-preset-revision-v2",
@@ -397,6 +434,8 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
         "codex-device-login-status",
         "codex-auth-broker-request",
         "codex-auth-broker-response",
+        "codex-usage-observation",
+        "codex-control-command-result-v2",
     }.issubset({name for name, _ in entries})
     for name, entry in entries:
         canonical = REPOSITORY_ROOT / entry.canonical_path
@@ -557,6 +596,24 @@ def test_codex_auth_v2_adds_only_slot06_and_preserves_v1() -> None:
                 "result_sha256": "sha256:" + "6" * 64,
             },
             CodexControlCommandResult,
+        ),
+        ("codex-usage-observation", _usage_observation(), CodexUsageObservation),
+        (
+            "codex-control-command-result-v2",
+            {
+                "schema_version": "codex-control-command-result/1.1",
+                "command_id": "codexcmd_" + "8" * 32,
+                "command_type": "OBSERVE",
+                "binding_id": "authbinding_" + "7" * 32,
+                "outcome": "SUCCEEDED",
+                "result_resource_version": 2,
+                "binding_state": "READY",
+                "reason_code": None,
+                "processed_at": (NOW + timedelta(seconds=1)).isoformat().replace("+00:00", "Z"),
+                "usage_observation": _usage_observation(),
+                "result_sha256": "sha256:" + "6" * 64,
+            },
+            CodexControlCommandResultV2,
         ),
         (
             "codex-auth-enrollment-request",

@@ -4,6 +4,7 @@ polkit.addRule(function(action, subject) {
     var probeUnit = /^eom-worker-probe-(01|02|03|04|05|06)@probe_[0-9a-f]{32}\.service$/;
     var authUnit = /^eom-worker-auth-(01|02|03|04|05|06)\.service$/;
     var loginUnit = /^eom-worker-login-(01|02|03|04|05|06)@authflow_[0-9a-f]{32}\.service$/;
+    var usageUnit = /^eom-worker-usage-(01|02|03|04|05|06)@codexcmd_[0-9a-f]{32}-authbinding_[0-9a-f]{32}\.service$/;
     var kordocUnit = /^eom-hwpx-kordoc@hwpxbuild_[0-9a-f]{32}\.service$/;
     var questionTemplateUnit = /^eom-hwpx-builder@hwpxbuild_[0-9a-f]{32}\.service$/;
     var contentTeamUnit = /^eom-hwpx-content-team@hwpxbuild_[0-9a-f]{32}\.service$/;
@@ -17,7 +18,7 @@ polkit.addRule(function(action, subject) {
     var verb = action.lookup("verb");
     if (verb === "start" && subject.user === "eom-workflow-runner"
         && (workerUnit.test(unit) || probeUnit.test(unit) || authUnit.test(unit)
-            || loginUnit.test(unit) || localImageUnit.test(unit))) {
+            || loginUnit.test(unit) || usageUnit.test(unit) || localImageUnit.test(unit))) {
         return polkit.Result.YES;
     }
     if (verb === "start" && subject.user === "eom-hwpx-manager"

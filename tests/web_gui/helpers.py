@@ -600,6 +600,20 @@ class FakeGateway:
                 "last_successful_job_id": "job_" + "2" * 32,
                 "active_auth_enrollment_id": None,
                 "active_auth_enrollment_state": None,
+                "usage_observation": {
+                    "plan_type": "edu",
+                    "observed_at": NOW.isoformat(),
+                    "windows": [
+                        {
+                            "limit_id": "codex",
+                            "limit_name": "Codex",
+                            "window_kind": "SECONDARY",
+                            "used_percent": 41,
+                            "window_duration_minutes": 10080,
+                            "resets_at": (NOW + timedelta(days=3)).isoformat(),
+                        }
+                    ],
+                },
             },
         )
 
@@ -761,6 +775,20 @@ class FakeGateway:
             "error_code": None,
             "requested_at": NOW.isoformat(),
             "processed_at": NOW.isoformat(),
+            "usage_observation": {
+                "plan_type": "edu",
+                "observed_at": NOW.isoformat(),
+                "windows": [
+                    {
+                        "limit_id": "codex",
+                        "limit_name": "Codex",
+                        "window_kind": "SECONDARY",
+                        "used_percent": 41,
+                        "window_duration_minutes": 10080,
+                        "resets_at": (NOW + timedelta(days=3)).isoformat(),
+                    }
+                ],
+            },
         }
 
     async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]:

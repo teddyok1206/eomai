@@ -1015,6 +1015,82 @@ class CodexControlCommandResult(FrozenModel):
         return self
 
 
+class CodexUsageWindow(FrozenModel):
+    """One sanitized App Server rate-limit window for a fixed Codex slot."""
+
+    limit_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    limit_name: str | None = Field(default=None, min_length=1, max_length=128)
+    window_kind: Literal["PRIMARY", "SECONDARY"]
+    used_percent: int = Field(ge=0, le=100)
+    window_duration_minutes: int | None = Field(default=None, ge=1, le=525_600)
+    resets_at: UtcDatetime | None
+
+
+class CodexUsageObservation(FrozenModel):
+    """Credential-free, immutable projection of one explicit usage refresh."""
+
+    schema_version: Literal["codex-usage-observation/1.0"] = "codex-usage-observation/1.0"
+    command_id: str = Field(pattern=r"^codexcmd_[0-9a-f]{32}$")
+    binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
+    slot_key: str = Field(pattern=r"^slot0[1-6]$")
+    account_type: Literal["chatgpt"] = "chatgpt"
+    plan_type: Literal[
+        "free",
+        "go",
+        "plus",
+        "pro",
+        "prolite",
+        "team",
+        "self_serve_business_prolite",
+        "self_serve_business_usage_based",
+        "business",
+        "ent26",
+        "enterprise_cbp_automation",
+        "enterprise_cbp_usage_based",
+        "enterprise",
+        "edu",
+        "unknown",
+    ]
+    windows: tuple[CodexUsageWindow, ...] = Field(min_length=1, max_length=32)
+    observed_at: UtcDatetime
+    observation_sha256: Sha256
+
+    @model_validator(mode="after")
+    def ordered_unique_windows(self) -> CodexUsageObservation:
+        keys = tuple((window.limit_id, window.window_kind) for window in self.windows)
+        if keys != tuple(sorted(keys)) or len(keys) != len(set(keys)):
+            raise ValueError("Codex usage windows must be sorted and unique")
+        return self
+
+
+class CodexControlCommandResultV2(FrozenModel):
+    """Successful OBSERVE result carrying a sanitized App Server usage snapshot."""
+
+    schema_version: Literal["codex-control-command-result/1.1"] = "codex-control-command-result/1.1"
+    command_id: str = Field(pattern=r"^codexcmd_[0-9a-f]{32}$")
+    command_type: Literal["OBSERVE"] = "OBSERVE"
+    binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
+    outcome: Literal["SUCCEEDED"] = "SUCCEEDED"
+    result_resource_version: int = Field(ge=1)
+    binding_state: Literal["READY"] = "READY"
+    reason_code: None = None
+    processed_at: UtcDatetime
+    usage_observation: CodexUsageObservation
+    result_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_usage_observation_binding(self) -> CodexControlCommandResultV2:
+        if self.command_type != "OBSERVE" or self.outcome != "SUCCEEDED":
+            raise ValueError("usage observation belongs to a successful OBSERVE command")
+        if (
+            self.usage_observation.command_id != self.command_id
+            or self.usage_observation.binding_id != self.binding_id
+            or self.usage_observation.observed_at > self.processed_at
+        ):
+            raise ValueError("usage observation differs from its control command")
+        return self
+
+
 class ExecutionPresetEvaluationReport(FrozenModel):
     """Bounded report metadata; detailed evidence remains an Artifact Revision."""
 

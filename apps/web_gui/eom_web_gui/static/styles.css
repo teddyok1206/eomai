@@ -308,6 +308,16 @@ html[data-ui-mode="human"] .panel-heading .eyebrow { display: none; }
 .control-card dt { color: var(--eom-text-muted); }
 .control-card dd { margin: 0; overflow-wrap: anywhere; }
 .control-card .form-actions { margin-top: 10px; flex-wrap: wrap; }
+.codex-usage { margin-top: 12px; padding: 11px; border: 1px solid var(--eom-blue-200); border-radius: 7px; background: white; }
+.codex-usage > header { align-items: baseline; }
+.codex-usage > header strong { font-size: var(--eom-type-label); }
+.codex-usage > header span { color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
+.codex-usage > p { margin: 8px 0 0; }
+.codex-usage-window { margin-top: 10px; display: grid; gap: 5px; }
+.codex-usage-window > div { display: flex; justify-content: space-between; gap: 12px; font-size: var(--eom-type-caption); }
+.codex-usage-window > div strong { color: var(--eom-graphite); font-family: "JetBrains Mono", monospace; }
+.codex-usage-window progress { width: 100%; height: 9px; accent-color: var(--eom-primary); }
+.codex-usage-window small { color: var(--eom-text-muted); font-size: 11px; }
 .analysis-progress { width: 100%; height: 8px; margin-top: 8px; accent-color: var(--eom-primary); }
 .admin-preset-panel { margin-top: 15px; }
 .advanced-policy > summary { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px; cursor: pointer; list-style-position: inside; }

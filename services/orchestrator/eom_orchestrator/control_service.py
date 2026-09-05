@@ -26,7 +26,7 @@ from eom_workflow import (
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,7 @@ from eom_orchestrator.control_models import (
     CodexAuthHealthEventRecord,
     CodexCapabilityEntryRecord,
     CodexCapabilitySnapshotRecord,
+    CodexControlCommandRecord,
     ExecutionBundleRecord,
     ExecutionBundleRevisionRecord,
     ExecutionPresetRecord,
@@ -1335,6 +1336,14 @@ def acquire_worker_lease(
             CodexCapabilitySnapshotRecord.valid_until > acquired_at,
             CodexCapabilitySnapshotRecord.codex_cli_version
             == CodexAuthBindingRecord.codex_cli_version,
+            ~exists(
+                select(CodexControlCommandRecord.command_id).where(
+                    CodexControlCommandRecord.binding_id == CodexAuthBindingRecord.binding_id,
+                    CodexControlCommandRecord.command_type == "OBSERVE",
+                    CodexControlCommandRecord.state == "PROCESSING",
+                    CodexControlCommandRecord.lease_expires_at > acquired_at,
+                )
+            ),
         )
         .order_by(
             WorkerSlotRecord.slot_id,

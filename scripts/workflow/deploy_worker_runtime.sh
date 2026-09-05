@@ -107,6 +107,7 @@ SOURCES=(
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_exec.py"
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_auth_exec.py"
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_device_login_exec.py"
+  "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_usage_exec.py"
   "${REPOSITORY}/infra/systemd/${BROKER_SERVICE}"
   "${WORKER_CONFIG_SOURCE}"
 )
@@ -116,6 +117,7 @@ for slot in 01 02 03 04 05 06; do
     "${REPOSITORY}/infra/systemd/eom-worker-probe-${slot}@.service"
     "${REPOSITORY}/infra/systemd/eom-worker-auth-${slot}.service"
     "${REPOSITORY}/infra/systemd/eom-worker-login-${slot}@.service"
+    "${REPOSITORY}/infra/systemd/eom-worker-usage-${slot}@.service"
   )
 done
 getent group eom-codex-auth >/dev/null || fail "Codex auth broker group is unavailable"
@@ -161,6 +163,9 @@ if [[ ${ACTION} == install ]]; then
   install -o root -g root -m 0755 \
     "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_device_login_exec.py" \
     "${LIBEXEC_ROOT}/eom-worker-device-login"
+  install -o root -g root -m 0755 \
+    "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_usage_exec.py" \
+    "${LIBEXEC_ROOT}/eom-worker-codex-usage"
   install -o root -g root -m 0644 \
     "${REPOSITORY}/infra/systemd/${BROKER_SERVICE}" \
     "${UNIT_ROOT}/${BROKER_SERVICE}"
@@ -180,6 +185,9 @@ if [[ ${ACTION} == install ]]; then
     install -o root -g root -m 0644 \
       "${REPOSITORY}/infra/systemd/eom-worker-login-${slot}@.service" \
       "${UNIT_ROOT}/eom-worker-login-${slot}@.service"
+    install -o root -g root -m 0644 \
+      "${REPOSITORY}/infra/systemd/eom-worker-usage-${slot}@.service" \
+      "${UNIT_ROOT}/eom-worker-usage-${slot}@.service"
   done
   systemctl daemon-reload
   systemctl enable "${BROKER_SERVICE}" >/dev/null
@@ -199,7 +207,8 @@ systemd-analyze verify "${UNIT_ROOT}/eom-workflow-runner.service" \
   "${UNIT_ROOT}"/eom-worker-{01,02,03,04,05,06}@.service \
   "${UNIT_ROOT}"/eom-worker-probe-{01,02,03,04,05,06}@.service \
   "${UNIT_ROOT}"/eom-worker-auth-{01,02,03,04,05,06}.service \
-  "${UNIT_ROOT}"/eom-worker-login-{01,02,03,04,05,06}@.service
+  "${UNIT_ROOT}"/eom-worker-login-{01,02,03,04,05,06}@.service \
+  "${UNIT_ROOT}"/eom-worker-usage-{01,02,03,04,05,06}@.service
 
 require_regular "${UNIT_ROOT}/eom-workflow-runner.service" root:root:644
 cmp -s "${REPOSITORY}/infra/systemd/eom-workflow-runner.service" \
@@ -207,12 +216,15 @@ cmp -s "${REPOSITORY}/infra/systemd/eom-workflow-runner.service" \
 require_regular "${LIBEXEC_ROOT}/eom-worker-exec" root:root:755
 require_regular "${LIBEXEC_ROOT}/eom-worker-auth-status" root:root:755
 require_regular "${LIBEXEC_ROOT}/eom-worker-device-login" root:root:755
+require_regular "${LIBEXEC_ROOT}/eom-worker-codex-usage" root:root:755
 cmp -s "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_exec.py" \
   "${LIBEXEC_ROOT}/eom-worker-exec" || fail "worker executable source drift"
 cmp -s "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_auth_exec.py" \
   "${LIBEXEC_ROOT}/eom-worker-auth-status" || fail "worker auth executable source drift"
 cmp -s "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_device_login_exec.py" \
   "${LIBEXEC_ROOT}/eom-worker-device-login" || fail "worker device-login executable source drift"
+cmp -s "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_usage_exec.py" \
+  "${LIBEXEC_ROOT}/eom-worker-codex-usage" || fail "worker usage executable source drift"
 require_regular "${UNIT_ROOT}/${BROKER_SERVICE}" root:root:644
 cmp -s "${REPOSITORY}/infra/systemd/${BROKER_SERVICE}" \
   "${UNIT_ROOT}/${BROKER_SERVICE}" || fail "Codex auth broker unit source drift"
@@ -221,7 +233,8 @@ cmp -s "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules" \
   "${POLKIT_ROOT}/50-eom-worker-units.rules" || fail "worker polkit source drift"
 for slot in 01 02 03 04 05 06; do
   for name in "eom-worker-${slot}@.service" "eom-worker-probe-${slot}@.service" \
-    "eom-worker-auth-${slot}.service" "eom-worker-login-${slot}@.service"; do
+    "eom-worker-auth-${slot}.service" "eom-worker-login-${slot}@.service" \
+    "eom-worker-usage-${slot}@.service"; do
     require_regular "${UNIT_ROOT}/${name}" root:root:644
     cmp -s "${REPOSITORY}/infra/systemd/${name}" "${UNIT_ROOT}/${name}" || \
       fail "worker unit ${name} source drift"
