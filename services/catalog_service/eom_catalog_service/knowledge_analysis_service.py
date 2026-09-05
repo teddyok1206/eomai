@@ -72,9 +72,10 @@ from eom_orchestrator.knowledge_analysis_models import (
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_workflow import ArtifactPointer, WorkflowRequest
 from eom_workflow.control_plane import ExecutionPresetRevision
-from eom_workflow_runner.models import WorkflowDefinitionRecord, WorkflowInstanceRecord
+from eom_workflow_runner.models import WorkflowInstanceRecord
 from eom_workflow_runner.repository import (
     CommandType,
+    admitted_workflow_definition,
     create_workflow_instance,
     enqueue_command,
 )
@@ -587,12 +588,10 @@ class KnowledgeAnalysisApplicationService:
                     workflow_version = KNOWLEDGE_ANALYSIS_DOCUMENT_WORKFLOW_VERSION
                 else:
                     workflow_version = KNOWLEDGE_ANALYSIS_WORKFLOW_VERSION
-                definition = session.scalar(
-                    select(WorkflowDefinitionRecord).where(
-                        WorkflowDefinitionRecord.definition_key == "knowledge-analysis",
-                        WorkflowDefinitionRecord.definition_version == workflow_version,
-                        WorkflowDefinitionRecord.active.is_(True),
-                    )
+                definition = admitted_workflow_definition(
+                    session,
+                    definition_key="knowledge-analysis",
+                    definition_version=workflow_version,
                 )
                 if definition is None:
                     raise KnowledgeAnalysisServiceError(

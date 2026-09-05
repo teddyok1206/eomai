@@ -51,10 +51,11 @@ from eom_workflow import (
 from eom_workflow.control_plane import WorkerRole
 from eom_workflow.schemas import result_schema_protocol
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
-from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowDefinitionRecord
+from eom_workflow_runner.models import WorkflowCommandRecord
 from eom_workflow_runner.repository import (
     CommandType,
     active_approval,
+    admitted_workflow_definition,
     create_workflow_instance,
     enqueue_command,
 )
@@ -220,12 +221,10 @@ class CommandAdapter:
         preflight_definition_hash: str | None = None
         if workflow_request.educational_retrieval is not None:
             with self.sessions() as preflight_session:
-                preflight_definition = preflight_session.scalar(
-                    select(WorkflowDefinitionRecord).where(
-                        WorkflowDefinitionRecord.definition_key == request.definition_key,
-                        WorkflowDefinitionRecord.definition_version == request.definition_version,
-                        WorkflowDefinitionRecord.active.is_(True),
-                    )
+                preflight_definition = admitted_workflow_definition(
+                    preflight_session,
+                    definition_key=request.definition_key,
+                    definition_version=request.definition_version,
                 )
                 if preflight_definition is None:
                     raise ApiError(
@@ -305,12 +304,10 @@ class CommandAdapter:
                 evidence_command
             )
         with transaction(self.sessions) as session:
-            definition = session.scalar(
-                select(WorkflowDefinitionRecord).where(
-                    WorkflowDefinitionRecord.definition_key == request.definition_key,
-                    WorkflowDefinitionRecord.definition_version == request.definition_version,
-                    WorkflowDefinitionRecord.active.is_(True),
-                )
+            definition = admitted_workflow_definition(
+                session,
+                definition_key=request.definition_key,
+                definition_version=request.definition_version,
             )
             if definition is None:
                 raise ApiError(

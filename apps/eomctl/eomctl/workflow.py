@@ -25,10 +25,10 @@ from eom_workflow_runner.models import (
 from eom_workflow_runner.repository import (
     CommandType,
     active_approval,
+    admitted_workflow_definition,
     create_workflow_instance,
     enqueue_command,
     import_workflow_definition,
-    reconcile_workflow_definition_admission,
     workflow_definition_admission_statuses,
 )
 from sqlalchemy import func, select
@@ -95,25 +95,14 @@ def definition_list() -> None:
 
 
 @definition_app.command("admission")
-def definition_admission(
-    apply: bool = typer.Option(
-        False,
-        "--apply",
-        help="Atomically make active flags match the reviewed admission policy.",
-    ),
-) -> None:
-    """Audit or explicitly apply the new-work workflow admission policy."""
+def definition_admission() -> None:
+    """Audit the effective new-work policy without rewriting immutable definitions."""
 
     engine = build_engine()
     sessions = build_session_factory(engine)
-    if apply:
-        with transaction(sessions) as session:
-            statuses = reconcile_workflow_definition_admission(session)
-            counts = _definition_instance_counts(session)
-    else:
-        with sessions() as session:
-            statuses = workflow_definition_admission_statuses(session)
-            counts = _definition_instance_counts(session)
+    with sessions() as session:
+        statuses = workflow_definition_admission_statuses(session)
+        counts = _definition_instance_counts(session)
     present = {(status.definition_key, status.definition_version) for status in statuses}
     missing = sorted(set(WORKFLOW_ADMISSION_BY_IDENTITY) - present)
     rows = [
@@ -122,9 +111,9 @@ def definition_admission(
             "definition_key": status.definition_key,
             "definition_version": status.definition_version,
             "role_protocol_version": status.role_protocol_version,
-            "active": status.active,
+            "stored_active": status.active,
             "admitted": status.admitted,
-            "aligned": status.active == status.admitted,
+            "accepts_new_work": status.accepts_new_work,
             "historical_instance_count": counts.get(status.definition_id, 0),
         }
         for status in statuses
@@ -132,8 +121,8 @@ def definition_admission(
     engine.dispose()
     _emit(
         {
-            "applied": apply,
-            "consistent": not missing and all(row["aligned"] for row in rows),
+            "consistent": not missing
+            and all(not row["admitted"] or row["accepts_new_work"] for row in rows),
             "missing_admitted_definitions": [
                 {"definition_key": key, "definition_version": version} for key, version in missing
             ],
@@ -206,12 +195,10 @@ def workflow_start(
     catalog = runtime.catalog
     sessions = build_session_factory(engine)
     with transaction(sessions) as session:
-        stored_definition = session.scalar(
-            select(WorkflowDefinitionRecord).where(
-                WorkflowDefinitionRecord.definition_key == definition,
-                WorkflowDefinitionRecord.definition_version == version,
-                WorkflowDefinitionRecord.active.is_(True),
-            )
+        stored_definition = admitted_workflow_definition(
+            session,
+            definition_key=definition,
+            definition_version=version,
         )
         if stored_definition is None:
             raise typer.BadParameter("workflow definition is not imported")

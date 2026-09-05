@@ -37,12 +37,12 @@ from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
 from eom_workflow import ReferenceBundleManifest, WorkflowRequest
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import (
-    WorkflowDefinitionRecord,
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
 from eom_workflow_runner.repository import (
     CommandType,
+    admitted_workflow_definition,
     create_workflow_instance,
     enqueue_command,
 )
@@ -428,13 +428,10 @@ class LegacyItemEditorialCompatibilityService:
                 run = self._locked_run(session, view.compatibility_run_id)
                 if run.state != "REQUESTED":
                     return self._projection(run)
-                definition = session.scalar(
-                    select(WorkflowDefinitionRecord).where(
-                        WorkflowDefinitionRecord.definition_key == COMPATIBILITY_WORKFLOW_KEY,
-                        WorkflowDefinitionRecord.definition_version
-                        == COMPATIBILITY_WORKFLOW_VERSION,
-                        WorkflowDefinitionRecord.active.is_(True),
-                    )
+                definition = admitted_workflow_definition(
+                    session,
+                    definition_key=COMPATIBILITY_WORKFLOW_KEY,
+                    definition_version=COMPATIBILITY_WORKFLOW_VERSION,
                 )
                 if definition is None:
                     self._raise(

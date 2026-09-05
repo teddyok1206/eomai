@@ -8,16 +8,17 @@ Date: 2026-09-05
 
 Workflow versions serve two different purposes: accepting new work and reproducing immutable
 history. The Workflow package owns one admission table for new instances. The Workflow Runner
-persists and reconciles the table, while Catalog and API services continue to resolve historical
-schemas from the definition and revision pinned by an existing workflow.
+combines that policy with the stored snapshot's availability flag, while Catalog and API services
+continue to resolve historical schemas from the definition and revision pinned by an existing
+workflow.
 
 ## Canonical source, revisions, and pointers
 
 `eom_workflow.admission` is the canonical source for admitted definition key, definition version,
 and role-protocol triples. A stored `workflow_definitions` row remains the immutable snapshot used
-by every existing `workflow_instances.definition_id`; setting `active=false` never deletes or
-rewrites it. Historical role/result schemas, Content Pack releases, item revisions, and Artifact
-revisions remain addressable by their pinned IDs and hashes.
+by every existing `workflow_instances.definition_id`. The DB immutability trigger deliberately
+prevents rewriting even the historical `active` value. Historical role/result schemas, Content Pack
+releases, item revisions, and Artifact revisions remain addressable by their pinned IDs and hashes.
 
 The admitted paths are:
 
@@ -32,30 +33,32 @@ The admitted paths are:
 
 ## Required pointers and resolution checks
 
-Admission resolves an exact `(definition_key, definition_version)` map key, then verifies that the
-stored canonical definition derives the expected single role protocol. Missing admitted rows,
-hash-conflicting imports, unexpected active rows, or protocol mismatches fail explicitly. Runtime
-history continues to use `definition_id`, definition hash, preset revision, schema reference, and
-Artifact revision without an implicit-latest substitution.
+Admission resolves an exact `(definition_key, definition_version)` map key before querying storage,
+then requires the stored snapshot's `active=true` flag. Import verifies that an admitted definition
+derives the expected single role protocol. Missing admitted rows, hash-conflicting imports, or
+protocol mismatches fail explicitly. Runtime history continues to use `definition_id`, definition
+hash, preset revision, schema reference, and Artifact revision without an implicit-latest
+substitution.
 
 ## Access patterns and data structures
 
 New submissions perform exact-key lookup, so an immutable hash map is used: expected O(1) time and
-O(v) space for six admitted identities. Reconciliation performs one ordered O(n) scan of the small
+O(v) space for six admitted identities. The audit performs one ordered O(n) scan of the small
 definition registry and set comparison. Historical instance lookup remains indexed by primary and
 foreign keys; no list scan, cache, queue, or binary duplication is introduced.
 
 ## Transactions, concurrency, failure, retry, and idempotency
 
-Reconciliation validates the complete desired set before updating any `active` flags and commits in
-one transaction. Repeating it is idempotent. Existing instances are unaffected because execution
-loads their pinned definition by ID rather than querying `active`. A failed or concurrent reconcile
-rolls back normally. Re-enabling an old row requires a reviewed policy change, not an ad-hoc DB edit.
+Admission is read-only and deterministic. Existing instances are unaffected because execution loads
+their pinned definition by ID rather than asking the admission policy. New imports store
+`active=false` for non-admitted identities; re-import of an existing definition never mutates the
+immutable snapshot. Re-enabling an old route requires a reviewed code-policy change, not an ad-hoc
+DB edit.
 
 ## Dependency direction and adapter ownership
 
-The pure policy lives in the Workflow contract package. Workflow Runner implements persistence;
-`eomctl` is only the explicit audit/apply adapter. Catalog socket request/response schema selection
+The pure policy lives in the Workflow contract package. Workflow Runner owns the policy-aware
+repository lookup; `eomctl` is only the read-only audit adapter. Catalog socket request/response schema selection
 likewise lives in Catalog contracts and is consumed by both client and server. Domain packages do
 not import SQLAlchemy, filesystem, socket, or service modules.
 
@@ -63,6 +66,6 @@ not import SQLAlchemy, filesystem, socket, or service modules.
 
 Deleting old files or rows would make old workflows and artifacts unverifiable. Leaving every row
 `active=true` and relying on callers to remember a latest version permits silent downgrade and
-client/server drift. A small immutable admission map plus reversible flags preserves history while
+client/server drift. A small immutable admission map layered over immutable snapshots preserves history while
 making the supported production path explicit. Adding a version-negotiation framework is rejected:
 the current fixed host has a small reviewed set and exact identities are safer and simpler.

@@ -140,6 +140,14 @@ def test_create_is_atomic_and_enqueues_exactly_one_start_on_dedicated_pool(
         definition_key="legacy-item-extraction",
         definition_version="1.0.0",
         definition_hash="sha256:" + "8" * 64,
+        canonical_definition={
+            "steps": [
+                {
+                    "type": "agent",
+                    "result_schema": "legacy-item-extraction-result@1.0",
+                }
+            ]
+        },
     )
     session = _ScalarSession([None, None, definition])
     service = _service(session)

@@ -17,10 +17,10 @@ from eom_workflow_runner.models import (
 )
 from eom_workflow_runner.repository import (
     CommandType,
+    admitted_workflow_definition,
     create_workflow_instance,
     enqueue_command,
     import_workflow_definition,
-    reconcile_workflow_definition_admission,
     workflow_business_fingerprint,
 )
 from eom_workflow_runner.state_machine import (
@@ -56,7 +56,7 @@ def _definition(session: Session, suffix: str) -> WorkflowDefinitionRecord:
     return definition
 
 
-def test_admission_reconcile_preserves_historical_definition_and_instance(
+def test_admission_policy_preserves_historical_definition_and_instance(
     db_session: Session,
 ) -> None:
     for path in ADMITTED_DEFINITION_PATHS:
@@ -82,10 +82,21 @@ def test_admission_reconcile_preserves_historical_definition_and_instance(
     )
     assert created
 
-    statuses = reconcile_workflow_definition_admission(db_session)
-
-    assert all(status.active == status.admitted for status in statuses)
-    assert historical.active is False
+    assert (
+        admitted_workflow_definition(
+            db_session,
+            definition_key=historical.definition_key,
+            definition_version=historical.definition_version,
+        )
+        is None
+    )
+    current = admitted_workflow_definition(
+        db_session,
+        definition_key="generic-item-development",
+        definition_version="1.7.0",
+    )
+    assert current is not None
+    assert historical.active is True
     assert workflow.definition_id == historical.definition_id
     assert workflow.definition_version == "1.0.0"
 

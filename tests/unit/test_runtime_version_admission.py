@@ -20,8 +20,8 @@ from eom_workflow.schemas import result_schema_protocol
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import WorkflowDefinitionRecord
 from eom_workflow_runner.repository import (
+    admitted_workflow_definition,
     import_workflow_definition,
-    reconcile_workflow_definition_admission,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -109,56 +109,85 @@ def test_admitted_definition_rejects_a_different_role_protocol() -> None:
         import_workflow_definition(session, compiled)
 
 
-def test_admission_reconciliation_is_complete_and_idempotent() -> None:
-    records: list[WorkflowDefinitionRecord] = []
-    for index, file_name in enumerate(ADMITTED_DEFINITIONS.values()):
-        compiled = compile_definition(ROOT / "config" / "workflows" / file_name, ROLES)
-        records.append(
-            WorkflowDefinitionRecord(
-                definition_id=f"wfdef_{index:032x}",
-                definition_key=compiled.definition.definition_key,
-                definition_version=compiled.definition.definition_version,
-                schema_version=compiled.definition.schema_version,
-                canonical_definition=compiled.as_dict(),
-                definition_hash=compiled.sha256,
-                active=False,
-                source_path=compiled.source_path,
-            )
+def test_admission_lookup_rejects_historical_before_querying_storage() -> None:
+    session = Mock()
+
+    assert (
+        admitted_workflow_definition(
+            session,
+            definition_key="generic-item-development",
+            definition_version="1.6.0",
         )
-    historical = compile_definition(
-        ROOT / "config/workflows/generic-item-development.v1.6.yaml",
+        is None
+    )
+    session.scalar.assert_not_called()
+
+
+def test_admission_lookup_requires_the_stored_snapshot_to_be_active() -> None:
+    compiled = compile_definition(
+        ROOT / "config/workflows/generic-item-development.v1.7.yaml",
         ROLES,
     )
-    records.append(
-        WorkflowDefinitionRecord(
-            definition_id="wfdef_ffffffffffffffffffffffffffffffff",
-            definition_key=historical.definition.definition_key,
-            definition_version=historical.definition.definition_version,
-            schema_version=historical.definition.schema_version,
-            canonical_definition=historical.as_dict(),
-            definition_hash=historical.sha256,
-            active=True,
-            source_path=historical.source_path,
-        )
+    record = WorkflowDefinitionRecord(
+        definition_id="wfdef_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        definition_key=compiled.definition.definition_key,
+        definition_version=compiled.definition.definition_version,
+        schema_version=compiled.definition.schema_version,
+        canonical_definition=compiled.as_dict(),
+        definition_hash=compiled.sha256,
+        active=True,
+        source_path=compiled.source_path,
     )
     session = Mock()
-    session.scalars.return_value = tuple(records)
+    session.scalar.return_value = record
 
-    first = reconcile_workflow_definition_admission(session)
-    second = reconcile_workflow_definition_admission(session)
+    assert (
+        admitted_workflow_definition(
+            session,
+            definition_key=record.definition_key,
+            definition_version=record.definition_version,
+        )
+        is record
+    )
+    session.scalar.assert_called_once()
 
-    assert all(status.active == status.admitted for status in first)
-    assert second == first
-    assert records[-1].active is False
-    assert session.flush.call_count == 2
+
+def test_admission_lookup_rejects_a_stored_role_protocol_mismatch() -> None:
+    compiled = compile_definition(
+        ROOT / "config/workflows/generic-item-development.v1.7.yaml",
+        ROLES,
+    )
+    canonical = compiled.as_dict()
+    for step in canonical["steps"]:
+        if step.get("type") == "agent":
+            step["result_schema"] = "authoring-result@6.0"
+    record = WorkflowDefinitionRecord(
+        definition_id="wfdef_dddddddddddddddddddddddddddddddd",
+        definition_key=compiled.definition.definition_key,
+        definition_version=compiled.definition.definition_version,
+        schema_version=compiled.definition.schema_version,
+        canonical_definition=canonical,
+        definition_hash=compiled.sha256,
+        active=True,
+        source_path=compiled.source_path,
+    )
+    session = Mock()
+    session.scalar.return_value = record
+
+    with pytest.raises(WorkflowError, match="unexpected role protocol"):
+        admitted_workflow_definition(
+            session,
+            definition_key=record.definition_key,
+            definition_version=record.definition_version,
+        )
 
 
-def test_admission_reconciliation_fails_before_mutation_when_current_definition_missing() -> None:
+def test_reimport_does_not_mutate_an_immutable_historical_snapshot() -> None:
     compiled = compile_definition(
         ROOT / "config/workflows/generic-item-development.v1.6.yaml",
         ROLES,
     )
-    historical = WorkflowDefinitionRecord(
+    record = WorkflowDefinitionRecord(
         definition_id="wfdef_ffffffffffffffffffffffffffffffff",
         definition_key=compiled.definition.definition_key,
         definition_version=compiled.definition.definition_version,
@@ -169,12 +198,12 @@ def test_admission_reconciliation_fails_before_mutation_when_current_definition_
         source_path=compiled.source_path,
     )
     session = Mock()
-    session.scalars.return_value = (historical,)
+    session.scalar.return_value = record
 
-    with pytest.raises(WorkflowError, match="not imported"):
-        reconcile_workflow_definition_admission(session)
+    existing, created = import_workflow_definition(session, compiled)
 
-    assert historical.active is True
+    assert not created and existing is record
+    assert record.active is True
     session.flush.assert_not_called()
 
 

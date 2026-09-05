@@ -34,11 +34,15 @@ from eom_workflow.control_plane import ExecutionPresetRevision
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
-    WorkflowDefinitionRecord,
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
-from eom_workflow_runner.repository import CommandType, create_workflow_instance, enqueue_command
+from eom_workflow_runner.repository import (
+    CommandType,
+    admitted_workflow_definition,
+    create_workflow_instance,
+    enqueue_command,
+)
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import Engine, select
@@ -174,12 +178,10 @@ class LegacyItemExtractionApplicationService:
                     )
 
                 self._validate_reviewed_pointers(session, command.request)
-                definition = session.scalar(
-                    select(WorkflowDefinitionRecord).where(
-                        WorkflowDefinitionRecord.definition_key == WORKFLOW_KEY,
-                        WorkflowDefinitionRecord.definition_version == WORKFLOW_VERSION,
-                        WorkflowDefinitionRecord.active.is_(True),
-                    )
+                definition = admitted_workflow_definition(
+                    session,
+                    definition_key=WORKFLOW_KEY,
+                    definition_version=WORKFLOW_VERSION,
                 )
                 if definition is None:
                     self._fail(

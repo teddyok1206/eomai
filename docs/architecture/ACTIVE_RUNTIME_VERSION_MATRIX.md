@@ -15,9 +15,9 @@ Artifact continues to resolve the exact immutable version and SHA-256 hash that 
 | Legacy assessment extraction | `legacy-item-extraction/1.0.0` | `workflow-role/1.14.0` | extraction result `@1.0` |
 | Legacy editorial compatibility | `legacy-item-editorial-compatibility/1.0.0` | `workflow-role/1.16.0` | compatibility result `@1.0` |
 
-The code authority for this table is `eom_workflow.admission`. The DB authority for whether a
-definition accepts new work is `workflow_definitions.active`; `eomctl workflow definition admission`
-audits it and `--apply` reconciles it atomically.
+The code authority for this table is `eom_workflow.admission`. A definition accepts new work only
+when it is in that table and its stored immutable snapshot has `active=true`. The `eomctl workflow
+definition admission` command audits the effective result without rewriting history.
 
 ## Generated-item and HWPX path
 
@@ -45,7 +45,8 @@ the numeric suffixes are not competing runtime selections. Both endpoints consum
 
 - Keep a historical contract or definition while any immutable row, manifest, receipt, or release
   pins it, or while it is required to validate those records.
-- Mark historical workflow definitions inactive so they cannot accept new requests.
+- Reject historical workflow identities in the policy-aware repository lookup even when an old
+  immutable row records `active=true`.
 - Remove only code or files with zero immutable references and zero validation/rebuild use, in a
   separate reviewed deletion after an inventory proves both conditions.
 - Never rewrite a historical ID/hash to make versions appear uniform. Consistency means one active

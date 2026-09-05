@@ -9,7 +9,6 @@ from typing import Any
 
 from eom_identifiers import content_sha256
 from eom_workflow import (
-    WORKFLOW_ADMISSION_BY_IDENTITY,
     AgentStep,
     CompiledWorkflowDefinition,
     WorkflowRequest,
@@ -70,6 +69,15 @@ class WorkflowDefinitionAdmissionStatus:
     active: bool
     admitted: bool
 
+    @property
+    def accepts_new_work(self) -> bool:
+        admission = workflow_admission(self.definition_key, self.definition_version)
+        return (
+            self.active
+            and admission is not None
+            and self.role_protocol_version == admission.role_protocol_version
+        )
+
 
 def _compiled_role_protocol(compiled: CompiledWorkflowDefinition) -> str:
     protocols = {
@@ -118,7 +126,6 @@ def import_workflow_definition(
                 WorkflowErrorCode.WORKFLOW_DEFINITION_CONFLICT,
                 "definition key and version already exist with a different hash",
             )
-        existing.active = admitted
         return existing, False
     record = WorkflowDefinitionRecord(
         definition_id=new_definition_id(),
@@ -149,29 +156,63 @@ def workflow_definition_admission_statuses(
     return _workflow_definition_admission_statuses(records)
 
 
+def _stored_role_protocol(record: WorkflowDefinitionRecord) -> str:
+    role_protocols = {
+        result_schema_protocol(str(step["result_schema"]))
+        for step in record.canonical_definition.get("steps", [])
+        if isinstance(step, dict)
+        and step.get("type") == "agent"
+        and isinstance(step.get("result_schema"), str)
+    }
+    if len(role_protocols) != 1:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
+            "stored definition has inconsistent role protocol versions",
+        )
+    return next(iter(role_protocols))
+
+
+def admitted_workflow_definition(
+    session: Session,
+    *,
+    definition_key: str,
+    definition_version: str,
+) -> WorkflowDefinitionRecord | None:
+    """Resolve a stored definition only when both snapshot and current policy admit new work."""
+
+    if not workflow_definition_is_admitted(definition_key, definition_version):
+        return None
+    record = session.scalar(
+        select(WorkflowDefinitionRecord).where(
+            WorkflowDefinitionRecord.definition_key == definition_key,
+            WorkflowDefinitionRecord.definition_version == definition_version,
+            WorkflowDefinitionRecord.active.is_(True),
+        )
+    )
+    if record is None:
+        return None
+    admission = workflow_admission(definition_key, definition_version)
+    if admission is None:  # guarded above; retain a fail-closed type boundary.
+        return None
+    if _stored_role_protocol(record) != admission.role_protocol_version:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
+            "stored admitted definition has an unexpected role protocol version",
+        )
+    return record
+
+
 def _workflow_definition_admission_statuses(
     records: tuple[WorkflowDefinitionRecord, ...],
 ) -> tuple[WorkflowDefinitionAdmissionStatus, ...]:
     values: list[WorkflowDefinitionAdmissionStatus] = []
     for record in records:
-        role_protocols = {
-            result_schema_protocol(str(step["result_schema"]))
-            for step in record.canonical_definition.get("steps", [])
-            if isinstance(step, dict)
-            and step.get("type") == "agent"
-            and isinstance(step.get("result_schema"), str)
-        }
-        if len(role_protocols) != 1:
-            raise WorkflowError(
-                WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
-                "stored definition has inconsistent role protocol versions",
-            )
         values.append(
             WorkflowDefinitionAdmissionStatus(
                 definition_id=record.definition_id,
                 definition_key=record.definition_key,
                 definition_version=record.definition_version,
-                role_protocol_version=next(iter(role_protocols)),
+                role_protocol_version=_stored_role_protocol(record),
                 active=record.active,
                 admitted=workflow_definition_is_admitted(
                     record.definition_key,
@@ -180,45 +221,6 @@ def _workflow_definition_admission_statuses(
             )
         )
     return tuple(values)
-
-
-def reconcile_workflow_definition_admission(
-    session: Session,
-) -> tuple[WorkflowDefinitionAdmissionStatus, ...]:
-    records = tuple(
-        session.scalars(
-            select(WorkflowDefinitionRecord)
-            .order_by(
-                WorkflowDefinitionRecord.definition_key,
-                WorkflowDefinitionRecord.definition_version,
-            )
-            .with_for_update()
-        )
-    )
-    statuses = _workflow_definition_admission_statuses(records)
-    by_identity = {
-        (status.definition_key, status.definition_version): status for status in statuses
-    }
-    missing = set(WORKFLOW_ADMISSION_BY_IDENTITY) - set(by_identity)
-    if missing:
-        key, version = sorted(missing)[0]
-        raise WorkflowError(
-            WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
-            f"admitted workflow definition is not imported: {key}/{version}",
-        )
-    for identity, admission in WORKFLOW_ADMISSION_BY_IDENTITY.items():
-        if by_identity[identity].role_protocol_version != admission.role_protocol_version:
-            raise WorkflowError(
-                WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
-                "stored admitted definition has an unexpected role protocol version",
-            )
-    for record in records:
-        record.active = workflow_definition_is_admitted(
-            record.definition_key,
-            record.definition_version,
-        )
-    session.flush()
-    return _workflow_definition_admission_statuses(records)
 
 
 def workflow_business_fingerprint(
