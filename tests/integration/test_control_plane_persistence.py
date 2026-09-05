@@ -802,7 +802,45 @@ def test_processing_usage_observation_reserves_its_exact_slot(
         )
     assert unavailable.value.code == "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE"
 
-    claimed.lease_expires_at = NOW + timedelta(minutes=2, seconds=30)
+    terminalize_codex_control_command(
+        db_session,
+        command_id=claimed.command_id,
+        lease_owner="usage-race-runner",
+        outcome="FAILED",
+        result_resource_version=None,
+        binding_state=None,
+        reason_code="CODEX_USAGE_TIMEOUT",
+        processed_at=NOW + timedelta(minutes=2, seconds=15),
+    )
+    expired_document = build_codex_control_command(
+        command_type="OBSERVE",
+        binding_id=binding.binding_id,
+        expected_resource_version=binding.resource_version,
+        requested_by_operator_id=operator.operator_id,
+        requested_at=NOW + timedelta(minutes=2, seconds=20),
+        reason_code=None,
+    )
+    db_session.add(
+        CodexControlCommandRecord(
+            command_id=str(expired_document["command_id"]),
+            command_type="OBSERVE",
+            binding_id=binding.binding_id,
+            expected_resource_version=binding.resource_version,
+            requested_by_operator_id=operator.operator_id,
+            idempotency_key=f"usage-race-expired:{uuid4().hex}",
+            request_sha256=str(expired_document["request_sha256"]),
+            canonical_document=expired_document,
+            state="PROCESSING",
+            attempts=1,
+            lease_owner="crashed-usage-runner",
+            lease_expires_at=NOW + timedelta(minutes=2, seconds=30),
+            result_resource_version=None,
+            result_document=None,
+            error_code=None,
+            requested_at=NOW + timedelta(minutes=2, seconds=20),
+            processed_at=None,
+        )
+    )
     db_session.flush()
     lease = acquire_worker_lease(
         db_session,
