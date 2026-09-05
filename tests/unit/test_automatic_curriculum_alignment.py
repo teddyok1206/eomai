@@ -5,6 +5,7 @@ from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts import KnowledgeGraphStructureManifestV4
 from eom_catalog_service.automatic_curriculum_alignment import (
     AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET,
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
@@ -250,6 +251,59 @@ def test_graph_snapshot_ancestry_accepts_a_contiguous_immutable_chain() -> None:
     assert KnowledgeGraphPublicationService._snapshot_ancestor_ids(session, third) == frozenset(
         snapshots
     )
+
+
+def test_v4_publication_validates_both_item_binding_families_against_one_ancestry() -> None:
+    service = object.__new__(KnowledgeGraphPublicationService)
+    session = Mock()
+    analyses = cast(Any, (object(),))
+    structure = KnowledgeGraphStructureManifestV4.model_construct()
+    snapshot_id = "graphrev_" + "9" * 32
+    ancestors = frozenset({snapshot_id, "graphrev_" + "8" * 32})
+    service._snapshot_ancestor_ids = Mock(return_value=ancestors)  # type: ignore[method-assign]
+    service._validate_approved_item_curriculum_bindings = Mock()  # type: ignore[method-assign]
+    service._validate_automatic_item_curriculum_bindings = Mock()  # type: ignore[method-assign]
+
+    service._validate_item_curriculum_bindings(
+        session,
+        structure,
+        analyses,
+        previous_snapshot_revision_id=snapshot_id,
+    )
+
+    service._snapshot_ancestor_ids.assert_called_once_with(session, snapshot_id)
+    service._validate_approved_item_curriculum_bindings.assert_called_once_with(
+        session,
+        structure,
+        analyses,
+        expected_snapshot_revision_id=snapshot_id,
+        ancestor_snapshot_ids=ancestors,
+    )
+    service._validate_automatic_item_curriculum_bindings.assert_called_once_with(
+        session,
+        structure,
+        analyses,
+        expected_snapshot_revision_id=snapshot_id,
+        ancestor_snapshot_ids=ancestors,
+    )
+
+
+def test_item_binding_validation_rejects_missing_prior_before_ancestry_lookup() -> None:
+    service = object.__new__(KnowledgeGraphPublicationService)
+    session = Mock()
+    structure = KnowledgeGraphStructureManifestV4.model_construct()
+    service._snapshot_ancestor_ids = Mock()  # type: ignore[method-assign]
+
+    with pytest.raises(KnowledgeGraphPublicationError) as caught:
+        service._validate_item_curriculum_bindings(
+            session,
+            structure,
+            cast(Any, ()),
+            previous_snapshot_revision_id=None,
+        )
+
+    assert caught.value.code == "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_PRIOR_MISSING"
+    service._snapshot_ancestor_ids.assert_not_called()
 
 
 def test_graph_snapshot_ancestry_rejects_a_revision_gap() -> None:

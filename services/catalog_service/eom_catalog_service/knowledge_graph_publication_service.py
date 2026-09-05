@@ -687,30 +687,12 @@ class KnowledgeGraphPublicationService:
                         "KNOWLEDGE_GRAPH_FRAMEWORK_INVALID",
                         "reviewed curriculum framework does not resolve exactly",
                     ) from exc
-            if isinstance(structure, KnowledgeGraphStructureManifestV3):
-                if previous_snapshot_revision_id is None:
-                    raise KnowledgeGraphPublicationError(
-                        "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_PRIOR_MISSING",
-                        "Item curriculum alignment requires a prior Graph snapshot",
-                    )
-                ancestor_snapshot_ids = self._snapshot_ancestor_ids(
-                    session, previous_snapshot_revision_id
-                )
-                self._validate_approved_item_curriculum_bindings(
-                    session,
-                    structure,
-                    analyses,
-                    expected_snapshot_revision_id=previous_snapshot_revision_id,
-                    ancestor_snapshot_ids=ancestor_snapshot_ids,
-                )
-            if isinstance(structure, KnowledgeGraphStructureManifestV4):
-                self._validate_automatic_item_curriculum_bindings(
-                    session,
-                    structure,
-                    analyses,
-                    expected_snapshot_revision_id=previous_snapshot_revision_id,
-                    ancestor_snapshot_ids=ancestor_snapshot_ids,
-                )
+            self._validate_item_curriculum_bindings(
+                session,
+                structure,
+                analyses,
+                previous_snapshot_revision_id=previous_snapshot_revision_id,
+            )
             self._validate_item_elements(session, structure)
 
         try:
@@ -1443,6 +1425,42 @@ class KnowledgeGraphPublicationService:
             seen.add(cursor)
             cursor = snapshot.previous_graph_snapshot_revision_id
         return frozenset(seen)
+
+    def _validate_item_curriculum_bindings(
+        self,
+        session: Session,
+        structure: KnowledgeGraphStructureContract | None,
+        analyses: tuple[AcceptedAnalysisProposal, ...],
+        *,
+        previous_snapshot_revision_id: str | None,
+    ) -> None:
+        """Validate every reviewed and automatic Item binding against one ancestry snapshot."""
+
+        if not isinstance(
+            structure, (KnowledgeGraphStructureManifestV3, KnowledgeGraphStructureManifestV4)
+        ):
+            return
+        if previous_snapshot_revision_id is None:
+            raise KnowledgeGraphPublicationError(
+                "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_PRIOR_MISSING",
+                "Item curriculum alignment requires a prior Graph snapshot",
+            )
+        ancestor_snapshot_ids = self._snapshot_ancestor_ids(session, previous_snapshot_revision_id)
+        self._validate_approved_item_curriculum_bindings(
+            session,
+            structure,
+            analyses,
+            expected_snapshot_revision_id=previous_snapshot_revision_id,
+            ancestor_snapshot_ids=ancestor_snapshot_ids,
+        )
+        if isinstance(structure, KnowledgeGraphStructureManifestV4):
+            self._validate_automatic_item_curriculum_bindings(
+                session,
+                structure,
+                analyses,
+                expected_snapshot_revision_id=previous_snapshot_revision_id,
+                ancestor_snapshot_ids=ancestor_snapshot_ids,
+            )
 
     def _validate_approved_item_curriculum_bindings(
         self,
