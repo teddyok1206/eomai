@@ -24,6 +24,7 @@ from eom_catalog_contracts import (
     KnowledgeGraphStructureManifestV2,
     KnowledgeGraphStructureManifestV3,
     KnowledgeGraphStructureManifestV4,
+    KnowledgeGraphStructureManifestV5,
     KnowledgeNodeType,
     ProposedKnowledgeEdgeV2,
     validate_knowledge_edge_endpoint_types,
@@ -392,6 +393,7 @@ def _add_reviewed_curriculum_structure(
         KnowledgeGraphStructureManifestV2
         | KnowledgeGraphStructureManifestV3
         | KnowledgeGraphStructureManifestV4
+        | KnowledgeGraphStructureManifestV5
     ),
     node_accumulators: dict[str, _NodeAccumulator],
     local_node_ids: dict[tuple[str, str], str],
@@ -504,6 +506,81 @@ def _add_reviewed_curriculum_structure(
         for unit_id in item_binding.curriculum_unit_ids:
             direct_pointers[unit_id].update(item_pointers)
 
+    if isinstance(structure, KnowledgeGraphStructureManifestV5):
+        for placement in structure.assessment_item_occurrences:
+            pointers = set(
+                pointer
+                for values in node_pointers_by_run[placement.analysis_run_id].values()
+                for pointer in values
+            )
+            occurrence_key = (
+                "assessment-occurrence-revision:" + placement.assessment_occurrence_revision_id
+            )
+            placement_key = (
+                "assessment-item-occurrence:"
+                + placement.assessment_occurrence_revision_id
+                + f":{placement.item_number}"
+            )
+            item_key = "item-revision:" + placement.item_revision_id
+            structural_nodes = (
+                (
+                    occurrence_key,
+                    KnowledgeNodeType.ASSESSMENT_OCCURRENCE_REVISION,
+                    placement.occurrence_display_label,
+                ),
+                (
+                    placement_key,
+                    KnowledgeNodeType.ASSESSMENT_ITEM_OCCURRENCE,
+                    f"{placement.occurrence_display_label} {placement.item_number}번 문항",
+                ),
+                (
+                    item_key,
+                    KnowledgeNodeType.ITEM_REVISION,
+                    f"{placement.occurrence_display_label} {placement.item_number}번",
+                ),
+            )
+            structural_ids: dict[str, str] = {}
+            for stable_key, node_type, label in structural_nodes:
+                node_id = _stable_id("knode_", {"node_type": node_type, "stable_key": stable_key})
+                structural_ids[stable_key] = node_id
+                existing = node_accumulators.get(stable_key)
+                if existing is None:
+                    node_accumulators[stable_key] = _NodeAccumulator(
+                        node_id=node_id,
+                        node_type=node_type,
+                        stable_key=stable_key,
+                        label_counts={label: 1},
+                        reviewed_label=label,
+                        source_pointers=set(pointers),
+                    )
+                elif existing.node_id != node_id or existing.node_type != node_type:
+                    raise KnowledgeGraphProjectionError(
+                        "KNOWLEDGE_GRAPH_ASSESSMENT_NODE_CONFLICT",
+                        "assessment placement conflicts with an existing graph node",
+                    )
+                else:
+                    existing.add_label(label, reviewed=True)
+                    existing.source_pointers.update(pointers)
+            occurrence_node_id = structural_ids[occurrence_key]
+            placement_node_id = structural_ids[placement_key]
+            item_node_id = structural_ids[item_key]
+            _merge_edge(
+                edge_accumulators,
+                edge_type="HAS_ASSESSMENT_ITEM",
+                from_node_id=occurrence_node_id,
+                to_node_id=placement_node_id,
+                confidence_milli=1000,
+                source_pointers=pointers,
+            )
+            _merge_edge(
+                edge_accumulators,
+                edge_type="REPRESENTS_ITEM_REVISION",
+                from_node_id=placement_node_id,
+                to_node_id=item_node_id,
+                confidence_milli=1000,
+                source_pointers=pointers,
+            )
+
     children_by_parent: dict[str, list[str]] = {}
     for unit in structure.curriculum_units:
         if unit.parent_unit_id is not None:
@@ -611,6 +688,34 @@ def _add_reviewed_curriculum_structure(
                     source_pointers=set(pointers_by_stable_key[proposed_node.stable_key]),
                 )
 
+    if isinstance(structure, KnowledgeGraphStructureManifestV5):
+        for placement in structure.assessment_item_occurrences:
+            placement_node_id = _stable_id(
+                "knode_",
+                {
+                    "node_type": KnowledgeNodeType.ASSESSMENT_ITEM_OCCURRENCE,
+                    "stable_key": (
+                        "assessment-item-occurrence:"
+                        + placement.assessment_occurrence_revision_id
+                        + f":{placement.item_number}"
+                    ),
+                },
+            )
+            pointers = set(
+                pointer
+                for values in node_pointers_by_run[placement.analysis_run_id].values()
+                for pointer in values
+            )
+            for unit_id in placement.curriculum_unit_ids:
+                _merge_edge(
+                    edge_accumulators,
+                    edge_type="ALIGNS_WITH_CURRICULUM",
+                    from_node_id=placement_node_id,
+                    to_node_id=unit_node_ids[unit_id],
+                    confidence_milli=1000,
+                    source_pointers=pointers,
+                )
+
 
 def build_education_graph_projection(
     analyses: tuple[AcceptedAnalysisProposal, ...],
@@ -619,6 +724,7 @@ def build_education_graph_projection(
         | KnowledgeGraphStructureManifestV2
         | KnowledgeGraphStructureManifestV3
         | KnowledgeGraphStructureManifestV4
+        | KnowledgeGraphStructureManifestV5
         | None
     ),
 ) -> EducationGraphProjection:
@@ -782,15 +888,19 @@ def build_education_graph_projection(
         item_elements=item_elements,
         anchor_count=anchor_count,
         projection_schema_version=(
-            "3.0"
-            if isinstance(structure, KnowledgeGraphStructureManifestV2)
+            "4.0"
+            if isinstance(structure, KnowledgeGraphStructureManifestV5)
             else (
-                "2.0"
-                if any(
-                    isinstance(analysis.source, EducationalDocumentKnowledgeSourceV3)
-                    for analysis in analyses
+                "3.0"
+                if isinstance(structure, KnowledgeGraphStructureManifestV2)
+                else (
+                    "2.0"
+                    if any(
+                        isinstance(analysis.source, EducationalDocumentKnowledgeSourceV3)
+                        for analysis in analyses
+                    )
+                    else "1.0"
                 )
-                else "1.0"
             )
         ),
     )
@@ -801,7 +911,7 @@ def serialize_education_graph_projection(
 ) -> EducationGraphProjectionFiles:
     """Serialize projection members canonically for Artifact publication."""
 
-    include_aliases = projection.projection_schema_version == "3.0"
+    include_aliases = projection.projection_schema_version in {"3.0", "4.0"}
     node_documents = [item.document(include_aliases=include_aliases) for item in projection.nodes]
     edge_documents = [item.document() for item in projection.edges]
     closure_documents = [item.document() for item in projection.curriculum_closure]

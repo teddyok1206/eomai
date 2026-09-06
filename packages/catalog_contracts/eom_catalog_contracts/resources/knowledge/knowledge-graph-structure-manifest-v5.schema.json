@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0",
+  "title": "Knowledge Graph Assessment Placement Structure Manifest V5",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "knowledge-graph-structure-manifest/5.0"},
+    "structure_manifest_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/structure_manifest_id"
+    },
+    "framework_key": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/framework_key"
+    },
+    "framework_revision_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/framework_revision_id"
+    },
+    "outline_key": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/outline_key"
+    },
+    "outline_revision": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/outline_revision"
+    },
+    "outline_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/outline_sha256"
+    },
+    "source_analysis_run_ids": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/source_analysis_run_ids"
+    },
+    "curriculum_units": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/curriculum_units"
+    },
+    "analysis_curriculum_bindings": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/analysis_curriculum_bindings"
+    },
+    "approved_item_curriculum_bindings": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/approved_item_curriculum_bindings"
+    },
+    "automatic_item_curriculum_bindings": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/automatic_item_curriculum_bindings"
+    },
+    "assessment_item_occurrences": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/assessmentItemOccurrence"}
+    },
+    "item_elements": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/item_elements"
+    },
+    "reviewed_by_operator_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/reviewed_by_operator_id"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/created_at"
+    },
+    "manifest_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0#/properties/manifest_sha256"
+    }
+  },
+  "required": [
+    "schema_version",
+    "structure_manifest_id",
+    "framework_key",
+    "framework_revision_id",
+    "outline_key",
+    "outline_revision",
+    "outline_sha256",
+    "source_analysis_run_ids",
+    "curriculum_units",
+    "analysis_curriculum_bindings",
+    "approved_item_curriculum_bindings",
+    "automatic_item_curriculum_bindings",
+    "assessment_item_occurrences",
+    "item_elements",
+    "reviewed_by_operator_id",
+    "created_at",
+    "manifest_sha256"
+  ],
+  "$defs": {
+    "assessmentItemOccurrence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "analysis_run_id",
+        "item_id",
+        "item_revision_id",
+        "item_origin_profile_id",
+        "item_origin_profile_sha256",
+        "extraction_acceptance_id",
+        "extraction_acceptance_sha256",
+        "assessment_source_bundle_id",
+        "assessment_source_bundle_revision_id",
+        "assessment_source_bundle_sha256",
+        "assessment_occurrence_id",
+        "assessment_occurrence_revision_id",
+        "assessment_occurrence_revision_sha256",
+        "occurrence_display_label",
+        "administration_year",
+        "administration_month",
+        "target_school_level",
+        "target_grade",
+        "subject_key",
+        "item_number",
+        "curriculum_unit_ids",
+        "placement_sha256"
+      ],
+      "properties": {
+        "analysis_run_id": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "item_origin_profile_id": {
+          "type": "string",
+          "pattern": "^originprofile_[0-9a-f]{32}$"
+        },
+        "item_origin_profile_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        },
+        "extraction_acceptance_id": {
+          "type": "string",
+          "pattern": "^itemacceptance_[0-9a-f]{32}$"
+        },
+        "extraction_acceptance_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        },
+        "assessment_source_bundle_id": {
+          "type": "string",
+          "pattern": "^assessbundle_[0-9a-f]{32}$"
+        },
+        "assessment_source_bundle_revision_id": {
+          "type": "string",
+          "pattern": "^assessbundlerev_[0-9a-f]{32}$"
+        },
+        "assessment_source_bundle_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        },
+        "assessment_occurrence_id": {
+          "type": "string",
+          "pattern": "^occurrence_[0-9a-f]{32}$"
+        },
+        "assessment_occurrence_revision_id": {
+          "type": "string",
+          "pattern": "^occurrev_[0-9a-f]{32}$"
+        },
+        "assessment_occurrence_revision_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        },
+        "occurrence_display_label": {"type": "string", "minLength": 1, "maxLength": 512},
+        "administration_year": {"type": "integer", "minimum": 1900, "maximum": 2200},
+        "administration_month": {"type": "integer", "minimum": 1, "maximum": 12},
+        "target_school_level": {
+          "enum": ["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"]
+        },
+        "target_grade": {"type": "integer", "minimum": 1, "maximum": 6},
+        "subject_key": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,159}$"
+        },
+        "item_number": {"type": "integer", "minimum": 1, "maximum": 200},
+        "curriculum_unit_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^currunit_[0-9a-f]{32}$"}
+        },
+        "placement_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

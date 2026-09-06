@@ -610,6 +610,7 @@ class KnowledgeRetrievalApplicationService:
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0",
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/6.0",
                     "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0",
+                    "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0",
                 }
             ),
         )
@@ -1219,7 +1220,8 @@ class KnowledgeRetrievalApplicationService:
             label = "; ".join(candidate.node_labels)
             line = (
                 f"- `{entry.evidence_id}` score={entry.relevance_milli} use={entry.use} "
-                f"source=`{source_identity}` nodes={','.join(entry.graph_node_ids)}: {label}"
+                f"class={source.source_class} source=`{source_identity}` "
+                f"nodes={','.join(entry.graph_node_ids)}: {label}"
             )
             proposed = "\n".join([*lines, line, ""])
             if (

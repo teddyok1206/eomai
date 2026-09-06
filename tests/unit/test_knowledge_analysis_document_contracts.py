@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 from eom_catalog_contracts import (
-    KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY,
+    WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY,
     CatalogApplicationResponse,
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
@@ -1500,7 +1500,7 @@ def test_endpoint_contract_schema_exactly_matches_the_domain_compatibility_table
         }
     canonical = {
         str(edge_type): {(str(source), str(target)) for source, target in pairs}
-        for edge_type, pairs in KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.items()
+        for edge_type, pairs in WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.items()
     }
     assert projected == canonical
 
@@ -1513,7 +1513,7 @@ def test_typed_identity_schema_is_generated_from_the_closed_ontology() -> None:
     }
     canonical_node_types = {
         str(source)
-        for pairs in KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.values()
+        for pairs in WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.values()
         for pair in pairs
         for source in pair
     }
@@ -1530,7 +1530,7 @@ def test_typed_identity_schema_is_generated_from_the_closed_ontology() -> None:
         }
     canonical = {
         str(edge_type): {(str(source), str(target)) for source, target in pairs}
-        for edge_type, pairs in KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.items()
+        for edge_type, pairs in WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.items()
     }
     assert projected == canonical
 

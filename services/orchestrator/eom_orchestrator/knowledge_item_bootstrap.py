@@ -49,8 +49,8 @@ class KnowledgeItemRetrievalBootstrapPolicy(BaseModel):
         min_length=1, max_length=1
     )
     allowed_query_kinds: tuple[Literal["ITEM_PREPARATION"], ...] = Field(min_length=1, max_length=1)
-    allowed_source_classes: tuple[Literal["APPROVED_ITEM", "TEXTBOOK"], ...] = Field(
-        min_length=2, max_length=2
+    allowed_source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"], ...] = Field(
+        min_length=2, max_length=3
     )
     maximum_budget: dict[str, int]
 
@@ -60,7 +60,10 @@ class KnowledgeItemRetrievalBootstrapPolicy(BaseModel):
             raise ValueError("knowledge item corpus policy differs")
         if self.allowed_query_kinds != ("ITEM_PREPARATION",):
             raise ValueError("knowledge item query policy differs")
-        if self.allowed_source_classes != ("APPROVED_ITEM", "TEXTBOOK"):
+        if self.allowed_source_classes not in {
+            ("APPROVED_ITEM", "TEXTBOOK"),
+            ("APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"),
+        }:
             raise ValueError("knowledge item source policy differs")
         if self.maximum_budget != {
             "max_documents": 16,
@@ -80,6 +83,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
         "knowledge-item-control-bootstrap/1.0",
         "knowledge-item-control-bootstrap/2.0",
         "knowledge-item-control-bootstrap/3.0",
+        "knowledge-item-control-bootstrap/4.0",
     ]
     preset_key: Literal["knowledge-grounded-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -102,6 +106,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
             "knowledge-item-control-bootstrap/1.0": "workflow-role/1.12.0",
             "knowledge-item-control-bootstrap/2.0": "workflow-role/1.15.0",
             "knowledge-item-control-bootstrap/3.0": "workflow-role/1.17.0",
+            "knowledge-item-control-bootstrap/4.0": "workflow-role/1.17.0",
         }[self.schema_version]
         if self.compatible_workflow_protocols != (expected_protocol,):
             raise ValueError("knowledge item workflow protocol differs")
@@ -147,6 +152,7 @@ def load_knowledge_item_bootstrap_manifest(
             "knowledge-item-control-bootstrap/1.0": "knowledge-item-control-bootstrap",
             "knowledge-item-control-bootstrap/2.0": "knowledge-item-control-bootstrap-v2",
             "knowledge-item-control-bootstrap/3.0": "knowledge-item-control-bootstrap-v3",
+            "knowledge-item-control-bootstrap/4.0": "knowledge-item-control-bootstrap-v4",
         }.get(schema_version)
         if schema_name is None:
             raise ValueError("knowledge item bootstrap schema version is unsupported")

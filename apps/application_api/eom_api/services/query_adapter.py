@@ -8,7 +8,7 @@ import hmac
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal, Never
+from typing import Any, Literal, Never, cast
 
 from eom_api_contracts.common import ArtifactPointer
 from eom_api_contracts.content_intakes import (
@@ -20,7 +20,10 @@ from eom_api_contracts.content_packs import (
     ContentPackActivationView,
     ContentPackReleaseView,
 )
-from eom_api_contracts.curriculum import CurriculumGraphCapabilityView
+from eom_api_contracts.curriculum import (
+    AssessmentItemOccurrenceView,
+    CurriculumGraphCapabilityView,
+)
 from eom_api_contracts.deliverables import DeliverableView
 from eom_api_contracts.events import EventView
 from eom_api_contracts.hwpx import HwpxBuildView
@@ -59,12 +62,14 @@ from eom_catalog_service.knowledge_analysis_batch_models import (
     KnowledgeAnalysisBatchRecord,
 )
 from eom_catalog_service.knowledge_graph_models import (
+    AssessmentItemOccurrenceReferenceRecord,
     CurriculumUnitClosureRecord,
     CurriculumUnitRecord,
     EducationRetrievalRequestRecord,
     EvidenceBundleRecord,
     EvidenceBundleRevisionRecord,
     KnowledgeCorpusRecord,
+    KnowledgeEdgeRecord,
     KnowledgeGraphSnapshotRecord,
     KnowledgeNodeRecord,
 )
@@ -349,6 +354,211 @@ class QueryAdapter:
                 unit_count=len(unit_rows),
                 closure_count=len(closure_rows),
             )
+
+    def assessment_items_by_exam(
+        self,
+        *,
+        administration_year: int,
+        target_school_level: str,
+        target_grade: int,
+        administration_month: int,
+        subject_key: str,
+        limit: int,
+        cursor: str | None,
+    ) -> PageResult[AssessmentItemOccurrenceView]:
+        """Return ordered placements for one exact exam key in the current snapshot."""
+
+        aggregate = (
+            f"{administration_year}:{target_school_level}:{target_grade}:"
+            f"{administration_month}:{subject_key}"
+        )
+        offset = self.cursors.decode_ordinal(cursor, "assessment-exam", aggregate) if cursor else 0
+        with self.sessions() as session:
+            snapshot_id = self._current_assessment_snapshot_id(session)
+            if snapshot_id is None:
+                return PageResult((), None, False)
+            statement = (
+                select(AssessmentItemOccurrenceReferenceRecord)
+                .where(
+                    AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id
+                    == snapshot_id,
+                    AssessmentItemOccurrenceReferenceRecord.administration_year
+                    == administration_year,
+                    AssessmentItemOccurrenceReferenceRecord.target_school_level
+                    == target_school_level,
+                    AssessmentItemOccurrenceReferenceRecord.target_grade == target_grade,
+                    AssessmentItemOccurrenceReferenceRecord.administration_month
+                    == administration_month,
+                    AssessmentItemOccurrenceReferenceRecord.subject_key == subject_key,
+                )
+                .order_by(
+                    AssessmentItemOccurrenceReferenceRecord.item_number,
+                    AssessmentItemOccurrenceReferenceRecord.item_revision_id,
+                )
+                .offset(offset)
+                .limit(limit + 1)
+            )
+            rows = tuple(session.scalars(statement))
+            return self._assessment_item_page(
+                session,
+                rows,
+                limit=limit,
+                offset=offset,
+                cursor_resource="assessment-exam",
+                cursor_aggregate=aggregate,
+            )
+
+    def assessment_items_by_curriculum_unit(
+        self,
+        *,
+        curriculum_unit_id: str,
+        limit: int,
+        cursor: str | None,
+    ) -> PageResult[AssessmentItemOccurrenceView]:
+        """Traverse current Graph adjacency from a unit to its past-exam placements."""
+
+        offset = (
+            self.cursors.decode_ordinal(cursor, "assessment-unit", curriculum_unit_id)
+            if cursor
+            else 0
+        )
+        with self.sessions() as session:
+            snapshot_id = self._current_assessment_snapshot_id(session)
+            if snapshot_id is None:
+                return PageResult((), None, False)
+            unit = session.get(CurriculumUnitRecord, (snapshot_id, curriculum_unit_id))
+            if unit is None:
+                return PageResult((), None, False)
+            statement = (
+                select(AssessmentItemOccurrenceReferenceRecord)
+                .join(
+                    KnowledgeEdgeRecord,
+                    and_(
+                        KnowledgeEdgeRecord.graph_snapshot_revision_id
+                        == AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id,
+                        KnowledgeEdgeRecord.from_node_id
+                        == AssessmentItemOccurrenceReferenceRecord.placement_node_id,
+                    ),
+                )
+                .where(
+                    AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id
+                    == snapshot_id,
+                    KnowledgeEdgeRecord.to_node_id == unit.node_id,
+                    KnowledgeEdgeRecord.edge_type == "ALIGNS_WITH_CURRICULUM",
+                )
+                .order_by(
+                    AssessmentItemOccurrenceReferenceRecord.administration_year.desc(),
+                    AssessmentItemOccurrenceReferenceRecord.administration_month.desc(),
+                    AssessmentItemOccurrenceReferenceRecord.target_grade,
+                    AssessmentItemOccurrenceReferenceRecord.occurrence_display_label,
+                    AssessmentItemOccurrenceReferenceRecord.item_number,
+                    AssessmentItemOccurrenceReferenceRecord.item_revision_id,
+                )
+                .offset(offset)
+                .limit(limit + 1)
+            )
+            rows = tuple(session.scalars(statement))
+            return self._assessment_item_page(
+                session,
+                rows,
+                limit=limit,
+                offset=offset,
+                cursor_resource="assessment-unit",
+                cursor_aggregate=curriculum_unit_id,
+            )
+
+    @staticmethod
+    def _current_assessment_snapshot_id(session: Session) -> str | None:
+        corpus = session.scalar(
+            select(KnowledgeCorpusRecord).where(
+                KnowledgeCorpusRecord.corpus_key == INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
+                KnowledgeCorpusRecord.lifecycle_state == "ACTIVE",
+            )
+        )
+        if corpus is None or corpus.current_graph_snapshot_revision_id is None:
+            return None
+        snapshot = session.get(
+            KnowledgeGraphSnapshotRecord, corpus.current_graph_snapshot_revision_id
+        )
+        if (
+            snapshot is None
+            or snapshot.state != "PUBLISHED"
+            or snapshot.graph_id != corpus.graph_id
+            or snapshot.ontology_version != "education-knowledge-graph/1.1"
+        ):
+            return None
+        return snapshot.graph_snapshot_revision_id
+
+    def _assessment_item_page(
+        self,
+        session: Session,
+        rows: tuple[AssessmentItemOccurrenceReferenceRecord, ...],
+        *,
+        limit: int,
+        offset: int,
+        cursor_resource: str,
+        cursor_aggregate: str,
+    ) -> PageResult[AssessmentItemOccurrenceView]:
+        page_rows = rows[:limit]
+        placement_ids = {row.placement_node_id for row in page_rows}
+        units_by_placement: dict[str, list[str]] = {}
+        if placement_ids:
+            for placement_node_id, curriculum_unit_id in session.execute(
+                select(KnowledgeEdgeRecord.from_node_id, CurriculumUnitRecord.curriculum_unit_id)
+                .join(
+                    CurriculumUnitRecord,
+                    and_(
+                        CurriculumUnitRecord.graph_snapshot_revision_id
+                        == KnowledgeEdgeRecord.graph_snapshot_revision_id,
+                        CurriculumUnitRecord.node_id == KnowledgeEdgeRecord.to_node_id,
+                    ),
+                )
+                .where(
+                    KnowledgeEdgeRecord.graph_snapshot_revision_id
+                    == page_rows[0].graph_snapshot_revision_id,
+                    KnowledgeEdgeRecord.from_node_id.in_(placement_ids),
+                    KnowledgeEdgeRecord.edge_type == "ALIGNS_WITH_CURRICULUM",
+                )
+                .order_by(
+                    KnowledgeEdgeRecord.from_node_id,
+                    CurriculumUnitRecord.curriculum_unit_id,
+                )
+            ):
+                units_by_placement.setdefault(placement_node_id, []).append(curriculum_unit_id)
+        values = tuple(
+            AssessmentItemOccurrenceView(
+                graph_snapshot_revision_id=row.graph_snapshot_revision_id,
+                placement_node_id=row.placement_node_id,
+                occurrence_node_id=row.occurrence_node_id,
+                item_node_id=row.item_node_id,
+                analysis_run_id=row.analysis_run_id,
+                assessment_occurrence_id=row.assessment_occurrence_id,
+                assessment_occurrence_revision_id=row.assessment_occurrence_revision_id,
+                assessment_occurrence_revision_sha256=(row.assessment_occurrence_revision_sha256),
+                occurrence_display_label=row.occurrence_display_label,
+                administration_year=row.administration_year,
+                administration_month=row.administration_month,
+                target_school_level=cast(
+                    Literal["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"],
+                    row.target_school_level,
+                ),
+                target_grade=row.target_grade,
+                subject_key=row.subject_key,
+                item_number=row.item_number,
+                item_id=row.item_id,
+                item_revision_id=row.item_revision_id,
+                curriculum_unit_ids=tuple(units_by_placement.get(row.placement_node_id, ())),
+                placement_sha256=row.placement_sha256,
+            )
+            for row in page_rows
+        )
+        has_more = len(rows) > limit
+        next_cursor = (
+            self.cursors.encode_ordinal(cursor_resource, cursor_aggregate, offset + len(page_rows))
+            if has_more
+            else None
+        )
+        return PageResult(values, next_cursor, has_more)
 
     @staticmethod
     def _unavailable_curriculum_graph(

@@ -181,6 +181,52 @@ def test_ranked_context_is_bounded_pointer_oriented_and_marks_answers_avoid_copy
     assert len(markdown.encode("utf-8")) < 64 * 1024
 
 
+def test_one_shot_context_exposes_past_exam_identity_without_copying_payload() -> None:
+    item = ApprovedItemKnowledgeSourceV2(
+        source_class="PAST_EXAM",
+        item_id="item_" + "b" * 32,
+        item_revision_id="itemrev_" + "c" * 32,
+        artifact_member=_member(
+            "c", media_type="application/json", schema_ref="eom.assessment.item-content/1.0"
+        ),
+    )
+    request = _request().model_copy(
+        update={"source_classes": ("APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK")}
+    )
+
+    entries, markdown = KnowledgeRetrievalApplicationService._rank_and_render(
+        request=request,
+        candidates=(
+            _Candidate(
+                analysis_run_id="analysisrun_" + "3" * 32,
+                source=item,
+                node_ids=("knode_exam", "knode_placement", "knode_unit"),
+                anchor_ids=("anchor_item",),
+                node_labels=(
+                    "2025학년도 고1 6월 통합과학 전국연합학력평가",
+                    "2025학년도 고1 6월 통합과학 전국연합학력평가 7번 문항",
+                    "생태계와 환경 변화",
+                ),
+                node_types=(
+                    "ASSESSMENT_OCCURRENCE_REVISION",
+                    "ASSESSMENT_ITEM_OCCURRENCE",
+                    "CURRICULUM_UNIT",
+                ),
+                relevance_milli=850,
+                answer_bearing=False,
+            ),
+        ),
+    )
+
+    assert len(entries) == 1
+    assert entries[0].source.source_class == "PAST_EXAM"
+    assert "class=PAST_EXAM" in markdown
+    assert "2025학년도 고1 6월" in markdown
+    assert "7번 문항" in markdown
+    assert "생태계와 환경 변화" in markdown
+    assert item.artifact_member.member_path not in markdown
+
+
 def test_ranked_context_orders_equal_relevance_entries_by_evidence_id() -> None:
     first_candidate_second_id = ContentIntakeKnowledgeSourceV2(
         source_class="TEXTBOOK",

@@ -7,7 +7,8 @@ from typing import Literal, NoReturn, Protocol
 
 from eom_catalog_contracts import (
     AssessmentOccurrencePointer,
-    AssessmentOccurrenceRevision,
+    AssessmentOccurrenceRevisionContract,
+    AssessmentOccurrenceRevisionV2,
     ItemOriginDerivation,
     ItemOriginProfile,
     ItemOriginProvenance,
@@ -186,9 +187,16 @@ class ItemOriginService:
             )
 
     def register_occurrence(
-        self, revision: AssessmentOccurrenceRevision
+        self, revision: AssessmentOccurrenceRevisionContract
     ) -> OriginRevisionRegistration:
-        self._validate_contract("assessment-occurrence-revision", revision)
+        self._validate_contract(
+            (
+                "assessment-occurrence-revision-v2"
+                if isinstance(revision, AssessmentOccurrenceRevisionV2)
+                else "assessment-occurrence-revision"
+            ),
+            revision,
+        )
         if revision.revision_state != "REVIEWED":
             self._fail("ITEM_ORIGIN_STATE_INVALID", "new occurrence revision must be reviewed")
         self._verify_evidence(revision.source_evidence)
@@ -359,7 +367,8 @@ class ItemOriginService:
 
     @staticmethod
     def _validate_contract(
-        name: str, value: OrganizationRevision | AssessmentOccurrenceRevision | ItemOriginProfile
+        name: str,
+        value: OrganizationRevision | AssessmentOccurrenceRevisionContract | ItemOriginProfile,
     ) -> None:
         try:
             validate_contract(name, value.model_dump(mode="json"))
@@ -402,7 +411,7 @@ class ItemOriginService:
         self,
         session: Session,
         logical: AssessmentOccurrenceRecord,
-        revision: AssessmentOccurrenceRevision,
+        revision: AssessmentOccurrenceRevisionContract,
     ) -> str | None:
         prior = logical.current_revision_id
         if prior is None:
@@ -608,10 +617,11 @@ class ItemOriginService:
 
     @staticmethod
     def _occurrence_revision_record(
-        value: AssessmentOccurrenceRevision,
+        value: AssessmentOccurrenceRevisionContract,
     ) -> AssessmentOccurrenceRevisionRecord:
         return AssessmentOccurrenceRevisionRecord(
             assessment_occurrence_revision_id=value.assessment_occurrence_revision_id,
+            schema_version=value.schema_version,
             assessment_occurrence_id=value.assessment_occurrence_id,
             revision_number=value.revision_number,
             previous_revision_id=value.previous_revision_id,
@@ -623,6 +633,19 @@ class ItemOriginService:
             exam_family_key=value.exam_family_key,
             administration_year=value.administration_year,
             administration_date=value.administration_date,
+            administration_month=(
+                value.administration_month
+                if isinstance(value, AssessmentOccurrenceRevisionV2)
+                else None
+            ),
+            target_school_level=(
+                value.target_school_level
+                if isinstance(value, AssessmentOccurrenceRevisionV2)
+                else None
+            ),
+            target_grade=(
+                value.target_grade if isinstance(value, AssessmentOccurrenceRevisionV2) else None
+            ),
             session_key=value.session_key,
             subject_key=value.subject_key,
             form_key=value.form_key,
@@ -638,7 +661,7 @@ class ItemOriginService:
 
     @staticmethod
     def _occurrence_evidence_record(
-        owner: AssessmentOccurrenceRevision, pointer: OriginArtifactMemberPointer
+        owner: AssessmentOccurrenceRevisionContract, pointer: OriginArtifactMemberPointer
     ) -> AssessmentOccurrenceSourceEvidenceRecord:
         return AssessmentOccurrenceSourceEvidenceRecord(
             assessment_occurrence_revision_id=owner.assessment_occurrence_revision_id,

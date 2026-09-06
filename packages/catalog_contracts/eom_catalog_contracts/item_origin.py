@@ -204,6 +204,35 @@ class AssessmentOccurrenceRevision(FrozenModel):
         return self
 
 
+class AssessmentOccurrenceRevisionV2(AssessmentOccurrenceRevision):
+    """Occurrence revision with an indexable school audience and administration month."""
+
+    schema_version: Literal["assessment-occurrence-revision/2.0"] = (
+        "assessment-occurrence-revision/2.0"  # type: ignore[assignment]
+    )
+    target_school_level: Literal["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"]
+    target_grade: int = Field(ge=1, le=6)
+    administration_month: int = Field(ge=1, le=12)
+
+    @model_validator(mode="after")
+    def typed_audience_and_month(self) -> AssessmentOccurrenceRevisionV2:
+        maximum_grade = 6 if self.target_school_level == "ELEMENTARY" else 3
+        if self.target_grade > maximum_grade:
+            raise ValueError("occurrence grade is outside its school level")
+        if (
+            self.administration_date is not None
+            and self.administration_date.month != self.administration_month
+        ):
+            raise ValueError("occurrence month must match administration date")
+        _require_hash(self, "revision_sha256")
+        return self
+
+
+type AssessmentOccurrenceRevisionContract = (
+    AssessmentOccurrenceRevision | AssessmentOccurrenceRevisionV2
+)
+
+
 class ItemOriginDerivation(FrozenModel):
     source_kind: Literal["ITEM_REVISION", "DOCUMENT_REVISION", "ASSESSMENT_SOURCE_BUNDLE_REVISION"]
     logical_id: str = Field(pattern=r"^[a-z][a-z0-9]*_[0-9a-f]{32}$")

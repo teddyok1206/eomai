@@ -155,7 +155,7 @@ def workflow_start_payload(
             "curriculum_root_key": None,
             "topic_keys": [],
             "required_item_elements": ["choice"],
-            "source_classes": ["APPROVED_ITEM", "TEXTBOOK"],
+            "source_classes": ["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"],
         }
     return payload
 

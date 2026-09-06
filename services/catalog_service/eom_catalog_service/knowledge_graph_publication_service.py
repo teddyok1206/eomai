@@ -58,15 +58,18 @@ from eom_catalog_contracts import (
     KnowledgeGraphSnapshotManifestV5,
     KnowledgeGraphSnapshotManifestV6,
     KnowledgeGraphSnapshotManifestV7,
+    KnowledgeGraphSnapshotManifestV8,
     KnowledgeGraphSnapshotPointer,
     KnowledgeGraphStructureManifest,
     KnowledgeGraphStructureManifestV2,
     KnowledgeGraphStructureManifestV3,
     KnowledgeGraphStructureManifestV4,
+    KnowledgeGraphStructureManifestV5,
     PublishKnowledgeGraphSnapshotCommand,
     PublishKnowledgeGraphSnapshotCommandV2,
     PublishKnowledgeGraphSnapshotCommandV3,
     PublishKnowledgeGraphSnapshotCommandV4,
+    PublishKnowledgeGraphSnapshotCommandV5,
     validate_contract,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256
@@ -94,6 +97,13 @@ from eom_catalog_service.curriculum_graph_structure import (
     CurriculumGraphStructureError,
     validate_integrated_science_structure_manifest,
 )
+from eom_catalog_service.item_origin_models import (
+    AssessmentOccurrenceRecord,
+    AssessmentOccurrenceRevisionRecord,
+    ItemOriginDerivationRecord,
+    ItemOriginOccurrenceRecord,
+    ItemOriginProfileRecord,
+)
 from eom_catalog_service.knowledge_analysis_sources import (
     EducationalDocumentSourceResolutionCache,
     KnowledgeAnalysisSourceError,
@@ -102,6 +112,7 @@ from eom_catalog_service.knowledge_analysis_sources import (
     resolve_historically_approved_item_source,
 )
 from eom_catalog_service.knowledge_graph_models import (
+    AssessmentItemOccurrenceReferenceRecord,
     CurriculumUnitClosureRecord,
     CurriculumUnitRecord,
     EducationRetrievalAccessPolicyRevisionRecord,
@@ -133,6 +144,11 @@ from eom_catalog_service.knowledge_graph_projection import (
 from eom_catalog_service.knowledge_proposal_resolution import (
     KnowledgeProposalResolutionError,
     resolve_knowledge_analysis_proposal,
+)
+from eom_catalog_service.legacy_assessment_models import (
+    AssessmentSourceBundleRevisionRecord,
+    LegacyItemExtractionAcceptanceRecord,
+    LegacyItemExtractionDecisionRecord,
 )
 from eom_catalog_service.models import (
     ItemComponentRecord,
@@ -220,6 +236,19 @@ KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_PROTOCOL = "catalog-knowledge-graph/1.6"
+KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_PROTOCOL,
+        "contracts": [
+            "knowledge-graph-publication/5.0",
+            "knowledge-graph-structure-manifest/5.0",
+            "knowledge-graph-snapshot-manifest/8.0",
+            "knowledge-graph-publication-result/1.0",
+            "knowledge-graph-projection/4.0",
+        ],
+    }
+)
 type KnowledgeAnalysisRequestContract = (
     KnowledgeAnalysisRequestV2
     | KnowledgeAnalysisRequestV3
@@ -245,18 +274,21 @@ type KnowledgeGraphSnapshotContract = (
     | KnowledgeGraphSnapshotManifestV5
     | KnowledgeGraphSnapshotManifestV6
     | KnowledgeGraphSnapshotManifestV7
+    | KnowledgeGraphSnapshotManifestV8
 )
 type KnowledgeGraphPublicationCommand = (
     PublishKnowledgeGraphSnapshotCommand
     | PublishKnowledgeGraphSnapshotCommandV2
     | PublishKnowledgeGraphSnapshotCommandV3
     | PublishKnowledgeGraphSnapshotCommandV4
+    | PublishKnowledgeGraphSnapshotCommandV5
 )
 type KnowledgeGraphStructureContract = (
     KnowledgeGraphStructureManifest
     | KnowledgeGraphStructureManifestV2
     | KnowledgeGraphStructureManifestV3
     | KnowledgeGraphStructureManifestV4
+    | KnowledgeGraphStructureManifestV5
 )
 
 
@@ -276,6 +308,7 @@ class CurrentKnowledgeGraphStructure:
         KnowledgeGraphStructureManifestV2
         | KnowledgeGraphStructureManifestV3
         | KnowledgeGraphStructureManifestV4
+        | KnowledgeGraphStructureManifestV5
     )
 
 
@@ -348,6 +381,7 @@ def _manifest_member_schema_ref(revision: ArtifactRevisionRecord) -> str:
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/5.0",
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/6.0",
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0",
+        "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0",
     }
     if len(matches) != 1 or matches[0].get("schema_ref") not in allowed:
         raise KnowledgeGraphPublicationError(
@@ -434,8 +468,12 @@ class KnowledgeGraphPublicationService:
                     KnowledgeGraphSnapshotManifestV5
                     | KnowledgeGraphSnapshotManifestV6
                     | KnowledgeGraphSnapshotManifestV7
+                    | KnowledgeGraphSnapshotManifestV8
                 )
-                if schema_ref.endswith("/7.0"):
+                if schema_ref.endswith("/8.0"):
+                    validate_contract("knowledge-graph-snapshot-manifest-v8", value)
+                    manifest = KnowledgeGraphSnapshotManifestV8.model_validate(value)
+                elif schema_ref.endswith("/7.0"):
                     validate_contract("knowledge-graph-snapshot-manifest-v7", value)
                     manifest = KnowledgeGraphSnapshotManifestV7.model_validate(value)
                 elif schema_ref.endswith("/6.0"):
@@ -469,6 +507,7 @@ class KnowledgeGraphPublicationService:
                         KnowledgeGraphStructureManifestV2,
                         KnowledgeGraphStructureManifestV3,
                         KnowledgeGraphStructureManifestV4,
+                        KnowledgeGraphStructureManifestV5,
                     ),
                 )
                 or run_ids != structure.source_analysis_run_ids
@@ -492,6 +531,7 @@ class KnowledgeGraphPublicationService:
             KnowledgeGraphStructureManifestV2
             | KnowledgeGraphStructureManifestV3
             | KnowledgeGraphStructureManifestV4
+            | KnowledgeGraphStructureManifestV5
         ),
     ) -> KnowledgeArtifactMemberPointer:
         """Commit one reviewed structure manifest through the Catalog Artifact boundary."""
@@ -499,12 +539,16 @@ class KnowledgeGraphPublicationService:
         try:
             validate_integrated_science_structure_manifest(structure)
             schema_key = (
-                "knowledge-graph-structure-manifest-v4"
-                if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                "knowledge-graph-structure-manifest-v5"
+                if isinstance(structure, KnowledgeGraphStructureManifestV5)
                 else (
-                    "knowledge-graph-structure-manifest-v3"
-                    if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                    else "knowledge-graph-structure-manifest-v2"
+                    "knowledge-graph-structure-manifest-v4"
+                    if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                    else (
+                        "knowledge-graph-structure-manifest-v3"
+                        if isinstance(structure, KnowledgeGraphStructureManifestV3)
+                        else "knowledge-graph-structure-manifest-v2"
+                    )
                 )
             )
             validate_contract(schema_key, structure.model_dump(mode="json"))
@@ -549,12 +593,16 @@ class KnowledgeGraphPublicationService:
                     file_metadata={
                         "evidence/graph-structure-manifest.json": {
                             "schema_ref": (
-                                "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0"
-                                if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                                "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"
+                                if isinstance(structure, KnowledgeGraphStructureManifestV5)
                                 else (
-                                    "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0"
-                                    if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                                    else "eom://schemas/knowledge/knowledge-graph-structure-manifest/2.0"
+                                    "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0"
+                                    if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                                    else (
+                                        "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0"
+                                        if isinstance(structure, KnowledgeGraphStructureManifestV3)
+                                        else "eom://schemas/knowledge/knowledge-graph-structure-manifest/2.0"
+                                    )
                                 )
                             ),
                             "media_type": "application/json",
@@ -562,21 +610,29 @@ class KnowledgeGraphPublicationService:
                     },
                     manifest_version="knowledge-graph-structure-file-set/1.0",
                     protocol_version=(
-                        KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
-                        if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                        KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_PROTOCOL
+                        if isinstance(structure, KnowledgeGraphStructureManifestV5)
                         else (
-                            KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
-                            if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                            else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
+                            KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
+                            if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                            else (
+                                KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
+                                if isinstance(structure, KnowledgeGraphStructureManifestV3)
+                                else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
+                            )
                         )
                     ),
                     protocol_schema_hash=(
-                        KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
-                        if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                        KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_SCHEMA_HASH
+                        if isinstance(structure, KnowledgeGraphStructureManifestV5)
                         else (
-                            KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
-                            if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                            else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
+                            KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
+                            if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                            else (
+                                KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
+                                if isinstance(structure, KnowledgeGraphStructureManifestV3)
+                                else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
+                            )
                         )
                     ),
                 )
@@ -693,6 +749,7 @@ class KnowledgeGraphPublicationService:
                 analyses,
                 previous_snapshot_revision_id=previous_snapshot_revision_id,
             )
+            self._validate_assessment_item_occurrences(session, structure, analyses)
             self._validate_item_elements(session, structure)
 
         try:
@@ -737,7 +794,15 @@ class KnowledgeGraphPublicationService:
             "created_at": command.requested_at,
         }
         manifest: KnowledgeGraphSnapshotContract
-        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4):
+        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV5):
+            manifest_value["structure_manifest"] = command.structure_manifest.model_dump(
+                mode="json"
+            )
+            manifest = KnowledgeGraphSnapshotManifestV8.model_validate(manifest_value)
+            validate_contract(
+                "knowledge-graph-snapshot-manifest-v8", manifest.model_dump(mode="json")
+            )
+        elif isinstance(command, PublishKnowledgeGraphSnapshotCommandV4):
             manifest_value["structure_manifest"] = command.structure_manifest.model_dump(
                 mode="json"
             )
@@ -792,6 +857,7 @@ class KnowledgeGraphPublicationService:
             projection_artifact=projection_artifact,
             manifest=manifest,
             manifest_artifact=manifest_artifact,
+            structure=structure,
         )
 
     def _existing_publication(
@@ -1298,6 +1364,9 @@ class KnowledgeGraphPublicationService:
             return None
         value = self._read_json_member(pointer, max_bytes=8 * 1024 * 1024)
         try:
+            if pointer.schema_ref.endswith("/5.0"):
+                validate_contract("knowledge-graph-structure-manifest-v5", value)
+                return KnowledgeGraphStructureManifestV5.model_validate(value)
             if pointer.schema_ref.endswith("/4.0"):
                 validate_contract("knowledge-graph-structure-manifest-v4", value)
                 return KnowledgeGraphStructureManifestV4.model_validate(value)
@@ -1437,7 +1506,12 @@ class KnowledgeGraphPublicationService:
         """Validate every reviewed and automatic Item binding against one ancestry snapshot."""
 
         if not isinstance(
-            structure, (KnowledgeGraphStructureManifestV3, KnowledgeGraphStructureManifestV4)
+            structure,
+            (
+                KnowledgeGraphStructureManifestV3,
+                KnowledgeGraphStructureManifestV4,
+                KnowledgeGraphStructureManifestV5,
+            ),
         ):
             return
         if previous_snapshot_revision_id is None:
@@ -1465,7 +1539,11 @@ class KnowledgeGraphPublicationService:
     def _validate_approved_item_curriculum_bindings(
         self,
         session: Session,
-        structure: KnowledgeGraphStructureManifestV3 | KnowledgeGraphStructureManifestV4,
+        structure: (
+            KnowledgeGraphStructureManifestV3
+            | KnowledgeGraphStructureManifestV4
+            | KnowledgeGraphStructureManifestV5
+        ),
         analyses: tuple[AcceptedAnalysisProposal, ...],
         *,
         expected_snapshot_revision_id: str | None,
@@ -1657,7 +1735,7 @@ class KnowledgeGraphPublicationService:
     def _validate_automatic_item_curriculum_bindings(
         self,
         session: Session,
-        structure: KnowledgeGraphStructureManifestV4,
+        structure: KnowledgeGraphStructureManifestV4 | KnowledgeGraphStructureManifestV5,
         analyses: tuple[AcceptedAnalysisProposal, ...],
         *,
         expected_snapshot_revision_id: str | None,
@@ -1937,6 +2015,204 @@ class KnowledgeGraphPublicationService:
                 )
 
     @staticmethod
+    def _validate_assessment_item_occurrences(
+        session: Session,
+        structure: KnowledgeGraphStructureContract | None,
+        analyses: tuple[AcceptedAnalysisProposal, ...],
+    ) -> None:
+        """Resolve every V5 placement through canonical origin and acceptance records."""
+
+        if not isinstance(structure, KnowledgeGraphStructureManifestV5):
+            return
+        placements = structure.assessment_item_occurrences
+        analysis_by_run = {item.analysis_run_id: item for item in analyses}
+        expected_run_ids = {
+            item.analysis_run_id
+            for item in analyses
+            if isinstance(item.source, ApprovedItemKnowledgeSourceV2)
+            and item.source.source_class == "PAST_EXAM"
+        }
+        if {item.analysis_run_id for item in placements} != expected_run_ids:
+            raise KnowledgeGraphPublicationError(
+                "KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_COVERAGE_INVALID",
+                "assessment placements must exactly cover PAST_EXAM Item analyses",
+            )
+        profile_ids = {item.item_origin_profile_id for item in placements}
+        occurrence_revision_ids = {item.assessment_occurrence_revision_id for item in placements}
+        acceptance_ids = {item.extraction_acceptance_id for item in placements}
+        bundle_revision_ids = {item.assessment_source_bundle_revision_id for item in placements}
+        item_revision_ids = {item.item_revision_id for item in placements}
+        profiles = {
+            row.item_origin_profile_id: row
+            for row in session.scalars(
+                select(ItemOriginProfileRecord).where(
+                    ItemOriginProfileRecord.item_origin_profile_id.in_(profile_ids)
+                )
+            )
+        }
+        occurrence_relations: dict[str, list[ItemOriginOccurrenceRecord]] = {}
+        for occurrence_relation in session.scalars(
+            select(ItemOriginOccurrenceRecord).where(
+                ItemOriginOccurrenceRecord.item_origin_profile_id.in_(profile_ids)
+            )
+        ):
+            occurrence_relations.setdefault(occurrence_relation.item_origin_profile_id, []).append(
+                occurrence_relation
+            )
+        derivations: dict[str, list[ItemOriginDerivationRecord]] = {}
+        for derivation in session.scalars(
+            select(ItemOriginDerivationRecord).where(
+                ItemOriginDerivationRecord.item_origin_profile_id.in_(profile_ids),
+                ItemOriginDerivationRecord.source_kind == "ASSESSMENT_SOURCE_BUNDLE_REVISION",
+            )
+        ):
+            derivations.setdefault(derivation.item_origin_profile_id, []).append(derivation)
+        occurrences = {
+            row.assessment_occurrence_revision_id: row
+            for row in session.scalars(
+                select(AssessmentOccurrenceRevisionRecord).where(
+                    AssessmentOccurrenceRevisionRecord.assessment_occurrence_revision_id.in_(
+                        occurrence_revision_ids
+                    )
+                )
+            )
+        }
+        occurrence_logicals = {
+            row.assessment_occurrence_id: row
+            for row in session.scalars(
+                select(AssessmentOccurrenceRecord).where(
+                    AssessmentOccurrenceRecord.assessment_occurrence_id.in_(
+                        {item.assessment_occurrence_id for item in placements}
+                    )
+                )
+            )
+        }
+        acceptances = {
+            row.acceptance_id: row
+            for row in session.scalars(
+                select(LegacyItemExtractionAcceptanceRecord).where(
+                    LegacyItemExtractionAcceptanceRecord.acceptance_id.in_(acceptance_ids)
+                )
+            )
+        }
+        decisions: dict[str, list[LegacyItemExtractionDecisionRecord]] = {}
+        for decision in session.scalars(
+            select(LegacyItemExtractionDecisionRecord).where(
+                LegacyItemExtractionDecisionRecord.acceptance_id.in_(acceptance_ids)
+            )
+        ):
+            decisions.setdefault(decision.acceptance_id, []).append(decision)
+        bundles = {
+            row.assessment_source_bundle_revision_id: row
+            for row in session.scalars(
+                select(AssessmentSourceBundleRevisionRecord).where(
+                    AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id.in_(
+                        bundle_revision_ids
+                    )
+                )
+            )
+        }
+        item_revisions = {
+            row.item_revision_id: row
+            for row in session.scalars(
+                select(ItemRevisionRecord).where(
+                    ItemRevisionRecord.item_revision_id.in_(item_revision_ids)
+                )
+            )
+        }
+        for placement in placements:
+            analysis = analysis_by_run.get(placement.analysis_run_id)
+            source = analysis.source if analysis is not None else None
+            profile = profiles.get(placement.item_origin_profile_id)
+            occurrence = occurrences.get(placement.assessment_occurrence_revision_id)
+            logical = occurrence_logicals.get(placement.assessment_occurrence_id)
+            acceptance = acceptances.get(placement.extraction_acceptance_id)
+            bundle = bundles.get(placement.assessment_source_bundle_revision_id)
+            revision = item_revisions.get(placement.item_revision_id)
+            profile_occurrences = occurrence_relations.get(placement.item_origin_profile_id, [])
+            profile_derivations = derivations.get(placement.item_origin_profile_id, [])
+            matching_decisions = [
+                decision
+                for decision in decisions.get(placement.extraction_acceptance_id, [])
+                if revision is not None
+                and revision.registration_key
+                == (f"legacy-item-promotion:{decision.acceptance_id}:{decision.item_proposal_id}")
+            ]
+            invalid = (
+                analysis is None
+                or not isinstance(source, ApprovedItemKnowledgeSourceV2)
+                or source.source_class != "PAST_EXAM"
+                or source.item_id != placement.item_id
+                or source.item_revision_id != placement.item_revision_id
+                or profile is None
+                or profile.item_id != placement.item_id
+                or profile.item_revision_id != placement.item_revision_id
+                or profile.profile_sha256 != placement.item_origin_profile_sha256
+                or profile.source_domain != "EXTERNAL_INSTITUTION"
+                or len(profile_occurrences) != 1
+                or profile_occurrences[0].assessment_occurrence_id
+                != placement.assessment_occurrence_id
+                or profile_occurrences[0].assessment_occurrence_revision_id
+                != placement.assessment_occurrence_revision_id
+                or profile_occurrences[0].occurrence_revision_sha256
+                != placement.assessment_occurrence_revision_sha256
+                or len(profile_derivations) != 1
+                or profile_derivations[0].logical_id != placement.assessment_source_bundle_id
+                or profile_derivations[0].revision_id
+                != placement.assessment_source_bundle_revision_id
+                or profile_derivations[0].manifest_sha256
+                != placement.assessment_source_bundle_sha256
+                or profile_derivations[0].relation != "DIGITIZED_FROM"
+                or occurrence is None
+                or occurrence.schema_version != "assessment-occurrence-revision/2.0"
+                or occurrence.assessment_occurrence_id != placement.assessment_occurrence_id
+                or occurrence.revision_sha256 != placement.assessment_occurrence_revision_sha256
+                or occurrence.revision_state != "REVIEWED"
+                or occurrence.display_label != placement.occurrence_display_label
+                or occurrence.administration_year != placement.administration_year
+                or occurrence.administration_month != placement.administration_month
+                or occurrence.target_school_level != placement.target_school_level
+                or occurrence.target_grade != placement.target_grade
+                or occurrence.subject_key != placement.subject_key
+                or logical is None
+                or logical.lifecycle_state != "ACTIVE"
+                or logical.current_revision_id != placement.assessment_occurrence_revision_id
+                or acceptance is None
+                or acceptance.acceptance_sha256 != placement.extraction_acceptance_sha256
+                or acceptance.state != "ACCEPTED"
+                or acceptance.coverage_state != "COMPLETE"
+                or bundle is None
+                or bundle.assessment_source_bundle_id != placement.assessment_source_bundle_id
+                or bundle.bundle_manifest_sha256 != placement.assessment_source_bundle_sha256
+                or bundle.state != "REVIEWED"
+                or bundle.assessment_occurrence_id != placement.assessment_occurrence_id
+                or bundle.assessment_occurrence_revision_id
+                != placement.assessment_occurrence_revision_id
+                or profile.rights_policy_id != bundle.rights_policy_id
+                or profile.rights_policy_revision_id != bundle.rights_policy_revision_id
+                or profile.rights_policy_sha256 != bundle.rights_policy_sha256
+                or occurrence.rights_policy_id != bundle.rights_policy_id
+                or occurrence.rights_policy_revision_id != bundle.rights_policy_revision_id
+                or occurrence.rights_policy_sha256 != bundle.rights_policy_sha256
+                or revision is None
+                or revision.revision_state != "APPROVED"
+                or revision.item_id != placement.item_id
+                or len(matching_decisions) != 1
+                or matching_decisions[0].decision not in {"ACCEPT", "CORRECT_AND_ACCEPT"}
+                or matching_decisions[0].item_number != placement.item_number
+                or (
+                    placement.target_school_level == "HIGH_SCHOOL"
+                    and placement.target_grade == 1
+                    and placement.administration_month == 3
+                )
+            )
+            if invalid:
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_INVALID",
+                    "assessment Item placement does not resolve to reviewed canonical evidence",
+                )
+
+    @staticmethod
     def _resolve_item_element(
         content: AssessmentItemContent, element_kind: str, element_id: str
     ) -> bool | None:
@@ -1967,6 +2243,7 @@ class KnowledgeGraphPublicationService:
             in {
                 "eom://schemas/knowledge/knowledge-graph-projection/2.0",
                 "eom://schemas/knowledge/knowledge-graph-projection/3.0",
+                "eom://schemas/knowledge/knowledge-graph-projection/4.0",
             }
             for metadata in files.metadata.values()
         )
@@ -1997,35 +2274,43 @@ class KnowledgeGraphPublicationService:
                     file_metadata=files.metadata,
                     manifest_version="knowledge-graph-projection-file-set/1.0",
                     protocol_version=(
-                        KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
-                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4)
+                        KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_PROTOCOL
+                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV5)
                         else (
-                            KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
-                            if isinstance(command, PublishKnowledgeGraphSnapshotCommandV3)
+                            KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
+                            if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4)
                             else (
-                                KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
-                                if isinstance(command, PublishKnowledgeGraphSnapshotCommandV2)
+                                KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
+                                if isinstance(command, PublishKnowledgeGraphSnapshotCommandV3)
                                 else (
-                                    KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL
-                                    if document_projection
-                                    else KNOWLEDGE_GRAPH_CATALOG_PROTOCOL
+                                    KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
+                                    if isinstance(command, PublishKnowledgeGraphSnapshotCommandV2)
+                                    else (
+                                        KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL
+                                        if document_projection
+                                        else KNOWLEDGE_GRAPH_CATALOG_PROTOCOL
+                                    )
                                 )
                             )
                         )
                     ),
                     protocol_schema_hash=(
-                        KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
-                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4)
+                        KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_SCHEMA_HASH
+                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV5)
                         else (
-                            KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
-                            if isinstance(command, PublishKnowledgeGraphSnapshotCommandV3)
+                            KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
+                            if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4)
                             else (
-                                KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
-                                if isinstance(command, PublishKnowledgeGraphSnapshotCommandV2)
+                                KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
+                                if isinstance(command, PublishKnowledgeGraphSnapshotCommandV3)
                                 else (
-                                    KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH
-                                    if document_projection
-                                    else KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH
+                                    KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
+                                    if isinstance(command, PublishKnowledgeGraphSnapshotCommandV2)
+                                    else (
+                                        KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH
+                                        if document_projection
+                                        else KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH
+                                    )
                                 )
                             )
                         )
@@ -2091,7 +2376,11 @@ class KnowledgeGraphPublicationService:
                 source = Path(raw_directory) / "manifest.json"
                 source.write_bytes(canonical_json_bytes(manifest))
                 source.chmod(0o640)
-                if isinstance(manifest, KnowledgeGraphSnapshotManifestV7):
+                if isinstance(manifest, KnowledgeGraphSnapshotManifestV8):
+                    schema_ref = "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0"
+                    protocol_version = KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_PROTOCOL
+                    protocol_schema_hash = KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_SCHEMA_HASH
+                elif isinstance(manifest, KnowledgeGraphSnapshotManifestV7):
                     schema_ref = "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0"
                     protocol_version = KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
                     protocol_schema_hash = KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
@@ -2153,6 +2442,7 @@ class KnowledgeGraphPublicationService:
         projection_artifact: CatalogArtifact,
         manifest: KnowledgeGraphSnapshotContract,
         manifest_artifact: CatalogArtifact,
+        structure: KnowledgeGraphStructureContract | None,
     ) -> KnowledgeGraphPublicationResult:
         with transaction(self.sessions) as session:
             session.execute(
@@ -2353,6 +2643,49 @@ class KnowledgeGraphPublicationService:
                     )
                 )
             node_by_stable_key = {item.stable_key: item.node_id for item in projection.nodes}
+            if isinstance(structure, KnowledgeGraphStructureManifestV5):
+                for placement in structure.assessment_item_occurrences:
+                    occurrence_node_id = node_by_stable_key[
+                        "assessment-occurrence-revision:"
+                        + placement.assessment_occurrence_revision_id
+                    ]
+                    placement_node_id = node_by_stable_key[
+                        "assessment-item-occurrence:"
+                        + placement.assessment_occurrence_revision_id
+                        + f":{placement.item_number}"
+                    ]
+                    item_node_id = node_by_stable_key["item-revision:" + placement.item_revision_id]
+                    session.add(
+                        AssessmentItemOccurrenceReferenceRecord(
+                            graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+                            placement_node_id=placement_node_id,
+                            occurrence_node_id=occurrence_node_id,
+                            item_node_id=item_node_id,
+                            analysis_run_id=placement.analysis_run_id,
+                            assessment_occurrence_id=placement.assessment_occurrence_id,
+                            assessment_occurrence_revision_id=(
+                                placement.assessment_occurrence_revision_id
+                            ),
+                            assessment_occurrence_revision_sha256=(
+                                placement.assessment_occurrence_revision_sha256
+                            ),
+                            occurrence_display_label=placement.occurrence_display_label,
+                            administration_year=placement.administration_year,
+                            administration_month=placement.administration_month,
+                            target_school_level=placement.target_school_level,
+                            target_grade=placement.target_grade,
+                            subject_key=placement.subject_key,
+                            item_number=placement.item_number,
+                            item_id=placement.item_id,
+                            item_revision_id=placement.item_revision_id,
+                            item_origin_profile_id=placement.item_origin_profile_id,
+                            extraction_acceptance_id=placement.extraction_acceptance_id,
+                            assessment_source_bundle_revision_id=(
+                                placement.assessment_source_bundle_revision_id
+                            ),
+                            placement_sha256=placement.placement_sha256,
+                        )
+                    )
             # The parent FK is immediate, not deferred.  Flush one topological layer at
             # a time because SQLAlchemy may reorder rows inside one executemany batch.
             # The adjacency index keeps traversal O(units + hierarchy edges), apart

@@ -114,6 +114,8 @@ class KnowledgeNodeType(StrEnum):
     ITEM_REVISION = "ITEM_REVISION"
     ITEM_ELEMENT = "ITEM_ELEMENT"
     ASSESSMENT_PATTERN = "ASSESSMENT_PATTERN"
+    ASSESSMENT_OCCURRENCE_REVISION = "ASSESSMENT_OCCURRENCE_REVISION"
+    ASSESSMENT_ITEM_OCCURRENCE = "ASSESSMENT_ITEM_OCCURRENCE"
 
 
 class KnowledgeEdgeType(StrEnum):
@@ -147,6 +149,8 @@ class KnowledgeEdgeType(StrEnum):
     PART_OF_INTERACTION = "PART_OF_INTERACTION"
     USES_ASSESSMENT_PATTERN = "USES_ASSESSMENT_PATTERN"
     SIMILAR_TO_ITEM = "SIMILAR_TO_ITEM"
+    HAS_ASSESSMENT_ITEM = "HAS_ASSESSMENT_ITEM"
+    REPRESENTS_ITEM_REVISION = "REPRESENTS_ITEM_REVISION"
 
 
 def _endpoint_pairs(
@@ -194,6 +198,12 @@ _ITEM = frozenset(
         KnowledgeNodeType.ITEM_REVISION,
         KnowledgeNodeType.ITEM_ELEMENT,
         KnowledgeNodeType.ASSESSMENT_PATTERN,
+    }
+)
+_ASSESSMENT_STRUCTURE = frozenset(
+    {
+        KnowledgeNodeType.ASSESSMENT_OCCURRENCE_REVISION,
+        KnowledgeNodeType.ASSESSMENT_ITEM_OCCURRENCE,
     }
 )
 _ALL_NODES = frozenset(KnowledgeNodeType)
@@ -254,7 +264,7 @@ KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY: dict[
         frozenset({KnowledgeNodeType.DOCUMENT_REVISION, KnowledgeNodeType.DOCUMENT_SECTION}),
     ),
     KnowledgeEdgeType.ALIGNS_WITH_CURRICULUM: _endpoint_pairs(
-        _KNOWLEDGE | _ITEM,
+        _KNOWLEDGE | _ITEM | frozenset({KnowledgeNodeType.ASSESSMENT_ITEM_OCCURRENCE}),
         frozenset({KnowledgeNodeType.CURRICULUM_UNIT, KnowledgeNodeType.ACHIEVEMENT_STANDARD}),
     ),
     KnowledgeEdgeType.HAS_ITEM_ELEMENT: _endpoint_pairs(
@@ -292,6 +302,38 @@ KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY: dict[
         frozenset({KnowledgeNodeType.ITEM_REVISION}),
         frozenset({KnowledgeNodeType.ITEM_REVISION}),
     ),
+    KnowledgeEdgeType.HAS_ASSESSMENT_ITEM: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.ASSESSMENT_OCCURRENCE_REVISION}),
+        frozenset({KnowledgeNodeType.ASSESSMENT_ITEM_OCCURRENCE}),
+    ),
+    KnowledgeEdgeType.REPRESENTS_ITEM_REVISION: _endpoint_pairs(
+        frozenset({KnowledgeNodeType.ASSESSMENT_ITEM_OCCURRENCE}),
+        frozenset({KnowledgeNodeType.ITEM_REVISION}),
+    ),
+}
+
+_STRUCTURAL_NODE_TYPES = frozenset(
+    {
+        KnowledgeNodeType.ASSESSMENT_OCCURRENCE_REVISION,
+        KnowledgeNodeType.ASSESSMENT_ITEM_OCCURRENCE,
+    }
+)
+_STRUCTURAL_EDGE_TYPES = frozenset(
+    {
+        KnowledgeEdgeType.HAS_ASSESSMENT_ITEM,
+        KnowledgeEdgeType.REPRESENTS_ITEM_REVISION,
+    }
+)
+WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY: dict[
+    KnowledgeEdgeType, frozenset[tuple[KnowledgeNodeType, KnowledgeNodeType]]
+] = {
+    edge_type: frozenset(
+        pair
+        for pair in pairs
+        if pair[0] not in _STRUCTURAL_NODE_TYPES and pair[1] not in _STRUCTURAL_NODE_TYPES
+    )
+    for edge_type, pairs in KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.items()
+    if edge_type not in _STRUCTURAL_EDGE_TYPES
 }
 
 
@@ -306,6 +348,19 @@ def validate_knowledge_edge_endpoint_types(
     endpoints = (KnowledgeNodeType(from_node_type), KnowledgeNodeType(to_node_type))
     if endpoints not in KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY[edge]:
         raise ValueError("knowledge edge endpoint types are incompatible")
+
+
+def validate_worker_knowledge_edge_endpoint_types(
+    edge_type: KnowledgeEdgeType | str,
+    from_node_type: KnowledgeNodeType | str,
+    to_node_type: KnowledgeNodeType | str,
+) -> None:
+    """Reject projector-owned assessment structure at the worker proposal boundary."""
+
+    edge = KnowledgeEdgeType(edge_type)
+    endpoints = (KnowledgeNodeType(from_node_type), KnowledgeNodeType(to_node_type))
+    if endpoints not in WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.get(edge, frozenset()):
+        raise ValueError("worker knowledge edge endpoint types are incompatible")
 
 
 class KnowledgeArtifactMemberPointer(FrozenModel):
@@ -437,7 +492,7 @@ class KnowledgeEdgeEndpointContract(FrozenModel):
 
     @model_validator(mode="after")
     def compatible_endpoint_types(self) -> KnowledgeEdgeEndpointContract:
-        validate_knowledge_edge_endpoint_types(
+        validate_worker_knowledge_edge_endpoint_types(
             self.edge_type,
             self.from_node_type,
             self.to_node_type,
@@ -1182,6 +1237,12 @@ def _validate_knowledge_proposal_references(
     ambiguity_identities: tuple[str, ...],
     general_knowledge_used: bool,
 ) -> None:
+    structural_types = {
+        KnowledgeNodeType.ASSESSMENT_OCCURRENCE_REVISION,
+        KnowledgeNodeType.ASSESSMENT_ITEM_OCCURRENCE,
+    }
+    if any(node.node_type in structural_types for node in nodes):
+        raise ValueError("assessment structure nodes are reserved to deterministic projection")
     anchor_ids = [anchor.anchor_id for anchor in anchors]
     node_ids = [node.node_id for node in nodes]
     edge_ids = [edge.edge_id for edge in edges]
@@ -1438,7 +1499,7 @@ def validate_knowledge_analysis_proposal_ontology(
             if isinstance(edge, ProposedKnowledgeEdgeV2)
             else edge.edge_type
         )
-        validate_knowledge_edge_endpoint_types(
+        validate_worker_knowledge_edge_endpoint_types(
             edge_type,
             node_types[edge.from_node_id],
             node_types[edge.to_node_id],
@@ -2014,6 +2075,49 @@ class AutomaticItemCurriculumAlignmentBinding(FrozenModel):
         return self
 
 
+class AssessmentOccurrenceItemBinding(FrozenModel):
+    """Immutable placement of one learned Item Revision in one reviewed examination."""
+
+    analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    item_origin_profile_id: str = Field(pattern=r"^originprofile_[0-9a-f]{32}$")
+    item_origin_profile_sha256: Sha256
+    extraction_acceptance_id: str = Field(pattern=r"^itemacceptance_[0-9a-f]{32}$")
+    extraction_acceptance_sha256: Sha256
+    assessment_source_bundle_id: str = Field(pattern=r"^assessbundle_[0-9a-f]{32}$")
+    assessment_source_bundle_revision_id: str = Field(pattern=r"^assessbundlerev_[0-9a-f]{32}$")
+    assessment_source_bundle_sha256: Sha256
+    assessment_occurrence_id: str = Field(pattern=r"^occurrence_[0-9a-f]{32}$")
+    assessment_occurrence_revision_id: str = Field(pattern=r"^occurrev_[0-9a-f]{32}$")
+    assessment_occurrence_revision_sha256: Sha256
+    occurrence_display_label: str = Field(min_length=1, max_length=512)
+    administration_year: int = Field(ge=1900, le=2200)
+    administration_month: int = Field(ge=1, le=12)
+    target_school_level: Literal["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"]
+    target_grade: int = Field(ge=1, le=6)
+    subject_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,159}$")
+    item_number: int = Field(ge=1, le=200)
+    curriculum_unit_ids: tuple[Annotated[str, Field(pattern=r"^currunit_[0-9a-f]{32}$")], ...] = (
+        Field(min_length=1, max_length=8)
+    )
+    placement_sha256: Sha256
+
+    _label = field_validator("occurrence_display_label")(_safe_text)
+
+    @model_validator(mode="after")
+    def immutable_placement_is_closed(self) -> AssessmentOccurrenceItemBinding:
+        maximum_grade = 6 if self.target_school_level == "ELEMENTARY" else 3
+        if self.target_grade > maximum_grade:
+            raise ValueError("assessment placement grade is outside its school level")
+        if tuple(sorted(set(self.curriculum_unit_ids))) != self.curriculum_unit_ids:
+            raise ValueError("assessment placement curriculum units must be sorted and unique")
+        body = self.model_dump(mode="json", exclude={"placement_sha256"})
+        if content_sha256(body) != self.placement_sha256:
+            raise ValueError("assessment Item placement hash does not match content")
+        return self
+
+
 class ItemElementBinding(FrozenModel):
     node_stable_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$")
     item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
@@ -2252,6 +2356,63 @@ class KnowledgeGraphStructureManifestV4(KnowledgeGraphStructureManifestV3):
         return self
 
 
+class KnowledgeGraphStructureManifestV5(KnowledgeGraphStructureManifestV4):
+    """Automatic Item alignments plus reviewed examination placement identities."""
+
+    schema_version: Literal["knowledge-graph-structure-manifest/5.0"] = (
+        "knowledge-graph-structure-manifest/5.0"  # type: ignore[assignment]
+    )
+    assessment_item_occurrences: tuple[AssessmentOccurrenceItemBinding, ...] = Field(
+        min_length=1, max_length=10000
+    )
+
+    @model_validator(mode="after")
+    def assessment_placements_are_closed(self) -> KnowledgeGraphStructureManifestV5:
+        placements = self.assessment_item_occurrences
+        ordering = tuple(
+            sorted(
+                placements,
+                key=lambda item: (
+                    item.administration_year,
+                    item.administration_month,
+                    item.target_school_level,
+                    item.target_grade,
+                    item.assessment_occurrence_revision_id,
+                    item.item_number,
+                    item.item_revision_id,
+                ),
+            )
+        )
+        if placements != ordering:
+            raise ValueError("assessment Item placements must use deterministic exam order")
+        identities = tuple(
+            (item.assessment_occurrence_revision_id, item.item_number) for item in placements
+        )
+        run_ids = tuple(item.analysis_run_id for item in placements)
+        revision_ids = tuple(item.item_revision_id for item in placements)
+        automatic_by_run = {
+            item.analysis_run_id: item for item in self.automatic_item_curriculum_bindings
+        }
+        if (
+            len(identities) != len(set(identities))
+            or len(run_ids) != len(set(run_ids))
+            or len(revision_ids) != len(set(revision_ids))
+            or not set(run_ids).issubset(automatic_by_run)
+        ):
+            raise ValueError(
+                "assessment Item placements must uniquely reference automatic Item runs"
+            )
+        for placement in placements:
+            alignment = automatic_by_run[placement.analysis_run_id]
+            if (
+                placement.item_id != alignment.item_id
+                or placement.item_revision_id != alignment.item_revision_id
+                or placement.curriculum_unit_ids != alignment.curriculum_unit_ids
+            ):
+                raise ValueError("assessment Item placement differs from curriculum alignment")
+        return self
+
+
 class PublishKnowledgeGraphSnapshotCommand(FrozenModel):
     """Pointer-only command for publishing one immutable graph snapshot."""
 
@@ -2289,6 +2450,9 @@ class PublishKnowledgeGraphSnapshotCommand(FrozenModel):
             ),
             "knowledge-graph-publication/4.0": (
                 "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0"
+            ),
+            "knowledge-graph-publication/5.0": (
+                "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"
             ),
         }[str(self.schema_version)]
         if self.structure_manifest is not None and (
@@ -2375,6 +2539,31 @@ class PublishKnowledgeGraphSnapshotCommandV4(PublishKnowledgeGraphSnapshotComman
             != "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0"
         ):
             raise ValueError("graph publication V4 requires the exact structure manifest V4")
+        return self
+
+
+class PublishKnowledgeGraphSnapshotCommandV5(PublishKnowledgeGraphSnapshotCommand):
+    """Publication command requiring assessment-placement structure manifest V5."""
+
+    schema_version: Literal["knowledge-graph-publication/5.0"] = "knowledge-graph-publication/5.0"  # type: ignore[assignment]
+    structure_manifest: KnowledgeArtifactMemberPointer
+
+    @field_validator("display_name")
+    @classmethod
+    def display_name_is_single_line_safe_text(cls, value: str) -> str:
+        if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in value):
+            raise ValueError("graph display name contains a control character")
+        return value
+
+    @model_validator(mode="after")
+    def exact_v5_structure_pointer(self) -> PublishKnowledgeGraphSnapshotCommandV5:
+        if (
+            self.structure_manifest.member_path != "evidence/graph-structure-manifest.json"
+            or self.structure_manifest.media_type != "application/json"
+            or self.structure_manifest.schema_ref
+            != "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"
+        ):
+            raise ValueError("graph publication V5 requires the exact structure manifest V5")
         return self
 
 
@@ -2582,6 +2771,7 @@ class KnowledgeGraphSnapshotManifestV4(FrozenModel):
                 "knowledge-graph-snapshot-manifest/5.0",
                 "knowledge-graph-snapshot-manifest/6.0",
                 "knowledge-graph-snapshot-manifest/7.0",
+                "knowledge-graph-snapshot-manifest/8.0",
             } and isinstance(source, EducationalDocumentKnowledgeSourceV4):
                 base_key = (
                     *base_key,
@@ -2662,6 +2852,29 @@ class KnowledgeGraphSnapshotManifestV7(KnowledgeGraphSnapshotManifestV4):
             raise ValueError("graph snapshot V7 requires the exact structure manifest V4")
         if self.projections.curriculum_closure is None:
             raise ValueError("graph snapshot V7 requires a curriculum closure projection")
+        return self
+
+
+class KnowledgeGraphSnapshotManifestV8(KnowledgeGraphSnapshotManifestV4):
+    """Snapshot pinning examination placements and automatic Item curriculum structure V5."""
+
+    schema_version: Literal["knowledge-graph-snapshot-manifest/8.0"] = (
+        "knowledge-graph-snapshot-manifest/8.0"  # type: ignore[assignment]
+    )
+    ontology_version: Literal["education-knowledge-graph/1.1"] = "education-knowledge-graph/1.1"  # type: ignore[assignment]
+    structure_manifest: KnowledgeArtifactMemberPointer
+
+    @model_validator(mode="after")
+    def exact_structure_pointer(self) -> KnowledgeGraphSnapshotManifestV8:
+        if (
+            self.structure_manifest.member_path != "evidence/graph-structure-manifest.json"
+            or self.structure_manifest.media_type != "application/json"
+            or self.structure_manifest.schema_ref
+            != "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"
+        ):
+            raise ValueError("graph snapshot V8 requires the exact structure manifest V5")
+        if self.projections.curriculum_closure is None:
+            raise ValueError("graph snapshot V8 requires a curriculum closure projection")
         return self
 
 

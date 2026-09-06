@@ -83,6 +83,7 @@ def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
         "curriculum_units",
         "curriculum_unit_closure",
         "item_element_refs",
+        "assessment_item_occurrence_references",
         "education_retrieval_access_policy_revisions",
         "education_retrieval_requests",
         "evidence_bundles",

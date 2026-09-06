@@ -446,8 +446,24 @@ def test_release_verifies_curriculum_schema_resources() -> None:
 def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
-    assert "len(schemas) != 8" in deployment
+    assert "len(schemas) != 9" in deployment
     assert '"eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"' in deployment
+
+
+def test_release_verifies_assessment_occurrence_graph_schema_resources() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+
+    for resource in (
+        "item-origin/assessment-occurrence-revision-v2.schema.json",
+        "knowledge/knowledge-types-v2.schema.json",
+        "knowledge/knowledge-graph-projection-v4.schema.json",
+        "knowledge/knowledge-graph-publication-v5.schema.json",
+        "knowledge/knowledge-graph-snapshot-manifest-v8.schema.json",
+        "knowledge/knowledge-graph-structure-manifest-v5.schema.json",
+    ):
+        assert f'"{resource}": ' in deployment
+        assert f'"schemas/{resource}"' in deployment
 
 
 def test_release_verifies_guidance_schema_resources() -> None:

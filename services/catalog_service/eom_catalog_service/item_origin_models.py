@@ -232,6 +232,31 @@ class AssessmentOccurrenceRevisionRecord(Base):
         ),
         CheckConstraint("revision_number > 0", name="ck_assessment_occurrence_revision_number"),
         CheckConstraint(
+            "schema_version IN ('assessment-occurrence-revision/1.0',"
+            "'assessment-occurrence-revision/2.0')",
+            name="ck_assessment_occurrence_revision_schema",
+        ),
+        CheckConstraint(
+            "(schema_version = 'assessment-occurrence-revision/1.0' AND "
+            "target_school_level IS NULL AND target_grade IS NULL AND "
+            "administration_month IS NULL) OR "
+            "(schema_version = 'assessment-occurrence-revision/2.0' AND "
+            "target_school_level IS NOT NULL AND target_grade IS NOT NULL AND "
+            "administration_month IS NOT NULL)",
+            name="ck_assessment_occurrence_typed_audience",
+        ),
+        CheckConstraint(
+            "target_school_level IS NULL OR "
+            "(target_school_level = 'ELEMENTARY' AND target_grade BETWEEN 1 AND 6) OR "
+            "(target_school_level IN ('MIDDLE_SCHOOL','HIGH_SCHOOL') "
+            "AND target_grade BETWEEN 1 AND 3)",
+            name="ck_assessment_occurrence_grade",
+        ),
+        CheckConstraint(
+            "administration_month IS NULL OR administration_month BETWEEN 1 AND 12",
+            name="ck_assessment_occurrence_month",
+        ),
+        CheckConstraint(
             "revision_state IN ('REVIEWED','SUPERSEDED','WITHDRAWN')",
             name="ck_assessment_occurrence_revision_state",
         ),
@@ -258,9 +283,21 @@ class AssessmentOccurrenceRevisionRecord(Base):
             "ix_assessment_occurrence_organization",
             "issuing_organization_revision_id",
         ),
+        Index(
+            "ix_assessment_occurrence_audience_lookup",
+            "administration_year",
+            "target_school_level",
+            "target_grade",
+            "administration_month",
+            "subject_key",
+            "assessment_occurrence_revision_id",
+        ),
     )
 
     assessment_occurrence_revision_id: Mapped[str] = mapped_column(String(41), primary_key=True)
+    schema_version: Mapped[str] = mapped_column(
+        String(48), nullable=False, server_default="assessment-occurrence-revision/1.0"
+    )
     assessment_occurrence_id: Mapped[str] = mapped_column(
         ForeignKey("assessment_occurrences.assessment_occurrence_id"), nullable=False
     )
@@ -276,6 +313,9 @@ class AssessmentOccurrenceRevisionRecord(Base):
     exam_family_key: Mapped[str] = mapped_column(String(160), nullable=False)
     administration_year: Mapped[int] = mapped_column(Integer, nullable=False)
     administration_date: Mapped[date | None] = mapped_column(Date)
+    administration_month: Mapped[int | None] = mapped_column(Integer)
+    target_school_level: Mapped[str | None] = mapped_column(String(24))
+    target_grade: Mapped[int | None] = mapped_column(Integer)
     session_key: Mapped[str | None] = mapped_column(String(160))
     subject_key: Mapped[str] = mapped_column(String(160), nullable=False)
     form_key: Mapped[str | None] = mapped_column(String(160))

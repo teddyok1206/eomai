@@ -61,6 +61,7 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
         "curriculum_units",
         "curriculum_unit_closure",
         "item_element_refs",
+        "assessment_item_occurrence_references",
     ):
         assert table in READ_TABLES
         assert table in INSERT_TABLES

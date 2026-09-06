@@ -5,10 +5,12 @@ from typing import Any, cast
 
 from eom_api.app import create_app
 from eom_api.routers.curriculum import (
+    assessment_occurrence_items,
+    curriculum_unit_past_exam_items,
     integrated_science_editorial_outline,
     integrated_science_graph_capability,
 )
-from eom_api_contracts import CurriculumGraphCapabilityView
+from eom_api_contracts import AssessmentItemOccurrenceView, CurriculumGraphCapabilityView
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     IntegratedScienceEditorialOutline,
@@ -20,6 +22,8 @@ from tests.api.helpers import disconnected_services
 
 PATH = "/api/v1/curriculum/integrated-science-editorial-outline"
 CAPABILITY_PATH = "/api/v1/curriculum/integrated-science-graph-capability"
+EXAM_ITEMS_PATH = "/api/v1/curriculum/assessment-occurrences/items"
+UNIT_ITEMS_PATH = "/api/v1/curriculum/integrated-science-units/{curriculum_unit_id}/past-exam-items"
 
 
 def test_curriculum_outline_endpoint_is_authenticated_and_author_permissioned() -> None:
@@ -32,6 +36,12 @@ def test_curriculum_outline_endpoint_is_authenticated_and_author_permissioned() 
         capability_operation = app.openapi()["paths"][CAPABILITY_PATH]["get"]
         assert capability_operation["operationId"] == "integrated_science_graph_capability_get"
         assert capability_operation["x-eom-permission"] == "workflow:start"
+        exam_items_operation = app.openapi()["paths"][EXAM_ITEMS_PATH]["get"]
+        assert exam_items_operation["operationId"] == "assessment_occurrence_item_list"
+        assert exam_items_operation["x-eom-permission"] == "workflow:start"
+        unit_items_operation = app.openapi()["paths"][UNIT_ITEMS_PATH]["get"]
+        assert unit_items_operation["operationId"] == "curriculum_unit_past_exam_item_list"
+        assert unit_items_operation["x-eom-permission"] == "workflow:start"
         with TestClient(app, base_url="http://localhost") as client:
             response = client.get(PATH)
         assert response.status_code == 401
@@ -88,3 +98,79 @@ def test_curriculum_graph_capability_endpoint_returns_query_projection() -> None
     )
     response = integrated_science_graph_capability(request)
     assert response.data == value
+
+
+def _past_exam_item() -> AssessmentItemOccurrenceView:
+    return AssessmentItemOccurrenceView(
+        graph_snapshot_revision_id="graphrev_" + "1" * 32,
+        placement_node_id="knode_" + "2" * 64,
+        occurrence_node_id="knode_" + "3" * 64,
+        item_node_id="knode_" + "4" * 64,
+        analysis_run_id="analysisrun_" + "5" * 32,
+        assessment_occurrence_id="occurrence_" + "6" * 32,
+        assessment_occurrence_revision_id="occurrev_" + "7" * 32,
+        assessment_occurrence_revision_sha256="sha256:" + "8" * 64,
+        occurrence_display_label="2025년 고1 6월 통합과학",
+        administration_year=2025,
+        administration_month=6,
+        target_school_level="HIGH_SCHOOL",
+        target_grade=1,
+        subject_key="integrated-science",
+        item_number=12,
+        item_id="item_" + "9" * 32,
+        item_revision_id="itemrev_" + "a" * 32,
+        curriculum_unit_ids=("currunit_" + "b" * 32,),
+        placement_sha256="sha256:" + "c" * 64,
+    )
+
+
+def test_curriculum_item_routes_forward_exact_exam_and_unit_keys() -> None:
+    item = _past_exam_item()
+
+    class Queries:
+        exam_kwargs: dict[str, object] | None = None
+        unit_kwargs: dict[str, object] | None = None
+
+        def assessment_items_by_exam(self, **kwargs: object) -> SimpleNamespace:
+            self.exam_kwargs = kwargs
+            return SimpleNamespace(data=(item,), next_cursor=None, has_more=False)
+
+        def assessment_items_by_curriculum_unit(self, **kwargs: object) -> SimpleNamespace:
+            self.unit_kwargs = kwargs
+            return SimpleNamespace(data=(item,), next_cursor=None, has_more=False)
+
+    queries = Queries()
+    request = cast(
+        Request,
+        SimpleNamespace(
+            state=SimpleNamespace(request_context=SimpleNamespace(request_id="req_items")),
+            app=SimpleNamespace(state=SimpleNamespace(services=SimpleNamespace(queries=queries))),
+        ),
+    )
+    exam = assessment_occurrence_items(
+        request,
+        administration_year=2025,
+        target_school_level="HIGH_SCHOOL",
+        target_grade=1,
+        administration_month=6,
+        subject_key="integrated-science",
+        limit=50,
+        cursor=None,
+    )
+    unit_id = "currunit_" + "b" * 32
+    unit = curriculum_unit_past_exam_items(request, unit_id, limit=50, cursor=None)
+    assert exam.data == unit.data == (item,)
+    assert queries.exam_kwargs == {
+        "administration_year": 2025,
+        "target_school_level": "HIGH_SCHOOL",
+        "target_grade": 1,
+        "administration_month": 6,
+        "subject_key": "integrated-science",
+        "limit": 50,
+        "cursor": None,
+    }
+    assert queries.unit_kwargs == {
+        "curriculum_unit_id": unit_id,
+        "limit": 50,
+        "cursor": None,
+    }

@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "config/control-plane/knowledge-grounded-item-v1"
 CONFIG_V2 = ROOT / "config/control-plane/knowledge-grounded-item-v2"
 CONFIG_V3 = ROOT / "config/control-plane/knowledge-grounded-item-v3"
+CONFIG_V4 = ROOT / "config/control-plane/knowledge-grounded-item-v4"
 
 
 def test_knowledge_item_bootstrap_is_schema_first_and_exact() -> None:
@@ -70,6 +71,21 @@ def test_knowledge_item_v3_bootstrap_pins_conditional_image_protocol() -> None:
     assert manifest.compatible_workflow_protocols == ("workflow-role/1.17.0",)
     assert manifest.evidence_access_by_role["image"] == "EVIDENCE_CONTEXT"
     assert manifest.retrieval_policy.allowed_corpus_keys == ("integrated-science-textbooks",)
+
+
+def test_knowledge_item_v4_bootstrap_routes_past_exam_graph_evidence_to_one_shot() -> None:
+    manifest = load_knowledge_item_bootstrap_manifest(CONFIG_V4)
+    value = manifest.model_dump(mode="json")
+
+    validate_control_contract("knowledge-item-control-bootstrap-v4", value)
+    assert manifest.schema_version == "knowledge-item-control-bootstrap/4.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.17.0",)
+    assert manifest.evidence_access_by_role["authoring"] == "EVIDENCE_CONTEXT"
+    assert manifest.retrieval_policy.allowed_source_classes == (
+        "APPROVED_ITEM",
+        "PAST_EXAM",
+        "TEXTBOOK",
+    )
 
 
 @pytest.mark.parametrize(

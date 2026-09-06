@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-types-v2",
+  "title": "EOM Education Knowledge Shared Types V2",
+  "$defs": {
+    "sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "utcTimestamp": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"
+    },
+    "safeMemberPath": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/safeMemberPath"
+    },
+    "artifactMemberPointer": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+    },
+    "sourceRevisionPointer": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sourceRevisionPointer"
+    },
+    "graphSnapshotPointer": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+    },
+    "sourceAnchor": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sourceAnchor"
+    },
+    "nodeType": {
+      "type": "string",
+      "enum": [
+        "CURRICULUM_FRAMEWORK_REVISION",
+        "CURRICULUM_UNIT",
+        "ACHIEVEMENT_STANDARD",
+        "CONCEPT",
+        "CLAIM",
+        "PROCESS",
+        "OBSERVABLE_PROPERTY",
+        "FORMULA",
+        "DATA_REPRESENTATION",
+        "DOCUMENT_REVISION",
+        "DOCUMENT_SECTION",
+        "FIGURE",
+        "TABLE",
+        "EQUATION",
+        "ITEM_REVISION",
+        "ITEM_ELEMENT",
+        "ASSESSMENT_PATTERN",
+        "ASSESSMENT_OCCURRENCE_REVISION",
+        "ASSESSMENT_ITEM_OCCURRENCE"
+      ]
+    },
+    "edgeType": {
+      "type": "string",
+      "enum": [
+        "CONTAINS_CURRICULUM_UNIT",
+        "PRECEDES_CURRICULUM_UNIT",
+        "DEFINES_ACHIEVEMENT_STANDARD",
+        "DEFINES",
+        "EXPLAINS",
+        "IS_A",
+        "PART_OF",
+        "CAUSES",
+        "AFFECTS",
+        "DEPENDS_ON",
+        "CONTRASTS_WITH",
+        "REQUIRES_PREREQUISITE",
+        "SUPPORTS_CLAIM",
+        "CONTRADICTS_CLAIM",
+        "ILLUSTRATES",
+        "TABULATES",
+        "EXPRESSES_AS_EQUATION",
+        "DERIVED_FROM",
+        "CITES_SOURCE",
+        "ALIGNS_WITH_CURRICULUM",
+        "HAS_ITEM_ELEMENT",
+        "ASSESSES_CONCEPT",
+        "REQUIRES_CONCEPT",
+        "USES_SOURCE_EVIDENCE",
+        "REPRESENTS_CONCEPT",
+        "SUPPORTS_STATEMENT",
+        "CONTRADICTS_STATEMENT",
+        "PART_OF_INTERACTION",
+        "USES_ASSESSMENT_PATTERN",
+        "SIMILAR_TO_ITEM",
+        "HAS_ASSESSMENT_ITEM",
+        "REPRESENTS_ITEM_REVISION"
+      ]
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-graph-projection/4.0",
+  "title": "Education Knowledge Graph Projection Types V4",
+  "oneOf": [
+    {"$ref": "#/$defs/node"},
+    {"$ref": "#/$defs/edge"},
+    {"$ref": "eom://schemas/knowledge/knowledge-graph-projection/3.0#/$defs/curriculumClosure"},
+    {"$ref": "eom://schemas/knowledge/knowledge-graph-projection/3.0#/$defs/lexicalIndex"}
+  ],
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id",
+        "node_type",
+        "stable_key",
+        "label",
+        "aliases",
+        "answer_bearing",
+        "source_pointers"
+      ],
+      "properties": {
+        "node_id": {"type": "string", "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"},
+        "node_type": {"$ref": "eom://schemas/knowledge/knowledge-types-v2#/$defs/nodeType"},
+        "stable_key": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$"
+        },
+        "label": {"type": "string", "minLength": 1, "maxLength": 500},
+        "aliases": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "answer_bearing": {"type": "boolean"},
+        "source_pointers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 320000,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "eom://schemas/knowledge/knowledge-graph-projection/3.0#/$defs/sourcePointer"
+          }
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edge_id",
+        "edge_type",
+        "from_node_id",
+        "to_node_id",
+        "confidence_milli",
+        "answer_bearing",
+        "source_pointers"
+      ],
+      "properties": {
+        "edge_id": {"type": "string", "pattern": "^kedge_[a-z0-9][a-z0-9_-]{0,63}$"},
+        "edge_type": {"$ref": "eom://schemas/knowledge/knowledge-types-v2#/$defs/edgeType"},
+        "from_node_id": {
+          "type": "string",
+          "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "to_node_id": {"type": "string", "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"},
+        "confidence_milli": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "answer_bearing": {"type": "boolean"},
+        "source_pointers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 320000,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "eom://schemas/knowledge/knowledge-graph-projection/3.0#/$defs/sourcePointer"
+          }
+        }
+      }
+    }
+  }
+}

@@ -8,7 +8,7 @@ import copy
 import json
 from pathlib import Path
 
-from eom_catalog_contracts.knowledge import KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY
+from eom_catalog_contracts.knowledge import WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SOURCE = REPOSITORY_ROOT / "schemas/knowledge/knowledge-analysis-worker-proposal-v4.schema.json"
@@ -67,7 +67,7 @@ def _typed_node() -> dict[str, object]:
 
 def _typed_edge() -> dict[str, object]:
     alternatives = []
-    for edge_type, pairs in KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.items():
+    for edge_type, pairs in WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.items():
         source_types = tuple(sorted({str(source) for source, _ in pairs}))
         target_types = tuple(sorted({str(target) for _, target in pairs}))
         alternatives.append(

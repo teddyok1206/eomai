@@ -8,6 +8,7 @@ import pytest
 from eom_catalog_contracts import (
     ApprovedItemCurriculumAlignmentBinding,
     ApprovedItemKnowledgeSourceV2,
+    AssessmentOccurrenceItemBinding,
     AutomaticItemCurriculumAlignmentBinding,
     EducationalDocumentKnowledgeSourceV4,
     KnowledgeAnalysisWorkerProposal,
@@ -18,6 +19,7 @@ from eom_catalog_contracts import (
     KnowledgeGraphStructureManifestV2,
     KnowledgeGraphStructureManifestV3,
     KnowledgeGraphStructureManifestV4,
+    KnowledgeGraphStructureManifestV5,
     PublishKnowledgeGraphSnapshotCommandV2,
     PublishKnowledgeGraphSnapshotCommandV3,
     PublishKnowledgeGraphSnapshotCommandV4,
@@ -346,6 +348,40 @@ def _automatic_item_alignment(
     return AutomaticItemCurriculumAlignmentBinding.model_validate(reviewed)
 
 
+def _assessment_placement(
+    analysis: AcceptedAnalysisProposal, unit_id: str
+) -> AssessmentOccurrenceItemBinding:
+    assert isinstance(analysis.source, ApprovedItemKnowledgeSourceV2)
+    value = {
+        "analysis_run_id": analysis.analysis_run_id,
+        "item_id": analysis.source.item_id,
+        "item_revision_id": analysis.source.item_revision_id,
+        "item_origin_profile_id": "originprofile_" + "6" * 32,
+        "item_origin_profile_sha256": "sha256:" + "6" * 64,
+        "extraction_acceptance_id": "itemacceptance_" + "7" * 32,
+        "extraction_acceptance_sha256": "sha256:" + "7" * 64,
+        "assessment_source_bundle_id": "assessbundle_" + "8" * 32,
+        "assessment_source_bundle_revision_id": "assessbundlerev_" + "9" * 32,
+        "assessment_source_bundle_sha256": "sha256:" + "9" * 64,
+        "assessment_occurrence_id": "occurrence_" + "a" * 32,
+        "assessment_occurrence_revision_id": "occurrev_" + "b" * 32,
+        "assessment_occurrence_revision_sha256": "sha256:" + "b" * 64,
+        "occurrence_display_label": "2025학년도 고1 6월 통합과학 전국연합학력평가",
+        "administration_year": 2025,
+        "administration_month": 6,
+        "target_school_level": "HIGH_SCHOOL",
+        "target_grade": 1,
+        "subject_key": "integrated-science",
+        "item_number": 7,
+        "curriculum_unit_ids": [unit_id],
+        "placement_sha256": "sha256:" + "0" * 64,
+    }
+    value["placement_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "placement_sha256"}
+    )
+    return AssessmentOccurrenceItemBinding.model_validate(value)
+
+
 def test_reviewed_outline_builds_complete_deterministic_structure_and_projection() -> None:
     analyses = _complete_analyses()
     first = build_integrated_science_structure_manifest(
@@ -492,6 +528,71 @@ def test_v4_structure_keeps_reviewed_framework_and_separates_automatic_alignment
         structure,
     )
     assert any(edge.edge_type == "ALIGNS_WITH_CURRICULUM" for edge in projection.edges)
+
+
+def test_v5_exam_ontology_reaches_exam_and_item_from_curriculum_in_two_hops() -> None:
+    documents = _complete_analyses()
+    base = build_integrated_science_structure_manifest(
+        documents, reviewed_by_operator_id=OPERATOR_ID, created_at=NOW
+    )
+    item_analysis = _approved_item_analysis()
+    assert isinstance(item_analysis.source, ApprovedItemKnowledgeSourceV2)
+    item_analysis = item_analysis.__class__(
+        analysis_run_id=item_analysis.analysis_run_id,
+        source=item_analysis.source.model_copy(update={"source_class": "PAST_EXAM"}),
+        accepted_result=item_analysis.accepted_result,
+        proposal=item_analysis.proposal,
+    )
+    unit_id = next(
+        unit.curriculum_unit_id for unit in base.curriculum_units if unit.unit_level == "MINOR"
+    )
+    automatic = _automatic_item_alignment(item_analysis, unit_id)
+    placement = _assessment_placement(item_analysis, unit_id)
+    structure = extend_integrated_science_structure_manifest_with_automatic_item_alignments(
+        base,
+        (automatic,),
+        created_at=NOW,
+        assessment_item_occurrences=(placement,),
+    )
+
+    assert isinstance(structure, KnowledgeGraphStructureManifestV5)
+    validate_contract("knowledge-graph-structure-manifest-v5", structure.model_dump(mode="json"))
+    projection = build_education_graph_projection(
+        tuple(sorted((*documents, item_analysis), key=lambda item: item.analysis_run_id)),
+        structure,
+    )
+    nodes_by_id = {node.node_id: node for node in projection.nodes}
+    unit_node_id = next(
+        node.node_id
+        for node in projection.nodes
+        if node.stable_key
+        == next(
+            unit.node_stable_key
+            for unit in base.curriculum_units
+            if unit.curriculum_unit_id == unit_id
+        )
+    )
+    first_hop = {
+        edge.from_node_id
+        for edge in projection.edges
+        if edge.to_node_id == unit_node_id and edge.edge_type == "ALIGNS_WITH_CURRICULUM"
+    }
+    placement_node_id = next(
+        node_id
+        for node_id in first_hop
+        if nodes_by_id[node_id].node_type == "ASSESSMENT_ITEM_OCCURRENCE"
+    )
+    second_hop = {
+        other
+        for edge in projection.edges
+        if placement_node_id in {edge.from_node_id, edge.to_node_id}
+        for other in {edge.from_node_id, edge.to_node_id} - {placement_node_id}
+    }
+    assert {nodes_by_id[node_id].node_type for node_id in second_hop} >= {
+        "ASSESSMENT_OCCURRENCE_REVISION",
+        "ITEM_REVISION",
+    }
+    assert any("2025학년도" in nodes_by_id[node_id].label for node_id in second_hop)
 
 
 def test_v4_structure_rejects_automatic_reclassification_of_human_alignment() -> None:

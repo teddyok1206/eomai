@@ -607,6 +607,129 @@ class KnowledgeEdgeRecord(Base):
     answer_bearing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
+class AssessmentItemOccurrenceReferenceRecord(Base):
+    """Snapshot-local typed index for one immutable examination Item placement."""
+
+    __tablename__ = "assessment_item_occurrence_references"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["graph_snapshot_revision_id", "occurrence_node_id"],
+            ["knowledge_nodes.graph_snapshot_revision_id", "knowledge_nodes.node_id"],
+            name="fk_assessment_item_ref_occurrence_node",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["graph_snapshot_revision_id", "placement_node_id"],
+            ["knowledge_nodes.graph_snapshot_revision_id", "knowledge_nodes.node_id"],
+            name="fk_assessment_item_ref_placement_node",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["graph_snapshot_revision_id", "item_node_id"],
+            ["knowledge_nodes.graph_snapshot_revision_id", "knowledge_nodes.node_id"],
+            name="fk_assessment_item_ref_item_node",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "placement_sha256 ~ '^sha256:[0-9a-f]{64}$' "
+            "AND assessment_occurrence_revision_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_assessment_item_ref_hashes",
+        ),
+        CheckConstraint(
+            "administration_month BETWEEN 1 AND 12 AND item_number BETWEEN 1 AND 200",
+            name="ck_assessment_item_ref_ranges",
+        ),
+        CheckConstraint(
+            "target_school_level IN ('ELEMENTARY','MIDDLE_SCHOOL','HIGH_SCHOOL')",
+            name="ck_assessment_item_ref_school_level",
+        ),
+        CheckConstraint(
+            "(target_school_level = 'ELEMENTARY' AND target_grade BETWEEN 1 AND 6) OR "
+            "(target_school_level IN ('MIDDLE_SCHOOL','HIGH_SCHOOL') "
+            "AND target_grade BETWEEN 1 AND 3)",
+            name="ck_assessment_item_ref_grade",
+        ),
+        UniqueConstraint(
+            "graph_snapshot_revision_id",
+            "assessment_occurrence_revision_id",
+            "item_number",
+            name="uq_assessment_item_ref_exam_number",
+        ),
+        UniqueConstraint(
+            "graph_snapshot_revision_id",
+            "analysis_run_id",
+            name="uq_assessment_item_ref_analysis",
+        ),
+        Index(
+            "ix_assessment_item_ref_exam_lookup",
+            "graph_snapshot_revision_id",
+            "administration_year",
+            "target_school_level",
+            "target_grade",
+            "administration_month",
+            "subject_key",
+            "item_number",
+        ),
+        Index(
+            "ix_assessment_item_ref_item_revision",
+            "graph_snapshot_revision_id",
+            "item_revision_id",
+        ),
+    )
+
+    graph_snapshot_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_graph_snapshots.graph_snapshot_revision_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    placement_node_id: Mapped[str] = mapped_column(String(72), primary_key=True)
+    occurrence_node_id: Mapped[str] = mapped_column(String(72), nullable=False)
+    item_node_id: Mapped[str] = mapped_column(String(72), nullable=False)
+    analysis_run_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_analysis_runs.analysis_run_id", ondelete="RESTRICT"), nullable=False
+    )
+    assessment_occurrence_id: Mapped[str] = mapped_column(
+        ForeignKey("assessment_occurrences.assessment_occurrence_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    assessment_occurrence_revision_id: Mapped[str] = mapped_column(
+        ForeignKey(
+            "assessment_occurrence_revisions.assessment_occurrence_revision_id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+    assessment_occurrence_revision_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    occurrence_display_label: Mapped[str] = mapped_column(String(512), nullable=False)
+    administration_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    administration_month: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_school_level: Mapped[str] = mapped_column(String(24), nullable=False)
+    target_grade: Mapped[int] = mapped_column(Integer, nullable=False)
+    subject_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    item_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("items.item_id", ondelete="RESTRICT"), nullable=False
+    )
+    item_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("item_revisions.item_revision_id", ondelete="RESTRICT"), nullable=False
+    )
+    item_origin_profile_id: Mapped[str] = mapped_column(
+        ForeignKey("item_origin_profiles.item_origin_profile_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    extraction_acceptance_id: Mapped[str] = mapped_column(
+        ForeignKey("legacy_item_extraction_acceptances.acceptance_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    assessment_source_bundle_revision_id: Mapped[str] = mapped_column(
+        ForeignKey(
+            "assessment_source_bundle_revisions.assessment_source_bundle_revision_id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+    placement_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+
+
 class KnowledgeNodeSourcePointerRecord(Base):
     __tablename__ = "knowledge_node_source_pointers"
     __table_args__ = (

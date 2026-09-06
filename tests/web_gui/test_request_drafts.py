@@ -213,7 +213,7 @@ def test_workflow_payload_exposes_only_bounded_educational_requirement() -> None
         "curriculum_root_key": None,
         "topic_keys": [],
         "required_item_elements": ["choice"],
-        "source_classes": ["APPROVED_ITEM", "TEXTBOOK"],
+        "source_classes": ["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"],
     }
     assert payload["execution_preset_key"] == "knowledge-grounded-item"
     brief = payload["item_brief"]

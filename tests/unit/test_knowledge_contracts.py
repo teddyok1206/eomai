@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import pytest
 from eom_catalog_contracts import (
     KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY,
+    WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY,
     EducationRetrievalRequest,
     EvidenceBundleManifest,
     KnowledgeAnalysisProposalReceipt,
@@ -15,11 +16,13 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisResultV2,
     KnowledgeAnalysisReviewDecision,
     KnowledgeAnalysisWorkerProposal,
+    KnowledgeEdgeEndpointContract,
     KnowledgeEdgeType,
     KnowledgeGraphPublicationResult,
     KnowledgeGraphSnapshotManifest,
     KnowledgeGraphSnapshotManifestV2,
     KnowledgeGraphStructureManifest,
+    KnowledgeNodeType,
     PublishKnowledgeGraphSnapshotCommand,
     validate_contract,
     validate_knowledge_analysis_proposal_ontology,
@@ -751,7 +754,36 @@ def test_graph_structure_manifest_closes_hierarchy_elements_and_hash() -> None:
 def test_graph_ontology_compatibility_is_closed_and_exhaustive() -> None:
     assert set(KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY) == set(KnowledgeEdgeType)
     assert all(KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.values())
+    assert not {
+        KnowledgeEdgeType.HAS_ASSESSMENT_ITEM,
+        KnowledgeEdgeType.REPRESENTS_ITEM_REVISION,
+    }.intersection(WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY)
+    assert all(
+        source
+        not in {
+            KnowledgeNodeType.ASSESSMENT_OCCURRENCE_REVISION,
+            KnowledgeNodeType.ASSESSMENT_ITEM_OCCURRENCE,
+        }
+        and target
+        not in {
+            KnowledgeNodeType.ASSESSMENT_OCCURRENCE_REVISION,
+            KnowledgeNodeType.ASSESSMENT_ITEM_OCCURRENCE,
+        }
+        for pairs in WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY.values()
+        for source, target in pairs
+    )
     validate_knowledge_edge_endpoint_types("EXPLAINS", "CLAIM", "CONCEPT")
+    validate_knowledge_edge_endpoint_types(
+        "HAS_ASSESSMENT_ITEM",
+        "ASSESSMENT_OCCURRENCE_REVISION",
+        "ASSESSMENT_ITEM_OCCURRENCE",
+    )
+    with pytest.raises(ValueError, match="worker knowledge edge"):
+        KnowledgeEdgeEndpointContract(
+            edge_type="HAS_ASSESSMENT_ITEM",
+            from_node_type="ASSESSMENT_OCCURRENCE_REVISION",
+            to_node_type="ASSESSMENT_ITEM_OCCURRENCE",
+        )
     with pytest.raises(ValueError, match="endpoint types are incompatible"):
         validate_knowledge_edge_endpoint_types("HAS_ITEM_ELEMENT", "CONCEPT", "TABLE")
 

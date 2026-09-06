@@ -224,15 +224,18 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         if name.startswith("eom_api_contracts/schemas/") and name.endswith(".schema.json")
     ]
     if (
-        len(schemas) != 8
+        len(schemas) != 9
+        or "eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"
+        not in schemas
         or "eom_api_contracts/schemas/hwpx.schema.json" not in schemas
         or "eom_api_contracts/schemas/items.schema.json" not in schemas
         or "eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"
         not in schemas
     ):
         raise SystemExit(
-            "expected 8 packaged API schemas including HWPX, Items, and curriculum "
-            f"capability, found {schemas}"
+            "expected 9 packaged API schemas including HWPX, Items, curriculum "
+            "capability, and assessment occurrence, "
+            f"found {schemas}"
         )
 
 workflow_prefix = "eom_workflow/resources/"
@@ -501,6 +504,7 @@ catalog_resources = {
     "item-origin/item-origin-types-v1.schema.json": "schemas/item-origin/item-origin-types-v1.schema.json",
     "item-origin/organization-revision-v1.schema.json": "schemas/item-origin/organization-revision-v1.schema.json",
     "item-origin/assessment-occurrence-revision-v1.schema.json": "schemas/item-origin/assessment-occurrence-revision-v1.schema.json",
+    "item-origin/assessment-occurrence-revision-v2.schema.json": "schemas/item-origin/assessment-occurrence-revision-v2.schema.json",
     "item-origin/item-origin-profile-v1.schema.json": "schemas/item-origin/item-origin-profile-v1.schema.json",
     "legacy-assessment/legacy-assessment-types-v1.schema.json": "schemas/legacy-assessment/legacy-assessment-types-v1.schema.json",
     "legacy-assessment/assessment-source-bundle-proposal-v1.schema.json": "schemas/legacy-assessment/assessment-source-bundle-proposal-v1.schema.json",
@@ -519,6 +523,7 @@ catalog_resources = {
     "legacy-assessment/legacy-item-editorial-compatibility-proposal-v1.schema.json": "schemas/legacy-assessment/legacy-item-editorial-compatibility-proposal-v1.schema.json",
     "legacy-assessment/legacy-item-editorial-compatibility-result-v1.schema.json": "schemas/legacy-assessment/legacy-item-editorial-compatibility-result-v1.schema.json",
     "knowledge/knowledge-types-v1.schema.json": "schemas/knowledge/knowledge-types-v1.schema.json",
+    "knowledge/knowledge-types-v2.schema.json": "schemas/knowledge/knowledge-types-v2.schema.json",
     "knowledge/knowledge-analysis-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-request-v1.schema.json",
     "knowledge/knowledge-analysis-result-v1.schema.json": "schemas/knowledge/knowledge-analysis-result-v1.schema.json",
     "knowledge/knowledge-analysis-types-v2.schema.json": "schemas/knowledge/knowledge-analysis-types-v2.schema.json",
@@ -559,11 +564,13 @@ catalog_resources = {
     "knowledge/knowledge-graph-projection-v1.schema.json": "schemas/knowledge/knowledge-graph-projection-v1.schema.json",
     "knowledge/knowledge-graph-projection-v2.schema.json": "schemas/knowledge/knowledge-graph-projection-v2.schema.json",
     "knowledge/knowledge-graph-projection-v3.schema.json": "schemas/knowledge/knowledge-graph-projection-v3.schema.json",
+    "knowledge/knowledge-graph-projection-v4.schema.json": "schemas/knowledge/knowledge-graph-projection-v4.schema.json",
     "knowledge/knowledge-graph-publication-result-v1.schema.json": "schemas/knowledge/knowledge-graph-publication-result-v1.schema.json",
     "knowledge/knowledge-graph-publication-v1.schema.json": "schemas/knowledge/knowledge-graph-publication-v1.schema.json",
     "knowledge/knowledge-graph-publication-v2.schema.json": "schemas/knowledge/knowledge-graph-publication-v2.schema.json",
     "knowledge/knowledge-graph-publication-v3.schema.json": "schemas/knowledge/knowledge-graph-publication-v3.schema.json",
     "knowledge/knowledge-graph-publication-v4.schema.json": "schemas/knowledge/knowledge-graph-publication-v4.schema.json",
+    "knowledge/knowledge-graph-publication-v5.schema.json": "schemas/knowledge/knowledge-graph-publication-v5.schema.json",
     "knowledge/knowledge-graph-snapshot-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
     "knowledge/knowledge-graph-snapshot-manifest-v2.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
     "knowledge/knowledge-graph-snapshot-manifest-v3.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v3.schema.json",
@@ -571,10 +578,12 @@ catalog_resources = {
     "knowledge/knowledge-graph-snapshot-manifest-v5.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v5.schema.json",
     "knowledge/knowledge-graph-snapshot-manifest-v6.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v6.schema.json",
     "knowledge/knowledge-graph-snapshot-manifest-v7.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v7.schema.json",
+    "knowledge/knowledge-graph-snapshot-manifest-v8.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v8.schema.json",
     "knowledge/knowledge-graph-structure-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v1.schema.json",
     "knowledge/knowledge-graph-structure-manifest-v2.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v2.schema.json",
     "knowledge/knowledge-graph-structure-manifest-v3.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v3.schema.json",
     "knowledge/knowledge-graph-structure-manifest-v4.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v4.schema.json",
+    "knowledge/knowledge-graph-structure-manifest-v5.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v5.schema.json",
     "knowledge/education-retrieval-access-policy-v1.schema.json": "schemas/knowledge/education-retrieval-access-policy-v1.schema.json",
     "knowledge/education-retrieval-request-v1.schema.json": "schemas/knowledge/education-retrieval-request-v1.schema.json",
     "knowledge/education-retrieval-request-v2.schema.json": "schemas/knowledge/education-retrieval-request-v2.schema.json",

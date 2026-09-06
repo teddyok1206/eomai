@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0",
+  "title": "EOM Assessment Placement Knowledge Graph Snapshot Manifest V8",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "knowledge-graph-snapshot-manifest/8.0"},
+    "graph_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0#/properties/graph_id"
+    },
+    "graph_snapshot_revision_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0#/properties/graph_snapshot_revision_id"
+    },
+    "revision_number": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0#/properties/revision_number"
+    },
+    "previous_graph_snapshot_revision_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0#/properties/previous_graph_snapshot_revision_id"
+    },
+    "state": {"const": "PUBLISHED"},
+    "ontology_version": {"const": "education-knowledge-graph/1.1"},
+    "publisher_version": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0#/properties/publisher_version"
+    },
+    "source_revisions": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0#/properties/source_revisions"
+    },
+    "analysis_results": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0#/properties/analysis_results"
+    },
+    "structure_manifest": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+    },
+    "projections": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0#/properties/projections"
+    },
+    "counts": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0#/properties/counts"
+    },
+    "snapshot_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"
+    }
+  },
+  "required": [
+    "schema_version",
+    "graph_id",
+    "graph_snapshot_revision_id",
+    "revision_number",
+    "previous_graph_snapshot_revision_id",
+    "state",
+    "ontology_version",
+    "publisher_version",
+    "source_revisions",
+    "analysis_results",
+    "structure_manifest",
+    "projections",
+    "counts",
+    "snapshot_sha256",
+    "created_at"
+  ]
+}
