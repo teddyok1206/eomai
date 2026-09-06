@@ -9,6 +9,7 @@ from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
     AssessmentLearningExamView,
     AssessmentLearningItemCounts,
+    AssessmentLearningPageView,
     AssessmentLearningWorkUnitCounts,
 )
 from eom_api_contracts.auth import LoginRequest
@@ -82,6 +83,7 @@ def test_assessment_learning_schemas_match_typed_progress_and_exclude_march() ->
     for name in (
         "assessment-learning-batch-v1.schema.json",
         "assessment-learning-exam-v1.schema.json",
+        "assessment-learning-page-v1.schema.json",
     ):
         assert (SCHEMA_ROOT / name).read_bytes() == (packaged_root / name).read_bytes()
 
@@ -165,6 +167,25 @@ def test_assessment_learning_schemas_match_typed_progress_and_exclude_march() ->
     validator = Draft202012Validator(exam_schema)
     assert tuple(validator.iter_errors(exam)) == ()
     assert tuple(validator.iter_errors(exam | {"administration_month": 3}))
+
+    page = AssessmentLearningPageView(
+        extraction_batch_id="legacybatch_" + "1" * 32,
+        assessment_occurrence_revision_id="occurrev_" + "6" * 32,
+        page_input_id="assessmentpage_" + "9" * 32,
+        source_role="PROBLEM_DOCUMENT",
+        physical_page=1,
+        artifact_id="artifact_" + "a" * 32,
+        artifact_revision_id="rev_" + "b" * 32,
+        artifact_member="pages/problem-1.png",
+        sha256="sha256:" + "c" * 64,
+        content_length=1024,
+        width_px=1240,
+        height_px=1754,
+    ).model_dump(mode="json")
+    page_schema = json.loads(
+        (SCHEMA_ROOT / "assessment-learning-page-v1.schema.json").read_text(encoding="utf-8")
+    )
+    assert tuple(Draft202012Validator(page_schema).iter_errors(page)) == ()
 
     with pytest.raises(ValidationError, match="monotonic"):
         AssessmentLearningItemCounts(

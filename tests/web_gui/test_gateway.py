@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -848,6 +849,65 @@ async def test_gateway_validates_assessment_learning_batch_and_exam_progress() -
     assert batches[0].image_observation_mode == "REQUIRED"
     assert exams[0].display_label == "2025년 고1 6월 통합과학"
     assert exams[0].items.graph_published == 0
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_gateway_validates_assessment_page_pointer_and_png_bytes() -> None:
+    batch_id = "legacybatch_" + "1" * 32
+    occurrence_revision_id = "occurrev_" + "2" * 32
+    page_input_id = "assessmentpage_" + "3" * 32
+    content = b"\x89PNG\r\n\x1a\nWEB_PAGE"
+    digest = "sha256:" + hashlib.sha256(content).hexdigest()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/pages"):
+            return httpx.Response(
+                200,
+                json=_list(
+                    [
+                        {
+                            "schema_version": "assessment-learning-page-view/1.0",
+                            "extraction_batch_id": batch_id,
+                            "assessment_occurrence_revision_id": occurrence_revision_id,
+                            "page_input_id": page_input_id,
+                            "source_role": "PROBLEM_DOCUMENT",
+                            "physical_page": 1,
+                            "artifact_id": "artifact_" + "4" * 32,
+                            "artifact_revision_id": "rev_" + "5" * 32,
+                            "artifact_member": "pages/problem-1.png",
+                            "sha256": digest,
+                            "media_type": "image/png",
+                            "content_length": len(content),
+                            "width_px": 1240,
+                            "height_px": 1754,
+                        }
+                    ]
+                ),
+            )
+        return httpx.Response(
+            200,
+            content=content,
+            headers={
+                "Content-Type": "image/png",
+                "Content-Length": str(len(content)),
+                "ETag": f'"{digest}"',
+            },
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    pages = await gateway.assessment_learning_pages(_session(), batch_id, occurrence_revision_id)
+    media = await gateway.assessment_learning_page_media(
+        _session(), batch_id, occurrence_revision_id, page_input_id
+    )
+    assert pages[0].artifact_revision_id == "rev_" + "5" * 32
+    assert media.content == content
     await gateway.close()
 
 

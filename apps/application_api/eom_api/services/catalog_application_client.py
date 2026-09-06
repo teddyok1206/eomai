@@ -17,11 +17,17 @@ from eom_catalog_contracts import (
     CATALOG_APPLICATION_MAX_MESSAGE_BYTES,
     CATALOG_APPLICATION_SOCKET_MODE,
     CATALOG_APPLICATION_SOCKET_PATH,
+    CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
     CATALOG_ITEM_MEDIA_MAX_BYTES,
     AssessmentItemContentContract,
+    AssessmentPageImagePointer,
+    AssessmentPageListQuery,
+    AssessmentPageMediaQuery,
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CatalogAssessmentPageListResponse,
+    CatalogAssessmentPageMediaResponse,
     CatalogItemMediaResponse,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
@@ -162,6 +168,109 @@ class CatalogApplicationClient:
             raise CatalogApplicationClientError(
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
                 "Catalog media boundary is unavailable",
+            ) from exc
+
+    def assessment_pages(
+        self,
+        extraction_batch_id: str,
+        assessment_occurrence_revision_id: str,
+    ) -> tuple[AssessmentPageImagePointer, ...]:
+        command = AssessmentPageListQuery(
+            extraction_batch_id=extraction_batch_id,
+            assessment_occurrence_revision_id=assessment_occurrence_revision_id,
+        )
+        payload = command.model_dump(mode="json")
+        validate_contract("catalog-assessment-page-list-request", payload)
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+            connection.sendall(encoded + b"\n")
+            connection.settimeout(RESPONSE_TIMEOUT_SECONDS)
+            raw = self._read_response(connection)
+            value: Any = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError
+            validate_contract("catalog-assessment-page-list-response", value)
+            response = CatalogAssessmentPageListResponse.model_validate(value)
+            if response.status == "ERROR":
+                self._raise_remote_error(response.error_code)
+            assert response.pages is not None
+            return response.pages
+        except CatalogApplicationClientError:
+            raise
+        except (
+            OSError,
+            ValueError,
+            json.JSONDecodeError,
+            UnicodeError,
+            ValidationError,
+            JsonSchemaValidationError,
+        ) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog assessment page-list boundary is unavailable",
+            ) from exc
+        finally:
+            connection.close()
+
+    def download_assessment_page(
+        self,
+        extraction_batch_id: str,
+        assessment_occurrence_revision_id: str,
+        page_input_id: str,
+    ) -> ProxiedItemMedia:
+        command = AssessmentPageMediaQuery(
+            extraction_batch_id=extraction_batch_id,
+            assessment_occurrence_revision_id=assessment_occurrence_revision_id,
+            page_input_id=page_input_id,
+        )
+        payload = command.model_dump(mode="json")
+        validate_contract("catalog-assessment-page-media-request", payload)
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+            connection.sendall(encoded + b"\n")
+            connection.settimeout(RESPONSE_TIMEOUT_SECONDS)
+            raw = self._read_media_header(connection)
+            value: Any = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError
+            validate_contract("catalog-assessment-page-media-response", value)
+            response = CatalogAssessmentPageMediaResponse.model_validate(value)
+            if response.status == "ERROR":
+                self._raise_remote_error(response.error_code)
+            assert response.media_type is not None
+            assert response.content_length is not None
+            assert response.sha256 is not None
+            if response.content_length > CATALOG_ASSESSMENT_PAGE_MAX_BYTES:
+                raise ValueError("Catalog assessment page exceeds its fixed bound")
+            return ProxiedItemMedia(
+                connection=connection,
+                media_type=response.media_type,
+                content_length=response.content_length,
+                sha256=response.sha256,
+            )
+        except CatalogApplicationClientError:
+            connection.close()
+            raise
+        except (
+            OSError,
+            ValueError,
+            json.JSONDecodeError,
+            UnicodeError,
+            ValidationError,
+            JsonSchemaValidationError,
+        ) as exc:
+            connection.close()
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog assessment page-media boundary is unavailable",
             ) from exc
 
     def create_knowledge_analysis(

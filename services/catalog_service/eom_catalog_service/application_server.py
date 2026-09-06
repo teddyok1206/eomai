@@ -18,9 +18,13 @@ from eom_catalog_contracts import (
     CATALOG_APPLICATION_RUNTIME_DIRECTORY_MODE,
     CATALOG_APPLICATION_SOCKET_MODE,
     CATALOG_APPLICATION_SOCKET_PATH,
+    AssessmentPageListQuery,
+    AssessmentPageMediaQuery,
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CatalogAssessmentPageListResponse,
+    CatalogAssessmentPageMediaResponse,
     CatalogItemMediaResponse,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
@@ -97,6 +101,30 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     )
                     return
                 self._stream_item_media(media_request)
+                return
+            if raw_operation == "GET_ASSESSMENT_PAGE_IMAGES":
+                try:
+                    validate_contract("catalog-assessment-page-list-request", value)
+                    page_list_request = AssessmentPageListQuery.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_assessment_page_list_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._write_assessment_pages(page_list_request)
+                return
+            if raw_operation == "GET_ASSESSMENT_PAGE_IMAGE":
+                try:
+                    validate_contract("catalog-assessment-page-media-request", value)
+                    page_media_request = AssessmentPageMediaQuery.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_assessment_page_media_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._stream_assessment_page(page_media_request)
                 return
             if raw_operation in {
                 "IMPORT_REVIEWED_ITEM_CONTENT",
@@ -242,6 +270,56 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
         finally:
             chunks.close()
 
+    def _write_assessment_pages(self, request: AssessmentPageListQuery) -> None:
+        try:
+            value = self.server.registry.assessment_pages(
+                request.extraction_batch_id,
+                request.assessment_occurrence_revision_id,
+            )
+            self.server.write_assessment_page_list_response(
+                self.wfile,
+                CatalogAssessmentPageListResponse(status="OK", pages=value.pages),
+            )
+        except RegistryError as exc:
+            self.server.write_assessment_page_list_error(self.wfile, exc.code.value)
+        except Exception:
+            self.server.write_assessment_page_list_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+
+    def _stream_assessment_page(self, request: AssessmentPageMediaQuery) -> None:
+        try:
+            media = self.server.registry.load_assessment_page_media(
+                request.extraction_batch_id,
+                request.assessment_occurrence_revision_id,
+                request.page_input_id,
+            )
+        except RegistryError as exc:
+            self.server.write_assessment_page_media_error(self.wfile, exc.code.value)
+            return
+        except Exception:
+            self.server.write_assessment_page_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+            return
+        self.server.write_assessment_page_media_header(
+            self.wfile,
+            CatalogAssessmentPageMediaResponse(
+                status="OK",
+                media_type="image/png",
+                content_length=media.content_length,
+                sha256=media.sha256,
+            ),
+        )
+        chunks = media.iter_chunks()
+        try:
+            for chunk in chunks:
+                self.wfile.write(chunk)
+        finally:
+            chunks.close()
+
 
 class CatalogApplicationServer(_ThreadingUnixServer):
     """Closed protocol; only the fixed Application API UID may connect."""
@@ -328,6 +406,52 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         if len(raw) + 1 > MAX_MESSAGE_BYTES:
             raise RuntimeError("Catalog application response exceeded its fixed bound")
         stream.write(raw + b"\n")
+
+    @staticmethod
+    def write_assessment_page_list_response(
+        stream: Any, response: CatalogAssessmentPageListResponse
+    ) -> None:
+        payload = {
+            key: value
+            for key, value in response.model_dump(mode="json").items()
+            if value is not None
+        }
+        validate_contract("catalog-assessment-page-list-response", payload)
+        raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        )
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Catalog assessment page response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_assessment_page_list_error(cls, stream: Any, error_code: str) -> None:
+        cls.write_assessment_page_list_response(
+            stream,
+            CatalogAssessmentPageListResponse(status="ERROR", error_code=error_code),
+        )
+
+    @staticmethod
+    def write_assessment_page_media_header(
+        stream: Any, response: CatalogAssessmentPageMediaResponse
+    ) -> None:
+        payload = {
+            key: value
+            for key, value in response.model_dump(mode="json").items()
+            if value is not None
+        }
+        validate_contract("catalog-assessment-page-media-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Catalog assessment page media header exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_assessment_page_media_error(cls, stream: Any, error_code: str) -> None:
+        cls.write_assessment_page_media_header(
+            stream,
+            CatalogAssessmentPageMediaResponse(status="ERROR", error_code=error_code),
+        )
 
     @classmethod
     def write_error(cls, stream: Any, operation: str, error_code: str) -> None:

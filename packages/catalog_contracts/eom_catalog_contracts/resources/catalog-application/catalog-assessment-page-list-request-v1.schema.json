@@ -1,0 +1,13 @@
+{
+  "$id": "eom://schemas/catalog-application/catalog-assessment-page-list-request/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "assessment_occurrence_revision_id": {"pattern": "^occurrev_[0-9a-f]{32}$", "type": "string"},
+    "extraction_batch_id": {"pattern": "^legacybatch_[0-9a-f]{32}$", "type": "string"},
+    "operation": {"const": "GET_ASSESSMENT_PAGE_IMAGES"}
+  },
+  "required": ["operation", "extraction_batch_id", "assessment_occurrence_revision_id"],
+  "title": "Catalog Assessment Page List Request V1",
+  "type": "object"
+}

@@ -14,6 +14,7 @@ from eom_api.services.catalog_application_client import (
 from eom_catalog_contracts import (
     AssessmentItemContent,
     AssessmentItemContentV2,
+    AssessmentPageImagePointer,
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
@@ -57,6 +58,45 @@ class FakeRegistry:
     def load_item_media(self, _revision_id: str, block_id: str) -> SimpleNamespace:
         assert block_id == "block_image"
         content = b"\x89PNG\r\n\x1a\nCATALOG_MEDIA"
+
+        def iter_chunks() -> object:
+            yield content
+
+        return SimpleNamespace(
+            media_type="image/png",
+            content_length=len(content),
+            sha256="sha256:" + hashlib.sha256(content).hexdigest(),
+            iter_chunks=iter_chunks,
+        )
+
+    def assessment_pages(self, batch_id: str, occurrence_revision_id: str) -> SimpleNamespace:
+        assert batch_id == "legacybatch_" + "1" * 32
+        assert occurrence_revision_id == "occurrev_" + "2" * 32
+        return SimpleNamespace(
+            pages=(
+                AssessmentPageImagePointer(
+                    page_input_id="assessmentpage_" + "3" * 32,
+                    source_role="PROBLEM_DOCUMENT",
+                    physical_page=1,
+                    artifact_id="artifact_" + "4" * 32,
+                    artifact_revision_id="rev_" + "5" * 32,
+                    member_path="pages/problem-1.png",
+                    sha256="sha256:"
+                    + hashlib.sha256(b"\x89PNG\r\n\x1a\nASSESSMENT_PAGE").hexdigest(),
+                    content_length=len(b"\x89PNG\r\n\x1a\nASSESSMENT_PAGE"),
+                    width_px=1240,
+                    height_px=1754,
+                ),
+            )
+        )
+
+    def load_assessment_page_media(
+        self, batch_id: str, occurrence_revision_id: str, page_input_id: str
+    ) -> SimpleNamespace:
+        assert batch_id == "legacybatch_" + "1" * 32
+        assert occurrence_revision_id == "occurrev_" + "2" * 32
+        assert page_input_id == "assessmentpage_" + "3" * 32
+        content = b"\x89PNG\r\n\x1a\nASSESSMENT_PAGE"
 
         def iter_chunks() -> object:
             yield content
@@ -457,6 +497,18 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
         sha256="sha256:" + "a" * 64,
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-item-media-response", media_response)
+    page_list_request = {
+        "operation": "GET_ASSESSMENT_PAGE_IMAGES",
+        "extraction_batch_id": "legacybatch_" + "1" * 32,
+        "assessment_occurrence_revision_id": "occurrev_" + "2" * 32,
+    }
+    validate_contract("catalog-assessment-page-list-request", page_list_request)
+    page_media_request = {
+        **page_list_request,
+        "operation": "GET_ASSESSMENT_PAGE_IMAGE",
+        "page_input_id": "assessmentpage_" + "3" * 32,
+    }
+    validate_contract("catalog-assessment-page-media-request", page_media_request)
 
 
 def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
@@ -483,6 +535,18 @@ def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
         media_bytes = b"".join(media.iter_chunks())
         assert media_bytes == b"\x89PNG\r\n\x1a\nCATALOG_MEDIA"
         assert media.media_type == "image/png"
+        pages = client.assessment_pages(
+            "legacybatch_" + "1" * 32,
+            "occurrev_" + "2" * 32,
+        )
+        assert len(pages) == 1
+        assert pages[0].page_input_id == "assessmentpage_" + "3" * 32
+        page_media = client.download_assessment_page(
+            "legacybatch_" + "1" * 32,
+            "occurrev_" + "2" * 32,
+            "assessmentpage_" + "3" * 32,
+        )
+        assert b"".join(page_media.iter_chunks()) == b"\x89PNG\r\n\x1a\nASSESSMENT_PAGE"
         analysis = client.create_knowledge_analysis(
             CreateKnowledgeAnalysisCommand(
                 source={

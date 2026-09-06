@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 from eom_api.app import create_app
@@ -146,10 +148,53 @@ class FakeQueries:
         return PageResult((_exam(),), None, False)
 
 
+class FakeCatalogApplication:
+    def assessment_pages(
+        self, batch_id: str, occurrence_revision_id: str
+    ) -> tuple[SimpleNamespace, ...]:
+        assert batch_id == BATCH_ID
+        assert occurrence_revision_id == "occurrev_" + "8" * 32
+        content = b"\x89PNG\r\n\x1a\nEXAM_PAGE"
+        return (
+            SimpleNamespace(
+                page_input_id="assessmentpage_" + "a" * 32,
+                source_role="PROBLEM_DOCUMENT",
+                physical_page=1,
+                artifact_id="artifact_" + "b" * 32,
+                artifact_revision_id="rev_" + "c" * 32,
+                member_path="pages/problem-1.png",
+                sha256="sha256:" + hashlib.sha256(content).hexdigest(),
+                content_length=len(content),
+                width_px=1240,
+                height_px=1754,
+            ),
+        )
+
+    def download_assessment_page(
+        self, batch_id: str, occurrence_revision_id: str, page_input_id: str
+    ) -> SimpleNamespace:
+        assert batch_id == BATCH_ID
+        assert occurrence_revision_id == "occurrev_" + "8" * 32
+        assert page_input_id == "assessmentpage_" + "a" * 32
+        content = b"\x89PNG\r\n\x1a\nEXAM_PAGE"
+        return SimpleNamespace(
+            content_length=len(content),
+            sha256="sha256:" + hashlib.sha256(content).hexdigest(),
+            iter_chunks=lambda: iter((content,)),
+        )
+
+
+class FakeAudit:
+    def append(self, _context: object, **_values: Any) -> None:
+        return
+
+
 def _client(*, admin: bool) -> tuple[TestClient, Any, FakeQueries]:
     services = disconnected_services()
     queries = FakeQueries()
     services.queries = queries  # type: ignore[assignment]
+    services.catalog_application = FakeCatalogApplication()  # type: ignore[assignment]
+    services.audit = FakeAudit()  # type: ignore[assignment]
     app = create_app(services)
 
     def authenticated(request: Request) -> AccessAuthentication:
@@ -187,5 +232,29 @@ def test_non_admin_cannot_read_assessment_learning_progress() -> None:
             response = client.get("/api/v1/assessment-learning-batches")
         assert response.status_code == 403
         assert response.json()["error_code"] == "PERMISSION_DENIED"
+    finally:
+        services.engine.dispose()
+
+
+def test_admin_lists_and_streams_exact_exam_page_png() -> None:
+    client, services, _queries = _client(admin=True)
+    occurrence_revision_id = "occurrev_" + "8" * 32
+    page_input_id = "assessmentpage_" + "a" * 32
+    try:
+        with client:
+            pages = client.get(
+                f"/api/v1/assessment-learning-batches/{BATCH_ID}/exams/"
+                f"{occurrence_revision_id}/pages"
+            )
+            image = client.get(
+                f"/api/v1/assessment-learning-batches/{BATCH_ID}/exams/"
+                f"{occurrence_revision_id}/pages/{page_input_id}/image"
+            )
+        assert pages.status_code == image.status_code == 200
+        assert pages.json()["data"][0]["page_input_id"] == page_input_id
+        assert pages.json()["data"][0]["artifact_member"] == "pages/problem-1.png"
+        assert image.content == b"\x89PNG\r\n\x1a\nEXAM_PAGE"
+        assert image.headers["content-type"] == "image/png"
+        assert image.headers["cache-control"] == "no-store"
     finally:
         services.engine.dispose()

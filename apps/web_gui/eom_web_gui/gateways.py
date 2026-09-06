@@ -13,6 +13,7 @@ import httpx
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
     AssessmentLearningExamStatus,
+    AssessmentLearningPageStatus,
     CodexAccountStatusView,
     CodexAuthEnrollmentStatusView,
     CodexControlCommandStatusView,
@@ -246,6 +247,18 @@ class ApplicationGateway(Protocol):
     async def assessment_learning_exams(
         self, session: WebSession, batch_id: str
     ) -> tuple[AssessmentLearningExamStatus, ...]: ...
+
+    async def assessment_learning_pages(
+        self, session: WebSession, batch_id: str, occurrence_revision_id: str
+    ) -> tuple[AssessmentLearningPageStatus, ...]: ...
+
+    async def assessment_learning_page_media(
+        self,
+        session: WebSession,
+        batch_id: str,
+        occurrence_revision_id: str,
+        page_input_id: str,
+    ) -> ItemMedia: ...
 
     async def knowledge_analysis_batch(
         self, session: WebSession, batch_id: str
@@ -642,6 +655,57 @@ class HttpApplicationGateway:
             )
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def assessment_learning_pages(
+        self, session: WebSession, batch_id: str, occurrence_revision_id: str
+    ) -> tuple[AssessmentLearningPageStatus, ...]:
+        _require_id(batch_id, "legacybatch_")
+        _require_id(occurrence_revision_id, "occurrev_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/assessment-learning-batches/{batch_id}/exams/{occurrence_revision_id}/pages",
+        )
+        try:
+            return tuple(
+                AssessmentLearningPageStatus.model_validate(value)
+                for value in self._list_data(response)
+            )
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def assessment_learning_page_media(
+        self,
+        session: WebSession,
+        batch_id: str,
+        occurrence_revision_id: str,
+        page_input_id: str,
+    ) -> ItemMedia:
+        _require_id(batch_id, "legacybatch_")
+        _require_id(occurrence_revision_id, "occurrev_")
+        _require_id(page_input_id, "assessmentpage_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/assessment-learning-batches/{batch_id}/exams/"
+            f"{occurrence_revision_id}/pages/{page_input_id}/image",
+            headers={"Accept": "image/png"},
+        )
+        content_type = response.headers.get("content-type", "").split(";", 1)[0]
+        etag = response.headers.get("etag", "")
+        content_length = response.headers.get("content-length", "")
+        actual_sha256 = "sha256:" + hashlib.sha256(response.content).hexdigest()
+        if (
+            content_type != "image/png"
+            or response.headers.get("content-disposition") is not None
+            or not content_length.isascii()
+            or not content_length.isdigit()
+            or int(content_length) != len(response.content)
+            or not 0 < len(response.content) <= 32 * 1024 * 1024
+            or etag != f'"{actual_sha256}"'
+        ):
+            raise GatewayError(status=502, code="ASSESSMENT_PAGE_MEDIA_RESPONSE_INVALID")
+        return ItemMedia(content=response.content, content_type=content_type, etag=etag)
 
     async def knowledge_analysis_batch(
         self, session: WebSession, batch_id: str

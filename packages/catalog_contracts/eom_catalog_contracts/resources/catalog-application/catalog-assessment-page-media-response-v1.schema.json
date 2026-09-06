@@ -1,0 +1,29 @@
+{
+  "$id": "eom://schemas/catalog-application/catalog-assessment-page-media-response/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "content_length": {"maximum": 33554432, "minimum": 1, "type": "integer"},
+        "media_type": {"const": "image/png"},
+        "operation": {"const": "GET_ASSESSMENT_PAGE_IMAGE"},
+        "sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        "status": {"const": "OK"}
+      },
+      "required": ["status", "operation", "media_type", "content_length", "sha256"],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {"pattern": "^[A-Z][A-Z0-9_]{2,127}$", "type": "string"},
+        "operation": {"const": "GET_ASSESSMENT_PAGE_IMAGE"},
+        "status": {"const": "ERROR"}
+      },
+      "required": ["status", "operation", "error_code"],
+      "type": "object"
+    }
+  ],
+  "title": "Catalog Assessment Page Media Response V1"
+}

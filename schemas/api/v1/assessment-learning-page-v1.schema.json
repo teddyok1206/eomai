@@ -1,0 +1,24 @@
+{
+  "$id": "https://eom.local/schemas/api/assessment-learning-page-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_id": {"pattern": "^artifact_[0-9a-f]{32}$", "type": "string"},
+    "artifact_member": {"maxLength": 512, "minLength": 1, "type": "string"},
+    "artifact_revision_id": {"pattern": "^rev_[0-9a-f]{32}$", "type": "string"},
+    "assessment_occurrence_revision_id": {"pattern": "^occurrev_[0-9a-f]{32}$", "type": "string"},
+    "content_length": {"maximum": 33554432, "minimum": 1, "type": "integer"},
+    "extraction_batch_id": {"pattern": "^legacybatch_[0-9a-f]{32}$", "type": "string"},
+    "height_px": {"maximum": 20000, "minimum": 1, "type": "integer"},
+    "media_type": {"const": "image/png"},
+    "page_input_id": {"pattern": "^assessmentpage_[0-9a-f]{32}$", "type": "string"},
+    "physical_page": {"maximum": 100000, "minimum": 1, "type": "integer"},
+    "schema_version": {"const": "assessment-learning-page-view/1.0"},
+    "sha256": {"pattern": "^(?:sha256:)?[0-9a-f]{64}$", "type": "string"},
+    "source_role": {"enum": ["PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"]},
+    "width_px": {"maximum": 20000, "minimum": 1, "type": "integer"}
+  },
+  "required": ["schema_version", "extraction_batch_id", "assessment_occurrence_revision_id", "page_input_id", "source_role", "physical_page", "artifact_id", "artifact_revision_id", "artifact_member", "sha256", "media_type", "content_length", "width_px", "height_px"],
+  "title": "Assessment Learning Page View V1",
+  "type": "object"
+}

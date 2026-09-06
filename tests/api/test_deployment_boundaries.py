@@ -213,6 +213,10 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "item-registry/assessment-item-content-v2.schema.json",
         "catalog-application/catalog-item-media-request-v1.schema.json",
         "catalog-application/catalog-item-media-response-v1.schema.json",
+        "catalog-application/catalog-assessment-page-list-request-v1.schema.json",
+        "catalog-application/catalog-assessment-page-list-response-v1.schema.json",
+        "catalog-application/catalog-assessment-page-media-request-v1.schema.json",
+        "catalog-application/catalog-assessment-page-media-response-v1.schema.json",
         "knowledge/knowledge-analysis-batch-request-v1.schema.json",
         "knowledge/knowledge-analysis-batch-request-v2.schema.json",
         "knowledge/knowledge-analysis-batch-request-v3.schema.json",
@@ -446,11 +450,12 @@ def test_release_verifies_curriculum_schema_resources() -> None:
 def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
-    assert "len(schemas) != 11" in deployment
+    assert "len(schemas) != 12" in deployment
     assert '"eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/assessment-learning-page-v1.schema.json"' in deployment
 
 
 def test_release_verifies_assessment_occurrence_graph_schema_resources() -> None:

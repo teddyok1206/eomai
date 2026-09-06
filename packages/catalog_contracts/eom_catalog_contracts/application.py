@@ -37,6 +37,7 @@ CATALOG_APPLICATION_MAX_MESSAGE_BYTES = 4 * 1024 * 1024
 CATALOG_APPLICATION_SOCKET_MODE = 0o660
 CATALOG_APPLICATION_RUNTIME_DIRECTORY_MODE = 0o750
 CATALOG_ITEM_MEDIA_MAX_BYTES = 16 * 1024 * 1024
+CATALOG_ASSESSMENT_PAGE_MAX_BYTES = 32 * 1024 * 1024
 
 CatalogApplicationOperation = Literal[
     "IMPORT_REVIEWED_ITEM_CONTENT",
@@ -116,6 +117,92 @@ class CatalogItemMediaResponse(FrozenModel):
                 raise ValueError("Catalog media error cannot contain success metadata")
             return self
         raise ValueError("Catalog media response variant is incomplete")
+
+
+class AssessmentPageListQuery(FrozenModel):
+    """Read-only lookup of the immutable page images for one exam in one batch."""
+
+    operation: Literal["GET_ASSESSMENT_PAGE_IMAGES"] = "GET_ASSESSMENT_PAGE_IMAGES"
+    extraction_batch_id: str = Field(pattern=r"^legacybatch_[0-9a-f]{32}$")
+    assessment_occurrence_revision_id: str = Field(pattern=r"^occurrev_[0-9a-f]{32}$")
+
+
+class AssessmentPageMediaQuery(FrozenModel):
+    """Read one exact PNG selected from an immutable assessment layout."""
+
+    operation: Literal["GET_ASSESSMENT_PAGE_IMAGE"] = "GET_ASSESSMENT_PAGE_IMAGE"
+    extraction_batch_id: str = Field(pattern=r"^legacybatch_[0-9a-f]{32}$")
+    assessment_occurrence_revision_id: str = Field(pattern=r"^occurrev_[0-9a-f]{32}$")
+    page_input_id: str = Field(pattern=r"^assessmentpage_[0-9a-f]{32}$")
+
+
+class AssessmentPageImagePointer(FrozenModel):
+    page_input_id: str = Field(pattern=r"^assessmentpage_[0-9a-f]{32}$")
+    source_role: Literal["PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"]
+    physical_page: int = Field(ge=1, le=100000)
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    member_path: str = Field(min_length=1, max_length=512)
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    media_type: Literal["image/png"] = "image/png"
+    content_length: int = Field(ge=1, le=CATALOG_ASSESSMENT_PAGE_MAX_BYTES)
+    width_px: int = Field(ge=1, le=20000)
+    height_px: int = Field(ge=1, le=20000)
+
+
+class CatalogAssessmentPageListResponse(FrozenModel):
+    status: Literal["OK", "ERROR"]
+    operation: Literal["GET_ASSESSMENT_PAGE_IMAGES"] = "GET_ASSESSMENT_PAGE_IMAGES"
+    pages: tuple[AssessmentPageImagePointer, ...] | None = Field(
+        default=None, min_length=1, max_length=1000
+    )
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
+
+    @model_validator(mode="after")
+    def exact_variant(self) -> CatalogAssessmentPageListResponse:
+        if self.status == "OK" and self.pages is not None and self.error_code is None:
+            identities = tuple(page.page_input_id for page in self.pages)
+            positions = tuple((page.source_role, page.physical_page) for page in self.pages)
+            if len(identities) != len(set(identities)) or len(positions) != len(set(positions)):
+                raise ValueError("assessment page response contains duplicate page identities")
+            expected = tuple(
+                sorted(
+                    self.pages,
+                    key=lambda page: (
+                        0 if page.source_role == "PROBLEM_DOCUMENT" else 1,
+                        page.physical_page,
+                        page.page_input_id,
+                    ),
+                )
+            )
+            if self.pages != expected:
+                raise ValueError("assessment page response order is not deterministic")
+            return self
+        if self.status == "ERROR" and self.pages is None and self.error_code is not None:
+            return self
+        raise ValueError("assessment page-list response variant is incomplete")
+
+
+class CatalogAssessmentPageMediaResponse(FrozenModel):
+    status: Literal["OK", "ERROR"]
+    operation: Literal["GET_ASSESSMENT_PAGE_IMAGE"] = "GET_ASSESSMENT_PAGE_IMAGE"
+    media_type: Literal["image/png"] | None = None
+    content_length: int | None = Field(default=None, ge=1, le=CATALOG_ASSESSMENT_PAGE_MAX_BYTES)
+    sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
+
+    @model_validator(mode="after")
+    def exact_variant(self) -> CatalogAssessmentPageMediaResponse:
+        success_values = (self.media_type, self.content_length, self.sha256)
+        if self.status == "OK" and all(value is not None for value in success_values):
+            if self.error_code is not None:
+                raise ValueError("assessment page media success contains an error")
+            return self
+        if self.status == "ERROR" and self.error_code is not None:
+            if any(value is not None for value in success_values):
+                raise ValueError("assessment page media error contains success metadata")
+            return self
+        raise ValueError("assessment page media response variant is incomplete")
 
 
 class ContentIntakeKnowledgeAnalysisSelection(FrozenModel):

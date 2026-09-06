@@ -8,6 +8,7 @@ from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
     AssessmentLearningExamStatus,
     AssessmentLearningItemCounts,
+    AssessmentLearningPageStatus,
     AssessmentLearningWorkUnitCounts,
     CodexAuthEnrollmentStatusView,
     CodexDeviceChallengeView,
@@ -792,6 +793,48 @@ class FakeGateway:
                     graph_published=0,
                 ),
             ),
+        )
+
+    async def assessment_learning_pages(
+        self, session: WebSession, batch_id: str, occurrence_revision_id: str
+    ) -> tuple[AssessmentLearningPageStatus, ...]:
+        del session
+        assert batch_id == "legacybatch_" + "1" * 32
+        assert occurrence_revision_id == "occurrev_" + "6" * 32
+        return (
+            AssessmentLearningPageStatus(
+                schema_version="assessment-learning-page-view/1.0",
+                extraction_batch_id=batch_id,
+                assessment_occurrence_revision_id=occurrence_revision_id,
+                page_input_id="assessmentpage_" + "9" * 32,
+                source_role="PROBLEM_DOCUMENT",
+                physical_page=1,
+                artifact_id="artifact_" + "a" * 32,
+                artifact_revision_id="rev_" + "b" * 32,
+                artifact_member="pages/problem-1.png",
+                sha256="sha256:" + "c" * 64,
+                media_type="image/png",
+                content_length=16,
+                width_px=1240,
+                height_px=1754,
+            ),
+        )
+
+    async def assessment_learning_page_media(
+        self,
+        session: WebSession,
+        batch_id: str,
+        occurrence_revision_id: str,
+        page_input_id: str,
+    ) -> ItemMedia:
+        del session
+        assert batch_id == "legacybatch_" + "1" * 32
+        assert occurrence_revision_id == "occurrev_" + "6" * 32
+        assert page_input_id == "assessmentpage_" + "9" * 32
+        return ItemMedia(
+            content=b"\x89PNG\r\n\x1a\nWEB_PAGE",
+            content_type="image/png",
+            etag='"sha256:' + "c" * 64 + '"',
         )
 
     async def knowledge_analysis_batch_ranges(

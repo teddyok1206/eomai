@@ -14,10 +14,13 @@ from pathlib import Path
 from typing import Any, BinaryIO, Literal, cast
 
 from eom_catalog_contracts import (
+    CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
     CATALOG_ITEM_MEDIA_MAX_BYTES,
     AssessmentItemContent,
     AssessmentItemContentContract,
     AssessmentItemContentV2,
+    AssessmentLayoutObservation,
+    AssessmentPageImagePointer,
     ImageBlock,
     MediaArtifactPointer,
     validate_contract,
@@ -45,6 +48,13 @@ from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.item_repository import append_item_event
+from eom_catalog_service.legacy_assessment_models import (
+    AssessmentLayoutObservationRecord,
+    AssessmentSourceBundleRevisionRecord,
+)
+from eom_catalog_service.legacy_item_extraction_batch_models import (
+    LegacyItemExtractionBatchWorkUnitRecord,
+)
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
     ContentPackRecord,
@@ -62,6 +72,19 @@ from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.staging import stage_registry_manifest
 
 
+def _stat_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_uid,
+        value.st_gid,
+        value.st_nlink,
+        value.st_size,
+        value.st_mtime_ns,
+    )
+
+
 @dataclass(frozen=True)
 class ResolvedItemMedia:
     """Validated descriptor for one pinned image block; storage paths stay private."""
@@ -77,6 +100,13 @@ class ResolvedItemMedia:
                 yield chunk
         finally:
             self.stream.close()
+
+
+@dataclass(frozen=True)
+class ResolvedAssessmentPages:
+    """Ordered immutable page pointers for one batch-scoped assessment occurrence."""
+
+    pages: tuple[AssessmentPageImagePointer, ...]
 
 
 class RegistryService:
@@ -374,10 +404,200 @@ class RegistryService:
             path = self._resolve_media_file(session, pointer)
             return self._open_validated_media(path, pointer)
 
+    def assessment_pages(
+        self,
+        extraction_batch_id: str,
+        assessment_occurrence_revision_id: str,
+    ) -> ResolvedAssessmentPages:
+        """Resolve page metadata through one exact batch, bundle, and layout chain."""
+
+        with self.sessions() as session:
+            layout = self._assessment_layout(
+                session,
+                extraction_batch_id=extraction_batch_id,
+                assessment_occurrence_revision_id=assessment_occurrence_revision_id,
+            )
+            values: list[AssessmentPageImagePointer] = []
+            for page in layout.pages:
+                pointer = MediaArtifactPointer(
+                    artifact_id=page.page.image.artifact_id,
+                    artifact_revision_id=page.page.image.artifact_revision_id,
+                    artifact_member=page.page.image.member_path,
+                    sha256=page.page.image.sha256,
+                    media_type="image/png",
+                )
+                path = self._resolve_media_file(session, pointer)
+                metadata = path.lstat()
+                if metadata.st_size > CATALOG_ASSESSMENT_PAGE_MAX_BYTES:
+                    raise RegistryError(
+                        RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                        "assessment page image exceeds its delivery bound",
+                    )
+                values.append(
+                    AssessmentPageImagePointer(
+                        page_input_id=page.page.page_input_id,
+                        source_role=page.page.source_role,
+                        physical_page=page.page.physical_page,
+                        artifact_id=pointer.artifact_id,
+                        artifact_revision_id=pointer.artifact_revision_id,
+                        member_path=pointer.artifact_member,
+                        sha256=pointer.sha256,
+                        content_length=metadata.st_size,
+                        width_px=page.page.width_px,
+                        height_px=page.page.height_px,
+                    )
+                )
+            ordered = tuple(
+                sorted(
+                    values,
+                    key=lambda value: (
+                        0 if value.source_role == "PROBLEM_DOCUMENT" else 1,
+                        value.physical_page,
+                        value.page_input_id,
+                    ),
+                )
+            )
+            return ResolvedAssessmentPages(pages=ordered)
+
+    def load_assessment_page_media(
+        self,
+        extraction_batch_id: str,
+        assessment_occurrence_revision_id: str,
+        page_input_id: str,
+    ) -> ResolvedItemMedia:
+        """Open one exact exam page PNG after full batch and layout validation."""
+
+        with self.sessions() as session:
+            layout = self._assessment_layout(
+                session,
+                extraction_batch_id=extraction_batch_id,
+                assessment_occurrence_revision_id=assessment_occurrence_revision_id,
+            )
+            matches = tuple(
+                page.page for page in layout.pages if page.page.page_input_id == page_input_id
+            )
+            if len(matches) != 1:
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                    "assessment page image does not resolve",
+                )
+            page = matches[0]
+            pointer = MediaArtifactPointer(
+                artifact_id=page.image.artifact_id,
+                artifact_revision_id=page.image.artifact_revision_id,
+                artifact_member=page.image.member_path,
+                sha256=page.image.sha256,
+                media_type="image/png",
+            )
+            path = self._resolve_media_file(session, pointer)
+            return self._open_validated_media(
+                path,
+                pointer,
+                maximum_bytes=CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
+            )
+
+    @staticmethod
+    def _assessment_layout(
+        session: Session,
+        *,
+        extraction_batch_id: str,
+        assessment_occurrence_revision_id: str,
+    ) -> AssessmentLayoutObservation:
+        rows = tuple(
+            session.execute(
+                select(AssessmentSourceBundleRevisionRecord, AssessmentLayoutObservationRecord)
+                .join(
+                    LegacyItemExtractionBatchWorkUnitRecord,
+                    LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_revision_id
+                    == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id,
+                )
+                .join(
+                    AssessmentLayoutObservationRecord,
+                    AssessmentLayoutObservationRecord.assessment_source_bundle_revision_id
+                    == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id,
+                )
+                .where(
+                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id
+                    == extraction_batch_id,
+                    AssessmentSourceBundleRevisionRecord.assessment_occurrence_revision_id
+                    == assessment_occurrence_revision_id,
+                )
+                .distinct()
+            )
+        )
+        if len(rows) != 1:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "assessment batch has no unique immutable layout",
+            )
+        bundle, layout_record = rows[0]
+        artifact = session.get(ArtifactRecord, layout_record.artifact_id)
+        revision = session.get(ArtifactRevisionRecord, layout_record.artifact_revision_id)
+        if (
+            artifact is None
+            or revision is None
+            or not artifact.approved
+            or not revision.approved
+            or revision.logical_artifact_id != layout_record.artifact_id
+            or layout_record.assessment_source_bundle_id != bundle.assessment_source_bundle_id
+            or layout_record.bundle_manifest_sha256 != bundle.bundle_manifest_sha256
+        ):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "assessment layout pointer is missing or stale",
+            )
+        target = RegistryService._artifact_member_file(
+            revision,
+            layout_record.artifact_member_path,
+            layout_record.artifact_sha256,
+        )
+        try:
+            metadata = target.lstat()
+            if metadata.st_size < 1 or metadata.st_size > 16 * 1024 * 1024:
+                raise ValueError("assessment layout exceeds its byte bound")
+            descriptor = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                opened = os.fstat(descriptor)
+                raw = os.read(descriptor, metadata.st_size + 1)
+                if (
+                    len(raw) != metadata.st_size
+                    or os.read(descriptor, 1)
+                    or _stat_identity(opened) != _stat_identity(os.fstat(descriptor))
+                ):
+                    raise ValueError("assessment layout changed while reading")
+            finally:
+                os.close(descriptor)
+            value: object = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError("assessment layout is not an object")
+            validate_contract("assessment-layout-observation", value)
+            layout = AssessmentLayoutObservation.model_validate(value)
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "assessment layout artifact is invalid",
+            ) from exc
+        if (
+            layout.assessment_layout_observation_id
+            != layout_record.assessment_layout_observation_id
+            or layout.bundle.assessment_source_bundle_id != bundle.assessment_source_bundle_id
+            or layout.bundle.assessment_source_bundle_revision_id
+            != bundle.assessment_source_bundle_revision_id
+            or layout.bundle.bundle_manifest_sha256 != bundle.bundle_manifest_sha256
+            or layout.observation_sha256 != layout_record.observation_sha256
+        ):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "assessment layout content differs from its DB pointer",
+            )
+        return layout
+
     @staticmethod
     def _open_validated_media(
         path: Path,
         pointer: MediaArtifactPointer,
+        *,
+        maximum_bytes: int = CATALOG_ITEM_MEDIA_MAX_BYTES,
     ) -> ResolvedItemMedia:
         descriptor = -1
         stream: BinaryIO | None = None
@@ -388,7 +608,7 @@ class RegistryService:
             if (
                 not stat.S_ISREG(metadata.st_mode)
                 or metadata.st_size < 1
-                or metadata.st_size > CATALOG_ITEM_MEDIA_MAX_BYTES
+                or metadata.st_size > maximum_bytes
             ):
                 raise ValueError("item media size or type is outside the delivery contract")
             digest = hashlib.sha256()

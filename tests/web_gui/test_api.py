@@ -532,6 +532,27 @@ def test_codex_control_plane_is_admin_only_and_never_accepts_credentials() -> No
         assert quality.status_code == 200
         assert quality.json()["quality_state"] == "PASS"
         assert quality.json()["visual_input_page_count"] == 495
+        learning_batches = client.get("/studio/api/v1/admin/assessment-learning-batches")
+        assert learning_batches.status_code == 200
+        learning_batch_id = learning_batches.json()[0]["extraction_batch_id"]
+        exams = client.get(
+            f"/studio/api/v1/admin/assessment-learning-batches/{learning_batch_id}/exams"
+        )
+        assert exams.status_code == 200
+        occurrence_revision_id = exams.json()[0]["assessment_occurrence_revision_id"]
+        pages = client.get(
+            f"/studio/api/v1/admin/assessment-learning-batches/{learning_batch_id}/exams/"
+            f"{occurrence_revision_id}/pages"
+        )
+        assert pages.status_code == 200
+        page_input_id = pages.json()[0]["page_input_id"]
+        media = client.get(
+            f"/studio/api/v1/admin/assessment-learning-batches/{learning_batch_id}/exams/"
+            f"{occurrence_revision_id}/pages/{page_input_id}/image"
+        )
+        assert media.status_code == 200
+        assert media.headers["content-type"] == "image/png"
+        assert media.content.startswith(b"\x89PNG")
 
 
 def test_codex_control_plane_rejects_non_admin_and_credential_fields() -> None:

@@ -510,6 +510,30 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:e40e2f407ca6a124ed091dbc8e7b06e4eee78783d5855b6e8c17e24294f9928f",
         ),
+        "catalog-assessment-page-list-request": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-assessment-page-list-request-v1.schema.json",
+            "resources/catalog-application/catalog-assessment-page-list-request-v1.schema.json",
+            "1.0",
+            "sha256:a2bd18c2ae6a3280e1d66ada150ed664b04d5583b6569401b11cc2b589abec8d",
+        ),
+        "catalog-assessment-page-list-response": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-assessment-page-list-response-v1.schema.json",
+            "resources/catalog-application/catalog-assessment-page-list-response-v1.schema.json",
+            "1.0",
+            "sha256:2ec9dfb16b22b028f68b2778d08b2697abe2b9701a428de21a3bbbf806f7c3a1",
+        ),
+        "catalog-assessment-page-media-request": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-assessment-page-media-request-v1.schema.json",
+            "resources/catalog-application/catalog-assessment-page-media-request-v1.schema.json",
+            "1.0",
+            "sha256:ab72da0aa488478e7e918053ec0771e3e1c006acee2c4489604970e744f1d536",
+        ),
+        "catalog-assessment-page-media-response": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-assessment-page-media-response-v1.schema.json",
+            "resources/catalog-application/catalog-assessment-page-media-response-v1.schema.json",
+            "1.0",
+            "sha256:6a1e60af2d8d5fca8ff0c58014bfed2cb1121fb4e2346068f4db30f8f59b3021",
+        ),
         "knowledge-types": CatalogSchemaResource(
             "schemas/knowledge/knowledge-types-v1.schema.json",
             "resources/knowledge/knowledge-types-v1.schema.json",

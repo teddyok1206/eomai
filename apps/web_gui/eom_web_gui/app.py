@@ -337,6 +337,48 @@ def create_app(
     ) -> tuple[dict[str, object], ...]:
         return await actual.recent_items(session)
 
+    @app.get(
+        f"{API_PREFIX}/admin/assessment-learning-batches/{{batch_id}}/exams/"
+        "{occurrence_revision_id}/pages"
+    )
+    async def assessment_learning_pages(
+        batch_id: str,
+        occurrence_revision_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> tuple[dict[str, object], ...]:
+        return tuple(
+            value.model_dump(mode="json")
+            for value in await actual.assessment_learning_pages(
+                session, batch_id, occurrence_revision_id
+            )
+        )
+
+    @app.get(
+        f"{API_PREFIX}/admin/assessment-learning-batches/{{batch_id}}/exams/"
+        "{occurrence_revision_id}/pages/{page_input_id}/image"
+    )
+    async def assessment_learning_page_media(
+        batch_id: str,
+        occurrence_revision_id: str,
+        page_input_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> Response:
+        value = await actual.gateway.assessment_learning_page_media(
+            session,
+            batch_id,
+            occurrence_revision_id,
+            page_input_id,
+        )
+        return Response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "ETag": value.etag,
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
     @app.post(f"{API_PREFIX}/items/structured-content-imports")
     async def structured_item_import(
         value: StructuredItemImportRequest,

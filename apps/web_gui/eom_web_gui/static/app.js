@@ -47,6 +47,7 @@ const state = {
   analysisBatchPollTimer: null,
   assessmentLearningBatches: [],
   assessmentLearningExams: [],
+  assessmentLearningPagesByExam: new Map(),
   selectedAssessmentLearningBatchId: null,
   assessmentLearningPollTimer: null,
   presentationVocabulary: null,
@@ -1368,9 +1369,64 @@ function renderAssessmentLearningExams(exams) {
     progress.max = exam.items.expected;
     progress.value = exam.items.graph_published;
     progress.setAttribute("aria-label", `${exam.display_label} 현재 Graph 발행 문항 수`);
-    card.append(heading, metrics, progress);
+    const pageActions = document.createElement("div");
+    pageActions.className = "learning-page-actions";
+    const pagePanel = document.createElement("section");
+    pagePanel.className = "learning-page-panel";
+    pagePanel.hidden = true;
+    const pageButton = actionButton("원본 PNG 보기", async () => {
+      if (!pagePanel.hidden) {
+        pagePanel.hidden = true;
+        pageButton.textContent = "원본 PNG 보기";
+        return;
+      }
+      pagePanel.hidden = false;
+      pageButton.textContent = "원본 PNG 닫기";
+      await loadAssessmentLearningPages(exam, pagePanel, pageButton);
+    }, true);
+    pageActions.append(pageButton);
+    card.append(heading, metrics, progress, pageActions, pagePanel);
     root.append(card);
   }
+}
+
+async function loadAssessmentLearningPages(exam, panel, button) {
+  const key = `${exam.extraction_batch_id}:${exam.assessment_occurrence_revision_id}`;
+  let pages = state.assessmentLearningPagesByExam.get(key);
+  if (!pages) {
+    button.disabled = true;
+    panel.replaceChildren(Object.assign(document.createElement("p"), {textContent: "고정된 페이지 포인터와 PNG를 확인하고 있습니다."}));
+    try {
+      pages = await api(
+        `/admin/assessment-learning-batches/${encodeURIComponent(exam.extraction_batch_id)}`
+        + `/exams/${encodeURIComponent(exam.assessment_occurrence_revision_id)}/pages`,
+      );
+      state.assessmentLearningPagesByExam.set(key, pages);
+    } catch (failure) {
+      panel.replaceChildren(Object.assign(document.createElement("p"), {className: "form-message error", textContent: `원본 페이지 조회 실패: ${failure.message}`}));
+      button.disabled = false;
+      return;
+    }
+    button.disabled = false;
+  }
+  const grid = document.createElement("div");
+  grid.className = "learning-page-grid";
+  for (const page of pages) {
+    const figure = document.createElement("figure");
+    const image = document.createElement("img");
+    image.loading = "lazy";
+    image.alt = `${page.source_role === "PROBLEM_DOCUMENT" ? "문제" : "정답·해설"} ${page.physical_page}쪽`;
+    image.src = `${API}/admin/assessment-learning-batches/${encodeURIComponent(page.extraction_batch_id)}`
+      + `/exams/${encodeURIComponent(page.assessment_occurrence_revision_id)}`
+      + `/pages/${encodeURIComponent(page.page_input_id)}/image`;
+    const caption = document.createElement("figcaption");
+    caption.textContent = `${page.source_role === "PROBLEM_DOCUMENT" ? "문제" : "정답·해설"} ${page.physical_page}쪽 · ${page.width_px}×${page.height_px}`;
+    const identity = document.createElement("code");
+    identity.textContent = `${page.artifact_revision_id} · ${page.sha256}`;
+    figure.append(image, caption, identity);
+    grid.append(figure);
+  }
+  panel.replaceChildren(grid);
 }
 
 async function loadControlPlane() {

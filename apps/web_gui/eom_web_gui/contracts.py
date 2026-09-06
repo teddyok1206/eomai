@@ -211,6 +211,23 @@ class AssessmentLearningExamStatus(WebModel):
         return self
 
 
+class AssessmentLearningPageStatus(WebModel):
+    schema_version: Literal["assessment-learning-page-view/1.0"]
+    extraction_batch_id: str = Field(pattern=r"^legacybatch_[0-9a-f]{32}$")
+    assessment_occurrence_revision_id: str = Field(pattern=r"^occurrev_[0-9a-f]{32}$")
+    page_input_id: str = Field(pattern=r"^assessmentpage_[0-9a-f]{32}$")
+    source_role: Literal["PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"]
+    physical_page: int = Field(ge=1, le=100000)
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    artifact_member: str = Field(min_length=1, max_length=512)
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    media_type: Literal["image/png"]
+    content_length: int = Field(ge=1, le=32 * 1024 * 1024)
+    width_px: int = Field(ge=1, le=20000)
+    height_px: int = Field(ge=1, le=20000)
+
+
 class KnowledgeAnalysisBatchRangeStatus(WebModel):
     """Minimum immutable range projection needed by the quality observer."""
 

@@ -4,6 +4,7 @@ from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
     AssessmentLearningExamView,
     AssessmentLearningItemCounts,
+    AssessmentLearningPageView,
     AssessmentLearningWorkUnitCounts,
 )
 from eom_api_contracts.common import (
@@ -60,6 +61,7 @@ __all__ = [
     "AssessmentLearningBatchView",
     "AssessmentLearningExamView",
     "AssessmentLearningItemCounts",
+    "AssessmentLearningPageView",
     "AssessmentLearningWorkUnitCounts",
     "CommandResult",
     "ContentIntakeAnalysisSourceInput",
