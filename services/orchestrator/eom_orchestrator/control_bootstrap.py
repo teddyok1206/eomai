@@ -1566,11 +1566,33 @@ def _publish_analysis_capacity_policy_v2(
             document=reviewed.model_dump(mode="json"),
             created_by=actor_id,
         )
-        publish_capacity_policy_revision(
-            session,
-            capacity_policy_id=policy_id,
-            capacity_policy_revision_id=revision_id,
+        logical = session.get(WorkerCapacityPolicyRecord, policy_id)
+        if logical is None:
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_HISTORY_INVALID",
+                "parallel fixed-host capacity logical record is missing",
+            )
+        current = (
+            session.get(WorkerCapacityPolicyRevisionRecord, logical.current_revision_id)
+            if logical.current_revision_id is not None
+            else None
         )
+        if logical.current_revision_id is not None and (
+            current is None or current.capacity_policy_id != policy_id
+        ):
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_HISTORY_INVALID",
+                "parallel fixed-host capacity pointer is invalid",
+            )
+        # The knowledge preset pins reviewed revision 2. A later shared-host capacity
+        # revision may already be current for another workload; never move that global
+        # pointer backward merely to reuse this immutable revision.
+        if current is None or current.revision_number < reviewed.revision_number:
+            publish_capacity_policy_revision(
+                session,
+                capacity_policy_id=policy_id,
+                capacity_policy_revision_id=revision_id,
+            )
     return revision_id
 
 

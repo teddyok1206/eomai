@@ -197,6 +197,59 @@ def test_parallel_bootstrap_preserves_an_operator_assigned_account_label(
     assert binding.account_label == "textbook-analysis-slot06"
 
 
+def test_parallel_bootstrap_reuses_v2_without_moving_newer_capacity_pointer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy_id = control_bootstrap._stable_id("capacity_", "fixed-host")
+    revision_v2_id = control_bootstrap._stable_id("capacityrev_", "fixed-host:v2")
+    revision_v3_id = control_bootstrap._stable_id("capacityrev_", "fixed-host:v3")
+    logical = SimpleNamespace(current_revision_id=revision_v3_id)
+    current = SimpleNamespace(capacity_policy_id=policy_id, revision_number=3)
+
+    class FakeSession:
+        @staticmethod
+        def get(model: object, identity: str) -> object | None:
+            if model is control_bootstrap.WorkerCapacityPolicyRevisionRecord:
+                return current if identity == revision_v3_id else None
+            if model is control_bootstrap.WorkerCapacityPolicyRecord and identity == policy_id:
+                return logical
+            return None
+
+    @contextmanager
+    def fake_transaction(_sessions: object) -> Iterator[FakeSession]:
+        yield FakeSession()
+
+    published: list[str] = []
+    monkeypatch.setattr(control_bootstrap, "transaction", fake_transaction)
+    monkeypatch.setattr(control_bootstrap, "record_capacity_policy_revision", lambda *a, **k: None)
+    monkeypatch.setattr(
+        control_bootstrap,
+        "publish_capacity_policy_revision",
+        lambda *a, **k: published.append(str(k["capacity_policy_revision_id"])),
+    )
+    slots = tuple(
+        SimpleNamespace(slot_id=slot_id, linux_user=user, role=role, gpu=gpu, enabled=True)
+        for slot_id, user, role, gpu in (
+            ("01", "eom-cdx-01", "authoring", False),
+            ("02", "eom-cdx-02", "review", False),
+            ("03", "eom-cdx-03", "image", True),
+            ("04", "eom-cdx-04", "item_management", False),
+            ("05", "eom-cdx-05", "support", False),
+            ("06", "eom-cdx-06", "support", False),
+        )
+    )
+
+    actual = control_bootstrap._publish_analysis_capacity_policy_v2(  # type: ignore[arg-type]
+        object(),  # type: ignore[arg-type]
+        slots=slots,
+        actor_id="operator_test",
+    )
+
+    assert actual == revision_v2_id
+    assert published == []
+    assert logical.current_revision_id == revision_v3_id
+
+
 def test_standard_capacity_accepts_only_hash_pinned_shared_policy_revisions() -> None:
     assert {
         control_bootstrap._stable_id("capacityrev_", "fixed-host:v1"): (
