@@ -386,9 +386,14 @@ class WorkflowRequest(FrozenModel):
                     "legacy generated knowledge workflow requires the pinned image role"
                 )
         elif self.request_name == "KNOWLEDGE_ANALYSIS_REQUEST":
+            analysis_image_mode = (
+                "required"
+                if isinstance(self.analysis_request, KnowledgeAnalysisRequestV9)
+                else "skip"
+            )
             if (
                 self.analysis_request is None
-                or self.image_mode != "skip"
+                or self.image_mode != analysis_image_mode
                 or any(
                     value is not None
                     for value in (
@@ -403,7 +408,8 @@ class WorkflowRequest(FrozenModel):
                 )
             ):
                 raise ValueError(
-                    "knowledge analysis requires one pinned V2 request and no item fields"
+                    "knowledge analysis requires one pinned request, matching image mode, "
+                    "and no item fields"
                 )
             if self.legacy_extraction_request is not None:
                 raise ValueError("knowledge analysis cannot include a legacy extraction request")

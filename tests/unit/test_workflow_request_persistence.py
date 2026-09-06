@@ -75,6 +75,17 @@ def test_storage_preserves_schema_required_nullable_analysis_pointers() -> None:
     assert stored["analysis_request"]["prior_graph_snapshot"] is None
 
 
+def test_text_analysis_workflow_rejects_image_materialization_mode() -> None:
+    with pytest.raises(ValidationError, match="matching image mode"):
+        WorkflowRequest(
+            request_name="KNOWLEDGE_ANALYSIS_REQUEST",
+            image_mode="required",
+            analysis_request=KnowledgeAnalysisRequestV2.model_validate(
+                _analysis_request_document()
+            ),
+        )
+
+
 def test_loader_recovers_only_legacy_omitted_nulls_and_revalidates_hash() -> None:
     stored = workflow_request_storage_document(_workflow_request())
     legacy = deepcopy(stored)

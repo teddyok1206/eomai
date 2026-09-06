@@ -19,6 +19,7 @@ from eom_catalog_service.knowledge_graph_projection import (
 )
 from eom_catalog_service.knowledge_graph_publication_service import _snapshot_source_revision
 from eom_identifiers import content_sha256
+from eom_workflow import WorkflowRequest
 from pydantic import ValidationError
 
 NOW = datetime(2026, 9, 6, 3, tzinfo=UTC)
@@ -258,6 +259,24 @@ def test_v9_request_and_proposal_require_exact_ordered_page_observations() -> No
     invalid["page_image_observations"].reverse()
     with pytest.raises(ValidationError):
         KnowledgeAnalysisWorkerProposalV7.model_validate(invalid)
+
+
+def test_visual_analysis_workflow_requires_image_materialization_mode() -> None:
+    request = _request(_source())
+
+    workflow_request = WorkflowRequest(
+        request_name="KNOWLEDGE_ANALYSIS_REQUEST",
+        image_mode="required",
+        analysis_request=request,
+    )
+
+    assert workflow_request.worker_request().analysis_request == request
+    with pytest.raises(ValidationError, match="matching image mode"):
+        WorkflowRequest(
+            request_name="KNOWLEDGE_ANALYSIS_REQUEST",
+            image_mode="skip",
+            analysis_request=request,
+        )
 
 
 def test_visual_graph_source_pointer_retains_exact_png_revision_and_hash() -> None:
