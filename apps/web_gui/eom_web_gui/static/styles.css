@@ -419,9 +419,9 @@ html[data-ui-mode="human"] .panel-heading .eyebrow { display: none; }
 .quick-actions { padding: 17px; display: flex; flex-wrap: wrap; gap: 9px; }
 .toast { position: fixed; z-index: 80; right: 22px; bottom: 22px; max-width: 420px; padding: 11px 14px; border: 1px solid var(--eom-border); border-left: 4px solid var(--eom-primary); border-radius: 6px; background: white; box-shadow: 0 7px 30px rgba(16,24,40,.17); font-size: var(--eom-type-label); }
 
-.login-page { background: var(--eom-ink); }
-.login-shell { min-height: 100vh; display: grid; place-items: center; padding: 28px; background: radial-gradient(circle at 74% 18%, #4f46e5 0, #312e81 38%, #171531 76%); }
-.login-panel { width: min(430px, 100%); padding: 34px; background: white; border-top: 4px solid var(--eom-primary); border-radius: 8px; box-shadow: 0 22px 70px rgba(3, 20, 47, .3); }
+.login-page { background: var(--eom-surface-muted); }
+.login-shell { min-height: 100vh; display: grid; place-items: center; padding: 28px; background: var(--eom-surface-muted); }
+.login-panel { width: min(430px, 100%); padding: 34px; background: white; border: 1px solid var(--eom-border); border-top: 4px solid var(--eom-primary); border-radius: 8px; box-shadow: 0 16px 44px rgba(31, 28, 79, .12); }
 .login-panel .brand-seal { width: 54px; height: 54px; margin-bottom: 23px; }
 .login-panel h1 { margin: 5px 0 9px; font-size: 25px; }
 .login-intro { margin: 0 0 25px; color: var(--eom-text-muted); font-size: 13px; line-height: 1.6; }

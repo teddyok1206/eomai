@@ -90,6 +90,13 @@ def test_brand_mark_is_one_color_vector_without_a_literal_letter() -> None:
     assert "background: linear-gradient(145deg" not in CSS
 
 
+def test_login_surface_uses_the_quiet_solid_workbench_background() -> None:
+    login_shell_rule = next(line for line in CSS.splitlines() if line.startswith(".login-shell "))
+    assert ".login-page { background: var(--eom-surface-muted); }" in CSS
+    assert "background: var(--eom-surface-muted)" in login_shell_rule
+    assert "gradient" not in login_shell_rule
+
+
 def test_readable_type_scale_keeps_explanatory_text_out_of_micro_sizes() -> None:
     for token in (
         "--eom-type-caption: 12px",
