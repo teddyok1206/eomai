@@ -23,12 +23,14 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisRequestV8,
+    KnowledgeAnalysisRequestV9,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
     KnowledgeAnalysisWorkerProposalV4,
     KnowledgeAnalysisWorkerProposalV5,
     KnowledgeAnalysisWorkerProposalV6,
+    KnowledgeAnalysisWorkerProposalV7,
     LegacyItemEditorialCompatibilityProposal,
     LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionRequest,
@@ -166,6 +168,7 @@ class KnowledgeAnalysisWorkerRequest(FrozenModel):
         | KnowledgeAnalysisRequestV6
         | KnowledgeAnalysisRequestV7
         | KnowledgeAnalysisRequestV8
+        | KnowledgeAnalysisRequestV9
     )
 
 
@@ -307,6 +310,7 @@ class WorkflowRequest(FrozenModel):
         | KnowledgeAnalysisRequestV6
         | KnowledgeAnalysisRequestV7
         | KnowledgeAnalysisRequestV8
+        | KnowledgeAnalysisRequestV9
         | None
     ) = None
     legacy_extraction_request: LegacyItemExtractionRequest | None = None
@@ -536,6 +540,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.15.0",
         "workflow-role/1.16.0",
         "workflow-role/1.17.0",
+        "workflow-role/1.18.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -639,6 +644,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.15.0",
         "workflow-role/1.16.0",
         "workflow-role/1.17.0",
+        "workflow-role/1.18.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1424,6 +1430,16 @@ class KnowledgeAnalysisProposalRoleResultV8(RoleResultBase):
     output: KnowledgeAnalysisProposalOutputV6
 
 
+class KnowledgeAnalysisProposalOutputV7(FrozenModel):
+    proposal: KnowledgeAnalysisWorkerProposalV7
+
+
+class KnowledgeAnalysisProposalRoleResultV9(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.18.0"] = "workflow-role/1.18.0"
+    role: Literal["support"] = "support"
+    output: KnowledgeAnalysisProposalOutputV7
+
+
 class LegacyItemExtractionOutput(FrozenModel):
     extraction_result: LegacyItemExtractionResult
 
@@ -1484,6 +1500,7 @@ RoleResult = (
     | KnowledgeAnalysisProposalRoleResultV6
     | KnowledgeAnalysisProposalRoleResultV7
     | KnowledgeAnalysisProposalRoleResultV8
+    | KnowledgeAnalysisProposalRoleResultV9
     | LegacyItemExtractionRoleResult
     | LegacyItemEditorialCompatibilityRoleResult
 )

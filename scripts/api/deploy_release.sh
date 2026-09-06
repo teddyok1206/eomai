@@ -224,8 +224,10 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         if name.startswith("eom_api_contracts/schemas/") and name.endswith(".schema.json")
     ]
     if (
-        len(schemas) != 12
+        len(schemas) != 13
         or "eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"
+        not in schemas
+        or "eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"
         not in schemas
         or "eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"
         not in schemas
@@ -239,7 +241,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         not in schemas
     ):
         raise SystemExit(
-            "expected 12 packaged API schemas including HWPX, Items, curriculum "
+            "expected 13 packaged API schemas including HWPX, Items, curriculum "
             "capability, assessment occurrence, and assessment learning, "
             f"found {schemas}"
         )
@@ -545,29 +547,35 @@ catalog_resources = {
     "knowledge/knowledge-analysis-result-v2.schema.json": "schemas/knowledge/knowledge-analysis-result-v2.schema.json",
     "knowledge/knowledge-analysis-types-v3.schema.json": "schemas/knowledge/knowledge-analysis-types-v3.schema.json",
     "knowledge/knowledge-analysis-types-v4.schema.json": "schemas/knowledge/knowledge-analysis-types-v4.schema.json",
+    "knowledge/knowledge-analysis-types-v5.schema.json": "schemas/knowledge/knowledge-analysis-types-v5.schema.json",
+    "knowledge/knowledge-assessment-page-image-observation-v2.schema.json": "schemas/knowledge/knowledge-assessment-page-image-observation-v2.schema.json",
     "knowledge/knowledge-analysis-request-v3.schema.json": "schemas/knowledge/knowledge-analysis-request-v3.schema.json",
     "knowledge/knowledge-analysis-request-v4.schema.json": "schemas/knowledge/knowledge-analysis-request-v4.schema.json",
     "knowledge/knowledge-analysis-request-v5.schema.json": "schemas/knowledge/knowledge-analysis-request-v5.schema.json",
     "knowledge/knowledge-analysis-request-v6.schema.json": "schemas/knowledge/knowledge-analysis-request-v6.schema.json",
     "knowledge/knowledge-analysis-request-v7.schema.json": "schemas/knowledge/knowledge-analysis-request-v7.schema.json",
     "knowledge/knowledge-analysis-request-v8.schema.json": "schemas/knowledge/knowledge-analysis-request-v8.schema.json",
+    "knowledge/knowledge-analysis-request-v9.schema.json": "schemas/knowledge/knowledge-analysis-request-v9.schema.json",
     "knowledge/knowledge-analysis-proposal-receipt-v2.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v2.schema.json",
     "knowledge/knowledge-analysis-proposal-receipt-v3.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v3.schema.json",
     "knowledge/knowledge-analysis-proposal-receipt-v4.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v4.schema.json",
     "knowledge/knowledge-analysis-proposal-receipt-v5.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v5.schema.json",
     "knowledge/knowledge-analysis-proposal-receipt-v6.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v6.schema.json",
     "knowledge/knowledge-analysis-proposal-receipt-v7.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v7.schema.json",
+    "knowledge/knowledge-analysis-proposal-receipt-v8.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v8.schema.json",
     "knowledge/knowledge-analysis-result-v3.schema.json": "schemas/knowledge/knowledge-analysis-result-v3.schema.json",
     "knowledge/knowledge-analysis-result-v4.schema.json": "schemas/knowledge/knowledge-analysis-result-v4.schema.json",
     "knowledge/knowledge-analysis-result-v5.schema.json": "schemas/knowledge/knowledge-analysis-result-v5.schema.json",
     "knowledge/knowledge-analysis-result-v6.schema.json": "schemas/knowledge/knowledge-analysis-result-v6.schema.json",
     "knowledge/knowledge-analysis-result-v7.schema.json": "schemas/knowledge/knowledge-analysis-result-v7.schema.json",
     "knowledge/knowledge-analysis-result-v8.schema.json": "schemas/knowledge/knowledge-analysis-result-v8.schema.json",
+    "knowledge/knowledge-analysis-result-v9.schema.json": "schemas/knowledge/knowledge-analysis-result-v9.schema.json",
     "knowledge/knowledge-analysis-worker-proposal-v2.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v2.schema.json",
     "knowledge/knowledge-analysis-worker-proposal-v3.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v3.schema.json",
     "knowledge/knowledge-analysis-worker-proposal-v4.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v4.schema.json",
     "knowledge/knowledge-analysis-worker-proposal-v5.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v5.schema.json",
     "knowledge/knowledge-analysis-worker-proposal-v6.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v6.schema.json",
+    "knowledge/knowledge-analysis-worker-proposal-v7.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v7.schema.json",
     "knowledge/knowledge-analysis-proposed-node-v3.schema.json": "schemas/knowledge/knowledge-analysis-proposed-node-v3.schema.json",
     "knowledge/knowledge-analysis-proposed-node-v4.schema.json": "schemas/knowledge/knowledge-analysis-proposed-node-v4.schema.json",
     "knowledge/knowledge-analysis-proposed-edge-v4.schema.json": "schemas/knowledge/knowledge-analysis-proposed-edge-v4.schema.json",
@@ -691,7 +699,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
         )
         definitions.append(definition)
     analysis_definitions = []
-    for version in ("1", "2", "3", "4", "5", "6", "7", "8"):
+    for version in ("1", "2", "3", "4", "5", "6", "7", "8", "9"):
         definition = root / f"knowledge-analysis.v{version}.yaml"
         definition.write_bytes(
             (
@@ -760,7 +768,7 @@ import sys
 from pathlib import Path
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -849,6 +857,7 @@ load_role_input_schema("authoring", "workflow-role/1.17.0")
 load_role_input_schema("image", "workflow-role/1.17.0")
 load_role_input_schema("review", "workflow-role/1.17.0")
 load_role_input_schema("item_management", "workflow-role/1.17.0")
+load_role_input_schema("support", "workflow-role/1.18.0")
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
     load_codex_result_schema(schema_id)
@@ -871,9 +880,9 @@ if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "
     raise SystemExit("generic workflow definition versions mismatch")
 analysis_versions = {
     compile_definition(Path(path), {"support"}).definition.definition_version
-    for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8)
+    for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9)
 }
-if analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0", "6.0.0", "7.0.0", "8.0.0"}:
+if analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0"}:
     raise SystemExit("knowledge analysis workflow definition mismatch")
 legacy = compile_definition(Path(legacy_definition), {"support"}).definition
 if (
@@ -892,6 +901,7 @@ admitted_definitions = (
     compile_definition(Path(analysis_v1), {"support"}),
     compile_definition(Path(analysis_v4), {"support"}),
     compile_definition(Path(analysis_v8), {"support"}),
+    compile_definition(Path(analysis_v9), {"support"}),
     compile_definition(Path(legacy_definition), {"support"}),
     compile_definition(Path(editorial_definition), {"support"}),
 )

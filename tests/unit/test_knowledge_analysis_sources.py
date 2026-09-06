@@ -204,7 +204,7 @@ def test_approved_historical_item_revision_resolves_without_implicit_latest_look
     assert source.artifact_member.materialized_path == "source/item-content.json"
 
 
-def test_published_analysis_re_resolves_its_exact_superseded_item_revision() -> None:
+def test_published_analysis_re_resolves_its_exact_superseded_approved_item_revision() -> None:
     content_bytes = 512
     component = SimpleNamespace(
         required=True,
@@ -252,7 +252,7 @@ def test_published_analysis_re_resolves_its_exact_superseded_item_revision() -> 
     source = resolve_historically_approved_item_source(
         session,
         item_revision_id=ITEM_REVISION_ID,
-        source_class="PAST_EXAM",
+        source_class="APPROVED_ITEM",
     )
 
     assert source.item_id == ITEM_ID

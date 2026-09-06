@@ -355,6 +355,26 @@ def create_app(
 
     @app.get(
         f"{API_PREFIX}/admin/assessment-learning-batches/{{batch_id}}/exams/"
+        "{occurrence_revision_id}/items"
+    )
+    async def assessment_learning_items(
+        batch_id: str,
+        occurrence_revision_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+        item_number: int | None = None,
+    ) -> tuple[dict[str, object], ...]:
+        return tuple(
+            value.model_dump(mode="json")
+            for value in await actual.assessment_learning_items(
+                session,
+                batch_id,
+                occurrence_revision_id,
+                item_number=item_number,
+            )
+        )
+
+    @app.get(
+        f"{API_PREFIX}/admin/assessment-learning-batches/{{batch_id}}/exams/"
         "{occurrence_revision_id}/pages/{page_input_id}/image"
     )
     async def assessment_learning_page_media(

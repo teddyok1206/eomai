@@ -10,7 +10,7 @@ from eom_api.routers.curriculum import (
     integrated_science_editorial_outline,
     integrated_science_graph_capability,
 )
-from eom_api_contracts import AssessmentItemOccurrenceView, CurriculumGraphCapabilityView
+from eom_api_contracts import AssessmentItemOccurrenceViewV2, CurriculumGraphCapabilityView
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     IntegratedScienceEditorialOutline,
@@ -100,12 +100,12 @@ def test_curriculum_graph_capability_endpoint_returns_query_projection() -> None
     assert response.data == value
 
 
-def _past_exam_item() -> AssessmentItemOccurrenceView:
-    return AssessmentItemOccurrenceView(
+def _past_exam_item() -> AssessmentItemOccurrenceViewV2:
+    return AssessmentItemOccurrenceViewV2(
         graph_snapshot_revision_id="graphrev_" + "1" * 32,
-        placement_node_id="knode_" + "2" * 64,
-        occurrence_node_id="knode_" + "3" * 64,
-        item_node_id="knode_" + "4" * 64,
+        placement_node_id="knode_" + "2" * 32,
+        occurrence_node_id="knode_" + "3" * 32,
+        item_node_id="knode_" + "4" * 32,
         analysis_run_id="analysisrun_" + "5" * 32,
         assessment_occurrence_id="occurrence_" + "6" * 32,
         assessment_occurrence_revision_id="occurrev_" + "7" * 32,
@@ -154,6 +154,8 @@ def test_curriculum_item_routes_forward_exact_exam_and_unit_keys() -> None:
         target_grade=1,
         administration_month=6,
         subject_key="integrated-science",
+        assessment_occurrence_revision_id="occurrev_" + "7" * 32,
+        item_number=12,
         limit=50,
         cursor=None,
     )
@@ -166,6 +168,8 @@ def test_curriculum_item_routes_forward_exact_exam_and_unit_keys() -> None:
         "target_grade": 1,
         "administration_month": 6,
         "subject_key": "integrated-science",
+        "assessment_occurrence_revision_id": "occurrev_" + "7" * 32,
+        "item_number": 12,
         "limit": 50,
         "cursor": None,
     }

@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
+    ApprovedPastExamItemKnowledgeSourceV3,
     ContentIntakeKnowledgeSourceV2,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
@@ -37,6 +38,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisRequestV8,
+    KnowledgeAnalysisRequestV9,
     KnowledgeAnalysisSourceV3,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphSnapshotPointer,
@@ -55,9 +57,9 @@ from sqlalchemy.orm import Session
 from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactService
 from eom_catalog_service.knowledge_analysis_sources import (
     KnowledgeAnalysisSourceError,
-    resolve_approved_item_source,
     resolve_content_intake_source,
     resolve_educational_document_source,
+    resolve_historically_approved_item_source,
 )
 from eom_catalog_service.knowledge_graph_models import (
     CurriculumUnitClosureRecord,
@@ -173,7 +175,11 @@ def _bounded_seed_scores(seed_scores: dict[str, int], *, limit: int) -> dict[str
 @dataclass(frozen=True)
 class _Candidate:
     analysis_run_id: str
-    source: KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4
+    source: (
+        KnowledgeAnalysisSourceV3
+        | EducationalDocumentKnowledgeSourceV4
+        | ApprovedPastExamItemKnowledgeSourceV3
+    )
     node_ids: tuple[str, ...]
     anchor_ids: tuple[str, ...]
     node_labels: tuple[str, ...]
@@ -947,7 +953,10 @@ class KnowledgeRetrievalApplicationService:
             ].append(pointer)
 
         source_cache: dict[
-            tuple[str, str, str], KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4
+            tuple[str, str, str],
+            KnowledgeAnalysisSourceV3
+            | EducationalDocumentKnowledgeSourceV4
+            | ApprovedPastExamItemKnowledgeSourceV3,
         ] = {}
         values: list[_Candidate] = []
         for key, pointers in sorted(grouped.items()):
@@ -1004,14 +1013,16 @@ class KnowledgeRetrievalApplicationService:
         session: Session,
         snapshot_id: str,
         pointer: KnowledgeNodeSourcePointerRecord,
-    ) -> KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4:
+    ) -> (
+        KnowledgeAnalysisSourceV3
+        | EducationalDocumentKnowledgeSourceV4
+        | ApprovedPastExamItemKnowledgeSourceV3
+    ):
         association = session.scalar(
             select(KnowledgeSnapshotAnalysisRecord).where(
                 KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id == snapshot_id,
                 KnowledgeSnapshotAnalysisRecord.analysis_run_id == pointer.analysis_run_id,
                 KnowledgeSnapshotAnalysisRecord.source_revision_id == pointer.source_revision_id,
-                KnowledgeSnapshotAnalysisRecord.source_artifact_revision_id
-                == pointer.artifact_revision_id,
             )
         )
         if association is None:
@@ -1027,10 +1038,15 @@ class KnowledgeRetrievalApplicationService:
             )
         try:
             schema_version = run.canonical_request.get("schema_version")
+            visual_item_source: ApprovedPastExamItemKnowledgeSourceV3 | None = None
             document_source: (
                 EducationalDocumentKnowledgeSourceV3 | EducationalDocumentKnowledgeSourceV4 | None
-            )
-            if schema_version == "knowledge-analysis-request/8.0":
+            ) = None
+            if schema_version == "knowledge-analysis-request/9.0":
+                visual_item_source = KnowledgeAnalysisRequestV9.model_validate(
+                    run.canonical_request
+                ).source
+            elif schema_version == "knowledge-analysis-request/8.0":
                 document_source = KnowledgeAnalysisRequestV8.model_validate(
                     run.canonical_request
                 ).source
@@ -1054,22 +1070,34 @@ class KnowledgeRetrievalApplicationService:
                 document_source = KnowledgeAnalysisRequestV3.model_validate(
                     run.canonical_request
                 ).source
-            else:
-                document_source = None
-            if document_source is not None:
-                source: KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4 = (
-                    document_source
+            source: (
+                KnowledgeAnalysisSourceV3
+                | EducationalDocumentKnowledgeSourceV4
+                | ApprovedPastExamItemKnowledgeSourceV3
+            )
+            actual: (
+                KnowledgeAnalysisSourceV3
+                | EducationalDocumentKnowledgeSourceV4
+                | ApprovedPastExamItemKnowledgeSourceV3
+            )
+            if visual_item_source is not None:
+                source = visual_item_source
+                actual = resolve_historically_approved_item_source(
+                    session,
+                    artifacts=self.artifacts,
+                    item_revision_id=visual_item_source.item_revision_id,
+                    source_class=visual_item_source.source_class,
                 )
-                actual: KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4 = (
-                    resolve_educational_document_source(
-                        session,
-                        self.artifacts,
-                        document_revision_id=document_source.document_revision_id,
-                        source_class=document_source.source_class,
-                        first_physical_page=document_source.first_physical_page,
-                        last_physical_page=document_source.last_physical_page,
-                        curriculum_unit_keys=document_source.curriculum_unit_keys,
-                    )
+            elif document_source is not None:
+                source = document_source
+                actual = resolve_educational_document_source(
+                    session,
+                    self.artifacts,
+                    document_revision_id=document_source.document_revision_id,
+                    source_class=document_source.source_class,
+                    first_physical_page=document_source.first_physical_page,
+                    last_physical_page=document_source.last_physical_page,
+                    curriculum_unit_keys=document_source.curriculum_unit_keys,
                 )
             else:
                 legacy_source = KnowledgeAnalysisRequestV2.model_validate(
@@ -1084,8 +1112,9 @@ class KnowledgeRetrievalApplicationService:
                         source_class=legacy_source.source_class,
                     )
                     if isinstance(legacy_source, ContentIntakeKnowledgeSourceV2)
-                    else resolve_approved_item_source(
+                    else resolve_historically_approved_item_source(
                         session,
+                        artifacts=self.artifacts,
                         item_revision_id=legacy_source.item_revision_id,
                         source_class=legacy_source.source_class,
                     )
@@ -1095,13 +1124,31 @@ class KnowledgeRetrievalApplicationService:
                 "KNOWLEDGE_RETRIEVAL_SOURCE_STALE",
                 "pinned source can no longer be resolved exactly",
             ) from exc
-        if (
-            actual != source
-            or actual.artifact_member.artifact_id != pointer.source_artifact_id
-            or actual.artifact_member.artifact_revision_id != pointer.artifact_revision_id
-            or actual.artifact_member.sha256 != pointer.source_sha256
-            or actual.artifact_member.member_path != pointer.member_path
-        ):
+        allowed_member_keys = {
+            (
+                actual.artifact_member.artifact_id,
+                actual.artifact_member.artifact_revision_id,
+                actual.artifact_member.sha256,
+                actual.artifact_member.member_path,
+            )
+        }
+        if isinstance(actual, ApprovedPastExamItemKnowledgeSourceV3):
+            allowed_member_keys.update(
+                (
+                    page.image.artifact_id,
+                    page.image.artifact_revision_id,
+                    page.image.sha256,
+                    page.image.member_path,
+                )
+                for page in actual.page_inputs
+            )
+        pointer_key = (
+            pointer.source_artifact_id,
+            pointer.artifact_revision_id,
+            pointer.source_sha256,
+            pointer.member_path,
+        )
+        if actual != source or pointer_key not in allowed_member_keys:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_SOURCE_HASH_MISMATCH",
                 "graph source pointer differs from the canonical source revision",
@@ -1207,11 +1254,22 @@ class KnowledgeRetrievalApplicationService:
                     answer_bearing=candidate.answer_bearing,
                 )
             else:
+                item_source = (
+                    ApprovedItemKnowledgeSourceV2(
+                        source_class=source.source_class,
+                        item_id=source.item_id,
+                        item_revision_id=source.item_revision_id,
+                        lifecycle_state=source.lifecycle_state,
+                        artifact_member=source.artifact_member,
+                    )
+                    if isinstance(source, ApprovedPastExamItemKnowledgeSourceV3)
+                    else source
+                )
                 entry = EvidenceEntryV2(
                     evidence_id=evidence_id,
                     evidence_kind=kind,
                     use=use,
-                    source=source,
+                    source=item_source,
                     graph_node_ids=candidate.node_ids,
                     anchor_ids=candidate.anchor_ids,
                     relevance_milli=candidate.relevance_milli,

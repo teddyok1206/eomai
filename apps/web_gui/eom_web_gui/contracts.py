@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Literal
@@ -226,6 +227,46 @@ class AssessmentLearningPageStatus(WebModel):
     content_length: int = Field(ge=1, le=32 * 1024 * 1024)
     width_px: int = Field(ge=1, le=20000)
     height_px: int = Field(ge=1, le=20000)
+
+
+class AssessmentLearningItemStatus(WebModel):
+    """One Graph-published Item placement bound to its immutable parent exam."""
+
+    schema_version: Literal["assessment-item-occurrence-view/2.0"]
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    placement_node_id: str = Field(pattern=r"^knode_[0-9a-f]{32}$")
+    occurrence_node_id: str = Field(pattern=r"^knode_[0-9a-f]{32}$")
+    item_node_id: str = Field(pattern=r"^knode_[0-9a-f]{32}$")
+    analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    assessment_occurrence_id: str = Field(pattern=r"^occurrence_[0-9a-f]{32}$")
+    assessment_occurrence_revision_id: str = Field(pattern=r"^occurrev_[0-9a-f]{32}$")
+    assessment_occurrence_revision_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    occurrence_display_label: str = Field(min_length=1, max_length=512)
+    administration_year: int = Field(ge=1900, le=2200)
+    administration_month: int = Field(ge=1, le=12)
+    target_school_level: Literal["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"]
+    target_grade: int = Field(ge=1, le=6)
+    subject_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,159}$")
+    item_number: int = Field(ge=1, le=200)
+    item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    curriculum_unit_ids: tuple[str, ...] = Field(min_length=1, max_length=8)
+    placement_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def coherent_item(self) -> AssessmentLearningItemStatus:
+        if tuple(sorted(set(self.curriculum_unit_ids))) != self.curriculum_unit_ids or any(
+            re.fullmatch(r"currunit_[0-9a-f]{32}", value) is None
+            for value in self.curriculum_unit_ids
+        ):
+            raise ValueError("assessment learning curriculum unit IDs are invalid")
+        if (
+            self.target_school_level == "HIGH_SCHOOL"
+            and self.target_grade == 1
+            and self.administration_month == 3
+        ):
+            raise ValueError("high-school grade 1 March evidence is not learnable")
+        return self
 
 
 class KnowledgeAnalysisBatchRangeStatus(WebModel):

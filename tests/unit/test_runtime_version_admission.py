@@ -32,6 +32,7 @@ ADMITTED_DEFINITIONS = {
     ("knowledge-analysis", "1.0.0"): "knowledge-analysis.v1.yaml",
     ("knowledge-analysis", "4.0.0"): "knowledge-analysis.v4.yaml",
     ("knowledge-analysis", "8.0.0"): "knowledge-analysis.v8.yaml",
+    ("knowledge-analysis", "9.0.0"): "knowledge-analysis.v9.yaml",
     ("legacy-item-extraction", "1.0.0"): "legacy-item-extraction.v1.yaml",
     (
         "legacy-item-editorial-compatibility",

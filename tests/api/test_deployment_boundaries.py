@@ -133,10 +133,13 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "knowledge/knowledge-analysis-result-v2.schema.json",
         "knowledge/knowledge-analysis-types-v3.schema.json",
         "knowledge/knowledge-analysis-types-v4.schema.json",
+        "knowledge/knowledge-analysis-types-v5.schema.json",
+        "knowledge/knowledge-assessment-page-image-observation-v2.schema.json",
         "knowledge/knowledge-analysis-request-v3.schema.json",
         "knowledge/knowledge-analysis-request-v4.schema.json",
         "knowledge/knowledge-analysis-request-v5.schema.json",
         "knowledge/knowledge-analysis-request-v6.schema.json",
+        "knowledge/knowledge-analysis-request-v9.schema.json",
         "knowledge/knowledge-analysis-worker-proposal-v2.schema.json",
         "knowledge/knowledge-analysis-worker-proposal-v3.schema.json",
         "knowledge/knowledge-analysis-worker-proposal-v4.schema.json",
@@ -144,10 +147,13 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "knowledge/knowledge-analysis-proposal-receipt-v3.schema.json",
         "knowledge/knowledge-analysis-proposal-receipt-v4.schema.json",
         "knowledge/knowledge-analysis-proposal-receipt-v5.schema.json",
+        "knowledge/knowledge-analysis-proposal-receipt-v8.schema.json",
         "knowledge/knowledge-analysis-result-v3.schema.json",
         "knowledge/knowledge-analysis-result-v4.schema.json",
         "knowledge/knowledge-analysis-result-v5.schema.json",
         "knowledge/knowledge-analysis-result-v6.schema.json",
+        "knowledge/knowledge-analysis-result-v9.schema.json",
+        "knowledge/knowledge-analysis-worker-proposal-v7.schema.json",
         "knowledge/knowledge-graph-projection-v1.schema.json",
         "knowledge/knowledge-graph-projection-v2.schema.json",
         "knowledge/knowledge-graph-projection-v3.schema.json",
@@ -450,9 +456,10 @@ def test_release_verifies_curriculum_schema_resources() -> None:
 def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
-    assert "len(schemas) != 12" in deployment
+    assert "len(schemas) != 13" in deployment
     assert '"eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-page-v1.schema.json"' in deployment
@@ -489,12 +496,13 @@ def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions()
     )
     assert (
         "for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, "
-        "analysis_v5, analysis_v6, analysis_v7, analysis_v8)" in deployment
+        "analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9)" in deployment
     )
     assert (
         'analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", '
-        '"5.0.0", "6.0.0", "7.0.0", "8.0.0"}' in deployment
+        '"5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0"}' in deployment
     )
+    assert 'load_role_input_schema("support", "workflow-role/1.18.0")' in deployment
 
 
 def test_release_verifies_legacy_item_extraction_runtime_and_contracts() -> None:

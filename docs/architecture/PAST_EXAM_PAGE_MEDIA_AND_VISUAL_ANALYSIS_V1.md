@@ -37,9 +37,21 @@ JSON plus the exact problem/answer page-image members recovered from that Item's
 extraction provenance. OCR and normalized text remain auxiliary evidence; image observation is
 required and every selected page is passed to Codex through the orchestrator image manifest.
 
+The Graph snapshot manifest stores the smallest immutable Item Revision source pointer. Its paired
+accepted-result Artifact retains the complete visual-source closure, while each projected node or
+edge source pointer records the exact Item JSON or PNG Artifact Revision, member path, and hash that
+its anchor cited. Retrieval re-resolves the accepted V9 request and validates the projected pointer
+against that closed member set; it never substitutes the source PDF or a newer page render.
+
 ## Access patterns and data structures
 
 - Exam lookup: indexed batch work-unit membership followed by the indexed bundle revision.
+- Item-in-exam lookup: current Graph snapshot plus the occurrence metadata composite index, with an
+  optional exact occurrence-revision and item-number predicate. The returned placement includes the
+  parent exam identity/label and sorted curriculum unit IDs, so `exam -> item -> unit` and
+  `unit -> exam/item` traversal share the same immutable placement row.
+  API projection `assessment-item-occurrence-view/2.0` preserves the Graph's existing 32-hex node
+  identity; V1 remains immutable because its wider node pattern never matched persisted Graph IDs.
 - Page lookup: one layout observation followed by an ordered tuple keyed by `page_input_id`.
 - Single image lookup: a map from page ID to the unique page pointer, then one Artifact Revision PK
   lookup.

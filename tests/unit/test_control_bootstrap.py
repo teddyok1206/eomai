@@ -52,6 +52,7 @@ ANALYSIS_CONFIG_V11 = ROOT / "config/control-plane/knowledge-analysis-v11"
 ANALYSIS_CONFIG_V12 = ROOT / "config/control-plane/knowledge-analysis-v12"
 ANALYSIS_CONFIG_V13 = ROOT / "config/control-plane/knowledge-analysis-v13"
 ANALYSIS_CONFIG_V14 = ROOT / "config/control-plane/knowledge-analysis-v14"
+ANALYSIS_CONFIG_V15 = ROOT / "config/control-plane/knowledge-analysis-v15"
 
 
 def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version() -> None:
@@ -60,7 +61,7 @@ def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version
     )
 
     assert set(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS) == schema_versions
-    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 15))
+    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 16))
 
 
 def test_knowledge_analysis_v13_adds_parallel_capacity_without_changing_worker_semantics() -> None:
@@ -127,6 +128,42 @@ def test_knowledge_analysis_v14_requires_page_local_structured_evidence() -> Non
         "not a substitute for structured",
         "mark it `NO_RELEVANT_CONTENT`",
         "mark it `UNCLEAR`",
+    ):
+        assert required in role_instruction
+
+
+def test_knowledge_analysis_v15_requires_exact_past_exam_png_inspection() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V15)
+
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/15.0"
+    assert manifest.slot_key == "slot05"
+    assert manifest.worker_pool_key == "support"
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    assert manifest.timeout_seconds == 7200
+    assert manifest.compatible_workflow_protocols[-1] == "workflow-role/1.18.0"
+    expected_sha256 = {
+        "bootstrap.yaml": "5e991132cd2ad1987c4e0cf29e84a14b0815654309bfac86d6336f0bb5a928eb",
+        "instructions/platform.md": (
+            "1070790a5b4d505c641b769e2e7e377fba64a65e2c1cf25e1a03225358583fee"
+        ),
+        "instructions/knowledge-analysis.md": (
+            "20dd782c30b00f34cc3ce5ff655708bad1a122830022dd32aff51cead2993c64"
+        ),
+    }
+    for relative_path, expected in expected_sha256.items():
+        assert hashlib.sha256((ANALYSIS_CONFIG_V15 / relative_path).read_bytes()).hexdigest() == (
+            expected
+        )
+    role_instruction = (ANALYSIS_CONFIG_V15 / "instructions/knowledge-analysis.md").read_text(
+        encoding="utf-8"
+    )
+    for required in (
+        "MUST visually inspect every supplied problem and",
+        "never substitute for the visual pass",
+        "Never cite the source PDF pointer",
+        "Do not impose quotas or invent",
+        "layout/localization features",
     ):
         assert required in role_instruction
 

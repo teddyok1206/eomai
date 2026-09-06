@@ -10,6 +10,13 @@ from typing import Annotated, Literal
 from eom_identifiers import content_sha256
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from eom_catalog_contracts.legacy_assessment import (
+    AssessmentArtifactMemberPointer,
+    AssessmentLayoutObservationPointer,
+    AssessmentPageImageInput,
+    AssessmentSourceBundlePointer,
+)
+
 
 def _require_utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() != timedelta(0):
@@ -623,6 +630,61 @@ class ApprovedItemKnowledgeSourceV2(FrozenModel):
     artifact_member: KnowledgeAnalysisSourceArtifactMemberV2
 
 
+class ApprovedPastExamItemKnowledgeSourceV3(ApprovedItemKnowledgeSourceV2):
+    """One approved past-exam Item plus its exact visually reviewed source pages."""
+
+    source_class: Literal["PAST_EXAM"] = "PAST_EXAM"
+    extraction_acceptance_id: str = Field(pattern=r"^itemacceptance_[0-9a-f]{32}$")
+    extraction_acceptance_sha256: Sha256
+    extraction_acceptance_artifact: AssessmentArtifactMemberPointer
+    extraction_result_id: str = Field(pattern=r"^itemextractresult_[0-9a-f]{32}$")
+    extraction_result_sha256: Sha256
+    extraction_result_artifact: AssessmentArtifactMemberPointer
+    item_proposal_id: str = Field(pattern=r"^itemproposal_[0-9a-f]{32}$")
+    item_number: int = Field(ge=1, le=10000)
+    bundle: AssessmentSourceBundlePointer
+    layout_observation: AssessmentLayoutObservationPointer
+    page_inputs: tuple[AssessmentPageImageInput, ...] = Field(min_length=1, max_length=32)
+    page_image_count: int = Field(ge=1, le=32)
+
+    @model_validator(mode="after")
+    def closed_visual_source(self) -> ApprovedPastExamItemKnowledgeSourceV3:
+        if (
+            self.artifact_member.materialized_path != "source/item-content.json"
+            or self.artifact_member.logical_name != "item-content.json"
+            or self.artifact_member.media_type != "application/json"
+            or self.extraction_acceptance_artifact.schema_ref
+            != "eom://schemas/legacy-assessment/legacy-item-extraction-acceptance/1.0"
+            or self.extraction_acceptance_artifact.media_type != "application/json"
+            or self.extraction_result_artifact.schema_ref
+            != "eom://schemas/legacy-assessment/legacy-item-extraction-result/1.0"
+            or self.extraction_result_artifact.media_type != "application/json"
+            or self.layout_observation.assessment_layout_observation_id == ""
+        ):
+            raise ValueError("past-exam Item source pointers are inconsistent")
+        ordered = tuple(
+            sorted(
+                self.page_inputs,
+                key=lambda page: (
+                    0 if page.source_role == "PROBLEM_DOCUMENT" else 1,
+                    page.physical_page,
+                    page.page_input_id,
+                ),
+            )
+        )
+        page_ids = tuple(page.page_input_id for page in self.page_inputs)
+        positions = tuple((page.source_role, page.physical_page) for page in self.page_inputs)
+        if (
+            self.page_inputs != ordered
+            or len(page_ids) != len(set(page_ids))
+            or len(positions) != len(set(positions))
+            or self.page_image_count != len(self.page_inputs)
+            or not any(page.source_role == "PROBLEM_DOCUMENT" for page in self.page_inputs)
+        ):
+            raise ValueError("past-exam Item page selection is incomplete or unordered")
+        return self
+
+
 KnowledgeAnalysisSourceV2 = Annotated[
     ContentIntakeKnowledgeSourceV2 | ApprovedItemKnowledgeSourceV2,
     Field(discriminator="source_kind"),
@@ -986,6 +1048,7 @@ class _KnowledgeAnalysisRequestBase(FrozenModel):
         "eom://schemas/knowledge/knowledge-analysis-worker-proposal/4.0",
         "eom://schemas/knowledge/knowledge-analysis-worker-proposal/5.0",
         "eom://schemas/knowledge/knowledge-analysis-worker-proposal/6.0",
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/7.0",
     ]
     predecessor_analysis_run_id: str | None = Field(
         default=None, pattern=r"^analysisrun_[0-9a-f]{32}$"
@@ -1018,6 +1081,7 @@ class _KnowledgeAnalysisRequestBase(FrozenModel):
                 "knowledge-analysis-request/6.0",
                 "knowledge-analysis-request/7.0",
                 "knowledge-analysis-request/8.0",
+                "knowledge-analysis-request/9.0",
             }
             else KNOWLEDGE_ANALYSIS_OUTPUTS_V2
         )
@@ -1173,6 +1237,38 @@ class KnowledgeAnalysisRequestV8(_KnowledgeAnalysisRequestBase):
     def complete_multimodal_outputs(self) -> KnowledgeAnalysisRequestV8:
         if set(self.requested_outputs) != KNOWLEDGE_ANALYSIS_OUTPUTS_V3:
             raise ValueError("multimodal analysis requires the complete bounded output set")
+        return self
+
+
+class KnowledgeAnalysisRequestV9(_KnowledgeAnalysisRequestBase):
+    """Past-exam Item request with mandatory immutable page-image evidence."""
+
+    schema_version: Literal["knowledge-analysis-request/9.0"] = "knowledge-analysis-request/9.0"
+    worker_proposal_schema_ref: Literal[
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/7.0"
+    ] = "eom://schemas/knowledge/knowledge-analysis-worker-proposal/7.0"
+    accepted_result_schema_ref: Literal["eom://schemas/knowledge/knowledge-analysis-result/9.0"] = (
+        "eom://schemas/knowledge/knowledge-analysis-result/9.0"
+    )
+    source: ApprovedPastExamItemKnowledgeSourceV3
+    requested_outputs: tuple[
+        Literal[
+            "NORMALIZED_MARKDOWN",
+            "SOURCE_ANCHORS",
+            "NODES",
+            "EDGES",
+            "CLAIMS",
+            "COMPONENT_OBSERVATIONS",
+            "PAGE_IMAGE_OBSERVATIONS",
+            "UNRESOLVED_AMBIGUITIES",
+        ],
+        ...,
+    ] = Field(min_length=8, max_length=8)
+
+    @model_validator(mode="after")
+    def complete_visual_item_outputs(self) -> KnowledgeAnalysisRequestV9:
+        if set(self.requested_outputs) != KNOWLEDGE_ANALYSIS_OUTPUTS_V3:
+            raise ValueError("visual Item analysis requires the complete bounded output set")
         return self
 
 
@@ -1426,6 +1522,23 @@ class KnowledgePageImageObservation(FrozenModel):
         return self
 
 
+class KnowledgeAssessmentPageImageObservation(FrozenModel):
+    """Visual attestation for one exact past-exam problem or answer PNG."""
+
+    page_input_id: str = Field(pattern=r"^assessmentpage_[0-9a-f]{32}$")
+    source_role: Literal["PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"]
+    physical_page: int = Field(ge=1, le=100000)
+    image_sha256: Sha256
+    observation_state: Literal["OBSERVED", "UNCLEAR"]
+    anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def local_anchors_are_unique(self) -> KnowledgeAssessmentPageImageObservation:
+        if len(self.anchor_ids) != len(set(self.anchor_ids)):
+            raise ValueError("assessment page-image observation anchors must be unique")
+        return self
+
+
 class KnowledgeAnalysisWorkerProposalV4(KnowledgeAnalysisWorkerProposalV3):
     """Multimodal proposal with one honest observation for every attached page PNG."""
 
@@ -1474,6 +1587,49 @@ class KnowledgeAnalysisWorkerProposalV6(KnowledgeAnalysisWorkerProposalV5):
     nodes: tuple[ProposedKnowledgeNodeV3, ...] = Field(max_length=512)
 
 
+class KnowledgeAnalysisWorkerProposalV7(KnowledgeAnalysisWorkerProposalV3):
+    """Stable-identity Item proposal with role-aware past-exam page attestations."""
+
+    schema_version: Literal["knowledge-analysis-worker-proposal/7.0"] = (
+        "knowledge-analysis-worker-proposal/7.0"  # type: ignore[assignment]
+    )
+    anchors: tuple[KnowledgeSourceAnchorV2, ...] = Field(min_length=1, max_length=1024)
+    nodes: tuple[ProposedKnowledgeNodeV3, ...] = Field(max_length=512)
+    edges: tuple[ProposedKnowledgeEdgeV3, ...] = Field(max_length=1024)
+    page_image_observations: tuple[KnowledgeAssessmentPageImageObservation, ...] = Field(
+        min_length=1, max_length=32
+    )
+
+    @model_validator(mode="after")
+    def complete_ordered_assessment_page_observations(self) -> KnowledgeAnalysisWorkerProposalV7:
+        known_anchors = {anchor.anchor_id for anchor in self.anchors}
+        identities = tuple(item.page_input_id for item in self.page_image_observations)
+        positions = tuple(
+            (item.source_role, item.physical_page) for item in self.page_image_observations
+        )
+        ordered = tuple(
+            sorted(
+                self.page_image_observations,
+                key=lambda item: (
+                    0 if item.source_role == "PROBLEM_DOCUMENT" else 1,
+                    item.physical_page,
+                    item.page_input_id,
+                ),
+            )
+        )
+        if (
+            self.page_image_observations != ordered
+            or len(identities) != len(set(identities))
+            or len(positions) != len(set(positions))
+            or any(
+                not set(observation.anchor_ids).issubset(known_anchors)
+                for observation in self.page_image_observations
+            )
+        ):
+            raise ValueError("assessment page-image observations are incomplete or unordered")
+        return self
+
+
 def validate_knowledge_analysis_proposal_ontology(
     proposal: (
         KnowledgeAnalysisWorkerProposal
@@ -1482,6 +1638,7 @@ def validate_knowledge_analysis_proposal_ontology(
         | KnowledgeAnalysisWorkerProposalV4
         | KnowledgeAnalysisWorkerProposalV5
         | KnowledgeAnalysisWorkerProposalV6
+        | KnowledgeAnalysisWorkerProposalV7
     ),
 ) -> None:
     """Validate proposal edges against the closed education-graph ontology.
@@ -1764,6 +1921,40 @@ class KnowledgeAnalysisProposalReceiptV7(KnowledgeAnalysisProposalReceiptV5):
         return self
 
 
+class KnowledgeAnalysisProposalReceiptV8(_KnowledgeAnalysisProposalReceiptBase):
+    """Validated proposal receipt for a visually inspected past-exam Item."""
+
+    schema_version: Literal["knowledge-analysis-proposal-receipt/8.0"] = (
+        "knowledge-analysis-proposal-receipt/8.0"
+    )
+    source: ApprovedPastExamItemKnowledgeSourceV3
+    members: KnowledgeProposalMembersV2
+    counts: KnowledgeProposalCountsV2
+
+    @model_validator(mode="after")
+    def visual_item_member_contract(self) -> KnowledgeAnalysisProposalReceiptV8:
+        expected_schema_refs = {
+            "normalized_markdown": "eom://schemas/knowledge/normalized-markdown/1.0",
+            "anchors": "eom://schemas/knowledge/source-anchor/2.0",
+            "nodes": "eom://schemas/knowledge/proposed-node/4.0",
+            "edges": "eom://schemas/knowledge/proposed-edge/4.0",
+            "claims": "eom://schemas/knowledge/proposed-claim/2.0",
+            "component_observations": "eom://schemas/knowledge/component-observation/2.0",
+            "page_image_observations": (
+                "eom://schemas/knowledge/assessment-page-image-observation/2.0"
+            ),
+            "unresolved_ambiguities": "eom://schemas/knowledge/ambiguity/3.0",
+        }
+        if any(
+            getattr(self.members, name).schema_ref != schema_ref
+            for name, schema_ref in expected_schema_refs.items()
+        ):
+            raise ValueError("visual Item proposal member schema reference is inconsistent")
+        if self.counts.page_image_observations != self.source.page_image_count:
+            raise ValueError("visual Item proposal receipt page count differs from its source")
+        return self
+
+
 class KnowledgeAnalysisReviewDecision(FrozenModel):
     schema_version: Literal["knowledge-analysis-review-decision/1.0"] = (
         "knowledge-analysis-review-decision/1.0"
@@ -1906,6 +2097,24 @@ class KnowledgeAnalysisResultV8(KnowledgeAnalysisResultV6):
             "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/7.0"
         ):
             raise ValueError("accepted stable-identity result requires proposal receipt V7")
+        return self
+
+
+class KnowledgeAnalysisResultV9(_KnowledgeAnalysisResultBase):
+    """Accepted visual analysis for one immutable past-exam Item Revision."""
+
+    schema_version: Literal["knowledge-analysis-result/9.0"] = "knowledge-analysis-result/9.0"
+    source: ApprovedPastExamItemKnowledgeSourceV3
+    counts: KnowledgeProposalCountsV2
+
+    @model_validator(mode="after")
+    def visual_item_receipt_pointer(self) -> KnowledgeAnalysisResultV9:
+        if self.proposal_receipt.schema_ref != (
+            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/8.0"
+        ):
+            raise ValueError("accepted visual Item result requires proposal receipt V8")
+        if self.counts.page_image_observations != self.source.page_image_count:
+            raise ValueError("accepted visual Item result page count differs from its source")
         return self
 
 

@@ -57,16 +57,10 @@ class CurriculumGraphCapabilityView(ApiModel):
         return self
 
 
-class AssessmentItemOccurrenceView(ApiModel):
-    """One immutable past-examination placement in the current Graph snapshot."""
+class _AssessmentItemOccurrenceBase(ApiModel):
+    """Shared immutable past-examination placement values."""
 
-    schema_version: Literal["assessment-item-occurrence-view/1.0"] = (
-        "assessment-item-occurrence-view/1.0"
-    )
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
-    placement_node_id: str = Field(pattern=r"^knode_[0-9a-f]{64}$")
-    occurrence_node_id: str = Field(pattern=r"^knode_[0-9a-f]{64}$")
-    item_node_id: str = Field(pattern=r"^knode_[0-9a-f]{64}$")
     analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
     assessment_occurrence_id: str = Field(pattern=r"^occurrence_[0-9a-f]{32}$")
     assessment_occurrence_revision_id: str = Field(pattern=r"^occurrev_[0-9a-f]{32}$")
@@ -96,3 +90,25 @@ class AssessmentItemOccurrenceView(ApiModel):
         ):
             raise ValueError("high-school grade 1 March evidence is not learnable")
         return self
+
+
+class AssessmentItemOccurrenceView(_AssessmentItemOccurrenceBase):
+    """Immutable V1 projection retained for contract compatibility."""
+
+    schema_version: Literal["assessment-item-occurrence-view/1.0"] = (
+        "assessment-item-occurrence-view/1.0"
+    )
+    placement_node_id: str = Field(pattern=r"^knode_[0-9a-f]{64}$")
+    occurrence_node_id: str = Field(pattern=r"^knode_[0-9a-f]{64}$")
+    item_node_id: str = Field(pattern=r"^knode_[0-9a-f]{64}$")
+
+
+class AssessmentItemOccurrenceViewV2(_AssessmentItemOccurrenceBase):
+    """Occurrence projection aligned with the Graph's immutable 128-bit node IDs."""
+
+    schema_version: Literal["assessment-item-occurrence-view/2.0"] = (
+        "assessment-item-occurrence-view/2.0"
+    )
+    placement_node_id: str = Field(pattern=r"^knode_[0-9a-f]{32}$")
+    occurrence_node_id: str = Field(pattern=r"^knode_[0-9a-f]{32}$")
+    item_node_id: str = Field(pattern=r"^knode_[0-9a-f]{32}$")

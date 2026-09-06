@@ -410,7 +410,7 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 51
+    assert len(entries) == 52
     assert len({name for name, _ in entries}) == len(entries)
     assert {
         "execution-preset-revision-v2",
@@ -428,6 +428,7 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
         "resolved-execution-plan-v5",
         "resolved-execution-plan-v6",
         "resolved-execution-plan-v7",
+        "resolved-execution-plan-v8",
         "worker-capacity-policy-v3",
         "codex-auth-enrollment-request",
         "codex-auth-enrollment-status",

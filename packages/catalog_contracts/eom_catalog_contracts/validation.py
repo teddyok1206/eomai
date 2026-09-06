@@ -582,6 +582,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "4.0",
             "sha256:02584fb9edb61c32a904c5ec5878f9f96ffe300f32796fab3cfe730ae531935f",
         ),
+        "knowledge-analysis-types-v5": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-types-v5.schema.json",
+            "resources/knowledge/knowledge-analysis-types-v5.schema.json",
+            "5.0",
+            "sha256:6ebd7a574a8c202bf6994eee8a42965a18a65f23bce38da50ae7ae81084132bf",
+        ),
         "knowledge-analysis-request-v3": CatalogSchemaResource(
             "schemas/knowledge/knowledge-analysis-request-v3.schema.json",
             "resources/knowledge/knowledge-analysis-request-v3.schema.json",
@@ -617,6 +623,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/knowledge-analysis-request-v8.schema.json",
             "8.0",
             "sha256:21629d4417eced251d8596e9d87d94444cc3fe906b50644395c332faea6c50fc",
+        ),
+        "knowledge-analysis-request-v9": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-request-v9.schema.json",
+            "resources/knowledge/knowledge-analysis-request-v9.schema.json",
+            "9.0",
+            "sha256:0aa8708c9952d47bac35e3a7921a03deacff64688dc880258cac0595d9a4e56d",
         ),
         "knowledge-analysis-batch-request": CatalogSchemaResource(
             "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
@@ -678,6 +690,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "6.0",
             "sha256:a5b0815acd211ce43d0be25ff886c8b2a7c39fa225916da034b8e7ad03b2f01c",
         ),
+        "knowledge-analysis-worker-proposal-v7": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-worker-proposal-v7.schema.json",
+            "resources/knowledge/knowledge-analysis-worker-proposal-v7.schema.json",
+            "7.0",
+            "sha256:8be2932a12408c4f52e453ff4e40a1a4973a8776e3f39fb55189c4b67e5bad9b",
+        ),
+        "knowledge-assessment-page-image-observation-v2": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-assessment-page-image-observation-v2.schema.json",
+            "resources/knowledge/knowledge-assessment-page-image-observation-v2.schema.json",
+            "2.0",
+            "sha256:ace304a0acd7c864a97e8bc1be8e886732270b07b98a49c970e89449427bbc9c",
+        ),
         "knowledge-analysis-proposed-node-v3": CatalogSchemaResource(
             "schemas/knowledge/knowledge-analysis-proposed-node-v3.schema.json",
             "resources/knowledge/knowledge-analysis-proposed-node-v3.schema.json",
@@ -738,6 +762,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "7.0",
             "sha256:c2aa46be06de9a001d504d7a75750fe6b57a8c148be22211f1e34834aff3fadb",
         ),
+        "knowledge-analysis-proposal-receipt-v8": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-proposal-receipt-v8.schema.json",
+            "resources/knowledge/knowledge-analysis-proposal-receipt-v8.schema.json",
+            "8.0",
+            "sha256:a8789f95a3472c5ab0ef3dc2e632bb4fee9832e1affab6472ef351736dde4810",
+        ),
         "knowledge-analysis-risk-policy": CatalogSchemaResource(
             "schemas/knowledge/knowledge-analysis-risk-policy-v1.schema.json",
             "resources/knowledge/knowledge-analysis-risk-policy-v1.schema.json",
@@ -791,6 +821,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/knowledge-analysis-result-v8.schema.json",
             "8.0",
             "sha256:8067c3e1d4907e65aa54f75f82a23f74f227c9c7834d6767a70bd48c1fa1a9e8",
+        ),
+        "knowledge-analysis-result-v9": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-result-v9.schema.json",
+            "resources/knowledge/knowledge-analysis-result-v9.schema.json",
+            "9.0",
+            "sha256:f52f7a1d4c7ec742fda337be9a6ea671b3911af1f519b7a4913e9266d63904d6",
         ),
         "knowledge-graph-snapshot-manifest": CatalogSchemaResource(
             "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",

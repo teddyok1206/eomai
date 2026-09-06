@@ -9,16 +9,23 @@ from typing import Any
 from eom_catalog_contracts import (
     ApprovedItemCurriculumAlignmentBinding,
     ApprovedItemKnowledgeSourceV2,
+    ApprovedPastExamItemKnowledgeSourceV3,
+    AssessmentArtifactMemberPointer,
     AutomaticItemCurriculumAlignmentBinding,
     CurriculumUnitBinding,
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
     ItemElementBinding,
+    KnowledgeAnalysisOriginalSourceMemberV3,
+    KnowledgeAnalysisSourceArtifactMemberV2,
     KnowledgeAnalysisSourceV3,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
     KnowledgeAnalysisWorkerProposalV4,
+    KnowledgeAnalysisWorkerProposalV5,
+    KnowledgeAnalysisWorkerProposalV6,
+    KnowledgeAnalysisWorkerProposalV7,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphStructureManifest,
     KnowledgeGraphStructureManifestV2,
@@ -99,13 +106,20 @@ class GraphSourcePointer:
 @dataclass(frozen=True)
 class AcceptedAnalysisProposal:
     analysis_run_id: str
-    source: KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4
+    source: (
+        KnowledgeAnalysisSourceV3
+        | EducationalDocumentKnowledgeSourceV4
+        | ApprovedPastExamItemKnowledgeSourceV3
+    )
     accepted_result: KnowledgeArtifactMemberPointer
     proposal: (
         KnowledgeAnalysisWorkerProposal
         | KnowledgeAnalysisWorkerProposalV2
         | KnowledgeAnalysisWorkerProposalV3
         | KnowledgeAnalysisWorkerProposalV4
+        | KnowledgeAnalysisWorkerProposalV5
+        | KnowledgeAnalysisWorkerProposalV6
+        | KnowledgeAnalysisWorkerProposalV7
     )
 
 
@@ -249,7 +263,11 @@ def _stable_id(prefix: str, value: dict[str, object]) -> str:
 
 
 def _source_revision_id(
-    source: KnowledgeAnalysisSourceV3 | EducationalDocumentKnowledgeSourceV4,
+    source: (
+        KnowledgeAnalysisSourceV3
+        | EducationalDocumentKnowledgeSourceV4
+        | ApprovedPastExamItemKnowledgeSourceV3
+    ),
 ) -> str:
     if isinstance(source, ApprovedItemKnowledgeSourceV2):
         return source.item_revision_id
@@ -295,7 +313,35 @@ def _source_pointer(
 ) -> GraphSourcePointer:
     anchors = {item.anchor_id: item for item in analysis.proposal.anchors}
     anchor = anchors[anchor_id]
-    member = analysis.source.artifact_member
+    member: (
+        KnowledgeAnalysisSourceArtifactMemberV2
+        | KnowledgeAnalysisOriginalSourceMemberV3
+        | AssessmentArtifactMemberPointer
+    ) = analysis.source.artifact_member
+    if isinstance(analysis.source, ApprovedPastExamItemKnowledgeSourceV3):
+        matching_images = tuple(
+            page.image
+            for page in analysis.source.page_inputs
+            if (
+                page.image.artifact_revision_id == anchor.artifact_revision_id
+                and page.image.member_path == anchor.member_path
+            )
+        )
+        if matching_images:
+            if len(matching_images) != 1:
+                raise KnowledgeGraphProjectionError(
+                    "KNOWLEDGE_GRAPH_SOURCE_POINTER_AMBIGUOUS",
+                    "visual Item anchor resolves to more than one page image",
+                )
+            member = matching_images[0]
+        elif (
+            anchor.artifact_revision_id != member.artifact_revision_id
+            or anchor.member_path != member.member_path
+        ):
+            raise KnowledgeGraphProjectionError(
+                "KNOWLEDGE_GRAPH_SOURCE_POINTER_INVALID",
+                "visual Item anchor does not resolve to a pinned Item or page image member",
+            )
     return GraphSourcePointer(
         analysis_run_id=analysis.analysis_run_id,
         source_kind=analysis.source.source_kind,

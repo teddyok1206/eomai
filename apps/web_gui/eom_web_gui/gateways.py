@@ -13,6 +13,7 @@ import httpx
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
     AssessmentLearningExamStatus,
+    AssessmentLearningItemStatus,
     AssessmentLearningPageStatus,
     CodexAccountStatusView,
     CodexAuthEnrollmentStatusView,
@@ -251,6 +252,14 @@ class ApplicationGateway(Protocol):
     async def assessment_learning_pages(
         self, session: WebSession, batch_id: str, occurrence_revision_id: str
     ) -> tuple[AssessmentLearningPageStatus, ...]: ...
+
+    async def assessment_learning_items(
+        self,
+        session: WebSession,
+        exam: AssessmentLearningExamStatus,
+        *,
+        item_number: int | None,
+    ) -> tuple[AssessmentLearningItemStatus, ...]: ...
 
     async def assessment_learning_page_media(
         self,
@@ -673,6 +682,56 @@ class HttpApplicationGateway:
             )
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def assessment_learning_items(
+        self,
+        session: WebSession,
+        exam: AssessmentLearningExamStatus,
+        *,
+        item_number: int | None,
+    ) -> tuple[AssessmentLearningItemStatus, ...]:
+        params: dict[str, str | int | float | bool | None] = {
+            "administration_year": exam.administration_year,
+            "target_school_level": exam.target_school_level,
+            "target_grade": exam.target_grade,
+            "administration_month": exam.administration_month,
+            "subject_key": exam.subject_key,
+            "assessment_occurrence_revision_id": exam.assessment_occurrence_revision_id,
+            "limit": 200,
+        }
+        if item_number is not None:
+            if not 1 <= item_number <= 200:
+                raise GatewayError(status=422, code="REQUEST_VALIDATION_FAILED")
+            params["item_number"] = item_number
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/curriculum/assessment-occurrences/items",
+            params=params,
+        )
+        try:
+            values = tuple(
+                AssessmentLearningItemStatus.model_validate(value)
+                for value in self._list_data(response)
+            )
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+        if any(
+            value.assessment_occurrence_id != exam.assessment_occurrence_id
+            or value.assessment_occurrence_revision_id != exam.assessment_occurrence_revision_id
+            or value.assessment_occurrence_revision_sha256
+            != exam.assessment_occurrence_revision_sha256
+            or value.occurrence_display_label != exam.display_label
+            or value.administration_year != exam.administration_year
+            or value.administration_month != exam.administration_month
+            or value.target_school_level != exam.target_school_level
+            or value.target_grade != exam.target_grade
+            or value.subject_key != exam.subject_key
+            or (item_number is not None and value.item_number != item_number)
+            for value in values
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return values
 
     async def assessment_learning_page_media(
         self,

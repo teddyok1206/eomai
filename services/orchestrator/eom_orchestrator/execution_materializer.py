@@ -32,6 +32,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV5,
     ResolvedExecutionPlanV6,
     ResolvedExecutionPlanV7,
+    ResolvedExecutionPlanV8,
     ResolvedStepExecutionV3,
     validate_control_contract,
 )
@@ -138,6 +139,7 @@ def materialize_execution_step(
         "resolved-execution-plan/5.0",
         "resolved-execution-plan/6.0",
         "resolved-execution-plan/7.0",
+        "resolved-execution-plan/8.0",
     }
     plan: (
         ResolvedExecutionPlan
@@ -147,6 +149,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV5
         | ResolvedExecutionPlanV6
         | ResolvedExecutionPlanV7
+        | ResolvedExecutionPlanV8
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -160,6 +163,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV6.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/7.0":
         plan = ResolvedExecutionPlanV7.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/8.0":
+        plan = ResolvedExecutionPlanV8.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -301,6 +306,20 @@ def materialize_execution_step(
             plan.compatibility_request.source.item_content.artifact_revision_id
         )
         source_sha256 = plan.compatibility_request.source.item_content.sha256
+    elif isinstance(plan, ResolvedExecutionPlanV8):
+        visual_item_bytes, visual_item_members = _materialize_past_exam_item_source(
+            session,
+            plan=plan,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        )
+        total_bytes += visual_item_bytes
+        member_count += visual_item_members
+        _require_total_size(total_bytes, analysis=True)
+        source_artifact_revision_id = plan.item_source.artifact_member.artifact_revision_id
+        source_sha256 = plan.item_source.artifact_member.sha256
 
     agents_bytes = _agents_document(instruction_docs)
     total_bytes += len(agents_bytes)
@@ -347,9 +366,14 @@ def materialize_execution_step(
             group_id=worker_group_id,
         )
         image_input_manifest_sha256 = image_manifest.manifest_sha256
-    elif isinstance(plan, ResolvedExecutionPlanV6):
+    elif isinstance(plan, (ResolvedExecutionPlanV6, ResolvedExecutionPlanV8)):
         image_entries: list[dict[str, object]] = []
-        for page in plan.extraction_request.page_inputs:
+        pages = (
+            plan.extraction_request.page_inputs
+            if isinstance(plan, ResolvedExecutionPlanV6)
+            else plan.item_source.page_inputs
+        )
+        for page in pages:
             expected_bytes = _assessment_member_expected_bytes(
                 session,
                 pointer=page.image,
@@ -463,6 +487,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV5
             | ResolvedExecutionPlanV6
             | ResolvedExecutionPlanV7
+            | ResolvedExecutionPlanV8
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -474,6 +499,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV6.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/7.0":
         plan = ResolvedExecutionPlanV7.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/8.0":
+        plan = ResolvedExecutionPlanV8.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -521,6 +548,18 @@ def authorized_execution_artifact_revisions(
             authority.artifact_member.artifact_revision_id
             for authority in compatibility_request.authorities
         )
+    elif isinstance(plan, ResolvedExecutionPlanV8):
+        source = plan.item_source
+        revision_ids.update(
+            {
+                source.artifact_member.artifact_revision_id,
+                source.extraction_acceptance_artifact.artifact_revision_id,
+                source.extraction_result_artifact.artifact_revision_id,
+                source.layout_observation.artifact.artifact_revision_id,
+            }
+        )
+        revision_ids.update(page.source.artifact_revision_id for page in source.page_inputs)
+        revision_ids.update(page.image.artifact_revision_id for page in source.page_inputs)
     bundles: list[tuple[BundleRevisionPointer, str]] = [(step.instruction_bundle, "INSTRUCTION")]
     if step.reference_bundle is not None:
         bundles.append((step.reference_bundle, "REFERENCE"))
@@ -1027,6 +1066,105 @@ def _materialize_legacy_editorial_compatibility_source(
     _ensure_parent(request_path.parent, workspace=workspace, group_id=worker_group_id)
     _write_exclusive(request_path, request_bytes, group_id=worker_group_id)
     return total_bytes + len(request_bytes), len(materials) + 1
+
+
+def _materialize_past_exam_item_source(
+    session: Session,
+    *,
+    plan: ResolvedExecutionPlanV8,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> tuple[int, int]:
+    """Materialize one immutable Item, its review evidence, and exact selected page PNGs."""
+
+    source = plan.item_source
+    if source.artifact_member.schema_ref is None:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_SCHEMA_MISMATCH",
+            "past-exam Item content has no schema reference",
+        )
+    item_pointer = OriginArtifactMemberPointer(
+        artifact_id=source.artifact_member.artifact_id,
+        artifact_revision_id=source.artifact_member.artifact_revision_id,
+        member_path=source.artifact_member.member_path,
+        schema_ref=source.artifact_member.schema_ref,
+        media_type=source.artifact_member.media_type,
+        sha256=source.artifact_member.sha256,
+    )
+    materials: tuple[tuple[OriginArtifactMemberPointer, str, int], ...] = (
+        (item_pointer, source.artifact_member.materialized_path, 16 * 1024 * 1024),
+        (
+            source.extraction_acceptance_artifact,
+            "source/extraction-acceptance.json",
+            4 * 1024 * 1024,
+        ),
+        (
+            source.extraction_result_artifact,
+            "source/extraction-result.json",
+            16 * 1024 * 1024,
+        ),
+        (
+            source.layout_observation.artifact,
+            source.layout_observation.workspace_relative_path,
+            4 * 1024 * 1024,
+        ),
+    )
+    total_bytes = 0
+    member_count = 0
+    for pointer, relative_path, maximum_bytes in materials:
+        payload = _materialize_assessment_member(
+            session,
+            pointer=pointer,
+            relative_path=relative_path,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=maximum_bytes,
+        )
+        try:
+            value = json.loads(payload)
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_ENCODING_INVALID",
+                "past-exam Item evidence is not UTF-8 JSON",
+            ) from exc
+        if not isinstance(value, dict):
+            raise ControlPlaneError(
+                "CONTROL_POINTER_MEDIA_MISMATCH",
+                "past-exam Item evidence is not an object",
+            )
+        total_bytes += len(payload)
+        member_count += 1
+
+    for page in source.page_inputs:
+        _validate_assessment_member_pointer(
+            session,
+            pointer=page.source,
+            artifact_root=artifact_root,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        )
+        payload = _materialize_assessment_member(
+            session,
+            pointer=page.image,
+            relative_path=page.workspace_relative_path,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=16 * 1024 * 1024,
+        )
+        _validate_png_payload(
+            payload,
+            expected_width=page.width_px,
+            expected_height=page.height_px,
+        )
+        total_bytes += len(payload)
+        member_count += 1
+        _require_total_size(total_bytes, analysis=True)
+    return total_bytes, member_count
 
 
 def _assessment_member_expected_bytes(

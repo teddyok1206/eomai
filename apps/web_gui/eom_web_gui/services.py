@@ -10,6 +10,7 @@ from typing import Any
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
     AssessmentLearningExamStatus,
+    AssessmentLearningItemStatus,
     AssessmentLearningPageStatus,
     CodexAccountAdminCommand,
     CodexAuthChallengeReveal,
@@ -205,6 +206,29 @@ class WebServices:
         _require_admin(session)
         return await self.gateway.assessment_learning_pages(
             session, batch_id, occurrence_revision_id
+        )
+
+    async def assessment_learning_items(
+        self,
+        session: WebSession,
+        batch_id: str,
+        occurrence_revision_id: str,
+        *,
+        item_number: int | None,
+    ) -> tuple[AssessmentLearningItemStatus, ...]:
+        _require_admin(session)
+        exams = await self.gateway.assessment_learning_exams(session, batch_id)
+        matches = tuple(
+            exam
+            for exam in exams
+            if exam.assessment_occurrence_revision_id == occurrence_revision_id
+        )
+        if len(matches) != 1:
+            raise GatewayError(status=404, code="ASSESSMENT_EXAM_NOT_FOUND")
+        return await self.gateway.assessment_learning_items(
+            session,
+            matches[0],
+            item_number=item_number,
         )
 
     async def knowledge_analysis_quality(

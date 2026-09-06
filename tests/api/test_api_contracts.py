@@ -15,7 +15,10 @@ from eom_api_contracts.assessment_learning import (
 from eom_api_contracts.auth import LoginRequest
 from eom_api_contracts.common import ArtifactPointer
 from eom_api_contracts.control_plane import CreateExecutionPresetDraftRequest
-from eom_api_contracts.curriculum import AssessmentItemOccurrenceView
+from eom_api_contracts.curriculum import (
+    AssessmentItemOccurrenceView,
+    AssessmentItemOccurrenceViewV2,
+)
 from eom_api_contracts.knowledge_analysis import (
     CreateKnowledgeAnalysisRequest,
     KnowledgeAnalysisReviewRequest,
@@ -74,6 +77,43 @@ def test_assessment_item_occurrence_schema_matches_typed_projection_and_excludes
     validator = Draft202012Validator(schema)
     assert tuple(validator.iter_errors(value)) == ()
     assert tuple(validator.iter_errors(value | {"administration_month": 3}))
+
+
+def test_assessment_item_occurrence_v2_matches_graph_node_identity_width() -> None:
+    canonical_path = SCHEMA_ROOT / "assessment-item-occurrence-v2.schema.json"
+    packaged_path = (
+        Path(__file__).resolve().parents[2]
+        / "packages/api_contracts/eom_api_contracts/schemas"
+        / canonical_path.name
+    )
+    assert canonical_path.read_bytes() == packaged_path.read_bytes()
+    value = AssessmentItemOccurrenceViewV2(
+        graph_snapshot_revision_id="graphrev_" + "1" * 32,
+        placement_node_id="knode_" + "2" * 32,
+        occurrence_node_id="knode_" + "3" * 32,
+        item_node_id="knode_" + "4" * 32,
+        analysis_run_id="analysisrun_" + "5" * 32,
+        assessment_occurrence_id="occurrence_" + "6" * 32,
+        assessment_occurrence_revision_id="occurrev_" + "7" * 32,
+        assessment_occurrence_revision_sha256="sha256:" + "8" * 64,
+        occurrence_display_label="2025년 고1 6월 통합과학 12번",
+        administration_year=2025,
+        administration_month=6,
+        target_school_level="HIGH_SCHOOL",
+        target_grade=1,
+        subject_key="integrated-science",
+        item_number=12,
+        item_id="item_" + "9" * 32,
+        item_revision_id="itemrev_" + "a" * 32,
+        curriculum_unit_ids=("currunit_" + "b" * 32,),
+        placement_sha256="sha256:" + "c" * 64,
+    ).model_dump(mode="json")
+    validator = Draft202012Validator(json.loads(canonical_path.read_text(encoding="utf-8")))
+    assert tuple(validator.iter_errors(value)) == ()
+    with pytest.raises(ValidationError):
+        AssessmentItemOccurrenceViewV2.model_validate(
+            value | {"placement_node_id": "knode_" + "d" * 64}
+        )
 
 
 def test_assessment_learning_schemas_match_typed_progress_and_exclude_march() -> None:

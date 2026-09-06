@@ -13,12 +13,14 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV5,
     KnowledgeAnalysisProposalReceiptV6,
     KnowledgeAnalysisProposalReceiptV7,
+    KnowledgeAnalysisProposalReceiptV8,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
     KnowledgeAnalysisWorkerProposalV4,
     KnowledgeAnalysisWorkerProposalV5,
     KnowledgeAnalysisWorkerProposalV6,
+    KnowledgeAnalysisWorkerProposalV7,
 )
 from pydantic import ValidationError
 
@@ -32,6 +34,7 @@ type KnowledgeAnalysisReceipt = (
     | KnowledgeAnalysisProposalReceiptV5
     | KnowledgeAnalysisProposalReceiptV6
     | KnowledgeAnalysisProposalReceiptV7
+    | KnowledgeAnalysisProposalReceiptV8
 )
 
 
@@ -53,6 +56,7 @@ def resolve_knowledge_analysis_proposal(
     | KnowledgeAnalysisWorkerProposalV4
     | KnowledgeAnalysisWorkerProposalV5
     | KnowledgeAnalysisWorkerProposalV6
+    | KnowledgeAnalysisWorkerProposalV7
 ):
     """Dereference every pinned member once and reconstruct the typed proposal."""
 
@@ -100,21 +104,25 @@ def resolve_knowledge_analysis_proposal(
 
     proposal_value = {
         "schema_version": (
-            "knowledge-analysis-worker-proposal/6.0"
-            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV7)
+            "knowledge-analysis-worker-proposal/7.0"
+            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV8)
             else (
-                "knowledge-analysis-worker-proposal/5.0"
-                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV6)
+                "knowledge-analysis-worker-proposal/6.0"
+                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV7)
                 else (
-                    "knowledge-analysis-worker-proposal/4.0"
-                    if isinstance(receipt, KnowledgeAnalysisProposalReceiptV5)
+                    "knowledge-analysis-worker-proposal/5.0"
+                    if isinstance(receipt, KnowledgeAnalysisProposalReceiptV6)
                     else (
-                        "knowledge-analysis-worker-proposal/3.0"
-                        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV4)
+                        "knowledge-analysis-worker-proposal/4.0"
+                        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV5)
                         else (
-                            "knowledge-analysis-worker-proposal/2.0"
-                            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
-                            else "knowledge-analysis-worker-proposal/1.0"
+                            "knowledge-analysis-worker-proposal/3.0"
+                            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV4)
+                            else (
+                                "knowledge-analysis-worker-proposal/2.0"
+                                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV3)
+                                else "knowledge-analysis-worker-proposal/1.0"
+                            )
                         )
                     )
                 )
@@ -133,8 +141,11 @@ def resolve_knowledge_analysis_proposal(
             | KnowledgeAnalysisWorkerProposalV4
             | KnowledgeAnalysisWorkerProposalV5
             | KnowledgeAnalysisWorkerProposalV6
+            | KnowledgeAnalysisWorkerProposalV7
         )
-        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV7):
+        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV8):
+            proposal = KnowledgeAnalysisWorkerProposalV7.model_validate(proposal_value)
+        elif isinstance(receipt, KnowledgeAnalysisProposalReceiptV7):
             proposal = KnowledgeAnalysisWorkerProposalV6.model_validate(proposal_value)
         elif isinstance(receipt, KnowledgeAnalysisProposalReceiptV6):
             proposal = KnowledgeAnalysisWorkerProposalV5.model_validate(proposal_value)
@@ -166,12 +177,16 @@ def resolve_knowledge_analysis_proposal(
         receipt.counts.component_observations,
         receipt.counts.ambiguities,
     )
-    if isinstance(proposal, KnowledgeAnalysisWorkerProposalV4) and isinstance(
+    if isinstance(
+        proposal,
+        (KnowledgeAnalysisWorkerProposalV4, KnowledgeAnalysisWorkerProposalV7),
+    ) and isinstance(
         receipt,
         (
             KnowledgeAnalysisProposalReceiptV5,
             KnowledgeAnalysisProposalReceiptV6,
             KnowledgeAnalysisProposalReceiptV7,
+            KnowledgeAnalysisProposalReceiptV8,
         ),
     ):
         actual_counts = (*actual_counts, len(proposal.page_image_observations))

@@ -1,0 +1,51 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "page_input_id",
+    "source_role",
+    "physical_page",
+    "image_sha256",
+    "observation_state",
+    "anchor_ids"
+  ],
+  "properties": {
+    "page_input_id": {
+      "type": "string",
+      "pattern": "^assessmentpage_[0-9a-f]{32}$"
+    },
+    "source_role": {
+      "enum": [
+        "PROBLEM_DOCUMENT",
+        "ANSWER_EXPLANATION_DOCUMENT"
+      ]
+    },
+    "physical_page": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "image_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+    },
+    "observation_state": {
+      "enum": [
+        "OBSERVED",
+        "UNCLEAR"
+      ]
+    },
+    "anchor_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/assessment-page-image-observation/2.0",
+  "title": "EOM Past-Exam Page Image Observation V2"
+}

@@ -48,6 +48,7 @@ const state = {
   assessmentLearningBatches: [],
   assessmentLearningExams: [],
   assessmentLearningPagesByExam: new Map(),
+  assessmentLearningItemsByExam: new Map(),
   selectedAssessmentLearningBatchId: null,
   assessmentLearningPollTimer: null,
   presentationVocabulary: null,
@@ -1384,10 +1385,81 @@ function renderAssessmentLearningExams(exams) {
       pageButton.textContent = "원본 PNG 닫기";
       await loadAssessmentLearningPages(exam, pagePanel, pageButton);
     }, true);
-    pageActions.append(pageButton);
-    card.append(heading, metrics, progress, pageActions, pagePanel);
+    const itemNumber = document.createElement("input");
+    itemNumber.type = "number";
+    itemNumber.min = "1";
+    itemNumber.max = "200";
+    itemNumber.inputMode = "numeric";
+    itemNumber.placeholder = "문항 번호";
+    itemNumber.setAttribute("aria-label", `${exam.display_label} 문항 번호`);
+    const itemPanel = document.createElement("section");
+    itemPanel.className = "learning-item-panel";
+    itemPanel.hidden = true;
+    const itemButton = actionButton("문항 조회", async () => {
+      const parsed = Number.parseInt(itemNumber.value, 10);
+      const selected = Number.isInteger(parsed) && parsed >= 1 && parsed <= 200 ? parsed : null;
+      await loadAssessmentLearningItems(exam, itemPanel, selected, pagePanel, pageButton);
+    }, true);
+    const allItemsButton = actionButton("Graph 문항 전체", async () => {
+      itemNumber.value = "";
+      await loadAssessmentLearningItems(exam, itemPanel, null, pagePanel, pageButton);
+    }, true);
+    pageActions.append(itemNumber, itemButton, allItemsButton, pageButton);
+    card.append(heading, metrics, progress, pageActions, itemPanel, pagePanel);
     root.append(card);
   }
+}
+
+async function loadAssessmentLearningItems(exam, panel, itemNumber, pagePanel, pageButton) {
+  const baseKey = `${exam.extraction_batch_id}:${exam.assessment_occurrence_revision_id}`;
+  const key = `${baseKey}:${itemNumber ?? "all"}`;
+  panel.hidden = false;
+  panel.replaceChildren(Object.assign(document.createElement("p"), {
+    textContent: "현재 Graph에서 시험지와 문항 연결을 확인하고 있습니다.",
+  }));
+  let items = state.assessmentLearningItemsByExam.get(key);
+  if (!items) {
+    const query = itemNumber === null ? "" : `?item_number=${encodeURIComponent(itemNumber)}`;
+    try {
+      items = await api(
+        `/admin/assessment-learning-batches/${encodeURIComponent(exam.extraction_batch_id)}`
+        + `/exams/${encodeURIComponent(exam.assessment_occurrence_revision_id)}/items${query}`,
+      );
+      state.assessmentLearningItemsByExam.set(key, items);
+    } catch (failure) {
+      panel.replaceChildren(Object.assign(document.createElement("p"), {
+        className: "form-message error",
+        textContent: `시험지 문항 조회 실패: ${failure.message}`,
+      }));
+      return;
+    }
+  }
+  if (!items.length) {
+    panel.replaceChildren(Object.assign(document.createElement("p"), {
+      className: "empty-state",
+      textContent: itemNumber === null
+        ? "현재 Graph snapshot에 발행된 문항이 없습니다."
+        : `${itemNumber}번 문항은 현재 Graph snapshot에 아직 발행되지 않았습니다.`,
+    }));
+    return;
+  }
+  const heading = document.createElement("strong");
+  heading.textContent = items[0].occurrence_display_label;
+  const list = document.createElement("div");
+  list.className = "learning-item-list";
+  for (const item of items) {
+    const button = actionButton(`${item.item_number}번 문항`, async () => {
+      if (pagePanel.hidden) await pageButton.click();
+      pagePanel.scrollIntoView({behavior: "smooth", block: "nearest"});
+    }, true);
+    button.title = `${item.occurrence_display_label} · 단원 ${item.curriculum_unit_ids.length}개 · 원본 시험지 열기`;
+    const units = document.createElement("small");
+    units.textContent = `연결 단원 ${item.curriculum_unit_ids.length}개`;
+    const entry = document.createElement("span");
+    entry.append(button, units);
+    list.append(entry);
+  }
+  panel.replaceChildren(heading, list);
 }
 
 async function loadAssessmentLearningPages(exam, panel, button) {

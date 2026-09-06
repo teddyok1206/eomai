@@ -10,6 +10,7 @@ from unicodedata import normalize
 from urllib.parse import urlsplit
 
 from eom_catalog_contracts import (
+    ApprovedPastExamItemKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
     EducationalRetrievalRequirement,
@@ -616,6 +617,46 @@ class ResolvedExecutionPlanV7(FrozenModel):
         body = self.model_dump(mode="json", exclude={"plan_sha256"})
         if content_sha256(body) != self.plan_sha256:
             raise ValueError("editorial compatibility plan hash does not match canonical content")
+        return self
+
+
+class ResolvedExecutionPlanV8(FrozenModel):
+    """One past-exam Item analysis pinned to exact Item JSON and selected page PNGs."""
+
+    schema_version: Literal["resolved-execution-plan/8.0"] = "resolved-execution-plan/8.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["KNOWLEDGE_ANALYSIS"] = "KNOWLEDGE_ANALYSIS"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["knowledge-analysis"] = "knowledge-analysis"
+    workflow_definition_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    workflow_definition_sha256: Sha256
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    analysis_request_sha256: Sha256
+    item_source: ApprovedPastExamItemKnowledgeSourceV3
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
+    resolver_version: Literal["8.0.0"] = "8.0.0"
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def one_visual_item_support_step_and_exact_hash(self) -> ResolvedExecutionPlanV8:
+        step = self.steps[0]
+        if (
+            step.step_key != "analyze"
+            or step.role != WorkerRole.SUPPORT
+            or step.worker_pool_key != "support"
+            or step.reference_bundle is not None
+        ):
+            raise ValueError("visual Item analysis plan requires one isolated support step")
+        body = self.model_dump(mode="json", exclude={"plan_sha256"})
+        if content_sha256(body) != self.plan_sha256:
+            raise ValueError("visual Item analysis plan hash does not match canonical content")
         return self
 
 

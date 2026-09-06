@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-types/5.0",
+  "title": "EOM Past-Exam Visual Knowledge Analysis Shared Types V5",
+  "$defs": {
+    "assessmentPageImageObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page_input_id",
+        "source_role",
+        "physical_page",
+        "image_sha256",
+        "observation_state",
+        "anchor_ids"
+      ],
+      "properties": {
+        "page_input_id": {
+          "type": "string",
+          "pattern": "^assessmentpage_[0-9a-f]{32}$"
+        },
+        "source_role": {
+          "enum": [
+            "PROBLEM_DOCUMENT",
+            "ANSWER_EXPLANATION_DOCUMENT"
+          ]
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "image_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+        },
+        "observation_state": {
+          "enum": [
+            "OBSERVED",
+            "UNCLEAR"
+          ]
+        },
+        "anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "pastExamItemSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind",
+        "source_class",
+        "item_id",
+        "item_revision_id",
+        "lifecycle_state",
+        "artifact_member",
+        "extraction_acceptance_id",
+        "extraction_acceptance_sha256",
+        "extraction_acceptance_artifact",
+        "extraction_result_id",
+        "extraction_result_sha256",
+        "extraction_result_artifact",
+        "item_proposal_id",
+        "item_number",
+        "bundle",
+        "layout_observation",
+        "page_inputs",
+        "page_image_count"
+      ],
+      "properties": {
+        "source_kind": {
+          "const": "APPROVED_ITEM_REVISION"
+        },
+        "source_class": {
+          "const": "PAST_EXAM"
+        },
+        "item_id": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{32}$"
+        },
+        "item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "lifecycle_state": {
+          "const": "APPROVED"
+        },
+        "artifact_member": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sourceArtifactMember"
+        },
+        "extraction_acceptance_id": {
+          "type": "string",
+          "pattern": "^itemacceptance_[0-9a-f]{32}$"
+        },
+        "extraction_acceptance_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+        },
+        "extraction_acceptance_artifact": {
+          "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/artifactMemberPointer"
+        },
+        "extraction_result_id": {
+          "type": "string",
+          "pattern": "^itemextractresult_[0-9a-f]{32}$"
+        },
+        "extraction_result_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+        },
+        "extraction_result_artifact": {
+          "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/artifactMemberPointer"
+        },
+        "item_proposal_id": {
+          "type": "string",
+          "pattern": "^itemproposal_[0-9a-f]{32}$"
+        },
+        "item_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "bundle": {
+          "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/assessmentSourceBundlePointer"
+        },
+        "layout_observation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "assessment_layout_observation_id",
+            "artifact",
+            "workspace_relative_path",
+            "observation_sha256"
+          ],
+          "properties": {
+            "assessment_layout_observation_id": {
+              "type": "string",
+              "pattern": "^assessmentlayout_[0-9a-f]{32}$"
+            },
+            "artifact": {
+              "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/artifactMemberPointer"
+            },
+            "workspace_relative_path": {
+              "const": "source/layout-observation.json"
+            },
+            "observation_sha256": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sha256"
+            }
+          }
+        },
+        "page_inputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/pageImageInput"
+          }
+        },
+        "page_image_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        }
+      }
+    }
+  }
+}

@@ -18,6 +18,7 @@ from eom_api_contracts.common import (
 )
 from eom_api_contracts.curriculum import (
     AssessmentItemOccurrenceView,
+    AssessmentItemOccurrenceViewV2,
     CurriculumGraphCapabilityView,
 )
 from eom_api_contracts.errors import ProblemDetails, ValidationIssue
@@ -58,6 +59,7 @@ __all__ = [
     "ApprovedItemAnalysisSourceInput",
     "ArtifactPointer",
     "AssessmentItemOccurrenceView",
+    "AssessmentItemOccurrenceViewV2",
     "AssessmentLearningBatchView",
     "AssessmentLearningExamView",
     "AssessmentLearningItemCounts",

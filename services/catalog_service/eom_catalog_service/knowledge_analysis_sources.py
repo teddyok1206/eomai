@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
-from typing import Literal
+from typing import Any, Literal, NoReturn, cast
 
 from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
     ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
     ApprovedItemKnowledgeSourceV2,
+    ApprovedPastExamItemKnowledgeSourceV3,
+    AssessmentArtifactMemberPointer,
+    AssessmentLayoutObservation,
     ContentIntakeKnowledgeSourceV2,
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
@@ -20,16 +23,30 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisDocumentMaterializationMemberV4,
     KnowledgeAnalysisOriginalSourceMemberV3,
     KnowledgeAnalysisSourceArtifactMemberV2,
+    LegacyItemExtractionAcceptance,
+    LegacyItemExtractionBatchManifestV2,
+    LegacyItemExtractionResult,
     TextbookAnalysisBundleManifest,
     TextbookAnalysisBundleManifestV2,
     TextbookPageAnalysisV2,
     validate_contract,
 )
+from eom_identifiers import content_sha256
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.legacy_assessment_models import (
+    AssessmentLayoutObservationRecord,
+    AssessmentSourceBundleRevisionRecord,
+    LegacyItemExtractionAcceptanceRecord,
+    LegacyItemExtractionDecisionRecord,
+)
+from eom_catalog_service.legacy_item_extraction_batch_models import (
+    LegacyItemExtractionBatchRecord,
+    LegacyItemExtractionBatchWorkUnitRecord,
+)
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
     ContentIntakeSourceFileRecord,
@@ -171,10 +188,11 @@ def resolve_content_intake_source(
 def _resolve_item_source(
     session: Session,
     *,
+    artifacts: CatalogArtifactService | None,
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
     eligible_revision_states: frozenset[str],
-) -> ApprovedItemKnowledgeSourceV2:
+) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
     revision = session.get(ItemRevisionRecord, item_revision_id)
     if revision is None:
         raise KnowledgeAnalysisSourceError(
@@ -245,22 +263,35 @@ def _resolve_item_source(
     if not isinstance(size_bytes, int):
         size_bytes = artifact_revision.content_bytes
     _validate_media_and_size(component.media_type, size_bytes)
+    artifact_member = KnowledgeAnalysisSourceArtifactMemberV2(
+        artifact_id=component.artifact_id,
+        artifact_revision_id=component.artifact_revision_id,
+        member_path=component.logical_name,
+        materialized_path="source/item-content.json",
+        sha256=component.sha256,
+        bytes=size_bytes,
+        schema_ref=component.schema_ref,
+        media_type=component.media_type,
+        logical_name="item-content.json",
+    )
+    if source_class == "PAST_EXAM":
+        if artifacts is None:
+            raise KnowledgeAnalysisSourceError(
+                "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
+                "past-exam Item analysis requires immutable extraction evidence",
+            )
+        return _resolve_past_exam_item_source(
+            session,
+            artifacts=artifacts,
+            revision=revision,
+            artifact_member=artifact_member,
+        )
     try:
         return ApprovedItemKnowledgeSourceV2(
             source_class=source_class,
             item_id=revision.item_id,
             item_revision_id=item_revision_id,
-            artifact_member=KnowledgeAnalysisSourceArtifactMemberV2(
-                artifact_id=component.artifact_id,
-                artifact_revision_id=component.artifact_revision_id,
-                member_path=component.logical_name,
-                materialized_path="source/item-content.json",
-                sha256=component.sha256,
-                bytes=size_bytes,
-                schema_ref=component.schema_ref,
-                media_type=component.media_type,
-                logical_name="item-content.json",
-            ),
+            artifact_member=artifact_member,
         )
     except ValueError as exc:
         raise KnowledgeAnalysisSourceError(
@@ -268,16 +299,405 @@ def _resolve_item_source(
         ) from exc
 
 
+def _resolve_past_exam_item_source(
+    session: Session,
+    *,
+    artifacts: CatalogArtifactService,
+    revision: ItemRevisionRecord,
+    artifact_member: KnowledgeAnalysisSourceArtifactMemberV2,
+) -> ApprovedPastExamItemKnowledgeSourceV3:
+    """Resolve one promoted Item back to its exact extraction request and PNG evidence."""
+
+    metadata = revision.metadata_json
+    acceptance_id = metadata.get("extraction_acceptance_id")
+    extraction_result_id = metadata.get("extraction_result_id")
+    item_proposal_id = metadata.get("item_proposal_id")
+    item_number = metadata.get("item_number")
+    if (
+        metadata.get("source_kind") != "PAST_EXAM"
+        or not isinstance(acceptance_id, str)
+        or not isinstance(extraction_result_id, str)
+        or not isinstance(item_proposal_id, str)
+        or not isinstance(item_number, int)
+    ):
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
+            "past-exam Item promotion provenance is incomplete",
+        )
+    acceptance_record = session.get(LegacyItemExtractionAcceptanceRecord, acceptance_id)
+    decisions = tuple(
+        session.scalars(
+            select(LegacyItemExtractionDecisionRecord).where(
+                LegacyItemExtractionDecisionRecord.acceptance_id == acceptance_id,
+                LegacyItemExtractionDecisionRecord.item_proposal_id == item_proposal_id,
+                LegacyItemExtractionDecisionRecord.item_number == item_number,
+            )
+        )
+    )
+    if (
+        acceptance_record is None
+        or acceptance_record.state not in {"ACCEPTED", "ACCEPTED_WITH_CORRECTIONS"}
+        or acceptance_record.coverage_state != "COMPLETE"
+        or acceptance_record.extraction_result_id != extraction_result_id
+        or len(decisions) != 1
+        or decisions[0].decision not in {"ACCEPT", "CORRECT_AND_ACCEPT"}
+    ):
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_STALE",
+            "past-exam Item acceptance or decision does not resolve",
+        )
+    work_units = tuple(
+        session.scalars(
+            select(LegacyItemExtractionBatchWorkUnitRecord)
+            .where(
+                LegacyItemExtractionBatchWorkUnitRecord.acceptance_id == acceptance_id,
+                LegacyItemExtractionBatchWorkUnitRecord.extraction_result_id
+                == extraction_result_id,
+                LegacyItemExtractionBatchWorkUnitRecord.state == "ACCEPTED",
+            )
+            .order_by(
+                LegacyItemExtractionBatchWorkUnitRecord.created_at,
+                LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+                LegacyItemExtractionBatchWorkUnitRecord.work_unit_id,
+            )
+        )
+    )
+    lineage = {
+        (
+            unit.extraction_request_id,
+            unit.request_sha256,
+            unit.assessment_source_bundle_id,
+            unit.assessment_source_bundle_revision_id,
+            unit.bundle_manifest_sha256,
+            unit.result_sha256,
+            unit.acceptance_sha256,
+        )
+        for unit in work_units
+    }
+    if (
+        not work_units
+        or len(lineage) != 1
+        or next(iter(lineage))[5:]  # result and acceptance self hashes
+        != (acceptance_record.result_sha256, acceptance_record.acceptance_sha256)
+    ):
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_STALE",
+            "past-exam Item extraction lineage is ambiguous",
+        )
+    work_unit = work_units[0]
+    batch = session.get(LegacyItemExtractionBatchRecord, work_unit.extraction_batch_id)
+    bundle = session.get(
+        AssessmentSourceBundleRevisionRecord,
+        work_unit.assessment_source_bundle_revision_id,
+    )
+    if (
+        batch is None
+        or bundle is None
+        or batch.manifest_sha256 == ""
+        or bundle.assessment_source_bundle_id != work_unit.assessment_source_bundle_id
+        or bundle.bundle_manifest_sha256 != work_unit.bundle_manifest_sha256
+        or bundle.state not in {"REVIEWED", "SUPERSEDED"}
+    ):
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_STALE",
+            "past-exam Item batch or bundle revision is stale",
+        )
+
+    try:
+        manifest_value = _read_json_member(
+            artifacts,
+            artifact_id=batch.manifest_artifact_id,
+            revision_id=batch.manifest_artifact_revision_id,
+            member_path=batch.manifest_artifact_member_path,
+            sha256=batch.manifest_artifact_sha256,
+            media_type=batch.manifest_artifact_media_type,
+            schema_ref=batch.manifest_artifact_schema_ref,
+        )
+        validate_contract("legacy-item-extraction-batch-v2", manifest_value)
+        batch_manifest = LegacyItemExtractionBatchManifestV2.model_validate(manifest_value)
+        manifest_units = tuple(
+            unit
+            for unit in batch_manifest.work_units
+            if unit.work_unit_id == work_unit.work_unit_id
+        )
+        if len(manifest_units) != 1:
+            raise ValueError("work unit is absent from its immutable batch manifest")
+        request = manifest_units[0].request
+
+        acceptance_value = _read_json_member(
+            artifacts,
+            artifact_id=acceptance_record.acceptance_artifact_id,
+            revision_id=acceptance_record.acceptance_artifact_revision_id,
+            member_path=acceptance_record.acceptance_artifact_member_path,
+            sha256=acceptance_record.acceptance_artifact_sha256,
+            media_type=acceptance_record.acceptance_artifact_media_type,
+            schema_ref=acceptance_record.acceptance_artifact_schema_ref,
+        )
+        validate_contract("legacy-item-extraction-acceptance", acceptance_value)
+        acceptance = LegacyItemExtractionAcceptance.model_validate(acceptance_value)
+
+        result_value = _read_json_member(
+            artifacts,
+            artifact_id=acceptance_record.result_artifact_id,
+            revision_id=acceptance_record.result_artifact_revision_id,
+            member_path=acceptance_record.result_artifact_member_path,
+            sha256=acceptance_record.result_artifact_sha256,
+            media_type=acceptance_record.result_artifact_media_type,
+            schema_ref=acceptance_record.result_artifact_schema_ref,
+        )
+        validate_contract("legacy-item-extraction-result", result_value)
+        result = LegacyItemExtractionResult.model_validate(result_value)
+
+        layout_record = session.get(
+            AssessmentLayoutObservationRecord,
+            request.layout_observation.assessment_layout_observation_id,
+        )
+        if layout_record is None:
+            raise ValueError("layout observation record is absent")
+        layout_value = _read_json_member(
+            artifacts,
+            artifact_id=layout_record.artifact_id,
+            revision_id=layout_record.artifact_revision_id,
+            member_path=layout_record.artifact_member_path,
+            sha256=layout_record.artifact_sha256,
+            media_type=layout_record.artifact_media_type,
+            schema_ref=layout_record.artifact_schema_ref,
+        )
+        validate_contract("assessment-layout-observation", layout_value)
+        layout = AssessmentLayoutObservation.model_validate(layout_value)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_HASH_MISMATCH",
+            "past-exam Item extraction evidence bytes are invalid",
+        ) from exc
+
+    decision_models = tuple(
+        value
+        for value in acceptance.item_decisions
+        if value.item_proposal_id == item_proposal_id and value.item_number == item_number
+    )
+    proposals = tuple(
+        value
+        for value in result.items
+        if value.item_proposal_id == item_proposal_id and value.item_number == item_number
+    )
+    expected_result_pointer = AssessmentArtifactMemberPointer(
+        artifact_id=acceptance_record.result_artifact_id,
+        artifact_revision_id=acceptance_record.result_artifact_revision_id,
+        member_path=acceptance_record.result_artifact_member_path,
+        schema_ref=acceptance_record.result_artifact_schema_ref,
+        media_type=acceptance_record.result_artifact_media_type,
+        sha256=acceptance_record.result_artifact_sha256,
+    )
+    expected_layout_pointer = AssessmentArtifactMemberPointer(
+        artifact_id=layout_record.artifact_id,
+        artifact_revision_id=layout_record.artifact_revision_id,
+        member_path=layout_record.artifact_member_path,
+        schema_ref=layout_record.artifact_schema_ref,
+        media_type=layout_record.artifact_media_type,
+        sha256=layout_record.artifact_sha256,
+    )
+    if (
+        batch_manifest.extraction_batch_id != batch.extraction_batch_id
+        or batch_manifest.manifest_sha256 != batch.manifest_sha256
+        or request.extraction_request_id != work_unit.extraction_request_id
+        or request.request_sha256 != work_unit.request_sha256
+        or request.bundle.assessment_source_bundle_id != bundle.assessment_source_bundle_id
+        or request.bundle.assessment_source_bundle_revision_id
+        != bundle.assessment_source_bundle_revision_id
+        or request.bundle.bundle_manifest_sha256 != bundle.bundle_manifest_sha256
+        or acceptance.acceptance_id != acceptance_record.acceptance_id
+        or acceptance.acceptance_sha256 != acceptance_record.acceptance_sha256
+        or acceptance.extraction_result.extraction_result_id != result.extraction_result_id
+        or acceptance.extraction_result.result_sha256 != result.result_sha256
+        or acceptance.extraction_result.artifact != expected_result_pointer
+        or result.extraction_result_id != extraction_result_id
+        or result.extraction_request_id != request.extraction_request_id
+        or result.request_sha256 != request.request_sha256
+        or result.result_sha256 != acceptance_record.result_sha256
+        or len(decision_models) != 1
+        or decision_models[0].decision not in {"ACCEPT", "CORRECT_AND_ACCEPT"}
+        or decision_models[0].decision != decisions[0].decision
+        or len(proposals) != 1
+        or result.observed_page_input_ids
+        != tuple(page.page_input_id for page in request.page_inputs)
+        or layout.assessment_layout_observation_id
+        != request.layout_observation.assessment_layout_observation_id
+        or request.layout_observation.artifact != expected_layout_pointer
+        or layout.observation_sha256 != request.layout_observation.observation_sha256
+        or layout.bundle != request.bundle
+    ):
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_STALE",
+            "past-exam Item evidence is not cross-bound",
+        )
+    proposal = proposals[0]
+    if (
+        decision_models[0].decision == "ACCEPT"
+        and content_sha256(proposal.item_content.model_dump(mode="json")) != artifact_member.sha256
+    ):
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_STALE",
+            "promoted Item content differs from its extraction proposal",
+        )
+    page_by_id = {page.page.page_input_id: page.page for page in layout.pages}
+    page_by_position = {
+        (page.page.source_role, page.page.physical_page): page.page for page in layout.pages
+    }
+    boundaries = tuple(
+        value for value in layout.item_boundaries if value.item_number == item_number
+    )
+    if len(boundaries) != 1:
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_STALE", "past-exam Item layout boundary is ambiguous"
+        )
+    selected_page_ids = {segment.page_input_id for segment in boundaries[0].segments}
+    for anchor in proposal.source_anchors:
+        if anchor.source_role not in {"PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"}:
+            continue
+        if anchor.physical_page is None:
+            raise KnowledgeAnalysisSourceError(
+                "KNOWLEDGE_ANALYSIS_SOURCE_STALE",
+                "past-exam Item image anchor has no physical page",
+            )
+        source_role = cast(
+            Literal["PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"], anchor.source_role
+        )
+        page = page_by_position.get((source_role, anchor.physical_page))
+        if page is None or anchor.source != page.image:
+            raise KnowledgeAnalysisSourceError(
+                "KNOWLEDGE_ANALYSIS_SOURCE_STALE",
+                "past-exam Item page anchor differs from its immutable PNG",
+            )
+        selected_page_ids.add(page.page_input_id)
+    if not selected_page_ids.issubset(page_by_id):
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_STALE", "past-exam Item page selection is dangling"
+        )
+    page_inputs = tuple(
+        sorted(
+            (page_by_id[page_id] for page_id in selected_page_ids),
+            key=lambda page: (
+                0 if page.source_role == "PROBLEM_DOCUMENT" else 1,
+                page.physical_page,
+                page.page_input_id,
+            ),
+        )
+    )
+    for page in page_inputs:
+        for pointer, max_bytes in ((page.source, MAX_SOURCE_BYTES), (page.image, 32 * 1024 * 1024)):
+            _resolve_artifact_member(
+                session,
+                artifact_id=pointer.artifact_id,
+                artifact_revision_id=pointer.artifact_revision_id,
+                member_path=pointer.member_path,
+                sha256=pointer.sha256,
+                size_bytes=None,
+                media_type=pointer.media_type,
+                schema_ref=pointer.schema_ref,
+            )
+            artifacts.verify_member(
+                artifact_id=pointer.artifact_id,
+                revision_id=pointer.artifact_revision_id,
+                member_path=pointer.member_path,
+                sha256=pointer.sha256,
+                media_type=pointer.media_type,
+                schema_ref=pointer.schema_ref,
+                max_bytes=max_bytes,
+            )
+    try:
+        return ApprovedPastExamItemKnowledgeSourceV3(
+            item_id=revision.item_id,
+            item_revision_id=revision.item_revision_id,
+            artifact_member=artifact_member,
+            extraction_acceptance_id=acceptance.acceptance_id,
+            extraction_acceptance_sha256=acceptance.acceptance_sha256,
+            extraction_acceptance_artifact=AssessmentArtifactMemberPointer(
+                artifact_id=acceptance_record.acceptance_artifact_id,
+                artifact_revision_id=acceptance_record.acceptance_artifact_revision_id,
+                member_path=acceptance_record.acceptance_artifact_member_path,
+                schema_ref=acceptance_record.acceptance_artifact_schema_ref,
+                media_type=acceptance_record.acceptance_artifact_media_type,
+                sha256=acceptance_record.acceptance_artifact_sha256,
+            ),
+            extraction_result_id=result.extraction_result_id,
+            extraction_result_sha256=result.result_sha256,
+            extraction_result_artifact=AssessmentArtifactMemberPointer(
+                artifact_id=acceptance_record.result_artifact_id,
+                artifact_revision_id=acceptance_record.result_artifact_revision_id,
+                member_path=acceptance_record.result_artifact_member_path,
+                schema_ref=acceptance_record.result_artifact_schema_ref,
+                media_type=acceptance_record.result_artifact_media_type,
+                sha256=acceptance_record.result_artifact_sha256,
+            ),
+            item_proposal_id=item_proposal_id,
+            item_number=item_number,
+            bundle=request.bundle,
+            layout_observation=request.layout_observation,
+            page_inputs=page_inputs,
+            page_image_count=len(page_inputs),
+        )
+    except ValueError as exc:
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
+            "past-exam Item visual source contract is invalid",
+        ) from exc
+
+
+def _reject_json_constant(_value: str) -> NoReturn:
+    raise ValueError("non-finite JSON value")
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, member in pairs:
+        if key in value:
+            raise ValueError("duplicate JSON key")
+        value[key] = member
+    return value
+
+
+def _read_json_member(
+    artifacts: CatalogArtifactService,
+    *,
+    artifact_id: str,
+    revision_id: str,
+    member_path: str,
+    sha256: str,
+    media_type: str,
+    schema_ref: str,
+) -> dict[str, Any]:
+    raw = artifacts.read_member(
+        artifact_id=artifact_id,
+        revision_id=revision_id,
+        member_path=member_path,
+        sha256=sha256,
+        media_type=media_type,
+        schema_ref=schema_ref,
+        max_bytes=MAX_DOCUMENT_JSON_BYTES,
+    )
+    value = json.loads(
+        raw,
+        object_pairs_hook=_unique_json_object,
+        parse_constant=_reject_json_constant,
+    )
+    if not isinstance(value, dict):
+        raise ValueError("Artifact member is not a JSON object")
+    return value
+
+
 def resolve_approved_item_source(
     session: Session,
     *,
+    artifacts: CatalogArtifactService | None = None,
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
-) -> ApprovedItemKnowledgeSourceV2:
+) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
     """Resolve a currently approved Item Revision for a new analysis request."""
 
     return _resolve_item_source(
         session,
+        artifacts=artifacts,
         item_revision_id=item_revision_id,
         source_class=source_class,
         eligible_revision_states=frozenset({"APPROVED"}),
@@ -287,13 +707,15 @@ def resolve_approved_item_source(
 def resolve_historically_approved_item_source(
     session: Session,
     *,
+    artifacts: CatalogArtifactService | None = None,
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
-) -> ApprovedItemKnowledgeSourceV2:
+) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
     """Re-resolve an immutable published source without substituting its current revision."""
 
     return _resolve_item_source(
         session,
+        artifacts=artifacts,
         item_revision_id=item_revision_id,
         source_class=source_class,
         eligible_revision_states=frozenset({"APPROVED", "SUPERSEDED", "RETIRED"}),

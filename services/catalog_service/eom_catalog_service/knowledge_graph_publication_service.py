@@ -11,6 +11,7 @@ from typing import Any, cast
 
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
+    ApprovedPastExamItemKnowledgeSourceV3,
     AssessmentItemContent,
     ContentIntakeKnowledgeSourceV2,
     CurriculumUnitBinding,
@@ -28,6 +29,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV5,
     KnowledgeAnalysisProposalReceiptV6,
     KnowledgeAnalysisProposalReceiptV7,
+    KnowledgeAnalysisProposalReceiptV8,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
@@ -35,6 +37,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV6,
     KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisRequestV8,
+    KnowledgeAnalysisRequestV9,
     KnowledgeAnalysisResultV2,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
@@ -42,12 +45,14 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisResultV6,
     KnowledgeAnalysisResultV7,
     KnowledgeAnalysisResultV8,
+    KnowledgeAnalysisResultV9,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
     KnowledgeAnalysisWorkerProposalV4,
     KnowledgeAnalysisWorkerProposalV5,
     KnowledgeAnalysisWorkerProposalV6,
+    KnowledgeAnalysisWorkerProposalV7,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphCounts,
     KnowledgeGraphProjections,
@@ -257,6 +262,7 @@ type KnowledgeAnalysisRequestContract = (
     | KnowledgeAnalysisRequestV6
     | KnowledgeAnalysisRequestV7
     | KnowledgeAnalysisRequestV8
+    | KnowledgeAnalysisRequestV9
 )
 type KnowledgeAnalysisReceiptContract = (
     KnowledgeAnalysisProposalReceipt
@@ -266,6 +272,7 @@ type KnowledgeAnalysisReceiptContract = (
     | KnowledgeAnalysisProposalReceiptV5
     | KnowledgeAnalysisProposalReceiptV6
     | KnowledgeAnalysisProposalReceiptV7
+    | KnowledgeAnalysisProposalReceiptV8
 )
 type KnowledgeGraphSnapshotContract = (
     KnowledgeGraphSnapshotManifestV2
@@ -394,6 +401,7 @@ def _manifest_member_schema_ref(revision: ArtifactRevisionRecord) -> str:
 def _source_revision_id(
     source: ContentIntakeKnowledgeSourceV2
     | ApprovedItemKnowledgeSourceV2
+    | ApprovedPastExamItemKnowledgeSourceV3
     | EducationalDocumentKnowledgeSourceV3
     | EducationalDocumentKnowledgeSourceV4,
 ) -> str:
@@ -404,6 +412,36 @@ def _source_revision_id(
     ):
         return source.document_revision_id
     return source.source_file_id
+
+
+def _snapshot_source_revision(
+    source: ContentIntakeKnowledgeSourceV2
+    | ApprovedItemKnowledgeSourceV2
+    | ApprovedPastExamItemKnowledgeSourceV3
+    | EducationalDocumentKnowledgeSourceV3
+    | EducationalDocumentKnowledgeSourceV4,
+) -> (
+    ContentIntakeKnowledgeSourceV2
+    | ApprovedItemKnowledgeSourceV2
+    | EducationalDocumentKnowledgeSourceV3
+    | EducationalDocumentKnowledgeSourceV4
+):
+    """Store the smallest immutable source identity in a Graph snapshot manifest.
+
+    The accepted-result Artifact retains the complete V9 visual evidence closure.  The graph
+    manifest needs the Item Revision identity and canonical content member only; individual graph
+    source pointers retain the exact page-image Artifact Revision and hash used by each anchor.
+    """
+
+    if isinstance(source, ApprovedPastExamItemKnowledgeSourceV3):
+        return ApprovedItemKnowledgeSourceV2(
+            source_class=source.source_class,
+            item_id=source.item_id,
+            item_revision_id=source.item_revision_id,
+            lifecycle_state=source.lifecycle_state,
+            artifact_member=source.artifact_member,
+        )
+    return source
 
 
 class KnowledgeGraphPublicationService:
@@ -783,7 +821,8 @@ class KnowledgeGraphPublicationService:
             "previous_graph_snapshot_revision_id": previous_snapshot_revision_id,
             "publisher_version": command.publisher_version,
             "source_revisions": [
-                item.source.model_dump(mode="json") for item in projection.analyses
+                _snapshot_source_revision(item.source).model_dump(mode="json")
+                for item in projection.analyses
             ],
             "analysis_results": [
                 item.accepted_result.model_dump(mode="json") for item in projection.analyses
@@ -903,7 +942,9 @@ class KnowledgeGraphPublicationService:
         try:
             request_version = run.canonical_request.get("schema_version")
             request: KnowledgeAnalysisRequestContract
-            if request_version == "knowledge-analysis-request/8.0":
+            if request_version == "knowledge-analysis-request/9.0":
+                request = KnowledgeAnalysisRequestV9.model_validate(run.canonical_request)
+            elif request_version == "knowledge-analysis-request/8.0":
                 request = KnowledgeAnalysisRequestV8.model_validate(run.canonical_request)
             elif request_version == "knowledge-analysis-request/7.0":
                 request = KnowledgeAnalysisRequestV7.model_validate(run.canonical_request)
@@ -951,11 +992,19 @@ class KnowledgeGraphPublicationService:
             manifest_artifact_type="knowledge-analysis-accepted-result",
             primary_file="evidence/accepted-result.json",
         )
-        stable_identity_multimodal = isinstance(request, KnowledgeAnalysisRequestV8)
+        visual_item = isinstance(request, KnowledgeAnalysisRequestV9)
+        stable_identity_multimodal = isinstance(
+            request, (KnowledgeAnalysisRequestV8, KnowledgeAnalysisRequestV9)
+        )
         typed_identity_multimodal = isinstance(request, KnowledgeAnalysisRequestV7)
         multimodal_document = isinstance(
             request,
-            (KnowledgeAnalysisRequestV6, KnowledgeAnalysisRequestV7, KnowledgeAnalysisRequestV8),
+            (
+                KnowledgeAnalysisRequestV6,
+                KnowledgeAnalysisRequestV7,
+                KnowledgeAnalysisRequestV8,
+                KnowledgeAnalysisRequestV9,
+            ),
         )
         integrity_document = isinstance(
             request,
@@ -964,6 +1013,7 @@ class KnowledgeGraphPublicationService:
                 KnowledgeAnalysisRequestV6,
                 KnowledgeAnalysisRequestV7,
                 KnowledgeAnalysisRequestV8,
+                KnowledgeAnalysisRequestV9,
             ),
         )
         endpoint_typed_document = isinstance(
@@ -974,6 +1024,7 @@ class KnowledgeGraphPublicationService:
                 KnowledgeAnalysisRequestV6,
                 KnowledgeAnalysisRequestV7,
                 KnowledgeAnalysisRequestV8,
+                KnowledgeAnalysisRequestV9,
             ),
         )
         document_source = isinstance(
@@ -985,9 +1036,12 @@ class KnowledgeGraphPublicationService:
                 KnowledgeAnalysisRequestV6,
                 KnowledgeAnalysisRequestV7,
                 KnowledgeAnalysisRequestV8,
+                KnowledgeAnalysisRequestV9,
             ),
         )
-        if stable_identity_multimodal:
+        if visual_item:
+            accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/9.0"
+        elif stable_identity_multimodal:
             accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/8.0"
         elif typed_identity_multimodal:
             accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/7.0"
@@ -1022,6 +1076,7 @@ class KnowledgeGraphPublicationService:
             | KnowledgeAnalysisResultV6
             | KnowledgeAnalysisResultV7
             | KnowledgeAnalysisResultV8
+            | KnowledgeAnalysisResultV9
         )
         database_accepted: (
             KnowledgeAnalysisResultV2
@@ -1031,9 +1086,17 @@ class KnowledgeGraphPublicationService:
             | KnowledgeAnalysisResultV6
             | KnowledgeAnalysisResultV7
             | KnowledgeAnalysisResultV8
+            | KnowledgeAnalysisResultV9
         )
         try:
-            if stable_identity_multimodal:
+            if visual_item:
+                validate_contract("knowledge-analysis-result-v9", accepted_value)
+                accepted = KnowledgeAnalysisResultV9.model_validate(accepted_value)
+                validate_contract("knowledge-analysis-result-v9", accepted_revision.result)
+                database_accepted = KnowledgeAnalysisResultV9.model_validate(
+                    accepted_revision.result
+                )
+            elif stable_identity_multimodal:
                 validate_contract("knowledge-analysis-result-v8", accepted_value)
                 accepted = KnowledgeAnalysisResultV8.model_validate(accepted_value)
                 validate_contract("knowledge-analysis-result-v8", accepted_revision.result)
@@ -1117,7 +1180,16 @@ class KnowledgeGraphPublicationService:
         receipt: KnowledgeAnalysisReceiptContract
         database_receipt: KnowledgeAnalysisReceiptContract
         try:
-            if stable_identity_multimodal:
+            if visual_item:
+                validate_contract("knowledge-analysis-proposal-receipt-v8", proposal_receipt_value)
+                receipt = KnowledgeAnalysisProposalReceiptV8.model_validate(proposal_receipt_value)
+                validate_contract(
+                    "knowledge-analysis-proposal-receipt-v8", proposal_revision.result
+                )
+                database_receipt = KnowledgeAnalysisProposalReceiptV8.model_validate(
+                    proposal_revision.result
+                )
+            elif stable_identity_multimodal:
                 validate_contract("knowledge-analysis-proposal-receipt-v7", proposal_receipt_value)
                 receipt = KnowledgeAnalysisProposalReceiptV7.model_validate(proposal_receipt_value)
                 validate_contract(
@@ -1206,9 +1278,19 @@ class KnowledgeGraphPublicationService:
                 "accepted result and proposal pointers are inconsistent",
             )
         proposal = self._load_proposal(receipt)
+        allowed_anchor_members = {
+            (
+                request.source.artifact_member.artifact_revision_id,
+                request.source.artifact_member.member_path,
+            )
+        }
+        if isinstance(request, KnowledgeAnalysisRequestV9):
+            allowed_anchor_members.update(
+                (page.image.artifact_revision_id, page.image.member_path)
+                for page in request.source.page_inputs
+            )
         if any(
-            anchor.artifact_revision_id != request.source.artifact_member.artifact_revision_id
-            or anchor.member_path != request.source.artifact_member.member_path
+            (anchor.artifact_revision_id, anchor.member_path) not in allowed_anchor_members
             for anchor in proposal.anchors
         ):
             raise KnowledgeGraphPublicationError(
@@ -1239,6 +1321,7 @@ class KnowledgeGraphPublicationService:
     ) -> (
         ContentIntakeKnowledgeSourceV2
         | ApprovedItemKnowledgeSourceV2
+        | ApprovedPastExamItemKnowledgeSourceV3
         | EducationalDocumentKnowledgeSourceV3
         | EducationalDocumentKnowledgeSourceV4
     ):
@@ -1253,6 +1336,7 @@ class KnowledgeGraphPublicationService:
         if isinstance(source, ApprovedItemKnowledgeSourceV2):
             return resolve_historically_approved_item_source(
                 session,
+                artifacts=self.artifacts,
                 item_revision_id=source.item_revision_id,
                 source_class=source.source_class,
             )
@@ -1344,6 +1428,7 @@ class KnowledgeGraphPublicationService:
         | KnowledgeAnalysisWorkerProposalV4
         | KnowledgeAnalysisWorkerProposalV5
         | KnowledgeAnalysisWorkerProposalV6
+        | KnowledgeAnalysisWorkerProposalV7
     ):
         try:
             return resolve_knowledge_analysis_proposal(self.artifacts, receipt)

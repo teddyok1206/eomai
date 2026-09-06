@@ -27,7 +27,7 @@ from eom_api_contracts.content_packs import (
     ContentPackReleaseView,
 )
 from eom_api_contracts.curriculum import (
-    AssessmentItemOccurrenceView,
+    AssessmentItemOccurrenceViewV2,
     CurriculumGraphCapabilityView,
 )
 from eom_api_contracts.deliverables import DeliverableView
@@ -397,34 +397,44 @@ class QueryAdapter:
         target_grade: int,
         administration_month: int,
         subject_key: str,
+        assessment_occurrence_revision_id: str | None,
+        item_number: int | None,
         limit: int,
         cursor: str | None,
-    ) -> PageResult[AssessmentItemOccurrenceView]:
+    ) -> PageResult[AssessmentItemOccurrenceViewV2]:
         """Return ordered placements for one exact exam key in the current snapshot."""
 
         aggregate = (
             f"{administration_year}:{target_school_level}:{target_grade}:"
-            f"{administration_month}:{subject_key}"
+            f"{administration_month}:{subject_key}:"
+            f"{assessment_occurrence_revision_id or '*'}:{item_number or '*'}"
         )
         offset = self.cursors.decode_ordinal(cursor, "assessment-exam", aggregate) if cursor else 0
         with self.sessions() as session:
             snapshot_id = self._current_assessment_snapshot_id(session)
             if snapshot_id is None:
                 return PageResult((), None, False)
+            conditions = [
+                AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id == snapshot_id,
+                AssessmentItemOccurrenceReferenceRecord.administration_year == administration_year,
+                AssessmentItemOccurrenceReferenceRecord.target_school_level == target_school_level,
+                AssessmentItemOccurrenceReferenceRecord.target_grade == target_grade,
+                AssessmentItemOccurrenceReferenceRecord.administration_month
+                == administration_month,
+                AssessmentItemOccurrenceReferenceRecord.subject_key == subject_key,
+            ]
+            if assessment_occurrence_revision_id is not None:
+                conditions.append(
+                    AssessmentItemOccurrenceReferenceRecord.assessment_occurrence_revision_id
+                    == assessment_occurrence_revision_id
+                )
+            if item_number is not None:
+                conditions.append(
+                    AssessmentItemOccurrenceReferenceRecord.item_number == item_number
+                )
             statement = (
                 select(AssessmentItemOccurrenceReferenceRecord)
-                .where(
-                    AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id
-                    == snapshot_id,
-                    AssessmentItemOccurrenceReferenceRecord.administration_year
-                    == administration_year,
-                    AssessmentItemOccurrenceReferenceRecord.target_school_level
-                    == target_school_level,
-                    AssessmentItemOccurrenceReferenceRecord.target_grade == target_grade,
-                    AssessmentItemOccurrenceReferenceRecord.administration_month
-                    == administration_month,
-                    AssessmentItemOccurrenceReferenceRecord.subject_key == subject_key,
-                )
+                .where(*conditions)
                 .order_by(
                     AssessmentItemOccurrenceReferenceRecord.item_number,
                     AssessmentItemOccurrenceReferenceRecord.item_revision_id,
@@ -448,7 +458,7 @@ class QueryAdapter:
         curriculum_unit_id: str,
         limit: int,
         cursor: str | None,
-    ) -> PageResult[AssessmentItemOccurrenceView]:
+    ) -> PageResult[AssessmentItemOccurrenceViewV2]:
         """Traverse current Graph adjacency from a unit to its past-exam placements."""
 
         offset = (
@@ -532,7 +542,7 @@ class QueryAdapter:
         offset: int,
         cursor_resource: str,
         cursor_aggregate: str,
-    ) -> PageResult[AssessmentItemOccurrenceView]:
+    ) -> PageResult[AssessmentItemOccurrenceViewV2]:
         page_rows = rows[:limit]
         placement_ids = {row.placement_node_id for row in page_rows}
         units_by_placement: dict[str, list[str]] = {}
@@ -560,7 +570,7 @@ class QueryAdapter:
             ):
                 units_by_placement.setdefault(placement_node_id, []).append(curriculum_unit_id)
         values = tuple(
-            AssessmentItemOccurrenceView(
+            AssessmentItemOccurrenceViewV2(
                 graph_snapshot_revision_id=row.graph_snapshot_revision_id,
                 placement_node_id=row.placement_node_id,
                 occurrence_node_id=row.occurrence_node_id,
