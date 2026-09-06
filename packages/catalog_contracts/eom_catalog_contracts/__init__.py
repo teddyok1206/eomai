@@ -120,6 +120,7 @@ from eom_catalog_contracts.item_origin import (
 )
 from eom_catalog_contracts.knowledge import (
     KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY,
+    PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
     WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY,
     AnalysisCurriculumBinding,
     ApprovedItemCurriculumAlignmentBinding,
@@ -431,6 +432,7 @@ __all__ = [
     "INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256",
     "INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY",
     "KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY",
+    "PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION",
     "WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY",
     "AcceptedCoverageItem",
     "ActivateContentPack",

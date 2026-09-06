@@ -43,6 +43,12 @@ edge source pointer records the exact Item JSON or PNG Artifact Revision, member
 its anchor cited. Retrieval re-resolves the accepted V9 request and validates the projected pointer
 against that closed member set; it never substitutes the source PDF or a newer page render.
 
+Previously accepted text-only analysis runs remain immutable audit history. Automatic learning
+treats an approved past-exam Item as complete only after a `knowledge-analysis-request/9.0` run
+exists, and automatic Graph publication admits only accepted V9 runs. This upgrades existing Item
+Revisions without rewriting them and prevents a removed text-only projection from being silently
+reintroduced.
+
 ## Access patterns and data structures
 
 - Exam lookup: indexed batch work-unit membership followed by the indexed bundle revision.

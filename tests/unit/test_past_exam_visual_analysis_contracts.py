@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 from eom_catalog_contracts import (
+    PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
     ApprovedItemKnowledgeSourceV2,
     ApprovedPastExamItemKnowledgeSourceV3,
     KnowledgeAnalysisRequestV9,
@@ -21,6 +22,12 @@ from eom_identifiers import content_sha256
 from pydantic import ValidationError
 
 NOW = datetime(2026, 9, 6, 3, tzinfo=UTC)
+
+
+def test_visual_past_exam_protocol_identity_is_centralized() -> None:
+    assert (
+        KnowledgeAnalysisRequestV9.model_fields["schema_version"].default
+    ) == PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION
 
 
 def _pointer(seed: str, *, member_path: str, schema_ref: str, media_type: str) -> dict[str, str]:

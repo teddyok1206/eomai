@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eom_catalog_contracts import LegacyItemPromotionRequest, ReconcileKnowledgeAnalysisCommand
+from eom_catalog_contracts import (
+    PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
+    LegacyItemPromotionRequest,
+    ReconcileKnowledgeAnalysisCommand,
+)
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
@@ -285,6 +289,16 @@ class LegacyItemAutomaticLearningService:
                     & (
                         KnowledgeAnalysisRunRecord.source_revision_id
                         == ItemRevisionRecord.item_revision_id
+                    )
+                    & (
+                        KnowledgeAnalysisRunRecord.canonical_request["source"][
+                            "source_class"
+                        ].astext
+                        == "PAST_EXAM"
+                    )
+                    & (
+                        KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
+                        == PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION
                     ),
                 )
                 .where(

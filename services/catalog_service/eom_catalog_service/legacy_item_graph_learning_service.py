@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 
 from eom_catalog_contracts import (
+    PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
     ApprovedItemKnowledgeSourceV2,
     AssessmentOccurrenceItemBinding,
     AutomaticItemCurriculumAlignmentBinding,
@@ -162,6 +163,8 @@ class LegacyItemGraphLearningService:
                             "source_class"
                         ].astext
                         == "PAST_EXAM",
+                        KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
+                        == PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
                         KnowledgeAnalysisRunRecord.state == "ACCEPTED",
                         AssessmentOccurrenceRevisionRecord.schema_version
                         == "assessment-occurrence-revision/2.0",
