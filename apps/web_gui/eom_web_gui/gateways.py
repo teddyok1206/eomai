@@ -11,6 +11,8 @@ from typing import Any, Protocol
 import httpx
 
 from eom_web_gui.contracts import (
+    AssessmentLearningBatchStatus,
+    AssessmentLearningExamStatus,
     CodexAccountStatusView,
     CodexAuthEnrollmentStatusView,
     CodexControlCommandStatusView,
@@ -236,6 +238,14 @@ class ApplicationGateway(Protocol):
     async def knowledge_analysis_batches(
         self, session: WebSession
     ) -> tuple[KnowledgeAnalysisBatchStatus, ...]: ...
+
+    async def assessment_learning_batches(
+        self, session: WebSession
+    ) -> tuple[AssessmentLearningBatchStatus, ...]: ...
+
+    async def assessment_learning_exams(
+        self, session: WebSession, batch_id: str
+    ) -> tuple[AssessmentLearningExamStatus, ...]: ...
 
     async def knowledge_analysis_batch(
         self, session: WebSession, batch_id: str
@@ -596,6 +606,41 @@ class HttpApplicationGateway:
         try:
             return tuple(_knowledge_analysis_batch(value) for value in self._list_data(response))
         except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def assessment_learning_batches(
+        self, session: WebSession
+    ) -> tuple[AssessmentLearningBatchStatus, ...]:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/assessment-learning-batches",
+            params={"limit": 20},
+        )
+        try:
+            return tuple(
+                AssessmentLearningBatchStatus.model_validate(value)
+                for value in self._list_data(response)
+            )
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def assessment_learning_exams(
+        self, session: WebSession, batch_id: str
+    ) -> tuple[AssessmentLearningExamStatus, ...]:
+        _require_id(batch_id, "legacybatch_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/assessment-learning-batches/{batch_id}/exams",
+            params={"limit": 500},
+        )
+        try:
+            return tuple(
+                AssessmentLearningExamStatus.model_validate(value)
+                for value in self._list_data(response)
+            )
+        except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def knowledge_analysis_batch(

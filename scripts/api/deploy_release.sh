@@ -224,8 +224,12 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         if name.startswith("eom_api_contracts/schemas/") and name.endswith(".schema.json")
     ]
     if (
-        len(schemas) != 9
+        len(schemas) != 11
         or "eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"
+        not in schemas
+        or "eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"
+        not in schemas
+        or "eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json"
         not in schemas
         or "eom_api_contracts/schemas/hwpx.schema.json" not in schemas
         or "eom_api_contracts/schemas/items.schema.json" not in schemas
@@ -233,8 +237,8 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         not in schemas
     ):
         raise SystemExit(
-            "expected 9 packaged API schemas including HWPX, Items, curriculum "
-            "capability, and assessment occurrence, "
+            "expected 11 packaged API schemas including HWPX, Items, curriculum "
+            "capability, assessment occurrence, and assessment learning, "
             f"found {schemas}"
         )
 

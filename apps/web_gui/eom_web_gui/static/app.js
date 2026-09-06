@@ -15,6 +15,7 @@ import {formatEquationSource, orderedItemPreviewBlocks} from "./item-preview.js"
 const API = "/studio/api/v1";
 const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/;
 const ANALYSIS_BATCH_PATTERN = /^analysisbatch_[a-f0-9]{32}$/;
+const ASSESSMENT_LEARNING_BATCH_PATTERN = /^legacybatch_[a-f0-9]{32}$/;
 const state = {
   csrf: "",
   operator: null,
@@ -44,6 +45,10 @@ const state = {
   knowledgeAnalysisBatches: [],
   knowledgeQualityReport: null,
   analysisBatchPollTimer: null,
+  assessmentLearningBatches: [],
+  assessmentLearningExams: [],
+  selectedAssessmentLearningBatchId: null,
+  assessmentLearningPollTimer: null,
   presentationVocabulary: null,
   curriculumOutline: null,
   curriculumSelection: {large: "", middle: "", small: ""},
@@ -58,6 +63,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
   approval: "human",
   hwpx: "human",
   control: "engine",
+  learning: "engine",
   knowledge: "engine",
   explorer: "engine",
   dashboard: "human",
@@ -238,7 +244,9 @@ function showView(name) {
   $(".sidebar").classList.remove("open");
   if (name === "hwpx") loadHwpx();
   if (name !== "control") window.clearTimeout(state.analysisBatchPollTimer);
+  if (name !== "learning") window.clearTimeout(state.assessmentLearningPollTimer);
   if (name === "control" && hasAdminRole()) loadControlPlane();
+  if (name === "learning" && hasAdminRole()) loadAssessmentLearning();
   if (name === "dashboard" && state.health) renderDashboard(state.health);
   const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
   window.scrollTo({top: 0, behavior});
@@ -273,8 +281,11 @@ function loadGlobalId() {
     $("#knowledge-batch-id").value = value;
     showView("knowledge");
     loadKnowledgeQuality();
+  } else if (ASSESSMENT_LEARNING_BATCH_PATTERN.test(value)) {
+    state.selectedAssessmentLearningBatchId = value;
+    showView("learning");
   } else {
-    toast("지원되는 문항 제작 진행, 문항, HWPX 제작 또는 분석 배치 ID를 입력하세요.");
+    toast("지원되는 문항 제작 진행, 문항, HWPX 제작 또는 분석·자료 학습 배치 ID를 입력하세요.");
   }
 }
 
@@ -1212,6 +1223,154 @@ function installControlPlane() {
   $("#codex-reauth-close").addEventListener("click", closeCodexReauthentication);
   $("#codex-reauth-progress-close").addEventListener("click", closeCodexReauthentication);
   $("#codex-challenge-reveal").addEventListener("click", revealCodexDeviceChallenge);
+}
+
+function installAssessmentLearning() {
+  $("#learning-refresh").addEventListener("click", loadAssessmentLearning);
+}
+
+async function loadAssessmentLearning() {
+  if (!hasAdminRole() || !$('[data-view="learning"].active')) return;
+  window.clearTimeout(state.assessmentLearningPollTimer);
+  const message = $("#learning-message");
+  showMessage(message, "기존 추출·승인·단원 분석·Graph 기록을 집계하고 있습니다.");
+  try {
+    const batches = await api("/admin/assessment-learning-batches");
+    state.assessmentLearningBatches = batches;
+    const selectedStillExists = batches.some(
+      (value) => value.extraction_batch_id === state.selectedAssessmentLearningBatchId,
+    );
+    if (!selectedStillExists) {
+      state.selectedAssessmentLearningBatchId = batches[0]?.extraction_batch_id || null;
+    }
+    let exams = [];
+    if (state.selectedAssessmentLearningBatchId) {
+      exams = await api(
+        `/admin/assessment-learning-batches/${encodeURIComponent(state.selectedAssessmentLearningBatchId)}/exams`,
+      );
+    }
+    state.assessmentLearningExams = exams;
+    renderAssessmentLearningBatches(batches);
+    renderAssessmentLearningExams(exams);
+    renderAssessmentLearningSummary();
+    const active = batches.filter((value) => ["QUEUED", "RUNNING", "AWAITING_REVIEW"].includes(value.state)).length;
+    showMessage(message, `${batches.length}개 학습 배치 · 실행 중 ${active}개 · 정규 기록에서 조회`, "success");
+    if (active > 0) {
+      state.assessmentLearningPollTimer = window.setTimeout(loadAssessmentLearning, 10000);
+    }
+  } catch (failure) {
+    setStatus($("#learning-badge"), "danger", "!", "조회 실패");
+    showMessage(message, `자료 학습 상태 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+async function selectAssessmentLearningBatch(batchId) {
+  state.selectedAssessmentLearningBatchId = batchId;
+  await loadAssessmentLearning();
+}
+
+function renderAssessmentLearningBatches(batches) {
+  const root = $("#learning-batch-list");
+  root.replaceChildren();
+  if (!batches.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "등록된 자료 학습 배치가 없습니다.";
+    root.append(empty);
+    return;
+  }
+  for (const batch of batches) {
+    const {card, details} = controlCard(batch.extraction_batch_id, batch.state, "generic");
+    if (batch.extraction_batch_id === state.selectedAssessmentLearningBatchId) {
+      card.classList.add("selected-learning-batch");
+    }
+    const terminalUnits = batch.work_units.accepted + batch.work_units.failed + batch.work_units.cancelled;
+    addControlDetail(details, "시험지", `${batch.exam_count}개`);
+    addControlDetail(details, "추출 승인", `${batch.work_units.accepted} / ${batch.total_work_unit_count}`);
+    addControlDetail(details, "문항 승인", `${batch.items.accepted} / ${batch.items.expected}`);
+    addControlDetail(details, "단원 분석 승인", batch.items.analysis_accepted);
+    addControlDetail(details, "Graph 발행", batch.items.graph_published);
+    addControlDetail(details, "실패", `${batch.work_units.failed}개 작업 · ${batch.items.analysis_failed}개 분석`);
+    const progress = document.createElement("progress");
+    progress.className = "analysis-progress";
+    progress.max = batch.total_work_unit_count;
+    progress.value = terminalUnits;
+    progress.setAttribute("aria-label", `${batch.extraction_batch_id} 추출 작업 진행률`);
+    card.append(progress);
+    const actions = document.createElement("div");
+    actions.className = "form-actions";
+    actions.append(actionButton("시험지별 보기", () => selectAssessmentLearningBatch(batch.extraction_batch_id), true));
+    card.append(actions);
+    root.append(card);
+  }
+}
+
+function renderAssessmentLearningSummary() {
+  const batch = state.assessmentLearningBatches.find(
+    (value) => value.extraction_batch_id === state.selectedAssessmentLearningBatchId,
+  );
+  if (!batch) {
+    for (const id of ["#learning-exam-count", "#learning-work-unit-count", "#learning-accepted-count", "#learning-promoted-count", "#learning-analysis-count", "#learning-graph-count"]) {
+      $(id).textContent = "-";
+    }
+    setStatus($("#learning-badge"), "neutral", "■", "학습 배치 없음");
+    $("#learning-updated-at").textContent = "-";
+    return;
+  }
+  $("#learning-exam-count").textContent = `${batch.exam_count}`;
+  $("#learning-work-unit-count").textContent = `${batch.work_units.accepted} / ${batch.total_work_unit_count}`;
+  $("#learning-accepted-count").textContent = `${batch.items.accepted} / ${batch.items.expected}`;
+  $("#learning-promoted-count").textContent = `${batch.items.promoted}`;
+  $("#learning-analysis-count").textContent = `${batch.items.analysis_accepted}`;
+  $("#learning-graph-count").textContent = `${batch.items.graph_published}`;
+  setStateStatus($("#learning-badge"), "generic", batch.state);
+  $("#learning-updated-at").textContent = `최근 갱신 ${formatSeoulDateTime(batch.updated_at)}`;
+}
+
+function renderAssessmentLearningExams(exams) {
+  const root = $("#learning-exam-list");
+  root.replaceChildren();
+  if (!exams.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "선택한 배치에 조회 가능한 시험지가 없습니다.";
+    root.append(empty);
+    return;
+  }
+  for (const exam of exams) {
+    const card = document.createElement("article");
+    card.className = "learning-exam-card";
+    const heading = document.createElement("div");
+    heading.className = "learning-exam-heading";
+    const title = document.createElement("strong");
+    title.textContent = exam.display_label;
+    const source = document.createElement("code");
+    source.textContent = exam.assessment_occurrence_revision_id;
+    heading.append(title, source);
+    const metrics = document.createElement("dl");
+    metrics.className = "learning-exam-metrics";
+    const values = [
+      ["추출 승인", `${exam.work_units.accepted}/${exam.total_work_unit_count}`],
+      ["문항 승인", `${exam.items.accepted}/${exam.items.expected}`],
+      ["정식 문항", exam.items.promoted],
+      ["단원 분석", exam.items.analysis_accepted],
+      ["Graph", exam.items.graph_published],
+      ["실패", `${exam.work_units.failed}/${exam.items.analysis_failed}`],
+    ];
+    for (const [label, value] of values) {
+      const term = document.createElement("dt");
+      const result = document.createElement("dd");
+      term.textContent = label;
+      result.textContent = String(value);
+      metrics.append(term, result);
+    }
+    const progress = document.createElement("progress");
+    progress.max = exam.items.expected;
+    progress.value = exam.items.graph_published;
+    progress.setAttribute("aria-label", `${exam.display_label} 현재 Graph 발행 문항 수`);
+    card.append(heading, metrics, progress);
+    root.append(card);
+  }
 }
 
 async function loadControlPlane() {
@@ -2343,6 +2502,7 @@ async function boot() {
   installStructuredImport();
   installHwpx();
   installControlPlane();
+  installAssessmentLearning();
   installKnowledgeQuality();
   installExplorer();
   $("#logout").addEventListener("click", logout);

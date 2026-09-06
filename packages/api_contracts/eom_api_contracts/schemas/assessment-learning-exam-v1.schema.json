@@ -1,0 +1,57 @@
+{
+  "$id": "https://eom.local/schemas/api/assessment-learning-exam-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "$defs": {
+    "itemCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "accepted": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "promoted": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "analysis_active": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "analysis_accepted": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "analysis_failed": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "graph_published": {"type": "integer", "minimum": 0, "maximum": 100000}
+      },
+      "required": ["expected", "accepted", "promoted", "analysis_active", "analysis_accepted", "analysis_failed", "graph_published"],
+      "type": "object"
+    },
+    "workUnitCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "pending": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "claimed": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "submitted": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "awaiting_review": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "accepted": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "failed": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "cancelled": {"type": "integer", "minimum": 0, "maximum": 10000}
+      },
+      "required": ["pending", "claimed", "submitted", "awaiting_review", "accepted", "failed", "cancelled"],
+      "type": "object"
+    }
+  },
+  "allOf": [{"not": {"properties": {"administration_month": {"const": 3}, "target_grade": {"const": 1}, "target_school_level": {"const": "HIGH_SCHOOL"}}, "required": ["administration_month", "target_grade", "target_school_level"]}}],
+  "properties": {
+    "schema_version": {"const": "assessment-learning-exam-view/1.0"},
+    "extraction_batch_id": {"type": "string", "pattern": "^legacybatch_[0-9a-f]{32}$"},
+    "assessment_occurrence_id": {"type": "string", "pattern": "^occurrence_[0-9a-f]{32}$"},
+    "assessment_occurrence_revision_id": {"type": "string", "pattern": "^occurrev_[0-9a-f]{32}$"},
+    "assessment_occurrence_revision_sha256": {"type": "string", "pattern": "^(?:sha256:)?[0-9a-f]{64}$"},
+    "assessment_source_bundle_revision_id": {"type": "string", "pattern": "^assessbundlerev_[0-9a-f]{32}$"},
+    "display_label": {"type": "string", "minLength": 1, "maxLength": 512},
+    "administration_year": {"type": "integer", "minimum": 1900, "maximum": 2200},
+    "administration_month": {"type": "integer", "minimum": 1, "maximum": 12},
+    "target_school_level": {"enum": ["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"]},
+    "target_grade": {"type": "integer", "minimum": 1, "maximum": 6},
+    "subject_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,159}$"},
+    "total_work_unit_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "image_required_work_unit_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "work_units": {"$ref": "#/$defs/workUnitCounts"},
+    "items": {"$ref": "#/$defs/itemCounts"}
+  },
+  "required": ["schema_version", "extraction_batch_id", "assessment_occurrence_id", "assessment_occurrence_revision_id", "assessment_occurrence_revision_sha256", "assessment_source_bundle_revision_id", "display_label", "administration_year", "administration_month", "target_school_level", "target_grade", "subject_key", "total_work_unit_count", "image_required_work_unit_count", "work_units", "items"],
+  "title": "Assessment Learning Exam View V1",
+  "type": "object"
+}

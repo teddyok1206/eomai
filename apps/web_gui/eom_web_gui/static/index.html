@@ -25,6 +25,7 @@
           <button type="button" class="nav-item" data-view-target="hwpx"><span aria-hidden="true">▱</span> HWPX</button>
           <p class="nav-group-label admin-only">운영 도구</p>
           <button type="button" class="nav-item admin-only" data-view-target="control"><span aria-hidden="true">⚙</span> Codex 실행 관리</button>
+          <button type="button" class="nav-item admin-only" data-view-target="learning"><span aria-hidden="true">◫</span> 자료 학습</button>
           <button type="button" class="nav-item admin-only" data-view-target="knowledge"><span aria-hidden="true">⌬</span> 교육 지식 맵</button>
           <button type="button" class="nav-item admin-only" data-view-target="explorer"><span aria-hidden="true">⌘</span> 운영 데이터 조회</button>
           <p class="nav-group-label">시스템</p>
@@ -221,6 +222,36 @@
                 <p id="preset-draft-message" class="form-message" aria-live="polite"></p>
               </div>
             </details>
+          </section>
+
+          <section class="view admin-only" data-view="learning" aria-labelledby="learning-title">
+            <div class="page-heading">
+              <div><p class="eyebrow">관리자 · 시험 자료 학습</p><h1 id="learning-title">자료 학습</h1><p>시험지 이미지 관찰부터 문항 승인, 단원 분석, 지식 그래프 발행까지 실제 누적 상태를 확인합니다.</p></div>
+              <div class="heading-actions"><span id="learning-badge" class="status-badge tone-neutral"><span class="status-icon">■</span> 상태 확인 전</span><button id="learning-refresh" class="button secondary" type="button">새로고침</button></div>
+            </div>
+            <section class="knowledge-boundary" aria-label="자료 학습 증거 정책">
+              <strong>이미지 관찰 필수 · OCR 텍스트 보조</strong><span>Graph RAG 누적 경로</span>
+              <p>모든 작업 단위는 고정된 시험지 페이지 PNG를 직접 관찰합니다. OCR·PDF 텍스트는 가능한 경우 분할과 판독을 돕지만 이미지를 대체하지 않으며, 승인된 문항과 단원 분석만 현재 지식 그래프에 발행됩니다.</p>
+            </section>
+            <div class="quality-metric-grid learning-metric-grid" aria-label="자료 학습 지표">
+              <article><span>시험지</span><strong id="learning-exam-count">-</strong></article>
+              <article><span>추출 작업 완료</span><strong id="learning-work-unit-count">-</strong></article>
+              <article><span>승인 문항</span><strong id="learning-accepted-count">-</strong></article>
+              <article><span>정식 문항 등록</span><strong id="learning-promoted-count">-</strong></article>
+              <article><span>단원 분석 승인</span><strong id="learning-analysis-count">-</strong></article>
+              <article><span>현재 Graph 발행</span><strong id="learning-graph-count">-</strong></article>
+            </div>
+            <div class="learning-grid">
+              <section class="panel">
+                <div class="panel-heading"><div><p class="eyebrow">영구 작업 이력</p><h2>학습 배치</h2></div><span class="muted-label">10초 자동 갱신</span></div>
+                <div id="learning-batch-list" class="control-list"><p class="empty-state">자료 학습 상태를 불러오세요.</p></div>
+              </section>
+              <section class="panel">
+                <div class="panel-heading"><div><p class="eyebrow">선택 배치 상세</p><h2>시험지별 진행</h2></div><span id="learning-updated-at" class="muted-label">-</span></div>
+                <div id="learning-exam-list" class="learning-exam-list"><p class="empty-state">학습 배치를 선택하면 시험지별 상태가 표시됩니다.</p></div>
+              </section>
+            </div>
+            <p id="learning-message" class="form-message" aria-live="polite"></p>
           </section>
 
           <section class="view admin-only" data-view="knowledge" aria-labelledby="knowledge-title">

@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from eom_web_gui.contracts import (
+    AssessmentLearningBatchStatus,
+    AssessmentLearningExamStatus,
     CodexAccountAdminCommand,
     CodexAuthChallengeReveal,
     CodexAuthEnrollmentStart,
@@ -183,6 +185,18 @@ class WebServices:
     ) -> tuple[KnowledgeAnalysisBatchStatus, ...]:
         _require_admin(session)
         return await self.gateway.knowledge_analysis_batches(session)
+
+    async def assessment_learning_batches(
+        self, session: WebSession
+    ) -> tuple[AssessmentLearningBatchStatus, ...]:
+        _require_admin(session)
+        return await self.gateway.assessment_learning_batches(session)
+
+    async def assessment_learning_exams(
+        self, session: WebSession, batch_id: str
+    ) -> tuple[AssessmentLearningExamStatus, ...]:
+        _require_admin(session)
+        return await self.gateway.assessment_learning_exams(session, batch_id)
 
     async def knowledge_analysis_quality(
         self, session: WebSession, batch_id: str

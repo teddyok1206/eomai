@@ -5,6 +5,10 @@ from typing import Any
 
 from eom_web_gui.app import create_app
 from eom_web_gui.contracts import (
+    AssessmentLearningBatchStatus,
+    AssessmentLearningExamStatus,
+    AssessmentLearningItemCounts,
+    AssessmentLearningWorkUnitCounts,
     CodexAuthEnrollmentStatusView,
     CodexDeviceChallengeView,
     ContentIntakeOption,
@@ -705,6 +709,91 @@ class FakeGateway:
         assert batch_id == values[0].batch_id
         return values[0]
 
+    async def assessment_learning_batches(
+        self, session: WebSession
+    ) -> tuple[AssessmentLearningBatchStatus, ...]:
+        del session
+        return (
+            AssessmentLearningBatchStatus(
+                schema_version="assessment-learning-batch-view/1.0",
+                extraction_batch_id="legacybatch_" + "1" * 32,
+                inventory_id="legacyinventory_" + "2" * 32,
+                inventory_sha256="sha256:" + "3" * 64,
+                state="RUNNING",
+                exam_count=25,
+                total_work_unit_count=108,
+                image_required_work_unit_count=108,
+                image_observation_mode="REQUIRED",
+                text_evidence_mode="AUXILIARY_WHEN_AVAILABLE",
+                work_units=AssessmentLearningWorkUnitCounts(
+                    pending=107,
+                    claimed=0,
+                    submitted=0,
+                    awaiting_review=0,
+                    accepted=1,
+                    failed=0,
+                    cancelled=0,
+                ),
+                items=AssessmentLearningItemCounts(
+                    expected=520,
+                    accepted=5,
+                    promoted=2,
+                    analysis_active=1,
+                    analysis_accepted=1,
+                    analysis_failed=0,
+                    graph_published=0,
+                ),
+                current_graph_snapshot_revision_id="graphrev_" + "4" * 32,
+                resource_version=2,
+                created_at=NOW,
+                started_at=NOW,
+                completed_at=None,
+                updated_at=NOW,
+            ),
+        )
+
+    async def assessment_learning_exams(
+        self, session: WebSession, batch_id: str
+    ) -> tuple[AssessmentLearningExamStatus, ...]:
+        del session
+        assert batch_id == "legacybatch_" + "1" * 32
+        return (
+            AssessmentLearningExamStatus(
+                schema_version="assessment-learning-exam-view/1.0",
+                extraction_batch_id=batch_id,
+                assessment_occurrence_id="occurrence_" + "5" * 32,
+                assessment_occurrence_revision_id="occurrev_" + "6" * 32,
+                assessment_occurrence_revision_sha256="sha256:" + "7" * 64,
+                assessment_source_bundle_revision_id="assessbundlerev_" + "8" * 32,
+                display_label="2025년 고1 6월 통합과학",
+                administration_year=2025,
+                administration_month=6,
+                target_school_level="HIGH_SCHOOL",
+                target_grade=1,
+                subject_key="integrated-science",
+                total_work_unit_count=4,
+                image_required_work_unit_count=4,
+                work_units=AssessmentLearningWorkUnitCounts(
+                    pending=3,
+                    claimed=0,
+                    submitted=0,
+                    awaiting_review=0,
+                    accepted=1,
+                    failed=0,
+                    cancelled=0,
+                ),
+                items=AssessmentLearningItemCounts(
+                    expected=20,
+                    accepted=5,
+                    promoted=2,
+                    analysis_active=1,
+                    analysis_accepted=1,
+                    analysis_failed=0,
+                    graph_published=0,
+                ),
+            ),
+        )
+
     async def knowledge_analysis_batch_ranges(
         self, session: WebSession, batch_id: str, *, cursor: str | None
     ) -> KnowledgeAnalysisRangePage:
@@ -861,4 +950,6 @@ def login(client: TestClient) -> dict[str, Any]:
         headers={"Origin": "http://testserver.local"},
     )
     assert response.status_code == 201
-    return response.json()
+    value = response.json()
+    assert isinstance(value, dict)
+    return value

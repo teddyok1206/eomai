@@ -6,10 +6,16 @@ import base64
 import hashlib
 import hmac
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal, Never, cast
 
+from eom_api_contracts.assessment_learning import (
+    AssessmentLearningBatchView,
+    AssessmentLearningExamView,
+    AssessmentLearningItemCounts,
+    AssessmentLearningWorkUnitCounts,
+)
 from eom_api_contracts.common import ArtifactPointer
 from eom_api_contracts.content_intakes import (
     ContentIntakeSummary,
@@ -57,6 +63,7 @@ from eom_catalog_contracts import (
 from eom_catalog_service.curriculum_graph_structure import (
     integrated_science_curriculum_units,
 )
+from eom_catalog_service.item_origin_models import AssessmentOccurrenceRevisionRecord
 from eom_catalog_service.knowledge_analysis_batch_models import (
     KnowledgeAnalysisBatchRangeRecord,
     KnowledgeAnalysisBatchRecord,
@@ -72,6 +79,16 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeEdgeRecord,
     KnowledgeGraphSnapshotRecord,
     KnowledgeNodeRecord,
+    KnowledgeSnapshotAnalysisRecord,
+)
+from eom_catalog_service.legacy_assessment_models import (
+    AssessmentLayoutObservationRecord,
+    AssessmentSourceBundleRevisionRecord,
+    LegacyItemExtractionDecisionRecord,
+)
+from eom_catalog_service.legacy_item_extraction_batch_models import (
+    LegacyItemExtractionBatchRecord,
+    LegacyItemExtractionBatchWorkUnitRecord,
 )
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
@@ -107,7 +124,7 @@ from eom_workflow_runner.models import (
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
-from sqlalchemy import Engine, Select, and_, func, or_, select
+from sqlalchemy import Engine, Select, and_, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from eom_api.errors import ApiError
@@ -119,6 +136,23 @@ class PageResult[ViewT]:
     data: tuple[ViewT, ...]
     next_cursor: str | None
     has_more: bool
+
+
+@dataclass
+class _AssessmentLearningExamAggregate:
+    batch_id: str
+    bundle_revision_id: str
+    occurrence: AssessmentOccurrenceRevisionRecord
+    layout_ids: set[str] = field(default_factory=set)
+    expected_item_counts: set[int] = field(default_factory=set)
+    work_unit_states: dict[str, int] = field(default_factory=dict)
+    accepted_item_keys: set[str] = field(default_factory=set)
+    promoted_item_revision_ids: set[str] = field(default_factory=set)
+    analysis_accepted_item_revision_ids: set[str] = field(default_factory=set)
+    analysis_active_item_revision_ids: set[str] = field(default_factory=set)
+    analysis_failed_item_revision_ids: set[str] = field(default_factory=set)
+    graph_item_revision_ids: set[str] = field(default_factory=set)
+    progress_updated_at: datetime | None = None
 
 
 class CursorCodec:
@@ -687,6 +721,89 @@ class QueryAdapter:
                 more,
             )
 
+    def list_assessment_learning_batches(
+        self, *, limit: int, cursor: str | None, state: str | None = None
+    ) -> PageResult[AssessmentLearningBatchView]:
+        """Project archive extraction through current-Graph publication without side effects."""
+
+        with self.sessions() as session:
+            statement = select(LegacyItemExtractionBatchRecord)
+            if state:
+                statement = statement.where(LegacyItemExtractionBatchRecord.state == state)
+            rows, next_cursor, more = self._page(
+                session,
+                statement,
+                LegacyItemExtractionBatchRecord.created_at,
+                LegacyItemExtractionBatchRecord.extraction_batch_id,
+                "assessment-learning-batch",
+                limit,
+                cursor,
+            )
+            aggregates, graph_snapshot_revision_id = self._assessment_learning_aggregates(
+                session, tuple(row.extraction_batch_id for row in rows)
+            )
+            by_batch: dict[str, list[_AssessmentLearningExamAggregate]] = {}
+            for aggregate in aggregates.values():
+                by_batch.setdefault(aggregate.batch_id, []).append(aggregate)
+            values = tuple(
+                self._assessment_learning_batch(
+                    row,
+                    by_batch.get(row.extraction_batch_id, []),
+                    graph_snapshot_revision_id,
+                )
+                for row in rows
+            )
+            return PageResult(values, next_cursor, more)
+
+    def assessment_learning_exams(
+        self,
+        batch_id: str,
+        *,
+        limit: int,
+        cursor: str | None,
+    ) -> PageResult[AssessmentLearningExamView]:
+        """Return deterministic exam-level progress for one archive-learning batch."""
+
+        with self.sessions() as session:
+            if session.get(LegacyItemExtractionBatchRecord, batch_id) is None:
+                self._not_found("ASSESSMENT_LEARNING_BATCH_NOT_FOUND")
+            aggregates, _ = self._assessment_learning_aggregates(session, (batch_id,))
+            ordered = sorted(
+                aggregates.values(),
+                key=lambda value: (
+                    value.occurrence.administration_year,
+                    value.occurrence.administration_month or 0,
+                    value.occurrence.display_label,
+                    value.bundle_revision_id,
+                ),
+            )
+            offset = (
+                self.cursors.decode_ordinal(cursor, "assessment-learning-exam", batch_id)
+                if cursor
+                else 0
+            )
+            if offset > len(ordered):
+                raise ApiError(
+                    400,
+                    "API_CURSOR_INVALID",
+                    "Invalid cursor",
+                    "The pagination cursor is outside this assessment-learning batch.",
+                )
+            page = ordered[offset : offset + limit + 1]
+            more = len(page) > limit
+            page = page[:limit]
+            next_offset = offset + len(page)
+            next_cursor = (
+                self.cursors.encode_ordinal("assessment-learning-exam", batch_id, next_offset)
+                if more
+                else None
+            )
+            return PageResult(
+                tuple(self._assessment_learning_exam(value) for value in page),
+                next_cursor,
+                more,
+            )
+
     def knowledge_analysis_batch(self, batch_id: str) -> KnowledgeAnalysisBatchView:
         with self.sessions() as session:
             row = session.get(KnowledgeAnalysisBatchRecord, batch_id)
@@ -1166,6 +1283,400 @@ class QueryAdapter:
                     )
         projected.sort(key=lambda pair: (pair[1].created_at, pair[0], pair[1].event_id))
         return tuple(view for _, view in projected[-limit:])
+
+    def _assessment_learning_aggregates(
+        self,
+        session: Session,
+        batch_ids: tuple[str, ...],
+    ) -> tuple[dict[tuple[str, str], _AssessmentLearningExamAggregate], str | None]:
+        if not batch_ids:
+            return {}, self._current_graph_snapshot_revision_id(session)
+
+        aggregates: dict[tuple[str, str], _AssessmentLearningExamAggregate] = {}
+        source_rows = session.execute(
+            select(
+                LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+                LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_revision_id,
+                AssessmentSourceBundleRevisionRecord,
+                AssessmentOccurrenceRevisionRecord,
+                AssessmentLayoutObservationRecord,
+            )
+            .join(
+                AssessmentSourceBundleRevisionRecord,
+                and_(
+                    AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id
+                    == LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_revision_id,
+                    AssessmentSourceBundleRevisionRecord.assessment_source_bundle_id
+                    == LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_id,
+                    AssessmentSourceBundleRevisionRecord.bundle_manifest_sha256
+                    == LegacyItemExtractionBatchWorkUnitRecord.bundle_manifest_sha256,
+                ),
+            )
+            .join(
+                AssessmentOccurrenceRevisionRecord,
+                and_(
+                    AssessmentOccurrenceRevisionRecord.assessment_occurrence_revision_id
+                    == AssessmentSourceBundleRevisionRecord.assessment_occurrence_revision_id,
+                    AssessmentOccurrenceRevisionRecord.assessment_occurrence_id
+                    == AssessmentSourceBundleRevisionRecord.assessment_occurrence_id,
+                    AssessmentOccurrenceRevisionRecord.revision_sha256
+                    == AssessmentSourceBundleRevisionRecord.occurrence_revision_sha256,
+                ),
+            )
+            .join(
+                AssessmentLayoutObservationRecord,
+                and_(
+                    AssessmentLayoutObservationRecord.assessment_source_bundle_revision_id
+                    == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id,
+                    AssessmentLayoutObservationRecord.assessment_source_bundle_id
+                    == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_id,
+                    AssessmentLayoutObservationRecord.bundle_manifest_sha256
+                    == AssessmentSourceBundleRevisionRecord.bundle_manifest_sha256,
+                ),
+            )
+            .where(LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(batch_ids))
+            .distinct()
+        )
+        for batch_id, bundle_revision_id, _bundle, occurrence, layout in source_rows:
+            key = (batch_id, bundle_revision_id)
+            aggregate = aggregates.get(key)
+            if aggregate is None:
+                aggregate = _AssessmentLearningExamAggregate(
+                    batch_id=batch_id,
+                    bundle_revision_id=bundle_revision_id,
+                    occurrence=occurrence,
+                )
+                aggregates[key] = aggregate
+            elif (
+                aggregate.occurrence.assessment_occurrence_revision_id
+                != occurrence.assessment_occurrence_revision_id
+            ):
+                self._assessment_learning_projection_invalid()
+            aggregate.layout_ids.add(layout.assessment_layout_observation_id)
+            aggregate.expected_item_counts.add(layout.expected_item_count)
+
+        state_rows = session.execute(
+            select(
+                LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+                LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_revision_id,
+                LegacyItemExtractionBatchWorkUnitRecord.state,
+                func.count(),
+                func.max(LegacyItemExtractionBatchWorkUnitRecord.updated_at),
+            )
+            .where(LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(batch_ids))
+            .group_by(
+                LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+                LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_revision_id,
+                LegacyItemExtractionBatchWorkUnitRecord.state,
+            )
+        )
+        for batch_id, bundle_revision_id, state, count, updated_at in state_rows:
+            aggregate = aggregates.get((batch_id, bundle_revision_id))
+            if aggregate is None or state in aggregate.work_unit_states:
+                self._assessment_learning_projection_invalid()
+            aggregate.work_unit_states[state] = int(count)
+            if aggregate.progress_updated_at is None or updated_at > aggregate.progress_updated_at:
+                aggregate.progress_updated_at = updated_at
+
+        for aggregate in aggregates.values():
+            # Layout observations are immutable evidence, so repeated observations for
+            # one pinned bundle are valid. Their expected Item cardinality must agree.
+            if not aggregate.layout_ids or len(aggregate.expected_item_counts) != 1:
+                self._assessment_learning_projection_invalid()
+
+        registration_key = (
+            literal("legacy-item-promotion:")
+            + LegacyItemExtractionDecisionRecord.acceptance_id
+            + literal(":")
+            + LegacyItemExtractionDecisionRecord.item_proposal_id
+        )
+        item_rows = session.execute(
+            select(
+                LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+                LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_revision_id,
+                LegacyItemExtractionDecisionRecord.acceptance_id,
+                LegacyItemExtractionDecisionRecord.item_proposal_id,
+                ItemRevisionRecord.item_revision_id,
+                ItemRevisionRecord.created_at,
+            )
+            .join(
+                LegacyItemExtractionDecisionRecord,
+                LegacyItemExtractionDecisionRecord.acceptance_id
+                == LegacyItemExtractionBatchWorkUnitRecord.acceptance_id,
+            )
+            .outerjoin(ItemRevisionRecord, ItemRevisionRecord.registration_key == registration_key)
+            .where(
+                LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(batch_ids),
+                LegacyItemExtractionDecisionRecord.decision.in_(("ACCEPT", "CORRECT_AND_ACCEPT")),
+            )
+        )
+        item_owner: dict[str, _AssessmentLearningExamAggregate] = {}
+        for (
+            batch_id,
+            bundle_revision_id,
+            acceptance_id,
+            proposal_id,
+            item_revision_id,
+            item_created_at,
+        ) in item_rows:
+            aggregate = aggregates.get((batch_id, bundle_revision_id))
+            if aggregate is None:
+                self._assessment_learning_projection_invalid()
+            item_key = f"{acceptance_id}:{proposal_id}"
+            if item_key in aggregate.accepted_item_keys:
+                self._assessment_learning_projection_invalid()
+            aggregate.accepted_item_keys.add(item_key)
+            if item_revision_id is None:
+                continue
+            prior = item_owner.setdefault(item_revision_id, aggregate)
+            if prior is not aggregate:
+                self._assessment_learning_projection_invalid()
+            aggregate.promoted_item_revision_ids.add(item_revision_id)
+            if item_created_at is not None and (
+                aggregate.progress_updated_at is None
+                or item_created_at > aggregate.progress_updated_at
+            ):
+                aggregate.progress_updated_at = item_created_at
+
+        promoted_ids = tuple(item_owner)
+        latest_analysis: dict[str, tuple[datetime, str, str]] = {}
+        if promoted_ids:
+            analysis_rows = session.execute(
+                select(
+                    KnowledgeAnalysisRunRecord.item_revision_id,
+                    KnowledgeAnalysisRunRecord.analysis_run_id,
+                    KnowledgeAnalysisRunRecord.state,
+                    KnowledgeAnalysisRunRecord.created_at,
+                ).where(
+                    KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
+                    KnowledgeAnalysisRunRecord.item_revision_id.in_(promoted_ids),
+                )
+            )
+            for item_revision_id, analysis_run_id, state, created_at in analysis_rows:
+                if item_revision_id is None:
+                    self._assessment_learning_projection_invalid()
+                aggregate = item_owner[item_revision_id]
+                if state == "ACCEPTED":
+                    aggregate.analysis_accepted_item_revision_ids.add(item_revision_id)
+                candidate = (created_at, analysis_run_id, state)
+                current = latest_analysis.get(item_revision_id)
+                if current is None or candidate[:2] > current[:2]:
+                    latest_analysis[item_revision_id] = candidate
+                if (
+                    aggregate.progress_updated_at is None
+                    or created_at > aggregate.progress_updated_at
+                ):
+                    aggregate.progress_updated_at = created_at
+
+        active_states = {
+            "REQUESTED",
+            "RESOLVED",
+            "QUEUED",
+            "RUNNING",
+            "VALIDATING",
+            "NEEDS_REVIEW",
+        }
+        failed_states = {"REJECTED", "FAILED", "CANCELLED"}
+        for item_revision_id, (_created_at, _analysis_run_id, state) in latest_analysis.items():
+            aggregate = item_owner[item_revision_id]
+            if item_revision_id in aggregate.analysis_accepted_item_revision_ids:
+                continue
+            if state in active_states:
+                aggregate.analysis_active_item_revision_ids.add(item_revision_id)
+            elif state in failed_states:
+                aggregate.analysis_failed_item_revision_ids.add(item_revision_id)
+            else:
+                self._assessment_learning_projection_invalid()
+
+        graph_snapshot_revision_id = self._current_graph_snapshot_revision_id(session)
+        if graph_snapshot_revision_id is not None and promoted_ids:
+            graph_rows = session.execute(
+                select(
+                    KnowledgeAnalysisRunRecord.item_revision_id,
+                    KnowledgeAnalysisRunRecord.state,
+                )
+                .join(
+                    KnowledgeSnapshotAnalysisRecord,
+                    KnowledgeSnapshotAnalysisRecord.analysis_run_id
+                    == KnowledgeAnalysisRunRecord.analysis_run_id,
+                )
+                .where(
+                    KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id
+                    == graph_snapshot_revision_id,
+                    KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
+                    KnowledgeAnalysisRunRecord.item_revision_id.in_(promoted_ids),
+                )
+            )
+            for item_revision_id, state in graph_rows:
+                if item_revision_id is None or state != "ACCEPTED":
+                    self._assessment_learning_projection_invalid()
+                aggregate = item_owner[item_revision_id]
+                aggregate.graph_item_revision_ids.add(item_revision_id)
+                if item_revision_id not in aggregate.analysis_accepted_item_revision_ids:
+                    self._assessment_learning_projection_invalid()
+
+        return aggregates, graph_snapshot_revision_id
+
+    @staticmethod
+    def _current_graph_snapshot_revision_id(session: Session) -> str | None:
+        corpus = session.scalar(
+            select(KnowledgeCorpusRecord).where(
+                KnowledgeCorpusRecord.corpus_key == INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY
+            )
+        )
+        if corpus is None or corpus.lifecycle_state != "ACTIVE":
+            return None
+        return corpus.current_graph_snapshot_revision_id
+
+    def _assessment_learning_batch(
+        self,
+        row: LegacyItemExtractionBatchRecord,
+        exams: list[_AssessmentLearningExamAggregate],
+        graph_snapshot_revision_id: str | None,
+    ) -> AssessmentLearningBatchView:
+        if not exams:
+            self._assessment_learning_projection_invalid()
+        work_unit_states = self._merge_work_unit_states(exams)
+        item_counts = self._merge_item_counts(exams)
+        expected_count = sum(self._expected_item_count(exam) for exam in exams)
+        if item_counts.expected != expected_count:
+            self._assessment_learning_projection_invalid()
+        progress_updated_at = max(
+            (exam.progress_updated_at for exam in exams if exam.progress_updated_at is not None),
+            default=row.updated_at,
+        )
+        return AssessmentLearningBatchView(
+            extraction_batch_id=row.extraction_batch_id,
+            inventory_id=row.inventory_id,
+            inventory_sha256=row.inventory_sha256,
+            state=cast(
+                Literal[
+                    "QUEUED",
+                    "RUNNING",
+                    "AWAITING_REVIEW",
+                    "SUCCEEDED",
+                    "COMPLETED_WITH_GAPS",
+                    "CANCELLED",
+                ],
+                row.state,
+            ),
+            exam_count=len(exams),
+            total_work_unit_count=row.total_work_unit_count,
+            image_required_work_unit_count=row.total_work_unit_count,
+            work_units=work_unit_states,
+            items=item_counts,
+            current_graph_snapshot_revision_id=graph_snapshot_revision_id,
+            resource_version=row.resource_version,
+            created_at=row.created_at,
+            started_at=row.started_at,
+            completed_at=row.completed_at,
+            updated_at=max(row.updated_at, progress_updated_at),
+        )
+
+    def _assessment_learning_exam(
+        self, aggregate: _AssessmentLearningExamAggregate
+    ) -> AssessmentLearningExamView:
+        occurrence = aggregate.occurrence
+        if (
+            occurrence.administration_month is None
+            or occurrence.target_school_level is None
+            or occurrence.target_grade is None
+        ):
+            self._assessment_learning_projection_invalid()
+        work_units = self._work_unit_counts(aggregate.work_unit_states)
+        return AssessmentLearningExamView(
+            extraction_batch_id=aggregate.batch_id,
+            assessment_occurrence_id=occurrence.assessment_occurrence_id,
+            assessment_occurrence_revision_id=occurrence.assessment_occurrence_revision_id,
+            assessment_occurrence_revision_sha256=occurrence.revision_sha256,
+            assessment_source_bundle_revision_id=aggregate.bundle_revision_id,
+            display_label=occurrence.display_label,
+            administration_year=occurrence.administration_year,
+            administration_month=occurrence.administration_month,
+            target_school_level=cast(
+                Literal["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"],
+                occurrence.target_school_level,
+            ),
+            target_grade=occurrence.target_grade,
+            subject_key=occurrence.subject_key,
+            total_work_unit_count=work_units.total,
+            image_required_work_unit_count=work_units.total,
+            work_units=work_units,
+            items=self._item_counts(aggregate),
+        )
+
+    def _merge_work_unit_states(
+        self, exams: list[_AssessmentLearningExamAggregate]
+    ) -> AssessmentLearningWorkUnitCounts:
+        merged: dict[str, int] = {}
+        for exam in exams:
+            for state, count in exam.work_unit_states.items():
+                merged[state] = merged.get(state, 0) + count
+        return self._work_unit_counts(merged)
+
+    @staticmethod
+    def _work_unit_counts(states: dict[str, int]) -> AssessmentLearningWorkUnitCounts:
+        allowed = {
+            "PENDING",
+            "CLAIMED",
+            "SUBMITTED",
+            "AWAITING_REVIEW",
+            "ACCEPTED",
+            "FAILED",
+            "CANCELLED",
+        }
+        if not states.keys() <= allowed:
+            QueryAdapter._assessment_learning_projection_invalid()
+        return AssessmentLearningWorkUnitCounts(
+            pending=states.get("PENDING", 0),
+            claimed=states.get("CLAIMED", 0),
+            submitted=states.get("SUBMITTED", 0),
+            awaiting_review=states.get("AWAITING_REVIEW", 0),
+            accepted=states.get("ACCEPTED", 0),
+            failed=states.get("FAILED", 0),
+            cancelled=states.get("CANCELLED", 0),
+        )
+
+    def _merge_item_counts(
+        self, exams: list[_AssessmentLearningExamAggregate]
+    ) -> AssessmentLearningItemCounts:
+        return AssessmentLearningItemCounts(
+            expected=sum(self._expected_item_count(exam) for exam in exams),
+            accepted=sum(len(exam.accepted_item_keys) for exam in exams),
+            promoted=sum(len(exam.promoted_item_revision_ids) for exam in exams),
+            analysis_active=sum(len(exam.analysis_active_item_revision_ids) for exam in exams),
+            analysis_accepted=sum(len(exam.analysis_accepted_item_revision_ids) for exam in exams),
+            analysis_failed=sum(len(exam.analysis_failed_item_revision_ids) for exam in exams),
+            graph_published=sum(len(exam.graph_item_revision_ids) for exam in exams),
+        )
+
+    def _item_counts(
+        self, aggregate: _AssessmentLearningExamAggregate
+    ) -> AssessmentLearningItemCounts:
+        return AssessmentLearningItemCounts(
+            expected=self._expected_item_count(aggregate),
+            accepted=len(aggregate.accepted_item_keys),
+            promoted=len(aggregate.promoted_item_revision_ids),
+            analysis_active=len(aggregate.analysis_active_item_revision_ids),
+            analysis_accepted=len(aggregate.analysis_accepted_item_revision_ids),
+            analysis_failed=len(aggregate.analysis_failed_item_revision_ids),
+            graph_published=len(aggregate.graph_item_revision_ids),
+        )
+
+    @staticmethod
+    def _expected_item_count(aggregate: _AssessmentLearningExamAggregate) -> int:
+        if len(aggregate.expected_item_counts) != 1:
+            QueryAdapter._assessment_learning_projection_invalid()
+        return next(iter(aggregate.expected_item_counts))
+
+    @staticmethod
+    def _assessment_learning_projection_invalid() -> Never:
+        raise ApiError(
+            500,
+            "ASSESSMENT_LEARNING_PROJECTION_INVALID",
+            "Assessment learning projection is invalid",
+            "Canonical assessment-learning records are incomplete or inconsistent.",
+        )
 
     def _page(
         self,

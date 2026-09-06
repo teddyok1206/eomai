@@ -12,6 +12,7 @@ from eom_api.middleware import RequestBoundaryMiddleware
 from eom_api.openapi import build_openapi, install_route_metadata
 from eom_api.problem_details import install_exception_handlers
 from eom_api.routers import (
+    assessment_learning,
     auth,
     content_intakes,
     content_packs,
@@ -68,6 +69,7 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     app.state.services = actual
     for module in (
         health,
+        assessment_learning,
         hwpx,
         auth,
         operators,

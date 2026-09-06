@@ -1,5 +1,11 @@
 """Public contracts for EOM Application API V1."""
 
+from eom_api_contracts.assessment_learning import (
+    AssessmentLearningBatchView,
+    AssessmentLearningExamView,
+    AssessmentLearningItemCounts,
+    AssessmentLearningWorkUnitCounts,
+)
 from eom_api_contracts.common import (
     ApiModel,
     ArtifactPointer,
@@ -51,6 +57,10 @@ __all__ = [
     "ApprovedItemAnalysisSourceInput",
     "ArtifactPointer",
     "AssessmentItemOccurrenceView",
+    "AssessmentLearningBatchView",
+    "AssessmentLearningExamView",
+    "AssessmentLearningItemCounts",
+    "AssessmentLearningWorkUnitCounts",
     "CommandResult",
     "ContentIntakeAnalysisSourceInput",
     "CreateEvidenceBundleRequest",

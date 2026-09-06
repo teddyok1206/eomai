@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from eom_api_contracts.assessment_learning import (
+    AssessmentLearningBatchView,
+    AssessmentLearningExamView,
+    AssessmentLearningItemCounts,
+    AssessmentLearningWorkUnitCounts,
+)
 from eom_api_contracts.auth import LoginRequest
 from eom_api_contracts.common import ArtifactPointer
 from eom_api_contracts.control_plane import CreateExecutionPresetDraftRequest
@@ -66,6 +73,109 @@ def test_assessment_item_occurrence_schema_matches_typed_projection_and_excludes
     validator = Draft202012Validator(schema)
     assert tuple(validator.iter_errors(value)) == ()
     assert tuple(validator.iter_errors(value | {"administration_month": 3}))
+
+
+def test_assessment_learning_schemas_match_typed_progress_and_exclude_march() -> None:
+    packaged_root = (
+        Path(__file__).resolve().parents[2] / "packages/api_contracts/eom_api_contracts/schemas"
+    )
+    for name in (
+        "assessment-learning-batch-v1.schema.json",
+        "assessment-learning-exam-v1.schema.json",
+    ):
+        assert (SCHEMA_ROOT / name).read_bytes() == (packaged_root / name).read_bytes()
+
+    work_units = AssessmentLearningWorkUnitCounts(
+        pending=107,
+        claimed=0,
+        submitted=0,
+        awaiting_review=0,
+        accepted=1,
+        failed=0,
+        cancelled=0,
+    )
+    items = AssessmentLearningItemCounts(
+        expected=520,
+        accepted=5,
+        promoted=2,
+        analysis_active=1,
+        analysis_accepted=1,
+        analysis_failed=0,
+        graph_published=0,
+    )
+    now = datetime(2026, 9, 6, 14, 0, tzinfo=UTC)
+    batch = AssessmentLearningBatchView(
+        extraction_batch_id="legacybatch_" + "1" * 32,
+        inventory_id="legacyinventory_" + "2" * 32,
+        inventory_sha256="sha256:" + "3" * 64,
+        state="RUNNING",
+        exam_count=25,
+        total_work_unit_count=108,
+        image_required_work_unit_count=108,
+        work_units=work_units,
+        items=items,
+        current_graph_snapshot_revision_id="graphrev_" + "4" * 32,
+        resource_version=2,
+        created_at=now,
+        started_at=now,
+        completed_at=None,
+        updated_at=now,
+    ).model_dump(mode="json")
+    batch_schema = json.loads(
+        (SCHEMA_ROOT / "assessment-learning-batch-v1.schema.json").read_text(encoding="utf-8")
+    )
+    assert tuple(Draft202012Validator(batch_schema).iter_errors(batch)) == ()
+
+    exam = AssessmentLearningExamView(
+        extraction_batch_id="legacybatch_" + "1" * 32,
+        assessment_occurrence_id="occurrence_" + "5" * 32,
+        assessment_occurrence_revision_id="occurrev_" + "6" * 32,
+        assessment_occurrence_revision_sha256="sha256:" + "7" * 64,
+        assessment_source_bundle_revision_id="assessbundlerev_" + "8" * 32,
+        display_label="2025년 고1 6월 통합과학",
+        administration_year=2025,
+        administration_month=6,
+        target_school_level="HIGH_SCHOOL",
+        target_grade=1,
+        subject_key="integrated-science",
+        total_work_unit_count=4,
+        image_required_work_unit_count=4,
+        work_units=AssessmentLearningWorkUnitCounts(
+            pending=3,
+            claimed=0,
+            submitted=0,
+            awaiting_review=0,
+            accepted=1,
+            failed=0,
+            cancelled=0,
+        ),
+        items=AssessmentLearningItemCounts(
+            expected=20,
+            accepted=5,
+            promoted=2,
+            analysis_active=1,
+            analysis_accepted=1,
+            analysis_failed=0,
+            graph_published=0,
+        ),
+    ).model_dump(mode="json")
+    exam_schema = json.loads(
+        (SCHEMA_ROOT / "assessment-learning-exam-v1.schema.json").read_text(encoding="utf-8")
+    )
+    validator = Draft202012Validator(exam_schema)
+    assert tuple(validator.iter_errors(exam)) == ()
+    assert tuple(validator.iter_errors(exam | {"administration_month": 3}))
+
+    with pytest.raises(ValidationError, match="monotonic"):
+        AssessmentLearningItemCounts(
+            expected=5,
+            accepted=4,
+            promoted=3,
+            analysis_active=0,
+            analysis_accepted=2,
+            analysis_failed=0,
+            graph_published=3,
+        )
 
 
 def test_request_contracts_forbid_unknown_fields_and_redact_secrets() -> None:

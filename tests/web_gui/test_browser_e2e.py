@@ -37,6 +37,8 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "새 설정 초안 생성 전 확인",
             "설정 초안 사용 전환 검토",
             "계정 로그인 변경",
+            "자료 학습",
+            "이미지 관찰 필수 · OCR 텍스트 보조",
         ):
             assert marker in shell.text
         assert client.get("/studio/assets/styles.css").status_code == 200
@@ -46,6 +48,14 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
         assert client.get("/studio/assets/eom-mark.svg").status_code == 200
         assert client.get("/studio/assets/item-preview.js").status_code == 200
         assert client.get("/studio/assets/presentation-vocabulary.ko-KR.json").status_code == 200
+        learning_batches = client.get("/studio/api/v1/admin/assessment-learning-batches")
+        assert learning_batches.status_code == 200
+        learning_batch_id = learning_batches.json()[0]["extraction_batch_id"]
+        learning_exams = client.get(
+            f"/studio/api/v1/admin/assessment-learning-batches/{learning_batch_id}/exams"
+        )
+        assert learning_exams.status_code == 200
+        assert learning_exams.json()[0]["image_required_work_unit_count"] == 4
 
         draft = client.post(
             "/studio/api/v1/request-drafts",
@@ -175,6 +185,10 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "value.binding_id === openedAccount.binding_id" in javascript
     assert "account.active_auth_enrollment_id" in javascript
     assert "analysisBatchPollTimer" in javascript
+    assert 'data-view-target="learning"' in html
+    assert 'id="learning-exam-list"' in html
+    assert 'api("/admin/assessment-learning-batches")' in javascript
+    assert "assessmentLearningPollTimer" in javascript
     assert "10000" in javascript
     assert 'data-view-target="knowledge"' in html
     assert 'id="knowledge-quality-load"' in html

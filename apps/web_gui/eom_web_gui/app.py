@@ -392,6 +392,25 @@ def create_app(
             for value in await actual.knowledge_analysis_batches(session)
         )
 
+    @app.get(f"{API_PREFIX}/admin/assessment-learning-batches")
+    async def assessment_learning_batches(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> tuple[dict[str, Any], ...]:
+        return tuple(
+            value.model_dump(mode="json")
+            for value in await actual.assessment_learning_batches(session)
+        )
+
+    @app.get(f"{API_PREFIX}/admin/assessment-learning-batches/{{batch_id}}/exams")
+    async def assessment_learning_exams(
+        batch_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> tuple[dict[str, Any], ...]:
+        return tuple(
+            value.model_dump(mode="json")
+            for value in await actual.assessment_learning_exams(session, batch_id)
+        )
+
     @app.get(f"{API_PREFIX}/admin/knowledge-analysis-batches/{{batch_id}}/quality")
     async def knowledge_analysis_quality(
         batch_id: str,

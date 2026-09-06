@@ -742,6 +742,116 @@ async def test_gateway_projects_bounded_knowledge_analysis_batch_progress() -> N
 
 
 @pytest.mark.anyio
+async def test_gateway_validates_assessment_learning_batch_and_exam_progress() -> None:
+    batch_id = "legacybatch_" + "1" * 32
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/assessment-learning-batches":
+            assert request.url.params["limit"] == "20"
+            return httpx.Response(
+                200,
+                json=_list(
+                    [
+                        {
+                            "schema_version": "assessment-learning-batch-view/1.0",
+                            "extraction_batch_id": batch_id,
+                            "inventory_id": "legacyinventory_" + "2" * 32,
+                            "inventory_sha256": "sha256:" + "3" * 64,
+                            "state": "RUNNING",
+                            "exam_count": 25,
+                            "total_work_unit_count": 108,
+                            "image_required_work_unit_count": 108,
+                            "image_observation_mode": "REQUIRED",
+                            "text_evidence_mode": "AUXILIARY_WHEN_AVAILABLE",
+                            "work_units": {
+                                "pending": 107,
+                                "claimed": 0,
+                                "submitted": 0,
+                                "awaiting_review": 0,
+                                "accepted": 1,
+                                "failed": 0,
+                                "cancelled": 0,
+                            },
+                            "items": {
+                                "expected": 520,
+                                "accepted": 5,
+                                "promoted": 2,
+                                "analysis_active": 1,
+                                "analysis_accepted": 1,
+                                "analysis_failed": 0,
+                                "graph_published": 0,
+                            },
+                            "current_graph_snapshot_revision_id": "graphrev_" + "4" * 32,
+                            "resource_version": 2,
+                            "created_at": NOW.isoformat(),
+                            "started_at": NOW.isoformat(),
+                            "completed_at": None,
+                            "updated_at": NOW.isoformat(),
+                        }
+                    ]
+                ),
+            )
+        assert request.url.path == f"/api/v1/assessment-learning-batches/{batch_id}/exams"
+        assert request.url.params["limit"] == "500"
+        return httpx.Response(
+            200,
+            json=_list(
+                [
+                    {
+                        "schema_version": "assessment-learning-exam-view/1.0",
+                        "extraction_batch_id": batch_id,
+                        "assessment_occurrence_id": "occurrence_" + "5" * 32,
+                        "assessment_occurrence_revision_id": "occurrev_" + "6" * 32,
+                        "assessment_occurrence_revision_sha256": "sha256:" + "7" * 64,
+                        "assessment_source_bundle_revision_id": "assessbundlerev_" + "8" * 32,
+                        "display_label": "2025년 고1 6월 통합과학",
+                        "administration_year": 2025,
+                        "administration_month": 6,
+                        "target_school_level": "HIGH_SCHOOL",
+                        "target_grade": 1,
+                        "subject_key": "integrated-science",
+                        "total_work_unit_count": 4,
+                        "image_required_work_unit_count": 4,
+                        "work_units": {
+                            "pending": 3,
+                            "claimed": 0,
+                            "submitted": 0,
+                            "awaiting_review": 0,
+                            "accepted": 1,
+                            "failed": 0,
+                            "cancelled": 0,
+                        },
+                        "items": {
+                            "expected": 20,
+                            "accepted": 5,
+                            "promoted": 2,
+                            "analysis_active": 1,
+                            "analysis_accepted": 1,
+                            "analysis_failed": 0,
+                            "graph_published": 0,
+                        },
+                    }
+                ]
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    batches = await gateway.assessment_learning_batches(_session())
+    exams = await gateway.assessment_learning_exams(_session(), batch_id)
+    assert batches[0].items.expected == 520
+    assert batches[0].image_observation_mode == "REQUIRED"
+    assert exams[0].display_label == "2025년 고1 6월 통합과학"
+    assert exams[0].items.graph_published == 0
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_gateway_projects_exact_analysis_range_page_and_opaque_cursor() -> None:
     batch_id = "analysisbatch_" + "a" * 32
     next_cursor = "opaque-range-cursor"
