@@ -50,6 +50,7 @@ from eom_catalog_service.knowledge_graph_publication_service import (
 )
 from eom_identifiers import content_sha256
 from jsonschema import ValidationError as JsonSchemaValidationError
+from pydantic import ValidationError
 
 NOW = datetime(2026, 8, 31, 3, tzinfo=UTC)
 OPERATOR_ID = "operator_" + "1" * 32
@@ -528,6 +529,56 @@ def test_v4_structure_keeps_reviewed_framework_and_separates_automatic_alignment
         structure,
     )
     assert any(edge.edge_type == "ALIGNS_WITH_CURRICULUM" for edge in projection.edges)
+
+
+def test_automatic_alignment_accepts_visual_item_result_pointer() -> None:
+    documents = _complete_analyses()
+    base = build_integrated_science_structure_manifest(
+        documents, reviewed_by_operator_id=OPERATOR_ID, created_at=NOW
+    )
+    item_analysis = _approved_item_analysis()
+    unit_id = next(
+        unit.curriculum_unit_id for unit in base.curriculum_units if unit.unit_level == "MINOR"
+    )
+    value = _automatic_item_alignment(item_analysis, unit_id).model_dump(mode="json")
+    value["accepted_result"]["schema_ref"] = "eom://schemas/knowledge/knowledge-analysis-result/9.0"
+    value["alignment_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "alignment_sha256"}
+    )
+
+    visual = AutomaticItemCurriculumAlignmentBinding.model_validate(value)
+
+    structure = extend_integrated_science_structure_manifest_with_automatic_item_alignments(
+        base,
+        (visual,),
+        created_at=NOW,
+    )
+    validate_contract("knowledge-graph-structure-manifest-v4", structure.model_dump(mode="json"))
+    invalid_structure = structure.model_dump(mode="json")
+    invalid_structure["automatic_item_curriculum_bindings"][0]["accepted_result"]["schema_ref"] = (
+        "eom://schemas/knowledge/knowledge-analysis-result/8.0"
+    )
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("knowledge-graph-structure-manifest-v4", invalid_structure)
+
+
+def test_automatic_alignment_rejects_unrelated_result_pointer_version() -> None:
+    documents = _complete_analyses()
+    base = build_integrated_science_structure_manifest(
+        documents, reviewed_by_operator_id=OPERATOR_ID, created_at=NOW
+    )
+    item_analysis = _approved_item_analysis()
+    unit_id = next(
+        unit.curriculum_unit_id for unit in base.curriculum_units if unit.unit_level == "MINOR"
+    )
+    value = _automatic_item_alignment(item_analysis, unit_id).model_dump(mode="json")
+    value["accepted_result"]["schema_ref"] = "eom://schemas/knowledge/knowledge-analysis-result/8.0"
+    value["alignment_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "alignment_sha256"}
+    )
+
+    with pytest.raises(ValidationError, match="Artifact pointer is incompatible"):
+        AutomaticItemCurriculumAlignmentBinding.model_validate(value)
 
 
 def test_v5_exam_ontology_reaches_exam_and_item_from_curriculum_in_two_hops() -> None:

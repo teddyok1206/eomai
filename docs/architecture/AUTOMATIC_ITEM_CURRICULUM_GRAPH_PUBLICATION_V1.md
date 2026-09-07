@@ -28,8 +28,11 @@ evidence where applicable.
 An automatic alignment pins the accepted result pointer, prior snapshot revision, Evidence Bundle
 and revision, retrieval request and hash, Evidence Bundle manifest pointer, evidence node IDs,
 derived MINOR curriculum unit IDs, requesting operator, automatic policy version/hash, and a
-self-content hash. Publication re-resolves every pointer, released policy, permission hash,
-evidence entry, graph node, and curriculum unit, then recomputes the policy result exactly.
+self-content hash. The accepted-result pointer permits only the original approved-Item result V2 or
+the visual past-exam Item result V9. That closed union preserves old snapshots while allowing exact
+PNG-backed analysis to enter the same automatic alignment flow; unrelated document and multimodal
+result versions remain invalid. Publication re-resolves every pointer, released policy, permission
+hash, evidence entry, graph node, and curriculum unit, then recomputes the policy result exactly.
 
 ## Access patterns, structures, and indexes
 

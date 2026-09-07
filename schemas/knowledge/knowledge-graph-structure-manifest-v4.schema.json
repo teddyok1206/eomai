@@ -14,7 +14,24 @@
         "additionalProperties": false,
         "properties": {
           "accepted_result": {
-            "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+            "allOf": [
+              {
+                "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+              },
+              {
+                "properties": {
+                  "logical_name": {"const": "accepted-result.json"},
+                  "media_type": {"const": "application/json"},
+                  "member_path": {"const": "evidence/accepted-result.json"},
+                  "schema_ref": {
+                    "enum": [
+                      "eom://schemas/knowledge/knowledge-analysis-result/2.0",
+                      "eom://schemas/knowledge/knowledge-analysis-result/9.0"
+                    ]
+                  }
+                }
+              }
+            ]
           },
           "aligned_at": {
             "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"

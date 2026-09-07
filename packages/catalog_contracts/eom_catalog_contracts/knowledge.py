@@ -2264,7 +2264,10 @@ class AutomaticItemCurriculumAlignmentBinding(FrozenModel):
             self.accepted_result.member_path != "evidence/accepted-result.json"
             or self.accepted_result.media_type != "application/json"
             or self.accepted_result.schema_ref
-            != "eom://schemas/knowledge/knowledge-analysis-result/2.0"
+            not in {
+                "eom://schemas/knowledge/knowledge-analysis-result/2.0",
+                "eom://schemas/knowledge/knowledge-analysis-result/9.0",
+            }
             or self.evidence_manifest.member_path != "evidence/manifest.json"
             or self.evidence_manifest.media_type != "application/json"
             or self.evidence_manifest.schema_ref
