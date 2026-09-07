@@ -453,6 +453,19 @@ def test_release_verifies_curriculum_schema_resources() -> None:
     assert f'"schemas/curriculum/{resource}"' in deployment
 
 
+def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+
+    for resource in (
+        "mock-exam-assembly-manifest-v1.schema.json",
+        "mock-exam-assembly-policy-v1.schema.json",
+    ):
+        assert f'"assessment-assembly/{resource}": ' in deployment
+        assert f'"schemas/assessment-assembly/{resource}"' in deployment
+    assert "integrated-science-mock-exam-assembly-v1.json" in deployment
+    assert "content/assembly-policies/integrated-science-mock-exam-assembly-v1.json" in deployment
+
+
 def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 

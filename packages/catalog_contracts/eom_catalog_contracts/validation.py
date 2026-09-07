@@ -30,6 +30,18 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "mock-exam-assembly-manifest": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
+            "resources/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
+            "1.0",
+            "sha256:979d81c600eb8a1242c96bc3c5ade26792f6ac9c89ec22851fe1b10419808ab2",
+        ),
+        "mock-exam-assembly-policy": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-assembly-policy-v1.schema.json",
+            "resources/assessment-assembly/mock-exam-assembly-policy-v1.schema.json",
+            "1.0",
+            "sha256:85b1ec2e031452d1a514b7eb530c603d2f25fa258adde662dc10b8152d3ba0ba",
+        ),
         "assessment-assembly-manifest": CatalogSchemaResource(
             "schemas/legacy-usage/assessment-assembly-manifest-v1.schema.json",
             "resources/legacy-usage/assessment-assembly-manifest-v1.schema.json",

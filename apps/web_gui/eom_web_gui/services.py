@@ -31,6 +31,7 @@ from eom_web_gui.contracts import (
     KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
     KnowledgeAnalysisQualityReport,
+    MockExamAssemblySubmission,
     RequestDraft,
     RequestDraftInput,
     RequestDraftUpdate,
@@ -99,6 +100,14 @@ class WebServices:
             item_number=item_number,
             cursor=cursor,
         )
+
+    async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]:
+        return await self.gateway.mock_exam_assembly_policy(session)
+
+    async def create_mock_exam_assembly(
+        self, session: WebSession, value: MockExamAssemblySubmission
+    ) -> dict[str, Any]:
+        return await self.gateway.create_mock_exam_assembly(session, value)
 
     def update_draft(
         self,

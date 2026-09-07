@@ -509,6 +509,7 @@ async def test_gateway_validates_item_bank_page_and_forwards_graph_filters() -> 
                         "graph_snapshot_revision_id": "graphrev_" + "1" * 32,
                         "snapshot_sha256": "sha256:" + "2" * 64,
                         "analysis_run_id": "analysisrun_" + "3" * 32,
+                        "graph_placement_node_id": "knode_" + "d" * 32,
                         "assessment_occurrence_id": "occurrence_" + "4" * 32,
                         "assessment_occurrence_revision_id": "occurrev_" + "5" * 32,
                         "assessment_occurrence_revision_sha256": "sha256:" + "6" * 64,

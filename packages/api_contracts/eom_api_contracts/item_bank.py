@@ -25,6 +25,7 @@ class ItemBankEntryView(ApiModel):
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
     snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    graph_placement_node_id: str = Field(pattern=r"^knode_[0-9a-f]{32}$")
     assessment_occurrence_id: str = Field(pattern=r"^occurrence_[0-9a-f]{32}$")
     assessment_occurrence_revision_id: str = Field(pattern=r"^occurrev_[0-9a-f]{32}$")
     assessment_occurrence_revision_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")

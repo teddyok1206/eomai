@@ -32,6 +32,7 @@ from eom_web_gui.contracts import (
     ItemPreview,
     KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
+    MockExamAssemblySubmission,
     PreviewChoice,
     PreviewEquationBlock,
     PreviewImageBlock,
@@ -237,6 +238,12 @@ class ApplicationGateway(Protocol):
         item_number: int | None,
         cursor: str | None,
     ) -> ItemBankPage: ...
+
+    async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]: ...
+
+    async def create_mock_exam_assembly(
+        self, session: WebSession, value: MockExamAssemblySubmission
+    ) -> dict[str, Any]: ...
 
     async def import_structured_item(
         self, session: WebSession, value: StructuredItemImportRequest
@@ -1235,6 +1242,70 @@ class HttpApplicationGateway:
             )
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]:
+        response = await self._authorized(session, "GET", "/api/v1/assessment-assemblies/policy")
+        policy = self._data(response)
+        if (
+            policy.get("schema_version") != "mock-exam-assembly-policy/1.0"
+            or policy.get("item_count") != 25
+            or policy.get("total_points_milli") != 50_000
+            or not isinstance(policy.get("policy_revision_id"), str)
+            or not isinstance(policy.get("policy_sha256"), str)
+            or not SHA256_PATTERN.fullmatch(policy["policy_sha256"])
+            or not isinstance(policy.get("coverage_requirements"), list)
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return sanitize_mapping(policy)
+
+    async def create_mock_exam_assembly(
+        self, session: WebSession, value: MockExamAssemblySubmission
+    ) -> dict[str, Any]:
+        digest = hashlib.sha256(value.idempotency_key.encode("utf-8")).hexdigest()
+        deliverable_response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/deliverables",
+            json={
+                "deliverable_key": value.deliverable_key,
+                "deliverable_type": "MOCK_EXAM",
+                "title": value.title,
+                "edition": value.edition,
+            },
+            headers={"Idempotency-Key": f"mockexam-deliverable-{digest}"},
+        )
+        deliverable_id = self._data(deliverable_response).get("resource_id")
+        if not isinstance(deliverable_id, str) or not re.fullmatch(
+            r"deliverable_[0-9a-f]{32}", deliverable_id
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        detail = self._data(
+            await self._authorized(session, "GET", f"/api/v1/deliverables/{deliverable_id}")
+        )
+        deliverable_revision_id = detail.get("deliverable_revision_id")
+        if not isinstance(deliverable_revision_id, str) or not re.fullmatch(
+            r"delivrev_[0-9a-f]{32}", deliverable_revision_id
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        policy = await self.mock_exam_assembly_policy(session)
+        assembly_response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/assessment-assemblies",
+            json={
+                "deliverable_id": deliverable_id,
+                "deliverable_revision_id": deliverable_revision_id,
+                "form_key": value.form_key,
+                "display_label": value.display_label,
+                "policy_revision_id": policy["policy_revision_id"],
+                "policy_sha256": policy["policy_sha256"],
+                "graph_snapshot_revision_id": value.graph_snapshot_revision_id,
+                "graph_snapshot_sha256": value.graph_snapshot_sha256,
+                "placements": [row.model_dump(mode="json") for row in value.placements],
+            },
+            headers={"Idempotency-Key": f"mockexam-assembly-{digest}"},
+        )
+        return sanitize_mapping(self._data(assembly_response))
 
     async def item_media(
         self,

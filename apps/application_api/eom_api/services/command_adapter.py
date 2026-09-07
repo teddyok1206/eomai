@@ -5,6 +5,7 @@ from __future__ import annotations
 import secrets
 from typing import Any, Literal
 
+from eom_api_contracts.assessment_assemblies import CreateMockExamAssemblyRequest
 from eom_api_contracts.content_packs import ActivateContentPackRequest
 from eom_api_contracts.deliverables import CreateDeliverableRequest
 from eom_api_contracts.items import ItemRetirementRequest, StructuredItemContentImportRequest
@@ -18,6 +19,7 @@ from eom_api_contracts.workflows import (
 from eom_catalog_contracts import (
     CreateDeliverable,
     CreateItemProductionEvidenceCommand,
+    CreateMockExamAssembly,
     CreateUsagePlan,
     EducationalRetrievalRequirement,
     FulfillUsagePlan,
@@ -27,6 +29,10 @@ from eom_catalog_contracts import (
     resolve_integrated_science_curriculum_scope,
 )
 from eom_catalog_service.content_pack_service import ContentPackService
+from eom_catalog_service.mock_exam_assembly_service import (
+    MockExamAssemblyError,
+    MockExamAssemblyService,
+)
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.usage_service import UsageLedgerService
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
@@ -205,6 +211,7 @@ class CommandAdapter:
         self.registry = RegistryService(engine)
         self.catalog_application = catalog_application or CatalogApplicationClient()
         self.usage = UsageLedgerService(engine)
+        self.mock_exam_assemblies = MockExamAssemblyService(engine)
 
     def start_workflow(
         self,
@@ -589,6 +596,29 @@ class CommandAdapter:
             CreateDeliverable(**request.model_dump(), metadata={}, actor_id=actor.actor_id)
         )
         return new_api_command_id(), row.deliverable_id, revision.revision_number
+
+    def create_mock_exam_assembly(
+        self, request: CreateMockExamAssemblyRequest, actor: ActorContext
+    ) -> tuple[str, str, int]:
+        try:
+            manifest = self.mock_exam_assemblies.create(
+                CreateMockExamAssembly(
+                    **request.model_dump(mode="json"),
+                    actor_id=actor.actor_id,
+                )
+            )
+        except MockExamAssemblyError as exc:
+            raise ApiError(
+                409,
+                exc.code,
+                "Mock exam assembly failed",
+                "The pinned Item selections do not satisfy the released assembly policy.",
+            ) from exc
+        return (
+            new_api_command_id(),
+            manifest.assessment_assembly_revision_id,
+            1,
+        )
 
     def create_usage_plan(
         self, request: CreateUsagePlanRequest, actor: ActorContext

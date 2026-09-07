@@ -242,7 +242,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         not in schemas
     ):
         raise SystemExit(
-            "expected 13 packaged API schemas including HWPX, Items, curriculum "
+            "expected 14 packaged API schemas including HWPX, Items, curriculum "
             "capability, assessment occurrence, and assessment learning, "
             f"found {schemas}"
         )
@@ -463,6 +463,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
 
 catalog_prefix = "eom_catalog_contracts/resources/"
 catalog_resources = {
+    "assessment-assembly/mock-exam-assembly-manifest-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
+    "assessment-assembly/mock-exam-assembly-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-policy-v1.schema.json",
     "catalog-application/catalog-application-request-v1.schema.json": "schemas/catalog-application/catalog-application-request-v1.schema.json",
     "catalog-application/catalog-application-response-v1.schema.json": "schemas/catalog-application/catalog-application-response-v1.schema.json",
     "catalog-application/catalog-application-request-v2.schema.json": "schemas/catalog-application/catalog-application-request-v2.schema.json",
@@ -654,6 +656,16 @@ with zipfile.ZipFile(platform_wheel) as archive:
             raise SystemExit(f"Catalog Contract schema resource drift: {resource_name}")
         if member not in record:
             raise SystemExit(f"Catalog Contract resource missing from RECORD: {resource_name}")
+    policy_member = (
+        catalog_prefix
+        + "assessment-assembly/integrated-science-mock-exam-assembly-v1.json"
+    )
+    policy_source = (
+        repository_root
+        / "content/assembly-policies/integrated-science-mock-exam-assembly-v1.json"
+    )
+    if archive.read(policy_member) != policy_source.read_bytes() or policy_member not in record:
+        raise SystemExit("Catalog Contract assembly policy resource drift")
 
 image_prefix = "eom_image_contracts/schemas/"
 image_resources = {

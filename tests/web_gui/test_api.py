@@ -302,6 +302,20 @@ def test_graph_item_bank_is_authenticated_and_keeps_exam_unit_pointers() -> None
         assert item["graph_snapshot_revision_id"].startswith("graphrev_")
 
 
+def test_mock_exam_assembly_policy_is_authenticated() -> None:
+    client, _ = make_client()
+    with client:
+        assert client.get("/studio/api/v1/mock-exam-assemblies/policy").status_code == 401
+        login(client)
+        response = client.get("/studio/api/v1/mock-exam-assemblies/policy")
+        assert response.status_code == 200
+        policy = response.json()
+        assert policy["item_count"] == 25
+        assert policy["total_points_milli"] == 50_000
+        assert policy["required_slot_count"] == 21
+        assert policy["balance_slot_count"] == 4
+
+
 def test_workflow_timeline_approval_etag_and_item_preview() -> None:
     client, gateway = make_client()
     with client:

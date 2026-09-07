@@ -772,6 +772,7 @@ class FakeGateway:
             graph_snapshot_revision_id="graphrev_" + "1" * 32,
             snapshot_sha256="sha256:" + "2" * 64,
             analysis_run_id="analysisrun_" + "3" * 32,
+            graph_placement_node_id="knode_" + "d" * 32,
             assessment_occurrence_id="occurrence_" + "4" * 32,
             assessment_occurrence_revision_id="occurrev_" + "5" * 32,
             assessment_occurrence_revision_sha256="sha256:" + "6" * 64,
@@ -809,6 +810,36 @@ class FakeGateway:
         if item_number not in {None, entry.item_number}:
             return ItemBankPage((), None, False)
         return ItemBankPage((entry,), None, False)
+
+    async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]:
+        del session
+        return {
+            "schema_version": "mock-exam-assembly-policy/1.0",
+            "policy_revision_id": "assemblypolicyrev_" + "1" * 32,
+            "policy_sha256": "sha256:" + "2" * 64,
+            "item_count": 25,
+            "total_points_milli": 50_000,
+            "required_slot_count": 21,
+            "balance_slot_count": 4,
+            "inquiry_min_count": 4,
+            "inquiry_max_count": 5,
+            "score_distribution": [
+                {"points_milli": 1500, "count": 8},
+                {"points_milli": 2000, "count": 9},
+                {"points_milli": 2500, "count": 8},
+            ],
+            "coverage_requirements": [],
+            "guidance_revision": 1,
+        }
+
+    async def create_mock_exam_assembly(self, session: WebSession, value: Any) -> dict[str, Any]:
+        del session, value
+        return {
+            "resource_type": "assessment_assembly_revision",
+            "resource_id": "assemblyrev_" + "3" * 32,
+            "status": "COMPLETED",
+            "resource_version": 1,
+        }
 
     async def assessment_learning_exams(
         self, session: WebSession, batch_id: str

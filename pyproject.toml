@@ -68,6 +68,7 @@ eom_workflow = [
   "resources/roles/*.json",
 ]
 eom_catalog_contracts = [
+  "resources/assessment-assembly/*.json",
   "resources/catalog-application/*.json",
   "resources/content-intake/*.json",
   "resources/content-pack/*.json",

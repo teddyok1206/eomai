@@ -283,6 +283,7 @@ class ItemBankEntry(WebModel):
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
     snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    graph_placement_node_id: str = Field(pattern=r"^knode_[0-9a-f]{32}$")
     assessment_occurrence_id: str = Field(pattern=r"^occurrence_[0-9a-f]{32}$")
     assessment_occurrence_revision_id: str = Field(pattern=r"^occurrev_[0-9a-f]{32}$")
     assessment_occurrence_revision_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
@@ -314,6 +315,42 @@ class ItemBankEntry(WebModel):
             and self.administration_month == 3
         ):
             raise ValueError("high-school grade 1 March evidence is not learnable")
+        return self
+
+
+class MockExamAssemblyPlacementInput(WebModel):
+    position: int = Field(ge=1, le=200)
+    item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    item_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    graph_placement_node_id: str = Field(pattern=r"^knode_[0-9a-f]{32}$")
+    curriculum_unit_keys: tuple[str, ...] = Field(min_length=1, max_length=16)
+    points_milli: int = Field(ge=1, le=1_000_000)
+    coverage_role: Literal["REQUIRED", "BALANCE"]
+    coverage_requirement_id: str | None = None
+    is_inquiry: bool
+    material_type: str = Field(min_length=1, max_length=64)
+
+
+class MockExamAssemblySubmission(WebModel):
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$")
+    deliverable_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$")
+    title: str = Field(min_length=1, max_length=256)
+    edition: str = Field(min_length=1, max_length=64)
+    form_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$")
+    display_label: str = Field(min_length=1, max_length=128)
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    graph_snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    placements: tuple[MockExamAssemblyPlacementInput, ...] = Field(min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def ordered_unique_placements(self) -> MockExamAssemblySubmission:
+        positions = tuple(row.position for row in self.placements)
+        if positions != tuple(range(1, len(self.placements) + 1)):
+            raise ValueError("mock-exam positions must be contiguous and ordered")
+        revision_ids = tuple(row.item_revision_id for row in self.placements)
+        if len(revision_ids) != len(set(revision_ids)):
+            raise ValueError("mock-exam Item revisions must be unique")
         return self
 
 

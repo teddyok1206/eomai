@@ -10,6 +10,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal, Never, cast
 
+from eom_api_contracts.assessment_assemblies import (
+    MockExamAssemblyPolicyView,
+    MockExamAssemblyView,
+    MockExamCoverageRequirementView,
+    MockExamScoreBucketView,
+)
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
     AssessmentLearningExamView,
@@ -60,6 +66,7 @@ from eom_api_contracts.workflows import (
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
+    load_integrated_science_mock_exam_policy,
 )
 from eom_catalog_service.curriculum_graph_structure import (
     integrated_science_curriculum_units,
@@ -91,6 +98,7 @@ from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchRecord,
     LegacyItemExtractionBatchWorkUnitRecord,
 )
+from eom_catalog_service.mock_exam_assembly_service import MockExamAssemblyService
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
     ContentIntakeEventRecord,
@@ -111,6 +119,7 @@ from eom_catalog_service.models import (
     UsageRecord,
 )
 from eom_hwpx_manager.models import HwpxApplicationBuildRecord
+from eom_identifiers import content_sha256
 from eom_identity_service.models import OperatorEventRecord
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.database import build_session_factory
@@ -389,6 +398,45 @@ class QueryAdapter:
                 unit_count=len(unit_rows),
                 closure_count=len(closure_rows),
             )
+
+    @staticmethod
+    def mock_exam_assembly_policy() -> MockExamAssemblyPolicyView:
+        policy = load_integrated_science_mock_exam_policy()
+        return MockExamAssemblyPolicyView(
+            schema_version=policy.schema_version,
+            policy_key=policy.policy_key,
+            policy_revision_id=policy.policy_revision_id,
+            policy_sha256=content_sha256(policy.model_dump(mode="json")),
+            subject_key=policy.subject_key,
+            item_count=policy.item_count,
+            total_points_milli=policy.total_points_milli,
+            score_distribution=tuple(
+                MockExamScoreBucketView.model_validate(row.model_dump(mode="json"))
+                for row in policy.score_distribution
+            ),
+            required_slot_count=policy.required_slot_count,
+            balance_slot_count=policy.balance_slot_count,
+            inquiry_min_count=policy.inquiry_min_count,
+            inquiry_max_count=policy.inquiry_max_count,
+            coverage_requirements=tuple(
+                MockExamCoverageRequirementView.model_validate(row.model_dump(mode="json"))
+                for row in policy.coverage_requirements
+            ),
+            eligible_item_revision_states=policy.eligible_item_revision_states,
+            outline_key=policy.outline_key,
+            outline_revision=policy.outline_revision,
+            outline_sha256=policy.outline_sha256,
+            guidance_revision=policy.guidance_pointer.revision,
+            guidance_reviewed_document_sha256=(policy.guidance_pointer.reviewed_document_sha256),
+            guidance_original_sha256=policy.guidance_pointer.original_sha256,
+        )
+
+    def mock_exam_assembly(self, assembly_revision_id: str) -> MockExamAssemblyView:
+        with self.sessions() as session:
+            manifest = MockExamAssemblyService.inspect(session, assembly_revision_id)
+            if manifest is None:
+                self._not_found("ASSEMBLY_REVISION_NOT_FOUND")
+            return MockExamAssemblyView.model_validate(manifest.model_dump(mode="json"))
 
     def assessment_items_by_exam(
         self,
@@ -756,6 +804,7 @@ class QueryAdapter:
                         graph_snapshot_revision_id=snapshot_id,
                         snapshot_sha256=snapshot.snapshot_sha256,
                         analysis_run_id=reference.analysis_run_id,
+                        graph_placement_node_id=reference.placement_node_id,
                         assessment_occurrence_id=reference.assessment_occurrence_id,
                         assessment_occurrence_revision_id=(
                             reference.assessment_occurrence_revision_id

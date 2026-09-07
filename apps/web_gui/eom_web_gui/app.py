@@ -26,6 +26,7 @@ from eom_web_gui.contracts import (
     ExecutionPresetLifecycleCommand,
     ExplorerQuery,
     HwpxBuildRequest,
+    MockExamAssemblySubmission,
     RequestDraftInput,
     RequestDraftUpdate,
     StructuredItemImportRequest,
@@ -246,6 +247,19 @@ def create_app(
             "next_cursor": page.next_cursor,
             "has_more": page.has_more,
         }
+
+    @app.get(f"{API_PREFIX}/mock-exam-assemblies/policy")
+    async def mock_exam_assembly_policy(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return await actual.mock_exam_assembly_policy(session)
+
+    @app.post(f"{API_PREFIX}/mock-exam-assemblies", status_code=201)
+    async def create_mock_exam_assembly(
+        value: MockExamAssemblySubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.create_mock_exam_assembly(session, value)
 
     @app.get(f"{API_PREFIX}/content-intakes/accepted")
     async def accepted_content_intakes(

@@ -31,6 +31,7 @@
       "oneOf": [{"maxLength": 64, "minLength": 1, "type": "string"}, {"type": "null"}]
     },
     "graph_snapshot_revision_id": {"pattern": "^graphrev_[0-9a-f]{32}$", "type": "string"},
+    "graph_placement_node_id": {"pattern": "^knode_[0-9a-f]{32}$", "type": "string"},
     "item_id": {"pattern": "^item_[0-9a-f]{32}$", "type": "string"},
     "item_manifest_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
     "item_number": {"maximum": 200, "minimum": 1, "type": "integer"},
@@ -47,6 +48,7 @@
   },
   "required": [
     "schema_version", "graph_snapshot_revision_id", "snapshot_sha256", "analysis_run_id",
+    "graph_placement_node_id",
     "assessment_occurrence_id", "assessment_occurrence_revision_id",
     "assessment_occurrence_revision_sha256", "occurrence_display_label", "administration_year",
     "administration_month", "target_school_level", "target_grade", "subject_key", "item_number",

@@ -34,6 +34,8 @@ const state = {
   itemBankEntries: [],
   itemBankCursor: null,
   itemBankQuery: "",
+  mockExamPolicy: null,
+  mockExamSelections: [],
   acceptedIntakes: [],
   structuredSource: null,
   codexAccounts: [],
@@ -848,6 +850,131 @@ function installItemBank() {
     loadItemBank(true);
   });
   $("#item-bank-more").addEventListener("click", () => loadItemBank(false));
+  $("#mock-exam-clear").addEventListener("click", () => {
+    state.mockExamSelections = [];
+    renderMockExamSelections();
+    renderItemBank();
+  });
+  $("#mock-exam-submit").addEventListener("click", submitMockExamAssembly);
+  loadMockExamPolicy();
+}
+
+async function loadMockExamPolicy() {
+  const root = $("#mock-exam-policy-summary");
+  try {
+    state.mockExamPolicy = await api("/mock-exam-assemblies/policy");
+    const policy = state.mockExamPolicy;
+    root.querySelector("strong").textContent = `${policy.item_count}문항 · ${(policy.total_points_milli / 1000).toFixed(0)}점`;
+    root.querySelector("span").textContent = `필수 ${policy.required_slot_count} · 균형 ${policy.balance_slot_count}`;
+    root.querySelector("p").textContent = `배점 ${policy.score_distribution.map((row) => `${(row.points_milli / 1000).toFixed(1)}점×${row.count}`).join(" · ")} · 탐구/실험 ${policy.inquiry_min_count}~${policy.inquiry_max_count}문항 · 팀장 검토 지침 ${policy.guidance_revision}판`;
+    renderMockExamSelections();
+  } catch (failure) {
+    showMessage($("#mock-exam-message"), `배치 정책 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+function mockExamDefaultPoints(position) {
+  let boundary = 0;
+  for (const bucket of state.mockExamPolicy?.score_distribution || []) {
+    boundary += bucket.count;
+    if (position <= boundary) return bucket.points_milli;
+  }
+  return 0;
+}
+
+function toggleMockExamSelection(entry) {
+  const index = state.mockExamSelections.findIndex((row) => row.entry.item_revision_id === entry.item_revision_id);
+  if (index >= 0) {
+    state.mockExamSelections.splice(index, 1);
+  } else if (state.mockExamSelections.length < (state.mockExamPolicy?.item_count || 25)) {
+    const position = state.mockExamSelections.length + 1;
+    state.mockExamSelections.push({entry, points_milli: mockExamDefaultPoints(position), coverage_requirement_id: null, is_inquiry: false, material_type: "text"});
+  }
+  state.mockExamSelections.forEach((row, position) => {
+    row.points_milli ||= mockExamDefaultPoints(position + 1);
+  });
+  renderMockExamSelections();
+  renderItemBank();
+}
+
+function renderMockExamSelections() {
+  const root = $("#mock-exam-selections");
+  root.replaceChildren();
+  const selected = state.mockExamSelections;
+  const expected = state.mockExamPolicy?.item_count || 25;
+  setStatus($("#mock-exam-count"), selected.length === expected ? "success" : "neutral", selected.length === expected ? "✓" : "■", `${selected.length} / ${expected}`);
+  $("#mock-exam-submit").disabled = selected.length !== expected || !state.mockExamPolicy;
+  if (!selected.length) {
+    root.append(Object.assign(document.createElement("p"), {className: "empty-state", textContent: "선택된 문항이 없습니다."}));
+    return;
+  }
+  selected.forEach((selection, index) => {
+    const row = document.createElement("div");
+    row.className = "mock-exam-selection";
+    const number = Object.assign(document.createElement("strong"), {textContent: String(index + 1)});
+    const label = Object.assign(document.createElement("span"), {textContent: `${selection.entry.occurrence_display_label} · ${selection.entry.item_number}번`});
+    const units = Object.assign(document.createElement("small"), {textContent: selection.entry.curriculum_units.map((unit) => unit.unit_code).join(", ")});
+    const points = document.createElement("select");
+    for (const bucket of state.mockExamPolicy?.score_distribution || []) {
+      points.append(new Option(`${(bucket.points_milli / 1000).toFixed(1)}점`, String(bucket.points_milli)));
+    }
+    points.value = String(selection.points_milli);
+    points.addEventListener("change", () => { selection.points_milli = Number(points.value); });
+    const requirement = document.createElement("select");
+    requirement.append(new Option("균형 슬롯", ""));
+    for (const rule of state.mockExamPolicy?.coverage_requirements || []) {
+      requirement.append(new Option(rule.requirement_id, rule.requirement_id));
+    }
+    requirement.value = selection.coverage_requirement_id || "";
+    requirement.addEventListener("change", () => { selection.coverage_requirement_id = requirement.value || null; });
+    const inquiryLabel = document.createElement("label");
+    const inquiry = Object.assign(document.createElement("input"), {type: "checkbox", checked: selection.is_inquiry});
+    inquiry.addEventListener("change", () => { selection.is_inquiry = inquiry.checked; });
+    inquiryLabel.append(inquiry, "탐구/실험");
+    const remove = actionButton("빼기", () => toggleMockExamSelection(selection.entry), true);
+    row.append(number, label, units, requirement, points, inquiryLabel, remove);
+    root.append(row);
+  });
+}
+
+async function submitMockExamAssembly() {
+  const message = $("#mock-exam-message");
+  try {
+    const snapshots = new Set(state.mockExamSelections.map((row) => `${row.entry.graph_snapshot_revision_id}:${row.entry.snapshot_sha256}`));
+    if (snapshots.size !== 1) throw new StudioApiError("선택 문항의 Graph snapshot이 서로 다릅니다.");
+    const first = state.mockExamSelections[0].entry;
+    const payload = {
+      idempotency_key: `mockexam-${crypto.randomUUID().replaceAll("-", "")}`,
+      deliverable_key: $("#mock-exam-key").value.trim(),
+      title: $("#mock-exam-title-input").value.trim(),
+      edition: $("#mock-exam-edition").value.trim(),
+      form_key: $("#mock-exam-form-key").value.trim(),
+      display_label: $("#mock-exam-display-label").value.trim(),
+      graph_snapshot_revision_id: first.graph_snapshot_revision_id,
+      graph_snapshot_sha256: first.snapshot_sha256,
+      placements: state.mockExamSelections.map((selection, index) => ({
+        position: index + 1,
+        item_id: selection.entry.item_id,
+        item_revision_id: selection.entry.item_revision_id,
+        item_manifest_sha256: selection.entry.item_manifest_sha256,
+        graph_placement_node_id: selection.entry.graph_placement_node_id,
+        curriculum_unit_keys: selection.entry.curriculum_units.map((unit) => unit.unit_key).sort(),
+        points_milli: selection.points_milli,
+        coverage_role: selection.coverage_requirement_id ? "REQUIRED" : "BALANCE",
+        coverage_requirement_id: selection.coverage_requirement_id,
+        is_inquiry: selection.is_inquiry,
+        material_type: selection.material_type,
+      })),
+    };
+    if (!payload.deliverable_key || !payload.title || !payload.edition || !payload.form_key || !payload.display_label) throw new StudioApiError("시험지 기본 정보를 모두 입력하세요.");
+    $("#mock-exam-submit").disabled = true;
+    const result = await api("/mock-exam-assemblies", {method: "POST", mutation: true, body: payload});
+    showMessage(message, `모의고사 조립 리비전이 고정되었습니다: ${result.resource_id}`, "success");
+  } catch (failure) {
+    showMessage(message, `모의고사 조립 실패: ${failure.message}`, "error");
+  } finally {
+    $("#mock-exam-submit").disabled = state.mockExamSelections.length !== (state.mockExamPolicy?.item_count || 25);
+  }
 }
 
 function itemBankFilterQuery() {
@@ -951,6 +1078,7 @@ function renderItemBank() {
     }
     const actions = document.createElement("div");
     actions.className = "form-actions";
+    const selectedForExam = state.mockExamSelections.some((row) => row.entry.item_revision_id === entry.item_revision_id);
     actions.append(
       actionButton("완성 문항 보기", async () => {
         $("#item-id").value = entry.item_id;
@@ -965,6 +1093,7 @@ function renderItemBank() {
         $("#item-bank-number").value = "";
         await loadItemBank(true);
       }, true),
+      actionButton(selectedForExam ? "Blueprint에서 빼기" : "Blueprint에 담기", () => toggleMockExamSelection(entry), selectedForExam),
     );
     card.append(heading, units, pointers, actions);
     root.append(card);

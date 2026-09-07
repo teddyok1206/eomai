@@ -1,5 +1,11 @@
 """Public contracts for EOM Application API V1."""
 
+from eom_api_contracts.assessment_assemblies import (
+    CreateMockExamAssemblyRequest,
+    MockExamAssemblyPolicyView,
+    MockExamAssemblySelectionInput,
+    MockExamAssemblyView,
+)
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
     AssessmentLearningExamView,
@@ -72,6 +78,7 @@ __all__ = [
     "CreateHwpxBuildRequest",
     "CreateKnowledgeAnalysisBatchRequest",
     "CreateKnowledgeAnalysisRequest",
+    "CreateMockExamAssemblyRequest",
     "CurriculumGraphCapabilityView",
     "CurriculumRetrievalScopeInput",
     "EducationalDocumentAnalysisSourceInput",
@@ -95,6 +102,9 @@ __all__ = [
     "KnowledgeAnalysisRunView",
     "KnowledgeAnalysisSourceInput",
     "ListResponse",
+    "MockExamAssemblyPolicyView",
+    "MockExamAssemblySelectionInput",
+    "MockExamAssemblyView",
     "PageMeta",
     "ProblemDetails",
     "ResponseMeta",
