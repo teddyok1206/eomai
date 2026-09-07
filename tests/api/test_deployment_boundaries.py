@@ -86,9 +86,11 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     ) in source
     assert 'scripts/api/bootstrap_runtime_role.sh"' in source
     assert 'scripts/catalog/bootstrap_runtime_role.py"' in source
+    assert 'scripts/hwpx/bootstrap_manager_runtime_role.py"' in source
     assert (
         source.index("install_wheels\n")
         < source.index("reconcile_installed_catalog_runtime_privileges\n")
+        < source.index("reconcile_installed_hwpx_manager_runtime_privileges\n")
         < source.index("install_service\n")
     )
 

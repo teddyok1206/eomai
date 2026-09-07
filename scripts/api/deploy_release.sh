@@ -60,6 +60,13 @@ reconcile_installed_catalog_runtime_privileges() {
     "${REPOSITORY_ROOT}/scripts/catalog/bootstrap_runtime_role.py"
 }
 
+reconcile_installed_hwpx_manager_runtime_privileges() {
+  # The HWPX manager owns its build queues through a dedicated DB role. Keep
+  # its closed privilege matrix synchronized after migrations add a new queue.
+  sudo -n "${API_PYTHON}" \
+    "${REPOSITORY_ROOT}/scripts/hwpx/bootstrap_manager_runtime_role.py"
+}
+
 cleanup() {
   if [[ -n "${STAGING_ROOT}" && -d "${STAGING_ROOT}" ]]; then
     rm -rf "${STAGING_ROOT}"
@@ -1267,6 +1274,7 @@ case "${ACTION}" in
     build_release
     install_wheels
     reconcile_installed_catalog_runtime_privileges
+    reconcile_installed_hwpx_manager_runtime_privileges
     install_service
     ;;
   verify)

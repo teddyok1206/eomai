@@ -79,5 +79,6 @@ def test_manager_bootstrap_is_fixed_and_revokes_before_granting() -> None:
     assert "HWPX_MANAGER_SEQUENCE_PRIVILEGE_MISMATCH" in source
     assert "has_function_privilege" in source
     assert "HWPX_MANAGER_FUNCTION_PRIVILEGE_MISMATCH" in source
-    assert '!= "20260823_0011"' in source
+    assert "from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION" in source
+    assert "!= CURRENT_MIGRATION_REVISION" in source
     assert "EOM_API_TOKEN_HASH_KEY" not in source.split("def main()", 1)[0]

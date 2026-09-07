@@ -14,6 +14,7 @@ from typing import Never
 from urllib.parse import quote, unquote, urlsplit
 
 import psycopg
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from psycopg import sql
 from sqlalchemy import create_engine
 
@@ -314,7 +315,7 @@ def main() -> None:
             runtime_connection.exec_driver_sql(
                 "SELECT version_num FROM app.alembic_version"
             ).scalar_one()
-            != "20260823_0011"
+            != CURRENT_MIGRATION_REVISION
         ):
             fail("HWPX_MANAGER_MIGRATION_MISMATCH")
     engine.dispose()
