@@ -19,6 +19,7 @@ from eom_api_contracts.curriculum import (
     AssessmentItemOccurrenceView,
     AssessmentItemOccurrenceViewV2,
 )
+from eom_api_contracts.item_bank import ItemBankCurriculumUnitView, ItemBankEntryView
 from eom_api_contracts.knowledge_analysis import (
     CreateKnowledgeAnalysisRequest,
     KnowledgeAnalysisReviewRequest,
@@ -113,6 +114,60 @@ def test_assessment_item_occurrence_v2_matches_graph_node_identity_width() -> No
     with pytest.raises(ValidationError):
         AssessmentItemOccurrenceViewV2.model_validate(
             value | {"placement_node_id": "knode_" + "d" * 64}
+        )
+
+
+def test_item_bank_schema_matches_typed_graph_projection() -> None:
+    canonical_path = SCHEMA_ROOT / "item-bank-entry-v1.schema.json"
+    packaged_path = (
+        Path(__file__).resolve().parents[2]
+        / "packages/api_contracts/eom_api_contracts/schemas"
+        / canonical_path.name
+    )
+    assert canonical_path.read_bytes() == packaged_path.read_bytes()
+    value = ItemBankEntryView(
+        graph_snapshot_revision_id="graphrev_" + "1" * 32,
+        snapshot_sha256="sha256:" + "2" * 64,
+        analysis_run_id="analysisrun_" + "3" * 32,
+        assessment_occurrence_id="occurrence_" + "4" * 32,
+        assessment_occurrence_revision_id="occurrev_" + "5" * 32,
+        assessment_occurrence_revision_sha256="sha256:" + "6" * 64,
+        occurrence_display_label="2025년 고1 6월 통합과학",
+        administration_year=2025,
+        administration_month=6,
+        target_school_level="HIGH_SCHOOL",
+        target_grade=1,
+        subject_key="integrated-science",
+        item_number=12,
+        item_id="item_" + "7" * 32,
+        item_revision_id="itemrev_" + "8" * 32,
+        item_revision_state="APPROVED",
+        item_type_key="multiple-choice",
+        difficulty_band=None,
+        item_manifest_sha256="sha256:" + "9" * 64,
+        curriculum_units=(
+            ItemBankCurriculumUnitView(
+                curriculum_unit_id="currunit_" + "a" * 32,
+                unit_key="eom.is.middle.3-3",
+                unit_code="3-(3)",
+                label="중력장 내의 운동",
+                unit_level="MINOR",
+                parent_unit_id="currunit_" + "b" * 32,
+            ),
+        ),
+        placement_sha256="sha256:" + "c" * 64,
+    ).model_dump(mode="json")
+    assert (
+        tuple(
+            Draft202012Validator(
+                json.loads(canonical_path.read_text(encoding="utf-8"))
+            ).iter_errors(value)
+        )
+        == ()
+    )
+    with pytest.raises(ValidationError, match="sorted and unique"):
+        ItemBankEntryView.model_validate(
+            value | {"curriculum_units": [*value["curriculum_units"], *value["curriculum_units"]]}
         )
 
 

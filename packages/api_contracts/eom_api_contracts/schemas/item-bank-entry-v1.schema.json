@@ -1,0 +1,80 @@
+{
+  "$id": "https://eom.local/schemas/api/item-bank-entry-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "not": {
+        "properties": {
+          "administration_month": {"const": 3},
+          "target_grade": {"const": 1},
+          "target_school_level": {"const": "HIGH_SCHOOL"}
+        },
+        "required": ["administration_month", "target_grade", "target_school_level"]
+      }
+    }
+  ],
+  "properties": {
+    "administration_month": {"maximum": 12, "minimum": 1, "type": "integer"},
+    "administration_year": {"maximum": 2200, "minimum": 1900, "type": "integer"},
+    "analysis_run_id": {"pattern": "^analysisrun_[0-9a-f]{32}$", "type": "string"},
+    "assessment_occurrence_id": {"pattern": "^occurrence_[0-9a-f]{32}$", "type": "string"},
+    "assessment_occurrence_revision_id": {"pattern": "^occurrev_[0-9a-f]{32}$", "type": "string"},
+    "assessment_occurrence_revision_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "curriculum_units": {
+      "items": {"$ref": "#/$defs/curriculumUnit"},
+      "maxItems": 8,
+      "minItems": 1,
+      "type": "array"
+    },
+    "difficulty_band": {
+      "oneOf": [{"maxLength": 64, "minLength": 1, "type": "string"}, {"type": "null"}]
+    },
+    "graph_snapshot_revision_id": {"pattern": "^graphrev_[0-9a-f]{32}$", "type": "string"},
+    "item_id": {"pattern": "^item_[0-9a-f]{32}$", "type": "string"},
+    "item_manifest_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "item_number": {"maximum": 200, "minimum": 1, "type": "integer"},
+    "item_revision_id": {"pattern": "^itemrev_[0-9a-f]{32}$", "type": "string"},
+    "item_revision_state": {"enum": ["APPROVED", "SUPERSEDED"]},
+    "item_type_key": {"maxLength": 128, "minLength": 1, "type": "string"},
+    "occurrence_display_label": {"maxLength": 512, "minLength": 1, "type": "string"},
+    "placement_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "schema_version": {"const": "item-bank-entry-view/1.0"},
+    "snapshot_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "subject_key": {"pattern": "^[a-z0-9][a-z0-9._:-]{0,159}$", "type": "string"},
+    "target_grade": {"maximum": 6, "minimum": 1, "type": "integer"},
+    "target_school_level": {"enum": ["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"]}
+  },
+  "required": [
+    "schema_version", "graph_snapshot_revision_id", "snapshot_sha256", "analysis_run_id",
+    "assessment_occurrence_id", "assessment_occurrence_revision_id",
+    "assessment_occurrence_revision_sha256", "occurrence_display_label", "administration_year",
+    "administration_month", "target_school_level", "target_grade", "subject_key", "item_number",
+    "item_id", "item_revision_id", "item_revision_state", "item_type_key", "difficulty_band",
+    "item_manifest_sha256", "curriculum_units", "placement_sha256"
+  ],
+  "$defs": {
+    "curriculumUnit": {
+      "additionalProperties": false,
+      "properties": {
+        "curriculum_unit_id": {"pattern": "^currunit_[0-9a-f]{32}$", "type": "string"},
+        "label": {"maxLength": 200, "minLength": 1, "type": "string"},
+        "parent_unit_id": {
+          "oneOf": [
+            {"pattern": "^currunit_[0-9a-f]{32}$", "type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "unit_code": {"maxLength": 32, "minLength": 1, "type": "string"},
+        "unit_key": {"pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$", "type": "string"},
+        "unit_level": {"enum": ["MAJOR", "MIDDLE", "MINOR", "ACHIEVEMENT_STANDARD"]}
+      },
+      "required": [
+        "curriculum_unit_id", "unit_key", "unit_code", "label", "unit_level", "parent_unit_id"
+      ],
+      "type": "object"
+    }
+  },
+  "title": "Item Bank Entry View V1",
+  "type": "object"
+}

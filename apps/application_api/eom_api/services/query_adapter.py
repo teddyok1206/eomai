@@ -33,6 +33,7 @@ from eom_api_contracts.curriculum import (
 from eom_api_contracts.deliverables import DeliverableView
 from eom_api_contracts.events import EventView
 from eom_api_contracts.hwpx import HwpxBuildView
+from eom_api_contracts.item_bank import ItemBankCurriculumUnitView, ItemBankEntryView
 from eom_api_contracts.items import (
     ItemComponentView,
     ItemRelationshipView,
@@ -510,6 +511,287 @@ class QueryAdapter:
                 cursor_resource="assessment-unit",
                 cursor_aggregate=curriculum_unit_id,
             )
+
+    def item_bank_entries(
+        self,
+        *,
+        curriculum_unit_key: str | None,
+        administration_year: int | None,
+        administration_month: int | None,
+        target_school_level: str | None,
+        target_grade: int | None,
+        assessment_occurrence_revision_id: str | None,
+        item_number: int | None,
+        item_type_key: str | None,
+        difficulty_band: str | None,
+        limit: int,
+        cursor: str | None,
+    ) -> PageResult[ItemBankEntryView]:
+        """Browse pinned Integrated Science Items through the current Graph snapshot."""
+
+        filters = {
+            "curriculum_unit_key": curriculum_unit_key,
+            "administration_year": administration_year,
+            "administration_month": administration_month,
+            "target_school_level": target_school_level,
+            "target_grade": target_grade,
+            "assessment_occurrence_revision_id": assessment_occurrence_revision_id,
+            "item_number": item_number,
+            "item_type_key": item_type_key,
+            "difficulty_band": difficulty_band,
+        }
+        aggregate = hashlib.sha256(
+            json.dumps(filters, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        offset = self.cursors.decode_ordinal(cursor, "item-bank", aggregate) if cursor else 0
+        expected_units = integrated_science_curriculum_units()
+        expected_by_key = {unit.unit_key: unit for unit in expected_units}
+        expected_by_id = {unit.curriculum_unit_id: unit for unit in expected_units}
+        with self.sessions() as session:
+            snapshot_id = self._current_assessment_snapshot_id(session)
+            if snapshot_id is None:
+                return PageResult((), None, False)
+            snapshot = session.get(KnowledgeGraphSnapshotRecord, snapshot_id)
+            if snapshot is None:
+                return PageResult((), None, False)
+            conditions = [
+                AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id == snapshot_id,
+                AssessmentItemOccurrenceReferenceRecord.subject_key == "integrated-science",
+            ]
+            if administration_year is not None:
+                conditions.append(
+                    AssessmentItemOccurrenceReferenceRecord.administration_year
+                    == administration_year
+                )
+            if administration_month is not None:
+                conditions.append(
+                    AssessmentItemOccurrenceReferenceRecord.administration_month
+                    == administration_month
+                )
+            if target_school_level is not None:
+                conditions.append(
+                    AssessmentItemOccurrenceReferenceRecord.target_school_level
+                    == target_school_level
+                )
+            if target_grade is not None:
+                conditions.append(
+                    AssessmentItemOccurrenceReferenceRecord.target_grade == target_grade
+                )
+            if assessment_occurrence_revision_id is not None:
+                conditions.append(
+                    AssessmentItemOccurrenceReferenceRecord.assessment_occurrence_revision_id
+                    == assessment_occurrence_revision_id
+                )
+            if item_number is not None:
+                conditions.append(
+                    AssessmentItemOccurrenceReferenceRecord.item_number == item_number
+                )
+            if item_type_key is not None:
+                conditions.append(ItemRevisionRecord.item_type_key == item_type_key)
+            if difficulty_band is not None:
+                conditions.append(ItemRevisionRecord.difficulty_band == difficulty_band)
+
+            statement = select(
+                AssessmentItemOccurrenceReferenceRecord,
+                ItemRevisionRecord,
+            ).join(
+                ItemRevisionRecord,
+                ItemRevisionRecord.item_revision_id
+                == AssessmentItemOccurrenceReferenceRecord.item_revision_id,
+            )
+            if curriculum_unit_key is not None:
+                expected_unit = expected_by_key.get(curriculum_unit_key)
+                if expected_unit is None:
+                    return PageResult((), None, False)
+                observed_unit = session.get(
+                    CurriculumUnitRecord,
+                    (snapshot_id, expected_unit.curriculum_unit_id),
+                )
+                observed_node = (
+                    session.get(KnowledgeNodeRecord, (snapshot_id, observed_unit.node_id))
+                    if observed_unit is not None
+                    else None
+                )
+                if (
+                    observed_unit is None
+                    or observed_node is None
+                    or observed_unit.framework_revision_id != expected_unit.framework_revision_id
+                    or observed_unit.parent_unit_id != expected_unit.parent_unit_id
+                    or observed_unit.unit_level != expected_unit.unit_level
+                    or observed_unit.ordinal != expected_unit.ordinal
+                    or observed_node.stable_key != expected_unit.node_stable_key
+                ):
+                    return PageResult((), None, False)
+                descendant_ids = tuple(
+                    session.scalars(
+                        select(CurriculumUnitClosureRecord.descendant_unit_id)
+                        .where(
+                            CurriculumUnitClosureRecord.graph_snapshot_revision_id == snapshot_id,
+                            CurriculumUnitClosureRecord.framework_revision_id
+                            == expected_unit.framework_revision_id,
+                            CurriculumUnitClosureRecord.ancestor_unit_id
+                            == expected_unit.curriculum_unit_id,
+                        )
+                        .order_by(CurriculumUnitClosureRecord.descendant_unit_id)
+                    )
+                )
+                expected_descendant_ids: set[str] = set()
+                for candidate in expected_units:
+                    current = candidate
+                    while True:
+                        if current.curriculum_unit_id == expected_unit.curriculum_unit_id:
+                            expected_descendant_ids.add(candidate.curriculum_unit_id)
+                            break
+                        if current.parent_unit_id is None:
+                            break
+                        current = expected_by_id[current.parent_unit_id]
+                if set(descendant_ids) != expected_descendant_ids:
+                    return PageResult((), None, False)
+                descendant_node_ids = tuple(
+                    session.scalars(
+                        select(CurriculumUnitRecord.node_id).where(
+                            CurriculumUnitRecord.graph_snapshot_revision_id == snapshot_id,
+                            CurriculumUnitRecord.curriculum_unit_id.in_(descendant_ids),
+                        )
+                    )
+                )
+                if len(descendant_node_ids) != len(descendant_ids):
+                    return PageResult((), None, False)
+                statement = statement.join(
+                    KnowledgeEdgeRecord,
+                    and_(
+                        KnowledgeEdgeRecord.graph_snapshot_revision_id
+                        == AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id,
+                        KnowledgeEdgeRecord.from_node_id
+                        == AssessmentItemOccurrenceReferenceRecord.placement_node_id,
+                    ),
+                )
+                conditions.extend(
+                    (
+                        KnowledgeEdgeRecord.to_node_id.in_(descendant_node_ids),
+                        KnowledgeEdgeRecord.edge_type == "ALIGNS_WITH_CURRICULUM",
+                    )
+                )
+            rows = tuple(
+                session.execute(
+                    statement.where(*conditions)
+                    .order_by(
+                        AssessmentItemOccurrenceReferenceRecord.administration_year.desc(),
+                        AssessmentItemOccurrenceReferenceRecord.administration_month.desc(),
+                        AssessmentItemOccurrenceReferenceRecord.occurrence_display_label,
+                        AssessmentItemOccurrenceReferenceRecord.item_number,
+                        AssessmentItemOccurrenceReferenceRecord.item_revision_id,
+                    )
+                    .offset(offset)
+                    .limit(limit + 1)
+                ).all()
+            )
+            page_rows = rows[:limit]
+            placement_ids = {reference.placement_node_id for reference, _ in page_rows}
+            unit_ids_by_placement: dict[str, list[str]] = {}
+            if placement_ids:
+                for placement_node_id, curriculum_unit_id in session.execute(
+                    select(
+                        KnowledgeEdgeRecord.from_node_id,
+                        CurriculumUnitRecord.curriculum_unit_id,
+                    )
+                    .join(
+                        CurriculumUnitRecord,
+                        and_(
+                            CurriculumUnitRecord.graph_snapshot_revision_id
+                            == KnowledgeEdgeRecord.graph_snapshot_revision_id,
+                            CurriculumUnitRecord.node_id == KnowledgeEdgeRecord.to_node_id,
+                        ),
+                    )
+                    .where(
+                        KnowledgeEdgeRecord.graph_snapshot_revision_id == snapshot_id,
+                        KnowledgeEdgeRecord.from_node_id.in_(placement_ids),
+                        KnowledgeEdgeRecord.edge_type == "ALIGNS_WITH_CURRICULUM",
+                    )
+                ):
+                    unit_ids_by_placement.setdefault(placement_node_id, []).append(
+                        curriculum_unit_id
+                    )
+            values: list[ItemBankEntryView] = []
+            for reference, revision in page_rows:
+                if reference.item_id != revision.item_id or revision.revision_state not in {
+                    "APPROVED",
+                    "SUPERSEDED",
+                }:
+                    raise ApiError(
+                        500,
+                        "ITEM_BANK_POINTER_INVALID",
+                        "Item bank pointer invalid",
+                        "A Graph item pointer does not resolve to an eligible immutable revision.",
+                    )
+                try:
+                    linked_units = tuple(
+                        ItemBankCurriculumUnitView(
+                            curriculum_unit_id=unit.curriculum_unit_id,
+                            unit_key=unit.unit_key,
+                            unit_code=unit.unit_code,
+                            label=unit.label,
+                            unit_level=unit.unit_level,
+                            parent_unit_id=unit.parent_unit_id,
+                        )
+                        for unit in sorted(
+                            (
+                                expected_by_id[unit_id]
+                                for unit_id in unit_ids_by_placement.get(
+                                    reference.placement_node_id, ()
+                                )
+                            ),
+                            key=lambda value: value.unit_key,
+                        )
+                    )
+                except KeyError as exc:
+                    raise ApiError(
+                        500,
+                        "ITEM_BANK_CURRICULUM_POINTER_INVALID",
+                        "Item bank curriculum pointer invalid",
+                        "A Graph placement references an unreviewed curriculum unit.",
+                    ) from exc
+                values.append(
+                    ItemBankEntryView(
+                        graph_snapshot_revision_id=snapshot_id,
+                        snapshot_sha256=snapshot.snapshot_sha256,
+                        analysis_run_id=reference.analysis_run_id,
+                        assessment_occurrence_id=reference.assessment_occurrence_id,
+                        assessment_occurrence_revision_id=(
+                            reference.assessment_occurrence_revision_id
+                        ),
+                        assessment_occurrence_revision_sha256=(
+                            reference.assessment_occurrence_revision_sha256
+                        ),
+                        occurrence_display_label=reference.occurrence_display_label,
+                        administration_year=reference.administration_year,
+                        administration_month=reference.administration_month,
+                        target_school_level=cast(
+                            Literal["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"],
+                            reference.target_school_level,
+                        ),
+                        target_grade=reference.target_grade,
+                        subject_key=reference.subject_key,
+                        item_number=reference.item_number,
+                        item_id=reference.item_id,
+                        item_revision_id=reference.item_revision_id,
+                        item_revision_state=cast(
+                            Literal["APPROVED", "SUPERSEDED"], revision.revision_state
+                        ),
+                        item_type_key=revision.item_type_key,
+                        difficulty_band=revision.difficulty_band,
+                        item_manifest_sha256=revision.manifest_sha256,
+                        curriculum_units=linked_units,
+                        placement_sha256=reference.placement_sha256,
+                    )
+                )
+            has_more = len(rows) > limit
+            next_cursor = (
+                self.cursors.encode_ordinal("item-bank", aggregate, offset + len(values))
+                if has_more
+                else None
+            )
+            return PageResult(tuple(values), next_cursor, has_more)
 
     @staticmethod
     def _current_assessment_snapshot_id(session: Session) -> str | None:

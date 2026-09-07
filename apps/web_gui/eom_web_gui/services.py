@@ -37,7 +37,7 @@ from eom_web_gui.contracts import (
     StructuredItemImportRequest,
     WorkflowApproval,
 )
-from eom_web_gui.gateways import ApplicationGateway, GatewayError, LoginResult
+from eom_web_gui.gateways import ApplicationGateway, GatewayError, ItemBankPage, LoginResult
 from eom_web_gui.knowledge_quality import build_knowledge_quality_report
 from eom_web_gui.request_drafts import normalize_request, update_draft, workflow_start_payload
 from eom_web_gui.sessions import SessionStore, WebSession, utc_now
@@ -80,6 +80,25 @@ class WebServices:
     async def curriculum_editorial_outline(self, session: WebSession) -> CurriculumEditorialOutline:
         """Proxy the reviewed hierarchy; Graph revisions remain API-owned."""
         return await self.gateway.curriculum_editorial_outline(session)
+
+    async def item_bank_entries(
+        self,
+        session: WebSession,
+        *,
+        curriculum_unit_key: str | None,
+        administration_year: int | None,
+        administration_month: int | None,
+        item_number: int | None,
+        cursor: str | None,
+    ) -> ItemBankPage:
+        return await self.gateway.item_bank_entries(
+            session,
+            curriculum_unit_key=curriculum_unit_key,
+            administration_year=administration_year,
+            administration_month=administration_month,
+            item_number=item_number,
+            cursor=cursor,
+        )
 
     def update_draft(
         self,

@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
-from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -221,6 +221,31 @@ def create_app(
         session: Annotated[WebSession, Depends(require_session)],
     ) -> dict[str, Any]:
         return (await actual.curriculum_editorial_outline(session)).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/item-bank/entries")
+    async def item_bank_entries(
+        session: Annotated[WebSession, Depends(require_session)],
+        curriculum_unit_key: str | None = Query(
+            default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$"
+        ),
+        administration_year: int | None = Query(default=None, ge=1900, le=2200),
+        administration_month: int | None = Query(default=None, ge=1, le=12),
+        item_number: int | None = Query(default=None, ge=1, le=200),
+        cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+    ) -> dict[str, object]:
+        page = await actual.item_bank_entries(
+            session,
+            curriculum_unit_key=curriculum_unit_key,
+            administration_year=administration_year,
+            administration_month=administration_month,
+            item_number=item_number,
+            cursor=cursor,
+        )
+        return {
+            "values": tuple(value.model_dump(mode="json") for value in page.values),
+            "next_cursor": page.next_cursor,
+            "has_more": page.has_more,
+        }
 
     @app.get(f"{API_PREFIX}/content-intakes/accepted")
     async def accepted_content_intakes(

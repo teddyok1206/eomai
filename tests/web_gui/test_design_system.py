@@ -25,6 +25,7 @@ def test_surface_mode_is_route_derived_and_not_a_user_theme() -> None:
         'workflow: "engine"',
         'request: "human"',
         'item: "human"',
+        '"item-bank": "human"',
         'approval: "human"',
         'hwpx: "human"',
         'control: "engine"',

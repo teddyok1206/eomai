@@ -10,7 +10,13 @@ from eom_api.routers.curriculum import (
     integrated_science_editorial_outline,
     integrated_science_graph_capability,
 )
-from eom_api_contracts import AssessmentItemOccurrenceViewV2, CurriculumGraphCapabilityView
+from eom_api.routers.item_bank import item_bank_entries
+from eom_api_contracts import (
+    AssessmentItemOccurrenceViewV2,
+    CurriculumGraphCapabilityView,
+    ItemBankCurriculumUnitView,
+    ItemBankEntryView,
+)
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     IntegratedScienceEditorialOutline,
@@ -24,6 +30,7 @@ PATH = "/api/v1/curriculum/integrated-science-editorial-outline"
 CAPABILITY_PATH = "/api/v1/curriculum/integrated-science-graph-capability"
 EXAM_ITEMS_PATH = "/api/v1/curriculum/assessment-occurrences/items"
 UNIT_ITEMS_PATH = "/api/v1/curriculum/integrated-science-units/{curriculum_unit_id}/past-exam-items"
+ITEM_BANK_PATH = "/api/v1/item-bank/entries"
 
 
 def test_curriculum_outline_endpoint_is_authenticated_and_author_permissioned() -> None:
@@ -42,6 +49,9 @@ def test_curriculum_outline_endpoint_is_authenticated_and_author_permissioned() 
         unit_items_operation = app.openapi()["paths"][UNIT_ITEMS_PATH]["get"]
         assert unit_items_operation["operationId"] == "curriculum_unit_past_exam_item_list"
         assert unit_items_operation["x-eom-permission"] == "workflow:start"
+        item_bank_operation = app.openapi()["paths"][ITEM_BANK_PATH]["get"]
+        assert item_bank_operation["operationId"] == "item_bank_entry_list"
+        assert item_bank_operation["x-eom-permission"] == "item:read"
         with TestClient(app, base_url="http://localhost") as client:
             response = client.get(PATH)
         assert response.status_code == 401
@@ -175,6 +185,86 @@ def test_curriculum_item_routes_forward_exact_exam_and_unit_keys() -> None:
     }
     assert queries.unit_kwargs == {
         "curriculum_unit_id": unit_id,
+        "limit": 50,
+        "cursor": None,
+    }
+
+
+def test_item_bank_route_forwards_optional_graph_and_exam_filters() -> None:
+    entry = ItemBankEntryView(
+        graph_snapshot_revision_id="graphrev_" + "1" * 32,
+        snapshot_sha256="sha256:" + "2" * 64,
+        analysis_run_id="analysisrun_" + "3" * 32,
+        assessment_occurrence_id="occurrence_" + "4" * 32,
+        assessment_occurrence_revision_id="occurrev_" + "5" * 32,
+        assessment_occurrence_revision_sha256="sha256:" + "6" * 64,
+        occurrence_display_label="2025년 고1 6월 통합과학",
+        administration_year=2025,
+        administration_month=6,
+        target_school_level="HIGH_SCHOOL",
+        target_grade=1,
+        subject_key="integrated-science",
+        item_number=12,
+        item_id="item_" + "7" * 32,
+        item_revision_id="itemrev_" + "8" * 32,
+        item_revision_state="APPROVED",
+        item_type_key="multiple-choice",
+        difficulty_band=None,
+        item_manifest_sha256="sha256:" + "9" * 64,
+        curriculum_units=(
+            ItemBankCurriculumUnitView(
+                curriculum_unit_id="currunit_" + "a" * 32,
+                unit_key="eom.is.middle.3-3",
+                unit_code="3-(3)",
+                label="중력장 내의 운동",
+                unit_level="MINOR",
+                parent_unit_id="currunit_" + "b" * 32,
+            ),
+        ),
+        placement_sha256="sha256:" + "c" * 64,
+    )
+
+    class Queries:
+        kwargs: dict[str, object] | None = None
+
+        def item_bank_entries(self, **kwargs: object) -> SimpleNamespace:
+            self.kwargs = kwargs
+            return SimpleNamespace(data=(entry,), next_cursor="next", has_more=True)
+
+    queries = Queries()
+    request = cast(
+        Request,
+        SimpleNamespace(
+            state=SimpleNamespace(request_context=SimpleNamespace(request_id="req_item_bank")),
+            app=SimpleNamespace(state=SimpleNamespace(services=SimpleNamespace(queries=queries))),
+        ),
+    )
+    response = item_bank_entries(
+        request,
+        curriculum_unit_key="eom.is.middle.3-3",
+        administration_year=2025,
+        administration_month=6,
+        target_school_level="HIGH_SCHOOL",
+        target_grade=1,
+        assessment_occurrence_revision_id="occurrev_" + "5" * 32,
+        item_number=12,
+        item_type_key=None,
+        difficulty_band=None,
+        limit=50,
+        cursor=None,
+    )
+    assert response.data == (entry,)
+    assert response.page.has_more is True
+    assert queries.kwargs == {
+        "curriculum_unit_key": "eom.is.middle.3-3",
+        "administration_year": 2025,
+        "administration_month": 6,
+        "target_school_level": "HIGH_SCHOOL",
+        "target_grade": 1,
+        "assessment_occurrence_revision_id": "occurrev_" + "5" * 32,
+        "item_number": 12,
+        "item_type_key": None,
+        "difficulty_band": None,
         "limit": 50,
         "cursor": None,
     }

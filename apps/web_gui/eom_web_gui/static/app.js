@@ -31,6 +31,9 @@ const state = {
   hwpxPollTimer: null,
   hwpxRecentBuilds: [],
   recentItems: [],
+  itemBankEntries: [],
+  itemBankCursor: null,
+  itemBankQuery: "",
   acceptedIntakes: [],
   structuredSource: null,
   codexAccounts: [],
@@ -62,6 +65,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
   workflow: "engine",
   request: "human",
   item: "human",
+  "item-bank": "human",
   approval: "human",
   hwpx: "human",
   control: "engine",
@@ -368,6 +372,21 @@ function renderCurriculumOutline() {
   form.elements.curriculum_large_unit_key.value = state.curriculumSelection.large;
   form.elements.curriculum_middle_unit_key.value = state.curriculumSelection.middle;
   form.elements.curriculum_small_unit_key.value = state.curriculumSelection.small;
+  renderItemBankUnitOptions(units);
+}
+
+function renderItemBankUnitOptions(units) {
+  const select = $("#item-bank-unit");
+  const selected = select.value;
+  select.replaceChildren(new Option("전체 단원", ""));
+  const byKey = new Map(units.map((unit) => [unit.key, unit]));
+  for (const unit of units) {
+    const parent = unit.parent_key ? byKey.get(unit.parent_key) : null;
+    const prefix = unit.level === "LARGE" ? "대단원" : unit.level === "MIDDLE" ? "중단원" : "소단원";
+    const context = parent ? ` · ${parent.label}` : "";
+    select.append(new Option(`${prefix} ${unit.code} ${unit.label}${context}`, unit.key));
+  }
+  if (Array.from(select.options).some((option) => option.value === selected)) select.value = selected;
 }
 
 function setCurriculumSelection(selection) {
@@ -821,6 +840,135 @@ function installItemPreview() {
   $("#item-load").addEventListener("click", loadItemPreview);
   $("#recent-items-refresh").addEventListener("click", loadRecentItems);
   $("#recent-items").addEventListener("change", loadSelectedRecentItem);
+}
+
+function installItemBank() {
+  $("#item-bank-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    loadItemBank(true);
+  });
+  $("#item-bank-more").addEventListener("click", () => loadItemBank(false));
+}
+
+function itemBankFilterQuery() {
+  const query = new URLSearchParams();
+  const unit = $("#item-bank-unit").value;
+  const year = Number.parseInt($("#item-bank-year").value, 10);
+  const month = Number.parseInt($("#item-bank-month").value, 10);
+  const itemNumber = Number.parseInt($("#item-bank-number").value, 10);
+  if (unit) query.set("curriculum_unit_key", unit);
+  if (Number.isInteger(year)) query.set("administration_year", String(year));
+  if (Number.isInteger(month)) query.set("administration_month", String(month));
+  if (Number.isInteger(itemNumber)) query.set("item_number", String(itemNumber));
+  return query.toString();
+}
+
+async function loadItemBank(reset) {
+  const message = $("#item-bank-message");
+  if (reset) {
+    state.itemBankEntries = [];
+    state.itemBankCursor = null;
+    state.itemBankQuery = itemBankFilterQuery();
+    $("#item-bank-results").replaceChildren(Object.assign(document.createElement("p"), {
+      className: "empty-state",
+      textContent: "현재 Graph의 문항 포인터를 조회하고 있습니다.",
+    }));
+  }
+  const query = new URLSearchParams(state.itemBankQuery);
+  if (!reset && state.itemBankCursor) query.set("cursor", state.itemBankCursor);
+  $("#item-bank-more").disabled = true;
+  try {
+    const page = await api(`/item-bank/entries?${query.toString()}`);
+    const seen = new Set(state.itemBankEntries.map((entry) => entry.placement_sha256));
+    for (const entry of page.values) {
+      if (!seen.has(entry.placement_sha256)) {
+        state.itemBankEntries.push(entry);
+        seen.add(entry.placement_sha256);
+      }
+    }
+    state.itemBankCursor = page.next_cursor;
+    renderItemBank();
+    $("#item-bank-more").hidden = !page.has_more;
+    $("#item-bank-more").disabled = false;
+    setStatus($("#item-bank-badge"), "success", "✓", `${state.itemBankEntries.length}개 조회`);
+    showMessage(message, page.has_more ? "다음 문항을 이어서 조회할 수 있습니다." : "현재 조건의 문항을 모두 표시했습니다.", "success");
+  } catch (failure) {
+    $("#item-bank-more").disabled = false;
+    setStatus($("#item-bank-badge"), "danger", "!", "조회 실패");
+    showMessage(message, `문항은행 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+function renderItemBank() {
+  const root = $("#item-bank-results");
+  root.replaceChildren();
+  if (!state.itemBankEntries.length) {
+    root.append(Object.assign(document.createElement("p"), {
+      className: "empty-state",
+      textContent: "현재 조건에 맞는 Graph 문항이 없습니다.",
+    }));
+    return;
+  }
+  for (const entry of state.itemBankEntries) {
+    const card = document.createElement("article");
+    card.className = "item-bank-card";
+    const heading = document.createElement("header");
+    const title = document.createElement("div");
+    const eyebrow = document.createElement("small");
+    eyebrow.textContent = `${entry.administration_year}년 ${entry.administration_month}월 · 고${entry.target_grade}`;
+    const label = document.createElement("strong");
+    label.textContent = `${entry.occurrence_display_label} · ${entry.item_number}번`;
+    title.append(eyebrow, label);
+    const stateLabel = document.createElement("span");
+    stateLabel.className = "status-badge tone-success";
+    stateLabel.textContent = entry.item_revision_state === "APPROVED" ? "승인 문항" : "고정 과거 버전";
+    heading.append(title, stateLabel);
+    const units = document.createElement("div");
+    units.className = "item-bank-unit-list";
+    for (const unit of entry.curriculum_units) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "item-bank-unit-chip";
+      button.textContent = `${unit.unit_code} ${unit.label}`;
+      button.addEventListener("click", async () => {
+        $("#item-bank-unit").value = unit.unit_key;
+        await loadItemBank(true);
+      });
+      units.append(button);
+    }
+    const pointers = document.createElement("dl");
+    pointers.className = "item-bank-pointers";
+    for (const [name, value] of [
+      ["문항 버전", entry.item_revision_id],
+      ["시험지 버전", entry.assessment_occurrence_revision_id],
+      ["Graph snapshot", entry.graph_snapshot_revision_id],
+    ]) {
+      const term = document.createElement("dt");
+      const detail = document.createElement("dd");
+      term.textContent = name;
+      detail.textContent = value;
+      pointers.append(term, detail);
+    }
+    const actions = document.createElement("div");
+    actions.className = "form-actions";
+    actions.append(
+      actionButton("완성 문항 보기", async () => {
+        $("#item-id").value = entry.item_id;
+        $("#revision-id").value = entry.item_revision_id;
+        showView("item");
+        await loadItemPreview();
+      }),
+      actionButton("같은 시험지 문항", async () => {
+        $("#item-bank-unit").value = "";
+        $("#item-bank-year").value = String(entry.administration_year);
+        $("#item-bank-month").value = String(entry.administration_month);
+        $("#item-bank-number").value = "";
+        await loadItemBank(true);
+      }, true),
+    );
+    card.append(heading, units, pointers, actions);
+    root.append(card);
+  }
 }
 
 async function loadRecentItems() {
@@ -2627,6 +2775,7 @@ async function boot() {
   installWorkflow();
   installApproval();
   installItemPreview();
+  installItemBank();
   installStructuredImport();
   installHwpx();
   installControlPlane();

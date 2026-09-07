@@ -491,6 +491,78 @@ async def test_gateway_keeps_curriculum_classification_when_capability_is_unavai
 
 
 @pytest.mark.anyio
+async def test_gateway_validates_item_bank_page_and_forwards_graph_filters() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/item-bank/entries"
+        assert request.url.params["curriculum_unit_key"] == "eom.is.middle.3-3"
+        assert request.url.params["administration_year"] == "2025"
+        assert request.url.params["administration_month"] == "6"
+        assert request.url.params["target_school_level"] == "HIGH_SCHOOL"
+        assert request.url.params["target_grade"] == "1"
+        assert request.url.params["item_number"] == "12"
+        return httpx.Response(
+            200,
+            json=_list(
+                [
+                    {
+                        "schema_version": "item-bank-entry-view/1.0",
+                        "graph_snapshot_revision_id": "graphrev_" + "1" * 32,
+                        "snapshot_sha256": "sha256:" + "2" * 64,
+                        "analysis_run_id": "analysisrun_" + "3" * 32,
+                        "assessment_occurrence_id": "occurrence_" + "4" * 32,
+                        "assessment_occurrence_revision_id": "occurrev_" + "5" * 32,
+                        "assessment_occurrence_revision_sha256": "sha256:" + "6" * 64,
+                        "occurrence_display_label": "2025년 고1 6월 통합과학",
+                        "administration_year": 2025,
+                        "administration_month": 6,
+                        "target_school_level": "HIGH_SCHOOL",
+                        "target_grade": 1,
+                        "subject_key": "integrated-science",
+                        "item_number": 12,
+                        "item_id": "item_" + "7" * 32,
+                        "item_revision_id": "itemrev_" + "8" * 32,
+                        "item_revision_state": "APPROVED",
+                        "item_type_key": "multiple-choice",
+                        "difficulty_band": None,
+                        "item_manifest_sha256": "sha256:" + "9" * 64,
+                        "curriculum_units": [
+                            {
+                                "curriculum_unit_id": "currunit_" + "a" * 32,
+                                "unit_key": "eom.is.middle.3-3",
+                                "unit_code": "3-(3)",
+                                "label": "중력장 내의 운동",
+                                "unit_level": "MINOR",
+                                "parent_unit_id": "currunit_" + "b" * 32,
+                            }
+                        ],
+                        "placement_sha256": "sha256:" + "c" * 64,
+                    }
+                ]
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    page = await gateway.item_bank_entries(
+        _session(),
+        curriculum_unit_key="eom.is.middle.3-3",
+        administration_year=2025,
+        administration_month=6,
+        item_number=12,
+        cursor=None,
+    )
+    assert page.values[0].item_revision_id == "itemrev_" + "8" * 32
+    assert page.values[0].curriculum_units[0].label == "중력장 내의 운동"
+    assert page.has_more is False
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_gateway_accepts_complete_application_hwpx_build_view() -> None:
     build_id = "hwpxbuild_" + "1" * 32
 

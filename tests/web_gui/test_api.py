@@ -276,6 +276,32 @@ def test_curriculum_outline_is_authenticated_and_reviewed() -> None:
         assert all(unit["level"] != "SMALL" for unit in units)
 
 
+def test_graph_item_bank_is_authenticated_and_keeps_exam_unit_pointers() -> None:
+    client, _ = make_client()
+    with client:
+        assert client.get("/studio/api/v1/item-bank/entries").status_code == 401
+        login(client)
+        response = client.get(
+            "/studio/api/v1/item-bank/entries",
+            params={
+                "curriculum_unit_key": "eom.is.middle.3-3",
+                "administration_year": 2025,
+                "administration_month": 6,
+                "item_number": 12,
+            },
+        )
+        assert response.status_code == 200
+        page = response.json()
+        assert page["has_more"] is False
+        assert page["next_cursor"] is None
+        assert len(page["values"]) == 1
+        item = page["values"][0]
+        assert item["item_number"] == 12
+        assert item["item_revision_state"] == "APPROVED"
+        assert item["curriculum_units"][0]["unit_key"] == "eom.is.middle.3-3"
+        assert item["graph_snapshot_revision_id"].startswith("graphrev_")
+
+
 def test_workflow_timeline_approval_etag_and_item_preview() -> None:
     client, gateway = make_client()
     with client:

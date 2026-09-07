@@ -20,6 +20,8 @@ from eom_web_gui.contracts import (
     HwpxBuildRequest,
     HwpxBuildView,
     HwpxCapability,
+    ItemBankCurriculumUnit,
+    ItemBankEntry,
     ItemPreview,
     KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
@@ -37,6 +39,7 @@ from eom_web_gui.contracts import (
 from eom_web_gui.gateways import (
     GatewayError,
     HwpxDownload,
+    ItemBankPage,
     ItemMedia,
     KnowledgeAnalysisRangePage,
     LoginResult,
@@ -752,6 +755,60 @@ class FakeGateway:
                 updated_at=NOW,
             ),
         )
+
+    async def item_bank_entries(
+        self,
+        session: WebSession,
+        *,
+        curriculum_unit_key: str | None,
+        administration_year: int | None,
+        administration_month: int | None,
+        item_number: int | None,
+        cursor: str | None,
+    ) -> ItemBankPage:
+        del session, cursor
+        entry = ItemBankEntry(
+            schema_version="item-bank-entry-view/1.0",
+            graph_snapshot_revision_id="graphrev_" + "1" * 32,
+            snapshot_sha256="sha256:" + "2" * 64,
+            analysis_run_id="analysisrun_" + "3" * 32,
+            assessment_occurrence_id="occurrence_" + "4" * 32,
+            assessment_occurrence_revision_id="occurrev_" + "5" * 32,
+            assessment_occurrence_revision_sha256="sha256:" + "6" * 64,
+            occurrence_display_label="2025년 고1 6월 통합과학",
+            administration_year=2025,
+            administration_month=6,
+            target_school_level="HIGH_SCHOOL",
+            target_grade=1,
+            subject_key="integrated-science",
+            item_number=12,
+            item_id="item_" + "7" * 32,
+            item_revision_id="itemrev_" + "8" * 32,
+            item_revision_state="APPROVED",
+            item_type_key="multiple-choice",
+            difficulty_band=None,
+            item_manifest_sha256="sha256:" + "9" * 64,
+            curriculum_units=(
+                ItemBankCurriculumUnit(
+                    curriculum_unit_id="currunit_" + "a" * 32,
+                    unit_key="eom.is.middle.3-3",
+                    unit_code="3-(3)",
+                    label="중력장 내의 운동",
+                    unit_level="MINOR",
+                    parent_unit_id="currunit_" + "b" * 32,
+                ),
+            ),
+            placement_sha256="sha256:" + "c" * 64,
+        )
+        if curriculum_unit_key not in {None, "eom.is.middle.3-3"}:
+            return ItemBankPage((), None, False)
+        if administration_year not in {None, entry.administration_year}:
+            return ItemBankPage((), None, False)
+        if administration_month not in {None, entry.administration_month}:
+            return ItemBankPage((), None, False)
+        if item_number not in {None, entry.item_number}:
+            return ItemBankPage((), None, False)
+        return ItemBankPage((entry,), None, False)
 
     async def assessment_learning_exams(
         self, session: WebSession, batch_id: str

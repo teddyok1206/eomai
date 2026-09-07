@@ -456,7 +456,8 @@ def test_release_verifies_curriculum_schema_resources() -> None:
 def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
-    assert "len(schemas) != 13" in deployment
+    assert "len(schemas) != 14" in deployment
+    assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"' in deployment

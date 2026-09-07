@@ -33,6 +33,7 @@ from eom_api_contracts.hwpx import (
     HwpxSupports,
     HwpxValidationState,
 )
+from eom_api_contracts.item_bank import ItemBankCurriculumUnitView, ItemBankEntryView
 from eom_api_contracts.knowledge_analysis import (
     ApprovedItemAnalysisSourceInput,
     ContentIntakeAnalysisSourceInput,
@@ -85,6 +86,8 @@ __all__ = [
     "HwpxDeliveryProfile",
     "HwpxSupports",
     "HwpxValidationState",
+    "ItemBankCurriculumUnitView",
+    "ItemBankEntryView",
     "KnowledgeAnalysisBatchRangeView",
     "KnowledgeAnalysisBatchView",
     "KnowledgeAnalysisCountsView",

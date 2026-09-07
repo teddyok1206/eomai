@@ -224,11 +224,12 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         if name.startswith("eom_api_contracts/schemas/") and name.endswith(".schema.json")
     ]
     if (
-        len(schemas) != 13
+        len(schemas) != 14
         or "eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"
         not in schemas
         or "eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"
         not in schemas
+        or "eom_api_contracts/schemas/item-bank-entry-v1.schema.json" not in schemas
         or "eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"
         not in schemas
         or "eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json"

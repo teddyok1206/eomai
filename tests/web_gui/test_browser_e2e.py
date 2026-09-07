@@ -18,6 +18,8 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "문항 제작 진행",
             "문항 요청 초안",
             "완성 문항",
+            "Graph 문항은행",
+            "시험지 ↔ 문항 ↔ 교육과정 Graph",
             "문항 검토 승인",
             "HWPX 제작 및 다운로드",
             "기존 제작 결과 불러오기",

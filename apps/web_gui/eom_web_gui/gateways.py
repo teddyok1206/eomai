@@ -28,6 +28,7 @@ from eom_web_gui.contracts import (
     HwpxBuildRequest,
     HwpxBuildView,
     HwpxCapability,
+    ItemBankEntry,
     ItemPreview,
     KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
@@ -170,6 +171,13 @@ class KnowledgeAnalysisRangePage:
     has_more: bool
 
 
+@dataclass(frozen=True)
+class ItemBankPage:
+    values: tuple[ItemBankEntry, ...]
+    next_cursor: str | None
+    has_more: bool
+
+
 class ApplicationGateway(Protocol):
     async def health(self) -> dict[str, str]: ...
 
@@ -218,6 +226,17 @@ class ApplicationGateway(Protocol):
     ) -> ItemMedia: ...
 
     async def recent_items(self, session: WebSession) -> tuple[RecentItemOption, ...]: ...
+
+    async def item_bank_entries(
+        self,
+        session: WebSession,
+        *,
+        curriculum_unit_key: str | None,
+        administration_year: int | None,
+        administration_month: int | None,
+        item_number: int | None,
+        cursor: str | None,
+    ) -> ItemBankPage: ...
 
     async def import_structured_item(
         self, session: WebSession, value: StructuredItemImportRequest
@@ -1168,6 +1187,53 @@ class HttpApplicationGateway:
                 if isinstance(value, dict) and value.get("current_revision_id") is not None
             )
         except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def item_bank_entries(
+        self,
+        session: WebSession,
+        *,
+        curriculum_unit_key: str | None,
+        administration_year: int | None,
+        administration_month: int | None,
+        item_number: int | None,
+        cursor: str | None,
+    ) -> ItemBankPage:
+        params: dict[str, str | int | float | bool | None] = {
+            "curriculum_unit_key": curriculum_unit_key,
+            "administration_year": administration_year,
+            "administration_month": administration_month,
+            "target_school_level": "HIGH_SCHOOL",
+            "target_grade": 1,
+            "item_number": item_number,
+            "limit": 50,
+            "cursor": cursor,
+        }
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/item-bank/entries",
+            params=params,
+        )
+        document = response.json()
+        values = document.get("data") if isinstance(document, dict) else None
+        page = document.get("page") if isinstance(document, dict) else None
+        if (
+            not isinstance(values, list)
+            or not all(isinstance(value, dict) for value in values)
+            or not isinstance(page, dict)
+            or not isinstance(page.get("has_more"), bool)
+            or (page.get("next_cursor") is not None and not isinstance(page["next_cursor"], str))
+            or (page["has_more"] and not page.get("next_cursor"))
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        try:
+            return ItemBankPage(
+                values=tuple(ItemBankEntry.model_validate(value) for value in values),
+                next_cursor=page.get("next_cursor"),
+                has_more=page["has_more"],
+            )
+        except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def item_media(
