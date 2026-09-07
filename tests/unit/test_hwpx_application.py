@@ -6,9 +6,15 @@ import stat
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from eom_catalog_contracts import MockExamAssemblyManifestV1
+from eom_hwpx_contracts import (
+    CONTENT_TEAM_HANDOFF_MEMBERS,
+    ContentTeamHandoffMember,
+    ContentTeamHandoffSnapshot,
+)
 from eom_hwpx_manager import capability as capability_module
 from eom_hwpx_manager import runner
 from eom_hwpx_manager.application_adapter import (
@@ -25,7 +31,9 @@ from eom_hwpx_manager.application_state import (
     require_application_transition,
 )
 from eom_hwpx_manager.capability import HwpxCapabilityService
+from eom_hwpx_manager.content_team_service import ArtifactMemberPointer, ContentTeamHwpxService
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
+from eom_hwpx_manager.exam_application_service import ExamHwpxApplicationService
 from eom_hwpx_manager.markdown_structure import inspect_markdown_structure
 from eom_hwpx_manager.settings import HwpxSettings
 from eom_identifiers import sha256_file
@@ -349,6 +357,143 @@ def test_runner_returns_sanitized_failure_without_traceback(
     assert "HWPX_KORDOC_SOURCE_INVALID" in captured.err
     assert "SECRET_SOURCE_PATH" not in captured.err
     assert "Traceback" not in captured.err
+
+
+def test_runner_processes_assessment_queue_after_item_queue_is_idle(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class FakeEngine:
+        def dispose(self) -> None:
+            pass
+
+    class IdleItemService:
+        def __init__(self, _engine: object, **_kwargs: object) -> None:
+            pass
+
+        @staticmethod
+        def process_next() -> None:
+            return None
+
+    class AssessmentService:
+        def __init__(self, _engine: object, **_kwargs: object) -> None:
+            pass
+
+        @staticmethod
+        def process_next() -> SimpleNamespace:
+            return SimpleNamespace(build_id="hwpxbuild_" + "1" * 32, state="SUCCEEDED")
+
+    monkeypatch.setattr(runner, "build_engine", FakeEngine)
+    monkeypatch.setattr(runner, "_runtime_privileges_ready", lambda _engine: True)
+    monkeypatch.setattr(runner, "_runtime_staging_ready", lambda _path: True)
+    monkeypatch.setattr(runner, "RegistryService", lambda _engine: object())
+    monkeypatch.setattr(runner, "HwpxApplicationService", IdleItemService)
+    monkeypatch.setattr(runner, "ExamHwpxApplicationService", AssessmentService)
+
+    assert runner.run_once() == 0
+    assert "hwpxbuild_" + "1" * 32 + ":SUCCEEDED" in capsys.readouterr().out
+
+
+def test_assessment_build_request_identity_pins_content_team_handoff_revision() -> None:
+    placement = SimpleNamespace(
+        position=1,
+        placement_id="placement_" + "1" * 32,
+        item_id="item_" + "2" * 32,
+        item_revision_id="itemrev_" + "3" * 32,
+        item_manifest_sha256="sha256:" + "4" * 64,
+    )
+    manifest = SimpleNamespace(
+        assessment_assembly_revision_id="assemblyrev_" + "5" * 32,
+        manifest_sha256="sha256:" + "6" * 64,
+        policy_revision_id="assemblypolicyrev_" + "7" * 32,
+        policy_sha256="sha256:" + "8" * 64,
+        graph_snapshot_revision_id="graphrev_" + "9" * 32,
+        graph_snapshot_sha256="sha256:" + "a" * 64,
+        placements=(placement,),
+    )
+    handoff = ContentTeamHandoffSnapshot(
+        artifact_id="artifact_" + "b" * 32,
+        artifact_revision_id="rev_" + "c" * 32,
+        members=tuple(
+            ContentTeamHandoffMember(purpose=purpose, sha256=sha256, size=size)
+            for purpose, sha256, size in CONTENT_TEAM_HANDOFF_MEMBERS
+        ),
+    )
+
+    typed_manifest = cast(MockExamAssemblyManifestV1, manifest)
+    admitted = ExamHwpxApplicationService._request_sha256(typed_manifest, handoff)
+    changed = ExamHwpxApplicationService._request_sha256(
+        typed_manifest,
+        handoff.model_copy(update={"artifact_revision_id": "rev_" + "d" * 32}),
+    )
+
+    assert admitted != changed
+
+
+def test_content_team_batch_member_resolver_uses_two_indexed_queries(tmp_path: Path) -> None:
+    files: list[Path] = []
+    artifacts: list[SimpleNamespace] = []
+    revisions: list[SimpleNamespace] = []
+    pointers: list[ArtifactMemberPointer] = []
+    for index in (1, 2):
+        root = tmp_path / str(index)
+        root.mkdir()
+        member = root / f"member-{index}.json"
+        member.write_text(f'{{"index":{index}}}', encoding="utf-8")
+        digest = sha256_file(member)
+        artifact_id = f"artifact_{index:032x}"
+        revision_id = f"rev_{index:032x}"
+        files.append(member)
+        artifacts.append(SimpleNamespace(logical_artifact_id=artifact_id, approved=True))
+        revisions.append(
+            SimpleNamespace(
+                revision_id=revision_id,
+                logical_artifact_id=artifact_id,
+                approved=True,
+                nas_path=str(root),
+                manifest={
+                    "files": [
+                        {
+                            "file_name": member.name,
+                            "sha256": digest,
+                            "media_type": "application/json",
+                            "schema_ref": "eom.test/member/1.0",
+                            "bytes": member.stat().st_size,
+                        }
+                    ]
+                },
+            )
+        )
+        pointers.append(
+            ArtifactMemberPointer(
+                artifact_id=artifact_id,
+                revision_id=revision_id,
+                member_name=member.name,
+                expected_sha256=digest,
+                media_type="application/json",
+                schema_ref="eom.test/member/1.0",
+                max_bytes=1024,
+            )
+        )
+
+    class BatchSession:
+        calls = 0
+
+        def __enter__(self) -> BatchSession:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            pass
+
+        def scalars(self, _statement: object) -> tuple[SimpleNamespace, ...]:
+            self.calls += 1
+            return tuple(artifacts if self.calls == 1 else revisions)
+
+    session = BatchSession()
+    service = object.__new__(ContentTeamHwpxService)
+    service.sessions = lambda: session  # type: ignore[assignment]
+
+    assert service._resolve_members(tuple(pointers)) == tuple(files)
+    assert session.calls == 2
 
 
 def test_runner_fails_closed_before_queue_access_when_manager_privileges_are_missing(

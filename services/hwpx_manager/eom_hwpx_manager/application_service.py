@@ -75,6 +75,10 @@ class ItemRevisionResolver(Protocol):
 
     def inspect_revision(self, item_revision_id: str) -> dict[str, Any]: ...
 
+    def inspect_revisions(
+        self, item_revision_ids: tuple[str, ...]
+    ) -> tuple[dict[str, Any], ...]: ...
+
     def inspect_item(self, item_id: str) -> dict[str, Any]: ...
 
 

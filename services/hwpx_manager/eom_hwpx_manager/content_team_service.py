@@ -80,6 +80,19 @@ class ContentTeamBuildReceipt:
     native_table_count: int
 
 
+@dataclass(frozen=True)
+class ArtifactMemberPointer:
+    """Small immutable pointer used for indexed batch resolution of artifact members."""
+
+    artifact_id: str
+    revision_id: str
+    member_name: str
+    expected_sha256: str
+    media_type: str
+    schema_ref: str
+    max_bytes: int
+
+
 class ContentTeamHwpxService:
     """Resolve pinned members, run the isolated renderer, then commit validated HWPX."""
 
@@ -336,11 +349,22 @@ class ContentTeamHwpxService:
             schema_ref=ITEM_SCHEMA_REF,
             max_bytes=MAX_ITEM_JSON_BYTES,
         )
+        if source_path != canonical:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                "content-team source path differs from its canonical artifact member",
+            )
+        return self._load_resolved_content(source_path, source)
+
+    @staticmethod
+    def _load_resolved_content(
+        source_path: Path,
+        source: ContentTeamItemSource,
+    ) -> AssessmentItemContentV2:
         try:
             metadata = source_path.lstat()
             if (
-                source_path != canonical
-                or not stat.S_ISREG(metadata.st_mode)
+                not stat.S_ISREG(metadata.st_mode)
                 or source_path.is_symlink()
                 or metadata.st_size > MAX_ITEM_JSON_BYTES
                 or sha256_file(source_path) != source.json_sha256
@@ -362,6 +386,28 @@ class ContentTeamHwpxService:
         image_sources: tuple[ContentTeamImageSource, ...],
         content: AssessmentItemContentV2,
     ) -> tuple[tuple[ContentTeamImageSource, Path], ...]:
+        self._validate_image_sources(image_sources, content)
+        return tuple(
+            (
+                image,
+                self._resolve_member(
+                    image.artifact_id,
+                    image.artifact_revision_id,
+                    image.artifact_member,
+                    image.sha256,
+                    media_type=image.media_type,
+                    schema_ref=image.schema_ref,
+                    max_bytes=MAX_IMAGE_BYTES,
+                ),
+            )
+            for image in image_sources
+        )
+
+    @staticmethod
+    def _validate_image_sources(
+        image_sources: tuple[ContentTeamImageSource, ...],
+        content: AssessmentItemContentV2,
+    ) -> None:
         slots = tuple(
             (ordinal, visual.label)
             for ordinal, visual in enumerate(content.visuals)
@@ -372,7 +418,6 @@ class ContentTeamHwpxService:
                 HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
                 "content-team image components differ from editorial slots",
             )
-        resolved: list[tuple[ContentTeamImageSource, Path]] = []
         for image, (ordinal, label) in zip(image_sources, slots, strict=True):
             if (
                 image.visual_ordinal != ordinal
@@ -387,17 +432,6 @@ class ContentTeamHwpxService:
                     HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
                     "content-team image component is stale or malformed",
                 )
-            path = self._resolve_member(
-                image.artifact_id,
-                image.artifact_revision_id,
-                image.artifact_member,
-                image.sha256,
-                media_type=image.media_type,
-                schema_ref=image.schema_ref,
-                max_bytes=MAX_IMAGE_BYTES,
-            )
-            resolved.append((image, path))
-        return tuple(resolved)
 
     def _resolve_member(
         self,
@@ -410,44 +444,102 @@ class ContentTeamHwpxService:
         schema_ref: str,
         max_bytes: int,
     ) -> Path:
-        relative = Path(member_name)
-        if relative.is_absolute() or ".." in relative.parts or "\\" in member_name:
+        pointer = ArtifactMemberPointer(
+            artifact_id=artifact_id,
+            revision_id=revision_id,
+            member_name=member_name,
+            expected_sha256=expected_sha256,
+            media_type=media_type,
+            schema_ref=schema_ref,
+            max_bytes=max_bytes,
+        )
+        with self.sessions() as session:
+            artifact = session.get(ArtifactRecord, artifact_id)
+            revision = session.get(ArtifactRevisionRecord, revision_id)
+        return self._materialized_member_path(pointer, artifact, revision)
+
+    def _resolve_members(
+        self,
+        pointers: tuple[ArtifactMemberPointer, ...],
+    ) -> tuple[Path, ...]:
+        """Resolve an ordered pointer set with exactly two indexed database queries."""
+
+        if not pointers:
+            return ()
+        artifact_ids = {pointer.artifact_id for pointer in pointers}
+        revision_ids = {pointer.revision_id for pointer in pointers}
+        with self.sessions() as session:
+            artifacts = {
+                artifact.logical_artifact_id: artifact
+                for artifact in session.scalars(
+                    select(ArtifactRecord).where(
+                        ArtifactRecord.logical_artifact_id.in_(artifact_ids)
+                    )
+                )
+            }
+            revisions = {
+                revision.revision_id: revision
+                for revision in session.scalars(
+                    select(ArtifactRevisionRecord).where(
+                        ArtifactRevisionRecord.revision_id.in_(revision_ids)
+                    )
+                )
+            }
+        if len(artifacts) != len(artifact_ids) or len(revisions) != len(revision_ids):
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                "artifact member pointer set is incomplete",
+            )
+        return tuple(
+            self._materialized_member_path(
+                pointer,
+                artifacts.get(pointer.artifact_id),
+                revisions.get(pointer.revision_id),
+            )
+            for pointer in pointers
+        )
+
+    @staticmethod
+    def _materialized_member_path(
+        pointer: ArtifactMemberPointer,
+        artifact: ArtifactRecord | None,
+        revision: ArtifactRevisionRecord | None,
+    ) -> Path:
+        relative = Path(pointer.member_name)
+        if relative.is_absolute() or ".." in relative.parts or "\\" in pointer.member_name:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
                 "artifact member pointer is unsafe",
             )
-        with self.sessions() as session:
-            artifact = session.get(ArtifactRecord, artifact_id)
-            revision = session.get(ArtifactRevisionRecord, revision_id)
-            files = revision.manifest.get("files") if revision is not None else None
-            entries = (
-                [
-                    entry
-                    for entry in files
-                    if isinstance(entry, dict) and entry.get("file_name") == member_name
-                ]
-                if isinstance(files, list)
-                else []
+        files = revision.manifest.get("files") if revision is not None else None
+        entries = (
+            [
+                entry
+                for entry in files
+                if isinstance(entry, dict) and entry.get("file_name") == pointer.member_name
+            ]
+            if isinstance(files, list)
+            else []
+        )
+        if (
+            artifact is None
+            or revision is None
+            or not artifact.approved
+            or not revision.approved
+            or revision.logical_artifact_id != pointer.artifact_id
+            or len(entries) != 1
+            or entries[0].get("sha256") != pointer.expected_sha256
+            or entries[0].get("media_type") != pointer.media_type
+            or entries[0].get("schema_ref") != pointer.schema_ref
+            or not isinstance(entries[0].get("bytes"), int)
+            or not 0 < entries[0]["bytes"] <= pointer.max_bytes
+        ):
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                "artifact member pointer is stale or invalid",
             )
-            if (
-                artifact is None
-                or revision is None
-                or not artifact.approved
-                or not revision.approved
-                or revision.logical_artifact_id != artifact_id
-                or len(entries) != 1
-                or entries[0].get("sha256") != expected_sha256
-                or entries[0].get("media_type") != media_type
-                or entries[0].get("schema_ref") != schema_ref
-                or not isinstance(entries[0].get("bytes"), int)
-                or not 0 < entries[0]["bytes"] <= max_bytes
-            ):
-                raise HwpxManagerError(
-                    HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
-                    "artifact member pointer is stale or invalid",
-                )
-            root = Path(revision.nas_path)
-            expected_size = entries[0]["bytes"]
+        root = Path(revision.nas_path)
+        expected_size = entries[0]["bytes"]
         candidate = root / relative
         current = root
         try:
@@ -464,7 +556,7 @@ class ContentTeamHwpxService:
                 not stat.S_ISREG(metadata.st_mode)
                 or candidate.resolve(strict=True).parent != resolved_root
                 or metadata.st_size != expected_size
-                or sha256_file(candidate) != expected_sha256
+                or sha256_file(candidate) != pointer.expected_sha256
             ):
                 raise ValueError("artifact member materialization differs")
         except (OSError, ValueError) as exc:

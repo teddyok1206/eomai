@@ -15,6 +15,9 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "artifact_revisions",
     "artifacts",
     "hwpx_application_builds",
+    "hwpx_assessment_assembly_builds",
+    "assessment_assemblies",
+    "assessment_assembly_revisions",
     "item_components",
     "item_revisions",
     "items",
@@ -33,6 +36,7 @@ INSERT_TABLES: Final[tuple[str, ...]] = (
 
 UPDATE_TABLES: Final[tuple[str, ...]] = (
     "hwpx_application_builds",
+    "hwpx_assessment_assembly_builds",
     "jobs",
 )
 

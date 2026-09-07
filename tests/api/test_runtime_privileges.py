@@ -26,6 +26,9 @@ def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
     assert "hwpx_application_builds" in READ_TABLES
     assert "hwpx_application_builds" in INSERT_TABLES
     assert "hwpx_application_builds" in UPDATE_TABLES
+    assert "hwpx_assessment_assembly_builds" in READ_TABLES
+    assert "hwpx_assessment_assembly_builds" in INSERT_TABLES
+    assert "hwpx_assessment_assembly_builds" in UPDATE_TABLES
     # The private Catalog application process reuses the DB-only API runtime role
     # and must resolve the logical Artifact row for pinned media pointers.  This
     # remains metadata read-only; artifact registration stays outside the API.

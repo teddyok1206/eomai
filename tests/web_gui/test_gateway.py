@@ -7,7 +7,12 @@ from pathlib import Path
 
 import httpx
 import pytest
-from eom_web_gui.contracts import ExplorerEntity, ExplorerQuery, HwpxBuildRequest
+from eom_web_gui.contracts import (
+    ExplorerEntity,
+    ExplorerQuery,
+    HwpxBuildRequest,
+    MockExamHwpxBuildRequest,
+)
 from eom_web_gui.gateways import GatewayError, HttpApplicationGateway
 from eom_web_gui.sessions import ApiTokens, WebSession
 
@@ -635,6 +640,84 @@ async def test_gateway_requests_revision_derived_hwpx_profile_without_shape_requ
     )
 
     await gateway.create_hwpx_build(_session(), value)
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_gateway_uses_pinned_assembly_for_whole_exam_hwpx() -> None:
+    assembly_revision_id = "assemblyrev_" + "1" * 32
+    build_id = "hwpxbuild_" + "2" * 32
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if request.method == "POST":
+            assert request.url.path == (
+                f"/api/v1/assessment-assembly-revisions/{assembly_revision_id}/hwpx-builds"
+            )
+            assert request.headers["idempotency-key"] == "studio:mock-exam-hwpx:test"
+            assert json.loads(request.read()) == {
+                "renderer": "content-team-exam",
+                "include_explanation": True,
+            }
+            return httpx.Response(
+                202,
+                json=_single(
+                    {
+                        "command_id": "hwpxcmd_" + "2" * 32,
+                        "resource_type": "assessment_hwpx_build",
+                        "resource_id": build_id,
+                        "status": "ACCEPTED",
+                        "resource_version": 1,
+                        "status_url": f"/api/v1/assessment-hwpx-builds/{build_id}",
+                    }
+                ),
+            )
+        assert request.url.path == f"/api/v1/assessment-hwpx-builds/{build_id}"
+        return httpx.Response(
+            200,
+            json=_single(
+                {
+                    "build_id": build_id,
+                    "assessment_assembly_revision_id": assembly_revision_id,
+                    "assembly_manifest_sha256": "sha256:" + "3" * 64,
+                    "item_set_sha256": "sha256:" + "4" * 64,
+                    "state": "SUCCEEDED",
+                    "validation_state": "PASS",
+                    "item_count": 25,
+                    "section_count": 25,
+                    "native_equation_count": 20,
+                    "native_table_count": 8,
+                    "visual_count": 11,
+                    "output_artifact_revision_id": "rev_" + "5" * 32,
+                    "output_sha256": "sha256:" + "6" * 64,
+                    "download_available": True,
+                    "failure_code": None,
+                    "completed_at": NOW.isoformat(),
+                    "resource_version": 3,
+                }
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    await gateway.create_mock_exam_hwpx_build(
+        _session(),
+        MockExamHwpxBuildRequest(
+            assessment_assembly_revision_id=assembly_revision_id,
+            idempotency_key="studio:mock-exam-hwpx:test",
+        ),
+    )
+    value = await gateway.mock_exam_hwpx_build(_session(), build_id)
+    assert value.item_count == value.section_count == 25
+    assert value.visual_count == 11
+    assert calls == 2
     await gateway.close()
 
 

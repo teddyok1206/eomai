@@ -16,9 +16,10 @@ from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_engine
 from sqlalchemy import Engine
 
-from eom_hwpx_manager.application_service import HwpxApplicationService
+from eom_hwpx_manager.application_service import HwpxApplicationService, SecureHwpxDownload
 from eom_hwpx_manager.download_server import HwpxDownloadServer
-from eom_hwpx_manager.errors import HwpxManagerError
+from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
+from eom_hwpx_manager.exam_application_service import ExamHwpxApplicationService
 from eom_hwpx_manager.runtime_privileges import manager_runtime_privileges_ready
 from eom_hwpx_manager.settings import HwpxSettings
 
@@ -68,14 +69,19 @@ def run_once(*, verify_privileges: bool = True) -> int:
                 file=sys.stderr,
             )
             return 1
-        record = HwpxApplicationService(
+        registry = RegistryService(engine)
+        item_record = HwpxApplicationService(
             engine,
-            registry=RegistryService(engine),
+            registry=registry,
         ).process_next()
-        if record is None:
+        if item_record is not None:
+            print(f"hwpx_application_build={item_record.build_id}:{item_record.state}")
+            return 0
+        exam_record = ExamHwpxApplicationService(engine, registry=registry).process_next()
+        if exam_record is None:
             print("hwpx_application_build=IDLE")
             return 2
-        print(f"hwpx_application_build={record.build_id}:{record.state}")
+        print(f"hwpx_application_build={exam_record.build_id}:{exam_record.state}")
         return 0
     except HwpxManagerError as exc:
         print(
@@ -113,12 +119,20 @@ def serve(interval_seconds: float) -> int:
                 file=sys.stderr,
             )
             return 1
-        download_server = HwpxDownloadServer(
-            HwpxApplicationService(
-                download_engine,
-                registry=RegistryService(download_engine),
-            )
-        )
+        registry = RegistryService(download_engine)
+        item_service = HwpxApplicationService(download_engine, registry=registry)
+        exam_service = ExamHwpxApplicationService(download_engine, registry=registry)
+
+        class DownloadResolver:
+            def secure_download(self, build_id: str) -> SecureHwpxDownload:
+                try:
+                    return item_service.secure_download(build_id)
+                except HwpxManagerError as exc:
+                    if exc.code is not HwpxManagerErrorCode.HWPX_APPLICATION_BUILD_NOT_FOUND:
+                        raise
+                return exam_service.secure_download(build_id)
+
+        download_server = HwpxDownloadServer(DownloadResolver())
         server_thread = threading.Thread(
             target=download_server.serve_forever,
             name="eom-hwpx-download",

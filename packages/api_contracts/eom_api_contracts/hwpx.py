@@ -116,6 +116,59 @@ class CreateHwpxBuildRequest(ApiModel):
         return self
 
 
+class CreateAssessmentHwpxBuildRequest(ApiModel):
+    renderer: Literal["content-team-exam"] = "content-team-exam"
+    include_explanation: Literal[True] = True
+
+
+class AssessmentHwpxBuildView(ApiModel):
+    build_id: OpaqueId
+    assessment_assembly_id: OpaqueId
+    assessment_assembly_revision_id: OpaqueId
+    assembly_manifest_sha256: Sha256
+    policy_revision_id: OpaqueId
+    policy_sha256: Sha256
+    graph_snapshot_revision_id: OpaqueId
+    graph_snapshot_sha256: Sha256
+    item_set_sha256: Sha256
+    renderer: Literal["content-team-exam"]
+    renderer_version: Literal["1.0.0"]
+    state: HwpxBuildState
+    validation_state: HwpxValidationState
+    item_count: int = Field(ge=1, le=200)
+    section_count: int | None = Field(default=None, ge=0, le=200)
+    native_equation_count: int | None = Field(default=None, ge=0, le=25600)
+    native_table_count: int | None = Field(default=None, ge=0, le=4000)
+    visual_count: int | None = Field(default=None, ge=0, le=400)
+    output_artifact_id: OpaqueId | None = None
+    output_artifact_revision_id: OpaqueId | None = None
+    output_sha256: Sha256 | None = None
+    download_available: bool
+    failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{0,79}$")
+    failure_detail_sanitized: str | None = Field(default=None, max_length=500)
+    created_by_operator_id: OpaqueId
+    created_at: UtcDatetime
+    started_at: UtcDatetime | None = None
+    completed_at: UtcDatetime | None = None
+    resource_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def terminal_pointer_consistency(self) -> AssessmentHwpxBuildView:
+        pointers = (
+            self.output_artifact_id,
+            self.output_artifact_revision_id,
+            self.output_sha256,
+        )
+        if self.download_available and (
+            self.state is not HwpxBuildState.SUCCEEDED
+            or self.validation_state is not HwpxValidationState.PASS
+            or any(value is None for value in pointers)
+            or self.section_count != self.item_count
+        ):
+            raise ValueError("assessment download requires validated one-section-per-item output")
+        return self
+
+
 class HwpxBuildView(ApiModel):
     build_id: OpaqueId
     item_id: OpaqueId

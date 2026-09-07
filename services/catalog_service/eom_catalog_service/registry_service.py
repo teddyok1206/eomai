@@ -368,6 +368,52 @@ class RegistryService:
                 "components": [self.component_dict(item) for item in components]
             }
 
+    def inspect_revisions(self, revision_ids: tuple[str, ...]) -> tuple[dict[str, Any], ...]:
+        """Resolve an ordered immutable revision set in two indexed queries."""
+
+        if not revision_ids or len(revision_ids) != len(set(revision_ids)):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_REVISION_CONFLICT,
+                "item revision set must be non-empty and unique",
+            )
+        with self.sessions() as session:
+            revisions = {
+                revision.item_revision_id: revision
+                for revision in session.scalars(
+                    select(ItemRevisionRecord).where(
+                        ItemRevisionRecord.item_revision_id.in_(revision_ids)
+                    )
+                )
+            }
+            if len(revisions) != len(revision_ids):
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_REVISION_NOT_FOUND,
+                    "item revision set is incomplete",
+                )
+            components_by_revision: dict[str, list[ItemComponentRecord]] = {
+                revision_id: [] for revision_id in revision_ids
+            }
+            for component in session.scalars(
+                select(ItemComponentRecord)
+                .where(ItemComponentRecord.item_revision_id.in_(revision_ids))
+                .order_by(
+                    ItemComponentRecord.item_revision_id,
+                    ItemComponentRecord.component_type,
+                    ItemComponentRecord.ordinal,
+                )
+            ):
+                components_by_revision[component.item_revision_id].append(component)
+            return tuple(
+                self.revision_dict(revisions[revision_id])
+                | {
+                    "components": [
+                        self.component_dict(component)
+                        for component in components_by_revision[revision_id]
+                    ]
+                }
+                for revision_id in revision_ids
+            )
+
     def load_item_content(self, revision_id: str) -> AssessmentItemContentContract:
         """Resolve and validate the exact canonical content pinned by one revision."""
 

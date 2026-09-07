@@ -354,6 +354,31 @@ class MockExamAssemblySubmission(WebModel):
         return self
 
 
+class MockExamHwpxBuildRequest(WebModel):
+    assessment_assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$")
+
+
+class MockExamHwpxBuildView(WebModel):
+    build_id: str = Field(pattern=r"^hwpxbuild_[0-9a-f]{32}$")
+    assessment_assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
+    assembly_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    item_set_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    state: Literal["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]
+    validation_state: Literal["PENDING", "PASS", "FAIL"]
+    item_count: int = Field(ge=1, le=200)
+    section_count: int | None = Field(default=None, ge=0, le=200)
+    native_equation_count: int | None = Field(default=None, ge=0, le=25600)
+    native_table_count: int | None = Field(default=None, ge=0, le=4000)
+    visual_count: int | None = Field(default=None, ge=0, le=400)
+    output_artifact_revision_id: str | None = None
+    output_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    download_available: bool
+    failure_code: str | None = None
+    completed_at: UtcDatetime | None = None
+    resource_version: int = Field(ge=1)
+
+
 class KnowledgeAnalysisBatchRangeStatus(WebModel):
     """Minimum immutable range projection needed by the quality observer."""
 

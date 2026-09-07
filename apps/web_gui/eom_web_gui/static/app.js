@@ -36,6 +36,9 @@ const state = {
   itemBankQuery: "",
   mockExamPolicy: null,
   mockExamSelections: [],
+  mockExamAssemblyRevisionId: null,
+  mockExamHwpxBuildId: null,
+  mockExamHwpxPollTimer: null,
   acceptedIntakes: [],
   structuredSource: null,
   codexAccounts: [],
@@ -856,6 +859,7 @@ function installItemBank() {
     renderItemBank();
   });
   $("#mock-exam-submit").addEventListener("click", submitMockExamAssembly);
+  $("#mock-exam-hwpx-submit").addEventListener("click", createMockExamHwpxBuild);
   loadMockExamPolicy();
 }
 
@@ -969,11 +973,61 @@ async function submitMockExamAssembly() {
     if (!payload.deliverable_key || !payload.title || !payload.edition || !payload.form_key || !payload.display_label) throw new StudioApiError("시험지 기본 정보를 모두 입력하세요.");
     $("#mock-exam-submit").disabled = true;
     const result = await api("/mock-exam-assemblies", {method: "POST", mutation: true, body: payload});
+    state.mockExamAssemblyRevisionId = result.resource_id;
+    $("#mock-exam-assembly-revision").value = result.resource_id;
+    $("#mock-exam-hwpx-submit").disabled = false;
+    $("#mock-exam-hwpx-state").textContent = "제작 가능";
     showMessage(message, `모의고사 조립 리비전이 고정되었습니다: ${result.resource_id}`, "success");
   } catch (failure) {
     showMessage(message, `모의고사 조립 실패: ${failure.message}`, "error");
   } finally {
     $("#mock-exam-submit").disabled = state.mockExamSelections.length !== (state.mockExamPolicy?.item_count || 25);
+  }
+}
+
+async function createMockExamHwpxBuild() {
+  const revision = state.mockExamAssemblyRevisionId || $("#mock-exam-assembly-revision").value.trim();
+  if (!revision.startsWith("assemblyrev_")) return toast("먼저 모의고사 Blueprint를 확정하세요.");
+  const button = $("#mock-exam-hwpx-submit");
+  button.disabled = true;
+  try {
+    const command = await api("/mock-exam-hwpx/builds", {
+      method: "POST",
+      mutation: true,
+      body: {
+        assessment_assembly_revision_id: revision,
+        idempotency_key: `mockexam-hwpx-${crypto.randomUUID().replaceAll("-", "")}`,
+      },
+    });
+    state.mockExamHwpxBuildId = command.resource_id;
+    showMessage($("#mock-exam-hwpx-message"), `전체 시험지 제작을 시작했습니다: ${command.resource_id}`, "success");
+    await loadMockExamHwpxBuild();
+  } catch (failure) {
+    button.disabled = false;
+    showMessage($("#mock-exam-hwpx-message"), `전체 시험지 제작 실패: ${failure.message}`, "error");
+  }
+}
+
+async function loadMockExamHwpxBuild() {
+  if (!state.mockExamHwpxBuildId) return;
+  try {
+    const value = await api(`/mock-exam-hwpx/builds/${encodeURIComponent(state.mockExamHwpxBuildId)}`);
+    $("#mock-exam-hwpx-state").textContent = `${statePresentation("hwpx_build", value.state).label} · ${value.item_count}문항`;
+    const download = $("#mock-exam-hwpx-download");
+    download.hidden = !value.download_available;
+    download.href = value.download_available ? `${API}/mock-exam-hwpx/builds/${encodeURIComponent(value.build_id)}/download` : "#";
+    window.clearTimeout(state.mockExamHwpxPollTimer);
+    if (["REQUESTED", "RUNNING", "VALIDATING"].includes(value.state)) {
+      state.mockExamHwpxPollTimer = window.setTimeout(loadMockExamHwpxBuild, 2000);
+    } else if (value.download_available) {
+      showMessage($("#mock-exam-hwpx-message"), `검증된 ${value.section_count}문항 시험지를 다운로드할 수 있습니다.`, "success");
+    } else {
+      $("#mock-exam-hwpx-submit").disabled = false;
+      showMessage($("#mock-exam-hwpx-message"), `전체 시험지 제작 실패: ${errorMessage(value.failure_code)}`, "error");
+    }
+  } catch (failure) {
+    $("#mock-exam-hwpx-submit").disabled = false;
+    showMessage($("#mock-exam-hwpx-message"), `전체 시험지 상태 조회 실패: ${failure.message}`, "error");
   }
 }
 

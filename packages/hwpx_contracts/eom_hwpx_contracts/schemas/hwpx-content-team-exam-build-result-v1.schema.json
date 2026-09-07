@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/content-team-exam-build-result/1.0",
+  "title": "Content-team mock-exam HWPX build result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "renderer_profile", "renderer_version", "build_id", "assessment_assembly_revision_id", "assembly_manifest_sha256", "item_set_sha256", "handoff_archive_sha256", "status", "output_file", "output_sha256", "package_manifest_file", "renderer_report_file", "item_count", "section_count", "equation_count", "table_count", "visual_count", "warnings", "errors", "started_at", "completed_at"],
+  "properties": {
+    "schema_version": {"const": "content-team-exam-build-result/1.0"}, "renderer_profile": {"const": "content-team-hwp-question-editor-exam-v1"},
+    "renderer_version": {"const": "1.0.0"}, "build_id": {"type": "string", "pattern": "^hwpxbuild_[a-f0-9]{32}$"},
+    "assessment_assembly_revision_id": {"type": "string", "pattern": "^assemblyrev_[a-f0-9]{32}$"}, "assembly_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "item_set_sha256": {"$ref": "#/$defs/sha256"}, "handoff_archive_sha256": {"const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"},
+    "status": {"enum": ["SUCCEEDED", "FAILED"]}, "output_file": {"type": ["string", "null"], "enum": ["output/content-team-exam.hwpx", null]},
+    "output_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}, "package_manifest_file": {"type": ["string", "null"], "enum": ["output/package-manifest.json", null]},
+    "renderer_report_file": {"type": ["string", "null"], "enum": ["output/content-team-exam-validation.json", null]},
+    "item_count": {"type": "integer", "minimum": 0, "maximum": 200}, "section_count": {"type": "integer", "minimum": 0, "maximum": 200},
+    "equation_count": {"type": "integer", "minimum": 0, "maximum": 25600}, "table_count": {"type": "integer", "minimum": 0, "maximum": 4000},
+    "visual_count": {"type": "integer", "minimum": 0, "maximum": 400}, "warnings": {"type": "array", "maxItems": 20, "items": {"type": "string"}},
+    "errors": {"type": "array", "maxItems": 20, "items": {"type": "string"}}, "started_at": {"type": "string", "format": "date-time"}, "completed_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}}
+}

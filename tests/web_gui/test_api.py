@@ -456,6 +456,32 @@ def test_hwpx_ready_build_status_and_download_use_application_api_boundary() -> 
         assert gateway.hwpx_build_calls == 1
 
 
+def test_mock_exam_hwpx_build_status_and_download_use_application_api_boundary() -> None:
+    gateway = FakeGateway(hwpx_state="READY")
+    client, _ = make_client(gateway=gateway)
+    with client:
+        session = login(client)
+        response = client.post(
+            "/studio/api/v1/mock-exam-hwpx/builds",
+            json={
+                "assessment_assembly_revision_id": "assemblyrev_" + "1" * 32,
+                "idempotency_key": "studio:mock-exam-hwpx:test-0001",
+            },
+            headers={"X-CSRF-Token": session["csrf_token"]},
+        )
+        assert response.status_code == 202
+        build_id = response.json()["resource_id"]
+        status = client.get(f"/studio/api/v1/mock-exam-hwpx/builds/{build_id}")
+        assert status.status_code == 200
+        assert status.json()["item_count"] == status.json()["section_count"] == 25
+        assert status.json()["visual_count"] == 9
+        assert status.json()["download_available"] is True
+        download = client.get(f"/studio/api/v1/mock-exam-hwpx/builds/{build_id}/download")
+        assert download.status_code == 200
+        assert download.content == b"TEST_ONLY_MOCK_EXAM_HWPX"
+        assert gateway.mock_exam_hwpx_build_calls == 1
+
+
 def test_db_explorer_is_admin_read_only_allowlist() -> None:
     client, _ = make_client()
     with client:

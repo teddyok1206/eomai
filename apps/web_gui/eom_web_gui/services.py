@@ -32,6 +32,8 @@ from eom_web_gui.contracts import (
     KnowledgeAnalysisBatchStatus,
     KnowledgeAnalysisQualityReport,
     MockExamAssemblySubmission,
+    MockExamHwpxBuildRequest,
+    MockExamHwpxBuildView,
     RequestDraft,
     RequestDraftInput,
     RequestDraftUpdate,
@@ -108,6 +110,16 @@ class WebServices:
         self, session: WebSession, value: MockExamAssemblySubmission
     ) -> dict[str, Any]:
         return await self.gateway.create_mock_exam_assembly(session, value)
+
+    async def create_mock_exam_hwpx_build(
+        self, session: WebSession, value: MockExamHwpxBuildRequest
+    ) -> dict[str, Any]:
+        return await self.gateway.create_mock_exam_hwpx_build(session, value)
+
+    async def mock_exam_hwpx_build(
+        self, session: WebSession, build_id: str
+    ) -> MockExamHwpxBuildView:
+        return await self.gateway.mock_exam_hwpx_build(session, build_id)
 
     def update_draft(
         self,

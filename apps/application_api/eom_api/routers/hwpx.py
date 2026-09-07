@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from eom_api_contracts import CommandResult, ListResponse, SingleResponse
 from eom_api_contracts.hwpx import (
+    AssessmentHwpxBuildView,
+    CreateAssessmentHwpxBuildRequest,
     CreateHwpxBuildRequest,
     HwpxBuildState,
     HwpxBuildView,
@@ -19,7 +21,7 @@ from starlette.responses import StreamingResponse
 from eom_api.dependencies import Auth, IdempotencyKey, require_permission
 from eom_api.errors import ApiError
 from eom_api.routers.common import many, one, run_command
-from eom_api.services.hwpx_projection import project_hwpx_build
+from eom_api.services.hwpx_projection import project_assessment_hwpx_build, project_hwpx_build
 
 router = APIRouter(tags=["hwpx"])
 HWPX_CONTENT_TYPE = "application/vnd.hancom.hwpx"
@@ -118,6 +120,105 @@ def create_build(
             callback=execute,
             response_status=202,
         ),
+    )
+
+
+@router.post(
+    "/assessment-assembly-revisions/{assembly_revision_id}/hwpx-builds",
+    operation_id="assessment_hwpx_build_create",
+    status_code=202,
+    response_model=SingleResponse[CommandResult],
+    dependencies=[Depends(require_permission(PermissionKey.HWPX_BUILD_CREATE))],
+)
+def create_assessment_build(
+    request: Request,
+    assembly_revision_id: str,
+    body: CreateAssessmentHwpxBuildRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+) -> SingleResponse[CommandResult]:
+    if request.app.state.services.hwpx_capability.inspect().state != "READY":
+        raise ApiError(
+            503,
+            "HWPX_RENDERER_NOT_READY",
+            "HWPX renderer is not ready",
+            "The pinned isolated HWPX renderer has not passed capability preflight.",
+        )
+
+    def execute() -> CommandResult:
+        domain_key = request.app.state.services.idempotency.submission_key(
+            operator_id=authentication.operator.operator_id,
+            endpoint_key="assessment_hwpx_build_create",
+            raw_key=idempotency_key,
+        )
+        record, _ = request.app.state.services.exam_hwpx.request_build(
+            assembly_revision_id,
+            operator_id=authentication.operator.operator_id,
+            idempotency_key=domain_key,
+        )
+        return CommandResult(
+            command_id=f"hwpxcmd_{record.build_id.removeprefix('hwpxbuild_')}",
+            resource_type="assessment_hwpx_build",
+            resource_id=record.build_id,
+            status="ACCEPTED",
+            resource_version=record.resource_version,
+            status_url=f"/api/v1/assessment-hwpx-builds/{record.build_id}",
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body=body.model_dump(mode="json")
+            | {"assessment_assembly_revision_id": assembly_revision_id},
+            resource_type="assessment_hwpx_build",
+            callback=execute,
+            response_status=202,
+        ),
+    )
+
+
+@router.get(
+    "/assessment-hwpx-builds/{build_id}",
+    operation_id="assessment_hwpx_build_get",
+    response_model=SingleResponse[AssessmentHwpxBuildView],
+    dependencies=[Depends(require_permission(PermissionKey.HWPX_READ))],
+)
+def get_assessment_build(
+    request: Request, build_id: str
+) -> SingleResponse[AssessmentHwpxBuildView]:
+    return one(
+        request,
+        project_assessment_hwpx_build(request.app.state.services.exam_hwpx.get_build(build_id)),
+    )
+
+
+@router.get(
+    "/assessment-hwpx-builds/{build_id}/download",
+    operation_id="assessment_hwpx_build_download",
+    dependencies=[Depends(require_permission(PermissionKey.HWPX_READ))],
+)
+def download_assessment(request: Request, build_id: str) -> StreamingResponse:
+    value = request.app.state.services.hwpx_downloads.download(build_id)
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="ASSESSMENT_HWPX_DOWNLOAD_AUTHORIZED",
+        operation_id="assessment_hwpx_build_download",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="assessment_hwpx_build",
+        target_id=build_id,
+    )
+    return StreamingResponse(
+        value.iter_chunks(),
+        media_type=HWPX_CONTENT_TYPE,
+        headers={
+            "Content-Disposition": f'attachment; filename="{value.filename}"',
+            "Content-Length": str(value.content_length),
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

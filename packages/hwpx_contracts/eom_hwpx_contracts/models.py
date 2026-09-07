@@ -443,6 +443,93 @@ class ContentTeamRenderRequestV2(StrictModel):
         return self
 
 
+class ContentTeamExamAssemblyPointer(StrictModel):
+    """Immutable Assembly/Graph/policy identity consumed by one exam build."""
+
+    assessment_assembly_id: str = Field(pattern=r"^assembly_[a-f0-9]{32}$")
+    assessment_assembly_revision_id: str = Field(pattern=r"^assemblyrev_[a-f0-9]{32}$")
+    manifest_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    policy_revision_id: str = Field(pattern=r"^assemblypolicyrev_[a-f0-9]{32}$")
+    policy_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[a-f0-9]{32}$")
+    graph_snapshot_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+
+
+class ContentTeamExamImageSource(StrictModel):
+    visual_ordinal: int = Field(ge=0, le=1)
+    label: Literal["", "(가)", "(나)"]
+    artifact_id: str = Field(pattern=r"^artifact_[a-f0-9]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
+    artifact_member: Literal["generated-stimulus.png"] = "generated-stimulus.png"
+    sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    schema_ref: Literal["eom://schemas/generated-item/stimulus-png/3.0"] = (
+        "eom://schemas/generated-item/stimulus-png/3.0"
+    )
+    media_type: Literal["image/png"] = "image/png"
+    width_px: Literal[800] = 800
+    height_px: Literal[500] = 500
+    alt_text: str = Field(min_length=1, max_length=1000)
+    file_name: str = Field(pattern=r"^input/items/[0-9]{3}/visual-[01]\.png$")
+
+
+class ContentTeamExamItemSource(StrictModel):
+    position: int = Field(ge=1, le=200)
+    placement_id: str = Field(pattern=r"^placement_[a-f0-9]{32}$")
+    item_id: str = Field(pattern=r"^item_[a-f0-9]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-f0-9]{32}$")
+    item_manifest_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    source_artifact_id: str = Field(pattern=r"^artifact_[a-f0-9]{32}$")
+    source_artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
+    source_json_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    source_markdown_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    json_file: str = Field(pattern=r"^input/items/[0-9]{3}/item-content\.json$")
+    markdown_file: str = Field(pattern=r"^input/items/[0-9]{3}/content-team-item\.md$")
+    images: tuple[ContentTeamExamImageSource, ...] = Field(max_length=2)
+
+    @model_validator(mode="after")
+    def exact_item_paths_and_images(self) -> ContentTeamExamItemSource:
+        prefix = f"input/items/{self.position:03d}"
+        if self.json_file != f"{prefix}/item-content.json" or self.markdown_file != (
+            f"{prefix}/content-team-item.md"
+        ):
+            raise ValueError("exam item materialization path differs from its position")
+        ordinals = tuple(image.visual_ordinal for image in self.images)
+        if ordinals != tuple(sorted(set(ordinals))):
+            raise ValueError("exam item images must be unique and ordered")
+        if any(
+            image.file_name != f"{prefix}/visual-{image.visual_ordinal}.png"
+            for image in self.images
+        ):
+            raise ValueError("exam image materialization path differs from item position")
+        return self
+
+
+class ContentTeamExamRenderRequest(StrictModel):
+    schema_version: Literal["content-team-exam-render-request/1.0"] = (
+        "content-team-exam-render-request/1.0"
+    )
+    renderer_profile: Literal["content-team-hwp-question-editor-exam-v1"] = (
+        "content-team-hwp-question-editor-exam-v1"
+    )
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    assembly: ContentTeamExamAssemblyPointer
+    handoff: ContentTeamHandoffSnapshot
+    items: tuple[ContentTeamExamItemSource, ...] = Field(min_length=1, max_length=200)
+    output_directory: Literal["output"] = "output"
+
+    @model_validator(mode="after")
+    def ordered_unique_item_set(self) -> ContentTeamExamRenderRequest:
+        if tuple(item.position for item in self.items) != tuple(range(1, len(self.items) + 1)):
+            raise ValueError("exam items must be contiguous and ordered")
+        revision_ids = tuple(item.item_revision_id for item in self.items)
+        placement_ids = tuple(item.placement_id for item in self.items)
+        if len(revision_ids) != len(set(revision_ids)) or len(placement_ids) != len(
+            set(placement_ids)
+        ):
+            raise ValueError("exam item and placement identities must be unique")
+        return self
+
+
 class ContentTeamBuildResult(StrictModel):
     schema_version: Literal["1.0"] = "1.0"
     renderer_profile: Literal["content-team-hwp-question-editor-v1"] = (
@@ -536,6 +623,56 @@ class ContentTeamBuildResultV2(StrictModel):
             raise ValueError("failed content-team build cannot expose output")
         if self.completed_at < self.started_at:
             raise ValueError("content-team build completion precedes its start")
+        return self
+
+
+class ContentTeamExamBuildResult(StrictModel):
+    schema_version: Literal["content-team-exam-build-result/1.0"] = (
+        "content-team-exam-build-result/1.0"
+    )
+    renderer_profile: Literal["content-team-hwp-question-editor-exam-v1"] = (
+        "content-team-hwp-question-editor-exam-v1"
+    )
+    renderer_version: Literal["1.0.0"] = "1.0.0"
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    assessment_assembly_revision_id: str = Field(pattern=r"^assemblyrev_[a-f0-9]{32}$")
+    assembly_manifest_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    item_set_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    handoff_archive_sha256: Literal[
+        "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    ] = "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+    status: Literal["SUCCEEDED", "FAILED"]
+    output_file: Literal["output/content-team-exam.hwpx"] | None
+    output_sha256: str | None = Field(default=None, pattern=r"^sha256:[a-f0-9]{64}$")
+    package_manifest_file: Literal["output/package-manifest.json"] | None
+    renderer_report_file: Literal["output/content-team-exam-validation.json"] | None
+    item_count: int = Field(ge=0, le=200)
+    section_count: int = Field(ge=0, le=200)
+    equation_count: int = Field(ge=0, le=25600)
+    table_count: int = Field(ge=0, le=4000)
+    visual_count: int = Field(ge=0, le=400)
+    warnings: tuple[str, ...] = Field(max_length=20)
+    errors: tuple[str, ...] = Field(max_length=20)
+    started_at: datetime
+    completed_at: datetime
+
+    @model_validator(mode="after")
+    def terminal_files_match_status(self) -> ContentTeamExamBuildResult:
+        materialized = (
+            self.output_file,
+            self.output_sha256,
+            self.package_manifest_file,
+            self.renderer_report_file,
+        )
+        if self.status == "SUCCEEDED":
+            if any(value is None for value in materialized) or self.errors:
+                raise ValueError("successful exam build requires validated output")
+            if self.item_count < 1 or self.section_count != self.item_count:
+                raise ValueError("successful exam build requires one section per item")
+        elif any(value is not None for value in materialized) or not self.errors:
+            raise ValueError("failed exam build cannot expose output")
+        if self.completed_at < self.started_at:
+            raise ValueError("exam build completion precedes its start")
         return self
 
 

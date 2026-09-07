@@ -21,7 +21,10 @@ def test_manager_privilege_matrix_matches_owned_access_patterns() -> None:
         "alembic_version",
         "artifact_revisions",
         "artifacts",
+        "assessment_assemblies",
+        "assessment_assembly_revisions",
         "hwpx_application_builds",
+        "hwpx_assessment_assembly_builds",
         "item_components",
         "item_revisions",
         "items",
@@ -36,8 +39,13 @@ def test_manager_privilege_matrix_matches_owned_access_patterns() -> None:
         "jobs",
         "protocol_versions",
     }
-    assert set(UPDATE_TABLES) == {"hwpx_application_builds", "jobs"}
+    assert set(UPDATE_TABLES) == {
+        "hwpx_application_builds",
+        "hwpx_assessment_assembly_builds",
+        "jobs",
+    }
     assert "hwpx_application_builds" not in INSERT_TABLES
+    assert "hwpx_assessment_assembly_builds" not in INSERT_TABLES
     assert not set(INSERT_TABLES) & set(API_INSERT_TABLES)
     assert "jobs" not in API_UPDATE_TABLES
     assert {privilege for privilege, _tables in TABLE_PRIVILEGES} == {

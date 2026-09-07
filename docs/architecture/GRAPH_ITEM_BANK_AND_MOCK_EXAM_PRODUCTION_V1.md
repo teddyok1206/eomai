@@ -50,6 +50,15 @@ The dominant persistent reads are assembly-by-form, placements-by-assembly order
 position, and reverse usage-by-item. Existing foreign keys, unique placement constraints, and B-tree
 indexes own those access paths. New indexes are added only with an observed query-plan need.
 
+A whole-exam HWPX build resolves the ordered Item Revision set in two indexed Catalog queries and
+resolves all unique Artifact/ArtifactRevision member pointers in two additional indexed queries.
+Maps keyed by immutable revision/member identity preserve Assembly order and make validation and
+materialization `O(item count + component count)` in time and space. Each item is rendered through
+the reviewed content-team program, with only its displayed item number projected from the immutable
+Assembly position; the original Item JSON and editorial Markdown hashes remain unchanged. The final
+package contains one ordered HWPX section per item, while equation, table, and visual counts remain
+content-driven rather than fixed template quotas.
+
 ## Transactions, concurrency, failure, and replay
 
 Item-bank access is read-only and fails closed if the current Graph pointer or an Item Revision

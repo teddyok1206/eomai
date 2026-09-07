@@ -27,6 +27,7 @@ from eom_web_gui.contracts import (
     ExplorerQuery,
     HwpxBuildRequest,
     MockExamAssemblySubmission,
+    MockExamHwpxBuildRequest,
     RequestDraftInput,
     RequestDraftUpdate,
     StructuredItemImportRequest,
@@ -260,6 +261,33 @@ def create_app(
         session: Annotated[WebSession, Depends(require_csrf)],
     ) -> dict[str, Any]:
         return await actual.create_mock_exam_assembly(session, value)
+
+    @app.post(f"{API_PREFIX}/mock-exam-hwpx/builds", status_code=202)
+    async def create_mock_exam_hwpx_build(
+        value: MockExamHwpxBuildRequest,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.create_mock_exam_hwpx_build(session, value)
+
+    @app.get(f"{API_PREFIX}/mock-exam-hwpx/builds/{{build_id}}")
+    async def mock_exam_hwpx_build_status(
+        build_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (await actual.mock_exam_hwpx_build(session, build_id)).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/mock-exam-hwpx/builds/{{build_id}}/download")
+    async def mock_exam_hwpx_download(
+        build_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> Response:
+        validate_download_request(build_id)
+        value = await actual.gateway.mock_exam_hwpx_download(session, build_id)
+        return Response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={"Content-Disposition": value.content_disposition},
+        )
 
     @app.get(f"{API_PREFIX}/content-intakes/accepted")
     async def accepted_content_intakes(

@@ -196,6 +196,13 @@
               <p id="mock-exam-message" class="form-message" aria-live="polite">문항 카드에서 ‘Blueprint에 담기’를 눌러 25문항을 구성하세요.</p>
               <div id="mock-exam-selections" class="mock-exam-selections"><p class="empty-state">선택된 문항이 없습니다.</p></div>
               <div class="form-actions"><button id="mock-exam-clear" class="button quiet" type="button">선택 비우기</button><button id="mock-exam-submit" class="button primary" type="button" disabled>정책 검증 후 조립 확정</button></div>
+              <section class="knowledge-boundary" aria-label="시험지 HWPX 제작">
+                <strong>전체 시험지 HWPX</strong><span id="mock-exam-hwpx-state">Blueprint 확정 대기</span>
+                <p>팀장 한글화 프로그램으로 각 문항·정답·해설을 순서대로 렌더링하고 한 파일로 결합합니다. 표·이미지·수식 수는 문항 내용에 따라 달라집니다.</p>
+                <label>고정 배치 리비전<input id="mock-exam-assembly-revision" readonly placeholder="assemblyrev_..."></label>
+                <div class="form-actions"><button id="mock-exam-hwpx-submit" class="button primary" type="button" disabled>전체 시험지 HWPX 만들기</button><a id="mock-exam-hwpx-download" class="button secondary" href="#" hidden>전체 시험지 다운로드</a></div>
+                <p id="mock-exam-hwpx-message" class="form-message" aria-live="polite">배치 리비전이 확정되면 제작할 수 있습니다.</p>
+              </section>
             </section>
           </section>
 

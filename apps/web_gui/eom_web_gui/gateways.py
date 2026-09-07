@@ -33,6 +33,8 @@ from eom_web_gui.contracts import (
     KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
     MockExamAssemblySubmission,
+    MockExamHwpxBuildRequest,
+    MockExamHwpxBuildView,
     PreviewChoice,
     PreviewEquationBlock,
     PreviewImageBlock,
@@ -244,6 +246,16 @@ class ApplicationGateway(Protocol):
     async def create_mock_exam_assembly(
         self, session: WebSession, value: MockExamAssemblySubmission
     ) -> dict[str, Any]: ...
+
+    async def create_mock_exam_hwpx_build(
+        self, session: WebSession, value: MockExamHwpxBuildRequest
+    ) -> dict[str, Any]: ...
+
+    async def mock_exam_hwpx_build(
+        self, session: WebSession, build_id: str
+    ) -> MockExamHwpxBuildView: ...
+
+    async def mock_exam_hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload: ...
 
     async def import_structured_item(
         self, session: WebSession, value: StructuredItemImportRequest
@@ -1306,6 +1318,47 @@ class HttpApplicationGateway:
             headers={"Idempotency-Key": f"mockexam-assembly-{digest}"},
         )
         return sanitize_mapping(self._data(assembly_response))
+
+    async def create_mock_exam_hwpx_build(
+        self, session: WebSession, value: MockExamHwpxBuildRequest
+    ) -> dict[str, Any]:
+        _require_id(value.assessment_assembly_revision_id, "assemblyrev_")
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/assessment-assembly-revisions/"
+            f"{value.assessment_assembly_revision_id}/hwpx-builds",
+            json={"renderer": "content-team-exam", "include_explanation": True},
+            headers={"Idempotency-Key": value.idempotency_key},
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def mock_exam_hwpx_build(
+        self, session: WebSession, build_id: str
+    ) -> MockExamHwpxBuildView:
+        _require_id(build_id, "hwpxbuild_")
+        response = await self._authorized(
+            session, "GET", f"/api/v1/assessment-hwpx-builds/{build_id}"
+        )
+        return MockExamHwpxBuildView.model_validate(self._data(response))
+
+    async def mock_exam_hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload:
+        _require_id(build_id, "hwpxbuild_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/assessment-hwpx-builds/{build_id}/download",
+            headers={"Accept": "application/vnd.hancom.hwpx"},
+        )
+        content_type = response.headers.get("content-type", "")
+        disposition = response.headers.get("content-disposition", "")
+        if (
+            content_type.split(";", 1)[0] != "application/vnd.hancom.hwpx"
+            or not disposition.startswith('attachment; filename="')
+            or len(response.content) > 64 * 1024 * 1024
+        ):
+            raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
+        return HwpxDownload(response.content, content_type, disposition)
 
     async def item_media(
         self,

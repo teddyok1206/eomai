@@ -29,6 +29,8 @@ from eom_api_contracts.curriculum import (
 )
 from eom_api_contracts.errors import ProblemDetails, ValidationIssue
 from eom_api_contracts.hwpx import (
+    AssessmentHwpxBuildView,
+    CreateAssessmentHwpxBuildRequest,
     CreateHwpxBuildRequest,
     HwpxBuildOptions,
     HwpxBuildState,
@@ -65,6 +67,7 @@ __all__ = [
     "ApiModel",
     "ApprovedItemAnalysisSourceInput",
     "ArtifactPointer",
+    "AssessmentHwpxBuildView",
     "AssessmentItemOccurrenceView",
     "AssessmentItemOccurrenceViewV2",
     "AssessmentLearningBatchView",
@@ -74,6 +77,7 @@ __all__ = [
     "AssessmentLearningWorkUnitCounts",
     "CommandResult",
     "ContentIntakeAnalysisSourceInput",
+    "CreateAssessmentHwpxBuildRequest",
     "CreateEvidenceBundleRequest",
     "CreateHwpxBuildRequest",
     "CreateKnowledgeAnalysisBatchRequest",

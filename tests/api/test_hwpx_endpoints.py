@@ -24,6 +24,8 @@ NOW = datetime(2026, 8, 21, 12, tzinfo=UTC)
 BUILD_ID = "hwpxbuild_" + "1" * 32
 ITEM_ID = "item_" + "2" * 32
 REVISION_ID = "itemrev_" + "3" * 32
+ASSEMBLY_ID = "assembly_" + "a" * 32
+ASSEMBLY_REVISION_ID = "assemblyrev_" + "b" * 32
 ARTIFACT_ID = "artifact_" + "4" * 32
 ARTIFACT_REVISION_ID = "rev_" + "5" * 32
 OPERATOR_ID = "operator_" + "6" * 32
@@ -68,6 +70,40 @@ def _record(*, state: str = "REQUESTED") -> SimpleNamespace:
         validation_state="PASS" if succeeded else "PENDING",
         native_equation_count=5 if succeeded else None,
         native_table_count=2 if succeeded else None,
+        output_artifact_id=ARTIFACT_ID if succeeded else None,
+        output_artifact_revision_id=ARTIFACT_REVISION_ID if succeeded else None,
+        output_sha256="sha256:" + "9" * 64 if succeeded else None,
+        failure_code=None,
+        failure_detail_sanitized=None,
+        created_by_operator_id=OPERATOR_ID,
+        created_at=NOW,
+        started_at=NOW if succeeded else None,
+        completed_at=NOW if succeeded else None,
+        resource_version=2 if succeeded else 1,
+    )
+
+
+def _assessment_record(*, state: str = "REQUESTED") -> SimpleNamespace:
+    succeeded = state == "SUCCEEDED"
+    return SimpleNamespace(
+        build_id=BUILD_ID,
+        assessment_assembly_id=ASSEMBLY_ID,
+        assessment_assembly_revision_id=ASSEMBLY_REVISION_ID,
+        assembly_manifest_sha256="sha256:" + "1" * 64,
+        policy_revision_id="assemblypolicyrev_" + "2" * 32,
+        policy_sha256="sha256:" + "3" * 64,
+        graph_snapshot_revision_id="graphrev_" + "4" * 32,
+        graph_snapshot_sha256="sha256:" + "5" * 64,
+        item_set_sha256="sha256:" + "6" * 64,
+        renderer="content-team-exam",
+        renderer_version="1.0.0",
+        state=state,
+        validation_state="PASS" if succeeded else "PENDING",
+        item_count=25,
+        section_count=25 if succeeded else None,
+        native_equation_count=12 if succeeded else None,
+        native_table_count=8 if succeeded else None,
+        visual_count=7 if succeeded else None,
         output_artifact_id=ARTIFACT_ID if succeeded else None,
         output_artifact_revision_id=ARTIFACT_REVISION_ID if succeeded else None,
         output_sha256="sha256:" + "9" * 64 if succeeded else None,
@@ -178,6 +214,21 @@ class FakeHwpxService:
         return self.secure_download(build_id)
 
 
+class FakeAssessmentHwpxService:
+    def __init__(self) -> None:
+        self.request_count = 0
+        self.last_request: dict[str, Any] | None = None
+
+    def request_build(self, *_args: Any, **kwargs: Any) -> tuple[SimpleNamespace, bool]:
+        self.request_count += 1
+        self.last_request = kwargs
+        return _assessment_record(), True
+
+    @staticmethod
+    def get_build(_build_id: str) -> SimpleNamespace:
+        return _assessment_record(state="SUCCEEDED")
+
+
 class FakeQueries:
     @staticmethod
     def list_hwpx_builds(**_values: Any) -> PageResult[HwpxBuildView]:
@@ -192,6 +243,7 @@ def _client(tmp_path: Path, *, ready: bool = True, admin: bool = True) -> tuple[
     services = disconnected_services()
     services.hwpx_capability = FakeCapabilityService("READY" if ready else "PREPARED_NOT_DEPLOYED")  # type: ignore[assignment]
     services.hwpx = FakeHwpxService(output)  # type: ignore[assignment]
+    services.exam_hwpx = FakeAssessmentHwpxService()  # type: ignore[assignment]
     services.hwpx_downloads = services.hwpx  # type: ignore[assignment]
     services.queries = FakeQueries()  # type: ignore[assignment]
     services.idempotency = MemoryIdempotency()  # type: ignore[assignment]
@@ -287,6 +339,43 @@ def test_hwpx_build_replay_status_download_and_admin_list(tmp_path: Path) -> Non
             assert download.headers["content-type"] == "application/vnd.hancom.hwpx"
             assert download.headers["content-disposition"] == 'attachment; filename="eom-test.hwpx"'
             assert "HWPX_DOWNLOAD_AUTHORIZED" in services.audit.events
+    finally:
+        services.engine.dispose()
+
+
+def test_assessment_hwpx_build_status_and_download_use_pinned_assembly_identity(
+    tmp_path: Path,
+) -> None:
+    client, services = _client(tmp_path)
+    headers = {"Idempotency-Key": "assessment-hwpx-api-test-0001"}
+    try:
+        with client:
+            created = client.post(
+                f"/api/v1/assessment-assembly-revisions/{ASSEMBLY_REVISION_ID}/hwpx-builds",
+                headers=headers,
+                json={"renderer": "content-team-exam", "include_explanation": True},
+            )
+            assert created.status_code == 202
+            assert created.json()["data"]["resource_id"] == BUILD_ID
+            assert services.exam_hwpx.request_count == 1
+            assert services.exam_hwpx.last_request == {
+                "operator_id": OPERATOR_ID,
+                "idempotency_key": "api:" + "b" * 64,
+            }
+
+            status = client.get(f"/api/v1/assessment-hwpx-builds/{BUILD_ID}")
+            assert status.status_code == 200
+            value = status.json()["data"]
+            assert value["assessment_assembly_revision_id"] == ASSEMBLY_REVISION_ID
+            assert value["item_count"] == value["section_count"] == 25
+            assert value["download_available"] is True
+            assert (value["native_equation_count"], value["native_table_count"]) == (12, 8)
+            assert value["visual_count"] == 7
+
+            download = client.get(f"/api/v1/assessment-hwpx-builds/{BUILD_ID}/download")
+            assert download.status_code == 200
+            assert download.content == b"TEST_ONLY_HWPX"
+            assert "ASSESSMENT_HWPX_DOWNLOAD_AUTHORIZED" in services.audit.events
     finally:
         services.engine.dispose()
 

@@ -11,7 +11,7 @@ import socketserver
 import stat
 import struct
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from eom_hwpx_contracts import (
     HwpxManagerDownloadRequest,
@@ -20,13 +20,19 @@ from eom_hwpx_contracts import (
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
 
-from eom_hwpx_manager.application_service import HwpxApplicationService
+from eom_hwpx_manager.application_service import SecureHwpxDownload
 from eom_hwpx_manager.errors import HwpxManagerError
 
 MANAGER_SOCKET = Path("/run/eom-hwpx-api/manager.sock")
 MAX_HEADER_BYTES = 4096
 SOCKET_MODE = 0o660
 RUNTIME_DIRECTORY_MODE = 0o750
+
+
+class SecureDownloadResolver(Protocol):
+    """Resolve a validated download without exposing storage details to the socket server."""
+
+    def secure_download(self, build_id: str) -> SecureHwpxDownload: ...
 
 
 class _ThreadingUnixServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
@@ -78,7 +84,7 @@ class HwpxDownloadServer(_ThreadingUnixServer):
 
     def __init__(
         self,
-        service: HwpxApplicationService,
+        service: SecureDownloadResolver,
         *,
         socket_path: Path = MANAGER_SOCKET,
         allowed_uid: int | None = None,

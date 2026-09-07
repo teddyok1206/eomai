@@ -119,6 +119,64 @@ def test_registry_component_projection_preserves_pointer_metadata() -> None:
     assert projected["metadata"] == metadata
 
 
+def test_registry_bulk_revision_lookup_preserves_order_in_two_queries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_id = "itemrev_" + "1" * 32
+    second_id = "itemrev_" + "2" * 32
+    revisions = (
+        SimpleNamespace(item_revision_id=second_id),
+        SimpleNamespace(item_revision_id=first_id),
+    )
+    components = (
+        SimpleNamespace(item_revision_id=first_id, key="first-b"),
+        SimpleNamespace(item_revision_id=second_id, key="second"),
+        SimpleNamespace(item_revision_id=first_id, key="first-a"),
+    )
+
+    class BulkSession:
+        calls = 0
+
+        def __enter__(self) -> BulkSession:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            pass
+
+        def scalars(self, _statement: object) -> tuple[SimpleNamespace, ...]:
+            self.calls += 1
+            return revisions if self.calls == 1 else components
+
+    session = BulkSession()
+    service = object.__new__(RegistryService)
+    service.sessions = lambda: session  # type: ignore[assignment]
+    monkeypatch.setattr(
+        RegistryService,
+        "revision_dict",
+        staticmethod(lambda row: {"item_revision_id": row.item_revision_id}),
+    )
+    monkeypatch.setattr(
+        RegistryService,
+        "component_dict",
+        staticmethod(lambda row: {"key": row.key}),
+    )
+
+    values = service.inspect_revisions((first_id, second_id))
+
+    assert session.calls == 2
+    assert tuple(value["item_revision_id"] for value in values) == (first_id, second_id)
+    assert [row["key"] for row in values[0]["components"]] == ["first-b", "first-a"]
+    assert [row["key"] for row in values[1]["components"]] == ["second"]
+
+
+def test_registry_bulk_revision_lookup_rejects_duplicate_identity() -> None:
+    service = object.__new__(RegistryService)
+    revision_id = "itemrev_" + "1" * 32
+    with pytest.raises(RegistryError) as raised:
+        service.inspect_revisions((revision_id, revision_id))
+    assert raised.value.code is RegistryErrorCode.ITEM_REVISION_CONFLICT
+
+
 def test_registry_rejects_stale_pointer_and_media_type_mismatch(tmp_path: Path) -> None:
     pointer, revision, session = _fixture(tmp_path)
     media = session.values[(ArtifactRevisionRecord, "rev_" + "2" * 32)]

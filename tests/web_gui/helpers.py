@@ -25,6 +25,8 @@ from eom_web_gui.contracts import (
     ItemPreview,
     KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
+    MockExamHwpxBuildRequest,
+    MockExamHwpxBuildView,
     PreviewChoice,
     PreviewEquationBlock,
     PreviewImageBlock,
@@ -154,6 +156,7 @@ class FakeGateway:
         self.hwpx_state = hwpx_state
         self.graph_grounding_available = graph_grounding_available
         self.hwpx_build_calls = 0
+        self.mock_exam_hwpx_build_calls = 0
         self.structured_import_calls = 0
         self.control_command_calls = 0
         self.auth_enrollment_calls = 0
@@ -586,6 +589,54 @@ class FakeGateway:
             b"TEST_ONLY_HWPX",
             "application/vnd.hancom.hwpx",
             'attachment; filename="eom-test.hwpx"',
+        )
+
+    async def create_mock_exam_hwpx_build(
+        self, session: WebSession, value: MockExamHwpxBuildRequest
+    ) -> dict[str, Any]:
+        del session
+        assert value.assessment_assembly_revision_id == "assemblyrev_" + "1" * 32
+        self.mock_exam_hwpx_build_calls += 1
+        return {
+            "command_id": "hwpxcmd_" + "2" * 32,
+            "resource_type": "assessment_hwpx_build",
+            "resource_id": "hwpxbuild_" + "3" * 32,
+            "status": "ACCEPTED",
+            "resource_version": 1,
+            "status_url": "/api/v1/assessment-hwpx-builds/hwpxbuild_" + "3" * 32,
+        }
+
+    async def mock_exam_hwpx_build(
+        self, session: WebSession, build_id: str
+    ) -> MockExamHwpxBuildView:
+        del session
+        assert build_id == "hwpxbuild_" + "3" * 32
+        return MockExamHwpxBuildView(
+            build_id=build_id,
+            assessment_assembly_revision_id="assemblyrev_" + "1" * 32,
+            assembly_manifest_sha256="sha256:" + "4" * 64,
+            item_set_sha256="sha256:" + "5" * 64,
+            state="SUCCEEDED",
+            validation_state="PASS",
+            item_count=25,
+            section_count=25,
+            native_equation_count=18,
+            native_table_count=7,
+            visual_count=9,
+            output_artifact_revision_id="rev_" + "6" * 32,
+            output_sha256="sha256:" + "7" * 64,
+            download_available=True,
+            completed_at=NOW,
+            resource_version=3,
+        )
+
+    async def mock_exam_hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload:
+        del session
+        assert build_id == "hwpxbuild_" + "3" * 32
+        return HwpxDownload(
+            b"TEST_ONLY_MOCK_EXAM_HWPX",
+            "application/vnd.hancom.hwpx",
+            'attachment; filename="eom-mock-exam.hwpx"',
         )
 
     async def codex_accounts(self, session: WebSession) -> tuple[dict[str, Any], ...]:

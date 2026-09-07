@@ -6,7 +6,11 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from eom_catalog_service.registry_service import RegistryService
-from eom_hwpx_manager import HwpxApplicationService, HwpxCapabilityService
+from eom_hwpx_manager import (
+    ExamHwpxApplicationService,
+    HwpxApplicationService,
+    HwpxCapabilityService,
+)
 from eom_identity_service.auth_service import AuthService, LoginPolicy
 from eom_identity_service.service import OperatorService
 from eom_identity_service.tokens import SessionTokenService, TokenCodec, TokenPolicy
@@ -59,6 +63,7 @@ class AppServices:
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)
         self.hwpx = HwpxApplicationService(engine, registry=self.registry)
+        self.exam_hwpx = ExamHwpxApplicationService(engine, registry=self.registry)
         self.hwpx_downloads = HwpxDownloadClient()
         self.hwpx_capability = HwpxCapabilityService(manager_registered=True)
         self.rate_limiter = BoundedRateLimiter(settings.rate_limit.maximum_buckets)

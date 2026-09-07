@@ -215,6 +215,9 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "draft_spec_sha256.slice" not in javascript
     assert "analysisBatchEta" in javascript
     assert 'id="hwpx-delivery-guide"' in html
+    assert 'id="mock-exam-hwpx-submit"' in html
+    assert 'id="mock-exam-hwpx-download"' in html
+    assert "async function createMockExamHwpxBuild()" in javascript
     assert 'id="codex-reauth-panel"' in html
     assert 'id="codex-challenge-reveal"' in html
     assert "비밀번호나 토큰은 입력하지 마세요." in javascript

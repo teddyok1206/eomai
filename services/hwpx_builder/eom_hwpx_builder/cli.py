@@ -11,6 +11,11 @@ import typer
 
 from eom_hwpx_builder.analyzer import analyze_package
 from eom_hwpx_builder.bindings import compile_bindings
+from eom_hwpx_builder.content_team_exam_renderer import (
+    _read_request,
+    failed_content_team_exam_result,
+    render_content_team_exam_workspace,
+)
 from eom_hwpx_builder.content_team_renderer import (
     failed_content_team_result,
     render_content_team_workspace,
@@ -141,10 +146,22 @@ def render_content_team(
     result: Annotated[Path, typer.Option("--result", dir_okay=False)],
 ) -> None:
     started = datetime.now(UTC)
+    request_value: object = None
     try:
-        build_result = render_content_team_workspace(request, result)
+        request_value = json.loads(_read_request(request).decode("utf-8"))
+        if isinstance(request_value, dict) and request_value.get("schema_version") == (
+            "content-team-exam-render-request/1.0"
+        ):
+            build_result = render_content_team_exam_workspace(request, result)
+        else:
+            build_result = render_content_team_workspace(request, result)
     except Exception as exc:
-        failed = failed_content_team_result(request, result, started, exc)
+        if isinstance(request_value, dict) and request_value.get("schema_version") == (
+            "content-team-exam-render-request/1.0"
+        ):
+            failed = failed_content_team_exam_result(request, result, started, exc)
+        else:
+            failed = failed_content_team_result(request, result, started, exc)
         code = exc.code.value if isinstance(exc, HwpxError) else "HWPX_CONTENT_TEAM_RENDER_FAILED"
         _echo({"status": "FAILED", "error_code": code, "result_written": failed is not None})
         raise typer.Exit(1) from None
