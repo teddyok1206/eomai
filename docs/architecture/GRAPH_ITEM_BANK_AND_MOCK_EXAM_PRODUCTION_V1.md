@@ -215,6 +215,41 @@ Item/policy pointers at render time—were rejected because they introduce a sec
 a released exam non-reproducible. Recovery by automatic renderer replay was also rejected because
 an interrupted external process cannot be proven safe to repeat without a new operator request.
 
+## Bounded provenance-validation recovery
+
+The mock-exam coordinator owns recovery from the September 2026 false-negative that rejected the
+non-null curriculum Graph root correctly resolved for every planned Item. The canonical inputs are
+the immutable production plan and checkpoint, each existing Workflow occurrence, its accepted
+resolution, and its pinned V3 execution-plan provenance. Logical execution, Workflow call, and
+Workflow IDs remain unchanged; the recovery pins the already-created Workflow's current resource
+version and exact plan, snapshot, Evidence Bundle, request, policy, manifest-hash, and timestamp
+pointers. It resolves the expected Graph root from each call's reviewed selected-unit key and never
+accepts an implicit current unit or a merely non-null root.
+
+The dominant access is one map lookup and one official Workflow read for each of the fixed 25
+ordered calls, followed by construction of one immutable tuple, so time and transient space are
+both `O(25)`. No database schema, index, cache, binary materialization, or new dependency is needed.
+The coordinator validates the complete cohort before returning anything and issues no start,
+review, approval, worker, Catalog-write, or NAS operation in that pass. The runner commits all 25
+recovered rows as one ordinary checkpoint compare-and-swap; a failure or crash before CAS leaves the
+old immutable revision current, while a crash after CAS resumes from the recovery-only successor.
+
+Only a 25-row cohort whose rows have the exact historical
+`WORKFLOW_KNOWLEDGE_PROVENANCE_MISMATCH` failure shape, preserved start/Workflow pointers, and no
+downstream pointer may use this transition. Every Workflow must remain in a supported state other
+than `FAILED` or `CANCELLED`, retain the accepted generation resolution, and expose provenance whose
+root equals its planned unit. The checkpoint store independently admits only an all-row
+`FAILED -> WORKFLOW_ACTIVE` successor that
+adds provenance, preserves identities, and clears those failures. Any missing, stale, regressed,
+terminal, or mismatched Workflow aborts recovery without a successor. The following normal
+`advance-items` call handles review and approval through existing application boundaries.
+The historical checkpoint remains terminal to deployment admission so an interrupted emergency
+release can still be retried; only the explicit coordinator path recognizes this bounded recovery.
+
+Blanket reopening of `FAILED`, editing the current checkpoint or database, rolling back immutable
+history, and creating 25 replacement Workflows are rejected: each would either weaken unrelated
+terminal failures, lose audit history, bypass CAS, or duplicate valid occurrences.
+
 ## Acceptance checks
 
 - JSON Schema 2020-12 precedes new DTO and behavior.

@@ -57,6 +57,19 @@ CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION = "catalog/1.3"
+CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION,
+        "contracts": [
+            "item-revision-manifest-v1",
+            "assessment-item-content-v1",
+            "assessment-item-content-v2",
+            "assessment-item-content-v3",
+            "content-team-editorial-markdown-v2",
+        ],
+    }
+)
 MAX_JOB_IDEMPOTENCY_KEY_LENGTH = 128
 
 

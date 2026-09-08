@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Final, Literal
+from typing import Annotated, Any, Final, Literal
 
 from eom_identifiers import content_sha256
 from pydantic import Field, field_validator, model_validator
@@ -12,15 +12,21 @@ from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
 MOCK_EXAM_ITEM_REVIEW_PUBLICATION_COMMAND_SCHEMA: Final = (
     "mock-exam-item-review-publication-command"
 )
-MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_SCHEMA: Final = (
-    "mock-exam-item-review-publication-result"
+MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_SCHEMA: Final = "mock-exam-item-review-publication-result"
+MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V2_SCHEMA: Final = (
+    "mock-exam-item-review-publication-result-v2"
 )
 MOCK_EXAM_REVIEW_ELIGIBILITY_QUERY_SCHEMA: Final = "mock-exam-review-eligibility-query"
 MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_SCHEMA: Final = "mock-exam-review-eligibility-result"
+MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V2_SCHEMA: Final = "mock-exam-review-eligibility-result-v2"
 MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA: Final = "mock-exam-item-review-decision"
+MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA: Final = "mock-exam-item-review-decision-v2"
 MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME: Final = "mock-exam-item-review-decision.json"
 MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF: Final = (
     "eom://schemas/assessment-assembly/mock-exam-item-review-decision/1.0"
+)
+MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF: Final = (
+    "eom://schemas/assessment-assembly/mock-exam-item-review-decision/2.0"
 )
 
 
@@ -109,10 +115,7 @@ class MockExamReviewEligibilityResult(FrozenModel):
     def exact_counts_and_reason(self) -> MockExamReviewEligibilityResult:
         has_reviewer = self.reviewer_operator_id is not None
         has_approval_time = self.approved_at is not None
-        if (
-            has_reviewer != has_approval_time
-            or (self.approval_state == "APPROVED") != has_reviewer
-        ):
+        if has_reviewer != has_approval_time or (self.approval_state == "APPROVED") != has_reviewer:
             raise ValueError(
                 "review eligibility approval state, reviewer, and approval time must be atomic"
             )
@@ -130,6 +133,15 @@ class MockExamReviewEligibilityResult(FrozenModel):
         return self
 
 
+class MockExamReviewEligibilityResultV2(MockExamReviewEligibilityResult):
+    """V2 eligibility projection for the content-team V3/review-result@9 family."""
+
+    schema_version: Literal["mock-exam-review-eligibility-result/2.0"] = (
+        "mock-exam-review-eligibility-result/2.0"  # type: ignore[assignment]
+    )
+    review_result_schema: Literal["review-result@9.0"]  # type: ignore[assignment]
+
+
 class MockExamSourceReviewPointer(FrozenModel):
     step_run_id: str = Field(pattern=r"^steprun_[0-9a-f]{32}$")
     artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
@@ -138,6 +150,12 @@ class MockExamSourceReviewPointer(FrozenModel):
     result_schema: Literal["review-result@7.0", "review-result@8.0"]
     worker_decision: Literal["ready_for_human"] = "ready_for_human"
     finding_counts: MockExamReviewFindingCounts
+
+
+class MockExamSourceReviewPointerV2(MockExamSourceReviewPointer):
+    """V2 source pointer admitting the content-team V3 review result."""
+
+    result_schema: Literal["review-result@9.0"]  # type: ignore[assignment]
 
 
 class MockExamHumanApprovalPointer(FrozenModel):
@@ -159,9 +177,7 @@ class MockExamItemReviewDecisionV1(FrozenModel):
     human_approval: MockExamHumanApprovalPointer
     decision: Literal["APPROVE"] = "APPROVE"
     final_rating: Literal["A", "B", "C"]
-    rating_policy_key: Literal["integrated-science-item-rating"] = (
-        "integrated-science-item-rating"
-    )
+    rating_policy_key: Literal["integrated-science-item-rating"] = "integrated-science-item-rating"
     rating_policy_revision_id: str = Field(pattern=r"^ratingpolicyrev_[0-9a-f]{32}$")
     rating_policy_sha256: Sha256
     idempotency_key_sha256: Sha256
@@ -177,6 +193,15 @@ class MockExamItemReviewDecisionV1(FrozenModel):
         ):
             raise ValueError("Item review decision self-hash mismatch")
         return self
+
+
+class MockExamItemReviewDecisionV2(MockExamItemReviewDecisionV1):
+    """V2 immutable decision for the content-team V3/review-result@9 family."""
+
+    schema_version: Literal["mock-exam-item-review-decision/2.0"] = (
+        "mock-exam-item-review-decision/2.0"  # type: ignore[assignment]
+    )
+    source_review: MockExamSourceReviewPointerV2
 
 
 def mock_exam_item_review_decision_sha256(value: dict[str, Any]) -> str:
@@ -211,3 +236,26 @@ class MockExamItemReviewPublicationResult(FrozenModel):
     rating_policy_revision_id: str = Field(pattern=r"^ratingpolicyrev_[0-9a-f]{32}$")
     rating_policy_sha256: Sha256
     created: bool
+
+
+class MockExamItemReviewPublicationResultV2(MockExamItemReviewPublicationResult):
+    """V2 publication receipt for the content-team V3/review-result@9 family."""
+
+    schema_version: Literal["mock-exam-item-review-publication-result/2.0"] = (
+        "mock-exam-item-review-publication-result/2.0"  # type: ignore[assignment]
+    )
+    review_result_schema: Literal["review-result@9.0"]  # type: ignore[assignment]
+
+
+MockExamReviewEligibilityResultContract = Annotated[
+    MockExamReviewEligibilityResult | MockExamReviewEligibilityResultV2,
+    Field(discriminator="schema_version"),
+]
+MockExamItemReviewDecisionContract = Annotated[
+    MockExamItemReviewDecisionV1 | MockExamItemReviewDecisionV2,
+    Field(discriminator="schema_version"),
+]
+MockExamItemReviewPublicationResultContract = Annotated[
+    MockExamItemReviewPublicationResult | MockExamItemReviewPublicationResultV2,
+    Field(discriminator="schema_version"),
+]

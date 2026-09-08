@@ -36,9 +36,7 @@ def _write_checkpoint(
     directory.mkdir(mode=0o750)
     current = directory / "current.json"
     current.write_text(
-        json.dumps(
-            {"execution_id": execution_id, "state": state, "retryable": retryable}
-        ),
+        json.dumps({"execution_id": execution_id, "state": state, "retryable": retryable}),
         encoding="ascii",
     )
     current.chmod(0o640)

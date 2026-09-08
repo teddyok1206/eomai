@@ -17,7 +17,11 @@ from eom_hwpx_contracts.models import (
     ContentTeamCombinationAnswer,
     ContentTeamDirectChoiceAnswer,
     ContentTeamEditorialDraft,
+    ContentTeamEditorialDraftContract,
+    ContentTeamEditorialDraftV2,
     ContentTeamEditorialQuestion,
+    ContentTeamEditorialQuestionContract,
+    ContentTeamEditorialQuestionV2,
     ContentTeamExplanationSections,
     ContentTeamImageSlot,
     ContentTeamInquiry,
@@ -39,7 +43,7 @@ STATEMENT_LABELS = ("ㄱ", "ㄴ", "ㄷ")
 PROCEDURE_LABELS = tuple("가나다라마바사아")
 
 ITEM_LINE = re.compile(r"^(?P<number>[1-9][0-9]{0,2})\.\s*(?P<text>\S.*)$")
-SCORE = re.compile(r"\s*\[(?P<score>2(?:\.5)?|3)점\]\s*$")
+SCORE = re.compile(r"\s*\[(?P<score>1\.5|2(?:\.5)?|3)점\]\s*$")
 ANSWER = re.compile(r"^정답 : (?P<number>[①②③④⑤]) \((?P<content>[^\r\n]+)\)$")
 STATEMENT_COMBINATION = re.compile(r"^(?:ㄱ(?:, ㄴ)?(?:, ㄷ)?|ㄴ(?:, ㄷ)?|ㄷ)$")
 STATEMENT = re.compile(r"(?m)^\s*(?P<label>[ㄱㄴㄷ])[.．]\s*")  # noqa: RUF001
@@ -412,7 +416,7 @@ def _equations(value: str) -> tuple[str, ...]:
 
 
 def derive_content_team_equation_sources(
-    draft: ContentTeamEditorialDraft,
+    draft: ContentTeamEditorialDraftContract,
 ) -> tuple[str, ...]:
     """Derive the ordered equation occurrence index from authored fields."""
 
@@ -446,8 +450,12 @@ def _labels_in_explanation(value: str) -> tuple[str, ...]:
     return tuple(match.group("label") for match in STATEMENT.finditer(value))
 
 
-def parse_content_team_markdown(data: bytes) -> ContentTeamEditorialQuestion:
-    """Parse exactly one reviewed prompt/program-compatible Markdown item."""
+def _parse_content_team_markdown(
+    data: bytes,
+    *,
+    schema_version: Literal["1.0", "2.0"],
+) -> ContentTeamEditorialQuestionContract:
+    """Parse against the caller-pinned Markdown contract version."""
 
     if not data or len(data) > MAX_SOURCE_BYTES:
         _fail("content-team Markdown size is outside the profile")
@@ -555,10 +563,16 @@ def parse_content_team_markdown(data: bytes) -> ContentTeamEditorialQuestion:
     except ContentTeamEquationError as exc:
         raise ContentTeamMarkdownError(str(exc)) from exc
 
-    document = ContentTeamEditorialQuestion(
+    score_display = score_match.group("score")
+    if schema_version == "1.0" and score_display == "1.5":
+        _fail("content-team Markdown V1 does not support a 1.5-point score")
+    question_model = (
+        ContentTeamEditorialQuestionV2 if schema_version == "2.0" else ContentTeamEditorialQuestion
+    )
+    document = question_model(
         source_sha256=f"sha256:{hashlib.sha256(data).hexdigest()}",
         item_number=int(item.group("number")),
-        score_display=cast(Literal["2", "2.5", "3"], score_match.group("score")),
+        score_display=score_display,  # type: ignore[arg-type]
         stem=stem,
         bottom_stem=bottom_stem,
         inquiry=inquiry,
@@ -611,8 +625,34 @@ def parse_content_team_markdown(data: bytes) -> ContentTeamEditorialQuestion:
         ),
         equation_sources=equation_sources,
     )
-    validate_contract("content-team-editorial-question", document.model_dump(mode="json"))
+    validate_contract(
+        (
+            "content-team-editorial-question-v2"
+            if isinstance(document, ContentTeamEditorialQuestionV2)
+            else "content-team-editorial-question"
+        ),
+        document.model_dump(mode="json"),
+    )
     return document
+
+
+def parse_content_team_markdown(data: bytes) -> ContentTeamEditorialQuestion:
+    """Parse the immutable V1 Markdown contract.
+
+    The source bytes cannot identify their schema version.  V3 artifact resolvers must call
+    :func:`parse_content_team_markdown_v2` from the already validated source pointer instead of
+    inferring a version from the score value.
+    """
+
+    document = _parse_content_team_markdown(data, schema_version="1.0")
+    return ContentTeamEditorialQuestion.model_validate(document)
+
+
+def parse_content_team_markdown_v2(data: bytes) -> ContentTeamEditorialQuestionV2:
+    """Parse the V2 Markdown contract selected by a pinned V3 item-content pointer."""
+
+    document = _parse_content_team_markdown(data, schema_version="2.0")
+    return ContentTeamEditorialQuestionV2.model_validate(document)
 
 
 def statement_texts(values: Iterable[ContentTeamStatement]) -> dict[str, str]:
@@ -638,7 +678,7 @@ def _table_markdown(table: ContentTeamTable) -> tuple[str, ...]:
     return rows
 
 
-def serialize_content_team_markdown(draft: ContentTeamEditorialDraft) -> bytes:
+def serialize_content_team_markdown(draft: ContentTeamEditorialDraftContract) -> bytes:
     """Materialize the one canonical Markdown spelling and prove its lossless round trip."""
 
     if normalize_content_team_bottom_stem(draft.score_display, draft.bottom_stem) != (
@@ -693,8 +733,17 @@ def serialize_content_team_markdown(draft: ContentTeamEditorialDraft) -> bytes:
     ):
         lines.extend((label, "", section, ""))
     data = ("\n".join(lines).rstrip() + "\n").encode("utf-8")
-    reparsed = parse_content_team_markdown(data)
-    expected = ContentTeamEditorialDraft.model_validate(
+    reparsed = (
+        parse_content_team_markdown_v2(data)
+        if isinstance(draft, ContentTeamEditorialDraftV2)
+        else parse_content_team_markdown(data)
+    )
+    draft_model = (
+        ContentTeamEditorialDraftV2
+        if isinstance(draft, ContentTeamEditorialDraftV2)
+        else ContentTeamEditorialDraft
+    )
+    expected = draft_model.model_validate(
         draft.model_dump(mode="json", exclude={"schema_version", "source_sha256"})
     ).model_dump(mode="json")
     actual = reparsed.model_dump(mode="json", exclude={"schema_version", "source_sha256"})

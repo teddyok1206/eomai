@@ -10,14 +10,19 @@ from eom_identifiers import content_sha256
 
 from eom_catalog_contracts.assessment_assembly import (
     MockExamAssemblyCohortV1,
+    MockExamAssemblyPlanContract,
     MockExamAssemblyPlanV1,
+    MockExamAssemblyPlanV2,
     MockExamAssemblyPolicyV1,
     MockExamAssemblyShortageV1,
     MockExamCoverageRequirement,
     MockExamLayoutPolicyV1,
     MockExamLayoutSlotV1,
+    MockExamPlannedPlacementContract,
     MockExamPlannedPlacementV1,
-    MockExamPlanningCandidateV1,
+    MockExamPlannedPlacementV2,
+    MockExamPlanningCandidateContract,
+    MockExamPlanningCandidateV2,
     MockExamRatingPolicyV1,
     MockExamUsageSnapshotV1,
     validate_mock_exam_planned_placements,
@@ -67,10 +72,10 @@ def build_mock_exam_assembly_plan(
     graph_snapshot_sha256: str,
     usage_snapshot: MockExamUsageSnapshotV1,
     resolved_candidate_count: int,
-    candidates: tuple[MockExamPlanningCandidateV1, ...],
+    candidates: tuple[MockExamPlanningCandidateContract, ...],
     planned_at: datetime,
     cohort: MockExamAssemblyCohortV1 | None = None,
-) -> MockExamAssemblyPlanV1:
+) -> MockExamAssemblyPlanContract:
     """Select a complete immutable plan or return an empty, diagnosed shortage.
 
     Slot lookup is indexed once.  DFS visits the most constrained slot first while the final
@@ -90,8 +95,17 @@ def build_mock_exam_assembly_plan(
     candidate_revision_ids = tuple(row.item_revision_id for row in candidates)
     if len(candidate_revision_ids) != len(set(candidate_revision_ids)):
         _fail("ASSEMBLY_CANDIDATE_DUPLICATE", "candidate Item revisions must be unique")
+    has_v2_candidate = any(isinstance(row, MockExamPlanningCandidateV2) for row in candidates)
+    if has_v2_candidate and not all(
+        isinstance(row, MockExamPlanningCandidateV2) for row in candidates
+    ):
+        _fail(
+            "ASSEMBLY_CONTENT_PROTOCOL_MIXED",
+            "one assembly plan cannot mix V2 and V3 Item content pointers",
+        )
+    plan_version: Literal["1.0", "2.0"] = "2.0" if has_v2_candidate else "1.0"
     cohort_by_position: dict[int, str] | None = None
-    candidate_by_revision: dict[str, MockExamPlanningCandidateV1] | None = None
+    candidate_by_revision: dict[str, MockExamPlanningCandidateContract] | None = None
     if cohort is not None:
         cohort_by_position = {member.position: member.item_revision_id for member in cohort.members}
         candidate_by_revision = {row.item_revision_id: row for row in candidates}
@@ -113,9 +127,9 @@ def build_mock_exam_assembly_plan(
             )
 
     requirement_by_id = {row.requirement_id: row for row in policy.coverage_requirements}
-    options_by_slot: dict[str, tuple[MockExamPlanningCandidateV1, ...]] = {}
+    options_by_slot: dict[str, tuple[MockExamPlanningCandidateContract, ...]] = {}
     for slot in layout_policy.slots:
-        options: tuple[MockExamPlanningCandidateV1, ...]
+        options: tuple[MockExamPlanningCandidateContract, ...]
         if cohort_by_position is not None and candidate_by_revision is not None:
             candidate = candidate_by_revision[cohort_by_position[slot.position]]
             options = (
@@ -149,6 +163,7 @@ def build_mock_exam_assembly_plan(
             reason="NO_STRUCTURAL_CANDIDATES",
             visited_nodes=0,
             cohort=cohort,
+            plan_version=plan_version,
         )
     if not candidates:
         return _shortage_plan(
@@ -165,6 +180,7 @@ def build_mock_exam_assembly_plan(
             reason="NO_RATED_CANDIDATES",
             visited_nodes=0,
             cohort=cohort,
+            plan_version=plan_version,
         )
     if any(not options_by_slot[slot.slot_id] for slot in layout_policy.slots):
         return _shortage_plan(
@@ -181,6 +197,7 @@ def build_mock_exam_assembly_plan(
             reason="SLOT_CANDIDATE_MISSING",
             visited_nodes=0,
             cohort=cohort,
+            plan_version=plan_version,
         )
 
     search_slots = tuple(
@@ -193,7 +210,7 @@ def build_mock_exam_assembly_plan(
             ),
         )
     )
-    selected_by_slot: dict[str, tuple[MockExamPlanningCandidateV1, str | None]] = {}
+    selected_by_slot: dict[str, tuple[MockExamPlanningCandidateContract, str | None]] = {}
     selected_revisions: set[str] = set()
     selected_items: set[str] = set()
     selected_units_by_requirement: dict[str, set[str]] = {}
@@ -266,6 +283,7 @@ def build_mock_exam_assembly_plan(
             reason="CONSTRAINT_SEARCH_EXHAUSTED",
             visited_nodes=min(visited_nodes, MAX_PLANNER_VISITED_NODES),
             cohort=cohort,
+            plan_version=plan_version,
         )
 
     placements = tuple(
@@ -283,6 +301,7 @@ def build_mock_exam_assembly_plan(
                 usage_snapshot,
                 planned_at,
                 cohort,
+                plan_version,
             ),
             "status": "READY",
             "resolved_candidate_count": resolved_candidate_count,
@@ -331,10 +350,17 @@ def _validate_policy_pair(
 
 
 def _candidate_matches_slot(
-    candidate: MockExamPlanningCandidateV1,
+    candidate: MockExamPlanningCandidateContract,
     slot: MockExamLayoutSlotV1,
     requirement_by_id: dict[str, MockExamCoverageRequirement],
 ) -> bool:
+    if isinstance(candidate, MockExamPlanningCandidateV2) and candidate.source_score_display != {
+        1_500: "1.5",
+        2_000: "2",
+        2_500: "2.5",
+        3_000: "3",
+    }.get(slot.points_milli):
+        return False
     if slot.inquiry_required and not candidate.is_inquiry:
         return False
     if slot.coverage_requirement_id is None:
@@ -345,7 +371,7 @@ def _candidate_matches_slot(
 
 
 def _coverage_unit_options(
-    candidate: MockExamPlanningCandidateV1,
+    candidate: MockExamPlanningCandidateContract,
     slot: MockExamLayoutSlotV1,
     requirement_by_id: dict[str, MockExamCoverageRequirement],
     selected_units_by_requirement: dict[str, set[str]],
@@ -364,7 +390,7 @@ def _coverage_unit_options(
 
 
 def _candidate_rank(
-    candidate: MockExamPlanningCandidateV1, slot: MockExamLayoutSlotV1
+    candidate: MockExamPlanningCandidateContract, slot: MockExamLayoutSlotV1
 ) -> tuple[object, ...]:
     observed = (
         _DIFFICULTY_LEVELS.get(candidate.difficulty_band.strip().casefold())
@@ -391,9 +417,9 @@ def _candidate_rank(
 
 def _placement(
     slot: MockExamLayoutSlotV1,
-    candidate: MockExamPlanningCandidateV1,
+    candidate: MockExamPlanningCandidateContract,
     selected_unit_key: str | None,
-) -> MockExamPlannedPlacementV1:
+) -> MockExamPlannedPlacementContract:
     reason = {
         "slot": slot.model_dump(mode="json"),
         "item_revision_id": candidate.item_revision_id,
@@ -405,35 +431,38 @@ def _placement(
         "usage_fingerprint_sha256": candidate.usage_fingerprint_sha256,
         "coverage_unit_key": selected_unit_key,
     }
-    return MockExamPlannedPlacementV1(
-        slot_id=slot.slot_id,
-        position=slot.position,
-        display_number=str(slot.position),
-        item_id=candidate.item_id,
-        item_revision_id=candidate.item_revision_id,
-        item_manifest_sha256=candidate.item_manifest_sha256,
-        graph_item_node_id=candidate.graph_item_node_id,
-        graph_analysis_run_id=candidate.graph_analysis_run_id,
-        graph_source_class=candidate.graph_source_class,
-        graph_occurrence_placement_node_id=candidate.graph_occurrence_placement_node_id,
-        curriculum_unit_keys=candidate.curriculum_unit_keys,
-        large_unit_key=candidate.large_unit_key,
-        points_milli=slot.points_milli,
-        coverage_role=slot.coverage_role,
-        coverage_requirement_id=slot.coverage_requirement_id,
-        coverage_unit_key=selected_unit_key,
-        is_inquiry=candidate.is_inquiry,
-        item_type_key=candidate.item_type_key,
-        difficulty_band=candidate.difficulty_band,
-        material_profile=candidate.material_profile,
-        source_score_display=candidate.source_score_display,
-        content=candidate.content,
-        review=candidate.review,
-        usage_count=candidate.usage_count,
-        latest_usage_at=candidate.latest_usage_at,
-        usage_fingerprint_sha256=candidate.usage_fingerprint_sha256,
-        selection_reason_sha256=content_sha256(reason),
-    )
+    value = {
+        "slot_id": slot.slot_id,
+        "position": slot.position,
+        "display_number": str(slot.position),
+        "item_id": candidate.item_id,
+        "item_revision_id": candidate.item_revision_id,
+        "item_manifest_sha256": candidate.item_manifest_sha256,
+        "graph_item_node_id": candidate.graph_item_node_id,
+        "graph_analysis_run_id": candidate.graph_analysis_run_id,
+        "graph_source_class": candidate.graph_source_class,
+        "graph_occurrence_placement_node_id": candidate.graph_occurrence_placement_node_id,
+        "curriculum_unit_keys": candidate.curriculum_unit_keys,
+        "large_unit_key": candidate.large_unit_key,
+        "points_milli": slot.points_milli,
+        "coverage_role": slot.coverage_role,
+        "coverage_requirement_id": slot.coverage_requirement_id,
+        "coverage_unit_key": selected_unit_key,
+        "is_inquiry": candidate.is_inquiry,
+        "item_type_key": candidate.item_type_key,
+        "difficulty_band": candidate.difficulty_band,
+        "material_profile": candidate.material_profile,
+        "source_score_display": candidate.source_score_display,
+        "content": candidate.content.model_dump(mode="json"),
+        "review": candidate.review.model_dump(mode="json"),
+        "usage_count": candidate.usage_count,
+        "latest_usage_at": candidate.latest_usage_at,
+        "usage_fingerprint_sha256": candidate.usage_fingerprint_sha256,
+        "selection_reason_sha256": content_sha256(reason),
+    }
+    if isinstance(candidate, MockExamPlanningCandidateV2):
+        return MockExamPlannedPlacementV2.model_validate(value)
+    return MockExamPlannedPlacementV1.model_validate(value)
 
 
 def _shortage_plan(
@@ -447,11 +476,12 @@ def _shortage_plan(
     resolved_candidate_count: int,
     rated_candidate_count: int,
     planned_at: datetime,
-    options_by_slot: dict[str, tuple[MockExamPlanningCandidateV1, ...]],
+    options_by_slot: dict[str, tuple[MockExamPlanningCandidateContract, ...]],
     reason: MockExamShortageReason,
     visited_nodes: int,
     cohort: MockExamAssemblyCohortV1 | None,
-) -> MockExamAssemblyPlanV1:
+    plan_version: Literal["1.0", "2.0"],
+) -> MockExamAssemblyPlanContract:
     shortages = tuple(
         MockExamAssemblyShortageV1(
             slot_id=slot.slot_id,
@@ -477,6 +507,7 @@ def _shortage_plan(
                 usage_snapshot,
                 planned_at,
                 cohort,
+                plan_version,
             ),
             "status": "SHORTAGE",
             "resolved_candidate_count": resolved_candidate_count,
@@ -498,9 +529,10 @@ def _plan_header(
     usage_snapshot: MockExamUsageSnapshotV1,
     planned_at: datetime,
     cohort: MockExamAssemblyCohortV1 | None,
+    plan_version: Literal["1.0", "2.0"],
 ) -> dict[str, object]:
     value: dict[str, object] = {
-        "schema_version": "mock-exam-assembly-plan/1.0",
+        "schema_version": f"mock-exam-assembly-plan/{plan_version}",
         "policy_revision_id": policy.policy_revision_id,
         "policy_sha256": content_sha256(policy.model_dump(mode="json")),
         "layout_policy_revision_id": layout.layout_policy_revision_id,
@@ -517,8 +549,10 @@ def _plan_header(
     return value
 
 
-def _finish_plan(value: dict[str, object]) -> MockExamAssemblyPlanV1:
+def _finish_plan(value: dict[str, object]) -> MockExamAssemblyPlanContract:
     value["plan_sha256"] = content_sha256(value)
+    if value.get("schema_version") == "mock-exam-assembly-plan/2.0":
+        return MockExamAssemblyPlanV2.model_validate(value)
     return MockExamAssemblyPlanV1.model_validate(value)
 
 

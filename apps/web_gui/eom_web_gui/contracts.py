@@ -378,9 +378,16 @@ class MockExamHwpxBuildRequest(WebModel):
 
 class MockExamHwpxBuildView(WebModel):
     build_id: str = Field(pattern=r"^hwpxbuild_[0-9a-f]{32}$")
+    assessment_assembly_id: str = Field(pattern=r"^assembly_[0-9a-f]{32}$")
     assessment_assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
     assembly_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    policy_revision_id: str = Field(pattern=r"^assemblypolicyrev_[0-9a-f]{32}$")
+    policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    graph_snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     item_set_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    renderer: Literal["content-team-exam"]
+    renderer_version: Literal["1.0.0", "2.0.0", "3.0.0"]
     state: Literal["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]
     validation_state: Literal["PENDING", "PASS", "FAIL"]
     item_count: int = Field(ge=1, le=200)
@@ -388,10 +395,15 @@ class MockExamHwpxBuildView(WebModel):
     native_equation_count: int | None = Field(default=None, ge=0, le=25600)
     native_table_count: int | None = Field(default=None, ge=0, le=4000)
     visual_count: int | None = Field(default=None, ge=0, le=400)
-    output_artifact_revision_id: str | None = None
+    output_artifact_id: str | None = Field(default=None, pattern=r"^artifact_[0-9a-f]{32}$")
+    output_artifact_revision_id: str | None = Field(default=None, pattern=r"^rev_[0-9a-f]{32}$")
     output_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     download_available: bool
-    failure_code: str | None = None
+    failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{0,79}$")
+    failure_detail_sanitized: str | None = Field(default=None, max_length=500)
+    created_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    created_at: UtcDatetime
+    started_at: UtcDatetime | None = None
     completed_at: UtcDatetime | None = None
     resource_version: int = Field(ge=1)
 
@@ -1171,7 +1183,7 @@ class HwpxBuildView(WebModel):
     source_artifact_revision_id: str = Field(pattern=r"^rev_[a-f0-9]{32}$")
     source_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
     renderer: Literal["kordoc", "eom-template", "content-team"]
-    renderer_version: Literal["4.9.0", "1.0.0", "2.0.0"]
+    renderer_version: Literal["4.9.0", "1.0.0", "2.0.0", "3.0.0"]
     state: Literal["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]
     validation_state: Literal["PENDING", "PASS", "FAIL"]
     native_equation_count: int | None = Field(default=None, ge=0, le=32)

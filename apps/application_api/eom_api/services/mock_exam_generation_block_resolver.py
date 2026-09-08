@@ -5,8 +5,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Literal, Never
 
-from eom_api_contracts.mock_exam_execution import MockExamGenerationBlockResolutionV1
-from eom_catalog_contracts.mock_exam_production_plan import MockExamOneItemGenerationBlockV1
+from eom_api_contracts.mock_exam_execution import (
+    MockExamGenerationBlockResolutionV1,
+    MockExamGenerationBlockResolutionV2,
+)
+from eom_catalog_contracts.mock_exam_production_plan import (
+    MockExamOneItemGenerationBlockV1,
+    MockExamOneItemGenerationBlockV2,
+)
 from eom_catalog_service.models import (
     ContentPackActivationRecord,
     ContentPackRecord,
@@ -45,7 +51,7 @@ class DatabaseGenerationBlockResolver:
         self.environment = environment
 
     def resolve_generation_block(
-        self, block: MockExamOneItemGenerationBlockV1
+        self, block: MockExamOneItemGenerationBlockV1 | MockExamOneItemGenerationBlockV2
     ) -> MockExamGenerationBlockResolutionV1:
         statement = (
             select(
@@ -75,8 +81,7 @@ class DatabaseGenerationBlockResolver:
             )
             .where(
                 WorkflowDefinitionRecord.definition_key == block.workflow_definition_key,
-                WorkflowDefinitionRecord.definition_version
-                == block.workflow_definition_version,
+                WorkflowDefinitionRecord.definition_version == block.workflow_definition_version,
                 WorkflowDefinitionRecord.active.is_(True),
                 ContentPackActivationRecord.pack_key == block.content_pack_key,
                 ContentPackActivationRecord.environment == self.environment,
@@ -134,9 +139,7 @@ class DatabaseGenerationBlockResolver:
                 "generation-block Workflow definition has inconsistent role protocols",
             )
         try:
-            preset = ExecutionPresetRevisionV2.model_validate(
-                preset_revision.canonical_document
-            )
+            preset = ExecutionPresetRevisionV2.model_validate(preset_revision.canonical_document)
         except ValueError as exc:
             raise MockExamGenerationBlockResolutionError(
                 "PRODUCTION_EXECUTION_PRESET_INVALID",
@@ -153,23 +156,30 @@ class DatabaseGenerationBlockResolver:
                 "PRODUCTION_EXECUTION_PRESET_DRIFT",
                 "current execution preset pointers or protocol compatibility differ",
             )
-        return MockExamGenerationBlockResolutionV1(
-            generation_block_key=block.block_key,
-            generation_block_revision=block.block_revision,
-            generation_block_sha256=block.block_sha256,
-            workflow_definition_key=definition.definition_key,
-            workflow_definition_version=definition.definition_version,
-            workflow_definition_sha256=definition.definition_hash,
-            content_pack_release_id=release.content_pack_release_id,
-            content_pack_key=pack.pack_key,
-            content_pack_version=release.version,
-            content_pack_release_sha256=release.bundle_sha256,
-            content_pack_source_tree_sha256=release.source_tree_sha256,
-            execution_preset_id=preset.preset_id,
-            execution_preset_revision_id=preset.preset_revision_id,
-            execution_preset_key=preset_logical.preset_key,
-            execution_preset_sha256=preset.content_sha256,
-            resolved_at=datetime.now(UTC),
+        resolution_type = (
+            MockExamGenerationBlockResolutionV2
+            if block.block_revision == "2.0"
+            else MockExamGenerationBlockResolutionV1
+        )
+        return resolution_type.model_validate(
+            {
+                "generation_block_key": block.block_key,
+                "generation_block_revision": block.block_revision,
+                "generation_block_sha256": block.block_sha256,
+                "workflow_definition_key": definition.definition_key,
+                "workflow_definition_version": definition.definition_version,
+                "workflow_definition_sha256": definition.definition_hash,
+                "content_pack_release_id": release.content_pack_release_id,
+                "content_pack_key": pack.pack_key,
+                "content_pack_version": release.version,
+                "content_pack_release_sha256": release.bundle_sha256,
+                "content_pack_source_tree_sha256": release.source_tree_sha256,
+                "execution_preset_id": preset.preset_id,
+                "execution_preset_revision_id": preset.preset_revision_id,
+                "execution_preset_key": preset_logical.preset_key,
+                "execution_preset_sha256": preset.content_sha256,
+                "resolved_at": datetime.now(UTC),
+            }
         )
 
     @staticmethod

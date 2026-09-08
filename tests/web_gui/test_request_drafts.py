@@ -44,7 +44,7 @@ def test_request_text_becomes_reviewed_bounded_authoring_guidance() -> None:
     )
     payload = workflow_start_payload(draft)
     assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-    assert payload["definition_version"] == "1.8.0"
+    assert payload["definition_version"] == "1.9.0"
     assert payload["image_mode"] == "required"
     assert payload["pack_key"] == "generated-knowledge-item"
     assert payload["execution_preset_key"] == "standard-item"

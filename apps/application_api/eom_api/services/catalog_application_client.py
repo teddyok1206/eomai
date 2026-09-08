@@ -400,8 +400,16 @@ class CatalogApplicationClient:
         | InspectMockExamReviewEligibilityQuery,
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
-        schemas = catalog_application_schema_route(command.operation)
-        validate_contract(schemas.request_schema, payload)
+        content_schema_version = (
+            command.content.schema_version
+            if isinstance(command, ReviewedItemContentImportCommand)
+            else None
+        )
+        request_schemas = catalog_application_schema_route(
+            command.operation,
+            content_schema_version=content_schema_version,
+        )
+        validate_contract(request_schemas.request_schema, payload)
         self._validate_socket()
         connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
@@ -421,7 +429,26 @@ class CatalogApplicationClient:
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError
-            validate_contract(schemas.response_schema, value)
+            response_content_schema_version: str | None = content_schema_version
+            raw_content = value.get("content")
+            if isinstance(raw_content, dict):
+                raw_content_schema_version = raw_content.get("schema_version")
+                if isinstance(raw_content_schema_version, str):
+                    response_content_schema_version = raw_content_schema_version
+            review_result_schema: str | None = None
+            for field in ("item_review", "review_eligibility"):
+                raw_review = value.get(field)
+                if isinstance(raw_review, dict):
+                    raw_review_result_schema = raw_review.get("review_result_schema")
+                    if isinstance(raw_review_result_schema, str):
+                        review_result_schema = raw_review_result_schema
+                        break
+            response_schemas = catalog_application_schema_route(
+                command.operation,
+                content_schema_version=response_content_schema_version,
+                review_result_schema=review_result_schema,
+            )
+            validate_contract(response_schemas.response_schema, value)
             response = CatalogApplicationResponse.model_validate(value)
         except CatalogApplicationClientError:
             raise

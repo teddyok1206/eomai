@@ -116,6 +116,7 @@ def test_cli_exposes_atomic_graph_phase_without_legacy_batch_command() -> None:
 
     assert result.exit_code == 0
     assert "publish-graph" in result.stdout
+    assert "retire-items" in result.stdout
     assert "publish-next-graph-batch" not in result.stdout
     assert "exact 25-Item cohort atomically" in result.stdout
 

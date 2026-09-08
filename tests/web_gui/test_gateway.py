@@ -7,6 +7,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from eom_api_contracts import AssessmentHwpxBuildView
 from eom_catalog_contracts import (
     build_mock_exam_assembly_plan,
     load_integrated_science_mock_exam_layout_policy,
@@ -28,7 +29,11 @@ from eom_web_gui.gateways import (
 )
 from eom_web_gui.sessions import ApiTokens, WebSession
 
-from tests.unit.test_mock_exam_assembly_contracts import _planning_candidates, _usage_snapshot
+from tests.unit.test_mock_exam_assembly_contracts import (
+    _planning_candidates,
+    _planning_candidates_v2,
+    _usage_snapshot,
+)
 from tests.web_gui.helpers import structured_item_content
 
 NOW = datetime(2026, 8, 21, 9, 0, tzinfo=UTC)
@@ -688,29 +693,40 @@ async def test_gateway_uses_pinned_assembly_for_whole_exam_hwpx() -> None:
                 ),
             )
         assert request.url.path == f"/api/v1/assessment-hwpx-builds/{build_id}"
+        api_view = AssessmentHwpxBuildView(
+            build_id=build_id,
+            assessment_assembly_id="assembly_" + "1" * 32,
+            assessment_assembly_revision_id=assembly_revision_id,
+            assembly_manifest_sha256="sha256:" + "3" * 64,
+            policy_revision_id="assemblypolicyrev_" + "4" * 32,
+            policy_sha256="sha256:" + "5" * 64,
+            graph_snapshot_revision_id="graphrev_" + "6" * 32,
+            graph_snapshot_sha256="sha256:" + "7" * 64,
+            item_set_sha256="sha256:" + "8" * 64,
+            renderer="content-team-exam",
+            renderer_version="3.0.0",
+            state="SUCCEEDED",
+            validation_state="PASS",
+            item_count=25,
+            section_count=25,
+            native_equation_count=20,
+            native_table_count=8,
+            visual_count=11,
+            output_artifact_id="artifact_" + "9" * 32,
+            output_artifact_revision_id="rev_" + "a" * 32,
+            output_sha256="sha256:" + "b" * 64,
+            download_available=True,
+            failure_code=None,
+            failure_detail_sanitized=None,
+            created_by_operator_id="operator_" + "c" * 32,
+            created_at=NOW,
+            started_at=NOW,
+            completed_at=NOW,
+            resource_version=3,
+        )
         return httpx.Response(
             200,
-            json=_single(
-                {
-                    "build_id": build_id,
-                    "assessment_assembly_revision_id": assembly_revision_id,
-                    "assembly_manifest_sha256": "sha256:" + "3" * 64,
-                    "item_set_sha256": "sha256:" + "4" * 64,
-                    "state": "SUCCEEDED",
-                    "validation_state": "PASS",
-                    "item_count": 25,
-                    "section_count": 25,
-                    "native_equation_count": 20,
-                    "native_table_count": 8,
-                    "visual_count": 11,
-                    "output_artifact_revision_id": "rev_" + "5" * 32,
-                    "output_sha256": "sha256:" + "6" * 64,
-                    "download_available": True,
-                    "failure_code": None,
-                    "completed_at": NOW.isoformat(),
-                    "resource_version": 3,
-                }
-            ),
+            json=_single(api_view.model_dump(mode="json")),
         )
 
     gateway = HttpApplicationGateway(
@@ -729,6 +745,7 @@ async def test_gateway_uses_pinned_assembly_for_whole_exam_hwpx() -> None:
     )
     value = await gateway.mock_exam_hwpx_build(_session(), build_id)
     assert value.item_count == value.section_count == 25
+    assert value.renderer_version == "3.0.0"
     assert value.visual_count == 11
     assert calls == 2
     await gateway.close()
@@ -937,8 +954,80 @@ def test_web_plan_projection_rejects_tampered_or_duplicate_revisions() -> None:
     assert _verified_mock_exam_plan(duplicate, **arguments) is None
 
 
+def test_web_plan_projection_accepts_only_exact_v3_content_for_plan_v2() -> None:
+    policy = load_integrated_science_mock_exam_policy()
+    candidates = _planning_candidates_v2()
+    graph_revision_id = "graphrev_" + "c" * 32
+    graph_sha256 = "sha256:" + "d" * 64
+    plan = build_mock_exam_assembly_plan(
+        policy=policy,
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        rating_policy=load_integrated_science_mock_exam_rating_policy(),
+        graph_snapshot_revision_id=graph_revision_id,
+        graph_snapshot_sha256=graph_sha256,
+        usage_snapshot=_usage_snapshot(
+            captured_at=NOW,
+            candidate_revision_count=len(candidates),
+        ),
+        resolved_candidate_count=len(candidates),
+        candidates=candidates,
+        planned_at=NOW,
+    )
+    value = plan.model_dump(mode="json")
+    arguments = {
+        "policy_revision_id": policy.policy_revision_id,
+        "policy_sha256": value["policy_sha256"],
+        "graph_snapshot_revision_id": graph_revision_id,
+        "graph_snapshot_sha256": graph_sha256,
+        "item_count": policy.item_count,
+    }
+    assert value["schema_version"] == "mock-exam-assembly-plan/2.0"
+    assert _verified_mock_exam_plan(value, **arguments) == value
+
+    mixed = json.loads(json.dumps(value))
+    mixed["placements"][0]["content"]["schema_ref"] = "eom.assessment.item-content/2.0"
+    mixed["plan_sha256"] = content_sha256(
+        {key: item for key, item in mixed.items() if key != "plan_sha256"}
+    )
+    assert _verified_mock_exam_plan(mixed, **arguments) is None
+
+
 @pytest.mark.anyio
-async def test_gateway_requires_both_closed_profiles_for_automatic_hwpx_delivery() -> None:
+@pytest.mark.parametrize(
+    ("content_team_profile", "expected_state"),
+    (
+        (
+            {
+                "renderer": "content-team",
+                "renderer_version": "2.0.0",
+                "document_profile": "content-team-hwp-question-editor-v2",
+                "source_schema_ref": "eom.assessment.item-content/2.0",
+            },
+            "READY",
+        ),
+        (
+            {
+                "renderer": "content-team",
+                "renderer_version": "3.0.0",
+                "document_profile": "content-team-hwp-question-editor-v3",
+                "source_schema_ref": "eom.assessment.item-content/3.0",
+            },
+            "READY",
+        ),
+        (
+            {
+                "renderer": "content-team",
+                "renderer_version": "3.0.0",
+                "document_profile": "content-team-hwp-question-editor-v2",
+                "source_schema_ref": "eom.assessment.item-content/3.0",
+            },
+            "DEGRADED",
+        ),
+    ),
+)
+async def test_gateway_requires_both_closed_profiles_for_automatic_hwpx_delivery(
+    content_team_profile: dict[str, str], expected_state: str
+) -> None:
     profiles = [
         {
             "renderer": "eom-template",
@@ -946,12 +1035,7 @@ async def test_gateway_requires_both_closed_profiles_for_automatic_hwpx_delivery
             "document_profile": "eom-question-template-v1",
             "source_schema_ref": "eom.assessment.item-content/1.0",
         },
-        {
-            "renderer": "content-team",
-            "renderer_version": "2.0.0",
-            "document_profile": "content-team-hwp-question-editor-v2",
-            "source_schema_ref": "eom.assessment.item-content/2.0",
-        },
+        content_team_profile,
     ]
 
     def handler(_: httpx.Request) -> httpx.Response:
@@ -977,10 +1061,10 @@ async def test_gateway_requires_both_closed_profiles_for_automatic_hwpx_delivery
 
     capability = await gateway.hwpx_capability(_session())
 
-    assert capability.state == "READY"
+    assert capability.state == expected_state
     assert capability.renderer_key == "item-revision-auto"
     assert capability.document_profile == "item-revision-auto"
-    assert capability.build_available is True
+    assert capability.build_available is (expected_state == "READY")
     await gateway.close()
 
 

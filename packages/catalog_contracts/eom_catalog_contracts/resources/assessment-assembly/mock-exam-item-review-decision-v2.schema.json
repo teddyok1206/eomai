@@ -1,0 +1,98 @@
+{
+  "$defs": {
+    "FindingCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "blocking": {"const": 0, "type": "integer"},
+        "info": {"maximum": 20, "minimum": 0, "type": "integer"},
+        "warning": {"maximum": 20, "minimum": 0, "type": "integer"}
+      },
+      "required": ["info", "warning", "blocking"],
+      "type": "object"
+    },
+    "HumanApproval": {
+      "additionalProperties": false,
+      "properties": {
+        "approved_at": {"format": "date-time", "type": "string"},
+        "approval_request_id": {
+          "pattern": "^approval_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "reviewer_operator_id": {
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "type": "string"
+        }
+      },
+      "required": ["approval_request_id", "reviewer_operator_id", "approved_at"],
+      "type": "object"
+    },
+    "SourceReview": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"pattern": "^artifact_[0-9a-f]{32}$", "type": "string"},
+        "artifact_revision_id": {"pattern": "^rev_[0-9a-f]{32}$", "type": "string"},
+        "finding_counts": {"$ref": "#/$defs/FindingCounts"},
+        "result_schema": {"const": "review-result@9.0", "type": "string"},
+        "sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        "step_run_id": {"pattern": "^steprun_[0-9a-f]{32}$", "type": "string"},
+        "worker_decision": {"const": "ready_for_human", "type": "string"}
+      },
+      "required": [
+        "step_run_id",
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "result_schema",
+        "worker_decision",
+        "finding_counts"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/assessment-assembly/mock-exam-item-review-decision-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "decided_at": {"format": "date-time", "type": "string"},
+    "decision": {"const": "APPROVE", "type": "string"},
+    "decision_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "final_rating": {"enum": ["A", "B", "C"], "type": "string"},
+    "human_approval": {"$ref": "#/$defs/HumanApproval"},
+    "idempotency_key_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "item_review_record_id": {
+      "pattern": "^itemreview_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "item_revision_id": {"pattern": "^itemrev_[0-9a-f]{32}$", "type": "string"},
+    "rating_policy_key": {"const": "integrated-science-item-rating", "type": "string"},
+    "rating_policy_revision_id": {
+      "pattern": "^ratingpolicyrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "rating_policy_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "schema_version": {
+      "const": "mock-exam-item-review-decision/2.0",
+      "type": "string"
+    },
+    "source_review": {"$ref": "#/$defs/SourceReview"},
+    "workflow_id": {"pattern": "^workflow_[0-9a-f]{32}$", "type": "string"}
+  },
+  "required": [
+    "schema_version",
+    "item_review_record_id",
+    "item_revision_id",
+    "workflow_id",
+    "source_review",
+    "human_approval",
+    "decision",
+    "final_rating",
+    "rating_policy_key",
+    "rating_policy_revision_id",
+    "rating_policy_sha256",
+    "idempotency_key_sha256",
+    "decided_at",
+    "decision_sha256"
+  ],
+  "title": "MockExamItemReviewDecisionV2",
+  "type": "object"
+}

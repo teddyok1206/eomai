@@ -15,6 +15,7 @@ from eom_hwpx_contracts import (
     ContentTeamHandoffSnapshot,
     ContentTeamImageSource,
     ContentTeamItemSource,
+    ContentTeamItemSourceV2,
     KordocExpectedStructure,
     KordocRenderOptions,
     KordocSourcePointer,
@@ -63,8 +64,17 @@ CONTENT_TEAM_ITEM_CONTENT_SCHEMA_REFS = frozenset(
     {
         "eom.assessment.item-content/2.0",
         "eom://schemas/item-registry/assessment-item-content-v2",
+        "eom.assessment.item-content/3.0",
+        "eom://schemas/item-registry/assessment-item-content-v3",
     }
 )
+CONTENT_TEAM_ITEM_CONTENT_V3_SCHEMA_REFS = frozenset(
+    {
+        "eom.assessment.item-content/3.0",
+        "eom://schemas/item-registry/assessment-item-content-v3",
+    }
+)
+CONTENT_TEAM_RENDERER_VERSION_V3 = "3.0.0"
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
 AUTOMATIC_RENDERER = "auto"
 AUTOMATIC_DOCUMENT_PROFILE = "item-revision-auto"
@@ -119,7 +129,7 @@ class ContentTeamRenderer(Protocol):
     def build(
         self,
         source_path: Path,
-        source: ContentTeamItemSource,
+        source: ContentTeamItemSource | ContentTeamItemSourceV2,
         *,
         item_revision_id: str,
         image_sources: tuple[ContentTeamImageSource, ...],
@@ -200,14 +210,21 @@ class HwpxApplicationService:
                     "content-team Markdown member pointer is incomplete",
                 )
             handoff_snapshot = self.content_team_renderer.snapshot()
+            is_v3 = component.get("schema_ref") in CONTENT_TEAM_ITEM_CONTENT_V3_SCHEMA_REFS
             normalized_options = dict(options) | {
-                "document_profile": "content-team-hwp-question-editor-v2",
+                "document_profile": (
+                    "content-team-hwp-question-editor-v3"
+                    if is_v3
+                    else "content-team-hwp-question-editor-v2"
+                ),
                 "editorial_markdown_member": markdown_member,
                 "editorial_markdown_sha256": markdown_sha256,
                 "handoff": handoff_snapshot.model_dump(mode="json"),
                 "content_team_images": self._content_team_image_sources(revision),
             }
-            renderer_version = CONTENT_TEAM_RENDERER_VERSION
+            renderer_version = (
+                CONTENT_TEAM_RENDERER_VERSION_V3 if is_v3 else CONTENT_TEAM_RENDERER_VERSION
+            )
         else:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
@@ -365,14 +382,20 @@ class HwpxApplicationService:
                         HwpxManagerErrorCode.HWPX_REFERENCE_MISSING,
                         "stored content-team handoff snapshot is incomplete",
                     )
+                source_values = {
+                    "artifact_id": record.source_artifact_id,
+                    "artifact_revision_id": record.source_artifact_revision_id,
+                    "json_sha256": record.source_sha256,
+                    "markdown_sha256": str(record.options["editorial_markdown_sha256"]),
+                }
+                source = (
+                    ContentTeamItemSourceV2.model_validate(source_values)
+                    if record.source_schema_ref in CONTENT_TEAM_ITEM_CONTENT_V3_SCHEMA_REFS
+                    else ContentTeamItemSource.model_validate(source_values)
+                )
                 receipt = self.content_team_renderer.build(
                     source_path,
-                    ContentTeamItemSource(
-                        artifact_id=record.source_artifact_id,
-                        artifact_revision_id=record.source_artifact_revision_id,
-                        json_sha256=record.source_sha256,
-                        markdown_sha256=str(record.options["editorial_markdown_sha256"]),
-                    ),
+                    source,
                     item_revision_id=record.item_revision_id,
                     image_sources=tuple(
                         ContentTeamImageSource.model_validate(value)
@@ -511,7 +534,7 @@ class HwpxApplicationService:
         if len(eligible) != 1:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
-                "Item Revision must have exactly one V2 content-team ITEM_CONTENT component",
+                "Item Revision must have exactly one supported content-team ITEM_CONTENT component",
             )
         return eligible[0]
 

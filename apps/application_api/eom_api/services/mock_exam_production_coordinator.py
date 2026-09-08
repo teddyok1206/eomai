@@ -14,6 +14,7 @@ from typing import Any, Literal, Never, Protocol, cast
 from eom_api_contracts.assessment_assemblies import (
     CreatePlannedMockExamAssemblyRequest,
     MockExamAssemblyViewV2,
+    MockExamAssemblyViewV3,
     PreviewMockExamAssemblyPlanRequest,
 )
 from eom_api_contracts.hwpx import AssessmentHwpxBuildView
@@ -33,16 +34,21 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamGraphPublicationInputV1,
     MockExamGraphPublicationPointerV1,
     MockExamHwpxBuildPointerV1,
+    MockExamHwpxBuildPointerV2,
     MockExamItemRegistrationPointerV1,
     MockExamProductionExecutionV1,
+    MockExamProductionExecutionV2,
     MockExamProductionFailureV1,
     MockExamProductionItemRunV1,
+    MockExamProductionItemRunV2,
     MockExamRatingAuthorizationPointerV1,
     MockExamRatingPointerV1,
     MockExamRatingPolicyPointerV1,
     MockExamReviewEligibilityObservationV1,
+    MockExamReviewEligibilityObservationV2,
     MockExamReviewPointerV1,
     MockExamWorkflowKnowledgeProvenancePointerV1,
+    is_mock_exam_provenance_validation_recovery_candidate,
     mock_exam_production_state_from_pointers,
 )
 from eom_api_contracts.workflows import (
@@ -71,17 +77,21 @@ from eom_catalog_contracts.assessment_assembly import (
     mock_exam_item_set_sha256,
     mock_exam_planned_placement_id,
 )
+from eom_catalog_contracts.curriculum import resolve_integrated_science_curriculum_scope
 from eom_catalog_contracts.item_review import (
     InspectMockExamReviewEligibilityQuery,
     MockExamItemReviewPublicationResult,
     MockExamReviewEligibilityResult,
+    MockExamReviewEligibilityResultV2,
     PublishMockExamItemReviewCommand,
 )
 from eom_catalog_contracts.knowledge import KnowledgeSourceClass
 from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
+    MockExamOneItemGenerationBlockV2,
     MockExamPlannedWorkflowCallV1,
     MockExamProductionPlanV1,
+    MockExamProductionPlanV2,
 )
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext
@@ -111,7 +121,7 @@ class WorkflowApprovalReceipt:
 
 class GenerationBlockResolver(Protocol):
     def resolve_generation_block(
-        self, block: MockExamOneItemGenerationBlockV1
+        self, block: MockExamOneItemGenerationBlockV1 | MockExamOneItemGenerationBlockV2
     ) -> MockExamGenerationBlockResolutionV1: ...
 
 
@@ -142,25 +152,36 @@ class CatalogReviewEligibilityReader:
                 "WORKFLOW_REVIEW_POINTER_MISMATCH",
                 "Catalog returned review evidence for another Workflow",
             )
-        return MockExamReviewEligibilityObservationV1(
-            schema_version="mock-exam-review-eligibility/1.0",
-            workflow_id=result.workflow_id,
-            workflow_resource_version=result.workflow_lock_version,
-            approval_request_id=result.approval_request_id,
-            approval_resource_version=result.approval_lock_version,
-            approval_state=result.approval_state,
-            reviewer_operator_id=result.reviewer_operator_id,
-            approved_at=result.approved_at,
-            eligibility="ELIGIBLE" if result.eligible else "BLOCKED",
-            step_run_id=result.review_step_run_id,
-            artifact_id=result.review_artifact_id,
-            artifact_revision_id=result.review_artifact_revision_id,
-            sha256=result.review_sha256,
-            result_schema=result.review_result_schema,
-            worker_decision=result.decision,
-            finding_info_count=result.finding_counts.info,
-            finding_warning_count=result.finding_counts.warning,
-            finding_blocking_count=result.finding_counts.blocking,
+        observation_type = (
+            MockExamReviewEligibilityObservationV2
+            if isinstance(result, MockExamReviewEligibilityResultV2)
+            else MockExamReviewEligibilityObservationV1
+        )
+        return observation_type.model_validate(
+            {
+                "schema_version": (
+                    "mock-exam-review-eligibility/2.0"
+                    if isinstance(result, MockExamReviewEligibilityResultV2)
+                    else "mock-exam-review-eligibility/1.0"
+                ),
+                "workflow_id": result.workflow_id,
+                "workflow_resource_version": result.workflow_lock_version,
+                "approval_request_id": result.approval_request_id,
+                "approval_resource_version": result.approval_lock_version,
+                "approval_state": result.approval_state,
+                "reviewer_operator_id": result.reviewer_operator_id,
+                "approved_at": result.approved_at,
+                "eligibility": "ELIGIBLE" if result.eligible else "BLOCKED",
+                "step_run_id": result.review_step_run_id,
+                "artifact_id": result.review_artifact_id,
+                "artifact_revision_id": result.review_artifact_revision_id,
+                "sha256": result.review_sha256,
+                "result_schema": result.review_result_schema,
+                "worker_decision": result.decision,
+                "finding_info_count": result.finding_counts.info,
+                "finding_warning_count": result.finding_counts.warning,
+                "finding_blocking_count": result.finding_counts.blocking,
+            }
         )
 
 
@@ -406,7 +427,7 @@ class MockExamAssemblyOperations(Protocol):
         actor: ActorContext,
         *,
         idempotency_key: str,
-    ) -> MockExamAssemblyViewV2: ...
+    ) -> MockExamAssemblyViewV2 | MockExamAssemblyViewV3: ...
 
 
 class ExistingMockExamAssemblyOperations:
@@ -425,7 +446,7 @@ class ExistingMockExamAssemblyOperations:
         actor: ActorContext,
         *,
         idempotency_key: str,
-    ) -> MockExamAssemblyViewV2:
+    ) -> MockExamAssemblyViewV2 | MockExamAssemblyViewV3:
         del (
             idempotency_key
         )  # The existing assembly service replays by deterministic revision identity.
@@ -433,10 +454,10 @@ class ExistingMockExamAssemblyOperations:
             request, actor
         )
         result = self._queries.mock_exam_assembly(revision_id)
-        if not isinstance(result, MockExamAssemblyViewV2):
+        if not isinstance(result, (MockExamAssemblyViewV2, MockExamAssemblyViewV3)):
             raise MockExamProductionCoordinatorError(
                 "ASSEMBLY_SCHEMA_UNSUPPORTED",
-                "planned assembly did not return manifest version 2",
+                "planned assembly did not return a supported manifest family",
             )
         return result
 
@@ -523,8 +544,9 @@ class MockExamProductionCoordinator:
     ) -> MockExamProductionExecutionV1:
         if len(plan.workflow_calls) != 25:
             _raise("PRODUCTION_PLAN_ITEM_COUNT_INVALID", "production plan must have 25 calls")
+        row_type = MockExamProductionItemRunV2
         rows = tuple(
-            MockExamProductionItemRunV1(
+            row_type(
                 workflow_call_id=call.workflow_call_id,
                 position=call.item_brief.mock_exam_slot.position,
                 state="PLANNED",
@@ -557,6 +579,7 @@ class MockExamProductionCoordinator:
             production_plan_sha256=plan.plan_sha256,
             operator_id=operator_id,
             item_runs=rows,
+            use_v2=True,
             at=at,
         )
 
@@ -601,6 +624,16 @@ class MockExamProductionCoordinator:
             changed = True
 
         calls = {call.workflow_call_id: call for call in plan.workflow_calls}
+        if any(
+            is_mock_exam_provenance_validation_recovery_candidate(row)
+            for row in checkpoint.item_runs
+        ):
+            return self._recover_provenance_validation_cohort(
+                checkpoint,
+                calls,
+                resolution,
+                at=at,
+            )
         rows: list[MockExamProductionItemRunV1] = []
         for row in checkpoint.item_runs:
             current = row
@@ -647,6 +680,7 @@ class MockExamProductionCoordinator:
         for row in rows:
             current = self._observe_workflow(
                 row,
+                calls[row.workflow_call_id],
                 resolution,
                 checkpoint.operator_id,
                 actor,
@@ -664,9 +698,98 @@ class MockExamProductionCoordinator:
             failure=global_failure,
         )
 
+    def _recover_provenance_validation_cohort(
+        self,
+        checkpoint: MockExamProductionExecutionV1,
+        calls: dict[str, MockExamPlannedWorkflowCallV1],
+        resolution: MockExamGenerationBlockResolutionV1,
+        *,
+        at: datetime,
+    ) -> MockExamProductionExecutionV1:
+        """Reopen only the exact 25-row false-negative provenance incident.
+
+        Every official Workflow view is read and validated before one pointer-only successor is
+        returned.  This pass performs no start, review, or approval command; the runner's ordinary
+        checkpoint CAS therefore makes recovery all-or-none and safely repeatable after a crash.
+        """
+
+        if checkpoint.failure is not None or not all(
+            is_mock_exam_provenance_validation_recovery_candidate(row)
+            for row in checkpoint.item_runs
+        ):
+            _raise(
+                "PRODUCTION_PROVENANCE_RECOVERY_COHORT_INVALID",
+                "provenance recovery requires the exact historical 25-Workflow failure cohort",
+            )
+        observations: list[
+            tuple[
+                MockExamProductionItemRunV1,
+                WorkflowView,
+                MockExamWorkflowKnowledgeProvenancePointerV1,
+            ]
+        ] = []
+        recoverable_workflow_states = {
+            "REQUESTED",
+            "RUNNING",
+            "REWORK_REQUESTED",
+            "AWAITING_HUMAN_APPROVAL",
+            "APPROVED",
+            "REGISTERING",
+            "COMPLETED",
+        }
+        for row in checkpoint.item_runs:
+            call = calls[row.workflow_call_id]
+            try:
+                workflow = self.workflows.get(cast(str, row.workflow_id))
+            except Exception as exc:
+                raise MockExamProductionCoordinatorError(
+                    _error_code(exc, "PRODUCTION_PROVENANCE_RECOVERY_OBSERVATION_UNAVAILABLE"),
+                    "provenance recovery could not read an exact Workflow view",
+                ) from exc
+            if workflow.workflow_id != row.workflow_id:
+                _raise(
+                    "WORKFLOW_POINTER_MISMATCH",
+                    "provenance recovery observed another Workflow identity",
+                )
+            if (
+                row.workflow_resource_version is None
+                or workflow.resource_version < row.workflow_resource_version
+            ):
+                _raise(
+                    "WORKFLOW_RESOURCE_VERSION_REGRESSION",
+                    "provenance recovery observed an older Workflow revision",
+                )
+            _require_workflow_resolution(workflow, resolution)
+            provenance = _workflow_knowledge_provenance(workflow, resolution, call)
+            if workflow.state not in recoverable_workflow_states:
+                _raise(
+                    "PRODUCTION_PROVENANCE_RECOVERY_WORKFLOW_STATE_INVALID",
+                    "provenance recovery requires a supported non-failed Workflow lifecycle state",
+                )
+            observations.append((row, workflow, provenance))
+
+        recovered = tuple(
+            _update_run(
+                row,
+                state="WORKFLOW_ACTIVE",
+                workflow_resource_version=workflow.resource_version,
+                knowledge_provenance=provenance,
+                failure=None,
+            )
+            for row, workflow, provenance in observations
+        )
+        return _advance_checkpoint(
+            checkpoint,
+            at=at,
+            generation_block_resolution=resolution,
+            item_runs=recovered,
+            failure=None,
+        )
+
     def _observe_workflow(
         self,
         row: MockExamProductionItemRunV1,
+        call: MockExamPlannedWorkflowCallV1,
         resolution: MockExamGenerationBlockResolutionV1,
         operator_id: str,
         actor: ActorContext,
@@ -698,7 +821,7 @@ class MockExamProductionCoordinator:
             )
         try:
             _require_workflow_resolution(workflow, resolution)
-            provenance = _workflow_knowledge_provenance(workflow, resolution)
+            provenance = _workflow_knowledge_provenance(workflow, resolution, call)
             if row.knowledge_provenance is not None and provenance != row.knowledge_provenance:
                 raise MockExamProductionCoordinatorError(
                     "WORKFLOW_KNOWLEDGE_PROVENANCE_CHANGED",
@@ -1659,6 +1782,7 @@ class MockExamProductionCoordinator:
                 actor,
                 idempotency_key=assembly_key,
             )
+            _require_assembly_manifest_family(plan, manifest)
             manifest_members = tuple(
                 (row.position, row.item_revision_id) for row in manifest.plan.placements
             )
@@ -1759,7 +1883,15 @@ class MockExamProductionCoordinator:
                     "HWPX_BUILD_POINTER_MISMATCH",
                     "HWPX observation returned another build identity",
                 )
-            pointer = _hwpx_pointer(view, assembly, assembly_plan, actor.actor_id)
+            pointer = _hwpx_pointer(
+                view,
+                assembly,
+                assembly_plan,
+                actor.actor_id,
+                expected_renderer_version=(
+                    "3.0.0" if isinstance(plan, MockExamProductionPlanV2) else "2.0.0"
+                ),
+            )
             if checkpoint.hwpx_build is not None and (
                 pointer.item_set_sha256 != checkpoint.hwpx_build.item_set_sha256
             ):
@@ -1886,6 +2018,7 @@ def _require_workflow_resolution(
 def _workflow_knowledge_provenance(
     workflow: WorkflowView,
     resolution: MockExamGenerationBlockResolutionV1,
+    call: MockExamPlannedWorkflowCallV1,
 ) -> MockExamWorkflowKnowledgeProvenancePointerV1:
     source = workflow.knowledge_provenance
     if source is None:
@@ -1896,11 +2029,14 @@ def _workflow_knowledge_provenance(
     pointer = MockExamWorkflowKnowledgeProvenancePointerV1.model_validate(
         source.model_dump(mode="json")
     )
+    expected_curriculum_root = resolve_integrated_science_curriculum_scope(
+        call.item_brief.curriculum_selected_unit_key
+    ).graph_root_stable_key
     if (
         pointer.preset_revision_id != resolution.execution_preset_revision_id
         or pointer.corpus_key != "integrated-science-textbooks"
         or pointer.query_kind != "ITEM_PREPARATION"
-        or pointer.curriculum_root_key is not None
+        or pointer.curriculum_root_key != expected_curriculum_root
         or pointer.required_item_elements != ("choice", "paragraph")
         or pointer.source_classes != ("APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK")
     ):
@@ -2053,6 +2189,8 @@ def _hwpx_pointer(
     assembly: MockExamAssemblyPointerV1,
     assembly_plan: MockExamAssemblyPlanPointerV1,
     operator_id: str,
+    *,
+    expected_renderer_version: Literal["2.0.0", "3.0.0"],
 ) -> MockExamHwpxBuildPointerV1:
     if view.item_set_sha256 != assembly.item_set_sha256:
         _raise(
@@ -2069,11 +2207,11 @@ def _hwpx_pointer(
         or view.graph_snapshot_sha256 != assembly_plan.graph_snapshot_sha256
         or view.item_count != len(assembly.item_revision_ids)
         or view.renderer != "content-team-exam"
-        or view.renderer_version != "1.0.0"
+        or view.renderer_version != expected_renderer_version
         or view.created_by_operator_id != operator_id
     ):
         _raise("HWPX_BUILD_POINTER_MISMATCH", "HWPX build differs from the exact assembly")
-    return MockExamHwpxBuildPointerV1(
+    return MockExamHwpxBuildPointerV2(
         build_id=view.build_id,
         assessment_assembly_id=view.assessment_assembly_id,
         assessment_assembly_revision_id=view.assessment_assembly_revision_id,
@@ -2085,7 +2223,7 @@ def _hwpx_pointer(
         item_set_sha256=view.item_set_sha256,
         item_revision_ids=assembly.item_revision_ids,
         renderer=view.renderer,
-        renderer_version=view.renderer_version,
+        renderer_version=cast(Any, view.renderer_version),
         state=view.state.value,
         validation_state=view.validation_state.value,
         item_count=cast(Literal[25], view.item_count),
@@ -2110,10 +2248,13 @@ def _new_checkpoint(
     production_plan_sha256: str,
     operator_id: str,
     item_runs: tuple[MockExamProductionItemRunV1, ...],
+    use_v2: bool,
     at: datetime,
 ) -> MockExamProductionExecutionV1:
     value: dict[str, Any] = {
-        "schema_version": "mock-exam-production-execution/1.0",
+        "schema_version": (
+            "mock-exam-production-execution/2.0" if use_v2 else "mock-exam-production-execution/1.0"
+        ),
         "execution_id": execution_id,
         "production_request_id": production_request_id,
         "production_plan_id": production_plan_id,
@@ -2140,7 +2281,8 @@ def _new_checkpoint(
         "checkpointed_at": _utc_string(at),
     }
     sha256 = content_sha256(value)
-    return MockExamProductionExecutionV1.model_validate(
+    checkpoint_type = MockExamProductionExecutionV2 if use_v2 else MockExamProductionExecutionV1
+    return checkpoint_type.model_validate(
         {
             **value,
             "execution_revision_id": ("productionexecrev_" + sha256.removeprefix("sha256:")[:32]),
@@ -2318,7 +2460,12 @@ def _advance_checkpoint(
         "checkpointed_at": _utc_string(checkpointed_at),
     }
     sha256 = content_sha256(value)
-    return MockExamProductionExecutionV1.model_validate(
+    checkpoint_type = (
+        MockExamProductionExecutionV2
+        if isinstance(checkpoint, MockExamProductionExecutionV2)
+        else MockExamProductionExecutionV1
+    )
+    return checkpoint_type.model_validate(
         {
             **value,
             "execution_revision_id": ("productionexecrev_" + sha256.removeprefix("sha256:")[:32]),
@@ -2332,9 +2479,7 @@ def _checkpoint_timestamp_floor(
     *,
     at: datetime,
     generation_block_resolution: MockExamGenerationBlockResolutionV1 | None,
-    analysis_review_authorizations: tuple[
-        MockExamAnalysisReviewAuthorizationPointerV1, ...
-    ],
+    analysis_review_authorizations: tuple[MockExamAnalysisReviewAuthorizationPointerV1, ...],
     item_runs: tuple[MockExamProductionItemRunV1, ...],
     graph_publication_authorization: MockExamGraphPublicationAuthorizationPointerV1 | None,
     graph_publications: tuple[MockExamGraphPublicationPointerV1, ...],
@@ -2380,7 +2525,12 @@ def _update_run(
     row: MockExamProductionItemRunV1,
     **updates: Any,
 ) -> MockExamProductionItemRunV1:
-    return MockExamProductionItemRunV1.model_validate(row.model_dump(mode="json") | updates)
+    row_type = (
+        MockExamProductionItemRunV2
+        if isinstance(row, MockExamProductionItemRunV2)
+        else MockExamProductionItemRunV1
+    )
+    return row_type.model_validate(row.model_dump(mode="json") | updates)
 
 
 def _same_review_evidence(
@@ -2437,6 +2587,22 @@ def _terminal_run_failure(
             at,
         ),
     )
+
+
+def _require_assembly_manifest_family(
+    plan: MockExamProductionPlanV1,
+    manifest: MockExamAssemblyViewV2 | MockExamAssemblyViewV3,
+) -> None:
+    expected_schema = (
+        "mock-exam-assembly-manifest/3.0"
+        if isinstance(plan, MockExamProductionPlanV2)
+        else "mock-exam-assembly-manifest/2.0"
+    )
+    if manifest.schema_version != expected_schema:
+        _raise(
+            "ASSEMBLY_SCHEMA_UNSUPPORTED",
+            "released assembly does not match the production-plan protocol family",
+        )
 
 
 def _require_context(

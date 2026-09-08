@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from eom_catalog_contracts import (
     MockExamAssemblyManifestContract,
     MockExamAssemblyManifestV1,
-    MockExamContentPointerV1,
+    MockExamContentPointerContract,
     mock_exam_item_set_sha256,
     mock_exam_planned_placement_id,
 )
@@ -24,7 +24,7 @@ class AssemblyRenderPlacement:
     item_id: str
     item_revision_id: str
     item_manifest_sha256: str
-    content: MockExamContentPointerV1 | None
+    content: MockExamContentPointerContract | None
 
 
 @dataclass(frozen=True)

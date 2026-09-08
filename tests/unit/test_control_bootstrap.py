@@ -16,6 +16,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_STANDARD_V5_REFERENCE_KEYS,
     EXPECTED_STANDARD_V6_REFERENCE_KEYS,
     EXPECTED_STANDARD_V7_REFERENCE_KEYS,
+    EXPECTED_STANDARD_V8_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
@@ -38,6 +39,7 @@ CONFIG_V4 = ROOT / "config/control-plane/standard-item-v4"
 CONFIG_V5 = ROOT / "config/control-plane/standard-item-v5"
 CONFIG_V6 = ROOT / "config/control-plane/standard-item-v6"
 CONFIG_V7 = ROOT / "config/control-plane/standard-item-v7"
+CONFIG_V8 = ROOT / "config/control-plane/standard-item-v8"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -440,6 +442,7 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/5.0": 5,
         "standard-control-bootstrap/6.0": 6,
         "standard-control-bootstrap/7.0": 7,
+        "standard-control-bootstrap/8.0": 8,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
@@ -475,7 +478,21 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
         "standard-control-bootstrap/5.0": 2,
         "standard-control-bootstrap/6.0": 3,
         "standard-control-bootstrap/7.0": 4,
+        "standard-control-bootstrap/8.0": 4,
     }
+
+
+def test_standard_bootstrap_v8_pins_v3_protocol_without_copying_authority_files() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V8)
+
+    assert manifest.schema_version == "standard-control-bootstrap/8.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.19.0",)
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 8
+    assert STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version] == 4
+    assert not (CONFIG_V8 / "references").exists()
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V8_REFERENCE_KEYS
+    )
 
 
 def test_standard_bootstrap_v6_pins_source_prompt_and_handoff_profile() -> None:

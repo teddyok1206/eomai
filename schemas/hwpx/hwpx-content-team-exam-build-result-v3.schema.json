@@ -1,0 +1,191 @@
+{
+  "$id": "https://eom.local/schemas/hwpx/hwpx-content-team-exam-build-result-v3.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "assembly_manifest_sha256": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "title": "Assembly Manifest Sha256",
+      "type": "string"
+    },
+    "assessment_assembly_revision_id": {
+      "pattern": "^assemblyrev_[a-f0-9]{32}$",
+      "title": "Assessment Assembly Revision Id",
+      "type": "string"
+    },
+    "build_id": {
+      "pattern": "^hwpxbuild_[a-f0-9]{32}$",
+      "title": "Build Id",
+      "type": "string"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "equation_count": {
+      "maximum": 25600,
+      "minimum": 0,
+      "title": "Equation Count",
+      "type": "integer"
+    },
+    "errors": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Errors",
+      "type": "array"
+    },
+    "handoff_archive_sha256": {
+      "const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+      "title": "Handoff Archive Sha256",
+      "type": "string"
+    },
+    "item_count": {
+      "maximum": 200,
+      "minimum": 0,
+      "title": "Item Count",
+      "type": "integer"
+    },
+    "item_set_sha256": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "title": "Item Set Sha256",
+      "type": "string"
+    },
+    "output_file": {
+      "anyOf": [
+        {
+          "const": "output/content-team-exam.hwpx",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Output File"
+    },
+    "output_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Output Sha256"
+    },
+    "package_manifest_file": {
+      "anyOf": [
+        {
+          "const": "output/package-manifest.json",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Package Manifest File"
+    },
+    "render_plan_sha256": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "title": "Render Plan Sha256",
+      "type": "string"
+    },
+    "renderer_profile": {
+      "const": "content-team-hwp-question-editor-exam-v1",
+      "title": "Renderer Profile",
+      "type": "string"
+    },
+    "renderer_report_file": {
+      "anyOf": [
+        {
+          "const": "output/content-team-exam-validation.json",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Renderer Report File"
+    },
+    "renderer_version": {
+      "const": "3.0.0",
+      "title": "Renderer Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "content-team-exam-build-result/3.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "section_count": {
+      "maximum": 200,
+      "minimum": 0,
+      "title": "Section Count",
+      "type": "integer"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "table_count": {
+      "maximum": 4000,
+      "minimum": 0,
+      "title": "Table Count",
+      "type": "integer"
+    },
+    "visual_count": {
+      "maximum": 400,
+      "minimum": 0,
+      "title": "Visual Count",
+      "type": "integer"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "renderer_profile",
+    "build_id",
+    "assessment_assembly_revision_id",
+    "assembly_manifest_sha256",
+    "item_set_sha256",
+    "handoff_archive_sha256",
+    "status",
+    "output_file",
+    "output_sha256",
+    "package_manifest_file",
+    "renderer_report_file",
+    "item_count",
+    "section_count",
+    "equation_count",
+    "table_count",
+    "visual_count",
+    "warnings",
+    "errors",
+    "started_at",
+    "completed_at",
+    "schema_version",
+    "renderer_version",
+    "render_plan_sha256"
+  ],
+  "title": "ContentTeamExamBuildResultV3",
+  "type": "object"
+}

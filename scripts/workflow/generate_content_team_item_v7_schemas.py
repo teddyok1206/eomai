@@ -7,15 +7,19 @@ import json
 from pathlib import Path
 from typing import Any
 
-from eom_catalog_contracts import AssessmentItemContentV2
+from eom_catalog_contracts import AssessmentItemContentV2, AssessmentItemContentV3
 from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV7,
     ContentTeamAuthoringRoleResultV8,
+    ContentTeamAuthoringRoleResultV9,
     ContentTeamImageRoleResultV8,
+    ContentTeamImageRoleResultV9,
     ContentTeamRegistrationRoleResultV7,
     ContentTeamRegistrationRoleResultV8,
+    ContentTeamRegistrationRoleResultV9,
     ContentTeamReviewRoleResultV7,
     ContentTeamReviewRoleResultV8,
+    ContentTeamReviewRoleResultV9,
 )
 from jsonschema import Draft202012Validator
 
@@ -58,6 +62,18 @@ def main() -> None:
     ):
         path.write_bytes(catalog_payload)
 
+    catalog_v3_payload = _schema(
+        AssessmentItemContentV3,
+        "eom://schemas/item-registry/assessment-item-content-v3",
+    )
+    for path in (
+        ROOT / "schemas/item-registry/assessment-item-content-v3.schema.json",
+        ROOT
+        / "packages/catalog_contracts/eom_catalog_contracts/resources/item-registry"
+        / "assessment-item-content-v3.schema.json",
+    ):
+        path.write_bytes(catalog_v3_payload)
+
     roles = {
         "authoring": ContentTeamAuthoringRoleResultV7,
         "review": ContentTeamReviewRoleResultV7,
@@ -83,6 +99,24 @@ def main() -> None:
     }
     for role, model in roles_v8.items():
         file_name = f"{role}-result-v8.schema.json"
+        payload = _schema(
+            model,
+            f"https://eom.local/schemas/workflow/roles/{file_name}",
+        )
+        for root in (
+            ROOT / "schemas/workflow/roles",
+            ROOT / "packages/workflow/eom_workflow/resources/roles",
+        ):
+            (root / file_name).write_bytes(payload)
+
+    roles_v9 = {
+        "authoring": ContentTeamAuthoringRoleResultV9,
+        "image": ContentTeamImageRoleResultV9,
+        "review": ContentTeamReviewRoleResultV9,
+        "registration": ContentTeamRegistrationRoleResultV9,
+    }
+    for role, model in roles_v9.items():
+        file_name = f"{role}-result-v9.schema.json"
         payload = _schema(
             model,
             f"https://eom.local/schemas/workflow/roles/{file_name}",

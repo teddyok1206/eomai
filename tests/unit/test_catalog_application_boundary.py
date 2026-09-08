@@ -14,6 +14,7 @@ from eom_api.services.catalog_application_client import (
 from eom_catalog_contracts import (
     AssessmentItemContent,
     AssessmentItemContentV2,
+    AssessmentItemContentV3,
     AssessmentPageImagePointer,
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
@@ -25,9 +26,15 @@ from eom_catalog_contracts import (
     CreateKnowledgeAnalysisCommand,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
+    InspectMockExamReviewEligibilityQuery,
     ItemMediaQuery,
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisBatchApplicationResult,
+    MockExamEligibilityFindingCounts,
+    MockExamItemReviewPublicationResultV2,
+    MockExamReviewEligibilityResultV2,
+    MockExamReviewFindingCounts,
+    PublishMockExamItemReviewCommand,
     ReviewedItemContentImportCommand,
     validate_contract,
 )
@@ -112,6 +119,17 @@ class FakeRegistry:
 class FakeContentTeamRegistry(FakeRegistry):
     def load_item_content(self, _revision_id: str) -> AssessmentItemContentV2:
         return content_team_item()
+
+
+def _content_team_item_v3() -> AssessmentItemContentV3:
+    value = content_team_item().model_dump(mode="json")
+    value["schema_version"] = "3.0"
+    return AssessmentItemContentV3.model_validate(value)
+
+
+class FakeContentTeamV3Registry(FakeRegistry):
+    def load_item_content(self, _revision_id: str) -> AssessmentItemContentV3:
+        return _content_team_item_v3()
 
 
 class FakeKnowledgeAnalysis:
@@ -219,6 +237,55 @@ class FakeKnowledgeRetrieval:
             {key: item for key, item in value.items() if key != "result_sha256"}
         )
         return EvidenceBundlePublicationResultV2.model_validate(value)
+
+
+class FakeItemReviews:
+    def publish(
+        self,
+        command: PublishMockExamItemReviewCommand,
+    ) -> MockExamItemReviewPublicationResultV2:
+        return MockExamItemReviewPublicationResultV2(
+            item_review_record_id="itemreview_" + "1" * 32,
+            item_revision_id=command.item_revision_id,
+            workflow_id=command.expected_workflow_id,
+            review_step_run_id="steprun_" + "2" * 32,
+            human_approval_request_id="approval_" + "3" * 32,
+            review_artifact_id="artifact_" + "4" * 32,
+            review_artifact_revision_id="rev_" + "5" * 32,
+            review_sha256="sha256:" + "6" * 64,
+            decision_sha256="sha256:" + "7" * 64,
+            review_result_schema="review-result@9.0",
+            final_rating=command.final_rating,
+            finding_counts=MockExamReviewFindingCounts(info=0, warning=0, blocking=0),
+            reviewer_operator_id=command.reviewer_operator_id,
+            rating_policy_revision_id=command.rating_policy_revision_id,
+            rating_policy_sha256=command.rating_policy_sha256,
+            created=True,
+        )
+
+    def inspect_eligibility(
+        self,
+        query: InspectMockExamReviewEligibilityQuery,
+    ) -> MockExamReviewEligibilityResultV2:
+        return MockExamReviewEligibilityResultV2(
+            workflow_id=query.workflow_id,
+            workflow_lock_version=1,
+            approval_state="PENDING",
+            approval_request_id="approval_" + "3" * 32,
+            approval_lock_version=1,
+            reviewer_operator_id=None,
+            approved_at=None,
+            review_step_run_id="steprun_" + "2" * 32,
+            review_artifact_id="artifact_" + "4" * 32,
+            review_artifact_revision_id="rev_" + "5" * 32,
+            review_sha256="sha256:" + "6" * 64,
+            review_result_schema="review-result@9.0",
+            review_summary="V3 검토 결과를 사람 승인 전에 확인한다.",
+            findings=(),
+            finding_counts=MockExamEligibilityFindingCounts(info=0, warning=0, blocking=0),
+            eligible=True,
+            eligibility_reason="ELIGIBLE",
+        )
 
 
 def _retrieval_command() -> CreateEvidenceBundleCommand:
@@ -358,6 +425,7 @@ def _server(
     *,
     allowed_uid: int | None = None,
     registry: FakeRegistry | None = None,
+    item_reviews: FakeItemReviews | None = None,
 ) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -368,6 +436,7 @@ def _server(
         FakeKnowledgeAnalysis(),
         FakeKnowledgeAnalysisBatch(),
         FakeKnowledgeRetrieval(),
+        mock_exam_item_reviews=item_reviews,  # type: ignore[arg-type]
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid() if allowed_uid is None else allowed_uid,
         expected_uid=os.getuid(),
@@ -593,6 +662,59 @@ def test_catalog_socket_round_trip_uses_v10_for_content_team_items(tmp_path: Pat
         )
         assert imported.item_revision_id == "itemrev_" + "2" * 32
         assert client.load_item_content("itemrev_" + "2" * 32) == content_team_item()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_catalog_socket_round_trip_uses_v12_for_content_team_v3_items(tmp_path: Path) -> None:
+    server = _server(tmp_path, registry=FakeContentTeamV3Registry())
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = _client(server)
+        imported = client.import_reviewed(
+            ReviewedItemContentImportCommand(
+                base_revision_id="itemrev_" + "6" * 32,
+                expected_version=1,
+                reviewed_by="operator_test_admin",
+                review_reason="콘텐츠팀 V3 구조화 문항의 검토된 표현 정규화를 승인합니다.",
+                content=_content_team_item_v3(),
+            )
+        )
+        assert imported.item_revision_id == "itemrev_" + "2" * 32
+        assert client.load_item_content("itemrev_" + "2" * 32) == _content_team_item_v3()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_catalog_socket_round_trip_selects_v12_for_review_result_9(tmp_path: Path) -> None:
+    server = _server(tmp_path, item_reviews=FakeItemReviews())
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = _client(server)
+        published = client.publish_mock_exam_item_review(
+            PublishMockExamItemReviewCommand(
+                item_revision_id="itemrev_" + "1" * 32,
+                expected_workflow_id="workflow_" + "2" * 32,
+                final_rating="A",
+                reviewer_operator_id="operator_" + "3" * 32,
+                rating_policy_revision_id="ratingpolicyrev_" + "4" * 32,
+                rating_policy_sha256="sha256:" + "5" * 64,
+                idempotency_key="catalog-v12-review-result-9",
+            )
+        )
+        eligibility = client.inspect_mock_exam_review_eligibility(
+            InspectMockExamReviewEligibilityQuery(workflow_id="workflow_" + "2" * 32)
+        )
+        assert isinstance(published, MockExamItemReviewPublicationResultV2)
+        assert published.schema_version == "mock-exam-item-review-publication-result/2.0"
+        assert isinstance(eligibility, MockExamReviewEligibilityResultV2)
+        assert eligibility.schema_version == "mock-exam-review-eligibility-result/2.0"
     finally:
         server.shutdown()
         server.server_close()

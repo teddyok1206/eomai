@@ -1,0 +1,203 @@
+{
+  "$id": "https://eom.local/schemas/api/production-item-candidate-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analysis_run_id": {"pattern": "^analysisrun_[0-9a-f]{32}$", "type": "string"},
+    "content_component": {"$ref": "#/$defs/contentComponent"},
+    "content_profile": {"const": "CONTENT_TEAM_ITEM_CONTENT_V3"},
+    "curriculum_units": {
+      "items": {"$ref": "#/$defs/curriculumUnit"},
+      "maxItems": 8,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "difficulty_band": {
+      "oneOf": [{"maxLength": 64, "minLength": 1, "type": "string"}, {"type": "null"}]
+    },
+    "graph_item_node_id": {"pattern": "^knode_[0-9a-f]{32}$", "type": "string"},
+    "graph_snapshot_revision_id": {"pattern": "^graphrev_[0-9a-f]{32}$", "type": "string"},
+    "hwpx_exam_eligible": {"type": "boolean"},
+    "ineligibility_reasons": {
+      "items": {
+        "enum": [
+          "CONTENT_TEAM_EDITORIAL_MARKDOWN_POINTER_REQUIRED",
+          "CONTENT_TEAM_ITEM_V2_REQUIRED",
+          "ITEM_CONTENT_COMPONENT_MISSING",
+          "ITEM_CONTENT_SCHEMA_UNSUPPORTED",
+          "ITEM_NOT_ACTIVE",
+          "ITEM_REVISION_NOT_ELIGIBLE"
+        ]
+      },
+      "maxItems": 6,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "item_current_revision": {"type": "boolean"},
+    "item_id": {"pattern": "^item_[0-9a-f]{32}$", "type": "string"},
+    "item_lifecycle_state": {"enum": ["DRAFT", "ACTIVE", "RETIRED", "DELETED_SOFT"]},
+    "item_manifest_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "item_revision_id": {"pattern": "^itemrev_[0-9a-f]{32}$", "type": "string"},
+    "item_revision_state": {
+      "enum": ["DRAFT", "IN_REVIEW", "APPROVED", "REJECTED", "SUPERSEDED", "RETIRED"]
+    },
+    "item_type_key": {"maxLength": 128, "minLength": 1, "type": "string"},
+    "mock_exam_assembly_eligible": {"type": "boolean"},
+    "past_exam_context": {
+      "oneOf": [{"$ref": "#/$defs/pastExamContext"}, {"type": "null"}]
+    },
+    "schema_version": {"const": "production-item-candidate-view/2.0"},
+    "snapshot_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "source_class": {"enum": ["APPROVED_ITEM", "PAST_EXAM"]},
+    "source_display_label": {"maxLength": 512, "minLength": 1, "type": "string"}
+  },
+  "required": [
+    "schema_version",
+    "graph_snapshot_revision_id",
+    "snapshot_sha256",
+    "analysis_run_id",
+    "graph_item_node_id",
+    "source_class",
+    "source_display_label",
+    "past_exam_context",
+    "item_id",
+    "item_revision_id",
+    "item_revision_state",
+    "item_lifecycle_state",
+    "item_current_revision",
+    "item_type_key",
+    "difficulty_band",
+    "item_manifest_sha256",
+    "curriculum_units",
+    "content_profile",
+    "content_component",
+    "mock_exam_assembly_eligible",
+    "hwpx_exam_eligible",
+    "ineligibility_reasons"
+  ],
+  "$defs": {
+    "contentComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"pattern": "^artifact_[0-9a-f]{32}$", "type": "string"},
+        "artifact_revision_id": {"pattern": "^rev_[0-9a-f]{32}$", "type": "string"},
+        "editorial_markdown_member": {
+          "oneOf": [{"const": "content-team-item.md"}, {"type": "null"}]
+        },
+        "editorial_markdown_sha256": {
+          "oneOf": [
+            {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "editorial_markdown_schema_ref": {
+          "oneOf": [
+            {"const": "eom://schemas/hwpx/content-team-editorial-markdown/2.0"},
+            {"type": "null"}
+          ]
+        },
+        "item_component_id": {"pattern": "^itemcomponent_[0-9a-f]{32}$", "type": "string"},
+        "logical_name": {"maxLength": 128, "minLength": 1, "type": "string"},
+        "media_type": {"const": "application/json"},
+        "schema_ref": {
+          "enum": [
+            "eom.assessment.item-content/3.0",
+            "eom://schemas/item-registry/assessment-item-content-v3"
+          ]
+        },
+        "sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": [
+        "item_component_id",
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "logical_name",
+        "editorial_markdown_member",
+        "editorial_markdown_sha256",
+        "editorial_markdown_schema_ref"
+      ],
+      "type": "object"
+    },
+    "curriculumUnit": {
+      "additionalProperties": false,
+      "properties": {
+        "curriculum_unit_id": {"pattern": "^currunit_[0-9a-f]{32}$", "type": "string"},
+        "label": {"maxLength": 200, "minLength": 1, "type": "string"},
+        "parent_unit_id": {
+          "oneOf": [
+            {"pattern": "^currunit_[0-9a-f]{32}$", "type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "unit_code": {"maxLength": 32, "minLength": 1, "type": "string"},
+        "unit_key": {"pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$", "type": "string"},
+        "unit_level": {"enum": ["MAJOR", "MIDDLE", "MINOR", "ACHIEVEMENT_STANDARD"]}
+      },
+      "required": [
+        "curriculum_unit_id",
+        "unit_key",
+        "unit_code",
+        "label",
+        "unit_level",
+        "parent_unit_id"
+      ],
+      "type": "object"
+    },
+    "pastExamContext": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "not": {
+            "properties": {
+              "administration_month": {"const": 3},
+              "target_grade": {"const": 1},
+              "target_school_level": {"const": "HIGH_SCHOOL"}
+            },
+            "required": ["administration_month", "target_grade", "target_school_level"]
+          }
+        }
+      ],
+      "properties": {
+        "administration_month": {"maximum": 12, "minimum": 1, "type": "integer"},
+        "administration_year": {"maximum": 2200, "minimum": 1900, "type": "integer"},
+        "assessment_occurrence_id": {"pattern": "^occurrence_[0-9a-f]{32}$", "type": "string"},
+        "assessment_occurrence_revision_id": {
+          "pattern": "^occurrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "assessment_occurrence_revision_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "graph_placement_node_id": {"pattern": "^knode_[0-9a-f]{32}$", "type": "string"},
+        "item_number": {"maximum": 200, "minimum": 1, "type": "integer"},
+        "occurrence_display_label": {"maxLength": 512, "minLength": 1, "type": "string"},
+        "placement_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        "subject_key": {"pattern": "^[a-z0-9][a-z0-9._:-]{0,159}$", "type": "string"},
+        "target_grade": {"maximum": 6, "minimum": 1, "type": "integer"},
+        "target_school_level": {"enum": ["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"]}
+      },
+      "required": [
+        "graph_placement_node_id",
+        "assessment_occurrence_id",
+        "assessment_occurrence_revision_id",
+        "assessment_occurrence_revision_sha256",
+        "occurrence_display_label",
+        "administration_year",
+        "administration_month",
+        "target_school_level",
+        "target_grade",
+        "subject_key",
+        "item_number",
+        "placement_sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "title": "Production Item Candidate View V2",
+  "type": "object"
+}

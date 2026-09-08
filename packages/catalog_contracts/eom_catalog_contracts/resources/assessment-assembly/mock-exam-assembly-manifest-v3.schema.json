@@ -1,0 +1,80 @@
+{
+  "$id": "eom://schemas/assessment-assembly/mock-exam-assembly-manifest/3.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "mock-exam-assembly-manifest/3.0"
+    },
+    "assessment_assembly_revision_id": {
+      "pattern": "^assemblyrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "assessment_assembly_id": {
+      "pattern": "^assembly_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "assessment_form_id": {
+      "pattern": "^form_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "assessment_form_revision_id": {
+      "pattern": "^formrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "deliverable_id": {
+      "pattern": "^deliverable_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "deliverable_revision_id": {
+      "pattern": "^delivrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "form_key": {
+      "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "display_label": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "plan": {
+      "$ref": "eom://schemas/assessment-assembly/mock-exam-assembly-plan/2.0"
+    },
+    "revision_state": {
+      "const": "RELEASED"
+    },
+    "manifest_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "assessment_assembly_revision_id",
+    "assessment_assembly_id",
+    "assessment_form_id",
+    "assessment_form_revision_id",
+    "deliverable_id",
+    "deliverable_revision_id",
+    "form_key",
+    "display_label",
+    "plan",
+    "revision_state",
+    "manifest_sha256",
+    "created_at",
+    "created_by"
+  ],
+  "title": "Mock Exam Assembly Manifest V3",
+  "type": "object"
+}

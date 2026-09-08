@@ -15,15 +15,19 @@ from eom_hwpx_contracts import (
     ContentTeamExamBuildResult,
     ContentTeamExamBuildResultContract,
     ContentTeamExamBuildResultV2,
+    ContentTeamExamBuildResultV3,
     ContentTeamExamImageSource,
     ContentTeamExamItemSourceV2,
+    ContentTeamExamItemSourceV3,
     ContentTeamExamRenderRequest,
     ContentTeamExamRenderRequestContract,
     ContentTeamExamRenderRequestV2,
+    ContentTeamExamRenderRequestV3,
     ContentTeamImageSource,
     content_team_exam_item_set_projection,
     content_team_exam_render_plan_projection,
     parse_content_team_markdown,
+    parse_content_team_markdown_v2,
     serialize_content_team_markdown,
     validate_contract,
 )
@@ -59,13 +63,17 @@ from eom_hwpx_builder.xmlsafe import ParsedXml, local_name, parse_xml, serialize
 
 EXAM_RENDERER_VERSION = "1.0.0"
 EXAM_RENDERER_VERSION_V2 = "2.0.0"
+EXAM_RENDERER_VERSION_V3 = "3.0.0"
 MAX_EXAM_PACKAGE_BYTES = 64 * 1024 * 1024
 MAX_HANDOFF_BYTES = 64 * 1024 * 1024
 
-_PLANNED_SCORE_DISPLAY = {1500: "1.5", 2000: "2", 2500: "2.5"}
+_PLANNED_SCORE_DISPLAY = {1500: "1.5", 2000: "2", 2500: "2.5", 3000: "3"}
 
 
 def _load_exam_request(raw: dict[str, Any]) -> ContentTeamExamRenderRequestContract:
+    if raw.get("schema_version") == "content-team-exam-render-request/3.0":
+        validate_contract("content-team-exam-render-request-v3", raw)
+        return ContentTeamExamRenderRequestV3.model_validate(raw)
     if raw.get("schema_version") == "content-team-exam-render-request/2.0":
         validate_contract("content-team-exam-render-request-v2", raw)
         return ContentTeamExamRenderRequestV2.model_validate(raw)
@@ -77,7 +85,9 @@ def _item_set_sha256(request: ContentTeamExamRenderRequestContract) -> str:
     return sha256_bytes(canonical_json_bytes(content_team_exam_item_set_projection(request)))
 
 
-def _render_plan_sha256(request: ContentTeamExamRenderRequestV2) -> str:
+def _render_plan_sha256(
+    request: ContentTeamExamRenderRequestV2 | ContentTeamExamRenderRequestV3,
+) -> str:
     return sha256_bytes(canonical_json_bytes(content_team_exam_render_plan_projection(request)))
 
 
@@ -479,19 +489,35 @@ def render_content_team_exam_workspace(
             max_bytes=MAX_MARKDOWN_BYTES,
             expected_sha256=item.source_markdown_sha256,
         )
-        draft = _load_draft(json_bytes)
+        source_schema_ref = (
+            item.source_schema_ref
+            if isinstance(item, ContentTeamExamItemSourceV3)
+            else "eom.assessment.item-content/2.0"
+        )
+        draft = _load_draft(json_bytes, source_schema_ref=source_schema_ref)
         if serialize_content_team_markdown(draft) != markdown_bytes:
             raise HwpxError(
                 HwpxErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
                 "exam item JSON and Markdown differ",
             )
-        if parse_content_team_markdown(markdown_bytes).source_sha256 != item.source_markdown_sha256:
+        parsed = (
+            parse_content_team_markdown_v2(markdown_bytes)
+            if isinstance(item, ContentTeamExamItemSourceV3)
+            else parse_content_team_markdown(markdown_bytes)
+        )
+        if parsed.source_sha256 != item.source_markdown_sha256:
             raise HwpxError(
                 HwpxErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
                 "exam item Markdown identity differs",
             )
         rendered_score_display: str = draft.score_display
-        if isinstance(item, ContentTeamExamItemSourceV2):
+        if isinstance(item, ContentTeamExamItemSourceV3):
+            if draft.score_display != _PLANNED_SCORE_DISPLAY[item.points_milli]:
+                raise HwpxError(
+                    HwpxErrorCode.HWPX_SEMANTIC_MISMATCH,
+                    "V3 exam item source score differs from its exact placement score",
+                )
+        elif isinstance(item, ContentTeamExamItemSourceV2):
             rendered_score_display = _PLANNED_SCORE_DISPLAY[item.points_milli]
         output = item_output_root / f"item-{item.position:03d}.hwpx"
         report = _external_render(
@@ -559,13 +585,17 @@ def render_content_team_exam_workspace(
     item_set_sha256 = _item_set_sha256(request)
     render_plan_sha256 = (
         _render_plan_sha256(request)
-        if isinstance(request, ContentTeamExamRenderRequestV2)
+        if isinstance(request, (ContentTeamExamRenderRequestV2, ContentTeamExamRenderRequestV3))
         else None
     )
     renderer_version = (
-        EXAM_RENDERER_VERSION_V2
-        if isinstance(request, ContentTeamExamRenderRequestV2)
-        else EXAM_RENDERER_VERSION
+        EXAM_RENDERER_VERSION_V3
+        if isinstance(request, ContentTeamExamRenderRequestV3)
+        else (
+            EXAM_RENDERER_VERSION_V2
+            if isinstance(request, ContentTeamExamRenderRequestV2)
+            else EXAM_RENDERER_VERSION
+        )
     )
     report = {
         "status": "PASS",
@@ -587,9 +617,13 @@ def render_content_team_exam_workspace(
     write_private_json(output_dir / "content-team-exam-validation.json", report)
     package_manifest: dict[str, Any] = {
         "manifest_version": (
-            "content-team-exam-hwpx/2.0"
-            if isinstance(request, ContentTeamExamRenderRequestV2)
-            else "content-team-exam-hwpx/1.0"
+            "content-team-exam-hwpx/3.0"
+            if isinstance(request, ContentTeamExamRenderRequestV3)
+            else (
+                "content-team-exam-hwpx/2.0"
+                if isinstance(request, ContentTeamExamRenderRequestV2)
+                else "content-team-exam-hwpx/1.0"
+            )
         ),
         "renderer_profile": request.renderer_profile,
         "renderer_version": renderer_version,
@@ -627,7 +661,14 @@ def render_content_team_exam_workspace(
         "completed_at": datetime.now(UTC),
     }
     result: ContentTeamExamBuildResultContract
-    if isinstance(request, ContentTeamExamRenderRequestV2):
+    if isinstance(request, ContentTeamExamRenderRequestV3):
+        assert render_plan_sha256 is not None
+        result = ContentTeamExamBuildResultV3(
+            **result_values,
+            render_plan_sha256=render_plan_sha256,
+        )
+        result_contract = "content-team-exam-build-result-v3"
+    elif isinstance(request, ContentTeamExamRenderRequestV2):
         assert render_plan_sha256 is not None
         result = ContentTeamExamBuildResultV2(
             **result_values,
@@ -686,7 +727,13 @@ def failed_content_team_exam_result(
         "completed_at": datetime.now(UTC),
     }
     result: ContentTeamExamBuildResultContract
-    if isinstance(request, ContentTeamExamRenderRequestV2):
+    if isinstance(request, ContentTeamExamRenderRequestV3):
+        result = ContentTeamExamBuildResultV3(
+            **result_values,
+            render_plan_sha256=_render_plan_sha256(request),
+        )
+        result_contract = "content-team-exam-build-result-v3"
+    elif isinstance(request, ContentTeamExamRenderRequestV2):
         result = ContentTeamExamBuildResultV2(
             **result_values,
             render_plan_sha256=_render_plan_sha256(request),

@@ -12,7 +12,9 @@ from eom_catalog_contracts import (
 from eom_catalog_contracts.item_review import (
     MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME,
     MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF,
     MockExamItemReviewDecisionV1,
+    MockExamItemReviewDecisionV2,
     mock_exam_item_review_decision_sha256,
 )
 from eom_catalog_service.mock_exam_candidate_repository import (
@@ -176,8 +178,29 @@ def test_candidate_member_resolution_rejects_invalid_or_ambiguous_pointers(
         _read(repository, artifact, revision)
 
 
-def test_candidate_review_pointer_requires_the_canonical_self_hashed_decision(
+@pytest.mark.parametrize(
+    ("decision_version", "review_result_schema", "schema_ref", "require_v2"),
+    (
+        (
+            "mock-exam-item-review-decision/1.0",
+            "review-result@8.0",
+            MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
+            False,
+        ),
+        (
+            "mock-exam-item-review-decision/2.0",
+            "review-result@9.0",
+            MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF,
+            True,
+        ),
+    ),
+)
+def test_candidate_review_pointer_requires_the_exact_content_family_decision(
     tmp_path: Path,
+    decision_version: str,
+    review_result_schema: str,
+    schema_ref: str,
+    require_v2: bool,
 ) -> None:
     artifact_id = "artifact_" + "a" * 32
     revision_id = "rev_" + "b" * 32
@@ -187,7 +210,7 @@ def test_candidate_review_pointer_requires_the_canonical_self_hashed_decision(
     workflow_id = "workflow_" + "f" * 32
     approved_at = datetime(2026, 9, 8, 6, tzinfo=UTC).isoformat().replace("+00:00", "Z")
     unsigned = {
-        "schema_version": "mock-exam-item-review-decision/1.0",
+        "schema_version": decision_version,
         "item_review_record_id": review_id,
         "item_revision_id": item_revision_id,
         "workflow_id": workflow_id,
@@ -196,7 +219,7 @@ def test_candidate_review_pointer_requires_the_canonical_self_hashed_decision(
             "artifact_id": "artifact_" + "2" * 32,
             "artifact_revision_id": "rev_" + "3" * 32,
             "sha256": "sha256:" + "4" * 64,
-            "result_schema": "review-result@8.0",
+            "result_schema": review_result_schema,
             "worker_decision": "ready_for_human",
             "finding_counts": {"info": 0, "warning": 1, "blocking": 0},
         },
@@ -213,8 +236,14 @@ def test_candidate_review_pointer_requires_the_canonical_self_hashed_decision(
         "idempotency_key_sha256": "sha256:" + "9" * 64,
         "decided_at": approved_at,
     }
-    decision = MockExamItemReviewDecisionV1.model_validate(
-        {**unsigned, "decision_sha256": mock_exam_item_review_decision_sha256(unsigned)}
+    decision_value = {
+        **unsigned,
+        "decision_sha256": mock_exam_item_review_decision_sha256(unsigned),
+    }
+    decision: MockExamItemReviewDecisionV1 = (
+        MockExamItemReviewDecisionV2.model_validate(decision_value)
+        if require_v2
+        else MockExamItemReviewDecisionV1.model_validate(decision_value)
     )
     payload = canonical_json_bytes(decision)
     payload_sha256 = sha256_bytes(payload)
@@ -235,7 +264,7 @@ def test_candidate_review_pointer_requires_the_canonical_self_hashed_decision(
                 "bytes": len(payload),
                 "sha256": payload_sha256,
                 "media_type": "application/json",
-                "schema_ref": MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
+                "schema_ref": schema_ref,
             }
         ],
     }
@@ -288,7 +317,17 @@ def test_candidate_review_pointer_requires_the_canonical_self_hashed_decision(
         review,
         artifacts={artifact_id: artifact},
         revisions={revision_id: revision},
+        require_v2=require_v2,
     )
+
+    with pytest.raises(MockExamCandidateResolutionError) as mixed_family:
+        repository._validate_review_pointer(
+            review,
+            artifacts={artifact_id: artifact},
+            revisions={revision_id: revision},
+            require_v2=not require_v2,
+        )
+    assert mixed_family.value.code == "ASSEMBLY_ARTIFACT_MANIFEST_INVALID"
 
     review.severity_summary = {**summary, "final_rating": "A"}
     with pytest.raises(MockExamCandidateResolutionError) as raised:
@@ -296,5 +335,6 @@ def test_candidate_review_pointer_requires_the_canonical_self_hashed_decision(
             review,
             artifacts={artifact_id: artifact},
             revisions={revision_id: revision},
+            require_v2=require_v2,
         )
     assert raised.value.code == "ASSEMBLY_REVIEW_POINTER_INVALID"

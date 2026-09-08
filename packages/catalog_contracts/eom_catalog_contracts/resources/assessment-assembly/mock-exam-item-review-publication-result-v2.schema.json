@@ -1,0 +1,103 @@
+{
+  "$defs": {
+    "FindingCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "blocking": {"const": 0, "type": "integer"},
+        "info": {"maximum": 20, "minimum": 0, "type": "integer"},
+        "warning": {"maximum": 20, "minimum": 0, "type": "integer"}
+      },
+      "required": ["info", "warning", "blocking"],
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/assessment-assembly/mock-exam-item-review-publication-result-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "created": {"type": "boolean"},
+    "decision_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "decision": {"const": "APPROVE", "type": "string"},
+    "final_rating": {"enum": ["A", "B", "C"], "type": "string"},
+    "finding_counts": {"$ref": "#/$defs/FindingCounts"},
+    "human_approval_request_id": {
+      "pattern": "^approval_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "item_review_record_id": {
+      "pattern": "^itemreview_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "item_revision_id": {
+      "pattern": "^itemrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "operation": {
+      "const": "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+      "type": "string"
+    },
+    "rating_policy_revision_id": {
+      "pattern": "^ratingpolicyrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "rating_policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "review_artifact_id": {
+      "pattern": "^artifact_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "review_artifact_revision_id": {
+      "pattern": "^rev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "review_result_schema": {"const": "review-result@9.0", "type": "string"},
+    "review_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "review_step_run_id": {
+      "pattern": "^steprun_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "reviewer_operator_id": {
+      "pattern": "^operator_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "mock-exam-item-review-publication-result/2.0",
+      "type": "string"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "item_review_record_id",
+    "item_revision_id",
+    "workflow_id",
+    "review_step_run_id",
+    "human_approval_request_id",
+    "review_artifact_id",
+    "review_artifact_revision_id",
+    "review_sha256",
+    "decision_sha256",
+    "review_result_schema",
+    "decision",
+    "final_rating",
+    "finding_counts",
+    "reviewer_operator_id",
+    "rating_policy_revision_id",
+    "rating_policy_sha256",
+    "created"
+  ],
+  "title": "MockExamItemReviewPublicationResultV2",
+  "type": "object"
+}

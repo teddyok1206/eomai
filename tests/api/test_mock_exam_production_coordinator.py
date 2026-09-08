@@ -29,14 +29,18 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamExplicitAnalysisReviewV1,
     MockExamExplicitRatingV1,
     MockExamGenerationBlockResolutionV1,
+    MockExamGenerationBlockResolutionV2,
     MockExamGraphPublicationInputV1,
     MockExamProductionExecutionV1,
+    MockExamProductionExecutionV2,
     MockExamRatingPolicyPointerV1,
     MockExamReviewEligibilityObservationV1,
     build_mock_exam_explicit_analysis_review_set,
     build_mock_exam_explicit_rating_set,
+    mock_exam_production_is_terminal,
 )
 from eom_api_contracts.workflows import (
+    ContentTeamItemBriefRequestV3,
     WorkflowAcceptedResolutionView,
     WorkflowItemRegistrationView,
     WorkflowKnowledgeProvenanceView,
@@ -49,7 +53,10 @@ from eom_catalog_contracts.assessment_assembly import (
     mock_exam_item_set_sha256,
     mock_exam_planned_placement_id,
 )
-from eom_catalog_contracts.curriculum import load_integrated_science_editorial_outline
+from eom_catalog_contracts.curriculum import (
+    load_integrated_science_editorial_outline,
+    resolve_integrated_science_curriculum_scope,
+)
 from eom_catalog_contracts.item_review import (
     MockExamEligibilityFindingCounts,
     MockExamReviewEligibilityResult,
@@ -58,6 +65,7 @@ from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
     MockExamProductionPlanV1,
     build_integrated_science_mock_exam_production_plan,
+    build_integrated_science_mock_exam_production_plan_v2,
 )
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext, ActorSource, ActorType
@@ -153,6 +161,8 @@ class FakeWorkflowOperations:
         approved_at: datetime = NOW,
         provenance_resolved_at: datetime = NOW,
         accepted_resolution_drift_positions: frozenset[int] = frozenset(),
+        legacy_null_provenance_roots: bool = False,
+        workflow_failed_positions: frozenset[int] = frozenset(),
     ) -> None:
         self.blocking_positions = blocking_positions
         self.lose_first_start_response = lose_first_start_response
@@ -160,9 +170,13 @@ class FakeWorkflowOperations:
         self.approved_at = approved_at
         self.provenance_resolved_at = provenance_resolved_at
         self.accepted_resolution_drift_positions = accepted_resolution_drift_positions
+        self.legacy_null_provenance_roots = legacy_null_provenance_roots
+        self.workflow_failed_positions = workflow_failed_positions
         self.provenance_drift_positions: set[int] = set()
+        self.provenance_root_drift_positions: set[int] = set()
         self.start_requests: list[WorkflowStartRequest] = []
         self.start_keys: list[str] = []
+        self.get_keys: list[str] = []
         self.approval_keys: list[str] = []
         self._start_by_key: dict[str, WorkflowStartReceipt] = {}
         self._position_by_workflow: dict[str, int] = {}
@@ -173,7 +187,12 @@ class FakeWorkflowOperations:
     def resolve_generation_block(
         self, block: MockExamOneItemGenerationBlockV1
     ) -> MockExamGenerationBlockResolutionV1:
-        return MockExamGenerationBlockResolutionV1(
+        resolution_type = (
+            MockExamGenerationBlockResolutionV2
+            if block.block_revision == "2.0"
+            else MockExamGenerationBlockResolutionV1
+        )
+        return resolution_type(
             generation_block_key=block.block_key,
             generation_block_revision=block.block_revision,
             generation_block_sha256=block.block_sha256,
@@ -201,7 +220,7 @@ class FakeWorkflowOperations:
     ) -> WorkflowStartReceipt:
         assert actor.actor_id == OPERATOR_ID
         assert request.item_id is None and request.base_revision_id is None
-        assert request.item_brief is not None
+        assert isinstance(request.item_brief, ContentTeamItemBriefRequestV3)
         assert request.item_brief.mock_exam_slot is not None
         assert request.registry_mode == "CREATE_ITEM"
         assert request.definition_key == "generic-item-development"
@@ -234,10 +253,22 @@ class FakeWorkflowOperations:
         return receipt
 
     def get(self, workflow_id: str) -> WorkflowView:
+        self.get_keys.append(workflow_id)
         position = self._position_by_workflow[workflow_id]
         request = self._request_by_workflow[workflow_id]
         assert request.expected_resolution is not None
+        assert isinstance(request.item_brief, ContentTeamItemBriefRequestV3)
+        selected_unit_key = request.item_brief.curriculum_selected_unit_key
+        assert selected_unit_key is not None
+        curriculum_root_key: str | None = resolve_integrated_science_curriculum_scope(
+            selected_unit_key
+        ).graph_root_stable_key
+        if self.legacy_null_provenance_roots:
+            curriculum_root_key = None
+        elif position in self.provenance_root_drift_positions:
+            curriculum_root_key = "curriculum.eom.editorial.integrated-science.tampered"
         completed = workflow_id in self._approved
+        failed = position in self.workflow_failed_positions
         accepted_resolution = WorkflowAcceptedResolutionView.model_validate(
             request.expected_resolution.model_dump(mode="json")
         )
@@ -249,7 +280,7 @@ class FakeWorkflowOperations:
             workflow_id=workflow_id,
             definition_key="generic-item-development",
             definition_version="1.8.0",
-            state="COMPLETED" if completed else "AWAITING_HUMAN_APPROVAL",
+            state=("FAILED" if failed else "COMPLETED" if completed else "AWAITING_HUMAN_APPROVAL"),
             stage="registration" if completed else "review",
             current_step_key="register" if completed else "review",
             resource_version=2 if completed else 1,
@@ -257,7 +288,7 @@ class FakeWorkflowOperations:
             created_at=NOW,
             updated_at=NOW,
             completed_at=NOW if completed else None,
-            failure_code=None,
+            failure_code="WORKFLOW_EXECUTION_FAILED" if failed else None,
             accepted_resolution=accepted_resolution,
             knowledge_provenance=WorkflowKnowledgeProvenanceView(
                 plan_id=_hex_id("execplan_", position),
@@ -269,7 +300,7 @@ class FakeWorkflowOperations:
                 preset_revision_id=request.expected_resolution.execution_preset_revision_id,
                 corpus_key="integrated-science-textbooks",
                 query_kind="ITEM_PREPARATION",
-                curriculum_root_key=None,
+                curriculum_root_key=curriculum_root_key,
                 required_item_elements=("choice", "paragraph"),
                 source_classes=("APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"),
                 graph_snapshot_revision_id=_hex_id("graphrev_", 50 + position),
@@ -546,6 +577,7 @@ class FakeAssemblyOperations:
         assert idempotency_key.startswith("mockexam:")
         self.create_requests.append(request)
         return SimpleNamespace(
+            schema_version="mock-exam-assembly-manifest/2.0",
             plan=self._preview,
             assessment_assembly_id=_hex_id("assembly_", 1),
             assessment_assembly_revision_id=_hex_id("assemblyrev_", 1),
@@ -583,7 +615,7 @@ class FakeHwpxOperations:
             graph_snapshot_sha256=_sha(501),
             item_set_sha256=_fake_assembly_item_set_sha256(),
             renderer="content-team-exam",
-            renderer_version="1.0.0",
+            renderer_version="2.0.0",
             state=HwpxBuildState.SUCCEEDED,
             validation_state=HwpxValidationState.PASS,
             item_count=25,
@@ -888,7 +920,7 @@ def test_exact_25_new_workflows_then_full_pointer_pipeline() -> None:
     tampered = completed.model_dump(mode="json")
     tampered["graph_publication_authorization"] = backdated_graph_authorization
     with pytest.raises(ValidationError, match="authorization precedes"):
-        MockExamProductionExecutionV1.model_validate(tampered)
+        type(completed).model_validate(tampered)
 
 
 def test_stale_graph_base_requires_explicit_write_ahead_supersession() -> None:
@@ -1172,6 +1204,162 @@ def test_workflow_resolution_drift_blocks_before_approval() -> None:
     assert drifted.failure is not None
     assert drifted.failure.code == "WORKFLOW_ACCEPTED_RESOLUTION_MISMATCH"
     assert _hex_id("workflow_", 1) not in workflows._approved
+
+
+def test_historical_curriculum_root_false_negative_recovers_exact_cohort_without_restart(
+    tmp_path: Path,
+) -> None:
+    workflows = FakeWorkflowOperations(legacy_null_provenance_roots=True)
+    coordinator, *_ = _coordinator(workflows=workflows)
+    store = AtomicJsonMockExamProductionCheckpointStore(tmp_path / "provenance-recovery")
+    runner = MockExamProductionRunner(coordinator=coordinator, checkpoints=store)
+    plan = _plan()
+    checkpoint = runner.initialize(
+        plan,
+        _actor(),
+        production_request_id=PRODUCTION_REQUEST_ID,
+        at=NOW,
+    )
+    checkpoint = runner.advance_items(
+        plan, checkpoint.execution_id, _actor(), at=NOW + timedelta(seconds=1)
+    )
+    failed = runner.advance_items(
+        plan, checkpoint.execution_id, _actor(), at=NOW + timedelta(seconds=2)
+    )
+
+    assert all(row.state == "FAILED" for row in failed.item_runs)
+    assert all(
+        row.failure is not None
+        and row.failure.code == "WORKFLOW_KNOWLEDGE_PROVENANCE_MISMATCH"
+        and not row.failure.retryable
+        for row in failed.item_runs
+    )
+    # Deployment admission deliberately retains the historical terminal classification so an
+    # emergency recovery release cannot strand itself between installation attempts.
+    assert mock_exam_production_is_terminal(failed) is True
+    assert len(workflows.start_keys) == 25
+    assert workflows.approval_keys == []
+    failed_revision_path = (
+        tmp_path
+        / "provenance-recovery"
+        / failed.execution_id
+        / f"{failed.execution_revision_id}.json"
+    )
+    assert failed_revision_path.is_file()
+
+    workflows.legacy_null_provenance_roots = False
+    recovered = runner.advance_items(
+        plan, failed.execution_id, _actor(), at=NOW + timedelta(seconds=3)
+    )
+
+    assert recovered.predecessor_execution_revision_id == failed.execution_revision_id
+    assert all(row.state == "WORKFLOW_ACTIVE" for row in recovered.item_runs)
+    assert all(row.failure is None for row in recovered.item_runs)
+    expected_roots = {
+        call.workflow_call_id: resolve_integrated_science_curriculum_scope(
+            call.item_brief.curriculum_selected_unit_key
+        ).graph_root_stable_key
+        for call in plan.workflow_calls
+    }
+    assert all(
+        row.knowledge_provenance is not None
+        and row.knowledge_provenance.curriculum_root_key == expected_roots[row.workflow_call_id]
+        for row in recovered.item_runs
+    )
+    assert len(workflows.start_keys) == 25
+    assert workflows.approval_keys == []
+    assert _monotonic_successor(failed, recovered)
+    assert failed_revision_path.is_file()
+    partial = recovered.model_copy(
+        update={"item_runs": (recovered.item_runs[0], *failed.item_runs[1:])}
+    )
+    assert not _monotonic_successor(failed, partial)
+    policy_smuggling = recovered.model_copy(
+        update={
+            "analysis_policy": ANALYSIS_POLICY,
+            "analysis_general_knowledge_mode": "DISABLED",
+        }
+    )
+    assert not _monotonic_successor(failed, policy_smuggling)
+
+    advanced = runner.advance_items(
+        plan, recovered.execution_id, _actor(), at=NOW + timedelta(seconds=4)
+    )
+    assert all(row.state == "APPROVAL_SUBMITTED" for row in advanced.item_runs)
+    assert len(workflows.start_keys) == 25
+    assert len(workflows.approval_keys) == 25
+
+
+def test_provenance_recovery_root_mismatch_is_atomic_and_resumable(tmp_path: Path) -> None:
+    workflows = FakeWorkflowOperations(legacy_null_provenance_roots=True)
+    coordinator, *_ = _coordinator(workflows=workflows)
+    store = AtomicJsonMockExamProductionCheckpointStore(tmp_path / "provenance-recovery-mismatch")
+    runner = MockExamProductionRunner(coordinator=coordinator, checkpoints=store)
+    plan = _plan()
+    checkpoint = runner.initialize(
+        plan,
+        _actor(),
+        production_request_id=PRODUCTION_REQUEST_ID,
+        at=NOW,
+    )
+    checkpoint = runner.advance_items(plan, checkpoint.execution_id, _actor(), at=NOW)
+    failed = runner.advance_items(plan, checkpoint.execution_id, _actor(), at=NOW)
+    workflows.legacy_null_provenance_roots = False
+    workflows.provenance_root_drift_positions.add(13)
+
+    with pytest.raises(MockExamProductionCoordinatorError) as captured:
+        runner.advance_items(plan, failed.execution_id, _actor(), at=NOW + timedelta(seconds=1))
+
+    assert captured.value.code == "WORKFLOW_KNOWLEDGE_PROVENANCE_MISMATCH"
+    assert store.load(failed.execution_id) == failed
+    assert all(row.state == "FAILED" for row in store.load(failed.execution_id).item_runs)
+    assert len(workflows.start_keys) == 25
+    assert workflows.approval_keys == []
+
+    workflows.provenance_root_drift_positions.clear()
+    recovered = runner.advance_items(
+        plan, failed.execution_id, _actor(), at=NOW + timedelta(seconds=2)
+    )
+    assert all(row.state == "WORKFLOW_ACTIVE" for row in recovered.item_runs)
+    assert len(workflows.start_keys) == 25
+    assert workflows.approval_keys == []
+
+
+def test_unrelated_terminal_workflow_failures_are_never_reopened() -> None:
+    workflows = FakeWorkflowOperations(workflow_failed_positions=frozenset(range(1, 26)))
+    coordinator, *_ = _coordinator(workflows=workflows)
+    plan = _plan()
+    checkpoint = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+    failed = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+    get_count = len(workflows.get_keys)
+
+    unchanged = coordinator.advance_items(plan, failed, _actor(), at=NOW + timedelta(seconds=1))
+
+    assert unchanged == failed
+    assert all(
+        row.state == "FAILED"
+        and row.failure is not None
+        and row.failure.code == "WORKFLOW_EXECUTION_FAILED"
+        for row in unchanged.item_runs
+    )
+    assert len(workflows.get_keys) == get_count
+    assert len(workflows.start_keys) == 25
+    assert workflows.approval_keys == []
+    forged_recovery = failed.model_copy(
+        update={
+            "item_runs": tuple(
+                row.model_copy(update={"state": "WORKFLOW_ACTIVE", "failure": None})
+                for row in failed.item_runs
+            )
+        }
+    )
+    assert not _monotonic_successor(failed, forged_recovery)
 
 
 def test_checkpointed_knowledge_provenance_cannot_change_after_approval() -> None:
@@ -1665,11 +1853,12 @@ def test_execution_schema_and_packaged_mirror_validate_checkpoint() -> None:
         operator_id=OPERATOR_ID,
         at=NOW,
     )
-    canonical = ROOT / "schemas/api/v1/mock-exam-production-execution-v1.schema.json"
+    assert checkpoint.schema_version == "mock-exam-production-execution/2.0"
+    canonical = ROOT / "schemas/api/v1/mock-exam-production-execution-v2.schema.json"
     packaged = (
         ROOT
         / "packages/api_contracts/eom_api_contracts/schemas"
-        / "mock-exam-production-execution-v1.schema.json"
+        / "mock-exam-production-execution-v2.schema.json"
     )
     assert canonical.read_bytes() == packaged.read_bytes()
     schema = json.loads(canonical.read_text(encoding="utf-8"))
@@ -1695,6 +1884,53 @@ def test_execution_schema_and_packaged_mirror_validate_checkpoint() -> None:
     assert review_canonical.read_bytes() == review_packaged.read_bytes()
     review_schema = json.loads(review_canonical.read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(review_schema)
+
+
+def test_plan_v2_pins_execution_v2_and_generation_v2_before_workflow_side_effects() -> None:
+    coordinator, workflows, *_ = _coordinator()
+    plan = build_integrated_science_mock_exam_production_plan_v2(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    initial = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    pinned = coordinator.advance_items(plan, initial, _actor(), at=NOW)
+
+    assert isinstance(pinned, MockExamProductionExecutionV2)
+    assert isinstance(pinned.generation_block_resolution, MockExamGenerationBlockResolutionV2)
+    assert pinned.generation_block_resolution.workflow_definition_version == "1.9.0"
+    assert pinned.generation_block_resolution.content_pack_version == "1.14.0"
+    assert workflows.occurrence_count == 0
+
+
+def test_execution_v2_rejects_mixed_generation_and_review_families() -> None:
+    coordinator, workflows, *_ = _coordinator()
+    _plan_value, checkpoint = _registered_checkpoint(coordinator, workflows)
+    value = checkpoint.model_dump(mode="json")
+    assert value["generation_block_resolution"] is not None
+    value["generation_block_resolution"] |= {
+        "generation_block_revision": "2.0",
+        "workflow_definition_version": "1.9.0",
+        "content_pack_version": "1.14.0",
+    }
+    identity = {
+        key: child
+        for key, child in value.items()
+        if key not in {"execution_revision_id", "checkpoint_sha256"}
+    }
+    checkpoint_sha256 = content_sha256(identity)
+    value["execution_revision_id"] = (
+        "productionexecrev_" + checkpoint_sha256.removeprefix("sha256:")[:32]
+    )
+    value["checkpoint_sha256"] = checkpoint_sha256
+
+    with pytest.raises(ValidationError, match="mix protocol families"):
+        MockExamProductionExecutionV2.model_validate(value)
 
 
 def test_atomic_runner_persists_revision_chain_and_rejects_tampering(
@@ -1882,7 +2118,7 @@ def test_production_request_id_creates_distinct_authorized_occurrences() -> None
     )
     assert first.execution_id != second.execution_id
     with pytest.raises(ValidationError):
-        MockExamProductionExecutionV1.model_validate(
+        type(first).model_validate(
             first.model_dump(mode="json") | {"production_request_id": second.production_request_id}
         )
 

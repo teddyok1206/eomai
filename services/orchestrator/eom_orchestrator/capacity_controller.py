@@ -125,20 +125,57 @@ class CodexCapacityController:
             return worker_lease_view(lease)
 
     def reconcile_expired(self, *, observed_at: datetime) -> tuple[LeaseReconciliationOutcome, ...]:
+        return self._reconcile_expired_lease_ids(
+            self._expired_lease_ids(observed_at=observed_at),
+            observed_at=observed_at,
+        )
+
+    def reconcile_expired_for_workflows(
+        self,
+        workflow_ids: tuple[str, ...],
+        *,
+        observed_at: datetime,
+    ) -> tuple[LeaseReconciliationOutcome, ...]:
+        """Reconcile only expired leases owned by one explicitly pinned Workflow cohort."""
+
+        if not workflow_ids or len(workflow_ids) != len(set(workflow_ids)):
+            raise ValueError("lease reconciliation Workflow identities must be nonempty and unique")
+        return self._reconcile_expired_lease_ids(
+            self._expired_lease_ids(
+                observed_at=observed_at,
+                workflow_ids=workflow_ids,
+            ),
+            observed_at=observed_at,
+        )
+
+    def _expired_lease_ids(
+        self,
+        *,
+        observed_at: datetime,
+        workflow_ids: tuple[str, ...] | None = None,
+    ) -> tuple[str, ...]:
         with self.sessions() as session:
-            lease_ids = tuple(
-                session.scalars(
-                    select(WorkerLeaseRecord.lease_id)
-                    .where(
-                        (WorkerLeaseRecord.state == "RECONCILING")
-                        | (
-                            (WorkerLeaseRecord.state == "ACTIVE")
-                            & (WorkerLeaseRecord.expires_at <= observed_at)
-                        )
-                    )
-                    .order_by(WorkerLeaseRecord.expires_at, WorkerLeaseRecord.lease_id)
+            query = select(WorkerLeaseRecord.lease_id).where(
+                (WorkerLeaseRecord.state == "RECONCILING")
+                | (
+                    (WorkerLeaseRecord.state == "ACTIVE")
+                    & (WorkerLeaseRecord.expires_at <= observed_at)
                 )
             )
+            if workflow_ids is not None:
+                query = query.where(WorkerLeaseRecord.workflow_id.in_(workflow_ids))
+            return tuple(
+                session.scalars(
+                    query.order_by(WorkerLeaseRecord.expires_at, WorkerLeaseRecord.lease_id)
+                )
+            )
+
+    def _reconcile_expired_lease_ids(
+        self,
+        lease_ids: tuple[str, ...],
+        *,
+        observed_at: datetime,
+    ) -> tuple[LeaseReconciliationOutcome, ...]:
         outcomes: list[LeaseReconciliationOutcome] = []
         for lease_id in lease_ids:
             try:

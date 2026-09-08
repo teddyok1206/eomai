@@ -17,8 +17,8 @@ from eom_catalog_contracts.approved_item_graph_publication import (
 from eom_catalog_contracts.assessment_item import AssessmentItemContentContract
 from eom_catalog_contracts.item_review import (
     InspectMockExamReviewEligibilityQuery,
-    MockExamItemReviewPublicationResult,
-    MockExamReviewEligibilityResult,
+    MockExamItemReviewPublicationResultContract,
+    MockExamReviewEligibilityResultContract,
     PublishMockExamItemReviewCommand,
 )
 from eom_catalog_contracts.knowledge import (
@@ -446,8 +446,8 @@ class CatalogApplicationResponse(FrozenModel):
         | None
     ) = None
     graph_publication: ApprovedItemGraphPublicationResult | None = None
-    item_review: MockExamItemReviewPublicationResult | None = None
-    review_eligibility: MockExamReviewEligibilityResult | None = None
+    item_review: MockExamItemReviewPublicationResultContract | None = None
+    review_eligibility: MockExamReviewEligibilityResultContract | None = None
     content: AssessmentItemContentContract | None = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
 
@@ -560,11 +560,39 @@ CATALOG_APPLICATION_SCHEMA_ROUTES: Final = MappingProxyType(
     }
 )
 
+CATALOG_APPLICATION_V12_SCHEMA_ROUTE: Final = CatalogApplicationSchemaRoute(
+    "catalog-application-request-v12",
+    "catalog-application-response-v12",
+)
 
-def catalog_application_schema_route(operation: str) -> CatalogApplicationSchemaRoute:
-    """Resolve the single request/response schema pair for a socket operation."""
+
+def catalog_application_schema_route(
+    operation: str,
+    *,
+    content_schema_version: str | None = None,
+    review_result_schema: str | None = None,
+) -> CatalogApplicationSchemaRoute:
+    """Resolve the immutable schema pair for one wire payload family.
+
+    The operation-only lookup intentionally remains the historical route. V12 is selected only
+    when the payload itself identifies content V3 or the review-result@9 family, so old V10/V11
+    clients and stored messages keep their original validation semantics.
+    """
 
     try:
-        return CATALOG_APPLICATION_SCHEMA_ROUTES[operation]
+        historical_route = CATALOG_APPLICATION_SCHEMA_ROUTES[operation]
     except KeyError as exc:
         raise ValueError("unsupported catalog application operation") from exc
+    if (
+        operation in {"IMPORT_REVIEWED_ITEM_CONTENT", "GET_ITEM_CONTENT"}
+        and content_schema_version == "3.0"
+    ) or (
+        operation
+        in {
+            "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+            "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
+        }
+        and review_result_schema == "review-result@9.0"
+    ):
+        return CATALOG_APPLICATION_V12_SCHEMA_ROUTE
+    return historical_route

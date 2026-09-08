@@ -19,6 +19,7 @@ CONFIG = ROOT / "config/control-plane/knowledge-grounded-item-v1"
 CONFIG_V2 = ROOT / "config/control-plane/knowledge-grounded-item-v2"
 CONFIG_V3 = ROOT / "config/control-plane/knowledge-grounded-item-v3"
 CONFIG_V4 = ROOT / "config/control-plane/knowledge-grounded-item-v4"
+CONFIG_V5 = ROOT / "config/control-plane/knowledge-grounded-item-v5"
 
 
 def test_knowledge_item_bootstrap_is_schema_first_and_exact() -> None:
@@ -81,6 +82,26 @@ def test_knowledge_item_v4_bootstrap_routes_past_exam_graph_evidence_to_one_shot
     assert manifest.schema_version == "knowledge-item-control-bootstrap/4.0"
     assert manifest.compatible_workflow_protocols == ("workflow-role/1.17.0",)
     assert manifest.evidence_access_by_role["authoring"] == "EVIDENCE_CONTEXT"
+    assert manifest.retrieval_policy.allowed_source_classes == (
+        "APPROVED_ITEM",
+        "PAST_EXAM",
+        "TEXTBOOK",
+    )
+
+
+def test_knowledge_item_v5_bootstrap_pins_content_team_v3_protocol() -> None:
+    manifest = load_knowledge_item_bootstrap_manifest(CONFIG_V5)
+    value = manifest.model_dump(mode="json")
+
+    validate_control_contract("knowledge-item-control-bootstrap-v5", value)
+    assert manifest.schema_version == "knowledge-item-control-bootstrap/5.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.19.0",)
+    assert manifest.evidence_access_by_role == {
+        "authoring": "EVIDENCE_CONTEXT",
+        "image": "EVIDENCE_CONTEXT",
+        "review": "EVIDENCE_CONTEXT",
+        "item_management": "NONE",
+    }
     assert manifest.retrieval_policy.allowed_source_classes == (
         "APPROVED_ITEM",
         "PAST_EXAM",

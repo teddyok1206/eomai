@@ -150,6 +150,10 @@ from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_auth import WorkerAuthObservation
 from eom_orchestrator.worker_registry import FIXED_WORKER_SLOT_IDS
 from eom_orchestrator.worker_systemd import WorkerUnitActivity
+from eom_orchestrator.workflow_job_retirement import (
+    WorkflowJobRetirementError,
+    require_no_held_worker_leases,
+)
 from eom_workflow import CodexUsageObservation, ControlArtifactPointer, ExecutionPresetRevisionV2
 from eom_workflow.control_plane import WorkerRole
 from eom_workflow.schemas import role_schema_bundle_hash
@@ -1755,7 +1759,10 @@ def test_capacity_controller_reconciles_exact_unit_before_slot_reuse(
         )
     )
 
-    outcomes = controller.reconcile_expired(observed_at=NOW + timedelta(minutes=2))
+    outcomes = controller.reconcile_expired_for_workflows(
+        (workflow_id,),
+        observed_at=NOW + timedelta(minutes=2),
+    )
 
     assert observed_units == [("01", job_id)]
     assert len(outcomes) == 1
@@ -1772,10 +1779,27 @@ def test_capacity_controller_reconciles_exact_unit_before_slot_reuse(
                 .order_by(WorkerLeaseEventRecord.sequence)
             )
         )
-        assert tuple(event.new_state for event in events) == (
-            "ACTIVE",
-            "RECONCILING",
-        ) + (("EXPIRED",) if process_state == "ABSENT" else ())
+        event_vector = tuple(
+            (event.prior_state, event.new_state, event.reason_code) for event in events
+        )
+        assert event_vector == (
+            (None, "ACTIVE", None),
+            ("ACTIVE", "RECONCILING", "LEASE_TTL_EXPIRED"),
+        ) + ((("RECONCILING", "EXPIRED", "PROCESS_ABSENT"),) if process_state == "ABSENT" else ())
+        if process_state == "ABSENT":
+            require_no_held_worker_leases(session, (workflow_id,))
+        else:
+            with pytest.raises(WorkflowJobRetirementError):
+                require_no_held_worker_leases(session, (workflow_id,))
+
+    if process_state == "ABSENT":
+        assert (
+            controller.reconcile_expired_for_workflows(
+                (workflow_id,),
+                observed_at=NOW + timedelta(minutes=3),
+            )
+            == ()
+        )
 
     metrics = controller.metrics(observed_at=NOW + timedelta(minutes=2))
     assert metrics.queued_jobs == baseline.queued_jobs
@@ -1792,6 +1816,57 @@ def test_capacity_controller_reconciles_exact_unit_before_slot_reuse(
     assert metrics.held_knowledge_analysis_leases == baseline.held_knowledge_analysis_leases
     assert metrics.oldest_queued_seconds is not None
     assert (metrics.oldest_held_seconds is not None) == (process_state != "ABSENT")
+
+
+def test_scoped_reconciliation_does_not_touch_unexpired_lease(
+    db_session: Session,
+) -> None:
+    plan_id, workflow_id, _ = _complete_control_plane(db_session)
+    job = _job(db_session, workflow_id=workflow_id)
+    sessions = sessionmaker(bind=db_session.connection(), expire_on_commit=False)
+    observed_units: list[str] = []
+    controller = CodexCapacityController(
+        sessions,
+        activity_inspector=lambda _slot, inspected_job_id: (
+            observed_units.append(inspected_job_id)
+            or WorkerUnitActivity("ABSENT", "must-not-be-observed", None)
+        ),
+    )
+    claimed = controller.claim(
+        LeaseClaim(
+            plan_id=plan_id,
+            step_key="authoring",
+            job_id=job.job_id,
+            attempt=1,
+            workload_class="CODEX",
+            acquired_at=NOW + timedelta(minutes=1),
+            ttl=timedelta(minutes=30),
+        )
+    )
+
+    outcomes = controller.reconcile_expired_for_workflows(
+        (workflow_id,),
+        observed_at=NOW + timedelta(minutes=2),
+    )
+
+    assert outcomes == ()
+    assert observed_units == []
+    with sessions() as session:
+        lease = session.get(WorkerLeaseRecord, claimed.lease_id)
+        assert lease is not None and lease.state == "ACTIVE"
+        events = tuple(
+            session.scalars(
+                select(WorkerLeaseEventRecord)
+                .where(WorkerLeaseEventRecord.lease_id == claimed.lease_id)
+                .order_by(WorkerLeaseEventRecord.sequence)
+            )
+        )
+        event_vector = tuple(
+            (event.prior_state, event.new_state, event.reason_code) for event in events
+        )
+        assert event_vector == ((None, "ACTIVE", None),)
+        with pytest.raises(WorkflowJobRetirementError):
+            require_no_held_worker_leases(session, (workflow_id,))
 
 
 def test_uncertain_worker_terminal_state_reconciles_before_slot_reuse(

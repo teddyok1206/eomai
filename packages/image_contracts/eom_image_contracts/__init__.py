@@ -22,10 +22,12 @@ from eom_image_contracts.models import (
     content_sha256,
     text_sha256,
 )
+from eom_image_contracts.safe_svg import SVG_ALLOWED_FONT_FAMILIES, sanitize_svg_overlay
 from eom_image_contracts.validation import SCHEMA_SHA256, load_schema, validate_contract
 
 __all__ = [
     "SCHEMA_SHA256",
+    "SVG_ALLOWED_FONT_FAMILIES",
     "DeliveryCanvas",
     "GenerationCanvas",
     "LocalImageCompositeReceipt",
@@ -46,6 +48,7 @@ __all__ = [
     "content_json_bytes",
     "content_sha256",
     "load_schema",
+    "sanitize_svg_overlay",
     "text_sha256",
     "validate_contract",
 ]

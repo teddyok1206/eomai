@@ -23,8 +23,12 @@ from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
-from eom_workflow import ContentTeamItemBrief, WorkflowRequest
+from eom_workflow import ContentTeamItemBrief
 from eom_workflow_runner.models import WorkflowDefinitionRecord, WorkflowInstanceRecord
+from eom_workflow_runner.repository import (
+    load_persisted_workflow_request,
+    workflow_business_fingerprint,
+)
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
@@ -57,12 +61,28 @@ from eom_catalog_service.mock_exam_item_review_publication_service import (
 )
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
 
-_V2_ITEM_CONTENT_SCHEMA_REFS = frozenset(
-    {
-        "eom.assessment.item-content/2.0",
-        "eom://schemas/item-registry/assessment-item-content-v2",
-    }
-)
+_PRODUCTION_WORKFLOW_FAMILIES = {
+    "1.8.0": (
+        "workflow-role/1.17.0",
+        "1.13.0",
+        frozenset(
+            {
+                "eom.assessment.item-content/2.0",
+                "eom://schemas/item-registry/assessment-item-content-v2",
+            }
+        ),
+    ),
+    "1.9.0": (
+        "workflow-role/1.19.0",
+        "1.14.0",
+        frozenset(
+            {
+                "eom.assessment.item-content/3.0",
+                "eom://schemas/item-registry/assessment-item-content-v3",
+            }
+        ),
+    ),
+}
 _RETRIEVAL_NAMESPACE = "approved-item-auto-alignment"
 _PUBLICATION_NAMESPACE = "approved-item-auto-graph"
 
@@ -217,8 +237,7 @@ class ApprovedItemGraphPublicationService:
             if (
                 snapshot is None
                 or snapshot.state != "PUBLISHED"
-                or snapshot.snapshot_sha256
-                != command.expected_current_graph_snapshot_sha256
+                or snapshot.snapshot_sha256 != command.expected_current_graph_snapshot_sha256
             ):
                 raise ApprovedItemGraphPublicationError(
                     "APPROVED_ITEM_GRAPH_BASE_POINTER_INVALID",
@@ -358,15 +377,14 @@ class ApprovedItemGraphPublicationService:
             ApprovedItemGraphPublicationService._raise_replay_conflict(
                 "replayed analysis-to-Item pointers do not resolve exactly"
             )
-        if tuple(
-            pointers_by_run[run_id][1] for run_id in command.accepted_analysis_run_ids
-        ) != command.expected_workflow_ids:
+        if (
+            tuple(pointers_by_run[run_id][1] for run_id in command.accepted_analysis_run_ids)
+            != command.expected_workflow_ids
+        ):
             ApprovedItemGraphPublicationService._raise_replay_conflict(
                 "replayed analysis-to-Workflow pointers differ from the command"
             )
-        return tuple(
-            pointers_by_run[run_id][0] for run_id in command.accepted_analysis_run_ids
-        )
+        return tuple(pointers_by_run[run_id][0] for run_id in command.accepted_analysis_run_ids)
 
     @staticmethod
     def _validate_replay_retrievals(
@@ -447,6 +465,7 @@ class ApprovedItemGraphPublicationService:
             raise ValueError("accepted generated Item analysis pointer is missing")
         production_request_ids: set[str] = set()
         workflow_call_ids: set[str] = set()
+        workflow_family_versions: set[str] = set()
         slot_positions: list[int] = []
         slot_unit_keys: list[str] = []
         for analysis, expected_workflow_id in zip(
@@ -458,17 +477,22 @@ class ApprovedItemGraphPublicationService:
             run, revision, item, workflow, definition = by_run[analysis.analysis_run_id]
             request_source = run.canonical_request.get("source")
             try:
-                workflow_request = WorkflowRequest.model_validate(workflow.initial_request)
+                workflow_request = load_persisted_workflow_request(workflow.initial_request)
             except PydanticValidationError as exc:
                 raise ValueError("generated Item Workflow request is invalid") from exc
             occurrence = workflow_request.production_occurrence
             expected_resolution = workflow_request.expected_resolution
             registration = workflow.runtime_context.get("item_registration")
             accepted_resolution = workflow.runtime_context.get("accepted_resolution")
+            family = _PRODUCTION_WORKFLOW_FAMILIES.get(revision.workflow_definition_version or "")
+            if family is None:
+                raise ValueError("generated Item Workflow version is unsupported")
+            role_protocol, pack_version, content_schema_refs = family
+            family_version = revision.workflow_definition_version
             if (
                 not isinstance(source, ApprovedItemKnowledgeSourceV2)
                 or source.source_class != "APPROVED_ITEM"
-                or source.artifact_member.schema_ref not in _V2_ITEM_CONTENT_SCHEMA_REFS
+                or source.artifact_member.schema_ref not in content_schema_refs
                 or analysis.accepted_result.schema_ref
                 != "eom://schemas/knowledge/knowledge-analysis-result/2.0"
                 or run.state != "ACCEPTED"
@@ -481,26 +505,28 @@ class ApprovedItemGraphPublicationService:
                 or revision.item_id != source.item_id
                 or revision.workflow_id != expected_workflow_id
                 or revision.revision_number != 1
-                or revision.workflow_definition_version != "1.8.0"
                 or revision.revision_state != "APPROVED"
                 or item.lifecycle_state != "ACTIVE"
                 or item.current_revision_id != source.item_revision_id
                 or workflow.workflow_id != expected_workflow_id
                 or workflow.definition_key != "generic-item-development"
-                or workflow.definition_version != "1.8.0"
+                or workflow.definition_version != family_version
                 or workflow.definition_hash != definition.definition_hash
                 or workflow.definition_id != definition.definition_id
-                or workflow.role_schema_version != "workflow-role/1.17.0"
+                or workflow.role_schema_version != role_protocol
                 or workflow.state != "COMPLETED"
                 or workflow.stage != "COMPLETED"
                 or workflow.current_step_key != "complete"
                 or workflow.completed_at is None
                 or workflow.request_payload != workflow.initial_request
-                or workflow.request_hash != content_sha256(workflow.initial_request)
+                or workflow.request_hash
+                != workflow_business_fingerprint(
+                    definition,
+                    workflow_request,
+                )
                 or definition.definition_key != "generic-item-development"
-                or definition.definition_version != "1.8.0"
-                or definition.definition_hash
-                != content_sha256(definition.canonical_definition)
+                or definition.definition_version != family_version
+                or definition.definition_hash != content_sha256(definition.canonical_definition)
                 or workflow_request.request_name != "GENERATED_KNOWLEDGE_ITEM_REQUEST"
                 or workflow_request.registry_intent is None
                 or workflow_request.registry_intent.mode != "CREATE_ITEM"
@@ -511,12 +537,11 @@ class ApprovedItemGraphPublicationService:
                 or workflow_request.item_brief.mock_exam_slot is None
                 or occurrence is None
                 or expected_resolution is None
-                or expected_resolution.workflow_definition_key
-                != "generic-item-development"
-                or expected_resolution.workflow_definition_version != "1.8.0"
+                or expected_resolution.workflow_definition_key != "generic-item-development"
+                or expected_resolution.workflow_definition_version != family_version
                 or expected_resolution.workflow_definition_sha256 != workflow.definition_hash
-                or expected_resolution.content_pack_release_id
-                != revision.content_pack_release_id
+                or expected_resolution.content_pack_release_id != revision.content_pack_release_id
+                or expected_resolution.content_pack_version != pack_version
                 or accepted_resolution != expected_resolution.model_dump(mode="json")
                 or not isinstance(registration, dict)
                 or registration.get("item_id") != source.item_id
@@ -524,11 +549,13 @@ class ApprovedItemGraphPublicationService:
                 or registration.get("revision_number") != 1
             ):
                 raise ValueError(
-                    "analysis must resolve to one fresh completed generic-item-development@1.8.0 "
-                    "CREATE_ITEM Workflow and its active current approved V2 Item"
+                    "analysis must resolve to one fresh completed supported paired "
+                    "generic-item-development "
+                    "CREATE_ITEM Workflow and its active current approved Item"
                 )
             production_request_ids.add(occurrence.production_request_id)
             workflow_call_ids.add(occurrence.workflow_call_id)
+            workflow_family_versions.add(family_version)
             slot_positions.append(workflow_request.item_brief.mock_exam_slot.position)
             slot_unit_keys.append(
                 workflow_request.item_brief.mock_exam_slot.curriculum_selected_unit_key
@@ -536,6 +563,7 @@ class ApprovedItemGraphPublicationService:
         if (
             len(production_request_ids) != 1
             or len(workflow_call_ids) != len(analyses)
+            or len(workflow_family_versions) != 1
             or tuple(slot_positions) != tuple(range(1, 26))
         ):
             raise ValueError(
@@ -553,9 +581,7 @@ class ApprovedItemGraphPublicationService:
         unit_id_by_key = {
             row.unit_key: row.curriculum_unit_id for row in integrated_science_curriculum_units()
         }
-        if not (
-            len(analysis_run_ids) == len(expected_unit_keys) == len(alignments) == 25
-        ):
+        if not (len(analysis_run_ids) == len(expected_unit_keys) == len(alignments) == 25):
             raise ValueError("generated Item slot and alignment sets are not exact")
         for analysis_run_id, unit_key, alignment in zip(
             analysis_run_ids,
@@ -618,9 +644,7 @@ class ApprovedItemGraphPublicationService:
             "previous_graph_snapshot_revision_id": (
                 command.expected_current_graph_snapshot_revision_id
             ),
-            "previous_graph_snapshot_sha256": (
-                command.expected_current_graph_snapshot_sha256
-            ),
+            "previous_graph_snapshot_sha256": (command.expected_current_graph_snapshot_sha256),
             "graph_snapshot": graph_snapshot.model_dump(mode="json"),
             "graph_snapshot_sha256": graph_snapshot_sha256,
             "revision_number": revision_number,

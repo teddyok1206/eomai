@@ -282,6 +282,12 @@ def test_hwpx_capability_and_not_deployed_build_boundary(tmp_path: Path) -> None
                     "document_profile": "content-team-hwp-question-editor-v2",
                     "source_schema_ref": "eom.assessment.item-content/2.0",
                 },
+                {
+                    "renderer": "content-team",
+                    "renderer_version": "3.0.0",
+                    "document_profile": "content-team-hwp-question-editor-v3",
+                    "source_schema_ref": "eom.assessment.item-content/3.0",
+                },
             ]
             refused = client.post(
                 f"/api/v1/item-revisions/{REVISION_ID}/hwpx-builds",

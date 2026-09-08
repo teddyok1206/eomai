@@ -6,7 +6,7 @@ import re
 from pathlib import PurePosixPath
 from typing import Annotated, Final, Literal
 
-from eom_hwpx_contracts import ContentTeamEditorialDraft
+from eom_hwpx_contracts import ContentTeamEditorialDraft, ContentTeamEditorialDraftV2
 from pydantic import Field, field_validator, model_validator
 
 from eom_catalog_contracts.models import FrozenModel, Sha256, _safe_text
@@ -19,6 +19,7 @@ ASSESSMENT_ITEM_CONTENT_FILE_NAME: Final = "assessment-item-content.json"
 ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE: Final = "application/json"
 ASSESSMENT_ITEM_CONTENT_SCHEMA_REF: Final = "eom.assessment.item-content/1.0"
 ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF: Final = "eom.assessment.item-content/2.0"
+ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF: Final = "eom.assessment.item-content/3.0"
 
 
 class MediaArtifactPointer(FrozenModel):
@@ -226,7 +227,15 @@ class AssessmentItemContentV2(ContentTeamEditorialDraft):
     schema_version: Literal["2.0"] = "2.0"
 
 
-type AssessmentItemContentContract = AssessmentItemContent | AssessmentItemContentV2
+class AssessmentItemContentV3(ContentTeamEditorialDraftV2):
+    """Score-corrected content-team Item used by the V9 workflow family."""
+
+    schema_version: Literal["3.0"] = "3.0"
+
+
+type AssessmentItemContentContract = (
+    AssessmentItemContent | AssessmentItemContentV2 | AssessmentItemContentV3
+)
 
 
 def validate_item_reference_contract(

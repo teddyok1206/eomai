@@ -15,12 +15,18 @@ from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_FILE_NAME,
     ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
     ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+    ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF,
     AssessmentItemContentV2,
+    AssessmentItemContentV3,
     CurriculumUnitBindingV2,
     MockExamAssemblyCohortV1,
     MockExamAssemblyPolicyV1,
+    MockExamContentPointerContract,
     MockExamContentPointerV1,
+    MockExamContentPointerV2,
+    MockExamPlanningCandidateContract,
     MockExamPlanningCandidateV1,
+    MockExamPlanningCandidateV2,
     MockExamRatingPolicyV1,
     MockExamReviewPointerV1,
     MockExamUsageSnapshotV1,
@@ -30,7 +36,10 @@ from eom_catalog_contracts.item_review import (
     MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME,
     MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA,
     MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF,
     MockExamItemReviewDecisionV1,
+    MockExamItemReviewDecisionV2,
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
     classify_content_team_mock_exam_material_profile,
@@ -66,12 +75,19 @@ MAX_ITEM_CONTENT_BYTES = 2_097_152
 MAX_EDITORIAL_MARKDOWN_BYTES = 2_097_152
 MAX_REVIEW_BYTES = 2_097_152
 
-_CONTENT_TEAM_SCHEMA_REFS = frozenset(
+_CONTENT_TEAM_V2_SCHEMA_REFS = frozenset(
     {
         ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
         "eom://schemas/item-registry/assessment-item-content-v2",
     }
 )
+_CONTENT_TEAM_V3_SCHEMA_REFS = frozenset(
+    {
+        ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF,
+        "eom://schemas/item-registry/assessment-item-content-v3",
+    }
+)
+_CONTENT_TEAM_SCHEMA_REFS = _CONTENT_TEAM_V2_SCHEMA_REFS | _CONTENT_TEAM_V3_SCHEMA_REFS
 
 
 class MockExamCandidateResolutionError(RuntimeError):
@@ -85,7 +101,7 @@ class MockExamCandidateResolutionError(RuntimeError):
 @dataclass(frozen=True)
 class MockExamPlanningInputs:
     resolved_candidate_count: int
-    candidates: tuple[MockExamPlanningCandidateV1, ...]
+    candidates: tuple[MockExamPlanningCandidateContract, ...]
     usage_snapshot: MockExamUsageSnapshotV1
 
 
@@ -104,8 +120,8 @@ class _StructuralCandidate:
 
 @dataclass(frozen=True)
 class _CandidateContent:
-    pointer: MockExamContentPointerV1
-    value: AssessmentItemContentV2
+    pointer: MockExamContentPointerContract
+    value: AssessmentItemContentV2 | AssessmentItemContentV3
 
 
 class MockExamCandidateRepository:
@@ -191,7 +207,7 @@ class MockExamCandidateRepository:
             revision_ids=tuple(row.revision.item_revision_id for row, _review in rated_rows),
             captured_at=planned_at,
         )
-        candidates: list[MockExamPlanningCandidateV1] = []
+        candidates: list[MockExamPlanningCandidateContract] = []
         for row, review in rated_rows:
             content = self._load_candidate_content(
                 row,
@@ -200,43 +216,43 @@ class MockExamCandidateRepository:
             )
             usage = usage_by_revision[row.revision.item_revision_id]
             final_rating = review.severity_summary[rating_policy.rating_field]
-            candidates.append(
-                MockExamPlanningCandidateV1(
-                    item_id=row.item.item_id,
-                    item_revision_id=row.revision.item_revision_id,
-                    item_manifest_sha256=row.revision.manifest_sha256,
-                    item_current_revision=(
-                        row.item.current_revision_id == row.revision.item_revision_id
-                    ),
-                    graph_item_node_id=row.node.node_id,
-                    graph_analysis_run_id=row.analysis.analysis_run_id,
-                    graph_source_class=row.source_class,
-                    graph_occurrence_placement_node_id=(
-                        row.occurrence.placement_node_id if row.occurrence is not None else None
-                    ),
-                    curriculum_unit_keys=row.curriculum_unit_keys,
-                    large_unit_key=row.large_unit_key,
-                    item_type_key=row.revision.item_type_key,
-                    difficulty_band=row.revision.difficulty_band,
-                    is_inquiry=content.value.inquiry is not None,
-                    material_profile=classify_content_team_mock_exam_material_profile(
-                        content.value
-                    ),
-                    source_score_display=content.value.score_display,
-                    content=content.pointer,
-                    review=MockExamReviewPointerV1(
-                        item_review_record_id=review.item_review_record_id,
-                        review_artifact_id=review.review_artifact_id,
-                        review_artifact_revision_id=review.review_artifact_revision_id,
-                        review_sha256=review.review_sha256,
-                        decision="APPROVE",
-                        final_rating=cast(Literal["A", "B", "C"], final_rating),
-                    ),
-                    usage_count=usage[0],
-                    latest_usage_at=usage[1],
-                    usage_fingerprint_sha256=usage[2],
-                )
-            )
+            candidate_values = {
+                "item_id": row.item.item_id,
+                "item_revision_id": row.revision.item_revision_id,
+                "item_manifest_sha256": row.revision.manifest_sha256,
+                "item_current_revision": (
+                    row.item.current_revision_id == row.revision.item_revision_id
+                ),
+                "graph_item_node_id": row.node.node_id,
+                "graph_analysis_run_id": row.analysis.analysis_run_id,
+                "graph_source_class": row.source_class,
+                "graph_occurrence_placement_node_id": (
+                    row.occurrence.placement_node_id if row.occurrence is not None else None
+                ),
+                "curriculum_unit_keys": row.curriculum_unit_keys,
+                "large_unit_key": row.large_unit_key,
+                "item_type_key": row.revision.item_type_key,
+                "difficulty_band": row.revision.difficulty_band,
+                "is_inquiry": content.value.inquiry is not None,
+                "material_profile": classify_content_team_mock_exam_material_profile(content.value),
+                "source_score_display": content.value.score_display,
+                "content": content.pointer.model_dump(mode="json"),
+                "review": MockExamReviewPointerV1(
+                    item_review_record_id=review.item_review_record_id,
+                    review_artifact_id=review.review_artifact_id,
+                    review_artifact_revision_id=review.review_artifact_revision_id,
+                    review_sha256=review.review_sha256,
+                    decision="APPROVE",
+                    final_rating=cast(Literal["A", "B", "C"], final_rating),
+                ).model_dump(mode="json"),
+                "usage_count": usage[0],
+                "latest_usage_at": usage[1],
+                "usage_fingerprint_sha256": usage[2],
+            }
+            if isinstance(content.value, AssessmentItemContentV3):
+                candidates.append(MockExamPlanningCandidateV2.model_validate(candidate_values))
+            else:
+                candidates.append(MockExamPlanningCandidateV1.model_validate(candidate_values))
         return MockExamPlanningInputs(
             resolved_candidate_count=len(structural),
             candidates=(
@@ -450,7 +466,7 @@ class MockExamCandidateRepository:
                     "ASSEMBLY_LARGE_UNIT_AMBIGUOUS",
                     "a planning Item crosses reviewed large-unit boundaries",
                 )
-            self._validate_structural_component(component)
+            self.validate_structural_component(component)
             structural.append(
                 _StructuralCandidate(
                     analysis=analysis,
@@ -535,7 +551,9 @@ class MockExamCandidateRepository:
         return current.unit_key
 
     @staticmethod
-    def _validate_structural_component(component: ItemComponentRecord) -> None:
+    def validate_structural_component(component: ItemComponentRecord) -> None:
+        """Validate the shared canonical content-team component pointer shape."""
+
         metadata = component.metadata_json
         if (
             component.logical_name != ASSESSMENT_ITEM_CONTENT_FILE_NAME
@@ -620,6 +638,7 @@ class MockExamCandidateRepository:
                 review,
                 artifacts=artifacts,
                 revisions=revisions,
+                require_v2=row.component.schema_ref in _CONTENT_TEAM_V3_SCHEMA_REFS,
             )
         return artifacts, revisions
 
@@ -680,7 +699,18 @@ class MockExamCandidateRepository:
         *,
         artifacts: dict[str, ArtifactRecord],
         revisions: dict[str, ArtifactRevisionRecord],
+        require_v2: bool = False,
     ) -> None:
+        decision_schema = (
+            MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA
+            if require_v2
+            else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA
+        )
+        decision_schema_ref = (
+            MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF
+            if require_v2
+            else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF
+        )
         artifact = artifacts.get(review.review_artifact_id)
         revision = revisions.get(review.review_artifact_revision_id)
         if (
@@ -703,12 +733,16 @@ class MockExamCandidateRepository:
             expected_sha256=review.review_sha256,
             max_bytes=MAX_REVIEW_BYTES,
             expected_media_type="application/json",
-            expected_schema_ref=MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
+            expected_schema_ref=decision_schema_ref,
         )
         value = _json_object(payload, "ASSEMBLY_REVIEW_POINTER_INVALID")
         try:
-            validate_contract(MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA, value)
-            decision = MockExamItemReviewDecisionV1.model_validate(value)
+            validate_contract(decision_schema, value)
+            decision: MockExamItemReviewDecisionV1 = (
+                MockExamItemReviewDecisionV2.model_validate(value)
+                if require_v2
+                else MockExamItemReviewDecisionV1.model_validate(value)
+            )
         except (JsonSchemaValidationError, ValueError) as exc:
             raise MockExamCandidateResolutionError(
                 "ASSEMBLY_REVIEW_POINTER_INVALID",
@@ -765,6 +799,20 @@ class MockExamCandidateRepository:
         )
         metadata = row.component.metadata_json
         markdown_sha256 = cast(str, metadata["editorial_markdown_sha256"])
+        is_v3 = row.component.schema_ref in _CONTENT_TEAM_V3_SCHEMA_REFS
+        markdown_schema_ref = (
+            "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
+            if is_v3
+            else "eom://schemas/hwpx/content-team-editorial-markdown/1.0"
+        )
+        metadata_markdown_schema_ref = metadata.get("editorial_markdown_schema_ref")
+        if (is_v3 and metadata_markdown_schema_ref != markdown_schema_ref) or (
+            not is_v3 and metadata_markdown_schema_ref not in {None, markdown_schema_ref}
+        ):
+            self._fail(
+                "ASSEMBLY_ITEM_CONTENT_POINTER_INVALID",
+                "planning Item Markdown schema differs from its content schema",
+            )
         self._read_member(
             artifact,
             revision,
@@ -775,29 +823,46 @@ class MockExamCandidateRepository:
             expected_sha256=markdown_sha256,
             max_bytes=MAX_EDITORIAL_MARKDOWN_BYTES,
             expected_media_type="text/markdown",
-            expected_schema_ref="eom://schemas/hwpx/content-team-editorial-markdown/1.0",
+            expected_schema_ref=markdown_schema_ref,
         )
         value = _json_object(raw_content, "ASSEMBLY_ITEM_CONTENT_INVALID")
         try:
-            validate_contract("assessment-item-content-v2", value)
-            content = AssessmentItemContentV2.model_validate(value)
+            schema_name = "assessment-item-content-v3" if is_v3 else "assessment-item-content-v2"
+            content_model = AssessmentItemContentV3 if is_v3 else AssessmentItemContentV2
+            validate_contract(schema_name, value)
+            content = content_model.model_validate(value)
         except ValueError as exc:
             raise MockExamCandidateResolutionError(
                 "ASSEMBLY_ITEM_CONTENT_INVALID",
-                "content-team Item does not satisfy its canonical V2 contract",
+                "content-team Item does not satisfy its pinned canonical contract",
             ) from exc
-        return _CandidateContent(
-            pointer=MockExamContentPointerV1(
-                item_component_id=row.component.item_component_id,
-                artifact_id=row.component.artifact_id,
-                artifact_revision_id=row.component.artifact_revision_id,
-                member_path=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
-                schema_ref=ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
-                media_type=ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
-                sha256=row.component.sha256,
-                editorial_markdown_member="content-team-item.md",
-                editorial_markdown_sha256=markdown_sha256,
+        pointer_values = {
+            "item_component_id": row.component.item_component_id,
+            "artifact_id": row.component.artifact_id,
+            "artifact_revision_id": row.component.artifact_revision_id,
+            "member_path": ASSESSMENT_ITEM_CONTENT_FILE_NAME,
+            "schema_ref": (
+                ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF
+                if is_v3
+                else ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF
             ),
+            "media_type": ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+            "sha256": row.component.sha256,
+            "editorial_markdown_member": "content-team-item.md",
+            "editorial_markdown_sha256": markdown_sha256,
+        }
+        pointer: MockExamContentPointerContract
+        if is_v3:
+            pointer = MockExamContentPointerV2.model_validate(
+                {
+                    **pointer_values,
+                    "editorial_markdown_schema_ref": markdown_schema_ref,
+                }
+            )
+        else:
+            pointer = MockExamContentPointerV1.model_validate(pointer_values)
+        return _CandidateContent(
+            pointer=pointer,
             value=content,
         )
 

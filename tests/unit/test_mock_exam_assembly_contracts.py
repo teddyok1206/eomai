@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,13 +14,19 @@ from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_ASSEMBLY_POLICY_SHA256,
     INTEGRATED_SCIENCE_LAYOUT_POLICY_SHA256,
     INTEGRATED_SCIENCE_RATING_POLICY_SHA256,
+    CreateMockExamAssembly,
     CreatePlannedMockExamAssembly,
     MockExamAssemblyCohortV1,
+    MockExamAssemblyManifestV1,
     MockExamAssemblyManifestV2,
     MockExamAssemblyPlacementV1,
     MockExamAssemblyPlanV1,
+    MockExamAssemblyPlanV2,
+    MockExamAssemblySelection,
     MockExamContentPointerV1,
+    MockExamContentPointerV2,
     MockExamPlanningCandidateV1,
+    MockExamPlanningCandidateV2,
     MockExamPlanningError,
     MockExamReviewPointerV1,
     MockExamUsageSnapshotV1,
@@ -36,6 +44,7 @@ from eom_catalog_service.mock_exam_assembly_service import (
     MockExamAssemblyService,
 )
 from eom_catalog_service.mock_exam_candidate_repository import MockExamPlanningInputs
+from eom_catalog_service.models import ItemComponentRecord
 from eom_identifiers import content_sha256
 from jsonschema import Draft202012Validator
 from sqlalchemy import create_engine
@@ -128,6 +137,30 @@ def _planning_candidates() -> tuple[MockExamPlanningCandidateV1, ...]:
                 usage_fingerprint_sha256=usage_fingerprint,
             )
         )
+    return tuple(values)
+
+
+def _planning_candidates_v2() -> tuple[MockExamPlanningCandidateV2, ...]:
+    layout = load_integrated_science_mock_exam_layout_policy()
+    values: list[MockExamPlanningCandidateV2] = []
+    for candidate, slot in zip(_planning_candidates(), layout.slots, strict=True):
+        value = candidate.model_dump(mode="json")
+        value["source_score_display"] = {
+            1500: "1.5",
+            2000: "2",
+            2500: "2.5",
+            3000: "3",
+        }[slot.points_milli]
+        value["content"] = MockExamContentPointerV2(
+            **{
+                **candidate.content.model_dump(mode="json"),
+                "schema_ref": "eom.assessment.item-content/3.0",
+                "editorial_markdown_schema_ref": (
+                    "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
+                ),
+            }
+        ).model_dump(mode="json")
+        values.append(MockExamPlanningCandidateV2.model_validate(value))
     return tuple(values)
 
 
@@ -311,6 +344,52 @@ def test_server_planner_returns_one_deterministic_complete_plan() -> None:
     manifest_value["manifest_sha256"] = content_sha256(manifest_value)
     manifest = MockExamAssemblyManifestV2.model_validate(manifest_value)
     validate_contract("mock-exam-assembly-manifest-v2", manifest.model_dump(mode="json"))
+
+
+def test_v3_candidates_produce_only_plan_v2_and_reject_mixed_protocol_families() -> None:
+    policy = load_integrated_science_mock_exam_policy()
+    layout = load_integrated_science_mock_exam_layout_policy()
+    rating = load_integrated_science_mock_exam_rating_policy()
+    candidates = _planning_candidates_v2()
+    planned_at = datetime(2026, 9, 8, 4, 30, tzinfo=UTC)
+
+    plan = build_mock_exam_assembly_plan(
+        policy=policy,
+        layout_policy=layout,
+        rating_policy=rating,
+        graph_snapshot_revision_id=_identifier("graphrev_", 1),
+        graph_snapshot_sha256="sha256:" + "1" * 64,
+        usage_snapshot=_usage_snapshot(
+            captured_at=planned_at, candidate_revision_count=len(candidates)
+        ),
+        resolved_candidate_count=len(candidates),
+        candidates=candidates,
+        planned_at=planned_at,
+    )
+
+    assert isinstance(plan, MockExamAssemblyPlanV2)
+    assert plan.status == "READY"
+    assert tuple(row.source_score_display for row in plan.placements) == tuple(
+        {1500: "1.5", 2000: "2", 2500: "2.5", 3000: "3"}[slot.points_milli] for slot in layout.slots
+    )
+    validate_contract("mock-exam-assembly-plan-v2", plan.model_dump(mode="json"))
+
+    mixed = (_planning_candidates()[0], *candidates[1:])
+    with pytest.raises(MockExamPlanningError) as raised:
+        build_mock_exam_assembly_plan(
+            policy=policy,
+            layout_policy=layout,
+            rating_policy=rating,
+            graph_snapshot_revision_id=_identifier("graphrev_", 1),
+            graph_snapshot_sha256="sha256:" + "1" * 64,
+            usage_snapshot=_usage_snapshot(
+                captured_at=planned_at, candidate_revision_count=len(mixed)
+            ),
+            resolved_candidate_count=len(mixed),
+            candidates=mixed,
+            planned_at=planned_at,
+        )
+    assert raised.value.code == "ASSEMBLY_CONTENT_PROTOCOL_MIXED"
 
 
 def test_server_planner_reports_rating_shortage_without_partial_output() -> None:
@@ -644,9 +723,7 @@ def test_exact_cohort_create_remains_resumable_after_generic_preview_window(
     assert manifest.plan.plan_sha256 == plan.plan_sha256
     assert manifest.plan.cohort == cohort
 
-    generic_command = command.model_copy(
-        update={"cohort": None, "form_key": "expired-generic"}
-    )
+    generic_command = command.model_copy(update={"cohort": None, "form_key": "expired-generic"})
     with pytest.raises(MockExamAssemblyError, match="bounded creation window"):
         service.create_planned(generic_command)
 
@@ -756,6 +833,258 @@ def test_team_guidance_policy_accepts_exact_25_item_distribution() -> None:
     assert result.balance_slot_count == 4
     assert result.inquiry_count == 4
     assert len(result.coverage_requirement_ids) == 19
+
+
+def test_legacy_direct_assembly_accepts_only_one_exact_v2_content_pointer() -> None:
+    service = MockExamAssemblyService(create_engine("sqlite+pysqlite:///:memory:"))
+    revision_id = _identifier("itemrev_", 1)
+
+    def component(schema_ref: str, *, ordinal: int = 0) -> ItemComponentRecord:
+        return ItemComponentRecord(
+            item_component_id=_identifier("itemcomponent_", ordinal + 1),
+            item_revision_id=revision_id,
+            component_type="ITEM_CONTENT",
+            ordinal=ordinal,
+            schema_ref=schema_ref,
+            media_type="application/json",
+            artifact_id=_identifier("artifact_", ordinal + 1),
+            artifact_revision_id=_identifier("rev_", ordinal + 1),
+            sha256="sha256:" + "1" * 64,
+            logical_name="assessment-item-content.json",
+            required=True,
+            metadata_json={
+                "editorial_markdown_member": "content-team-item.md",
+                "editorial_markdown_sha256": "sha256:" + "2" * 64,
+            },
+        )
+
+    v2 = component("eom.assessment.item-content/2.0")
+    service._require_legacy_direct_content_family((v2,), (revision_id,))
+
+    with pytest.raises(MockExamAssemblyError) as missing:
+        service._require_legacy_direct_content_family((), (revision_id,))
+    assert missing.value.code == "ASSEMBLY_ITEM_CONTENT_POINTER_INVALID"
+
+    with pytest.raises(MockExamAssemblyError) as ambiguous:
+        service._require_legacy_direct_content_family(
+            (v2, component("eom.assessment.item-content/2.0", ordinal=1)),
+            (revision_id,),
+        )
+    assert ambiguous.value.code == "ASSEMBLY_ITEM_CONTENT_POINTER_INVALID"
+
+    with pytest.raises(MockExamAssemblyError) as unsupported:
+        service._require_legacy_direct_content_family(
+            (component("eom.assessment.item-content/3.0"),),
+            (revision_id,),
+        )
+    assert unsupported.value.code == "ASSEMBLY_ITEM_CONTENT_PROTOCOL_UNSUPPORTED"
+
+
+@pytest.mark.parametrize(
+    "schema_refs",
+    [
+        ("eom.assessment.item-content/3.0",),
+        (
+            "eom.assessment.item-content/2.0",
+            "eom.assessment.item-content/3.0",
+        ),
+    ],
+)
+def test_legacy_direct_create_rejects_v3_before_persistence(
+    monkeypatch: pytest.MonkeyPatch,
+    schema_refs: tuple[str, ...],
+) -> None:
+    service = MockExamAssemblyService(create_engine("sqlite+pysqlite:///:memory:"))
+    policy = load_integrated_science_mock_exam_policy()
+    selections = tuple(
+        MockExamAssemblySelection(
+            position=index,
+            item_id=_identifier("item_", index),
+            item_revision_id=_identifier("itemrev_", index),
+            item_manifest_sha256="sha256:" + f"{index:064x}",
+            graph_placement_node_id=_identifier("knode_", index),
+            curriculum_unit_keys=("eom.is.middle.1-1",),
+            points_milli=2000,
+            coverage_role="BALANCE",
+            coverage_requirement_id=None,
+            is_inquiry=False,
+            material_type="text_only",
+        )
+        for index in range(1, len(schema_refs) + 1)
+    )
+    command = CreateMockExamAssembly(
+        deliverable_id=_identifier("deliverable_", 1),
+        deliverable_revision_id=_identifier("delivrev_", 1),
+        form_key="legacy-direct",
+        display_label="Legacy direct",
+        policy_revision_id=policy.policy_revision_id,
+        policy_sha256=INTEGRATED_SCIENCE_ASSEMBLY_POLICY_SHA256,
+        graph_snapshot_revision_id=_identifier("graphrev_", 1),
+        graph_snapshot_sha256="sha256:" + "1" * 64,
+        placements=selections,
+        actor_id=_identifier("operator_", 1),
+    )
+
+    components = tuple(
+        ItemComponentRecord(
+            item_component_id=_identifier("itemcomponent_", index),
+            item_revision_id=selection.item_revision_id,
+            component_type="ITEM_CONTENT",
+            ordinal=0,
+            schema_ref=schema_ref,
+            media_type="application/json",
+            artifact_id=_identifier("artifact_", index),
+            artifact_revision_id=_identifier("rev_", index),
+            sha256="sha256:" + f"{index + 100:064x}",
+            logical_name="assessment-item-content.json",
+            required=True,
+            metadata_json={
+                "editorial_markdown_member": "content-team-item.md",
+                "editorial_markdown_sha256": "sha256:" + "2" * 64,
+            },
+        )
+        for index, (selection, schema_ref) in enumerate(
+            zip(selections, schema_refs, strict=True), start=1
+        )
+    )
+
+    class DirectSession:
+        scalar_batches = 0
+
+        def scalars(self, _statement: Any) -> tuple[Any, ...]:
+            self.scalar_batches += 1
+            if self.scalar_batches == 1:
+                return tuple(
+                    SimpleNamespace(item_revision_id=row.item_revision_id) for row in selections
+                )
+            if self.scalar_batches == 2:
+                return components
+            raise AssertionError("V3 direct create must fail before further graph resolution")
+
+    session = DirectSession()
+
+    @contextmanager
+    def direct_transaction(_sessions: Any) -> Iterator[DirectSession]:
+        yield session
+
+    persisted = False
+
+    def record_persist(*_args: Any) -> None:
+        nonlocal persisted
+        persisted = True
+
+    monkeypatch.setattr(
+        "eom_catalog_service.mock_exam_assembly_service.transaction", direct_transaction
+    )
+    monkeypatch.setattr(service, "_validate_policy_pointer", lambda _command: policy)
+    monkeypatch.setattr(service, "_resolve_deliverable", lambda *_args: (object(), object()))
+    monkeypatch.setattr(service, "_resolve_snapshot", lambda *_args: object())
+    monkeypatch.setattr(service, "_persist", record_persist)
+
+    with pytest.raises(MockExamAssemblyError) as unsupported:
+        service.create(command)
+    assert unsupported.value.code == "ASSEMBLY_ITEM_CONTENT_PROTOCOL_UNSUPPORTED"
+    assert persisted is False
+    assert session.scalar_batches == 2
+
+
+def test_legacy_direct_v2_completed_revision_replays_without_persistence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = MockExamAssemblyService(create_engine("sqlite+pysqlite:///:memory:"))
+    policy = load_integrated_science_mock_exam_policy()
+    resolved = _placements()
+    selection_fields = set(MockExamAssemblySelection.model_fields)
+    command = CreateMockExamAssembly(
+        deliverable_id=_identifier("deliverable_", 1),
+        deliverable_revision_id=_identifier("delivrev_", 1),
+        form_key="legacy-replay",
+        display_label="Legacy replay",
+        policy_revision_id=policy.policy_revision_id,
+        policy_sha256=INTEGRATED_SCIENCE_ASSEMBLY_POLICY_SHA256,
+        graph_snapshot_revision_id=_identifier("graphrev_", 1),
+        graph_snapshot_sha256="sha256:" + "1" * 64,
+        placements=tuple(
+            MockExamAssemblySelection.model_validate(
+                row.model_dump(mode="json", include=selection_fields)
+            )
+            for row in resolved
+        ),
+        actor_id=_identifier("operator_", 1),
+    )
+    identity = service._identity(command, resolved)
+    created_at = datetime.now(UTC)
+    manifest_value: dict[str, Any] = {
+        "schema_version": "mock-exam-assembly-manifest/1.0",
+        **identity,
+        "deliverable_id": command.deliverable_id,
+        "deliverable_revision_id": command.deliverable_revision_id,
+        "policy_revision_id": policy.policy_revision_id,
+        "policy_sha256": command.policy_sha256,
+        "outline_key": policy.outline_key,
+        "outline_revision": policy.outline_revision,
+        "outline_sha256": policy.outline_sha256,
+        "graph_snapshot_revision_id": command.graph_snapshot_revision_id,
+        "graph_snapshot_sha256": command.graph_snapshot_sha256,
+        "placements": [row.model_dump(mode="json") for row in resolved],
+        "validation": validate_mock_exam_placements(resolved, policy).model_dump(mode="json"),
+        "revision_state": "RELEASED",
+        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+        "created_by": command.actor_id,
+    }
+    manifest_value["manifest_sha256"] = content_sha256(manifest_value)
+    manifest = MockExamAssemblyManifestV1.model_validate(manifest_value)
+
+    class ReplaySession:
+        def get(self, _model: Any, revision_id: str) -> Any:
+            assert revision_id == manifest.assessment_assembly_revision_id
+            return SimpleNamespace(canonical_document=manifest.model_dump(mode="json"))
+
+    @contextmanager
+    def replay_transaction(_sessions: Any) -> Iterator[ReplaySession]:
+        yield ReplaySession()
+
+    v2_component = ItemComponentRecord(
+        item_component_id=_identifier("itemcomponent_", 1),
+        item_revision_id=resolved[0].item_revision_id,
+        component_type="ITEM_CONTENT",
+        ordinal=0,
+        schema_ref="eom.assessment.item-content/2.0",
+        media_type="application/json",
+        artifact_id=_identifier("artifact_", 1),
+        artifact_revision_id=_identifier("rev_", 1),
+        sha256="sha256:" + "1" * 64,
+        logical_name="assessment-item-content.json",
+        required=True,
+        metadata_json={
+            "editorial_markdown_member": "content-team-item.md",
+            "editorial_markdown_sha256": "sha256:" + "2" * 64,
+        },
+    )
+
+    def resolve_v2(*_args: Any) -> tuple[MockExamAssemblyPlacementV1, ...]:
+        service._require_legacy_direct_content_family(
+            (v2_component,), (v2_component.item_revision_id,)
+        )
+        return resolved
+
+    persisted = False
+
+    def record_persist(*_args: Any) -> None:
+        nonlocal persisted
+        persisted = True
+
+    monkeypatch.setattr(
+        "eom_catalog_service.mock_exam_assembly_service.transaction", replay_transaction
+    )
+    monkeypatch.setattr(service, "_validate_policy_pointer", lambda _command: policy)
+    monkeypatch.setattr(service, "_resolve_deliverable", lambda *_args: (object(), object()))
+    monkeypatch.setattr(service, "_resolve_snapshot", lambda *_args: object())
+    monkeypatch.setattr(service, "_resolve_placements", resolve_v2)
+    monkeypatch.setattr(service, "_persist", record_persist)
+
+    assert service.create(command) == manifest
+    assert persisted is False
 
 
 def test_team_guidance_policy_rejects_score_and_distinct_unit_drift() -> None:

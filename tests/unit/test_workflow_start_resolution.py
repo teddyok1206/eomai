@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import Mock, patch
 
 import pytest
+from eom_api.errors import ApiError
+from eom_api.services.command_adapter import CommandAdapter
+from eom_api_contracts.workflows import WorkflowActionRequest
 from eom_catalog_service.models import ContentPackRecord, ContentPackReleaseRecord
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_content_pack import ContentPackError
 from eom_workflow import WorkflowRequest
 from eom_workflow_runner.repository import (
+    CommandType,
     workflow_business_fingerprint,
     workflow_request_storage_document,
 )
@@ -125,6 +131,63 @@ def test_production_occurrence_and_expected_resolution_are_atomic() -> None:
                 }
             }
         )
+
+
+@pytest.mark.parametrize(
+    "action",
+    (
+        CommandType.APPROVE_WORKFLOW,
+        CommandType.REQUEST_REWORK,
+        CommandType.CANCEL_WORKFLOW,
+    ),
+)
+def test_public_mutation_guard_rejects_production_workflow(action: CommandType) -> None:
+    session = Mock()
+    session.get.return_value = SimpleNamespace(
+        initial_request=workflow_request_storage_document(_request())
+    )
+    adapter = object.__new__(CommandAdapter)
+    adapter.sessions = cast(Any, lambda: nullcontext(session))
+
+    with pytest.raises(ApiError) as raised:
+        adapter.require_public_workflow_action_allowed("workflow_" + "f" * 32, action)
+
+    assert raised.value.status == 403
+    assert raised.value.error_code == "WORKFLOW_PRODUCTION_OCCURRENCE_INTERNAL_ONLY"
+
+
+def test_internal_command_path_can_cancel_production_workflow() -> None:
+    workflow = SimpleNamespace(
+        lock_version=7,
+        initial_request=workflow_request_storage_document(_request()),
+    )
+    session = Mock()
+    session.scalar.return_value = workflow
+    command = SimpleNamespace(command_id="command_" + "d" * 32)
+    adapter = object.__new__(CommandAdapter)
+    adapter.sessions = cast(Any, object())
+
+    with (
+        patch(
+            "eom_api.services.command_adapter.transaction",
+            return_value=nullcontext(session),
+        ),
+        patch(
+            "eom_api.services.command_adapter.enqueue_command",
+            return_value=(command, True),
+        ) as enqueue,
+    ):
+        result = adapter.workflow_action(
+            "workflow_" + "f" * 32,
+            CommandType.CANCEL_WORKFLOW,
+            WorkflowActionRequest(),
+            cast(Any, SimpleNamespace(actor_id="operator_" + "e" * 32)),
+            expected_version=7,
+            idempotency_key="internal-production-cancel",
+        )
+
+    assert result == (command.command_id, 7)
+    enqueue.assert_called_once()
 
 
 class _PackBindingSession:

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import stat
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
+import eom_hwpx_builder.cli as hwpx_cli
 import pytest
 from eom_hwpx_builder.analyzer import analyze_package
 from eom_hwpx_builder.content_team_exam_renderer import (
@@ -18,24 +21,31 @@ from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
     ContentTeamExamAssemblyPointer,
     ContentTeamExamAssemblyPointerV2,
+    ContentTeamExamAssemblyPointerV3,
     ContentTeamExamBuildResult,
     ContentTeamExamBuildResultV2,
+    ContentTeamExamBuildResultV3,
+    ContentTeamExamImageSource,
     ContentTeamExamItemSource,
     ContentTeamExamItemSourceV2,
+    ContentTeamExamItemSourceV3,
     ContentTeamExamRenderRequest,
     ContentTeamExamRenderRequestV2,
+    ContentTeamExamRenderRequestV3,
     ContentTeamHandoffMember,
     ContentTeamHandoffSnapshot,
     parse_content_team_markdown,
+    parse_content_team_markdown_v2,
     serialize_content_team_markdown,
     validate_contract,
 )
 from eom_identifiers import content_sha256
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
-from tests.hwpx.helpers import synthetic_parts, write_hwpx
-from tests.hwpx.test_content_team_markdown import LABELED_BLOCK_ITEM
+from tests.hwpx.helpers import png_bytes, synthetic_parts, write_hwpx
+from tests.hwpx.test_content_team_markdown import GENERAL_ITEM, LABELED_BLOCK_ITEM
 
 ROOT = Path(__file__).resolve().parents[2]
 HANDOFF = ROOT / "staging/HwpQuestionEditor_handoff_export.zip"
@@ -43,6 +53,33 @@ HANDOFF = ROOT / "staging/HwpQuestionEditor_handoff_export.zip"
 
 def _sha256(value: bytes) -> str:
     return "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+def test_content_team_cli_dispatches_v3_request_to_whole_exam_renderer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+
+    def render_exam(_request: Path, _result: Path) -> SimpleNamespace:
+        calls.append("exam")
+        return SimpleNamespace(status="PASS")
+
+    def render_item(_request: Path, _result: Path) -> SimpleNamespace:
+        calls.append("item")
+        return SimpleNamespace(status="PASS")
+
+    monkeypatch.setattr(
+        hwpx_cli,
+        "_read_request",
+        lambda _path: b'{"schema_version":"content-team-exam-render-request/3.0"}',
+    )
+    monkeypatch.setattr(hwpx_cli, "render_content_team_exam_workspace", render_exam)
+    monkeypatch.setattr(hwpx_cli, "render_content_team_workspace", render_item)
+    monkeypatch.setattr(hwpx_cli, "_echo", lambda _value: None)
+
+    hwpx_cli.render_content_team(tmp_path / "request.json", tmp_path / "result.json")
+
+    assert calls == ["exam"]
 
 
 def _request(*, positions: tuple[int, ...] = (1, 2)) -> ContentTeamExamRenderRequest:
@@ -106,6 +143,26 @@ def _request_v2(*, points: tuple[int, ...] = (1500, 2500)) -> ContentTeamExamRen
     )
 
 
+def _request_v3(*, points: tuple[int, ...] = (1500, 2500, 3000)) -> ContentTeamExamRenderRequestV3:
+    legacy = _request(positions=tuple(range(1, len(points) + 1)))
+    return ContentTeamExamRenderRequestV3(
+        build_id=legacy.build_id,
+        assembly=ContentTeamExamAssemblyPointerV3(
+            **legacy.assembly.model_dump(mode="json"),
+            plan_sha256="sha256:" + "5" * 64,
+        ),
+        handoff=legacy.handoff,
+        items=tuple(
+            ContentTeamExamItemSourceV3(
+                **item.model_dump(mode="json"),
+                display_number=str(item.position),
+                points_milli=points[index],
+            )
+            for index, item in enumerate(legacy.items)
+        ),
+    )
+
+
 def test_exam_contract_schemas_match_packaged_copies_and_use_draft_2020_12() -> None:
     for name in (
         "hwpx-content-team-exam-render-request-v1.schema.json",
@@ -144,6 +201,23 @@ def test_exam_v2_request_rejects_display_number_drift_and_unsupported_score() ->
     value["items"][0]["points_milli"] = 3000
     with pytest.raises(ValidationError, match=r"1500|2000|2500"):
         ContentTeamExamRenderRequestV2.model_validate(value)
+
+
+def test_exam_v3_requires_manifest_v3_and_keeps_v2_manifest_pair_immutable() -> None:
+    v2 = _request_v2()
+    v3 = _request_v3()
+
+    assert v2.assembly.assembly_schema_version == "mock-exam-assembly-manifest/2.0"
+    assert v3.assembly.assembly_schema_version == "mock-exam-assembly-manifest/3.0"
+    validate_contract("content-team-exam-render-request-v2", v2.model_dump(mode="json"))
+    validate_contract("content-team-exam-render-request-v3", v3.model_dump(mode="json"))
+
+    invalid = v3.model_dump(mode="json")
+    invalid["assembly"]["assembly_schema_version"] = "mock-exam-assembly-manifest/2.0"
+    with pytest.raises(ValidationError, match=r"mock-exam-assembly-manifest/3\.0"):
+        ContentTeamExamRenderRequestV3.model_validate(invalid)
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("content-team-exam-render-request-v3", invalid)
 
 
 def test_exam_result_requires_one_section_per_item_and_no_fixed_component_counts() -> None:
@@ -339,3 +413,153 @@ def test_reviewed_handoff_v2_applies_planned_scores_without_mutating_sources(
             for item in request.items
         )
     )
+
+
+@pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
+def test_reviewed_handoff_v3_builds_exact_25_item_variable_visual_exam(
+    tmp_path: Path,
+) -> None:
+    points = (
+        1500,
+        1500,
+        2000,
+        1500,
+        1500,
+        2000,
+        1500,
+        2000,
+        2000,
+        2000,
+        2500,
+        2000,
+        2500,
+        2500,
+        1500,
+        2500,
+        2500,
+        2000,
+        1500,
+        2000,
+        2500,
+        1500,
+        2000,
+        2500,
+        2500,
+    )
+    score_by_points = {1500: "1.5", 2000: "2", 2500: "2.5", 3000: "3"}
+    raw = _request_v3(points=points).model_dump(mode="json")
+    input_root = tmp_path / "input"
+    input_root.mkdir()
+    (input_root / "handoff.zip").write_bytes(HANDOFF.read_bytes())
+    expected_visual_counts: list[int] = []
+    for position, item in enumerate(raw["items"], start=1):
+        visual_case = position % 3
+        source = (
+            LABELED_BLOCK_ITEM
+            if visual_case == 1
+            else (GENERAL_ITEM.replace("그림\n\n", "", 1) if visual_case == 2 else GENERAL_ITEM)
+        )
+        source = re.sub(
+            r"\[(?:1\.5|2|2\.5|3)점\]",
+            f"[{score_by_points[points[position - 1]]}점]",
+            source,
+            count=1,
+        )
+        draft = parse_content_team_markdown_v2(source.encode("utf-8"))
+        markdown = serialize_content_team_markdown(draft)
+        item_value = {
+            "schema_version": "3.0",
+            **draft.model_dump(mode="json", exclude={"schema_version", "source_sha256"}),
+        }
+        item_bytes = json.dumps(
+            item_value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        item_root = input_root / "items" / f"{position:03d}"
+        item_root.mkdir(parents=True)
+        (item_root / "item-content.json").write_bytes(item_bytes)
+        (item_root / "content-team-item.md").write_bytes(markdown)
+        item["source_json_sha256"] = _sha256(item_bytes)
+        item["source_markdown_sha256"] = _sha256(markdown)
+        image_slots = tuple(
+            (ordinal, visual.label)
+            for ordinal, visual in enumerate(draft.visuals)
+            if visual.kind == "IMAGE"
+        )
+        images: list[dict[str, object]] = []
+        for ordinal, label in image_slots:
+            image = png_bytes(output=(position + ordinal) % 2 == 0)
+            (item_root / f"visual-{ordinal}.png").write_bytes(image)
+            images.append(
+                ContentTeamExamImageSource(
+                    visual_ordinal=ordinal,
+                    label=label,
+                    artifact_id="artifact_" + f"{position * 2 + ordinal:032x}",
+                    artifact_revision_id="rev_" + f"{position * 2 + ordinal:032x}",
+                    sha256=_sha256(image),
+                    alt_text=f"문항 {position}의 검증된 그림",
+                    file_name=f"input/items/{position:03d}/visual-{ordinal}.png",
+                ).model_dump(mode="json")
+            )
+        item["images"] = images
+        expected_visual_counts.append(len(draft.visuals))
+
+    request = ContentTeamExamRenderRequestV3.model_validate(raw)
+    request_path = tmp_path / "request.json"
+    result_path = tmp_path / "result.json"
+    request_path.write_text(request.model_dump_json(), encoding="utf-8")
+
+    result = render_content_team_exam_workspace(request_path, result_path)
+
+    assert isinstance(result, ContentTeamExamBuildResultV3)
+    assert result.renderer_version == "3.0.0"
+    assert result.item_count == result.section_count == 25
+    report = json.loads(
+        (tmp_path / "output/content-team-exam-validation.json").read_text(encoding="utf-8")
+    )
+    assert [row["source_score_display"] for row in report["items"]] == [
+        score_by_points[value] for value in points
+    ]
+    assert [row["rendered_score_display"] for row in report["items"]] == [
+        score_by_points[value] for value in points
+    ]
+    assert [row["visual_count"] for row in report["items"]] == expected_visual_counts
+    assert set(expected_visual_counts) == {0, 1, 2}
+    with zipfile.ZipFile(tmp_path / "output/content-team-exam.hwpx") as archive:
+        sections = tuple(
+            name for name in archive.namelist() if re.fullmatch(r"Contents/section\d+\.xml", name)
+        )
+        assert len(sections) == 25
+        assert set(sections) == {f"Contents/section{index}.xml" for index in range(25)}
+
+
+@pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
+def test_reviewed_handoff_v3_rejects_source_score_drift_instead_of_overriding_it(
+    tmp_path: Path,
+) -> None:
+    raw = _request_v3(points=(1500,)).model_dump(mode="json")
+    input_root = tmp_path / "input"
+    item_root = input_root / "items/001"
+    item_root.mkdir(parents=True)
+    (input_root / "handoff.zip").write_bytes(HANDOFF.read_bytes())
+    draft = parse_content_team_markdown_v2(LABELED_BLOCK_ITEM.encode("utf-8"))
+    markdown = serialize_content_team_markdown(draft)
+    item_value = {
+        "schema_version": "3.0",
+        **draft.model_dump(mode="json", exclude={"schema_version", "source_sha256"}),
+    }
+    item_bytes = json.dumps(
+        item_value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    (item_root / "item-content.json").write_bytes(item_bytes)
+    (item_root / "content-team-item.md").write_bytes(markdown)
+    raw["items"][0]["source_json_sha256"] = _sha256(item_bytes)
+    raw["items"][0]["source_markdown_sha256"] = _sha256(markdown)
+    request = ContentTeamExamRenderRequestV3.model_validate(raw)
+    request_path = tmp_path / "request.json"
+    request_path.write_text(request.model_dump_json(), encoding="utf-8")
+
+    with pytest.raises(HwpxError, match="source score differs"):
+        render_content_team_exam_workspace(request_path, tmp_path / "result.json")

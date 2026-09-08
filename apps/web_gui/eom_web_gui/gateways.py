@@ -100,8 +100,9 @@ def _verified_mock_exam_plan(
     resolved_count = value.get("resolved_candidate_count")
     rated_count = value.get("rated_candidate_count")
     visited_nodes = value.get("search_visited_nodes")
+    plan_schema_version = value.get("schema_version")
     if (
-        value.get("schema_version") != "mock-exam-assembly-plan/1.0"
+        plan_schema_version not in {"mock-exam-assembly-plan/1.0", "mock-exam-assembly-plan/2.0"}
         or status not in {"READY", "SHORTAGE"}
         or value.get("policy_revision_id") != policy_revision_id
         or value.get("policy_sha256") != policy_sha256
@@ -173,6 +174,31 @@ def _verified_mock_exam_plan(
             or isinstance(placement.get("usage_count"), bool)
             or not isinstance(review, dict)
             or review.get("final_rating") not in {"A", "B", "C"}
+        ):
+            return None
+        content = placement.get("content")
+        if not isinstance(content, dict):
+            return None
+        expected_content_schema = (
+            "eom.assessment.item-content/3.0"
+            if plan_schema_version == "mock-exam-assembly-plan/2.0"
+            else "eom.assessment.item-content/2.0"
+        )
+        if (
+            content.get("schema_ref") != expected_content_schema
+            or content.get("media_type") != "application/json"
+            or content.get("member_path") != "assessment-item-content.json"
+            or content.get("editorial_markdown_member") != "content-team-item.md"
+            or not isinstance(content.get("sha256"), str)
+            or SHA256_PATTERN.fullmatch(content["sha256"]) is None
+            or not isinstance(content.get("editorial_markdown_sha256"), str)
+            or SHA256_PATTERN.fullmatch(content["editorial_markdown_sha256"]) is None
+        ):
+            return None
+        if (
+            plan_schema_version == "mock-exam-assembly-plan/2.0"
+            and content.get("editorial_markdown_schema_ref")
+            != "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
         ):
             return None
         positions.append(position)
@@ -1200,6 +1226,7 @@ class HttpApplicationGateway:
             in {
                 "eom.assessment.item-content/1.0",
                 "eom.assessment.item-content/2.0",
+                "eom.assessment.item-content/3.0",
             }
             for component in components
         )
@@ -1646,12 +1673,29 @@ class HttpApplicationGateway:
             and profile.get("source_schema_ref") == "eom.assessment.item-content/1.0"
             for profile in profiles
         )
+        supported_content_team_profiles = {
+            (
+                "content-team",
+                "2.0.0",
+                "content-team-hwp-question-editor-v2",
+                "eom.assessment.item-content/2.0",
+            ),
+            (
+                "content-team",
+                "3.0.0",
+                "content-team-hwp-question-editor-v3",
+                "eom.assessment.item-content/3.0",
+            ),
+        }
         content_team_ready = any(
             isinstance(profile, dict)
-            and profile.get("renderer") == "content-team"
-            and profile.get("renderer_version") == "2.0.0"
-            and profile.get("document_profile") == "content-team-hwp-question-editor-v2"
-            and profile.get("source_schema_ref") == "eom.assessment.item-content/2.0"
+            and (
+                profile.get("renderer"),
+                profile.get("renderer_version"),
+                profile.get("document_profile"),
+                profile.get("source_schema_ref"),
+            )
+            in supported_content_team_profiles
             for profile in profiles
         )
         if state == "READY" and not (template_ready and content_team_ready):

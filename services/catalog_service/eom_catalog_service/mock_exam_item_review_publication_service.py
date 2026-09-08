@@ -17,30 +17,41 @@ from eom_catalog_contracts.assessment_item import (
     ASSESSMENT_ITEM_CONTENT_FILE_NAME,
     ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
     ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+    ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF,
     AssessmentItemContentV2,
+    AssessmentItemContentV3,
 )
 from eom_catalog_contracts.item_review import (
     MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME,
     MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA,
     MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF,
     MOCK_EXAM_ITEM_REVIEW_PUBLICATION_COMMAND_SCHEMA,
     MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_SCHEMA,
+    MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V2_SCHEMA,
     MOCK_EXAM_REVIEW_ELIGIBILITY_QUERY_SCHEMA,
     MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_SCHEMA,
+    MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V2_SCHEMA,
     InspectMockExamReviewEligibilityQuery,
     MockExamEligibilityFinding,
     MockExamEligibilityFindingCounts,
     MockExamHumanApprovalPointer,
     MockExamItemReviewDecisionV1,
+    MockExamItemReviewDecisionV2,
     MockExamItemReviewPublicationResult,
+    MockExamItemReviewPublicationResultV2,
     MockExamReviewEligibilityResult,
+    MockExamReviewEligibilityResultV2,
     MockExamReviewFindingCounts,
     MockExamSourceReviewPointer,
+    MockExamSourceReviewPointerV2,
     PublishMockExamItemReviewCommand,
     mock_exam_item_review_decision_sha256,
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
     validate_content_team_mock_exam_slot_output,
+    validate_content_team_mock_exam_slot_output_v2,
 )
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -52,13 +63,15 @@ from eom_workflow import ArtifactPointer
 from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV7,
     ContentTeamAuthoringRoleResultV8,
+    ContentTeamAuthoringRoleResultV9,
     ContentTeamImageRoleResultV8,
+    ContentTeamImageRoleResultV9,
     ContentTeamItemBrief,
     ContentTeamReviewRoleResultV7,
     ContentTeamReviewRoleResultV8,
+    ContentTeamReviewRoleResultV9,
     RoleResultBase,
     RoleWorkerInput,
-    WorkflowRequest,
 )
 from eom_workflow.schemas import WorkflowSchemaError, validate_role_result
 from eom_workflow_runner.models import (
@@ -66,6 +79,10 @@ from eom_workflow_runner.models import (
     WorkflowDefinitionRecord,
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
+)
+from eom_workflow_runner.repository import (
+    load_persisted_workflow_request,
+    workflow_business_fingerprint,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
@@ -99,6 +116,19 @@ ITEM_REVIEW_PROTOCOL_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+ITEM_REVIEW_PROTOCOL_VERSION_V2 = "catalog/1.12"
+ITEM_REVIEW_PROTOCOL_SCHEMA_HASH_V2 = content_sha256(
+    {
+        "protocol": ITEM_REVIEW_PROTOCOL_VERSION_V2,
+        "contracts": [
+            "mock-exam-item-review-publication-command/1.0",
+            "mock-exam-review-eligibility-query/1.0",
+            "mock-exam-review-eligibility-result/2.0",
+            "mock-exam-item-review-decision/2.0",
+            "mock-exam-item-review-publication-result/2.0",
+        ],
+    }
+)
 WorkflowContracts = tuple[str, str | None, str, str, str]
 SUPPORTED_WORKFLOWS: dict[str, WorkflowContracts] = {
     "1.7.0": (
@@ -114,6 +144,13 @@ SUPPORTED_WORKFLOWS: dict[str, WorkflowContracts] = {
         "review-result@8.0",
         "registration-result@8.0",
         "workflow-role/1.17.0",
+    ),
+    "1.9.0": (
+        "authoring-result@9.0",
+        "image-result@9.0",
+        "review-result@9.0",
+        "registration-result@9.0",
+        "workflow-role/1.19.0",
     ),
 }
 
@@ -182,7 +219,7 @@ class _PublicationEvidence:
     review_artifact_id: str
     review_artifact_revision_id: str
     review_sha256: str
-    review_result_schema: Literal["review-result@7.0", "review-result@8.0"]
+    review_result_schema: Literal["review-result@7.0", "review-result@8.0", "review-result@9.0"]
     finding_counts: MockExamReviewFindingCounts
     approval_resolved_at: datetime
 
@@ -197,10 +234,18 @@ class _DecisionArtifactPointer:
 @dataclass(frozen=True)
 class _ReviewChainEvidence:
     workflow: WorkflowInstanceRecord
-    authoring_result: ContentTeamAuthoringRoleResultV7 | ContentTeamAuthoringRoleResultV8
+    authoring_result: (
+        ContentTeamAuthoringRoleResultV7
+        | ContentTeamAuthoringRoleResultV8
+        | ContentTeamAuthoringRoleResultV9
+    )
     review_step: WorkflowStepRunRecord
     review_pointer: ArtifactPointer
-    review_result: ContentTeamReviewRoleResultV7 | ContentTeamReviewRoleResultV8
+    review_result: (
+        ContentTeamReviewRoleResultV7
+        | ContentTeamReviewRoleResultV8
+        | ContentTeamReviewRoleResultV9
+    )
     gate_upstream_pointers: tuple[ArtifactPointer, ...]
 
 
@@ -256,8 +301,10 @@ class MockExamItemReviewPublicationService:
     ) -> tuple[MockExamReviewEligibilityResult, ...]:
         """Resolve an ordered, bounded eligibility set in one database session."""
 
-        if not queries or len(queries) > 25 or len({row.workflow_id for row in queries}) != len(
-            queries
+        if (
+            not queries
+            or len(queries) > 25
+            or len({row.workflow_id for row in queries}) != len(queries)
         ):
             self._fail(
                 "ITEM_REVIEW_ELIGIBILITY_BATCH_INVALID",
@@ -347,31 +394,40 @@ class MockExamItemReviewPublicationService:
             blocking=sum(row.severity == "blocking" for row in findings),
         )
         eligible = finding_counts.blocking == 0
-        result = MockExamReviewEligibilityResult(
-            workflow_id=workflow.workflow_id,
-            workflow_lock_version=workflow.lock_version,
-            approval_state=approval_state,
-            approval_request_id=approval.approval_request_id,
-            approval_lock_version=approval.lock_version,
-            reviewer_operator_id=reviewer_operator_id,
-            approved_at=approved_at,
-            review_step_run_id=chain.review_step.step_run_id,
-            review_artifact_id=chain.review_pointer.logical_artifact_id,
-            review_artifact_revision_id=chain.review_pointer.revision_id,
-            review_sha256=chain.review_pointer.content_hash,
-            review_result_schema=cast(
-                Literal["review-result@7.0", "review-result@8.0"],
-                chain.review_step.result_schema,
-            ),
-            decision="ready_for_human",
-            review_summary=chain.review_result.output.review.summary,
-            findings=findings,
-            finding_counts=finding_counts,
-            eligible=eligible,
-            eligibility_reason=("ELIGIBLE" if eligible else "REVIEW_BLOCKING_FINDINGS"),
+        review_result_schema = cast(
+            Literal["review-result@7.0", "review-result@8.0", "review-result@9.0"],
+            chain.review_step.result_schema,
         )
+        result_payload: dict[str, Any] = {
+            "workflow_id": workflow.workflow_id,
+            "workflow_lock_version": workflow.lock_version,
+            "approval_state": approval_state,
+            "approval_request_id": approval.approval_request_id,
+            "approval_lock_version": approval.lock_version,
+            "reviewer_operator_id": reviewer_operator_id,
+            "approved_at": approved_at,
+            "review_step_run_id": chain.review_step.step_run_id,
+            "review_artifact_id": chain.review_pointer.logical_artifact_id,
+            "review_artifact_revision_id": chain.review_pointer.revision_id,
+            "review_sha256": chain.review_pointer.content_hash,
+            "review_result_schema": review_result_schema,
+            "decision": "ready_for_human",
+            "review_summary": chain.review_result.output.review.summary,
+            "findings": findings,
+            "finding_counts": finding_counts,
+            "eligible": eligible,
+            "eligibility_reason": "ELIGIBLE" if eligible else "REVIEW_BLOCKING_FINDINGS",
+        }
+        if review_result_schema == "review-result@9.0":
+            result_schema = MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V2_SCHEMA
+            result: MockExamReviewEligibilityResult = (
+                MockExamReviewEligibilityResultV2.model_validate(result_payload)
+            )
+        else:
+            result_schema = MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_SCHEMA
+            result = MockExamReviewEligibilityResult.model_validate(result_payload)
         validate_contract(
-            MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_SCHEMA,
+            result_schema,
             result.model_dump(mode="json"),
         )
         return result
@@ -561,9 +617,7 @@ class MockExamItemReviewPublicationService:
         expected_state: Literal["AWAITING_HUMAN_APPROVAL", "INSPECTABLE", "COMPLETED"],
     ) -> tuple[WorkflowInstanceRecord, WorkflowContracts]:
         contracts = (
-            SUPPORTED_WORKFLOWS.get(workflow.definition_version)
-            if workflow is not None
-            else None
+            SUPPORTED_WORKFLOWS.get(workflow.definition_version) if workflow is not None else None
         )
         definition = (
             session.get(WorkflowDefinitionRecord, workflow.definition_id)
@@ -617,7 +671,7 @@ class MockExamItemReviewPublicationService:
                 "Workflow is not at the required review lifecycle boundary",
             )
         try:
-            source_request = WorkflowRequest.model_validate(workflow.initial_request)
+            source_request = load_persisted_workflow_request(workflow.initial_request)
         except PydanticValidationError as exc:
             raise MockExamItemReviewPublicationError(
                 "ITEM_REVIEW_WORKFLOW_INVALID",
@@ -625,7 +679,7 @@ class MockExamItemReviewPublicationService:
             ) from exc
         if (
             workflow.request_payload != workflow.initial_request
-            or workflow.request_hash != content_sha256(workflow.initial_request)
+            or workflow.request_hash != workflow_business_fingerprint(definition, source_request)
             or source_request.request_name != "GENERATED_KNOWLEDGE_ITEM_REQUEST"
             or source_request.content_pack is None
             or source_request.content_pack.pack_key != "generated-knowledge-item"
@@ -663,36 +717,50 @@ class MockExamItemReviewPublicationService:
                 "ITEM_REVIEW_AUTHORING_STEP_INVALID",
                 "Authoring step is stale or does not satisfy its pinned contract",
             )
+        expected_authoring_types: tuple[type[RoleResultBase], ...]
+        if workflow.definition_version == "1.7.0":
+            expected_authoring_types = (ContentTeamAuthoringRoleResultV7,)
+        elif workflow.definition_version == "1.8.0":
+            expected_authoring_types = (ContentTeamAuthoringRoleResultV8,)
+        else:
+            expected_authoring_types = (ContentTeamAuthoringRoleResultV9,)
         authoring_pointer, authoring_result = self._resolve_role_result(
             session,
             workflow=workflow,
             step=authoring_step,
             role="authoring",
             expected_schema=contracts[0],
-            expected_types=(
-                ContentTeamAuthoringRoleResultV7
-                if workflow.definition_version == "1.7.0"
-                else ContentTeamAuthoringRoleResultV8,
-            ),
+            expected_types=expected_authoring_types,
             max_bytes=MAX_ROLE_RESULT_BYTES,
         )
         if not isinstance(
             authoring_result,
-            ContentTeamAuthoringRoleResultV7 | ContentTeamAuthoringRoleResultV8,
+            ContentTeamAuthoringRoleResultV7
+            | ContentTeamAuthoringRoleResultV8
+            | ContentTeamAuthoringRoleResultV9,
         ):
             self._fail(
                 "ITEM_REVIEW_AUTHORING_RESULT_INVALID",
                 "Authoring result is not a supported content-team result",
             )
-        request = WorkflowRequest.model_validate(workflow.initial_request)
+        request = load_persisted_workflow_request(workflow.initial_request)
         assert isinstance(request.item_brief, ContentTeamItemBrief)
         assert request.item_brief.mock_exam_slot is not None
         try:
-            validate_content_team_mock_exam_slot_output(
-                slot=request.item_brief.mock_exam_slot,
-                content=authoring_result.output.draft,
-                authoring_difficulty=authoring_result.output.metadata.difficulty,
-            )
+            if isinstance(authoring_result, ContentTeamAuthoringRoleResultV9):
+                if authoring_result.output.metadata.knowledge_source_mode != "graph_grounded":
+                    raise ValueError("production authoring is not Graph-grounded")
+                validate_content_team_mock_exam_slot_output_v2(
+                    slot=request.item_brief.mock_exam_slot,
+                    content=authoring_result.output.draft,
+                    authoring_difficulty=authoring_result.output.metadata.difficulty,
+                )
+            else:
+                validate_content_team_mock_exam_slot_output(
+                    slot=request.item_brief.mock_exam_slot,
+                    content=authoring_result.output.draft,
+                    authoring_difficulty=authoring_result.output.metadata.difficulty,
+                )
         except ValueError as exc:
             raise MockExamItemReviewPublicationError(
                 "ITEM_REVIEW_AUTHORING_RESULT_INVALID",
@@ -716,7 +784,14 @@ class MockExamItemReviewPublicationService:
                     "Non-image workflow contains an active image branch",
                 )
         else:
-            assert isinstance(authoring_result, ContentTeamAuthoringRoleResultV8)
+            if not isinstance(
+                authoring_result,
+                ContentTeamAuthoringRoleResultV8 | ContentTeamAuthoringRoleResultV9,
+            ):
+                self._fail(
+                    "ITEM_REVIEW_IMAGE_STEP_INVALID",
+                    "Image workflow authoring result has an incompatible schema family",
+                )
             decision_step = self._single_active_step(
                 session,
                 workflow_id=workflow.workflow_id,
@@ -734,8 +809,7 @@ class MockExamItemReviewPublicationService:
                 or decision_step.result_schema is not None
                 or decision_step.platform_job_id is not None
                 or decision_step.output_pointer_manifest is not None
-                or decision_step.input_pointer_manifest
-                != {"field": "/output/draft/visuals"}
+                or decision_step.input_pointer_manifest != {"field": "/output/draft/visuals"}
                 or image_step.step_type != "agent"
                 or image_step.worker_role != "image"
                 or image_step.result_schema != image_schema
@@ -772,10 +846,21 @@ class MockExamItemReviewPublicationService:
                     step=image_step,
                     role="image",
                     expected_schema=image_schema,
-                    expected_types=(ContentTeamImageRoleResultV8,),
+                    expected_types=(
+                        (ContentTeamImageRoleResultV9,)
+                        if isinstance(authoring_result, ContentTeamAuthoringRoleResultV9)
+                        else (ContentTeamImageRoleResultV8,)
+                    ),
                     max_bytes=MAX_ROLE_RESULT_BYTES,
                 )
-                assert isinstance(image_result, ContentTeamImageRoleResultV8)
+                if not isinstance(
+                    image_result,
+                    ContentTeamImageRoleResultV8 | ContentTeamImageRoleResultV9,
+                ):
+                    self._fail(
+                        "ITEM_REVIEW_IMAGE_RESULT_INVALID",
+                        "Image result has an incompatible schema family",
+                    )
                 actual_image_ordinals = tuple(
                     row.visual_ordinal for row in image_result.output.drawings
                 )
@@ -900,9 +985,10 @@ class MockExamItemReviewPublicationService:
             revision=revision,
             expected_result_schema=contracts[3],
         )
-        registered_content = self._require_v2_item_content(
+        registered_content = self._require_item_content(
             session,
             revision.item_revision_id,
+            use_v3=contracts[0] == "authoring-result@9.0",
         )
         chain = self._resolve_review_chain(session, workflow, contracts=contracts)
         if registered_content != chain.authoring_result.output.draft:
@@ -936,18 +1022,20 @@ class MockExamItemReviewPublicationService:
             review_artifact_revision_id=chain.review_pointer.revision_id,
             review_sha256=chain.review_pointer.content_hash,
             review_result_schema=cast(
-                Literal["review-result@7.0", "review-result@8.0"],
+                Literal["review-result@7.0", "review-result@8.0", "review-result@9.0"],
                 chain.review_step.result_schema,
             ),
             finding_counts=counts,
             approval_resolved_at=cast(datetime, approval.resolved_at),
         )
 
-    def _require_v2_item_content(
+    def _require_item_content(
         self,
         session: Session,
         item_revision_id: str,
-    ) -> AssessmentItemContentV2:
+        *,
+        use_v3: bool,
+    ) -> AssessmentItemContentV2 | AssessmentItemContentV3:
         components = tuple(
             session.scalars(
                 select(ItemComponentRecord).where(
@@ -959,9 +1047,14 @@ class MockExamItemReviewPublicationService:
         if len(components) != 1:
             self._fail(
                 "ITEM_REVIEW_ITEM_NOT_V2",
-                "Item revision does not have one canonical V2 content component",
+                "Item revision does not have one canonical content component",
             )
         component = components[0]
+        expected_schema_ref = (
+            ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF
+            if use_v3
+            else ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF
+        )
         artifact = session.get(ArtifactRecord, component.artifact_id)
         artifact_revision = session.get(
             ArtifactRevisionRecord,
@@ -976,7 +1069,7 @@ class MockExamItemReviewPublicationService:
         if (
             component.ordinal != 0
             or not component.required
-            or component.schema_ref != ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF
+            or component.schema_ref != expected_schema_ref
             or component.media_type != ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE
             or component.logical_name != ASSESSMENT_ITEM_CONTENT_FILE_NAME
             or artifact is None
@@ -1002,7 +1095,7 @@ class MockExamItemReviewPublicationService:
         ):
             self._fail(
                 "ITEM_REVIEW_ITEM_CONTENT_POINTER_INVALID",
-                "V2 Item content pointer does not resolve to approved immutable evidence",
+                "Item content pointer does not resolve to approved immutable evidence",
             )
         try:
             raw = self.artifacts.read_member(
@@ -1011,16 +1104,23 @@ class MockExamItemReviewPublicationService:
                 member_path=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
                 sha256=component.sha256,
                 media_type=ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
-                schema_ref=ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+                schema_ref=expected_schema_ref,
                 max_bytes=MAX_ITEM_CONTENT_BYTES,
             )
             if sha256_bytes(raw) != component.sha256:
-                raise ValueError("V2 content bytes differ from their pointer")
+                raise ValueError("content bytes differ from their pointer")
             value: object = json.loads(raw)
             if not isinstance(value, dict):
-                raise ValueError("V2 Item content is not an object")
-            validate_contract("assessment-item-content-v2", value)
-            content = AssessmentItemContentV2.model_validate(value)
+                raise ValueError("Item content is not an object")
+            validate_contract(
+                "assessment-item-content-v3" if use_v3 else "assessment-item-content-v2",
+                value,
+            )
+            content = (
+                AssessmentItemContentV3.model_validate(value)
+                if use_v3
+                else AssessmentItemContentV2.model_validate(value)
+            )
         except (
             OSError,
             UnicodeError,
@@ -1031,7 +1131,7 @@ class MockExamItemReviewPublicationService:
         ) as exc:
             raise MockExamItemReviewPublicationError(
                 "ITEM_REVIEW_ITEM_CONTENT_INVALID",
-                "V2 Item content failed immutable contract validation",
+                "Item content failed immutable contract validation",
             ) from exc
         return content
 
@@ -1108,12 +1208,19 @@ class MockExamItemReviewPublicationService:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-    ) -> tuple[ArtifactPointer, ContentTeamReviewRoleResultV7 | ContentTeamReviewRoleResultV8]:
-        expected_type: type[RoleResultBase] = (
-            ContentTeamReviewRoleResultV7
-            if step.result_schema == "review-result@7.0"
-            else ContentTeamReviewRoleResultV8
-        )
+    ) -> tuple[
+        ArtifactPointer,
+        ContentTeamReviewRoleResultV7
+        | ContentTeamReviewRoleResultV8
+        | ContentTeamReviewRoleResultV9,
+    ]:
+        expected_type: type[RoleResultBase]
+        if step.result_schema == "review-result@7.0":
+            expected_type = ContentTeamReviewRoleResultV7
+        elif step.result_schema == "review-result@8.0":
+            expected_type = ContentTeamReviewRoleResultV8
+        else:
+            expected_type = ContentTeamReviewRoleResultV9
         pointer, parsed = self._resolve_role_result(
             session,
             workflow=workflow,
@@ -1125,7 +1232,9 @@ class MockExamItemReviewPublicationService:
         )
         if not isinstance(
             parsed,
-            ContentTeamReviewRoleResultV7 | ContentTeamReviewRoleResultV8,
+            ContentTeamReviewRoleResultV7
+            | ContentTeamReviewRoleResultV8
+            | ContentTeamReviewRoleResultV9,
         ):
             self._fail(
                 "ITEM_REVIEW_RESULT_INVALID",
@@ -1161,9 +1270,7 @@ class MockExamItemReviewPublicationService:
         job = session.get(JobRecord, pointer.job_id)
         try:
             artifact_manifest = (
-                ArtifactManifest.model_validate(revision.manifest)
-                if revision is not None
-                else None
+                ArtifactManifest.model_validate(revision.manifest) if revision is not None else None
             )
             worker_input = RoleWorkerInput.model_validate(job.request) if job is not None else None
         except PydanticValidationError as exc:
@@ -1389,20 +1496,31 @@ class MockExamItemReviewPublicationService:
             reviewer_operator_id=command.reviewer_operator_id,
             approved_at=evidence.approval_resolved_at,
         ).model_dump(mode="json")
+        is_v2 = evidence.review_result_schema == "review-result@9.0"
+        source_review_payload = {
+            "step_run_id": evidence.review_step_run_id,
+            "artifact_id": evidence.review_artifact_id,
+            "artifact_revision_id": evidence.review_artifact_revision_id,
+            "sha256": evidence.review_sha256,
+            "result_schema": evidence.review_result_schema,
+            "worker_decision": "ready_for_human",
+            "finding_counts": evidence.finding_counts,
+        }
+        source_review: MockExamSourceReviewPointer
+        if is_v2:
+            source_review = MockExamSourceReviewPointerV2.model_validate(source_review_payload)
+        else:
+            source_review = MockExamSourceReviewPointer.model_validate(source_review_payload)
         unsigned: dict[str, Any] = {
-            "schema_version": "mock-exam-item-review-decision/1.0",
+            "schema_version": (
+                "mock-exam-item-review-decision/2.0"
+                if is_v2
+                else "mock-exam-item-review-decision/1.0"
+            ),
             "item_review_record_id": item_review_record_id,
             "item_revision_id": evidence.item_revision_id,
             "workflow_id": evidence.workflow_id,
-            "source_review": MockExamSourceReviewPointer(
-                step_run_id=evidence.review_step_run_id,
-                artifact_id=evidence.review_artifact_id,
-                artifact_revision_id=evidence.review_artifact_revision_id,
-                sha256=evidence.review_sha256,
-                result_schema=evidence.review_result_schema,
-                worker_decision="ready_for_human",
-                finding_counts=evidence.finding_counts,
-            ).model_dump(mode="json"),
+            "source_review": source_review.model_dump(mode="json"),
             "human_approval": human_approval,
             "decision": policy.review_decision,
             "final_rating": command.final_rating,
@@ -1413,14 +1531,19 @@ class MockExamItemReviewPublicationService:
             # Hash the exact JSON representation that will be written to the artifact.
             "decided_at": human_approval["approved_at"],
         }
-        decision = MockExamItemReviewDecisionV1.model_validate(
+        decision_model = MockExamItemReviewDecisionV2 if is_v2 else MockExamItemReviewDecisionV1
+        decision = decision_model.model_validate(
             {
                 **unsigned,
                 "decision_sha256": mock_exam_item_review_decision_sha256(unsigned),
             }
         )
         validate_contract(
-            MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA,
+            (
+                MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA
+                if is_v2
+                else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA
+            ),
             decision.model_dump(mode="json"),
         )
         return decision
@@ -1431,6 +1554,18 @@ class MockExamItemReviewPublicationService:
     ) -> _DecisionArtifactPointer:
         payload = canonical_json_bytes(decision)
         expected_content_hash = sha256_bytes(payload)
+        is_v2 = isinstance(decision, MockExamItemReviewDecisionV2)
+        decision_schema_ref = (
+            MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF
+            if is_v2
+            else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF
+        )
+        protocol_version = (
+            ITEM_REVIEW_PROTOCOL_VERSION_V2 if is_v2 else ITEM_REVIEW_PROTOCOL_VERSION
+        )
+        protocol_schema_hash = (
+            ITEM_REVIEW_PROTOCOL_SCHEMA_HASH_V2 if is_v2 else ITEM_REVIEW_PROTOCOL_SCHEMA_HASH
+        )
         try:
             with tempfile.TemporaryDirectory(prefix="eom-item-review-decision-") as directory:
                 path = Path(directory) / MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME
@@ -1447,12 +1582,12 @@ class MockExamItemReviewPublicationService:
                     result=self._decision_artifact_result(decision),
                     file_metadata={
                         MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME: {
-                            "schema_ref": MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
+                            "schema_ref": decision_schema_ref,
                             "media_type": "application/json",
                         }
                     },
-                    protocol_version=ITEM_REVIEW_PROTOCOL_VERSION,
-                    protocol_schema_hash=ITEM_REVIEW_PROTOCOL_SCHEMA_HASH,
+                    protocol_version=protocol_version,
+                    protocol_schema_hash=protocol_schema_hash,
                     expected_file_sha256={
                         MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME: expected_content_hash
                     },
@@ -1499,6 +1634,20 @@ class MockExamItemReviewPublicationService:
         expected: MockExamItemReviewDecisionV1,
         mismatch_code: str = "ITEM_REVIEW_DECISION_ARTIFACT_INVALID",
     ) -> _DecisionArtifactPointer:
+        is_v2 = isinstance(expected, MockExamItemReviewDecisionV2)
+        decision_schema = (
+            MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA
+            if is_v2
+            else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA
+        )
+        decision_schema_ref = (
+            MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF
+            if is_v2
+            else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF
+        )
+        protocol_version = (
+            ITEM_REVIEW_PROTOCOL_VERSION_V2 if is_v2 else ITEM_REVIEW_PROTOCOL_VERSION
+        )
         artifact = session.get(ArtifactRecord, pointer.artifact_id)
         revision = session.get(ArtifactRevisionRecord, pointer.revision_id)
         job = session.get(JobRecord, revision.job_id) if revision is not None else None
@@ -1539,10 +1688,10 @@ class MockExamItemReviewPublicationService:
             or member.get("sha256") != pointer.content_hash
             or member.get("bytes") != revision.content_bytes
             or member.get("media_type") != "application/json"
-            or member.get("schema_ref") != MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF
+            or member.get("schema_ref") != decision_schema_ref
             or job.status != "SUCCEEDED"
             or job.task_type != "mock-exam-item-review-decision"
-            or job.protocol_version != ITEM_REVIEW_PROTOCOL_VERSION
+            or job.protocol_version != protocol_version
             or job.logical_artifact_id != pointer.artifact_id
             or job.revision_id != pointer.revision_id
             or job.request != self._decision_artifact_request(expected)
@@ -1559,7 +1708,7 @@ class MockExamItemReviewPublicationService:
                 member_path=MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME,
                 sha256=pointer.content_hash,
                 media_type="application/json",
-                schema_ref=MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
+                schema_ref=decision_schema_ref,
                 max_bytes=MAX_REVIEW_RESULT_BYTES,
             )
             if sha256_bytes(raw) != pointer.content_hash:
@@ -1567,8 +1716,12 @@ class MockExamItemReviewPublicationService:
             value: object = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError("decision artifact is not an object")
-            validate_contract(MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA, value)
-            parsed = MockExamItemReviewDecisionV1.model_validate(value)
+            validate_contract(decision_schema, value)
+            parsed = (
+                MockExamItemReviewDecisionV2.model_validate(value)
+                if is_v2
+                else MockExamItemReviewDecisionV1.model_validate(value)
+            )
         except (
             OSError,
             UnicodeError,
@@ -1734,27 +1887,35 @@ class MockExamItemReviewPublicationService:
         decision: MockExamItemReviewDecisionV1,
         created: bool,
     ) -> MockExamItemReviewPublicationResult:
-        result = MockExamItemReviewPublicationResult(
-            item_review_record_id=record.item_review_record_id,
-            item_revision_id=record.item_revision_id,
-            workflow_id=record.workflow_id,
-            review_step_run_id=evidence.review_step_run_id,
-            human_approval_request_id=evidence.approval_request_id,
-            review_artifact_id=record.review_artifact_id,
-            review_artifact_revision_id=record.review_artifact_revision_id,
-            review_sha256=record.review_sha256,
-            decision_sha256=decision.decision_sha256,
-            review_result_schema=evidence.review_result_schema,
-            decision="APPROVE",
-            final_rating=command.final_rating,
-            finding_counts=evidence.finding_counts,
-            reviewer_operator_id=record.reviewer_actor_id,
-            rating_policy_revision_id=command.rating_policy_revision_id,
-            rating_policy_sha256=command.rating_policy_sha256,
-            created=created,
-        )
+        result_payload: dict[str, Any] = {
+            "item_review_record_id": record.item_review_record_id,
+            "item_revision_id": record.item_revision_id,
+            "workflow_id": record.workflow_id,
+            "review_step_run_id": evidence.review_step_run_id,
+            "human_approval_request_id": evidence.approval_request_id,
+            "review_artifact_id": record.review_artifact_id,
+            "review_artifact_revision_id": record.review_artifact_revision_id,
+            "review_sha256": record.review_sha256,
+            "decision_sha256": decision.decision_sha256,
+            "review_result_schema": evidence.review_result_schema,
+            "decision": "APPROVE",
+            "final_rating": command.final_rating,
+            "finding_counts": evidence.finding_counts,
+            "reviewer_operator_id": record.reviewer_actor_id,
+            "rating_policy_revision_id": command.rating_policy_revision_id,
+            "rating_policy_sha256": command.rating_policy_sha256,
+            "created": created,
+        }
+        if evidence.review_result_schema == "review-result@9.0":
+            result_schema = MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V2_SCHEMA
+            result: MockExamItemReviewPublicationResult = (
+                MockExamItemReviewPublicationResultV2.model_validate(result_payload)
+            )
+        else:
+            result_schema = MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_SCHEMA
+            result = MockExamItemReviewPublicationResult.model_validate(result_payload)
         validate_contract(
-            MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_SCHEMA,
+            result_schema,
             result.model_dump(mode="json"),
         )
         return result

@@ -96,6 +96,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             )
             return
         operation = "GET_ITEM_CONTENT"
+        content_schema_version: str | None = None
         try:
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
@@ -151,7 +152,16 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
             }:
                 operation = raw_operation
-            schemas = catalog_application_schema_route(operation)
+            if raw_operation == "IMPORT_REVIEWED_ITEM_CONTENT":
+                raw_content = value.get("content")
+                if isinstance(raw_content, dict):
+                    raw_content_schema_version = raw_content.get("schema_version")
+                    if isinstance(raw_content_schema_version, str):
+                        content_schema_version = raw_content_schema_version
+            schemas = catalog_application_schema_route(
+                operation,
+                content_schema_version=content_schema_version,
+            )
             validate_contract(schemas.request_schema, value)
             request = CatalogApplicationRequest.model_validate(value).root
         except (
@@ -165,6 +175,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 self.wfile,
                 operation,
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                content_schema_version=content_schema_version,
             )
             return
         try:
@@ -270,16 +281,26 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             MockExamItemReviewPublicationError,
         ) as exc:
             code = getattr(exc.code, "value", str(exc.code))
-            self.server.write_error(self.wfile, request.operation, code)
+            self.server.write_error(
+                self.wfile,
+                request.operation,
+                code,
+                content_schema_version=content_schema_version,
+            )
             return
         except Exception:
             self.server.write_error(
                 self.wfile,
                 request.operation,
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+                content_schema_version=content_schema_version,
             )
             return
-        self.server.write_response(self.wfile, response)
+        self.server.write_response(
+            self.wfile,
+            response,
+            content_schema_version=content_schema_version,
+        )
 
     def _stream_item_media(self, request: ItemMediaQuery) -> None:
         try:
@@ -437,7 +458,13 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         return
 
     @staticmethod
-    def write_response(stream: Any, response: CatalogApplicationResponse) -> None:
+    def write_response(
+        stream: Any,
+        response: CatalogApplicationResponse,
+        *,
+        content_schema_version: str | None = None,
+        review_result_schema: str | None = None,
+    ) -> None:
         # Remove only inactive top-level response variants. Nested nullable contract fields such as
         # a content-team inquiry must remain explicit for canonical JSON Schema validation.
         payload = {
@@ -445,7 +472,17 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             for key, value in response.model_dump(mode="json").items()
             if value is not None
         }
-        schemas = catalog_application_schema_route(response.operation)
+        if response.content is not None:
+            content_schema_version = response.content.schema_version
+        if response.item_review is not None:
+            review_result_schema = response.item_review.review_result_schema
+        elif response.review_eligibility is not None:
+            review_result_schema = response.review_eligibility.review_result_schema
+        schemas = catalog_application_schema_route(
+            response.operation,
+            content_schema_version=content_schema_version,
+            review_result_schema=review_result_schema,
+        )
         validate_contract(schemas.response_schema, payload)
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         raw = encoded.encode("utf-8")
@@ -500,7 +537,15 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         )
 
     @classmethod
-    def write_error(cls, stream: Any, operation: str, error_code: str) -> None:
+    def write_error(
+        cls,
+        stream: Any,
+        operation: str,
+        error_code: str,
+        *,
+        content_schema_version: str | None = None,
+        review_result_schema: str | None = None,
+    ) -> None:
         cls.write_response(
             stream,
             CatalogApplicationResponse(
@@ -523,6 +568,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
                 ),
                 error_code=error_code,
             ),
+            content_schema_version=content_schema_version,
+            review_result_schema=review_result_schema,
         )
 
     @staticmethod

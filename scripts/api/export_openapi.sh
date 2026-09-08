@@ -23,7 +23,8 @@ SOURCE_PATHS=(
   services/workflow_runner packages/hwpx_contracts services/hwpx_manager
   packages/content_intake packages/content_pack packages/item_registry
   packages/operator_identity services/identity_service packages/api_contracts
-  apps/application_api packages/catalog_contracts services/catalog_service apps/eomctl
+  apps/application_api packages/catalog_contracts packages/image_contracts
+  services/catalog_service apps/eomctl
 )
 python_path=""
 for relative in "${SOURCE_PATHS[@]}"; do

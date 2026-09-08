@@ -9,16 +9,19 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
-from eom_catalog_contracts import AssessmentItemContentV2
+from eom_catalog_contracts import AssessmentItemContentV2, AssessmentItemContentV3
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
     ContentTeamBuildResult,
     ContentTeamBuildResultV2,
+    ContentTeamBuildResultV3,
     ContentTeamHandoffSnapshot,
     ContentTeamImageSource,
     ContentTeamItemSource,
+    ContentTeamItemSourceV2,
     ContentTeamRenderRequestV2,
+    ContentTeamRenderRequestV3,
     serialize_content_team_markdown,
 )
 from eom_hwpx_contracts import validate_contract as validate_hwpx_contract
@@ -38,6 +41,7 @@ from eom_orchestrator.repository import (
     submit_structured_job,
 )
 from eom_orchestrator.state_machine import JobState, transition_job
+from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy import Engine, select
 
 from eom_hwpx_manager.adapter import BuilderRun
@@ -45,7 +49,9 @@ from eom_hwpx_manager.application_adapter import FixedContentTeamBuilderAdapter
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.protocol import (
     HWPX_CONTENT_TEAM_PROTOCOL_VERSION_V2,
+    HWPX_CONTENT_TEAM_PROTOCOL_VERSION_V3,
     content_team_schema_bundle_hash_v2,
+    content_team_schema_bundle_hash_v3,
 )
 from eom_hwpx_manager.settings import HwpxSettings
 
@@ -127,7 +133,7 @@ class ContentTeamHwpxService:
     def build(
         self,
         source_path: Path,
-        source: ContentTeamItemSource,
+        source: ContentTeamItemSource | ContentTeamItemSourceV2,
         *,
         item_revision_id: str,
         image_sources: tuple[ContentTeamImageSource, ...],
@@ -148,7 +154,11 @@ class ContentTeamHwpxService:
             ITEM_MARKDOWN_MEMBER,
             source.markdown_sha256,
             media_type=ITEM_MARKDOWN_MEDIA_TYPE,
-            schema_ref=ITEM_MARKDOWN_SCHEMA_REF,
+            schema_ref=(
+                source.markdown_schema_ref
+                if isinstance(source, ContentTeamItemSourceV2)
+                else ITEM_MARKDOWN_SCHEMA_REF
+            ),
             max_bytes=MAX_MARKDOWN_BYTES,
         )
         markdown = serialize_content_team_markdown(content)
@@ -169,25 +179,50 @@ class ContentTeamHwpxService:
         job_id = new_job_id()
         artifact_id = new_logical_artifact_id()
         artifact_revision_id = new_revision_id()
-        request = ContentTeamRenderRequestV2(
-            build_id=build_id,
-            item_revision_id=item_revision_id,
-            source=source,
-            handoff=handoff_snapshot,
-            images=tuple(image for image, _path in image_inputs),
+        request = (
+            ContentTeamRenderRequestV3(
+                build_id=build_id,
+                item_revision_id=item_revision_id,
+                source=source,
+                handoff=handoff_snapshot,
+                images=tuple(image for image, _path in image_inputs),
+            )
+            if isinstance(source, ContentTeamItemSourceV2)
+            else ContentTeamRenderRequestV2(
+                build_id=build_id,
+                item_revision_id=item_revision_id,
+                source=source,
+                handoff=handoff_snapshot,
+                images=tuple(image for image, _path in image_inputs),
+            )
         )
         request_raw = request.model_dump(mode="json")
-        validate_hwpx_contract("content-team-render-request-v2", request_raw)
+        contract_name = (
+            "content-team-render-request-v3"
+            if isinstance(request, ContentTeamRenderRequestV3)
+            else "content-team-render-request-v2"
+        )
+        protocol_version = (
+            HWPX_CONTENT_TEAM_PROTOCOL_VERSION_V3
+            if isinstance(request, ContentTeamRenderRequestV3)
+            else HWPX_CONTENT_TEAM_PROTOCOL_VERSION_V2
+        )
+        protocol_hash = (
+            content_team_schema_bundle_hash_v3()
+            if isinstance(request, ContentTeamRenderRequestV3)
+            else content_team_schema_bundle_hash_v2()
+        )
+        validate_hwpx_contract(contract_name, request_raw)
         with transaction(self.sessions) as session:
             ensure_protocol_version(
                 session,
-                HWPX_CONTENT_TEAM_PROTOCOL_VERSION_V2,
-                content_team_schema_bundle_hash_v2(),
+                protocol_version,
+                protocol_hash,
             )
             job, created = submit_structured_job(
                 session,
                 job_id=job_id,
-                protocol_version=HWPX_CONTENT_TEAM_PROTOCOL_VERSION_V2,
+                protocol_version=protocol_version,
                 idempotency_key=f"hwpx-content-team:{idempotency_key}",
                 task_type="hwpx-content-team-build",
                 request=request_raw,
@@ -232,8 +267,17 @@ class ContentTeamHwpxService:
                 "HWPX_CONTENT_TEAM_RESULT_RECEIVED",
             )
             result_raw = self.adapter.load_json(workspace / "result.json", workspace)
-            validate_hwpx_contract("content-team-build-result-v2", result_raw)
-            result = ContentTeamBuildResultV2.model_validate(result_raw)
+            result_contract = (
+                "content-team-build-result-v3"
+                if isinstance(request, ContentTeamRenderRequestV3)
+                else "content-team-build-result-v2"
+            )
+            validate_hwpx_contract(result_contract, result_raw)
+            result = (
+                ContentTeamBuildResultV3.model_validate(result_raw)
+                if isinstance(request, ContentTeamRenderRequestV3)
+                else ContentTeamBuildResultV2.model_validate(result_raw)
+            )
             output = workspace / "output/content-team-item.hwpx"
             self._verify_output(output, workspace)
             package_manifest = self.adapter.load_json(
@@ -338,15 +382,15 @@ class ContentTeamHwpxService:
     def _load_content(
         self,
         source_path: Path,
-        source: ContentTeamItemSource,
-    ) -> AssessmentItemContentV2:
+        source: ContentTeamItemSource | ContentTeamItemSourceV2,
+    ) -> AssessmentItemContentV2 | AssessmentItemContentV3:
         canonical = self._resolve_member(
             source.artifact_id,
             source.artifact_revision_id,
             ITEM_JSON_MEMBER,
             source.json_sha256,
             media_type="application/json",
-            schema_ref=ITEM_SCHEMA_REF,
+            schema_ref=source.schema_ref,
             max_bytes=MAX_ITEM_JSON_BYTES,
         )
         if source_path != canonical:
@@ -359,8 +403,8 @@ class ContentTeamHwpxService:
     @staticmethod
     def _load_resolved_content(
         source_path: Path,
-        source: ContentTeamItemSource,
-    ) -> AssessmentItemContentV2:
+        source: ContentTeamItemSource | ContentTeamItemSourceV2,
+    ) -> AssessmentItemContentV2 | AssessmentItemContentV3:
         try:
             metadata = source_path.lstat()
             if (
@@ -373,6 +417,9 @@ class ContentTeamHwpxService:
             value: object = json.loads(source_path.read_text(encoding="utf-8"))
             if not isinstance(value, dict):
                 raise ValueError("item content is not an object")
+            if isinstance(source, ContentTeamItemSourceV2):
+                validate_catalog_contract("assessment-item-content-v3", value)
+                return AssessmentItemContentV3.model_validate(value)
             validate_catalog_contract("assessment-item-content-v2", value)
             return AssessmentItemContentV2.model_validate(value)
         except Exception as exc:
@@ -384,7 +431,7 @@ class ContentTeamHwpxService:
     def _resolve_images(
         self,
         image_sources: tuple[ContentTeamImageSource, ...],
-        content: AssessmentItemContentV2,
+        content: AssessmentItemContentV2 | AssessmentItemContentV3,
     ) -> tuple[tuple[ContentTeamImageSource, Path], ...]:
         self._validate_image_sources(image_sources, content)
         return tuple(
@@ -406,7 +453,7 @@ class ContentTeamHwpxService:
     @staticmethod
     def _validate_image_sources(
         image_sources: tuple[ContentTeamImageSource, ...],
-        content: AssessmentItemContentV2,
+        content: AssessmentItemContentV2 | AssessmentItemContentV3,
     ) -> None:
         slots = tuple(
             (ordinal, visual.label)
@@ -608,7 +655,26 @@ class ContentTeamHwpxService:
                     HwpxManagerErrorCode.HWPX_RESULT_INVALID,
                     "completed content-team build has no typed result",
                 )
-            parsed = ContentTeamBuildResult.model_validate(raw)
+            try:
+                schema_version = raw.get("schema_version")
+                if schema_version == "1.0":
+                    validate_hwpx_contract("content-team-build-result", raw)
+                    parsed: ContentTeamBuildResult | ContentTeamBuildResultV2 = (
+                        ContentTeamBuildResult.model_validate(raw)
+                    )
+                elif schema_version == "2.0":
+                    validate_hwpx_contract("content-team-build-result-v2", raw)
+                    parsed = ContentTeamBuildResultV2.model_validate(raw)
+                elif schema_version == "3.0":
+                    validate_hwpx_contract("content-team-build-result-v3", raw)
+                    parsed = ContentTeamBuildResultV3.model_validate(raw)
+                else:
+                    raise ValueError("unsupported completed content-team result schema")
+            except (JsonSchemaValidationError, ValueError) as exc:
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_RESULT_INVALID,
+                    "completed content-team build has an invalid typed result",
+                ) from exc
             if parsed.build_id != expected_build_id:
                 raise HwpxManagerError(
                     HwpxManagerErrorCode.HWPX_BUILD_IDEMPOTENCY_CONFLICT,

@@ -29,6 +29,7 @@ ROLES = {"authoring", "image", "review", "item_management", "support"}
 
 ADMITTED_DEFINITIONS = {
     ("generic-item-development", "1.8.0"): "generic-item-development.v1.8.yaml",
+    ("generic-item-development", "1.9.0"): "generic-item-development.v1.9.yaml",
     ("knowledge-analysis", "1.0.0"): "knowledge-analysis.v1.yaml",
     ("knowledge-analysis", "4.0.0"): "knowledge-analysis.v4.yaml",
     ("knowledge-analysis", "8.0.0"): "knowledge-analysis.v8.yaml",
@@ -228,6 +229,21 @@ def test_catalog_socket_operation_schema_routes_are_total_and_immutable() -> Non
         route = catalog_application_schema_route(operation)
         assert route.request_schema == f"catalog-application-request-v{request_version}"
         assert route.response_schema == f"catalog-application-response-v{response_version}"
+    for operation, context in (
+        ("IMPORT_REVIEWED_ITEM_CONTENT", {"content_schema_version": "3.0"}),
+        ("GET_ITEM_CONTENT", {"content_schema_version": "3.0"}),
+        (
+            "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+            {"review_result_schema": "review-result@9.0"},
+        ),
+        (
+            "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
+            {"review_result_schema": "review-result@9.0"},
+        ),
+    ):
+        route = catalog_application_schema_route(operation, **context)
+        assert route.request_schema == "catalog-application-request-v12"
+        assert route.response_schema == "catalog-application-response-v12"
     with pytest.raises(ValueError, match="unsupported"):
         catalog_application_schema_route("UNKNOWN")
     with pytest.raises(TypeError):

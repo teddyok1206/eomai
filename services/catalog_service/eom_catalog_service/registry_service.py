@@ -19,6 +19,7 @@ from eom_catalog_contracts import (
     AssessmentItemContent,
     AssessmentItemContentContract,
     AssessmentItemContentV2,
+    AssessmentItemContentV3,
     AssessmentLayoutObservation,
     AssessmentPageImagePointer,
     ImageBlock,
@@ -877,7 +878,11 @@ class RegistryService:
         revision: ArtifactRevisionRecord,
     ) -> AssessmentItemContentContract:
         schema_name: str
-        model: type[AssessmentItemContent] | type[AssessmentItemContentV2]
+        model: (
+            type[AssessmentItemContent]
+            | type[AssessmentItemContentV2]
+            | type[AssessmentItemContentV3]
+        )
         if pointer.schema_ref in {
             "eom.assessment.item-content/1.0",
             "eom://schemas/item-registry/assessment-item-content-v1",
@@ -888,6 +893,11 @@ class RegistryService:
             "eom://schemas/item-registry/assessment-item-content-v2",
         }:
             schema_name, model = "assessment-item-content-v2", AssessmentItemContentV2
+        elif pointer.schema_ref in {
+            "eom.assessment.item-content/3.0",
+            "eom://schemas/item-registry/assessment-item-content-v3",
+        }:
+            schema_name, model = "assessment-item-content-v3", AssessmentItemContentV3
         else:
             schema_name, model = "", AssessmentItemContent
         if pointer.ordinal != 0 or not schema_name or pointer.media_type != "application/json":

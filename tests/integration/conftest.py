@@ -13,7 +13,15 @@ from sqlalchemy.orm import Session
 def integration_engine() -> Iterator[Engine]:
     if os.environ.get("EOM_RUN_INTEGRATION") != "1":
         pytest.skip("set EOM_RUN_INTEGRATION=1 to run PostgreSQL integration tests")
-    engine = build_engine()
+    explicit_url = os.environ.get("EOM_DATABASE_URL")
+    if not explicit_url:
+        pytest.fail(
+            "integration tests require an explicit isolated EOM_DATABASE_URL; "
+            "runtime secret-file fallback is forbidden"
+        )
+    # Pass the already-resolved test URL so ``build_engine`` can never fall back to the installed
+    # production secret file. Never include the credential-bearing URL in test output.
+    engine = build_engine(explicit_url)
     yield engine
     engine.dispose()
 

@@ -1,0 +1,500 @@
+{
+  "$defs": {
+    "ContentTeamItemBriefV3Input": {
+      "additionalProperties": false,
+      "description": "Content-neutral presentation input accepted by the existing one-Item block.",
+      "properties": {
+        "authoring_guidance": {
+          "const": "검토된 요청 범위 안에서 콘텐츠팀 출제 원문과 편집 프로그램 계약을 그대로 적용하여 문항을 작성해 주세요.",
+          "title": "Authoring Guidance",
+          "type": "string"
+        },
+        "authoring_guidance_sha256": {
+          "const": "sha256:b60aba3badb50adf8d4b2919fa07f3d69962f06c53514cd1659d645862c48a64",
+          "title": "Authoring Guidance Sha256",
+          "type": "string"
+        },
+        "curriculum_selected_unit_key": {
+          "pattern": "^eom\\.is\\.middle\\.[1-6]-[1-7]$",
+          "title": "Curriculum Selected Unit Key",
+          "type": "string"
+        },
+        "difficulty": {
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ],
+          "title": "Difficulty",
+          "type": "string"
+        },
+        "mock_exam_slot": {
+          "$ref": "#/$defs/ContentTeamMockExamSlotV1"
+        },
+        "original_request_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Original Request Sha256",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "3.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "subject": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Subject",
+          "type": "string"
+        },
+        "task_type": {
+          "enum": [
+            "TEXT",
+            "DATA",
+            "TABLE",
+            "IMAGE",
+            "MIXED",
+            "INQUIRY"
+          ],
+          "title": "Task Type",
+          "type": "string"
+        },
+        "topic": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Topic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "subject",
+        "topic",
+        "task_type",
+        "difficulty",
+        "authoring_guidance",
+        "authoring_guidance_sha256",
+        "curriculum_selected_unit_key",
+        "mock_exam_slot",
+        "original_request_sha256"
+      ],
+      "title": "ContentTeamItemBriefV3Input",
+      "type": "object"
+    },
+    "ContentTeamMockExamSlotV1": {
+      "additionalProperties": false,
+      "description": "Immutable structured slot intent carried through the one-Item workflow.",
+      "properties": {
+        "assembly_policy_revision_id": {
+          "pattern": "^assemblypolicyrev_[0-9a-f]{32}$",
+          "title": "Assembly Policy Revision Id",
+          "type": "string"
+        },
+        "assembly_policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Assembly Policy Sha256",
+          "type": "string"
+        },
+        "balance_large_unit_key": {
+          "anyOf": [
+            {
+              "pattern": "^eom\\.is\\.large\\.[1-6]$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Balance Large Unit Key"
+        },
+        "coverage_requirement_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage Requirement Id"
+        },
+        "coverage_role": {
+          "enum": [
+            "REQUIRED",
+            "BALANCE"
+          ],
+          "title": "Coverage Role",
+          "type": "string"
+        },
+        "curriculum_selected_unit_key": {
+          "pattern": "^eom\\.is\\.middle\\.[1-6]-[1-7]$",
+          "title": "Curriculum Selected Unit Key",
+          "type": "string"
+        },
+        "inquiry_required": {
+          "title": "Inquiry Required",
+          "type": "boolean"
+        },
+        "large_unit_key": {
+          "pattern": "^eom\\.is\\.large\\.[1-6]$",
+          "title": "Large Unit Key",
+          "type": "string"
+        },
+        "layout_policy_revision_id": {
+          "pattern": "^layoutpolicyrev_[0-9a-f]{32}$",
+          "title": "Layout Policy Revision Id",
+          "type": "string"
+        },
+        "layout_policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Layout Policy Sha256",
+          "type": "string"
+        },
+        "points_milli": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "Points Milli",
+          "type": "integer"
+        },
+        "position": {
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "preferred_difficulty": {
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ],
+          "title": "Preferred Difficulty",
+          "type": "string"
+        },
+        "preferred_material_profiles": {
+          "items": {
+            "enum": [
+              "TEXT",
+              "DATA",
+              "TABLE",
+              "IMAGE",
+              "MIXED",
+              "INQUIRY"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Preferred Material Profiles",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "mock-exam-slot/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "slot_id": {
+          "pattern": "^slot-[0-9]{2,3}$",
+          "title": "Slot Id",
+          "type": "string"
+        },
+        "slot_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Slot Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "assembly_policy_revision_id",
+        "assembly_policy_sha256",
+        "layout_policy_revision_id",
+        "layout_policy_sha256",
+        "slot_id",
+        "position",
+        "points_milli",
+        "coverage_role",
+        "coverage_requirement_id",
+        "balance_large_unit_key",
+        "curriculum_selected_unit_key",
+        "large_unit_key",
+        "inquiry_required",
+        "preferred_difficulty",
+        "preferred_material_profiles",
+        "slot_sha256"
+      ],
+      "title": "ContentTeamMockExamSlotV1",
+      "type": "object"
+    },
+    "MockExamOneItemGenerationBlockV2": {
+      "additionalProperties": false,
+      "description": "Generation block pinning only the score/provenance-correct V3 path.",
+      "properties": {
+        "block_key": {
+          "const": "content-team-one-item-generation",
+          "title": "Block Key",
+          "type": "string"
+        },
+        "block_revision": {
+          "const": "2.0",
+          "title": "Block Revision",
+          "type": "string"
+        },
+        "block_sha256": {
+          "const": "sha256:977601f0e1060f9f6304c5b58be357723758359adf1b18c931d6f82a35ae4c81",
+          "title": "Block Sha256",
+          "type": "string"
+        },
+        "content_pack_key": {
+          "const": "generated-knowledge-item",
+          "title": "Content Pack Key",
+          "type": "string"
+        },
+        "content_pack_source_tree_sha256": {
+          "const": "sha256:31f15f4811090045a92ad3a465e94f91ec430e638fe7b07f132c024e079a5792",
+          "title": "Content Pack Source Tree Sha256",
+          "type": "string"
+        },
+        "content_pack_version": {
+          "const": "1.14.0",
+          "title": "Content Pack Version",
+          "type": "string"
+        },
+        "execution_preset_key": {
+          "const": "knowledge-grounded-item",
+          "title": "Execution Preset Key",
+          "type": "string"
+        },
+        "image_mode": {
+          "const": "required",
+          "title": "Image Mode",
+          "type": "string"
+        },
+        "registry_mode": {
+          "const": "CREATE_ITEM",
+          "title": "Registry Mode",
+          "type": "string"
+        },
+        "request_name": {
+          "const": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+          "title": "Request Name",
+          "type": "string"
+        },
+        "workflow_definition_key": {
+          "const": "generic-item-development",
+          "title": "Workflow Definition Key",
+          "type": "string"
+        },
+        "workflow_definition_version": {
+          "const": "1.9.0",
+          "title": "Workflow Definition Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_key",
+        "block_revision",
+        "workflow_definition_key",
+        "workflow_definition_version",
+        "request_name",
+        "image_mode",
+        "content_pack_key",
+        "content_pack_version",
+        "content_pack_source_tree_sha256",
+        "execution_preset_key",
+        "registry_mode",
+        "block_sha256"
+      ],
+      "title": "MockExamOneItemGenerationBlockV2",
+      "type": "object"
+    },
+    "MockExamPlannedWorkflowCallV2": {
+      "additionalProperties": false,
+      "properties": {
+        "generation_block_key": {
+          "const": "content-team-one-item-generation",
+          "title": "Generation Block Key",
+          "type": "string"
+        },
+        "generation_block_revision": {
+          "const": "2.0",
+          "title": "Generation Block Revision",
+          "type": "string"
+        },
+        "generation_block_sha256": {
+          "const": "sha256:977601f0e1060f9f6304c5b58be357723758359adf1b18c931d6f82a35ae4c81",
+          "title": "Generation Block Sha256",
+          "type": "string"
+        },
+        "item_brief": {
+          "$ref": "#/$defs/ContentTeamItemBriefV3Input"
+        },
+        "workflow_call_id": {
+          "pattern": "^workflowcall_[0-9a-f]{32}$",
+          "title": "Workflow Call Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow_call_id",
+        "generation_block_key",
+        "generation_block_revision",
+        "generation_block_sha256",
+        "item_brief"
+      ],
+      "title": "MockExamPlannedWorkflowCallV2",
+      "type": "object"
+    },
+    "MockExamScoreBucket": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Count",
+          "type": "integer"
+        },
+        "points_milli": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "Points Milli",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "points_milli",
+        "count"
+      ],
+      "title": "MockExamScoreBucket",
+      "type": "object"
+    },
+    "mock_exam_slot": {
+      "$ref": "#/$defs/ContentTeamMockExamSlotV1"
+    }
+  },
+  "$id": "eom://schemas/assessment-assembly/mock-exam-production-plan/2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Production plan whose 25 calls all pin workflow 1.9 and Content Pack 1.14.",
+  "properties": {
+    "balance_slot_count": {
+      "const": 4,
+      "title": "Balance Slot Count",
+      "type": "integer"
+    },
+    "inquiry_count": {
+      "const": 4,
+      "title": "Inquiry Count",
+      "type": "integer"
+    },
+    "item_count": {
+      "const": 25,
+      "title": "Item Count",
+      "type": "integer"
+    },
+    "layout_policy_revision_id": {
+      "pattern": "^layoutpolicyrev_[0-9a-f]{32}$",
+      "title": "Layout Policy Revision Id",
+      "type": "string"
+    },
+    "layout_policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Layout Policy Sha256",
+      "type": "string"
+    },
+    "one_item_generation_block": {
+      "$ref": "#/$defs/MockExamOneItemGenerationBlockV2"
+    },
+    "outline_key": {
+      "const": "eom-integrated-science-editorial-outline",
+      "title": "Outline Key",
+      "type": "string"
+    },
+    "outline_revision": {
+      "const": "1.0",
+      "title": "Outline Revision",
+      "type": "string"
+    },
+    "outline_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Outline Sha256",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Plan Sha256",
+      "type": "string"
+    },
+    "policy_revision_id": {
+      "pattern": "^assemblypolicyrev_[0-9a-f]{32}$",
+      "title": "Policy Revision Id",
+      "type": "string"
+    },
+    "policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Policy Sha256",
+      "type": "string"
+    },
+    "production_plan_id": {
+      "pattern": "^productionplan_[0-9a-f]{32}$",
+      "title": "Production Plan Id",
+      "type": "string"
+    },
+    "required_slot_count": {
+      "const": 21,
+      "title": "Required Slot Count",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "mock-exam-production-plan/2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "score_distribution": {
+      "items": {
+        "$ref": "#/$defs/MockExamScoreBucket"
+      },
+      "maxItems": 20,
+      "minItems": 1,
+      "title": "Score Distribution",
+      "type": "array"
+    },
+    "total_points_milli": {
+      "const": 50000,
+      "title": "Total Points Milli",
+      "type": "integer"
+    },
+    "workflow_calls": {
+      "items": {
+        "$ref": "#/$defs/MockExamPlannedWorkflowCallV2"
+      },
+      "maxItems": 25,
+      "minItems": 25,
+      "title": "Workflow Calls",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "production_plan_id",
+    "policy_revision_id",
+    "policy_sha256",
+    "layout_policy_revision_id",
+    "layout_policy_sha256",
+    "outline_key",
+    "outline_revision",
+    "outline_sha256",
+    "item_count",
+    "total_points_milli",
+    "score_distribution",
+    "required_slot_count",
+    "balance_slot_count",
+    "inquiry_count",
+    "one_item_generation_block",
+    "workflow_calls",
+    "plan_sha256"
+  ],
+  "title": "MockExamProductionPlanV2",
+  "type": "object"
+}

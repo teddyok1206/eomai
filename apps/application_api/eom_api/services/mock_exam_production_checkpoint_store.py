@@ -17,7 +17,12 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Protocol
 
-from eom_api_contracts.mock_exam_execution import MockExamProductionExecutionV1
+from eom_api_contracts.mock_exam_execution import (
+    MockExamProductionExecutionV1,
+    MockExamProductionExecutionV2,
+    is_mock_exam_provenance_validation_recovery_candidate,
+    is_mock_exam_provenance_validation_recovery_successor,
+)
 from pydantic import ValidationError
 
 _EXECUTION_ID = re.compile(r"^productionexec_[0-9a-f]{32}$")
@@ -647,7 +652,13 @@ def _file_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int, i
 def _parse_checkpoint(payload: bytes) -> MockExamProductionExecutionV1:
     try:
         value = json.loads(payload.decode("utf-8"))
-        return MockExamProductionExecutionV1.model_validate(value)
+        checkpoint_type = (
+            MockExamProductionExecutionV2
+            if isinstance(value, dict)
+            and value.get("schema_version") == "mock-exam-production-execution/2.0"
+            else MockExamProductionExecutionV1
+        )
+        return checkpoint_type.model_validate(value)
     except (UnicodeError, json.JSONDecodeError, ValidationError) as exc:
         raise MockExamCheckpointStoreError(
             "CHECKPOINT_CONTRACT_INVALID",
@@ -684,6 +695,33 @@ def _monotonic_successor(
     current: MockExamProductionExecutionV1,
     successor: MockExamProductionExecutionV1,
 ) -> bool:
+    if current.schema_version != successor.schema_version:
+        return False
+    recovery_candidates = tuple(
+        is_mock_exam_provenance_validation_recovery_candidate(row) for row in current.item_runs
+    )
+    provenance_recovery = any(recovery_candidates)
+    if provenance_recovery and (
+        not all(recovery_candidates)
+        or current.failure is not None
+        or successor.failure is not None
+        or successor.generation_block_resolution != current.generation_block_resolution
+        or successor.analysis_policy != current.analysis_policy
+        or successor.analysis_general_knowledge_mode != current.analysis_general_knowledge_mode
+        or any(
+            not is_mock_exam_provenance_validation_recovery_successor(before, after)
+            for before, after in zip(current.item_runs, successor.item_runs, strict=True)
+        )
+        or successor.analysis_review_authorizations != current.analysis_review_authorizations
+        or successor.graph_publication_authorization != current.graph_publication_authorization
+        or successor.graph_publications != current.graph_publications
+        or successor.rating_authorization != current.rating_authorization
+        or successor.assembly_intent != current.assembly_intent
+        or successor.assembly_plan != current.assembly_plan
+        or successor.assembly != current.assembly
+        or successor.hwpx_build != current.hwpx_build
+    ):
+        return False
     for field in (
         "generation_block_resolution",
         "analysis_policy",
@@ -791,7 +829,9 @@ def _monotonic_successor(
             after.position,
         ):
             return False
-        if after.state not in _ITEM_STATE_TRANSITIONS[before.state]:
+        if after.state not in _ITEM_STATE_TRANSITIONS[
+            before.state
+        ] and not is_mock_exam_provenance_validation_recovery_successor(before, after):
             return False
         for field in (
             "start_command_id",

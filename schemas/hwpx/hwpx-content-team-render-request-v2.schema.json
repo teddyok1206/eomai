@@ -1,0 +1,300 @@
+{
+  "$defs": {
+    "ContentTeamHandoffMember": {
+      "additionalProperties": false,
+      "properties": {
+        "purpose": {
+          "enum": [
+            "automation-template",
+            "equation-prototypes",
+            "visual-slots-left-right",
+            "visual-slots-two-tables",
+            "labeled-data-condition",
+            "table-2-column",
+            "table-3-column",
+            "table-3-column-long-equation",
+            "table-4-column",
+            "inquiry-experiment-box"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "maximum": 26214400,
+          "minimum": 1,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "purpose",
+        "sha256",
+        "size"
+      ],
+      "title": "ContentTeamHandoffMember",
+      "type": "object"
+    },
+    "ContentTeamHandoffSnapshot": {
+      "additionalProperties": false,
+      "description": "Immutable source/archive identity used by every renderer attempt.",
+      "properties": {
+        "archive_file": {
+          "const": "input/handoff.zip",
+          "title": "Archive File",
+          "type": "string"
+        },
+        "archive_sha256": {
+          "const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+          "title": "Archive Sha256",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^artifact_[a-f0-9]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[a-f0-9]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "entry_count": {
+          "const": 606,
+          "title": "Entry Count",
+          "type": "integer"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/ContentTeamHandoffMember"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "title": "Members",
+          "type": "array"
+        },
+        "profile_sha256": {
+          "const": "sha256:ce08671ad433026ec51e68ddfc6a4d7ffe33ae8a792c1791dfa26b9b62e78863",
+          "title": "Profile Sha256",
+          "type": "string"
+        },
+        "uncompressed_bytes": {
+          "const": 49280719,
+          "title": "Uncompressed Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "archive_sha256",
+        "archive_file",
+        "entry_count",
+        "uncompressed_bytes",
+        "profile_sha256",
+        "members"
+      ],
+      "title": "ContentTeamHandoffSnapshot",
+      "type": "object"
+    },
+    "ContentTeamImageSource": {
+      "additionalProperties": false,
+      "properties": {
+        "alt_text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Alt Text",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^artifact_[a-f0-9]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_member": {
+          "const": "generated-stimulus.png",
+          "title": "Artifact Member",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[a-f0-9]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "file_name": {
+          "pattern": "^input/visual-[01]\\.png$",
+          "title": "File Name",
+          "type": "string"
+        },
+        "height_px": {
+          "const": 500,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "label": {
+          "enum": [
+            "",
+            "(가)",
+            "(나)"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "image/png",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/generated-item/stimulus-png/3.0",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "visual_ordinal": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Visual Ordinal",
+          "type": "integer"
+        },
+        "width_px": {
+          "const": 800,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "visual_ordinal",
+        "label",
+        "artifact_id",
+        "artifact_revision_id",
+        "artifact_member",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "width_px",
+        "height_px",
+        "alt_text",
+        "file_name"
+      ],
+      "title": "ContentTeamImageSource",
+      "type": "object"
+    },
+    "ContentTeamItemSource": {
+      "additionalProperties": false,
+      "description": "Pinned JSON and Markdown members of one canonical Catalog artifact revision.",
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[a-f0-9]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[a-f0-9]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "json_file": {
+          "const": "input/item-content.json",
+          "title": "Json File",
+          "type": "string"
+        },
+        "json_sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Json Sha256",
+          "type": "string"
+        },
+        "markdown_file": {
+          "const": "input/content-team-item.md",
+          "title": "Markdown File",
+          "type": "string"
+        },
+        "markdown_sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Markdown Sha256",
+          "type": "string"
+        },
+        "schema_ref": {
+          "const": "eom.assessment.item-content/2.0",
+          "title": "Schema Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "schema_ref",
+        "json_sha256",
+        "json_file",
+        "markdown_sha256",
+        "markdown_file"
+      ],
+      "title": "ContentTeamItemSource",
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/hwpx/hwpx-content-team-render-request-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "build_id": {
+      "pattern": "^hwpxbuild_[a-f0-9]{32}$",
+      "title": "Build Id",
+      "type": "string"
+    },
+    "handoff": {
+      "$ref": "#/$defs/ContentTeamHandoffSnapshot"
+    },
+    "images": {
+      "items": {
+        "$ref": "#/$defs/ContentTeamImageSource"
+      },
+      "maxItems": 2,
+      "title": "Images",
+      "type": "array"
+    },
+    "item_revision_id": {
+      "pattern": "^itemrev_[a-z0-9]{8,55}$",
+      "title": "Item Revision Id",
+      "type": "string"
+    },
+    "output_directory": {
+      "const": "output",
+      "title": "Output Directory",
+      "type": "string"
+    },
+    "renderer_profile": {
+      "const": "content-team-hwp-question-editor-v2",
+      "title": "Renderer Profile",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/ContentTeamItemSource"
+    }
+  },
+  "required": [
+    "schema_version",
+    "renderer_profile",
+    "build_id",
+    "item_revision_id",
+    "source",
+    "handoff",
+    "images",
+    "output_directory"
+  ],
+  "title": "ContentTeamRenderRequestV2",
+  "type": "object"
+}

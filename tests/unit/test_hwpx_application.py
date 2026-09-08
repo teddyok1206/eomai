@@ -13,6 +13,7 @@ import pytest
 from eom_catalog_contracts import MockExamAssemblyManifestV1, MockExamAssemblyManifestV2
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
+    ContentTeamBuildResultV3,
     ContentTeamHandoffMember,
     ContentTeamHandoffSnapshot,
 )
@@ -839,6 +840,81 @@ def test_v2_assembly_item_resolution_uses_and_cross_checks_direct_content_pointe
     component["artifact_revision_id"] = "rev_" + "0" * 32
     with pytest.raises(HwpxManagerError, match="differs from its Item Revision"):
         service._resolve_items(manifest)
+
+
+def test_content_team_completed_v3_build_replays_exact_typed_receipt() -> None:
+    build_id = "hwpxbuild_" + "1" * 32
+    result = ContentTeamBuildResultV3(
+        build_id=build_id,
+        item_revision_id="itemrev_" + "2" * 32,
+        source_artifact_id="artifact_" + "3" * 32,
+        source_artifact_revision_id="rev_" + "4" * 32,
+        source_json_sha256="sha256:" + "5" * 64,
+        source_markdown_sha256="sha256:" + "6" * 64,
+        status="SUCCEEDED",
+        output_file="output/content-team-item.hwpx",
+        output_sha256="sha256:" + "7" * 64,
+        package_manifest_file="output/package-manifest.json",
+        renderer_report_file="output/content-team-validation.json",
+        equation_count=1,
+        table_count=2,
+        visual_count=0,
+        labeled_block_count=0,
+        warnings=(),
+        errors=(),
+        started_at=datetime(2026, 9, 8, tzinfo=UTC),
+        completed_at=datetime(2026, 9, 8, 0, 0, 1, tzinfo=UTC),
+        image_set_sha256=content_sha256([]),
+        embedded_image_count=0,
+    )
+
+    class ReplaySession:
+        def __init__(self, raw: dict[str, Any]) -> None:
+            self.job = SimpleNamespace(
+                job_id="job_" + "8" * 32,
+                status="SUCCEEDED",
+                revision_id="rev_" + "9" * 32,
+                logical_artifact_id="artifact_" + "a" * 32,
+            )
+            self.revision = SimpleNamespace(
+                result={
+                    "builder_result": raw,
+                    "native_equation_count": 1,
+                    "native_table_count": 2,
+                },
+                content_hash="sha256:" + "b" * 64,
+            )
+
+        def __enter__(self) -> ReplaySession:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            pass
+
+        def get(self, _model: object, identifier: str) -> SimpleNamespace | None:
+            if identifier == self.job.job_id:
+                return self.job
+            if identifier == self.job.revision_id:
+                return self.revision
+            return None
+
+    service = object.__new__(ContentTeamHwpxService)
+    raw = result.model_dump(mode="json")
+    service.sessions = lambda: ReplaySession(raw)  # type: ignore[assignment]
+
+    receipt = service._completed_receipt("job_" + "8" * 32, expected_build_id=build_id)
+
+    assert receipt.build_id == build_id
+    assert receipt.output_sha256 == "sha256:" + "b" * 64
+    assert receipt.native_equation_count == 1
+    assert receipt.native_table_count == 2
+
+    mixed = dict(raw)
+    mixed["renderer_version"] = "2.0.0"
+    service.sessions = lambda: ReplaySession(mixed)  # type: ignore[assignment]
+    with pytest.raises(HwpxManagerError) as error:
+        service._completed_receipt("job_" + "8" * 32, expected_build_id=build_id)
+    assert error.value.code == HwpxManagerErrorCode.HWPX_RESULT_INVALID
 
 
 def test_content_team_batch_member_resolver_uses_two_indexed_queries(tmp_path: Path) -> None:

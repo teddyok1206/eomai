@@ -1,0 +1,422 @@
+{
+  "$defs": {
+    "ContentTeamExamAssemblyPointerV3": {
+      "additionalProperties": false,
+      "description": "Exact V3 Assembly identity for score-preserving content V3 rendering.",
+      "properties": {
+        "assembly_schema_version": {
+          "const": "mock-exam-assembly-manifest/3.0",
+          "title": "Assembly Schema Version",
+          "type": "string"
+        },
+        "assessment_assembly_id": {
+          "pattern": "^assembly_[a-f0-9]{32}$",
+          "title": "Assessment Assembly Id",
+          "type": "string"
+        },
+        "assessment_assembly_revision_id": {
+          "pattern": "^assemblyrev_[a-f0-9]{32}$",
+          "title": "Assessment Assembly Revision Id",
+          "type": "string"
+        },
+        "graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[a-f0-9]{32}$",
+          "title": "Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "graph_snapshot_sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Graph Snapshot Sha256",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "plan_sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Plan Sha256",
+          "type": "string"
+        },
+        "policy_revision_id": {
+          "pattern": "^assemblypolicyrev_[a-f0-9]{32}$",
+          "title": "Policy Revision Id",
+          "type": "string"
+        },
+        "policy_sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Policy Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assessment_assembly_id",
+        "assessment_assembly_revision_id",
+        "manifest_sha256",
+        "policy_revision_id",
+        "policy_sha256",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256",
+        "assembly_schema_version",
+        "plan_sha256"
+      ],
+      "title": "ContentTeamExamAssemblyPointerV3",
+      "type": "object"
+    },
+    "ContentTeamExamImageSource": {
+      "additionalProperties": false,
+      "properties": {
+        "alt_text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Alt Text",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^artifact_[a-f0-9]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_member": {
+          "const": "generated-stimulus.png",
+          "title": "Artifact Member",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[a-f0-9]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "file_name": {
+          "pattern": "^input/items/[0-9]{3}/visual-[01]\\.png$",
+          "title": "File Name",
+          "type": "string"
+        },
+        "height_px": {
+          "const": 500,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "label": {
+          "enum": [
+            "",
+            "(가)",
+            "(나)"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "image/png",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/generated-item/stimulus-png/3.0",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "visual_ordinal": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Visual Ordinal",
+          "type": "integer"
+        },
+        "width_px": {
+          "const": 800,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "visual_ordinal",
+        "label",
+        "artifact_id",
+        "artifact_revision_id",
+        "artifact_member",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "width_px",
+        "height_px",
+        "alt_text",
+        "file_name"
+      ],
+      "title": "ContentTeamExamImageSource",
+      "type": "object"
+    },
+    "ContentTeamExamItemSourceV3": {
+      "additionalProperties": false,
+      "description": "Exam member pointers bound to ITEM_CONTENT V3 and Markdown V2.",
+      "properties": {
+        "display_number": {
+          "pattern": "^[1-9][0-9]{0,2}$",
+          "title": "Display Number",
+          "type": "string"
+        },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/ContentTeamExamImageSource"
+          },
+          "maxItems": 2,
+          "title": "Images",
+          "type": "array"
+        },
+        "item_id": {
+          "pattern": "^item_[a-f0-9]{32}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "item_manifest_sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Item Manifest Sha256",
+          "type": "string"
+        },
+        "item_revision_id": {
+          "pattern": "^itemrev_[a-f0-9]{32}$",
+          "title": "Item Revision Id",
+          "type": "string"
+        },
+        "json_file": {
+          "pattern": "^input/items/[0-9]{3}/item-content\\.json$",
+          "title": "Json File",
+          "type": "string"
+        },
+        "markdown_file": {
+          "pattern": "^input/items/[0-9]{3}/content-team-item\\.md$",
+          "title": "Markdown File",
+          "type": "string"
+        },
+        "placement_id": {
+          "pattern": "^placement_[a-f0-9]{32}$",
+          "title": "Placement Id",
+          "type": "string"
+        },
+        "points_milli": {
+          "enum": [
+            1500,
+            2000,
+            2500,
+            3000
+          ],
+          "title": "Points Milli",
+          "type": "integer"
+        },
+        "position": {
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "source_artifact_id": {
+          "pattern": "^artifact_[a-f0-9]{32}$",
+          "title": "Source Artifact Id",
+          "type": "string"
+        },
+        "source_artifact_revision_id": {
+          "pattern": "^rev_[a-f0-9]{32}$",
+          "title": "Source Artifact Revision Id",
+          "type": "string"
+        },
+        "source_json_sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Source Json Sha256",
+          "type": "string"
+        },
+        "source_markdown_schema_ref": {
+          "const": "eom://schemas/hwpx/content-team-editorial-markdown/2.0",
+          "title": "Source Markdown Schema Ref",
+          "type": "string"
+        },
+        "source_markdown_sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Source Markdown Sha256",
+          "type": "string"
+        },
+        "source_schema_ref": {
+          "const": "eom.assessment.item-content/3.0",
+          "title": "Source Schema Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "position",
+        "placement_id",
+        "item_id",
+        "item_revision_id",
+        "item_manifest_sha256",
+        "source_artifact_id",
+        "source_artifact_revision_id",
+        "source_json_sha256",
+        "source_markdown_sha256",
+        "json_file",
+        "markdown_file",
+        "images",
+        "display_number",
+        "points_milli",
+        "source_schema_ref",
+        "source_markdown_schema_ref"
+      ],
+      "title": "ContentTeamExamItemSourceV3",
+      "type": "object"
+    },
+    "ContentTeamHandoffMember": {
+      "additionalProperties": false,
+      "properties": {
+        "purpose": {
+          "enum": [
+            "automation-template",
+            "equation-prototypes",
+            "visual-slots-left-right",
+            "visual-slots-two-tables",
+            "labeled-data-condition",
+            "table-2-column",
+            "table-3-column",
+            "table-3-column-long-equation",
+            "table-4-column",
+            "inquiry-experiment-box"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "maximum": 26214400,
+          "minimum": 1,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "purpose",
+        "sha256",
+        "size"
+      ],
+      "title": "ContentTeamHandoffMember",
+      "type": "object"
+    },
+    "ContentTeamHandoffSnapshot": {
+      "additionalProperties": false,
+      "description": "Immutable source/archive identity used by every renderer attempt.",
+      "properties": {
+        "archive_file": {
+          "const": "input/handoff.zip",
+          "title": "Archive File",
+          "type": "string"
+        },
+        "archive_sha256": {
+          "const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+          "title": "Archive Sha256",
+          "type": "string"
+        },
+        "artifact_id": {
+          "pattern": "^artifact_[a-f0-9]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[a-f0-9]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "entry_count": {
+          "const": 606,
+          "title": "Entry Count",
+          "type": "integer"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/ContentTeamHandoffMember"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "title": "Members",
+          "type": "array"
+        },
+        "profile_sha256": {
+          "const": "sha256:ce08671ad433026ec51e68ddfc6a4d7ffe33ae8a792c1791dfa26b9b62e78863",
+          "title": "Profile Sha256",
+          "type": "string"
+        },
+        "uncompressed_bytes": {
+          "const": 49280719,
+          "title": "Uncompressed Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "archive_sha256",
+        "archive_file",
+        "entry_count",
+        "uncompressed_bytes",
+        "profile_sha256",
+        "members"
+      ],
+      "title": "ContentTeamHandoffSnapshot",
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/hwpx/hwpx-content-team-exam-render-request-v3.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "assembly": {
+      "$ref": "#/$defs/ContentTeamExamAssemblyPointerV3"
+    },
+    "build_id": {
+      "pattern": "^hwpxbuild_[a-f0-9]{32}$",
+      "title": "Build Id",
+      "type": "string"
+    },
+    "handoff": {
+      "$ref": "#/$defs/ContentTeamHandoffSnapshot"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/ContentTeamExamItemSourceV3"
+      },
+      "maxItems": 200,
+      "minItems": 1,
+      "title": "Items",
+      "type": "array"
+    },
+    "output_directory": {
+      "const": "output",
+      "title": "Output Directory",
+      "type": "string"
+    },
+    "renderer_profile": {
+      "const": "content-team-hwp-question-editor-exam-v1",
+      "title": "Renderer Profile",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "content-team-exam-render-request/3.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "renderer_profile",
+    "build_id",
+    "assembly",
+    "handoff",
+    "items",
+    "output_directory"
+  ],
+  "title": "ContentTeamExamRenderRequestV3",
+  "type": "object"
+}

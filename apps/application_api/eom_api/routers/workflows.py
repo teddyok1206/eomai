@@ -147,6 +147,11 @@ def _action(
     idempotency_key: str,
     expected_version: int,
 ) -> CommandResult:
+    request.app.state.services.commands.require_public_workflow_action_allowed(
+        workflow_id,
+        command_type,
+    )
+
     def execute() -> CommandResult:
         actor = request.state.request_context.actor()
         submission_key = request.app.state.services.idempotency.submission_key(

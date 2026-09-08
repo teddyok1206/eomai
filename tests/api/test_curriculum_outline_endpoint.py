@@ -11,6 +11,7 @@ from eom_api.routers.curriculum import (
     integrated_science_graph_capability,
 )
 from eom_api.routers.item_bank import item_bank_entries, production_item_candidates
+from eom_api.services.query_adapter import _production_content_profile
 from eom_api_contracts import (
     AssessmentItemOccurrenceViewV2,
     CurriculumGraphCapabilityView,
@@ -34,6 +35,7 @@ ITEM_BANK_PATH = "/api/v1/item-bank/entries"
 PRODUCTION_CANDIDATES_PATH = "/api/v1/item-bank/production-candidates"
 MOCK_EXAM_PLAN_PATH = "/api/v1/assessment-assemblies/plan"
 MOCK_EXAM_PLANNED_CREATE_PATH = "/api/v1/assessment-assemblies/planned"
+MOCK_EXAM_GET_PATH = "/api/v1/assessment-assemblies/{assembly_revision_id}"
 
 
 def test_curriculum_outline_endpoint_is_authenticated_and_author_permissioned() -> None:
@@ -58,9 +60,46 @@ def test_curriculum_outline_endpoint_is_authenticated_and_author_permissioned() 
         production_operation = app.openapi()["paths"][PRODUCTION_CANDIDATES_PATH]["get"]
         assert production_operation["operationId"] == "production_item_candidate_list"
         assert production_operation["x-eom-permission"] == "item:read"
+        content_profile_parameter = next(
+            row for row in production_operation["parameters"] if row["name"] == "content_profile"
+        )
+        assert set(content_profile_parameter["schema"]["anyOf"][0]["enum"]) == {
+            "LEGACY_ITEM_CONTENT_V1",
+            "CONTENT_TEAM_ITEM_CONTENT_V2",
+            "CONTENT_TEAM_ITEM_CONTENT_V3",
+            "UNSUPPORTED",
+        }
+        candidate_response_ref = production_operation["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["$ref"]
+        candidate_response = app.openapi()["components"]["schemas"][
+            candidate_response_ref.rsplit("/", 1)[-1]
+        ]
+        candidate_items = candidate_response["properties"]["data"]["items"]
+        assert candidate_items["discriminator"]["mapping"] == {
+            "production-item-candidate-view/1.0": (
+                "#/components/schemas/ProductionItemCandidateView"
+            ),
+            "production-item-candidate-view/2.0": (
+                "#/components/schemas/ProductionItemCandidateViewV2"
+            ),
+        }
         plan_operation = app.openapi()["paths"][MOCK_EXAM_PLAN_PATH]["get"]
         assert plan_operation["operationId"] == "mock_exam_assembly_plan_preview"
         assert plan_operation["x-eom-permission"] == "deliverable:read"
+        openapi = app.openapi()
+        components = openapi["components"]["schemas"]
+        assert set(components["MockExamAssemblyPlanView"]["discriminator"]["mapping"]) == {
+            "mock-exam-assembly-plan/1.0",
+            "mock-exam-assembly-plan/2.0",
+        }
+        assembly_operation = openapi["paths"][MOCK_EXAM_GET_PATH]["get"]
+        assert assembly_operation["operationId"] == "mock_exam_assembly_get"
+        assert set(components["MockExamAssemblyViewContract"]["discriminator"]["mapping"]) == {
+            "mock-exam-assembly-manifest/1.0",
+            "mock-exam-assembly-manifest/2.0",
+            "mock-exam-assembly-manifest/3.0",
+        }
         create_operation = app.openapi()["paths"][MOCK_EXAM_PLANNED_CREATE_PATH]["post"]
         assert create_operation["operationId"] == "planned_mock_exam_assembly_create"
         assert create_operation["x-eom-permission"] == "deliverable:create"
@@ -303,7 +342,7 @@ def test_production_candidate_route_forwards_server_owned_capability_filters() -
         request,
         curriculum_unit_key="eom.is.middle.3-3",
         source_class="APPROVED_ITEM",
-        content_profile="CONTENT_TEAM_ITEM_CONTENT_V2",
+        content_profile="CONTENT_TEAM_ITEM_CONTENT_V3",
         eligible=True,
         item_type_key="multiple-choice",
         difficulty_band="MEDIUM",
@@ -314,10 +353,30 @@ def test_production_candidate_route_forwards_server_owned_capability_filters() -
     assert queries.kwargs == {
         "curriculum_unit_key": "eom.is.middle.3-3",
         "source_class": "APPROVED_ITEM",
-        "content_profile": "CONTENT_TEAM_ITEM_CONTENT_V2",
+        "content_profile": "CONTENT_TEAM_ITEM_CONTENT_V3",
         "eligible": True,
         "item_type_key": "multiple-choice",
         "difficulty_band": "MEDIUM",
         "limit": 25,
         "cursor": None,
     }
+
+
+def test_production_candidate_query_classifies_v3_only_by_the_exact_pointer_family() -> None:
+    assert (
+        _production_content_profile("application/json", "eom.assessment.item-content/3.0")
+        == "CONTENT_TEAM_ITEM_CONTENT_V3"
+    )
+    assert (
+        _production_content_profile(
+            "application/json", "eom://schemas/item-registry/assessment-item-content-v3"
+        )
+        == "CONTENT_TEAM_ITEM_CONTENT_V3"
+    )
+    assert (
+        _production_content_profile("application/json", "eom.assessment.item-content/2.0")
+        == "CONTENT_TEAM_ITEM_CONTENT_V2"
+    )
+    assert _production_content_profile("text/plain", "eom.assessment.item-content/3.0") == (
+        "UNSUPPORTED"
+    )

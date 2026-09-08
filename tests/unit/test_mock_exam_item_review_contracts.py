@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -8,21 +9,28 @@ from typing import Any
 import pytest
 from eom_catalog_contracts.item_review import (
     MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA,
     MOCK_EXAM_ITEM_REVIEW_PUBLICATION_COMMAND_SCHEMA,
     MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_SCHEMA,
+    MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V2_SCHEMA,
     MOCK_EXAM_REVIEW_ELIGIBILITY_QUERY_SCHEMA,
     MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_SCHEMA,
+    MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V2_SCHEMA,
     InspectMockExamReviewEligibilityQuery,
     MockExamEligibilityFinding,
     MockExamEligibilityFindingCounts,
     MockExamItemReviewDecisionV1,
+    MockExamItemReviewDecisionV2,
     MockExamItemReviewPublicationResult,
+    MockExamItemReviewPublicationResultV2,
     MockExamReviewEligibilityResult,
+    MockExamReviewEligibilityResultV2,
     PublishMockExamItemReviewCommand,
     mock_exam_item_review_decision_sha256,
 )
 from eom_catalog_contracts.validation import validate_contract
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -69,9 +77,12 @@ def test_item_review_schemas_are_draft_2020_12_and_packaged_byte_identically() -
     for file_name in (
         "mock-exam-item-review-publication-command-v1.schema.json",
         "mock-exam-item-review-publication-result-v1.schema.json",
+        "mock-exam-item-review-publication-result-v2.schema.json",
         "mock-exam-item-review-decision-v1.schema.json",
+        "mock-exam-item-review-decision-v2.schema.json",
         "mock-exam-review-eligibility-query-v1.schema.json",
         "mock-exam-review-eligibility-result-v1.schema.json",
+        "mock-exam-review-eligibility-result-v2.schema.json",
     ):
         canonical = ROOT / "schemas/assessment-assembly" / file_name
         packaged = (
@@ -83,6 +94,23 @@ def test_item_review_schemas_are_draft_2020_12_and_packaged_byte_identically() -
         schema = json.loads(canonical.read_text(encoding="utf-8"))
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
         Draft202012Validator.check_schema(schema)
+
+
+def test_historical_review_v1_schemas_are_byte_pinned() -> None:
+    expected = {
+        "mock-exam-item-review-decision-v1.schema.json": (
+            "5f0934dfb60d8daf03f32aee080ea0f75b5930553e7bc697a592954552e9fd80"
+        ),
+        "mock-exam-item-review-publication-result-v1.schema.json": (
+            "7c5925cea23b97b882ed12776c993db611fabac35b5056c41833f727eb989061"
+        ),
+        "mock-exam-review-eligibility-result-v1.schema.json": (
+            "5d8ce21540dbda8f38cda3f008e3379646e06505c6435e95b16095f1a6e8f7c2"
+        ),
+    }
+    for file_name, expected_sha256 in expected.items():
+        canonical = ROOT / "schemas/assessment-assembly" / file_name
+        assert hashlib.sha256(canonical.read_bytes()).hexdigest() == expected_sha256
 
 
 def test_publication_command_requires_the_private_catalog_operation() -> None:
@@ -101,9 +129,7 @@ def test_publication_command_requires_the_private_catalog_operation() -> None:
     assert value["expected_workflow_id"] == _id("workflow_", "4")
 
     with pytest.raises(ValidationError):
-        PublishMockExamItemReviewCommand.model_validate(
-            {**value, "idempotency_key": "bad\nkey!"}
-        )
+        PublishMockExamItemReviewCommand.model_validate({**value, "idempotency_key": "bad\nkey!"})
 
 
 def test_preapproval_eligibility_contract_exposes_review_content_and_stable_reason() -> None:
@@ -249,3 +275,102 @@ def test_publication_result_is_a_schema_valid_decision_artifact_receipt() -> Non
     value = result.model_dump(mode="json")
     validate_contract(MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_SCHEMA, value)
     assert value["operation"] == "PUBLISH_MOCK_EXAM_ITEM_REVIEW"
+
+
+def test_review_result_9_uses_only_additive_v2_decision_and_receipt_contracts() -> None:
+    value = _decision_value()
+    value["schema_version"] = "mock-exam-item-review-decision/2.0"
+    value["source_review"] = {
+        **value["source_review"],
+        "result_schema": "review-result@9.0",
+    }
+    value["decision_sha256"] = mock_exam_item_review_decision_sha256(value)
+
+    with pytest.raises(ValidationError):
+        MockExamItemReviewDecisionV1.model_validate(value)
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract(MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA, value)
+
+    decision = MockExamItemReviewDecisionV2.model_validate(value)
+    validate_contract(MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA, decision.model_dump(mode="json"))
+    mixed_decision = {
+        **value,
+        "source_review": {**value["source_review"], "result_schema": "review-result@8.0"},
+    }
+    mixed_decision["decision_sha256"] = mock_exam_item_review_decision_sha256(mixed_decision)
+    with pytest.raises(ValidationError):
+        MockExamItemReviewDecisionV2.model_validate(mixed_decision)
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract(MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA, mixed_decision)
+    receipt = MockExamItemReviewPublicationResultV2(
+        item_review_record_id=decision.item_review_record_id,
+        item_revision_id=decision.item_revision_id,
+        workflow_id=decision.workflow_id,
+        review_step_run_id=decision.source_review.step_run_id,
+        human_approval_request_id=decision.human_approval.approval_request_id,
+        review_artifact_id=_id("artifact_", "d"),
+        review_artifact_revision_id=_id("rev_", "e"),
+        review_sha256="sha256:" + "f" * 64,
+        decision_sha256=decision.decision_sha256,
+        review_result_schema="review-result@9.0",
+        final_rating=decision.final_rating,
+        finding_counts=decision.source_review.finding_counts,
+        reviewer_operator_id=decision.human_approval.reviewer_operator_id,
+        rating_policy_revision_id=decision.rating_policy_revision_id,
+        rating_policy_sha256=decision.rating_policy_sha256,
+        created=True,
+    )
+    validate_contract(
+        MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V2_SCHEMA,
+        receipt.model_dump(mode="json"),
+    )
+    mixed_receipt = {**receipt.model_dump(mode="json"), "review_result_schema": "review-result@8.0"}
+    with pytest.raises(ValidationError):
+        MockExamItemReviewPublicationResultV2.model_validate(mixed_receipt)
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract(MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V2_SCHEMA, mixed_receipt)
+    application_response = {
+        "status": "OK",
+        "operation": "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+        "item_review": receipt.model_dump(mode="json"),
+    }
+    validate_contract("catalog-application-response-v12", application_response)
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract(
+            MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_SCHEMA,
+            receipt.model_dump(mode="json"),
+        )
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("catalog-application-response-v11", application_response)
+
+
+def test_review_result_9_eligibility_uses_only_additive_v2_contract() -> None:
+    result = MockExamReviewEligibilityResultV2(
+        workflow_id=_id("workflow_", "1"),
+        workflow_lock_version=1,
+        approval_state="PENDING",
+        approval_request_id=_id("approval_", "2"),
+        approval_lock_version=1,
+        reviewer_operator_id=None,
+        approved_at=None,
+        review_step_run_id=_id("steprun_", "3"),
+        review_artifact_id=_id("artifact_", "4"),
+        review_artifact_revision_id=_id("rev_", "5"),
+        review_sha256="sha256:" + "6" * 64,
+        review_result_schema="review-result@9.0",
+        review_summary="V3 문항 검토 근거가 승인 전에 고정되어 있다.",
+        findings=(),
+        finding_counts=MockExamEligibilityFindingCounts(info=0, warning=0, blocking=0),
+        eligible=True,
+        eligibility_reason="ELIGIBLE",
+    )
+    value = result.model_dump(mode="json")
+    validate_contract(MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V2_SCHEMA, value)
+    with pytest.raises(ValidationError):
+        MockExamReviewEligibilityResultV2.model_validate(
+            {**value, "review_result_schema": "review-result@8.0"}
+        )
+    with pytest.raises(ValidationError):
+        MockExamReviewEligibilityResult.model_validate(value)
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract(MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_SCHEMA, value)

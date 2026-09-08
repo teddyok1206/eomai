@@ -11,6 +11,7 @@ from typing import Annotated, Any, Literal
 from eom_catalog_contracts import (
     AssessmentItemContent,
     AssessmentItemContentV2,
+    AssessmentItemContentV3,
     EducationalRetrievalRequirement,
     EquationBlock,
     IntegratedScienceCurriculumScope,
@@ -45,6 +46,7 @@ from eom_catalog_contracts import (
     validate_reviewed_authoring_guidance,
 )
 from eom_catalog_contracts.mock_exam_production_plan import ContentTeamMockExamSlotV1
+from eom_image_contracts import sanitize_svg_overlay
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -282,9 +284,7 @@ class WorkflowProductionOccurrence(FrozenModel):
 class ExpectedWorkflowResolution(FrozenModel):
     """Exact immutable catalog and control-plane dependencies required at start."""
 
-    schema_version: Literal["workflow-expected-resolution/1.0"] = (
-        "workflow-expected-resolution/1.0"
-    )
+    schema_version: Literal["workflow-expected-resolution/1.0"] = "workflow-expected-resolution/1.0"
     workflow_definition_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
     workflow_definition_version: str = Field(
         pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
@@ -610,6 +610,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.16.0",
         "workflow-role/1.17.0",
         "workflow-role/1.18.0",
+        "workflow-role/1.19.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -714,6 +715,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.16.0",
         "workflow-role/1.17.0",
         "workflow-role/1.18.0",
+        "workflow-role/1.19.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1427,6 +1429,93 @@ class ContentTeamRegistrationRoleResultV8(RoleResultBase):
     output: KnowledgeRegistrationOutput
 
 
+class KnowledgeAuthoringMetadataV2(FrozenModel):
+    """Truthful worker provenance for general and Graph-backed generation."""
+
+    subject: str = Field(min_length=1, max_length=80)
+    topic: str = Field(min_length=1, max_length=160)
+    difficulty: Literal["easy", "medium", "hard"]
+    knowledge_source_mode: Literal["general_model_knowledge", "graph_grounded"]
+
+
+class ContentTeamAuthoringOutputV9(FrozenModel):
+    draft: AssessmentItemContentV3
+    metadata: KnowledgeAuthoringMetadataV2
+
+
+class ContentTeamAuthoringRoleResultV9(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.19.0"] = "workflow-role/1.19.0"
+    role: Literal["authoring"]
+    output: ContentTeamAuthoringOutputV9
+
+
+class GeneratedVectorDrawingV9(GeneratedVectorDrawingV6):
+    """Worker-accepted SVG already proven by the renderer's authoritative grammar."""
+
+    svg_overlay: str = Field(
+        min_length=64,
+        max_length=65_536,
+        json_schema_extra={
+            "not": {
+                "anyOf": [
+                    {"pattern": "[Uu][Rr][Ll]\\s*\\("},
+                    {"pattern": "<[Ll][Ii][Nn][Ee][Aa][Rr][Gg][Rr][Aa][Dd][Ii][Ee][Nn][Tt]\\b"},
+                    {"pattern": "<[Rr][Aa][Dd][Ii][Aa][Ll][Gg][Rr][Aa][Dd][Ii][Ee][Nn][Tt]\\b"},
+                    {"pattern": "<[Ss][Cc][Rr][Ii][Pp][Tt]\\b"},
+                    {"pattern": "<[Ss][Tt][Yy][Ll][Ee]\\b"},
+                    {"pattern": "<[Ff][Oo][Rr][Ee][Ii][Gg][Nn][Oo][Bb][Jj][Ee][Cc][Tt]\\b"},
+                    {"pattern": "<[Ii][Mm][Aa][Gg][Ee]\\b"},
+                ]
+            }
+        },
+    )
+
+    @model_validator(mode="after")
+    def safe_svg_subset(self) -> GeneratedVectorDrawingV9:
+        sanitize_svg_overlay(self.svg_overlay, self.required_labels)
+        return self
+
+
+GeneratedDrawingV9 = Annotated[
+    GeneratedLineGraphDrawingV6 | GeneratedVectorDrawingV9,
+    Field(discriminator="kind"),
+]
+
+
+class ContentTeamIllustrationDrawingV9(ContentTeamIllustrationDrawingV8):
+    drawing: GeneratedDrawingV9
+
+
+class ContentTeamImageOutputV9(FrozenModel):
+    drawings: tuple[ContentTeamIllustrationDrawingV9, ...] = Field(min_length=1, max_length=2)
+    summary: str = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def ordered_unique_slots(self) -> ContentTeamImageOutputV9:
+        ordinals = tuple(item.visual_ordinal for item in self.drawings)
+        if ordinals != tuple(sorted(set(ordinals))):
+            raise ValueError("content-team image slots must be unique and ordered")
+        return self
+
+
+class ContentTeamImageRoleResultV9(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.19.0"] = "workflow-role/1.19.0"
+    role: Literal["image"]
+    output: ContentTeamImageOutputV9
+
+
+class ContentTeamReviewRoleResultV9(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.19.0"] = "workflow-role/1.19.0"
+    role: Literal["review"]
+    output: KnowledgeReviewOutput
+
+
+class ContentTeamRegistrationRoleResultV9(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.19.0"] = "workflow-role/1.19.0"
+    role: Literal["item_management"]
+    output: KnowledgeRegistrationOutput
+
+
 class KnowledgeAnalysisProposalOutput(FrozenModel):
     proposal: KnowledgeAnalysisWorkerProposal
 
@@ -1561,6 +1650,10 @@ RoleResult = (
     | ContentTeamImageRoleResultV8
     | ContentTeamReviewRoleResultV8
     | ContentTeamRegistrationRoleResultV8
+    | ContentTeamAuthoringRoleResultV9
+    | ContentTeamImageRoleResultV9
+    | ContentTeamReviewRoleResultV9
+    | ContentTeamRegistrationRoleResultV9
     | KnowledgeAnalysisProposalRoleResult
     | KnowledgeAnalysisProposalRoleResultV2
     | KnowledgeAnalysisProposalRoleResultV3

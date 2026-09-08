@@ -49,11 +49,23 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:7c5925cea23b97b882ed12776c993db611fabac35b5056c41833f727eb989061",
         ),
+        "mock-exam-item-review-publication-result-v2": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-item-review-publication-result-v2.schema.json",
+            "resources/assessment-assembly/mock-exam-item-review-publication-result-v2.schema.json",
+            "2.0",
+            "sha256:50dddba5c0167a0edb6993825d7ad62abb6c56bb6c707e2d103e7a2adedaa065",
+        ),
         "mock-exam-item-review-decision": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-item-review-decision-v1.schema.json",
             "resources/assessment-assembly/mock-exam-item-review-decision-v1.schema.json",
             "1.0",
             "sha256:5f0934dfb60d8daf03f32aee080ea0f75b5930553e7bc697a592954552e9fd80",
+        ),
+        "mock-exam-item-review-decision-v2": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-item-review-decision-v2.schema.json",
+            "resources/assessment-assembly/mock-exam-item-review-decision-v2.schema.json",
+            "2.0",
+            "sha256:7cb83fc19ce124f49bdd9829e3a846c318f85dfa6f3578d69594404fd414bf76",
         ),
         "mock-exam-review-eligibility-query": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json",
@@ -67,11 +79,23 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:5d8ce21540dbda8f38cda3f008e3379646e06505c6435e95b16095f1a6e8f7c2",
         ),
+        "mock-exam-review-eligibility-result-v2": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-review-eligibility-result-v2.schema.json",
+            "resources/assessment-assembly/mock-exam-review-eligibility-result-v2.schema.json",
+            "2.0",
+            "sha256:d1de598f3f8d754df44aff968199eb532eb0bb3ba0c00a72a04ac09a5f5e1557",
+        ),
         "mock-exam-production-plan": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-production-plan-v1.schema.json",
             "resources/assessment-assembly/mock-exam-production-plan-v1.schema.json",
             "1.0",
             "sha256:9f0cd769669d7394c59a8683f467bcc93a0846f6e6620a64d374f17802099f41",
+        ),
+        "mock-exam-production-plan-v2": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-production-plan-v2.schema.json",
+            "resources/assessment-assembly/mock-exam-production-plan-v2.schema.json",
+            "2.0",
+            "sha256:d3bddcbbb236cbfba595587ea373445224de9d02bfa2e975a7dd5010ca48483f",
         ),
         "mock-exam-assembly-manifest": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
@@ -85,11 +109,23 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:4c6e6788af06d6d11e146bc740c81c89659a250207d23257f4f346512752418a",
         ),
+        "mock-exam-assembly-manifest-v3": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-assembly-manifest-v3.schema.json",
+            "resources/assessment-assembly/mock-exam-assembly-manifest-v3.schema.json",
+            "3.0",
+            "sha256:fed79f9105f6ea8cd5f2d9bfa53a5c26114c5b880be3ece3befec51f48155c9e",
+        ),
         "mock-exam-assembly-plan": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-assembly-plan-v1.schema.json",
             "resources/assessment-assembly/mock-exam-assembly-plan-v1.schema.json",
             "1.0",
             "sha256:b962682195f8b5496fbcce89eed9b4f3daf9a3f27ba07c37307f1a78bce1cd56",
+        ),
+        "mock-exam-assembly-plan-v2": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-assembly-plan-v2.schema.json",
+            "resources/assessment-assembly/mock-exam-assembly-plan-v2.schema.json",
+            "2.0",
+            "sha256:6b349f47507b2cb81a0e7e8a210efe63df6f55a96fd41d7bd3a86486f50cf891",
         ),
         "mock-exam-layout-policy": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-layout-policy-v1.schema.json",
@@ -457,6 +493,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:2136413f5059905be0c066c8fd657cbfc5238ba47e36ac3502be669ae130b9a8",
         ),
+        "assessment-item-content-v3": CatalogSchemaResource(
+            "schemas/item-registry/assessment-item-content-v3.schema.json",
+            "resources/item-registry/assessment-item-content-v3.schema.json",
+            "3.0",
+            "sha256:3e9eada3374173119a74ddc7da1b21b6cf30d688d9a561c424120e77801a3596",
+        ),
         "catalog-application-request": CatalogSchemaResource(
             "schemas/catalog-application/catalog-application-request-v1.schema.json",
             "resources/catalog-application/catalog-application-request-v1.schema.json",
@@ -559,6 +601,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "11.0",
             "sha256:a832103de53ed2a258ea0e016677495d4818ed2c763dcb191153512f6350c5b4",
         ),
+        "catalog-application-request-v12": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v12.schema.json",
+            "resources/catalog-application/catalog-application-request-v12.schema.json",
+            "12.0",
+            "sha256:1fa2c37672bfadfa1947b4a19634726d2550d3d8c4c3a3cc614a6070e105a243",
+        ),
         "catalog-application-response-v7": CatalogSchemaResource(
             "schemas/catalog-application/catalog-application-response-v7.schema.json",
             "resources/catalog-application/catalog-application-response-v7.schema.json",
@@ -588,6 +636,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/catalog-application/catalog-application-response-v11.schema.json",
             "11.0",
             "sha256:19f0d075aadbe36cb8e32ed6d98216340e944c02dd27c003e4abb13c0478c5e7",
+        ),
+        "catalog-application-response-v12": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v12.schema.json",
+            "resources/catalog-application/catalog-application-response-v12.schema.json",
+            "12.0",
+            "sha256:81d158d1f74da6ca3150c2d44a4cb91eb9785575a3d508688df6c537ad93d800",
         ),
         "catalog-item-media-request": CatalogSchemaResource(
             "schemas/catalog-application/catalog-item-media-request-v1.schema.json",

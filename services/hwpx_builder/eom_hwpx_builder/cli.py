@@ -32,6 +32,13 @@ from eom_hwpx_builder.util import write_json
 from eom_hwpx_builder.validation import validate_structure
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
+CONTENT_TEAM_EXAM_REQUEST_SCHEMA_VERSIONS = frozenset(
+    {
+        "content-team-exam-render-request/1.0",
+        "content-team-exam-render-request/2.0",
+        "content-team-exam-render-request/3.0",
+    }
+)
 
 
 def _echo(value: object) -> None:
@@ -149,18 +156,18 @@ def render_content_team(
     request_value: object = None
     try:
         request_value = json.loads(_read_request(request).decode("utf-8"))
-        if isinstance(request_value, dict) and request_value.get("schema_version") in {
-            "content-team-exam-render-request/1.0",
-            "content-team-exam-render-request/2.0",
-        }:
+        if (
+            isinstance(request_value, dict)
+            and request_value.get("schema_version") in CONTENT_TEAM_EXAM_REQUEST_SCHEMA_VERSIONS
+        ):
             status = render_content_team_exam_workspace(request, result).status
         else:
             status = render_content_team_workspace(request, result).status
     except Exception as exc:
-        if isinstance(request_value, dict) and request_value.get("schema_version") in {
-            "content-team-exam-render-request/1.0",
-            "content-team-exam-render-request/2.0",
-        }:
+        if (
+            isinstance(request_value, dict)
+            and request_value.get("schema_version") in CONTENT_TEAM_EXAM_REQUEST_SCHEMA_VERSIONS
+        ):
             result_written = (
                 failed_content_team_exam_result(request, result, started, exc) is not None
             )

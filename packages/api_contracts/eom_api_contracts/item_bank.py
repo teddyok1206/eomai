@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -115,6 +115,11 @@ ProductionIneligibilityReason = Literal[
     "ITEM_NOT_ACTIVE",
     "ITEM_REVISION_NOT_ELIGIBLE",
 ]
+ProductionContentProfile = Literal[
+    "LEGACY_ITEM_CONTENT_V1",
+    "CONTENT_TEAM_ITEM_CONTENT_V2",
+    "UNSUPPORTED",
+]
 
 
 class ProductionItemCandidateView(ApiModel):
@@ -197,3 +202,83 @@ class ProductionItemCandidateView(ApiModel):
         ):
             raise ValueError("production eligibility differs from structural Item capability")
         return self
+
+
+class ProductionItemContentComponentViewV2(ProductionItemContentComponentView):
+    """V2 projection adds the pinned editorial-Markdown protocol identity."""
+
+    editorial_markdown_schema_ref: (
+        Literal["eom://schemas/hwpx/content-team-editorial-markdown/2.0"] | None
+    )
+
+    @model_validator(mode="after")
+    def editorial_schema_requires_pointer(self) -> Self:
+        if (
+            self.editorial_markdown_schema_ref is not None
+            and self.editorial_markdown_member is None
+        ):
+            raise ValueError("editorial Markdown schema cannot exist without its artifact pointer")
+        return self
+
+
+ProductionContentProfileV2 = Literal[
+    "LEGACY_ITEM_CONTENT_V1",
+    "CONTENT_TEAM_ITEM_CONTENT_V2",
+    "CONTENT_TEAM_ITEM_CONTENT_V3",
+    "UNSUPPORTED",
+]
+
+
+class ProductionItemCandidateViewV2(ProductionItemCandidateView):
+    """Additive production projection for graph-grounded Item Content V3."""
+
+    schema_version: Literal["production-item-candidate-view/2.0"] = (
+        "production-item-candidate-view/2.0"  # type: ignore[assignment]
+    )
+    content_profile: Literal["CONTENT_TEAM_ITEM_CONTENT_V3"]  # type: ignore[assignment]
+    content_component: ProductionItemContentComponentViewV2
+
+    @model_validator(mode="after")
+    def closed_production_capability(self) -> Self:
+        unit_keys = tuple(unit.unit_key for unit in self.curriculum_units)
+        unit_ids = tuple(unit.curriculum_unit_id for unit in self.curriculum_units)
+        if unit_keys != tuple(sorted(set(unit_keys))) or len(unit_ids) != len(set(unit_ids)):
+            raise ValueError("production candidate curriculum units must be sorted and unique")
+        if (self.source_class == "PAST_EXAM") != (self.past_exam_context is not None):
+            raise ValueError("production candidate source class and past-exam context differ")
+        if self.ineligibility_reasons != tuple(sorted(set(self.ineligibility_reasons))):
+            raise ValueError("production ineligibility reasons must be sorted and unique")
+
+        reasons: list[ProductionIneligibilityReason] = []
+        if self.item_lifecycle_state != "ACTIVE":
+            reasons.append("ITEM_NOT_ACTIVE")
+        if self.item_revision_state not in {"APPROVED", "SUPERSEDED"}:
+            reasons.append("ITEM_REVISION_NOT_ELIGIBLE")
+        component = self.content_component
+        if component.media_type != "application/json" or component.schema_ref not in {
+            "eom.assessment.item-content/3.0",
+            "eom://schemas/item-registry/assessment-item-content-v3",
+        }:
+            raise ValueError("content-team profile differs from its component schema")
+        if (
+            component.editorial_markdown_member is None
+            or component.editorial_markdown_schema_ref
+            != "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
+        ):
+            reasons.append("CONTENT_TEAM_EDITORIAL_MARKDOWN_POINTER_REQUIRED")
+
+        expected = tuple(sorted(reasons))
+        eligible = not expected
+        if (
+            self.ineligibility_reasons != expected
+            or self.mock_exam_assembly_eligible != eligible
+            or self.hwpx_exam_eligible != eligible
+        ):
+            raise ValueError("production eligibility differs from structural Item capability")
+        return self
+
+
+ProductionItemCandidateViewContract = Annotated[
+    ProductionItemCandidateView | ProductionItemCandidateViewV2,
+    Field(discriminator="schema_version"),
+]

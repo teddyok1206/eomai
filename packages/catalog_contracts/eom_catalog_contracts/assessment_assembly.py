@@ -235,6 +235,16 @@ class MockExamContentPointerV1(FrozenModel):
     editorial_markdown_sha256: Sha256
 
 
+class MockExamContentPointerV2(MockExamContentPointerV1):
+    """V3 Item content pointer with an explicit version-bound Markdown contract."""
+
+    schema_ref: Literal["eom.assessment.item-content/3.0"]  # type: ignore[assignment]
+    editorial_markdown_schema_ref: Literal["eom://schemas/hwpx/content-team-editorial-markdown/2.0"]
+
+
+MockExamContentPointerContract = MockExamContentPointerV1 | MockExamContentPointerV2
+
+
 class MockExamReviewPointerV1(FrozenModel):
     item_review_record_id: str = Field(pattern=r"^itemreview_[0-9a-f]{32}$")
     review_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
@@ -277,6 +287,16 @@ class MockExamPlanningCandidateV1(FrozenModel):
         ):
             raise ValueError("past-exam planning candidates require an occurrence placement")
         return self
+
+
+class MockExamPlanningCandidateV2(MockExamPlanningCandidateV1):
+    """Planning candidate backed by one V3 content and Markdown pointer pair."""
+
+    source_score_display: Literal["1.5", "2", "2.5", "3"]  # type: ignore[assignment]
+    content: MockExamContentPointerV2
+
+
+MockExamPlanningCandidateContract = MockExamPlanningCandidateV1 | MockExamPlanningCandidateV2
 
 
 class MockExamUsageSnapshotV1(FrozenModel):
@@ -409,6 +429,16 @@ class MockExamPlannedPlacementV1(FrozenModel):
         return self
 
 
+class MockExamPlannedPlacementV2(MockExamPlannedPlacementV1):
+    """Placement that preserves the V3 content and exact Markdown schema pointer."""
+
+    source_score_display: Literal["1.5", "2", "2.5", "3"]  # type: ignore[assignment]
+    content: MockExamContentPointerV2
+
+
+MockExamPlannedPlacementContract = MockExamPlannedPlacementV1 | MockExamPlannedPlacementV2
+
+
 class MockExamAssemblyShortageV1(FrozenModel):
     slot_id: str = Field(pattern=r"^slot-[0-9]{2,3}$")
     position: int = Field(ge=1, le=200)
@@ -478,6 +508,16 @@ class MockExamAssemblyPlanV1(FrozenModel):
         if content_sha256(value) != self.plan_sha256:
             raise ValueError("assembly plan hash does not match canonical content")
         return self
+
+
+class MockExamAssemblyPlanV2(MockExamAssemblyPlanV1):
+    """Assembly plan whose placements all carry V3 content pointers."""
+
+    schema_version: Literal["mock-exam-assembly-plan/2.0"]  # type: ignore[assignment]
+    placements: tuple[MockExamPlannedPlacementV2, ...] = Field(max_length=200)
+
+
+MockExamAssemblyPlanContract = MockExamAssemblyPlanV1 | MockExamAssemblyPlanV2
 
 
 class MockExamAssemblySelection(FrozenModel):
@@ -653,7 +693,16 @@ class MockExamAssemblyManifestV2(FrozenModel):
         return self
 
 
-MockExamAssemblyManifestContract = MockExamAssemblyManifestV1 | MockExamAssemblyManifestV2
+class MockExamAssemblyManifestV3(MockExamAssemblyManifestV2):
+    """Released Assembly manifest containing one V3-aware plan revision."""
+
+    schema_version: Literal["mock-exam-assembly-manifest/3.0"]  # type: ignore[assignment]
+    plan: MockExamAssemblyPlanV2
+
+
+MockExamAssemblyManifestContract = (
+    MockExamAssemblyManifestV1 | MockExamAssemblyManifestV2 | MockExamAssemblyManifestV3
+)
 
 
 def load_integrated_science_mock_exam_policy() -> MockExamAssemblyPolicyV1:
@@ -766,7 +815,7 @@ def validate_mock_exam_placements(
 
 
 def validate_mock_exam_planned_placements(
-    placements: tuple[MockExamPlannedPlacementV1, ...],
+    placements: tuple[MockExamPlannedPlacementV1 | MockExamPlannedPlacementV2, ...],
     policy: MockExamAssemblyPolicyV1,
 ) -> MockExamAssemblyValidationV1:
     """Apply the authoritative assembly invariants to server-derived placements."""

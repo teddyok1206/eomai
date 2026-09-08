@@ -6,6 +6,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from eom_orchestrator.capacity_controller import CodexCapacityController
+from eom_orchestrator.database import build_session_factory
+from eom_workflow_runner.mock_exam_production_retirement import (
+    MockExamProductionRetirementService,
+)
+from eom_workflow_runner.systemd_retirement_quiescence import (
+    SystemdWorkflowRunnerQuiescenceAdapter,
+)
+
 from eom_api.services.mock_exam_generation_block_resolver import (
     DatabaseGenerationBlockResolver,
 )
@@ -83,6 +92,13 @@ def build_mock_exam_production_runtime(
     runner = MockExamProductionRunner(
         coordinator=coordinator,
         checkpoints=AtomicJsonMockExamProductionCheckpointStore(checkpoint_root),
+        retirements=MockExamProductionRetirementService(
+            services.engine,
+            quiescence=SystemdWorkflowRunnerQuiescenceAdapter(),
+            lease_reconciler=CodexCapacityController(
+                build_session_factory(services.engine),
+            ),
+        ),
     )
     return MockExamProductionRuntime(
         application=MockExamProductionApplicationService(

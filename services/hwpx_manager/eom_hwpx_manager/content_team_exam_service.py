@@ -6,22 +6,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from eom_catalog_contracts import MockExamAssemblyManifestContract
+from eom_catalog_contracts import MockExamAssemblyManifestContract, MockExamAssemblyManifestV3
 from eom_hwpx_contracts import (
     ContentTeamExamAssemblyPointer,
     ContentTeamExamAssemblyPointerV2,
+    ContentTeamExamAssemblyPointerV3,
     ContentTeamExamBuildResult,
     ContentTeamExamBuildResultContract,
     ContentTeamExamBuildResultV2,
+    ContentTeamExamBuildResultV3,
     ContentTeamExamImageSource,
     ContentTeamExamItemSource,
     ContentTeamExamItemSourceV2,
+    ContentTeamExamItemSourceV3,
     ContentTeamExamRenderRequest,
     ContentTeamExamRenderRequestContract,
     ContentTeamExamRenderRequestV2,
+    ContentTeamExamRenderRequestV3,
     ContentTeamHandoffSnapshot,
     ContentTeamImageSource,
     ContentTeamItemSource,
+    ContentTeamItemSourceV2,
     content_team_exam_item_set_projection,
     content_team_exam_render_plan_projection,
 )
@@ -55,7 +60,6 @@ from eom_hwpx_manager.content_team_service import (
     ITEM_MARKDOWN_MEDIA_TYPE,
     ITEM_MARKDOWN_MEMBER,
     ITEM_MARKDOWN_SCHEMA_REF,
-    ITEM_SCHEMA_REF,
     MAX_HANDOFF_BYTES,
     MAX_IMAGE_BYTES,
     MAX_ITEM_JSON_BYTES,
@@ -67,16 +71,21 @@ from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.protocol import (
     HWPX_CONTENT_TEAM_EXAM_PROTOCOL_VERSION,
     HWPX_CONTENT_TEAM_EXAM_PROTOCOL_VERSION_V2,
+    HWPX_CONTENT_TEAM_EXAM_PROTOCOL_VERSION_V3,
     content_team_exam_schema_bundle_hash,
     content_team_exam_schema_bundle_hash_v2,
+    content_team_exam_schema_bundle_hash_v3,
 )
 
 EXAM_RENDERER = "content-team-exam"
 EXAM_RENDERER_VERSION = "1.0.0"
 EXAM_RENDERER_VERSION_V2 = "2.0.0"
+EXAM_RENDERER_VERSION_V3 = "3.0.0"
 
 
 def exam_renderer_version(manifest: MockExamAssemblyManifestContract) -> str:
+    if isinstance(manifest, MockExamAssemblyManifestV3):
+        return EXAM_RENDERER_VERSION_V3
     return (
         EXAM_RENDERER_VERSION_V2
         if project_assembly_for_render(manifest).plan_sha256 is not None
@@ -93,7 +102,7 @@ class ContentTeamExamItemPointer:
     item_id: str
     item_revision_id: str
     item_manifest_sha256: str
-    source: ContentTeamItemSource
+    source: ContentTeamItemSource | ContentTeamItemSourceV2
     images: tuple[ContentTeamImageSource, ...]
 
 
@@ -179,7 +188,19 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 "content-team handoff release pin changed after exam request creation",
             )
         projection = project_assembly_for_render(manifest)
-        is_v2 = projection.plan_sha256 is not None
+        source_schema_refs = {item.source.schema_ref for item in items}
+        if len(source_schema_refs) != 1:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "exam cannot mix content-team item schema families",
+            )
+        is_v3 = source_schema_refs == {"eom.assessment.item-content/3.0"}
+        is_v2 = projection.plan_sha256 is not None and not is_v3
+        if is_v3 and projection.plan_sha256 is None:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "V3 exam content requires a pinned server-authored plan",
+            )
         if tuple(
             (
                 row.position,
@@ -246,7 +267,7 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                             member_name=ITEM_JSON_MEMBER,
                             expected_sha256=item.source.json_sha256,
                             media_type="application/json",
-                            schema_ref=ITEM_SCHEMA_REF,
+                            schema_ref=item.source.schema_ref,
                             max_bytes=MAX_ITEM_JSON_BYTES,
                         ),
                     ),
@@ -258,7 +279,11 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                             member_name=ITEM_MARKDOWN_MEMBER,
                             expected_sha256=item.source.markdown_sha256,
                             media_type=ITEM_MARKDOWN_MEDIA_TYPE,
-                            schema_ref=ITEM_MARKDOWN_SCHEMA_REF,
+                            schema_ref=(
+                                item.source.markdown_schema_ref
+                                if isinstance(item.source, ContentTeamItemSourceV2)
+                                else ITEM_MARKDOWN_SCHEMA_REF
+                            ),
                             max_bytes=MAX_MARKDOWN_BYTES,
                         ),
                     ),
@@ -289,7 +314,9 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
         handoff_path = member_paths[(0, "handoff", 0)]
         staged_items: list[
             tuple[
-                ContentTeamExamItemSource | ContentTeamExamItemSourceV2,
+                ContentTeamExamItemSource
+                | ContentTeamExamItemSourceV2
+                | ContentTeamExamItemSourceV3,
                 Path,
                 Path,
                 tuple[tuple[ContentTeamImageSource, Path], ...],
@@ -328,8 +355,18 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                     for image, _ in image_inputs
                 ),
             }
-            staged_item: ContentTeamExamItemSource | ContentTeamExamItemSourceV2
-            if is_v2:
+            staged_item: (
+                ContentTeamExamItemSource
+                | ContentTeamExamItemSourceV2
+                | ContentTeamExamItemSourceV3
+            )
+            if is_v3:
+                item_value.update(
+                    display_number=item.display_number,
+                    points_milli=item.points_milli,
+                )
+                staged_item = ContentTeamExamItemSourceV3.model_validate(item_value)
+            elif is_v2:
                 item_value.update(
                     display_number=item.display_number,
                     points_milli=item.points_milli,
@@ -346,7 +383,31 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 )
             )
         request: ContentTeamExamRenderRequestContract
-        if is_v2:
+        if is_v3:
+            assert projection.plan_sha256 is not None
+            request = ContentTeamExamRenderRequestV3(
+                build_id=build_id,
+                assembly=ContentTeamExamAssemblyPointerV3(
+                    assessment_assembly_id=projection.assessment_assembly_id,
+                    assessment_assembly_revision_id=projection.assessment_assembly_revision_id,
+                    manifest_sha256=projection.manifest_sha256,
+                    policy_revision_id=projection.policy_revision_id,
+                    policy_sha256=projection.policy_sha256,
+                    graph_snapshot_revision_id=projection.graph_snapshot_revision_id,
+                    graph_snapshot_sha256=projection.graph_snapshot_sha256,
+                    plan_sha256=projection.plan_sha256,
+                ),
+                handoff=handoff_snapshot,
+                items=tuple(
+                    value[0]
+                    for value in staged_items
+                    if isinstance(value[0], ContentTeamExamItemSourceV3)
+                ),
+            )
+            contract_name = "content-team-exam-render-request-v3"
+            protocol_version = HWPX_CONTENT_TEAM_EXAM_PROTOCOL_VERSION_V3
+            protocol_hash = content_team_exam_schema_bundle_hash_v3()
+        elif is_v2:
             assert projection.plan_sha256 is not None
             request = ContentTeamExamRenderRequestV2(
                 build_id=build_id,
@@ -400,7 +461,7 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
         item_set_sha256 = content_sha256(content_team_exam_item_set_projection(request))
         render_plan_sha256 = (
             content_sha256(content_team_exam_render_plan_projection(request))
-            if isinstance(request, ContentTeamExamRenderRequestV2)
+            if isinstance(request, (ContentTeamExamRenderRequestV2, ContentTeamExamRenderRequestV3))
             else None
         )
         job_id = new_job_id()
@@ -461,7 +522,10 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
             self._transition(job_id, JobState.VALIDATING_RESULT, "HWPX_EXAM_RESULT_RECEIVED")
             result_raw = self.adapter.load_json(workspace / "result.json", workspace)
             result: ContentTeamExamBuildResultContract
-            if is_v2:
+            if is_v3:
+                validate_hwpx_contract("content-team-exam-build-result-v3", result_raw)
+                result = ContentTeamExamBuildResultV3.model_validate(result_raw)
+            elif is_v2:
                 validate_hwpx_contract("content-team-exam-build-result-v2", result_raw)
                 result = ContentTeamExamBuildResultV2.model_validate(result_raw)
             else:
@@ -483,7 +547,7 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 or result.assembly_manifest_sha256 != projection.manifest_sha256
                 or result.item_set_sha256 != item_set_sha256
                 or (
-                    isinstance(result, ContentTeamExamBuildResultV2)
+                    isinstance(result, (ContentTeamExamBuildResultV2, ContentTeamExamBuildResultV3))
                     and result.render_plan_sha256 != render_plan_sha256
                 )
                 or result.item_count != len(items)
@@ -616,11 +680,14 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                     HwpxManagerErrorCode.HWPX_BUILD_IDEMPOTENCY_CONFLICT,
                     "existing exam build is not a completed immutable result",
                 )
-            if raw.get("schema_version") == "content-team-exam-build-result/2.0":
-                validate_hwpx_contract("content-team-exam-build-result-v2", raw)
+            if raw.get("schema_version") == "content-team-exam-build-result/3.0":
+                validate_hwpx_contract("content-team-exam-build-result-v3", raw)
                 result: ContentTeamExamBuildResultContract = (
-                    ContentTeamExamBuildResultV2.model_validate(raw)
+                    ContentTeamExamBuildResultV3.model_validate(raw)
                 )
+            elif raw.get("schema_version") == "content-team-exam-build-result/2.0":
+                validate_hwpx_contract("content-team-exam-build-result-v2", raw)
+                result = ContentTeamExamBuildResultV2.model_validate(raw)
             else:
                 validate_hwpx_contract("content-team-exam-build-result", raw)
                 result = ContentTeamExamBuildResult.model_validate(raw)

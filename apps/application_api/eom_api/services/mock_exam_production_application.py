@@ -17,8 +17,10 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV1,
     MockExamGraphPublicationInputV1,
     MockExamProductionExecutionV1,
+    MockExamProductionExecutionV2,
     MockExamRatingPolicyPointerV1,
 )
+from eom_api_contracts.mock_exam_retirement import MockExamProductionRetirementReceiptV1
 from eom_catalog_contracts.mock_exam_production_plan import MockExamProductionPlanV1
 from eom_operator_identity import (
     ActorContext,
@@ -27,6 +29,7 @@ from eom_operator_identity import (
     OperatorProjection,
     PermissionKey,
 )
+from pydantic import ValidationError
 
 _PRODUCTION_REQUEST_ID = re.compile(r"^productionreq_[0-9a-f]{32}$")
 
@@ -67,6 +70,14 @@ class MockExamProductionRunnerPort(Protocol):
         *,
         at: datetime,
     ) -> MockExamProductionExecutionV1: ...
+
+    def retire_items(
+        self,
+        execution_id: str,
+        actor: ActorContext,
+        *,
+        at: datetime,
+    ) -> MockExamProductionRetirementReceiptV1: ...
 
     def advance_analyses(
         self,
@@ -336,6 +347,27 @@ class MockExamProductionApplicationService:
             self._releases.production_plan(), execution_id, actor, at=at
         )
 
+    def retire_items(
+        self,
+        execution_id: str,
+        actor: ActorContext,
+    ) -> MockExamProductionRetirementReceiptV1:
+        """Retire the exact owned 25-Workflow occurrence while the runner is held inactive."""
+
+        at = self._now()
+        self._authorize(
+            actor,
+            {PermissionKey.WORKFLOW_READ, PermissionKey.WORKFLOW_CANCEL},
+            at=at,
+            fresh=True,
+        )
+        # Retirement is intentionally historical: a held deployment may already expose the
+        # corrected current plan while this operation fences the superseded plan's exact cohort.
+        # Re-validate the loaded immutable checkpoint itself, but do not resolve an implicit
+        # current plan for this one use case.
+        self._historical_owned_checkpoint(execution_id, actor)
+        return self._runner.retire_items(execution_id, actor, at=at)
+
     def advance_analyses(
         self,
         execution_id: str,
@@ -526,6 +558,34 @@ class MockExamProductionApplicationService:
             _fail(
                 "PRODUCTION_PLAN_POINTER_MISMATCH",
                 "the execution does not pin the released static production plan",
+            )
+        return checkpoint
+
+    def _historical_owned_checkpoint(
+        self,
+        execution_id: str,
+        actor: ActorContext,
+    ) -> MockExamProductionExecutionV1:
+        checkpoint = self._runner.get(execution_id)
+        try:
+            # ``model_copy(update=...)`` intentionally skips validation in Pydantic. Round-trip
+            # through values so every checkpoint identity, revision, and content-hash invariant is
+            # rechecked at this authorization boundary as well as by the durable checkpoint store.
+            checkpoint_type = (
+                MockExamProductionExecutionV2
+                if isinstance(checkpoint, MockExamProductionExecutionV2)
+                else MockExamProductionExecutionV1
+            )
+            checkpoint = checkpoint_type.model_validate(checkpoint.model_dump(mode="json"))
+        except ValidationError as exc:
+            raise MockExamProductionApplicationError(
+                "PRODUCTION_HISTORICAL_CHECKPOINT_INVALID",
+                "the historical production checkpoint failed immutable identity validation",
+            ) from exc
+        if checkpoint.operator_id != actor.actor_id:
+            _fail(
+                "PRODUCTION_EXECUTION_OPERATOR_MISMATCH",
+                "the authenticated operator does not own this production execution",
             )
         return checkpoint
 

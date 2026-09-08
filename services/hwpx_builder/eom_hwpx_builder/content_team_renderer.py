@@ -15,11 +15,16 @@ from typing import Any
 from eom_hwpx_contracts import (
     ContentTeamBuildResult,
     ContentTeamBuildResultV2,
+    ContentTeamBuildResultV3,
     ContentTeamEditorialDraft,
+    ContentTeamEditorialDraftContract,
+    ContentTeamEditorialDraftV2,
     ContentTeamRenderRequest,
     ContentTeamRenderRequestV2,
+    ContentTeamRenderRequestV3,
     normalize_content_team_labeled_block_content,
     parse_content_team_markdown,
+    parse_content_team_markdown_v2,
     serialize_content_team_markdown,
     validate_contract,
 )
@@ -42,6 +47,7 @@ from eom_hwpx_builder.handoff import (
 from eom_hwpx_builder.util import canonical_json_bytes, sha256_bytes, sha256_file
 
 CONTENT_TEAM_RENDERER_VERSION = "2.0.0"
+CONTENT_TEAM_RENDERER_VERSION_V3 = "3.0.0"
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_MARKDOWN_BYTES = 1024 * 1024
@@ -201,14 +207,25 @@ def _extract_runtime(
     return runtime / "templates/automation.hwpx"
 
 
-def _load_draft(raw: bytes) -> ContentTeamEditorialDraft:
+def _load_draft(raw: bytes, *, source_schema_ref: str) -> ContentTeamEditorialDraftContract:
     try:
         value: object = json.loads(raw.decode("utf-8"))
-        if not isinstance(value, dict) or value.get("schema_version") != "2.0":
+        expected_version = {
+            "eom.assessment.item-content/2.0": "2.0",
+            "eom.assessment.item-content/3.0": "3.0",
+        }.get(source_schema_ref)
+        if (
+            expected_version is None
+            or not isinstance(value, dict)
+            or value.get("schema_version") != expected_version
+        ):
             raise ValueError("item content schema version mismatch")
         editorial = dict(value)
         editorial.pop("schema_version")
-        return ContentTeamEditorialDraft.model_validate(editorial)
+        model = (
+            ContentTeamEditorialDraftV2 if expected_version == "3.0" else ContentTeamEditorialDraft
+        )
+        return model.model_validate(editorial)
     except (UnicodeError, json.JSONDecodeError, ValidationError, ValueError) as exc:
         raise HwpxError(
             HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
@@ -301,7 +318,7 @@ def _external_render(
     template: Path,
     markdown: bytes,
     output: Path,
-    draft: ContentTeamEditorialDraft,
+    draft: ContentTeamEditorialDraftContract,
     *,
     item_number_override: int | None = None,
     score_display_override: str | None = None,
@@ -309,7 +326,7 @@ def _external_render(
     handoff_value = draft.model_dump(mode="json")
     for block in handoff_value["labeled_blocks"]:
         block["content"] = normalize_content_team_labeled_block_content(block["content"])
-    handoff_draft = ContentTeamEditorialDraft.model_validate(handoff_value)
+    handoff_draft = type(draft).model_validate(handoff_value)
     handoff_markdown = serialize_content_team_markdown(handoff_draft)
     rendered_item_number = (
         handoff_draft.item_number if item_number_override is None else item_number_override
@@ -403,7 +420,7 @@ def _external_render(
 
 def _manifest(
     output: Path,
-    request: ContentTeamRenderRequest | ContentTeamRenderRequestV2,
+    request: ContentTeamRenderRequest | ContentTeamRenderRequestV2 | ContentTeamRenderRequestV3,
     report: dict[str, Any],
 ) -> dict[str, Any]:
     analysis = analyze_package(output)
@@ -419,15 +436,23 @@ def _manifest(
         )
     return {
         "manifest_version": (
-            "content-team-hwpx/2.0"
-            if isinstance(request, ContentTeamRenderRequestV2)
-            else "content-team-hwpx/1.0"
+            "content-team-hwpx/3.0"
+            if isinstance(request, ContentTeamRenderRequestV3)
+            else (
+                "content-team-hwpx/2.0"
+                if isinstance(request, ContentTeamRenderRequestV2)
+                else "content-team-hwpx/1.0"
+            )
         ),
         "renderer_profile": request.renderer_profile,
         "renderer_version": (
-            CONTENT_TEAM_RENDERER_VERSION
-            if isinstance(request, ContentTeamRenderRequestV2)
-            else "1.0.0"
+            CONTENT_TEAM_RENDERER_VERSION_V3
+            if isinstance(request, ContentTeamRenderRequestV3)
+            else (
+                CONTENT_TEAM_RENDERER_VERSION
+                if isinstance(request, ContentTeamRenderRequestV2)
+                else "1.0.0"
+            )
         ),
         "source": request.source.model_dump(mode="json"),
         "handoff": request.handoff.model_dump(mode="json"),
@@ -443,7 +468,7 @@ def _manifest(
 def render_content_team_workspace(
     request_path: Path,
     result_path: Path,
-) -> ContentTeamBuildResult | ContentTeamBuildResultV2:
+) -> ContentTeamBuildResult | ContentTeamBuildResultV2 | ContentTeamBuildResultV3:
     started = datetime.now(UTC)
     workspace = request_path.parent.resolve(strict=True)
     if result_path.resolve(strict=False).parent != workspace or result_path.name != "result.json":
@@ -452,11 +477,14 @@ def render_content_team_workspace(
         request_raw: dict[str, Any] = json.loads(request_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise HwpxError(HwpxErrorCode.HWPX_REFERENCE_UNSAFE, "render request is invalid") from exc
-    if request_raw.get("schema_version") == "2.0":
+    if request_raw.get("schema_version") == "3.0":
+        validate_contract("content-team-render-request-v3", request_raw)
+        request: (
+            ContentTeamRenderRequest | ContentTeamRenderRequestV2 | ContentTeamRenderRequestV3
+        ) = ContentTeamRenderRequestV3.model_validate(request_raw)
+    elif request_raw.get("schema_version") == "2.0":
         validate_contract("content-team-render-request-v2", request_raw)
-        request: ContentTeamRenderRequest | ContentTeamRenderRequestV2 = (
-            ContentTeamRenderRequestV2.model_validate(request_raw)
-        )
+        request = ContentTeamRenderRequestV2.model_validate(request_raw)
     else:
         validate_contract("content-team-render-request", request_raw)
         request = ContentTeamRenderRequest.model_validate(request_raw)
@@ -477,13 +505,17 @@ def render_content_team_workspace(
         max_bytes=64 * 1024 * 1024,
         expected_sha256=request.handoff.archive_sha256,
     )
-    draft = _load_draft(json_bytes)
+    draft = _load_draft(json_bytes, source_schema_ref=request.source.schema_ref)
     if serialize_content_team_markdown(draft) != markdown_bytes:
         raise HwpxError(
             HwpxErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
             "content-team JSON and Markdown do not describe the same item",
         )
-    parsed = parse_content_team_markdown(markdown_bytes)
+    parsed = (
+        parse_content_team_markdown_v2(markdown_bytes)
+        if isinstance(request, ContentTeamRenderRequestV3)
+        else parse_content_team_markdown(markdown_bytes)
+    )
     if parsed.source_sha256 != request.source.markdown_sha256:
         raise HwpxError(
             HwpxErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
@@ -517,7 +549,7 @@ def render_content_team_workspace(
     report = _external_render(runtime, template, markdown_bytes, output, draft)
     image_set_sha256 = sha256_bytes(canonical_json_bytes([]))
     embedded_image_count = 0
-    if isinstance(request, ContentTeamRenderRequestV2):
+    if isinstance(request, (ContentTeamRenderRequestV2, ContentTeamRenderRequestV3)):
         expected_slots = tuple(
             (ordinal, visual.label)
             for ordinal, visual in enumerate(draft.visuals)
@@ -552,9 +584,13 @@ def render_content_team_workspace(
     write_private_json(output_dir / "package-manifest.json", package_manifest)
     prepare_private_handoff_file(output)
     result_class = (
-        ContentTeamBuildResultV2
-        if isinstance(request, ContentTeamRenderRequestV2)
-        else ContentTeamBuildResult
+        ContentTeamBuildResultV3
+        if isinstance(request, ContentTeamRenderRequestV3)
+        else (
+            ContentTeamBuildResultV2
+            if isinstance(request, ContentTeamRenderRequestV2)
+            else ContentTeamBuildResult
+        )
     )
     result_values: dict[str, Any] = {
         "build_id": request.build_id,
@@ -578,16 +614,20 @@ def render_content_team_workspace(
         "started_at": started,
         "completed_at": datetime.now(UTC),
     }
-    if isinstance(request, ContentTeamRenderRequestV2):
+    if isinstance(request, (ContentTeamRenderRequestV2, ContentTeamRenderRequestV3)):
         result_values.update(
             image_set_sha256=image_set_sha256,
             embedded_image_count=embedded_image_count,
         )
     result = result_class(**result_values)
     result_contract = (
-        "content-team-build-result-v2"
-        if isinstance(result, ContentTeamBuildResultV2)
-        else "content-team-build-result"
+        "content-team-build-result-v3"
+        if isinstance(result, ContentTeamBuildResultV3)
+        else (
+            "content-team-build-result-v2"
+            if isinstance(result, ContentTeamBuildResultV2)
+            else "content-team-build-result"
+        )
     )
     validate_contract(result_contract, result.model_dump(mode="json"))
     write_private_json(result_path, result.model_dump(mode="json"))
@@ -608,13 +648,15 @@ def failed_content_team_result(
     result_path: Path,
     started: datetime,
     error: Exception,
-) -> ContentTeamBuildResult | ContentTeamBuildResultV2 | None:
+) -> ContentTeamBuildResult | ContentTeamBuildResultV2 | ContentTeamBuildResultV3 | None:
     try:
         request_raw: object = json.loads(request_path.read_text(encoding="utf-8"))
         if not isinstance(request_raw, dict):
             return None
-        request: ContentTeamRenderRequest | ContentTeamRenderRequestV2
-        if request_raw.get("schema_version") == "2.0":
+        request: ContentTeamRenderRequest | ContentTeamRenderRequestV2 | ContentTeamRenderRequestV3
+        if request_raw.get("schema_version") == "3.0":
+            request = ContentTeamRenderRequestV3.model_validate(request_raw)
+        elif request_raw.get("schema_version") == "2.0":
             request = ContentTeamRenderRequestV2.model_validate(request_raw)
         else:
             request = ContentTeamRenderRequest.model_validate(request_raw)
@@ -622,9 +664,13 @@ def failed_content_team_result(
         return None
     code = error.code.value if isinstance(error, HwpxError) else "HWPX_CONTENT_TEAM_RENDER_FAILED"
     result_class = (
-        ContentTeamBuildResultV2
-        if isinstance(request, ContentTeamRenderRequestV2)
-        else ContentTeamBuildResult
+        ContentTeamBuildResultV3
+        if isinstance(request, ContentTeamRenderRequestV3)
+        else (
+            ContentTeamBuildResultV2
+            if isinstance(request, ContentTeamRenderRequestV2)
+            else ContentTeamBuildResult
+        )
     )
     result_values: dict[str, Any] = {
         "build_id": request.build_id,
@@ -648,7 +694,7 @@ def failed_content_team_result(
         "started_at": started,
         "completed_at": datetime.now(UTC),
     }
-    if isinstance(request, ContentTeamRenderRequestV2):
+    if isinstance(request, (ContentTeamRenderRequestV2, ContentTeamRenderRequestV3)):
         result_values.update(
             image_set_sha256=sha256_bytes(
                 canonical_json_bytes([image.model_dump(mode="json") for image in request.images])
@@ -657,9 +703,13 @@ def failed_content_team_result(
         )
     result = result_class(**result_values)
     validate_contract(
-        "content-team-build-result-v2"
-        if isinstance(result, ContentTeamBuildResultV2)
-        else "content-team-build-result",
+        "content-team-build-result-v3"
+        if isinstance(result, ContentTeamBuildResultV3)
+        else (
+            "content-team-build-result-v2"
+            if isinstance(result, ContentTeamBuildResultV2)
+            else "content-team-build-result"
+        ),
         result.model_dump(mode="json"),
     )
     write_private_json(result_path, result.model_dump(mode="json"))

@@ -38,32 +38,45 @@ class HwpxSupports(ApiModel):
 
 class HwpxDeliveryProfile(ApiModel):
     renderer: Literal["eom-template", "content-team"]
-    renderer_version: Literal["1.0.0", "2.0.0"]
+    renderer_version: Literal["1.0.0", "2.0.0", "3.0.0"]
     document_profile: Literal[
         "eom-question-template-v1",
         "content-team-hwp-question-editor-v1",
         "content-team-hwp-question-editor-v2",
+        "content-team-hwp-question-editor-v3",
     ]
     source_schema_ref: Literal[
         "eom.assessment.item-content/1.0",
         "eom.assessment.item-content/2.0",
+        "eom.assessment.item-content/3.0",
     ]
 
     @model_validator(mode="after")
     def exact_renderer_profile(self) -> HwpxDeliveryProfile:
-        expected = {
+        supported = {
             "eom-template": (
                 "1.0.0",
                 "eom-question-template-v1",
                 "eom.assessment.item-content/1.0",
             ),
-            "content-team": (
+            "content-team-v2": (
                 "2.0.0",
                 "content-team-hwp-question-editor-v2",
                 "eom.assessment.item-content/2.0",
             ),
-        }[self.renderer]
-        if (self.renderer_version, self.document_profile, self.source_schema_ref) != expected:
+            "content-team-v3": (
+                "3.0.0",
+                "content-team-hwp-question-editor-v3",
+                "eom.assessment.item-content/3.0",
+            ),
+        }
+        identity = (self.renderer_version, self.document_profile, self.source_schema_ref)
+        allowed = (
+            {supported["eom-template"]}
+            if self.renderer == "eom-template"
+            else {supported["content-team-v2"], supported["content-team-v3"]}
+        )
+        if identity not in allowed:
             raise ValueError("HWPX delivery profile mixes incompatible renderer identities")
         return self
 
@@ -78,6 +91,7 @@ class HwpxCapabilityView(ApiModel):
         "eom-question-template-v1",
         "content-team-hwp-question-editor-v1",
         "content-team-hwp-question-editor-v2",
+        "content-team-hwp-question-editor-v3",
     ]
     delivery_profiles: tuple[HwpxDeliveryProfile, ...] = Field(min_length=1, max_length=8)
     manager_registered: bool
@@ -95,6 +109,7 @@ class HwpxBuildOptions(ApiModel):
         "eom-question-template-v1",
         "content-team-hwp-question-editor-v1",
         "content-team-hwp-question-editor-v2",
+        "content-team-hwp-question-editor-v3",
     ] = "kordoc-report"
     item_number: int = Field(default=1, ge=1, le=999)
 
@@ -111,7 +126,13 @@ class CreateHwpxBuildRequest(ApiModel):
             "eom-template": "eom-question-template-v1",
             "content-team": "content-team-hwp-question-editor-v2",
         }[self.renderer]
-        if self.options.document_profile != expected:
+        content_team_profile = self.options.document_profile in {
+            "content-team-hwp-question-editor-v2",
+            "content-team-hwp-question-editor-v3",
+        }
+        if (self.renderer == "content-team" and not content_team_profile) or (
+            self.renderer != "content-team" and self.options.document_profile != expected
+        ):
             raise ValueError("renderer and document profile must identify the same closed adapter")
         return self
 
@@ -132,7 +153,7 @@ class AssessmentHwpxBuildView(ApiModel):
     graph_snapshot_sha256: Sha256
     item_set_sha256: Sha256
     renderer: Literal["content-team-exam"]
-    renderer_version: Literal["1.0.0"]
+    renderer_version: Literal["1.0.0", "2.0.0", "3.0.0"]
     state: HwpxBuildState
     validation_state: HwpxValidationState
     item_count: int = Field(ge=1, le=200)
@@ -176,7 +197,7 @@ class HwpxBuildView(ApiModel):
     source_artifact_revision_id: OpaqueId
     source_sha256: Sha256
     renderer: Literal["kordoc", "eom-template", "content-team"]
-    renderer_version: Literal["4.9.0", "1.0.0", "2.0.0"]
+    renderer_version: Literal["4.9.0", "1.0.0", "2.0.0", "3.0.0"]
     state: HwpxBuildState
     validation_state: HwpxValidationState
     native_equation_count: int | None = Field(default=None, ge=0, le=128)

@@ -6,6 +6,7 @@ EXPECTED_BRANCHES=("main" "feat/application-api-v0" "feat/hwpx-application-api-v
 API_PYTHON="/srv/eom/conda/envs/eom-api/bin/python"
 API_PIP="${API_PYTHON} -m pip"
 SERVICE="eom-api.service"
+WORKFLOW_RUNNER_SERVICE="eom-workflow-runner.service"
 PLATFORM_CONSUMER_SERVICES=(
   "eom-catalog-application-runner.service"
   "eom-workflow-runner.service"
@@ -20,11 +21,14 @@ RUNTIME_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_runtime_isolation
 RUNTIME_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-runtime-isolation"
 MOCK_EXAM_DEPLOYMENT_ADMISSION_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_mock_exam_deployment_admission.py"
 MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET="/usr/local/libexec/eom-api/verify-mock-exam-deployment-admission"
+WORKFLOW_RUNNER_HOLD_LIBRARY="${REPOSITORY_ROOT}/scripts/api/workflow_runner_deployment_hold.sh"
 ACTION="verify"
+PRESERVE_WORKFLOW_RUNNER_INACTIVE=false
 STAGING_ROOT=""
 
 usage() {
-  printf '%s\n' "usage: $0 [--build-only|--install|--verify]"
+  printf '%s\n' \
+    "usage: $0 [--build-only|--install|--install-preserve-workflow-runner-inactive|--verify]"
 }
 
 if (($# > 1)); then
@@ -35,6 +39,10 @@ if (($# == 1)); then
   case "$1" in
     --build-only) ACTION="build" ;;
     --install) ACTION="install" ;;
+    --install-preserve-workflow-runner-inactive)
+      ACTION="install"
+      PRESERVE_WORKFLOW_RUNNER_INACTIVE=true
+      ;;
     --verify) ACTION="verify" ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -43,6 +51,28 @@ fi
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
   exit 1
+}
+
+[[ -r "${WORKFLOW_RUNNER_HOLD_LIBRARY}" ]] || fail "workflow runner hold helper is unavailable"
+# shellcheck source=scripts/api/workflow_runner_deployment_hold.sh
+source "${WORKFLOW_RUNNER_HOLD_LIBRARY}"
+
+activate_workflow_runner_deployment_hold() {
+  [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true ]] || return 0
+  workflow_runner_require_stopped /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}" || \
+    fail "${WORKFLOW_RUNNER_SERVICE} must be inactive/dead with MainPID=0 before the hold"
+  # A runtime mask closes the interval between wheel replacement and retirement.  Deliberately
+  # leave it in place on both success and failure; only the reviewed post-retirement runbook may
+  # unmask and start the runner.
+  sudo -n systemctl mask --runtime "${WORKFLOW_RUNNER_SERVICE}" >/dev/null
+  workflow_runner_require_runtime_hold /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}" || \
+    fail "workflow runner runtime deployment hold was not installed in a quiescent state"
+}
+
+verify_workflow_runner_deployment_hold() {
+  [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true ]] || return 0
+  workflow_runner_require_runtime_hold /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}" || \
+    fail "workflow runner runtime deployment hold was lost or is not quiescent"
 }
 
 verify_mock_exam_deployment_admission() {
@@ -226,6 +256,7 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/routers/control_plane.py",
         "eom_api/routers/knowledge_analysis.py",
         "eom_api/routers/assessment_assemblies.py",
+        "eom_api/routers/item_bank.py",
         "eom_api/services/command_adapter.py",
         "eom_api/services/query_adapter.py",
         "eom_api/services/catalog_application_client.py",
@@ -292,28 +323,36 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json",
         "eom_api_contracts/schemas/errors.schema.json",
         "eom_api_contracts/schemas/hwpx.schema.json",
+        "eom_api_contracts/schemas/hwpx-v2.schema.json",
         "eom_api_contracts/schemas/item-bank-entry-v1.schema.json",
         "eom_api_contracts/schemas/items.schema.json",
         "eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json",
+        "eom_api_contracts/schemas/mock-exam-assembly-plan-v2.schema.json",
         "eom_api_contracts/schemas/mock-exam-explicit-analysis-review-set-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json",
+        "eom_api_contracts/schemas/mock-exam-production-execution-v2.schema.json",
+        "eom_api_contracts/schemas/mock-exam-production-retirement-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-review-eligibility-v1.schema.json",
+        "eom_api_contracts/schemas/mock-exam-review-eligibility-v2.schema.json",
         "eom_api_contracts/schemas/operators.schema.json",
         "eom_api_contracts/schemas/production-item-candidate-v1.schema.json",
+        "eom_api_contracts/schemas/production-item-candidate-v2.schema.json",
         "eom_api_contracts/schemas/resources.schema.json",
         "eom_api_contracts/schemas/workflow-start-v1.schema.json",
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 20 packaged API schemas including Workflow-start and mock-exam "
-            "production execution/review contracts, "
+            "expected exactly 26 packaged API schemas including Workflow-start and mock-exam "
+            "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "
             f"unexpected={sorted(schemas - expected_api_schemas)}"
         )
     required_contract_runtime = {
         "eom_api_contracts/__init__.py",
         "eom_api_contracts/assessment_assemblies.py",
+        "eom_api_contracts/item_bank.py",
         "eom_api_contracts/mock_exam_execution.py",
+        "eom_api_contracts/mock_exam_retirement.py",
         "eom_api_contracts/workflows.py",
     }
     if missing := required_contract_runtime - names:
@@ -373,6 +412,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_orchestrator/execution_materializer.py",
         "eom_orchestrator/execution_resolver.py",
         "eom_orchestrator/migration.py",
+        "eom_orchestrator/workflow_job_retirement.py",
         "eom_orchestrator/legacy_item_extraction_artifact.py",
         "eom_orchestrator/legacy_item_extraction_bootstrap.py",
         "eom_orchestrator/legacy_item_editorial_compatibility_artifact.py",
@@ -385,6 +425,9 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_workflow_runner/engine.py",
         "eom_workflow_runner/models.py",
         "eom_workflow_runner/repository.py",
+        "eom_workflow_runner/mock_exam_production_retirement.py",
+        "eom_workflow_runner/retirement_quiescence.py",
+        "eom_workflow_runner/systemd_retirement_quiescence.py",
         "eomctl/cli.py",
         "eomctl/control_plane.py",
         "eomctl/knowledge.py",
@@ -392,6 +435,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
     }
     catalog_staging_runtime = {
         "eom_image_contracts/models.py",
+        "eom_image_contracts/safe_svg.py",
         "eom_image_contracts/validation.py",
         "eom_hwpx_contracts/models.py",
         "eom_hwpx_contracts/content_team_equations.py",
@@ -399,6 +443,11 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_contracts/validation.py",
         "eom_hwpx_contracts/schemas/hwpx-content-team-exam-render-request-v2.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-content-team-exam-build-result-v2.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-editorial-question-v2.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-render-request-v3.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-build-result-v3.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-exam-render-request-v3.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-exam-build-result-v3.schema.json",
         "eom_catalog_contracts/assessment_item.py",
         "eom_catalog_contracts/assessment_assembly.py",
         "eom_catalog_contracts/approved_item_graph_publication.py",
@@ -583,16 +632,22 @@ catalog_resources = {
     "assessment-assembly/mock-exam-assembly-cohort-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-cohort-v1.schema.json",
     "assessment-assembly/mock-exam-assembly-manifest-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
     "assessment-assembly/mock-exam-assembly-manifest-v2.schema.json": "schemas/assessment-assembly/mock-exam-assembly-manifest-v2.schema.json",
+    "assessment-assembly/mock-exam-assembly-manifest-v3.schema.json": "schemas/assessment-assembly/mock-exam-assembly-manifest-v3.schema.json",
     "assessment-assembly/mock-exam-assembly-plan-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-plan-v1.schema.json",
+    "assessment-assembly/mock-exam-assembly-plan-v2.schema.json": "schemas/assessment-assembly/mock-exam-assembly-plan-v2.schema.json",
     "assessment-assembly/mock-exam-assembly-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-policy-v1.schema.json",
     "assessment-assembly/mock-exam-layout-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-layout-policy-v1.schema.json",
     "assessment-assembly/mock-exam-rating-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-rating-policy-v1.schema.json",
     "assessment-assembly/mock-exam-item-review-decision-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-decision-v1.schema.json",
+    "assessment-assembly/mock-exam-item-review-decision-v2.schema.json": "schemas/assessment-assembly/mock-exam-item-review-decision-v2.schema.json",
     "assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json",
     "assessment-assembly/mock-exam-item-review-publication-result-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-result-v1.schema.json",
+    "assessment-assembly/mock-exam-item-review-publication-result-v2.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-result-v2.schema.json",
     "assessment-assembly/mock-exam-production-plan-v1.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v1.schema.json",
+    "assessment-assembly/mock-exam-production-plan-v2.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v2.schema.json",
     "assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json",
     "assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json",
+    "assessment-assembly/mock-exam-review-eligibility-result-v2.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-result-v2.schema.json",
     "catalog-application/catalog-application-request-v1.schema.json": "schemas/catalog-application/catalog-application-request-v1.schema.json",
     "catalog-application/catalog-application-response-v1.schema.json": "schemas/catalog-application/catalog-application-response-v1.schema.json",
     "catalog-application/catalog-application-request-v2.schema.json": "schemas/catalog-application/catalog-application-request-v2.schema.json",
@@ -615,6 +670,8 @@ catalog_resources = {
     "catalog-application/catalog-application-response-v10.schema.json": "schemas/catalog-application/catalog-application-response-v10.schema.json",
     "catalog-application/catalog-application-request-v11.schema.json": "schemas/catalog-application/catalog-application-request-v11.schema.json",
     "catalog-application/catalog-application-response-v11.schema.json": "schemas/catalog-application/catalog-application-response-v11.schema.json",
+    "catalog-application/catalog-application-request-v12.schema.json": "schemas/catalog-application/catalog-application-request-v12.schema.json",
+    "catalog-application/catalog-application-response-v12.schema.json": "schemas/catalog-application/catalog-application-response-v12.schema.json",
     "catalog-application/catalog-item-media-request-v1.schema.json": "schemas/catalog-application/catalog-item-media-request-v1.schema.json",
     "catalog-application/catalog-item-media-response-v1.schema.json": "schemas/catalog-application/catalog-item-media-response-v1.schema.json",
     "catalog-application/catalog-assessment-page-list-request-v1.schema.json": "schemas/catalog-application/catalog-assessment-page-list-request-v1.schema.json",
@@ -647,6 +704,7 @@ catalog_resources = {
     "educational-document/educational-document-types-v1.schema.json": "schemas/educational-document/educational-document-types-v1.schema.json",
     "item-registry/assessment-item-content-v1.schema.json": "schemas/item-registry/assessment-item-content-v1.schema.json",
     "item-registry/assessment-item-content-v2.schema.json": "schemas/item-registry/assessment-item-content-v2.schema.json",
+    "item-registry/assessment-item-content-v3.schema.json": "schemas/item-registry/assessment-item-content-v3.schema.json",
     "item-registry/item-revision-manifest-v1.schema.json": "schemas/item-registry/item-revision-manifest-v1.schema.json",
     "item-origin/item-origin-types-v1.schema.json": "schemas/item-origin/item-origin-types-v1.schema.json",
     "item-origin/organization-revision-v1.schema.json": "schemas/item-origin/organization-revision-v1.schema.json",
@@ -836,7 +894,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
     root = Path(temporary)
     installed_root = root / "site-packages"
     definitions = []
-    for version in ("1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"):
+    for version in ("1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9"):
         definition = root / f"generic-item-development.v{version}.yaml"
         definition.write_bytes(
             (
@@ -916,7 +974,7 @@ import sys
 from pathlib import Path
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -929,6 +987,8 @@ from eom_api_contracts import (
     MockExamGenerationBlockResolutionV1,
     MockExamGraphPublicationInputV1,
     MockExamProductionExecutionV1,
+    MockExamProductionRetirementCommandV1,
+    MockExamProductionRetirementReceiptV1,
     mock_exam_production_is_terminal,
 )
 from eom_workflow.compiler import compile_definition
@@ -988,6 +1048,14 @@ if any(
     raise SystemExit("mock-exam contract package exports are incomplete")
 if mock_exam_production_is_terminal.__module__ != "eom_api_contracts.mock_exam_execution":
     raise SystemExit("mock-exam terminal-state contract export is incomplete")
+if any(
+    model.__module__ != "eom_api_contracts.mock_exam_retirement"
+    for model in (
+        MockExamProductionRetirementCommandV1,
+        MockExamProductionRetirementReceiptV1,
+    )
+):
+    raise SystemExit("mock-exam retirement contract package exports are incomplete")
 if CURRENT_MIGRATION_REVISION != "20260908_0032":
     raise SystemExit("installed runtime migration admission head mismatch")
 settings = Settings.from_environment()
@@ -1038,6 +1106,10 @@ load_role_input_schema("image", "workflow-role/1.17.0")
 load_role_input_schema("review", "workflow-role/1.17.0")
 load_role_input_schema("item_management", "workflow-role/1.17.0")
 load_role_input_schema("support", "workflow-role/1.18.0")
+load_role_input_schema("authoring", "workflow-role/1.19.0")
+load_role_input_schema("image", "workflow-role/1.19.0")
+load_role_input_schema("review", "workflow-role/1.19.0")
+load_role_input_schema("item_management", "workflow-role/1.19.0")
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
     load_codex_result_schema(schema_id)
@@ -1054,9 +1126,10 @@ compiled_versions = {
         definition_v1_6,
         definition_v1_7,
         definition_v1_8,
+        definition_v1_9,
     )
 }
-if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0"}:
+if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0"}:
     raise SystemExit("generic workflow definition versions mismatch")
 analysis_versions = {
     compile_definition(Path(path), {"support"}).definition.definition_version
@@ -1078,6 +1151,7 @@ if (
     raise SystemExit("legacy item editorial compatibility workflow definition mismatch")
 admitted_definitions = (
     compile_definition(Path(definition_v1_8), {"authoring", "image", "review", "item_management"}),
+    compile_definition(Path(definition_v1_9), {"authoring", "image", "review", "item_management"}),
     compile_definition(Path(analysis_v1), {"support"}),
     compile_definition(Path(analysis_v4), {"support"}),
     compile_definition(Path(analysis_v8), {"support"}),
@@ -1324,6 +1398,7 @@ record_release() {
   temporary="$(mktemp)"
   record="/var/lib/eom-api/deployments/${COMMIT}.json"
   COMMIT="${COMMIT}" VERSION="${VERSION}" DIST_DIR="${DIST_DIR}" RECORD="${temporary}" \
+    WORKFLOW_RUNNER_HELD="${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" \
     "${API_PYTHON}" - <<'PY'
 import hashlib
 import json
@@ -1338,6 +1413,7 @@ for path in sorted(dist.glob("*.whl")):
 payload = {
     "deployed_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     "source_commit": os.environ["COMMIT"],
+    "workflow_runner_held_inactive": os.environ["WORKFLOW_RUNNER_HELD"] == "true",
     "package_version": os.environ["VERSION"],
     "wheels": wheels,
     "rollback": (
@@ -1370,10 +1446,20 @@ wait_for_health() {
 restart_platform_consumers() {
   local consumer main_pid
   for consumer in "${PLATFORM_CONSUMER_SERVICES[@]}"; do
+    if [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true && \
+      "${consumer}" == "${WORKFLOW_RUNNER_SERVICE}" ]]; then
+      verify_workflow_runner_deployment_hold
+      continue
+    fi
     systemctl is-enabled --quiet "${consumer}" || \
       fail "${consumer} must already be enabled before shared-platform deployment"
   done
   for consumer in "${PLATFORM_CONSUMER_SERVICES[@]}"; do
+    if [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true && \
+      "${consumer}" == "${WORKFLOW_RUNNER_SERVICE}" ]]; then
+      verify_workflow_runner_deployment_hold
+      continue
+    fi
     sudo -n systemctl restart "${consumer}"
     systemctl is-active --quiet "${consumer}" || \
       fail "${consumer} did not become active after shared-platform deployment"
@@ -1396,11 +1482,14 @@ install_service() {
   sudo -n systemctl daemon-reload
   sudo -n systemctl enable "${SERVICE}" >/dev/null
   restart_platform_consumers
+  verify_workflow_runner_deployment_hold
   wait_for_health
   printf 'runtime_isolation_verifier_invocation=START\n'
   sudo -n "${RUNTIME_VERIFIER_TARGET}"
   record_release
-  if [[ -n "${EOM_API_SMOKE_USERNAME:-}" && -n "${EOM_API_SMOKE_PASSWORD_FILE:-}" ]]; then
+  if [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true ]]; then
+    printf '%s\n' "Authenticated smoke deferred while the Workflow runner hold is active."
+  elif [[ -n "${EOM_API_SMOKE_USERNAME:-}" && -n "${EOM_API_SMOKE_PASSWORD_FILE:-}" ]]; then
     "${REPOSITORY_ROOT}/scripts/api/smoke_test.sh"
   else
     printf 'Authenticated smoke deferred until EOM_API_SMOKE_USERNAME and '
@@ -1435,15 +1524,22 @@ case "${ACTION}" in
   install)
     sudo -n true || fail "noninteractive privileged access is required before installation"
     require_clean_tree
+    activate_workflow_runner_deployment_hold
     verify_mock_exam_deployment_admission
     prepare_runtime_dependencies
     build_release
     # Close the build-window race before replacing any installed runtime package.
+    verify_workflow_runner_deployment_hold
     verify_mock_exam_deployment_admission
     install_wheels
     reconcile_installed_catalog_runtime_privileges
     reconcile_installed_hwpx_manager_runtime_privileges
     install_service
+    if [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true ]]; then
+      printf '%s\n' "workflow_runner_deployment_hold=ACTIVE"
+      printf '%s\n' \
+        "Retire the pinned occurrence before unmasking and starting eom-workflow-runner.service."
+    fi
     ;;
   verify)
     verify_service

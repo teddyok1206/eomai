@@ -12,8 +12,10 @@ from eom_catalog_contracts import (
     MockExamAssemblyManifestContract,
     MockExamAssemblyManifestV1,
     MockExamAssemblyManifestV2,
+    MockExamAssemblyManifestV3,
     MockExamAssemblyPlacementV1,
-    MockExamAssemblyPlanV1,
+    MockExamAssemblyPlanContract,
+    MockExamAssemblyPlanV2,
     MockExamAssemblyPolicyV1,
     PreviewMockExamAssemblyPlan,
     build_mock_exam_assembly_plan,
@@ -53,7 +55,15 @@ from eom_catalog_service.mock_exam_candidate_repository import (
 from eom_catalog_service.models import (
     DeliverableRecord,
     DeliverableRevisionRecord,
+    ItemComponentRecord,
     ItemRevisionRecord,
+)
+
+_DIRECT_ITEM_CONTENT_SCHEMA_REFS = frozenset(
+    {
+        "eom.assessment.item-content/2.0",
+        "eom://schemas/item-registry/assessment-item-content-v2",
+    }
 )
 
 
@@ -85,7 +95,7 @@ class MockExamAssemblyService:
         self.sessions = build_session_factory(engine)
         self.candidates = candidates or MockExamCandidateRepository()
 
-    def preview(self, query: PreviewMockExamAssemblyPlan) -> MockExamAssemblyPlanV1:
+    def preview(self, query: PreviewMockExamAssemblyPlan) -> MockExamAssemblyPlanContract:
         """Resolve one immutable plan without creating a Form or Assembly row."""
 
         policy = self._validate_policy_pointer(query)
@@ -118,7 +128,9 @@ class MockExamAssemblyService:
             cohort=query.cohort,
         )
 
-    def create_planned(self, command: CreatePlannedMockExamAssembly) -> MockExamAssemblyManifestV2:
+    def create_planned(
+        self, command: CreatePlannedMockExamAssembly
+    ) -> MockExamAssemblyManifestV2 | MockExamAssemblyManifestV3:
         """Create one released assembly from server-resolved planning evidence."""
 
         policy = self._validate_policy_pointer(command)
@@ -129,10 +141,14 @@ class MockExamAssemblyService:
             existing = self._planned_replay(session, command)
             snapshot = self._resolve_snapshot(session, command)
             current_time = datetime.now(UTC)
-            if existing is None and command.cohort is None and (
-                not current_time - timedelta(minutes=15)
-                <= command.planned_at
-                <= (current_time + timedelta(seconds=5))
+            if (
+                existing is None
+                and command.cohort is None
+                and (
+                    not current_time - timedelta(minutes=15)
+                    <= command.planned_at
+                    <= (current_time + timedelta(seconds=5))
+                )
             ):
                 self._fail(
                     "ASSEMBLY_PLAN_EXPIRED",
@@ -180,8 +196,13 @@ class MockExamAssemblyService:
                 return existing
             identity = self._planned_identity(command, plan)
             created_at = datetime.now(UTC)
+            use_v3 = isinstance(plan, MockExamAssemblyPlanV2)
             value: dict[str, Any] = {
-                "schema_version": "mock-exam-assembly-manifest/2.0",
+                "schema_version": (
+                    "mock-exam-assembly-manifest/3.0"
+                    if use_v3
+                    else "mock-exam-assembly-manifest/2.0"
+                ),
                 **identity,
                 "deliverable_id": deliverable.deliverable_id,
                 "deliverable_revision_id": command.deliverable_revision_id,
@@ -193,8 +214,14 @@ class MockExamAssemblyService:
                 "created_by": command.actor_id,
             }
             value["manifest_sha256"] = content_sha256(value)
-            manifest = MockExamAssemblyManifestV2.model_validate(value)
-            validate_contract("mock-exam-assembly-manifest-v2", manifest.model_dump(mode="json"))
+            manifest: MockExamAssemblyManifestV2 | MockExamAssemblyManifestV3
+            if use_v3:
+                manifest = MockExamAssemblyManifestV3.model_validate(value)
+                contract_name = "mock-exam-assembly-manifest-v3"
+            else:
+                manifest = MockExamAssemblyManifestV2.model_validate(value)
+                contract_name = "mock-exam-assembly-manifest-v2"
+            validate_contract(contract_name, manifest.model_dump(mode="json"))
             self._persist_planned(session, command, manifest, created_at)
             return manifest
 
@@ -258,6 +285,8 @@ class MockExamAssemblyService:
             )
         elif schema_version == "mock-exam-assembly-manifest/2.0":
             manifest = MockExamAssemblyManifestV2.model_validate(row.canonical_document)
+        elif schema_version == "mock-exam-assembly-manifest/3.0":
+            manifest = MockExamAssemblyManifestV3.model_validate(row.canonical_document)
         else:
             raise MockExamAssemblyError(
                 "ASSEMBLY_MANIFEST_SCHEMA_UNSUPPORTED",
@@ -344,7 +373,7 @@ class MockExamAssemblyService:
         self,
         session: Session,
         command: CreatePlannedMockExamAssembly,
-    ) -> MockExamAssemblyManifestV2 | None:
+    ) -> MockExamAssemblyManifestV2 | MockExamAssemblyManifestV3 | None:
         form = session.scalar(
             select(AssessmentFormRecord)
             .where(
@@ -383,16 +412,20 @@ class MockExamAssemblyService:
                 "ASSEMBLY_REPLAY_POINTER_INVALID",
                 "current Form revision does not resolve to its Assembly revision",
             )
-        if assembly_revision.canonical_document.get("schema_version") != (
-            "mock-exam-assembly-manifest/2.0"
-        ):
+        stored_schema_version = assembly_revision.canonical_document.get("schema_version")
+        if stored_schema_version not in {
+            "mock-exam-assembly-manifest/2.0",
+            "mock-exam-assembly-manifest/3.0",
+        }:
             self._fail(
                 "ASSEMBLY_FORM_CONFLICT",
                 "form key already owns a non-planned Assembly",
             )
         try:
-            manifest = MockExamAssemblyManifestV2.model_validate(
-                assembly_revision.canonical_document
+            manifest = (
+                MockExamAssemblyManifestV3.model_validate(assembly_revision.canonical_document)
+                if stored_schema_version == "mock-exam-assembly-manifest/3.0"
+                else MockExamAssemblyManifestV2.model_validate(assembly_revision.canonical_document)
             )
         except ValueError:
             self._fail(
@@ -445,8 +478,7 @@ class MockExamAssemblyService:
             # requiring the old revision to remain current would strand a valid pinned cohort.
             or (
                 not exact_cohort
-                and corpus.current_graph_snapshot_revision_id
-                != command.graph_snapshot_revision_id
+                and corpus.current_graph_snapshot_revision_id != command.graph_snapshot_revision_id
             )
             or snapshot.graph_id != corpus.graph_id
             or snapshot.state != "PUBLISHED"
@@ -474,6 +506,15 @@ class MockExamAssemblyService:
                 )
             )
         }
+        content_components = tuple(
+            session.scalars(
+                select(ItemComponentRecord).where(
+                    ItemComponentRecord.item_revision_id.in_(revision_ids),
+                    ItemComponentRecord.component_type == "ITEM_CONTENT",
+                )
+            )
+        )
+        self._require_legacy_direct_content_family(content_components, revision_ids)
         placement_node_ids = tuple(row.graph_placement_node_id for row in command.placements)
         references = {
             row.placement_node_id: row
@@ -601,6 +642,36 @@ class MockExamAssemblyService:
             )
         return tuple(resolved)
 
+    def _require_legacy_direct_content_family(
+        self,
+        components: tuple[ItemComponentRecord, ...],
+        revision_ids: tuple[str, ...],
+    ) -> None:
+        """Admit only the exact V2 content family renderable by legacy manifest V1."""
+
+        by_revision: dict[str, list[ItemComponentRecord]] = {}
+        for component in components:
+            by_revision.setdefault(component.item_revision_id, []).append(component)
+        for revision_id in revision_ids:
+            candidates = by_revision.get(revision_id, [])
+            if len(candidates) != 1 or candidates[0].ordinal != 0:
+                self._fail(
+                    "ASSEMBLY_ITEM_CONTENT_POINTER_INVALID",
+                    "legacy direct assembly requires one canonical Item-content pointer",
+                )
+            try:
+                MockExamCandidateRepository.validate_structural_component(candidates[0])
+            except MockExamCandidateResolutionError:
+                self._fail(
+                    "ASSEMBLY_ITEM_CONTENT_POINTER_INVALID",
+                    "legacy direct assembly requires one canonical Item-content pointer",
+                )
+            if candidates[0].schema_ref not in _DIRECT_ITEM_CONTENT_SCHEMA_REFS:
+                self._fail(
+                    "ASSEMBLY_ITEM_CONTENT_PROTOCOL_UNSUPPORTED",
+                    "legacy direct assembly supports only the exact V2 Item-content protocol",
+                )
+
     @staticmethod
     def _major_unit_key(unit: Any, unit_by_id: dict[str, Any]) -> str:
         current = unit
@@ -656,7 +727,7 @@ class MockExamAssemblyService:
     @staticmethod
     def _planned_identity(
         command: CreatePlannedMockExamAssembly,
-        plan: MockExamAssemblyPlanV1,
+        plan: MockExamAssemblyPlanContract,
     ) -> dict[str, str]:
         form_id = _stable_id(
             "form_",
@@ -806,7 +877,7 @@ class MockExamAssemblyService:
         self,
         session: Session,
         command: CreatePlannedMockExamAssembly,
-        manifest: MockExamAssemblyManifestV2,
+        manifest: MockExamAssemblyManifestV2 | MockExamAssemblyManifestV3,
         created_at: datetime,
     ) -> None:
         if manifest.plan.validation is None:

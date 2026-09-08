@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,7 +28,9 @@ from eom_api_contracts.item_bank import (
     ItemBankCurriculumUnitView,
     ItemBankEntryView,
     ProductionItemCandidateView,
+    ProductionItemCandidateViewV2,
     ProductionItemContentComponentView,
+    ProductionItemContentComponentViewV2,
 )
 from eom_api_contracts.knowledge_analysis import (
     CreateKnowledgeAnalysisRequest,
@@ -65,6 +68,16 @@ def test_mock_exam_plan_api_schema_delegates_to_the_canonical_protocol() -> None
     assert canonical_path.read_bytes() == packaged_path.read_bytes()
     schema = json.loads(canonical_path.read_text(encoding="utf-8"))
     assert schema["$ref"] == "eom://schemas/assessment-assembly/mock-exam-assembly-plan/1.0"
+    canonical_v2 = SCHEMA_ROOT / "mock-exam-assembly-plan-v2.schema.json"
+    packaged_v2 = (
+        Path(__file__).resolve().parents[2]
+        / "packages/api_contracts/eom_api_contracts/schemas"
+        / canonical_v2.name
+    )
+    assert canonical_v2.read_bytes() == packaged_v2.read_bytes()
+    assert json.loads(canonical_v2.read_text(encoding="utf-8"))["$ref"] == (
+        "eom://schemas/assessment-assembly/mock-exam-assembly-plan/2.0"
+    )
     cohort = build_mock_exam_assembly_cohort(
         tuple("itemrev_" + f"{index:032x}" for index in range(1, 26))
     )
@@ -229,6 +242,9 @@ def test_production_item_candidate_schema_matches_structural_eligibility() -> No
         / canonical_path.name
     )
     assert canonical_path.read_bytes() == packaged_path.read_bytes()
+    assert hashlib.sha256(canonical_path.read_bytes()).hexdigest() == (
+        "6b5f27e7d275fc77e976d7445f40080ed3fb4145bfa280ca8356856eb12664f4"
+    )
     value = ProductionItemCandidateView(
         graph_snapshot_revision_id="graphrev_" + "1" * 32,
         snapshot_sha256="sha256:" + "2" * 64,
@@ -273,6 +289,45 @@ def test_production_item_candidate_schema_matches_structural_eligibility() -> No
     ).model_dump(mode="json")
     schema = json.loads(canonical_path.read_text(encoding="utf-8"))
     assert tuple(Draft202012Validator(schema).iter_errors(value)) == ()
+
+    v3 = value | {
+        "schema_version": "production-item-candidate-view/2.0",
+        "content_profile": "CONTENT_TEAM_ITEM_CONTENT_V3",
+        "content_component": value["content_component"]
+        | {
+            "schema_ref": "eom.assessment.item-content/3.0",
+            "editorial_markdown_schema_ref": (
+                "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
+            ),
+        },
+    }
+    with pytest.raises(ValidationError):
+        ProductionItemCandidateView.model_validate(v3)
+    assert tuple(Draft202012Validator(schema).iter_errors(v3))
+
+    v2_path = SCHEMA_ROOT / "production-item-candidate-v2.schema.json"
+    v2_packaged_path = packaged_path.with_name(v2_path.name)
+    assert v2_path.read_bytes() == v2_packaged_path.read_bytes()
+    v2_schema = json.loads(v2_path.read_text(encoding="utf-8"))
+    assert ProductionItemCandidateViewV2.model_validate(v3).content_profile == (
+        "CONTENT_TEAM_ITEM_CONTENT_V3"
+    )
+    assert tuple(Draft202012Validator(v2_schema).iter_errors(v3)) == ()
+    mixed_candidate = v3 | {"content_profile": "CONTENT_TEAM_ITEM_CONTENT_V2"}
+    with pytest.raises(ValidationError):
+        ProductionItemCandidateViewV2.model_validate(mixed_candidate)
+    assert tuple(Draft202012Validator(v2_schema).iter_errors(mixed_candidate))
+    with pytest.raises(ValidationError, match="profile differs"):
+        ProductionItemCandidateViewV2.model_validate(
+            v3
+            | {
+                "content_component": v3["content_component"]
+                | {"schema_ref": "eom.assessment.item-content/2.0"}
+            }
+        )
+
+    component = ProductionItemContentComponentViewV2.model_validate(v3["content_component"])
+    assert component.editorial_markdown_schema_ref is not None
 
     with pytest.raises(ValidationError, match="eligibility differs"):
         ProductionItemCandidateView.model_validate(

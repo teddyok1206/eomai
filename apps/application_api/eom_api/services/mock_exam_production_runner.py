@@ -14,8 +14,12 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamProductionExecutionV1,
     MockExamRatingPolicyPointerV1,
 )
+from eom_api_contracts.mock_exam_retirement import MockExamProductionRetirementReceiptV1
 from eom_catalog_contracts.mock_exam_production_plan import MockExamProductionPlanV1
 from eom_operator_identity import ActorContext
+from eom_workflow_runner.mock_exam_production_retirement import (
+    MockExamProductionRetirementService,
+)
 
 from eom_api.services.mock_exam_production_checkpoint_store import (
     MockExamProductionCheckpointStore,
@@ -33,9 +37,11 @@ class MockExamProductionRunner:
         *,
         coordinator: MockExamProductionCoordinator,
         checkpoints: MockExamProductionCheckpointStore,
+        retirements: MockExamProductionRetirementService | None = None,
     ) -> None:
         self._coordinator = coordinator
         self._checkpoints = checkpoints
+        self._retirements = retirements
 
     def initialize(
         self,
@@ -55,6 +61,20 @@ class MockExamProductionRunner:
 
     def get(self, execution_id: str) -> MockExamProductionExecutionV1:
         return self._checkpoints.load(execution_id)
+
+    def retire_items(
+        self,
+        execution_id: str,
+        actor: ActorContext,
+        *,
+        at: datetime,
+    ) -> MockExamProductionRetirementReceiptV1:
+        """Fence all old work without advancing or rewriting the immutable checkpoint."""
+
+        if self._retirements is None:
+            raise RuntimeError("mock-exam production retirement adapter is unavailable")
+        checkpoint = self._checkpoints.load(execution_id)
+        return self._retirements.retire(checkpoint, actor, at=at)
 
     def advance_items(
         self,

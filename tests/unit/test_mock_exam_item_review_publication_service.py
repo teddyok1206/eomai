@@ -4,16 +4,28 @@ from contextlib import nullcontext
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
+from eom_api.services.command_adapter import _workflow_request_from_api
+from eom_api.services.mock_exam_production_coordinator import _workflow_request
+from eom_api_contracts.mock_exam_execution import MockExamGenerationBlockResolutionV1
 from eom_catalog_contracts.assessment_assembly import (
+    load_integrated_science_mock_exam_layout_policy,
+    load_integrated_science_mock_exam_policy,
     load_integrated_science_mock_exam_rating_policy,
 )
+from eom_catalog_contracts.curriculum import load_integrated_science_editorial_outline
 from eom_catalog_contracts.item_review import (
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF,
     InspectMockExamReviewEligibilityQuery,
+    MockExamItemReviewDecisionV2,
+    MockExamItemReviewPublicationResultV2,
     MockExamReviewFindingCounts,
     PublishMockExamItemReviewCommand,
+)
+from eom_catalog_contracts.mock_exam_production_plan import (
+    build_integrated_science_mock_exam_production_plan,
 )
 from eom_catalog_service.mock_exam_item_review_publication_service import (
     MockExamItemReviewPublicationError,
@@ -33,6 +45,10 @@ from eom_workflow.models import (
     WorkerRequest,
 )
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
+from eom_workflow_runner.repository import (
+    workflow_business_fingerprint,
+    workflow_request_storage_document,
+)
 
 NOW = datetime(2026, 9, 8, 5, tzinfo=UTC)
 
@@ -47,6 +63,20 @@ class _RoleArtifactStore:
 
     def load_json_revision(self, **_kwargs: object) -> dict[str, Any]:
         return self.result
+
+
+class _DecisionCommitStore:
+    def __init__(self) -> None:
+        self.call: dict[str, Any] | None = None
+
+    def commit_file_set(self, **kwargs: Any) -> SimpleNamespace:
+        self.call = kwargs
+        expected = cast(dict[str, str], kwargs["expected_file_sha256"])
+        return SimpleNamespace(
+            artifact_id=_id("artifact_", "c"),
+            revision_id=_id("rev_", "d"),
+            content_hash=expected["mock-exam-item-review-decision.json"],
+        )
 
 
 class _LookupSession:
@@ -237,6 +267,74 @@ def test_decision_hash_uses_the_exact_json_timestamp_and_explicit_rating() -> No
     )
 
 
+def test_review_result_9_emits_v2_decision_artifact_and_publication_receipt() -> None:
+    policy = load_integrated_science_mock_exam_rating_policy()
+    command = PublishMockExamItemReviewCommand(
+        item_revision_id=_id("itemrev_", "1"),
+        expected_workflow_id=_id("workflow_", "2"),
+        final_rating="A",
+        reviewer_operator_id=_id("operator_", "3"),
+        rating_policy_revision_id=policy.rating_policy_revision_id,
+        rating_policy_sha256=content_sha256(policy.model_dump(mode="json")),
+        idempotency_key="content-team-v3-human-rating",
+    )
+    evidence = _PublicationEvidence(
+        item_revision_id=command.item_revision_id,
+        workflow_id=command.expected_workflow_id,
+        review_step_run_id=_id("steprun_", "4"),
+        approval_request_id=_id("approval_", "5"),
+        review_artifact_id=_id("artifact_", "6"),
+        review_artifact_revision_id=_id("rev_", "7"),
+        review_sha256="sha256:" + "8" * 64,
+        review_result_schema="review-result@9.0",
+        finding_counts=MockExamReviewFindingCounts(info=0, warning=0, blocking=0),
+        approval_resolved_at=NOW,
+    )
+    record_id, key_hash = MockExamItemReviewPublicationService._idempotency_identity(command)
+    decision = MockExamItemReviewPublicationService._decision(
+        command,
+        policy=policy,
+        evidence=evidence,
+        item_review_record_id=record_id,
+        idempotency_key_sha256=key_hash,
+    )
+    record = SimpleNamespace(
+        item_review_record_id=record_id,
+        item_revision_id=command.item_revision_id,
+        workflow_id=command.expected_workflow_id,
+        review_artifact_id=_id("artifact_", "9"),
+        review_artifact_revision_id=_id("rev_", "a"),
+        review_sha256="sha256:" + "b" * 64,
+        reviewer_actor_id=command.reviewer_operator_id,
+    )
+    result = MockExamItemReviewPublicationService._result(
+        cast(Any, object.__new__(MockExamItemReviewPublicationService)),
+        cast(Any, record),
+        evidence=evidence,
+        command=command,
+        decision=decision,
+        created=True,
+    )
+
+    assert isinstance(decision, MockExamItemReviewDecisionV2)
+    assert decision.schema_version == "mock-exam-item-review-decision/2.0"
+    assert isinstance(result, MockExamItemReviewPublicationResultV2)
+    assert result.schema_version == "mock-exam-item-review-publication-result/2.0"
+
+    store = _DecisionCommitStore()
+    service = cast(Any, object.__new__(MockExamItemReviewPublicationService))
+    service.artifacts = store
+    service._commit_decision_artifact(decision)
+    assert store.call is not None
+    assert store.call["protocol_version"] == "catalog/1.12"
+    assert store.call["file_metadata"] == {
+        "mock-exam-item-review-decision.json": {
+            "schema_ref": MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF,
+            "media_type": "application/json",
+        }
+    }
+
+
 @pytest.mark.parametrize(
     ("workflow_state", "approval_state", "reviewer_operator_id", "approved_at"),
     (
@@ -342,10 +440,50 @@ def test_eligibility_batch_bulk_loads_workflows_and_definitions_in_order() -> No
     ) == tuple(query.workflow_id for query in queries)
 
 
-def test_completed_workflow_evidence_accepts_deactivated_exact_definition() -> None:
+def test_real_production_workflow_uses_business_fingerprint_for_review_eligibility() -> None:
     definition_document = {"schema_version": "1.0", "test": "historical-review"}
     definition_sha256 = content_sha256(definition_document)
-    request_document = {"immutable": "request"}
+    plan = build_integrated_science_mock_exam_production_plan(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    resolution = MockExamGenerationBlockResolutionV1(
+        generation_block_key=plan.one_item_generation_block.block_key,
+        generation_block_revision=plan.one_item_generation_block.block_revision,
+        generation_block_sha256=plan.one_item_generation_block.block_sha256,
+        workflow_definition_key="generic-item-development",
+        workflow_definition_version="1.8.0",
+        workflow_definition_sha256=definition_sha256,
+        content_pack_release_id=_id("packrel_", "3"),
+        content_pack_key="generated-knowledge-item",
+        content_pack_version="1.13.0",
+        content_pack_release_sha256="sha256:" + "4" * 64,
+        content_pack_source_tree_sha256=(
+            plan.one_item_generation_block.content_pack_source_tree_sha256
+        ),
+        execution_preset_id=_id("execpreset_", "5"),
+        execution_preset_revision_id=_id("execpresetrev_", "6"),
+        execution_preset_key="knowledge-grounded-item",
+        execution_preset_sha256="sha256:" + "7" * 64,
+        resolved_at=NOW,
+    )
+    source_request = _workflow_request_from_api(
+        _workflow_request(
+            plan.workflow_calls[0],
+            plan.one_item_generation_block,
+            resolution,
+            _id("productionreq_", "8"),
+        )
+    )
+    request_document = workflow_request_storage_document(source_request)
+    definition = SimpleNamespace(
+        definition_key="generic-item-development",
+        definition_version="1.8.0",
+        definition_hash=definition_sha256,
+        canonical_definition=definition_document,
+        active=False,
+    )
     workflow = SimpleNamespace(
         workflow_id=_id("workflow_", "1"),
         definition_id=_id("workflowdef_", "2"),
@@ -359,47 +497,18 @@ def test_completed_workflow_evidence_accepts_deactivated_exact_definition() -> N
         completed_at=NOW,
         initial_request=request_document,
         request_payload=request_document,
-        request_hash=content_sha256(request_document),
-    )
-    definition = SimpleNamespace(
-        definition_key=workflow.definition_key,
-        definition_version=workflow.definition_version,
-        definition_hash=definition_sha256,
-        canonical_definition=definition_document,
-        active=False,
+        request_hash=workflow_business_fingerprint(cast(Any, definition), source_request),
     )
     session = Mock()
     session.get.return_value = definition
+    service = MockExamItemReviewPublicationService.__new__(MockExamItemReviewPublicationService)
 
-    class ExactBrief:
-        mock_exam_slot = object()
-
-    source_request = SimpleNamespace(
-        request_name="GENERATED_KNOWLEDGE_ITEM_REQUEST",
-        content_pack=SimpleNamespace(pack_key="generated-knowledge-item"),
-        registry_intent=SimpleNamespace(mode="CREATE_ITEM"),
-        item_brief=ExactBrief(),
-        execution_preset_key="knowledge-grounded-item",
+    resolved, _contracts = service._require_supported_workflow(
+        session,
+        workflow,
+        expected_state="COMPLETED",
     )
-    service = MockExamItemReviewPublicationService.__new__(
-        MockExamItemReviewPublicationService
-    )
-    with (
-        patch(
-            "eom_catalog_service.mock_exam_item_review_publication_service."
-            "ContentTeamItemBrief",
-            ExactBrief,
-        ),
-        patch(
-            "eom_catalog_service.mock_exam_item_review_publication_service."
-            "WorkflowRequest.model_validate",
-            return_value=source_request,
-        ),
-    ):
-        resolved, _contracts = service._require_supported_workflow(
-            session,
-            workflow,
-            expected_state="COMPLETED",
-        )
 
     assert resolved is workflow
+    assert source_request.production_occurrence is not None
+    assert workflow.request_hash != content_sha256(request_document)

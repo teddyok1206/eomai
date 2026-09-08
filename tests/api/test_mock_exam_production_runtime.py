@@ -365,6 +365,11 @@ class _Runner:
         assert self.current is not None
         return self.current
 
+    def retire_items(self, *_: Any, **__: Any) -> Any:
+        self.calls.append(("retire", None))
+        assert self.current is not None
+        return {"retired_execution_id": self.current.execution_id}
+
     def advance_analyses(self, *_: Any, **__: Any) -> MockExamProductionExecutionV1:
         self.calls.append(("analyses", None))
         assert self.current is not None
@@ -476,6 +481,40 @@ def test_application_enforces_owner_and_fresh_authentication() -> None:
         application.advance_analyses(checkpoint.execution_id, stale)
     assert freshness.value.code == "PRODUCTION_OPERATOR_REAUTHENTICATION_REQUIRED"
     assert [row[0] for row in runner.calls] == ["initialize"]
+
+
+def test_historical_retirement_ignores_current_plan_but_revalidates_pinned_checkpoint() -> None:
+    application, runner, _ = _application()
+    checkpoint = application.initialize(PRODUCTION_REQUEST_ID, _actor())
+
+    # A held install may make the corrected V2 plan current before the exact V1 occurrence is
+    # retired. Only the retirement use case is historical; all other phase methods retain their
+    # current-plan gate.
+    runner.releases.plan = runner.releases.plan.model_copy(
+        update={
+            "production_plan_id": "productionplan_" + "9" * 32,
+            "plan_sha256": "sha256:" + "9" * 64,
+        }
+    )
+    assert application.retire_items(checkpoint.execution_id, _actor()) == {
+        "retired_execution_id": checkpoint.execution_id
+    }
+    assert [row[0] for row in runner.calls] == ["initialize", "retire"]
+
+    runner.current = checkpoint.model_copy(update={"production_plan_sha256": "sha256:" + "8" * 64})
+    with pytest.raises(MockExamProductionApplicationError) as tampered:
+        application.retire_items(checkpoint.execution_id, _actor())
+    assert tampered.value.code == "PRODUCTION_HISTORICAL_CHECKPOINT_INVALID"
+    assert [row[0] for row in runner.calls] == ["initialize", "retire"]
+
+    runner.current = checkpoint
+    with pytest.raises(MockExamProductionApplicationError) as foreign_operator:
+        application.retire_items(
+            checkpoint.execution_id,
+            _actor(operator_id="operator_" + "9" * 32),
+        )
+    assert foreign_operator.value.code == "PRODUCTION_EXECUTION_OPERATOR_MISMATCH"
+    assert [row[0] for row in runner.calls] == ["initialize", "retire"]
 
 
 def test_graph_phase_accepts_only_access_policy_from_pinned_preset() -> None:

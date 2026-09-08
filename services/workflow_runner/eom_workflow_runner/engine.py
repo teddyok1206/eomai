@@ -746,7 +746,7 @@ class WorkflowRunner:
                     definition.worker_role == "image"
                     and full_request.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
                 ):
-                    if definition.result_schema == "image-result@8.0":
+                    if definition.result_schema in {"image-result@8.0", "image-result@9.0"}:
                         content_team_stimuli = self.catalog.materialize_content_team_stimuli(
                             workflow=workflow,
                             artifacts=(*upstream, result_pointer),

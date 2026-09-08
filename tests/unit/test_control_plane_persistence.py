@@ -318,9 +318,9 @@ def test_assessment_hwpx_build_migration_is_pointer_only_and_fifo_indexed() -> N
 
 
 def test_graph_publication_authorization_migration_is_additive_and_persisted() -> None:
-    source = Path(
-        "migrations/versions/20260908_0032_graph_publication_authorization.py"
-    ).read_text(encoding="utf-8")
+    source = Path("migrations/versions/20260908_0032_graph_publication_authorization.py").read_text(
+        encoding="utf-8"
+    )
     assert 'down_revision: str | None = "20260907_0031"' in source
     assert "authorized_at" in source
     assert "SET authorized_at = requested_at" in source

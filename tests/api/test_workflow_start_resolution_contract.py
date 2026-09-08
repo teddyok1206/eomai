@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
+from unittest.mock import Mock, patch
 
 import pytest
 from eom_api.errors import ApiError
-from eom_api.routers.workflows import start_workflow
+from eom_api.routers.workflows import _action, start_workflow
 from eom_api_contracts.workflows import (
     WorkflowAcceptedResolutionView,
+    WorkflowActionRequest,
     WorkflowStartRequest,
 )
 from eom_identity_service.tokens import AccessAuthentication
+from eom_workflow_runner.repository import CommandType
 from fastapi import Request
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
@@ -133,3 +137,46 @@ def test_public_workflow_start_rejects_internal_production_occurrence() -> None:
 
     assert raised.value.status == 403
     assert raised.value.error_code == "WORKFLOW_PRODUCTION_OCCURRENCE_INTERNAL_ONLY"
+
+
+@pytest.mark.parametrize(
+    "action",
+    (
+        CommandType.APPROVE_WORKFLOW,
+        CommandType.REQUEST_REWORK,
+        CommandType.CANCEL_WORKFLOW,
+    ),
+)
+def test_public_production_action_is_rejected_before_api_side_effects(
+    action: CommandType,
+) -> None:
+    commands = Mock()
+    commands.require_public_workflow_action_allowed.side_effect = ApiError(
+        403,
+        "WORKFLOW_PRODUCTION_OCCURRENCE_INTERNAL_ONLY",
+        "Production occurrence is internal-only",
+        "Coordinated production Workflows are internal-only.",
+    )
+    request = cast(
+        Request,
+        SimpleNamespace(
+            app=SimpleNamespace(state=SimpleNamespace(services=SimpleNamespace(commands=commands)))
+        ),
+    )
+
+    with (
+        patch("eom_api.routers.workflows.run_command") as run,
+        pytest.raises(ApiError) as raised,
+    ):
+        _action(
+            request,
+            "workflow_" + "f" * 32,
+            action,
+            WorkflowActionRequest(),
+            "public-production-action",
+            3,
+        )
+
+    assert raised.value.status == 403
+    assert raised.value.error_code == "WORKFLOW_PRODUCTION_OCCURRENCE_INTERNAL_ONLY"
+    run.assert_not_called()

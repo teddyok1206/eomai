@@ -91,6 +91,74 @@ for module in (eom_hwpx_builder, eom_hwpx_contracts):
         raise SystemExit(f"source checkout import detected: {path}")
 print("NON_EDITABLE_IMPORT=PASS")
 PY
+  "$PYTHON" - "$REPOSITORY_ROOT" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+import eom_hwpx_builder
+import eom_hwpx_contracts
+from eom_hwpx_builder.cli import CONTENT_TEAM_EXAM_REQUEST_SCHEMA_VERSIONS
+from eom_hwpx_builder.content_team_exam_renderer import EXAM_RENDERER_VERSION_V3
+from eom_hwpx_contracts import ContentTeamExamRenderRequestV3
+
+repository = Path(sys.argv[1]).resolve()
+installed_builder = Path(eom_hwpx_builder.__file__).resolve().parent
+installed_contracts = Path(eom_hwpx_contracts.__file__).resolve().parent
+source_pairs = (
+    (installed_builder / "cli.py", repository / "services/hwpx_builder/eom_hwpx_builder/cli.py"),
+    (
+        installed_builder / "content_team_exam_renderer.py",
+        repository / "services/hwpx_builder/eom_hwpx_builder/content_team_exam_renderer.py",
+    ),
+    (
+        installed_contracts / "models.py",
+        repository / "packages/hwpx_contracts/eom_hwpx_contracts/models.py",
+    ),
+    (
+        installed_contracts / "schemas/hwpx-content-team-exam-render-request-v3.schema.json",
+        repository / "schemas/hwpx/hwpx-content-team-exam-render-request-v3.schema.json",
+    ),
+    (
+        installed_contracts / "schemas/hwpx-content-team-exam-build-result-v3.schema.json",
+        repository / "schemas/hwpx/hwpx-content-team-exam-build-result-v3.schema.json",
+    ),
+)
+for installed, source in source_pairs:
+    if installed.read_bytes() != source.read_bytes():
+        raise SystemExit(f"installed HWPX V3 source drift: {installed.name}")
+schema_payload = {
+    "content-team-exam-render-request-v3": source_pairs[-2][0].read_text(encoding="utf-8"),
+    "content-team-exam-build-result-v3": source_pairs[-1][0].read_text(encoding="utf-8"),
+}
+schema_bundle_hash = "sha256:" + hashlib.sha256(
+    json.dumps(
+        schema_payload,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+).hexdigest()
+if schema_bundle_hash != (
+    "sha256:43b7659bb96845f97fc2c29f5b26eaf561b4ba36ed0a1ee811088aa7cd9675a8"
+):
+    raise SystemExit("installed HWPX V3 schema bundle mismatch")
+if CONTENT_TEAM_EXAM_REQUEST_SCHEMA_VERSIONS != {
+    "content-team-exam-render-request/1.0",
+    "content-team-exam-render-request/2.0",
+    "content-team-exam-render-request/3.0",
+}:
+    raise SystemExit("installed HWPX CLI request-family admission mismatch")
+if (
+    ContentTeamExamRenderRequestV3.model_fields["schema_version"].default
+    != "content-team-exam-render-request/3.0"
+    or EXAM_RENDERER_VERSION_V3 != "3.0.0"
+):
+    raise SystemExit("installed HWPX V3 renderer profile mismatch")
+print("CONTENT_TEAM_EXAM_V3_RUNTIME=READY")
+PY
   "$PYTHON" - "$KORDOC_TARGET" "$KORDOC_SOURCE/package-lock.json" <<'PY'
 import os
 import stat
@@ -231,14 +299,20 @@ required = {
         "eom_hwpx_contracts/schemas/hwpx-content-team-build-result-v1.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-content-team-render-request-v2.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-content-team-build-result-v2.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-editorial-question-v2.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-render-request-v3.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-build-result-v3.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-content-team-exam-render-request-v1.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-content-team-exam-build-result-v1.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-content-team-exam-render-request-v2.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-content-team-exam-build-result-v2.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-exam-render-request-v3.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-exam-build-result-v3.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-manager-download-v1.schema.json",
     },
     "eom_hwpx_builder": {
         "eom_hwpx_builder/__init__.py",
+        "eom_hwpx_builder/cli.py",
         "eom_hwpx_builder/content_team_handoff.py",
         "eom_hwpx_builder/content_team_renderer.py",
         "eom_hwpx_builder/content_team_exam_renderer.py",

@@ -36,11 +36,15 @@ from eom_workflow.models import (
     AuthoringRoleResult,
     ContentTeamAuthoringRoleResultV7,
     ContentTeamAuthoringRoleResultV8,
+    ContentTeamAuthoringRoleResultV9,
     ContentTeamImageRoleResultV8,
+    ContentTeamImageRoleResultV9,
     ContentTeamRegistrationRoleResultV7,
     ContentTeamRegistrationRoleResultV8,
+    ContentTeamRegistrationRoleResultV9,
     ContentTeamReviewRoleResultV7,
     ContentTeamReviewRoleResultV8,
+    ContentTeamReviewRoleResultV9,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
     GeneratedAuthoringRoleResultV5,
@@ -110,6 +114,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "authoring-result@6.0",
             "authoring-result@7.0",
             "authoring-result@8.0",
+            "authoring-result@9.0",
         }
     ),
     "image": frozenset(
@@ -121,6 +126,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "image-result@5.0",
             "image-result@6.0",
             "image-result@8.0",
+            "image-result@9.0",
         }
     ),
     "review": frozenset(
@@ -133,6 +139,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "review-result@6.0",
             "review-result@7.0",
             "review-result@8.0",
+            "review-result@9.0",
         }
     ),
     "item_management": frozenset(
@@ -145,6 +152,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "registration-result@6.0",
             "registration-result@7.0",
             "registration-result@8.0",
+            "registration-result@9.0",
         }
     ),
     "support": frozenset(
@@ -195,6 +203,10 @@ RESULT_SCHEMA_FILES = {
     "image-result@8.0": "image-result-v8.schema.json",
     "review-result@8.0": "review-result-v8.schema.json",
     "registration-result@8.0": "registration-result-v8.schema.json",
+    "authoring-result@9.0": "authoring-result-v9.schema.json",
+    "image-result@9.0": "image-result-v9.schema.json",
+    "review-result@9.0": "review-result-v9.schema.json",
+    "registration-result@9.0": "registration-result-v9.schema.json",
     "knowledge-analysis-proposal-result@1.0": ("knowledge-analysis-proposal-result-v1.schema.json"),
     "knowledge-analysis-proposal-result@2.0": ("knowledge-analysis-proposal-result-v2.schema.json"),
     "knowledge-analysis-proposal-result@3.0": ("knowledge-analysis-proposal-result-v3.schema.json"),
@@ -233,6 +245,7 @@ INPUT_SCHEMA_FILES_V1_15 = {
 INPUT_SCHEMA_FILES_V1_16 = {"support": "legacy-item-editorial-compatibility-input-v1.schema.json"}
 INPUT_SCHEMA_FILES_V1_17 = INPUT_SCHEMA_FILES_V1_15 | {"image": "image-input.schema.json"}
 INPUT_SCHEMA_FILES_V1_18 = {"support": "knowledge-analysis-input-v9.schema.json"}
+INPUT_SCHEMA_FILES_V1_19 = INPUT_SCHEMA_FILES_V1_17
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -276,6 +289,10 @@ RESULT_SCHEMA_PROTOCOLS = {
     "image-result@8.0": "workflow-role/1.17.0",
     "review-result@8.0": "workflow-role/1.17.0",
     "registration-result@8.0": "workflow-role/1.17.0",
+    "authoring-result@9.0": "workflow-role/1.19.0",
+    "image-result@9.0": "workflow-role/1.19.0",
+    "review-result@9.0": "workflow-role/1.19.0",
+    "registration-result@9.0": "workflow-role/1.19.0",
 }
 PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.0.1": INPUT_SCHEMA_FILES,
@@ -297,6 +314,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.16.0": INPUT_SCHEMA_FILES_V1_16,
     "workflow-role/1.17.0": INPUT_SCHEMA_FILES_V1_17,
     "workflow-role/1.18.0": INPUT_SCHEMA_FILES_V1_18,
+    "workflow-role/1.19.0": INPUT_SCHEMA_FILES_V1_19,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -318,6 +336,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.16.0",
     "workflow-role/1.17.0",
     "workflow-role/1.18.0",
+    "workflow-role/1.19.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -337,6 +356,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_15.values(),
             *INPUT_SCHEMA_FILES_V1_16.values(),
             *INPUT_SCHEMA_FILES_V1_18.values(),
+            *INPUT_SCHEMA_FILES_V1_19.values(),
         }
     )
 )
@@ -399,6 +419,7 @@ def load_role_input_schema(
         "workflow-role/1.13.0",
         "workflow-role/1.15.0",
         "workflow-role/1.17.0",
+        "workflow-role/1.19.0",
     }:
         schema = copy.deepcopy(schema)
         _mapping(_mapping(schema, "properties"), "protocol_version")["const"] = protocol_version
@@ -415,6 +436,7 @@ def load_role_input_schema(
                 "workflow-role/1.13.0",
                 "workflow-role/1.15.0",
                 "workflow-role/1.17.0",
+                "workflow-role/1.19.0",
             }
             else "KNOWLEDGE_ITEM_REQUEST"
         )
@@ -477,7 +499,15 @@ def validate_role_input(
 
 def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult:
     canonical_value = value
-    if schema_id in {"authoring-result@7.0", "authoring-result@8.0"} and role == "authoring":
+    if (
+        schema_id
+        in {
+            "authoring-result@7.0",
+            "authoring-result@8.0",
+            "authoring-result@9.0",
+        }
+        and role == "authoring"
+    ):
         canonical_value = _canonicalize_content_team_authoring_result(value, schema_id=schema_id)
     elif schema_id == "legacy-item-extraction-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_item_extraction_result(value)
@@ -523,6 +553,14 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return ContentTeamReviewRoleResultV8.model_validate(value)
         if schema_id == "registration-result@8.0" and role == "item_management":
             return ContentTeamRegistrationRoleResultV8.model_validate(value)
+        if schema_id == "authoring-result@9.0" and role == "authoring":
+            return ContentTeamAuthoringRoleResultV9.model_validate(canonical_value)
+        if schema_id == "image-result@9.0" and role == "image":
+            return ContentTeamImageRoleResultV9.model_validate(value)
+        if schema_id == "review-result@9.0" and role == "review":
+            return ContentTeamReviewRoleResultV9.model_validate(value)
+        if schema_id == "registration-result@9.0" and role == "item_management":
+            return ContentTeamRegistrationRoleResultV9.model_validate(value)
         if schema_id == "knowledge-analysis-proposal-result@1.0" and role == "support":
             return KnowledgeAnalysisProposalRoleResult.model_validate(value)
         if schema_id == "knowledge-analysis-proposal-result@2.0" and role == "support":
@@ -666,16 +704,31 @@ def _canonicalize_content_team_authoring_result(
         canonical_draft["visual_layout"] = derived_layout
     canonical_draft["equation_sources"] = []
     try:
-        model = (
-            ContentTeamAuthoringRoleResultV8
-            if schema_id == "authoring-result@8.0"
-            else ContentTeamAuthoringRoleResultV7
+        preliminary: (
+            ContentTeamAuthoringRoleResultV7
+            | ContentTeamAuthoringRoleResultV8
+            | ContentTeamAuthoringRoleResultV9
         )
-        preliminary = model.model_validate(canonical)
+        if schema_id == "authoring-result@7.0":
+            preliminary = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
+        elif schema_id == "authoring-result@8.0":
+            preliminary = ContentTeamAuthoringRoleResultV8.model_validate(canonical)
+        else:
+            preliminary = ContentTeamAuthoringRoleResultV9.model_validate(canonical)
         canonical_draft["equation_sources"] = list(
             derive_content_team_equation_sources(preliminary.output.draft)
         )
-        validated = model.model_validate(canonical)
+        validated: (
+            ContentTeamAuthoringRoleResultV7
+            | ContentTeamAuthoringRoleResultV8
+            | ContentTeamAuthoringRoleResultV9
+        )
+        if schema_id == "authoring-result@7.0":
+            validated = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
+        elif schema_id == "authoring-result@8.0":
+            validated = ContentTeamAuthoringRoleResultV8.model_validate(canonical)
+        else:
+            validated = ContentTeamAuthoringRoleResultV9.model_validate(canonical)
         serialize_content_team_markdown(validated.output.draft)
     except ValidationError as exc:
         raise WorkflowSchemaError(f"{schema_id} failed typed validation") from exc
@@ -1459,8 +1512,14 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     schema.pop("$id", None)
     if schema_id == "authoring-result@2.0":
         _project_knowledge_authoring_content(schema)
-    if schema_id in {"authoring-result@7.0", "authoring-result@8.0"}:
-        _project_content_team_authoring_contract(schema)
+    if schema_id in {
+        "authoring-result@7.0",
+        "authoring-result@8.0",
+        "authoring-result@9.0",
+    }:
+        _project_content_team_authoring_contract(schema, schema_id=schema_id)
+    if schema_id == "image-result@9.0":
+        _project_content_team_image_v9_codex_contract(schema)
     if schema_id in {
         "knowledge-analysis-proposal-result@1.0",
         "knowledge-analysis-proposal-result@2.0",
@@ -1489,6 +1548,23 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
     return schema
+
+
+def _project_content_team_image_v9_codex_contract(schema: dict[str, Any]) -> None:
+    """Drop only the SVG negation that Codex Structured Outputs cannot express.
+
+    The canonical ``image-result@9.0`` schema and Pydantic model retain the safe-SVG rejection
+    rules. This projection is used only for worker decoding; canonical validation runs before an
+    artifact can be committed.
+    """
+
+    definitions = _mapping(schema, "$defs")
+    drawing = _mapping(definitions, "GeneratedVectorDrawingV9")
+    properties = _mapping(drawing, "properties")
+    svg_overlay = _mapping(properties, "svg_overlay")
+    guard = svg_overlay.pop("not", None)
+    if not isinstance(guard, dict) or not isinstance(guard.get("anyOf"), list):
+        raise WorkflowSchemaError("image-result@9.0 safe-SVG guard is not projectable")
 
 
 def _project_legacy_editorial_compatibility_codex_contract(
@@ -1565,11 +1641,20 @@ def _project_legacy_editorial_compatibility_codex_contract(
     authorities["items"] = {"anyOf": prefix_items}
 
 
-def _project_content_team_authoring_contract(schema: dict[str, Any]) -> None:
+def _project_content_team_authoring_contract(
+    schema: dict[str, Any],
+    *,
+    schema_id: str,
+) -> None:
     """Make the model author semantic visuals while EOM derives their renderer route."""
 
     definitions = _mapping(schema, "$defs")
-    draft = _mapping(definitions, "AssessmentItemContentV2")
+    draft_name = (
+        "AssessmentItemContentV3"
+        if schema_id == "authoring-result@9.0"
+        else "AssessmentItemContentV2"
+    )
+    draft = _mapping(definitions, draft_name)
     properties = _mapping(draft, "properties")
     visual_layout = properties.pop("visual_layout", None)
     if not isinstance(visual_layout, dict):
@@ -1581,7 +1666,7 @@ def _project_content_team_authoring_contract(schema: dict[str, Any]) -> None:
 
     _mapping(properties, "bottom_stem")["description"] = (
         "Final question sentence only. The reviewed source format shows a trailing score marker, "
-        "but this structured field must omit it; put only 2, 2.5, or 3 in score_display."
+        "but this structured field must omit it; put the exact allowed value in score_display."
     )
     _mapping(properties, "score_display")["description"] = (
         "The score printed once after bottom_stem; never repeat the bracketed score inside "

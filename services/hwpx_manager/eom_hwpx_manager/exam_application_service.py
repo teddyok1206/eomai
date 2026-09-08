@@ -8,12 +8,16 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from eom_catalog_contracts import MockExamAssemblyManifestContract
+from eom_catalog_contracts import (
+    MockExamAssemblyManifestContract,
+    MockExamContentPointerV2,
+)
 from eom_catalog_service.mock_exam_assembly_service import MockExamAssemblyService
 from eom_hwpx_contracts import (
     ContentTeamHandoffSnapshot,
     ContentTeamImageSource,
     ContentTeamItemSource,
+    ContentTeamItemSourceV2,
 )
 from eom_identifiers import content_sha256, new_hwpx_build_id
 from eom_orchestrator.database import build_session_factory, transaction
@@ -369,7 +373,7 @@ class ExamHwpxApplicationService:
         placement: AssemblyRenderPlacement,
         component: dict[str, Any],
         metadata: dict[str, Any],
-    ) -> ContentTeamItemSource:
+    ) -> ContentTeamItemSource | ContentTeamItemSourceV2:
         pointer = placement.content
         if pointer is None:
             return ContentTeamItemSource(
@@ -381,6 +385,7 @@ class ExamHwpxApplicationService:
         if (
             component.get("item_component_id") != pointer.item_component_id
             or component.get("logical_name") != pointer.member_path
+            or component.get("schema_ref") != pointer.schema_ref
             or component.get("artifact_id") != pointer.artifact_id
             or component.get("artifact_revision_id") != pointer.artifact_revision_id
             or component.get("sha256") != pointer.sha256
@@ -388,17 +393,30 @@ class ExamHwpxApplicationService:
             or component.get("required") is not True
             or metadata.get("editorial_markdown_member") != pointer.editorial_markdown_member
             or metadata.get("editorial_markdown_sha256") != pointer.editorial_markdown_sha256
+            or (
+                isinstance(pointer, MockExamContentPointerV2)
+                and metadata.get("editorial_markdown_schema_ref")
+                != pointer.editorial_markdown_schema_ref
+            )
         ):
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_APPLICATION_REVISION_INELIGIBLE,
                 "planned Assembly content pointer differs from its Item Revision",
             )
-        return ContentTeamItemSource(
-            artifact_id=pointer.artifact_id,
-            artifact_revision_id=pointer.artifact_revision_id,
-            json_sha256=pointer.sha256,
-            markdown_sha256=pointer.editorial_markdown_sha256,
-        )
+        source_values = {
+            "artifact_id": pointer.artifact_id,
+            "artifact_revision_id": pointer.artifact_revision_id,
+            "json_sha256": pointer.sha256,
+            "markdown_sha256": pointer.editorial_markdown_sha256,
+        }
+        if isinstance(pointer, MockExamContentPointerV2):
+            return ContentTeamItemSourceV2.model_validate(
+                {
+                    **source_values,
+                    "markdown_schema_ref": pointer.editorial_markdown_schema_ref,
+                }
+            )
+        return ContentTeamItemSource.model_validate(source_values)
 
     @staticmethod
     def _item_set_sha256(manifest: MockExamAssemblyManifestContract) -> str:

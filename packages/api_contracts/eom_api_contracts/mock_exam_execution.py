@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import datetime
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from eom_identifiers import content_sha256
 from pydantic import Field, model_validator
@@ -100,6 +100,14 @@ class MockExamGenerationBlockResolutionV1(ApiModel):
     resolved_at: UtcDatetime
 
 
+class MockExamGenerationBlockResolutionV2(MockExamGenerationBlockResolutionV1):
+    """Pinned V3 content-team generation family."""
+
+    generation_block_revision: Literal["2.0"]  # type: ignore[assignment]
+    workflow_definition_version: Literal["1.9.0"]  # type: ignore[assignment]
+    content_pack_version: Literal["1.14.0"]  # type: ignore[assignment]
+
+
 class MockExamReviewPointerV1(ApiModel):
     """Exact validated review artifact with a zero-blocking quality gate."""
 
@@ -175,6 +183,31 @@ class MockExamReviewEligibilityObservationV1(ApiModel):
             approval_request_id=self.approval_request_id,
             reviewer_operator_id=self.reviewer_operator_id,
             approved_at=self.approved_at,
+        )
+
+
+class MockExamReviewPointerV2(MockExamReviewPointerV1):
+    result_schema: Literal["review-result@9.0"]  # type: ignore[assignment]
+
+
+class MockExamReviewEligibilityObservationV2(MockExamReviewEligibilityObservationV1):
+    schema_version: Literal["mock-exam-review-eligibility/2.0"]  # type: ignore[assignment]
+    result_schema: Literal["review-result@9.0"]  # type: ignore[assignment]
+
+    def approved_pointer(self) -> MockExamReviewPointerV2:
+        if self.eligibility != "ELIGIBLE" or self.finding_blocking_count != 0:
+            raise ValueError("blocked review cannot be used for approval")
+        return MockExamReviewPointerV2(
+            approval_request_id=self.approval_request_id,
+            approval_resource_version=self.approval_resource_version,
+            step_run_id=self.step_run_id,
+            artifact_id=self.artifact_id,
+            artifact_revision_id=self.artifact_revision_id,
+            sha256=self.sha256,
+            result_schema=self.result_schema,
+            finding_info_count=self.finding_info_count,
+            finding_warning_count=self.finding_warning_count,
+            finding_blocking_count=0,
         )
 
 
@@ -425,6 +458,74 @@ class MockExamProductionItemRunV1(ApiModel):
         return self
 
 
+class MockExamProductionItemRunV2(MockExamProductionItemRunV1):
+    review: MockExamReviewPointerV1 | MockExamReviewPointerV2 | None = None
+
+
+def is_mock_exam_provenance_validation_recovery_candidate(
+    row: MockExamProductionItemRunV1,
+) -> bool:
+    """Recognize only the historical false-negative provenance failure shape.
+
+    The affected coordinator rejected the correctly resolved per-Item curriculum root before it
+    could checkpoint the Workflow's knowledge provenance.  No other terminal failure is eligible
+    for reopening.
+    """
+
+    failure = row.failure
+    downstream_pointers = (
+        row.knowledge_provenance,
+        row.review,
+        row.approval_command_id,
+        row.human_approval,
+        row.registration,
+        row.analysis,
+        row.graph_publication_id,
+        row.rating,
+    )
+    return (
+        row.state == "FAILED"
+        and row.start_command_id is not None
+        and row.workflow_id is not None
+        and row.workflow_resource_version is not None
+        and all(pointer is None for pointer in downstream_pointers)
+        and failure is not None
+        and failure.stage == "WORKFLOW_EXECUTION"
+        and failure.category == "ARTIFACT_INTEGRITY_FAILED"
+        and failure.code == "WORKFLOW_KNOWLEDGE_PROVENANCE_MISMATCH"
+        and not failure.retryable
+    )
+
+
+def is_mock_exam_provenance_validation_recovery_successor(
+    before: MockExamProductionItemRunV1,
+    after: MockExamProductionItemRunV1,
+) -> bool:
+    """Validate the single recovery-only Item transition accepted by checkpoint CAS."""
+
+    return (
+        is_mock_exam_provenance_validation_recovery_candidate(before)
+        and after.state == "WORKFLOW_ACTIVE"
+        and after.workflow_call_id == before.workflow_call_id
+        and after.position == before.position
+        and after.start_command_id == before.start_command_id
+        and after.workflow_id == before.workflow_id
+        and after.workflow_resource_version is not None
+        and before.workflow_resource_version is not None
+        and after.workflow_resource_version >= before.workflow_resource_version
+        and after.knowledge_provenance is not None
+        and after.knowledge_provenance.curriculum_root_key is not None
+        and after.review is None
+        and after.approval_command_id is None
+        and after.human_approval is None
+        and after.registration is None
+        and after.analysis is None
+        and after.graph_publication_id is None
+        and after.rating is None
+        and after.failure is None
+    )
+
+
 class MockExamGraphPublicationPointerV1(ApiModel):
     batch_number: Literal[1] = 1
     publication_id: str = Field(pattern=r"^graphpub_[0-9a-f]{32}$")
@@ -556,6 +657,10 @@ class MockExamHwpxBuildPointerV1(ApiModel):
         if self.state == "FAILED" and self.failure_code is None:
             raise ValueError("failed HWPX build requires a stable failure code")
         return self
+
+
+class MockExamHwpxBuildPointerV2(MockExamHwpxBuildPointerV1):
+    renderer_version: Literal["2.0.0", "3.0.0"]  # type: ignore[assignment]
 
 
 class MockExamAnalysisReviewBindingPointerV1(ApiModel):
@@ -1017,6 +1122,38 @@ class MockExamProductionExecutionV1(ApiModel):
             selected_rows = self.item_runs
             if any(row.graph_publication_id != publication.publication_id for row in selected_rows):
                 raise ValueError("Item Graph pointer differs from its atomic publication")
+
+
+class MockExamProductionExecutionV2(MockExamProductionExecutionV1):
+    """Additive checkpoint family for the V3 content-team production path."""
+
+    schema_version: Literal["mock-exam-production-execution/2.0"]  # type: ignore[assignment]
+    generation_block_resolution: (
+        MockExamGenerationBlockResolutionV1 | MockExamGenerationBlockResolutionV2 | None
+    ) = None
+    item_runs: tuple[MockExamProductionItemRunV2, ...] = Field(min_length=25, max_length=25)
+    hwpx_build: MockExamHwpxBuildPointerV2 | None = None
+
+    @model_validator(mode="after")
+    def successor_family_is_exact(self) -> Self:
+        resolution = self.generation_block_resolution
+        if resolution is None:
+            return self
+        v3_family = isinstance(resolution, MockExamGenerationBlockResolutionV2)
+        reviews = tuple(row.review for row in self.item_runs if row.review is not None)
+        if any(isinstance(row, MockExamReviewPointerV2) != v3_family for row in reviews):
+            raise ValueError("execution review pointers mix protocol families")
+        if self.hwpx_build is not None:
+            expected_renderer = "3.0.0" if v3_family else "2.0.0"
+            if self.hwpx_build.renderer_version != expected_renderer:
+                raise ValueError("execution renderer differs from its generation family")
+        return self
+
+
+MockExamProductionExecution = Annotated[
+    MockExamProductionExecutionV1 | MockExamProductionExecutionV2,
+    Field(discriminator="schema_version"),
+]
 
 
 class MockExamExplicitRatingV1(ApiModel):

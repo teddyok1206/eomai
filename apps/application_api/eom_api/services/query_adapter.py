@@ -17,6 +17,7 @@ from eom_api_contracts.assessment_assemblies import (
     MockExamAssemblyView,
     MockExamAssemblyViewContract,
     MockExamAssemblyViewV2,
+    MockExamAssemblyViewV3,
     MockExamCoverageRequirementView,
     MockExamScoreBucketView,
     PreviewMockExamAssemblyPlanRequest,
@@ -47,9 +48,13 @@ from eom_api_contracts.hwpx import HwpxBuildView
 from eom_api_contracts.item_bank import (
     ItemBankCurriculumUnitView,
     ItemBankEntryView,
+    ProductionContentProfileV2,
     ProductionIneligibilityReason,
     ProductionItemCandidateView,
+    ProductionItemCandidateViewContract,
+    ProductionItemCandidateViewV2,
     ProductionItemContentComponentView,
+    ProductionItemContentComponentViewV2,
     ProductionPastExamContextView,
 )
 from eom_api_contracts.items import (
@@ -164,14 +169,34 @@ _LEGACY_ITEM_CONTENT_SCHEMA_REFS = frozenset(
         "eom://schemas/item-registry/assessment-item-content-v1",
     }
 )
-_CONTENT_TEAM_ITEM_CONTENT_SCHEMA_REFS = frozenset(
+_CONTENT_TEAM_ITEM_CONTENT_V2_SCHEMA_REFS = frozenset(
     {
         "eom.assessment.item-content/2.0",
         "eom://schemas/item-registry/assessment-item-content-v2",
     }
 )
+_CONTENT_TEAM_ITEM_CONTENT_V3_SCHEMA_REFS = frozenset(
+    {
+        "eom.assessment.item-content/3.0",
+        "eom://schemas/item-registry/assessment-item-content-v3",
+    }
+)
 _SHA256_PATTERN = r"^sha256:[0-9a-f]{64}$"
 _SHA256_RE = re.compile(_SHA256_PATTERN)
+
+
+def _production_content_profile(media_type: str, schema_ref: str) -> ProductionContentProfileV2:
+    """Classify one canonical Item-content pointer by its exact schema family."""
+
+    if media_type != "application/json":
+        return "UNSUPPORTED"
+    if schema_ref in _LEGACY_ITEM_CONTENT_SCHEMA_REFS:
+        return "LEGACY_ITEM_CONTENT_V1"
+    if schema_ref in _CONTENT_TEAM_ITEM_CONTENT_V2_SCHEMA_REFS:
+        return "CONTENT_TEAM_ITEM_CONTENT_V2"
+    if schema_ref in _CONTENT_TEAM_ITEM_CONTENT_V3_SCHEMA_REFS:
+        return "CONTENT_TEAM_ITEM_CONTENT_V3"
+    return "UNSUPPORTED"
 
 
 @dataclass(frozen=True)
@@ -472,7 +497,9 @@ class QueryAdapter:
                 self._not_found("ASSEMBLY_REVISION_NOT_FOUND")
             if manifest.schema_version == "mock-exam-assembly-manifest/1.0":
                 return MockExamAssemblyView.model_validate(manifest.model_dump(mode="json"))
-            return MockExamAssemblyViewV2.model_validate(manifest.model_dump(mode="json"))
+            if manifest.schema_version == "mock-exam-assembly-manifest/2.0":
+                return MockExamAssemblyViewV2.model_validate(manifest.model_dump(mode="json"))
+            return MockExamAssemblyViewV3.model_validate(manifest.model_dump(mode="json"))
 
     def mock_exam_assembly_plan(
         self, request: PreviewMockExamAssemblyPlanRequest
@@ -845,16 +872,13 @@ class QueryAdapter:
         *,
         curriculum_unit_key: str | None,
         source_class: Literal["APPROVED_ITEM", "PAST_EXAM"] | None,
-        content_profile: Literal[
-            "LEGACY_ITEM_CONTENT_V1", "CONTENT_TEAM_ITEM_CONTENT_V2", "UNSUPPORTED"
-        ]
-        | None,
+        content_profile: ProductionContentProfileV2 | None,
         eligible: bool | None,
         item_type_key: str | None,
         difficulty_band: str | None,
         limit: int,
         cursor: str | None,
-    ) -> PageResult[ProductionItemCandidateView]:
+    ) -> PageResult[ProductionItemCandidateViewContract]:
         """List Graph-accepted Item revisions without inventing examination placement data."""
 
         filters = {
@@ -926,15 +950,23 @@ class QueryAdapter:
                 ItemComponentRecord.media_type == "application/json",
                 ItemComponentRecord.schema_ref.in_(_LEGACY_ITEM_CONTENT_SCHEMA_REFS),
             )
-            content_team_profile = and_(
+            content_team_v2_profile = and_(
                 ItemComponentRecord.item_component_id.is_not(None),
                 ItemComponentRecord.media_type == "application/json",
-                ItemComponentRecord.schema_ref.in_(_CONTENT_TEAM_ITEM_CONTENT_SCHEMA_REFS),
+                ItemComponentRecord.schema_ref.in_(_CONTENT_TEAM_ITEM_CONTENT_V2_SCHEMA_REFS),
             )
+            content_team_v3_profile = and_(
+                ItemComponentRecord.item_component_id.is_not(None),
+                ItemComponentRecord.media_type == "application/json",
+                ItemComponentRecord.schema_ref.in_(_CONTENT_TEAM_ITEM_CONTENT_V3_SCHEMA_REFS),
+            )
+            content_team_profile = or_(content_team_v2_profile, content_team_v3_profile)
             if content_profile == "LEGACY_ITEM_CONTENT_V1":
                 conditions.append(legacy_profile)
             elif content_profile == "CONTENT_TEAM_ITEM_CONTENT_V2":
-                conditions.append(content_team_profile)
+                conditions.append(content_team_v2_profile)
+            elif content_profile == "CONTENT_TEAM_ITEM_CONTENT_V3":
+                conditions.append(content_team_v3_profile)
             elif content_profile == "UNSUPPORTED":
                 conditions.append(
                     or_(
@@ -943,15 +975,26 @@ class QueryAdapter:
                     )
                 )
 
-            structural_eligibility = and_(
-                ItemRecord.lifecycle_state == "ACTIVE",
-                ItemRevisionRecord.revision_state.in_(("APPROVED", "SUPERSEDED")),
-                content_team_profile,
+            editorial_pointer = and_(
                 ItemComponentRecord.metadata_json["editorial_markdown_member"].as_string()
                 == "content-team-item.md",
                 ItemComponentRecord.metadata_json["editorial_markdown_sha256"]
                 .as_string()
                 .op("~")(_SHA256_PATTERN),
+            )
+            structurally_supported_content = or_(
+                and_(content_team_v2_profile, editorial_pointer),
+                and_(
+                    content_team_v3_profile,
+                    editorial_pointer,
+                    ItemComponentRecord.metadata_json["editorial_markdown_schema_ref"].as_string()
+                    == "eom://schemas/hwpx/content-team-editorial-markdown/2.0",
+                ),
+            )
+            structural_eligibility = and_(
+                ItemRecord.lifecycle_state == "ACTIVE",
+                ItemRevisionRecord.revision_state.in_(("APPROVED", "SUPERSEDED")),
+                structurally_supported_content,
             )
             if eligible is not None:
                 conditions.append(func.coalesce(structural_eligibility, False).is_(eligible))
@@ -1114,7 +1157,7 @@ class QueryAdapter:
                         )
                     unit_ids_by_node.setdefault(from_node_id, set()).add(unit.curriculum_unit_id)
 
-            values: list[ProductionItemCandidateView] = []
+            values: list[ProductionItemCandidateViewContract] = []
             for analysis, node, revision, item, component in page_rows:
                 classes = source_classes_by_run.get(analysis.analysis_run_id, set())
                 if len(classes) != 1 or not classes.issubset({"APPROVED_ITEM", "PAST_EXAM"}):
@@ -1175,24 +1218,18 @@ class QueryAdapter:
                     )
                 )
 
-                component_view: ProductionItemContentComponentView | None = None
-                observed_profile: Literal[
-                    "LEGACY_ITEM_CONTENT_V1", "CONTENT_TEAM_ITEM_CONTENT_V2", "UNSUPPORTED"
-                ] = "UNSUPPORTED"
+                component_view: (
+                    ProductionItemContentComponentView | ProductionItemContentComponentViewV2 | None
+                ) = None
+                observed_profile: ProductionContentProfileV2 = "UNSUPPORTED"
                 if component is not None:
-                    if (
-                        component.media_type == "application/json"
-                        and component.schema_ref in _LEGACY_ITEM_CONTENT_SCHEMA_REFS
-                    ):
-                        observed_profile = "LEGACY_ITEM_CONTENT_V1"
-                    elif (
-                        component.media_type == "application/json"
-                        and component.schema_ref in _CONTENT_TEAM_ITEM_CONTENT_SCHEMA_REFS
-                    ):
-                        observed_profile = "CONTENT_TEAM_ITEM_CONTENT_V2"
+                    observed_profile = _production_content_profile(
+                        component.media_type, component.schema_ref
+                    )
                     metadata = component.metadata_json
                     markdown_member = metadata.get("editorial_markdown_member")
                     markdown_sha256 = metadata.get("editorial_markdown_sha256")
+                    markdown_schema_ref = metadata.get("editorial_markdown_schema_ref")
                     if not (
                         markdown_member == "content-team-item.md"
                         and isinstance(markdown_sha256, str)
@@ -1200,16 +1237,32 @@ class QueryAdapter:
                     ):
                         markdown_member = None
                         markdown_sha256 = None
-                    component_view = ProductionItemContentComponentView(
-                        item_component_id=component.item_component_id,
-                        artifact_id=component.artifact_id,
-                        artifact_revision_id=component.artifact_revision_id,
-                        sha256=component.sha256,
-                        schema_ref=component.schema_ref,
-                        media_type=component.media_type,
-                        logical_name=component.logical_name,
-                        editorial_markdown_member=markdown_member,
-                        editorial_markdown_sha256=markdown_sha256,
+                        markdown_schema_ref = None
+                    elif (
+                        markdown_schema_ref
+                        != "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
+                    ):
+                        markdown_schema_ref = None
+                    component_type = (
+                        ProductionItemContentComponentViewV2
+                        if observed_profile == "CONTENT_TEAM_ITEM_CONTENT_V3"
+                        else ProductionItemContentComponentView
+                    )
+                    component_kwargs: dict[str, Any] = {
+                        "item_component_id": component.item_component_id,
+                        "artifact_id": component.artifact_id,
+                        "artifact_revision_id": component.artifact_revision_id,
+                        "sha256": component.sha256,
+                        "schema_ref": component.schema_ref,
+                        "media_type": component.media_type,
+                        "logical_name": component.logical_name,
+                        "editorial_markdown_member": markdown_member,
+                        "editorial_markdown_sha256": markdown_sha256,
+                    }
+                    if component_type is ProductionItemContentComponentViewV2:
+                        component_kwargs["editorial_markdown_schema_ref"] = markdown_schema_ref
+                    component_view = component_type(
+                        **component_kwargs,
                     )
 
                 reasons: list[ProductionIneligibilityReason] = []
@@ -1221,8 +1274,16 @@ class QueryAdapter:
                     reasons.append("ITEM_CONTENT_COMPONENT_MISSING")
                 elif observed_profile == "LEGACY_ITEM_CONTENT_V1":
                     reasons.append("CONTENT_TEAM_ITEM_V2_REQUIRED")
-                elif observed_profile == "CONTENT_TEAM_ITEM_CONTENT_V2":
-                    if component_view.editorial_markdown_member is None:
+                elif observed_profile in {
+                    "CONTENT_TEAM_ITEM_CONTENT_V2",
+                    "CONTENT_TEAM_ITEM_CONTENT_V3",
+                }:
+                    if component_view.editorial_markdown_member is None or (
+                        observed_profile == "CONTENT_TEAM_ITEM_CONTENT_V3"
+                        and isinstance(component_view, ProductionItemContentComponentViewV2)
+                        and component_view.editorial_markdown_schema_ref
+                        != "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
+                    ):
                         reasons.append("CONTENT_TEAM_EDITORIAL_MARKDOWN_POINTER_REQUIRED")
                 else:
                     reasons.append("ITEM_CONTENT_SCHEMA_UNSUPPORTED")
@@ -1258,33 +1319,35 @@ class QueryAdapter:
                     if occurrence is not None
                     else item.human_reference_code or revision.item_revision_id
                 )
-                values.append(
-                    ProductionItemCandidateView(
-                        graph_snapshot_revision_id=snapshot_id,
-                        snapshot_sha256=snapshot.snapshot_sha256,
-                        analysis_run_id=analysis.analysis_run_id,
-                        graph_item_node_id=node.node_id,
-                        source_class=cast(
-                            Literal["APPROVED_ITEM", "PAST_EXAM"], observed_source_class
-                        ),
-                        source_display_label=display_label,
-                        past_exam_context=past_exam_context,
-                        item_id=item.item_id,
-                        item_revision_id=revision.item_revision_id,
-                        item_revision_state=cast(Any, revision.revision_state),
-                        item_lifecycle_state=cast(Any, item.lifecycle_state),
-                        item_current_revision=item.current_revision_id == revision.item_revision_id,
-                        item_type_key=revision.item_type_key,
-                        difficulty_band=revision.difficulty_band,
-                        item_manifest_sha256=revision.manifest_sha256,
-                        curriculum_units=linked_units,
-                        content_profile=observed_profile,
-                        content_component=component_view,
-                        mock_exam_assembly_eligible=is_eligible,
-                        hwpx_exam_eligible=is_eligible,
-                        ineligibility_reasons=ordered_reasons,
-                    )
-                )
+                candidate_kwargs: dict[str, Any] = {
+                    "graph_snapshot_revision_id": snapshot_id,
+                    "snapshot_sha256": snapshot.snapshot_sha256,
+                    "analysis_run_id": analysis.analysis_run_id,
+                    "graph_item_node_id": node.node_id,
+                    "source_class": cast(
+                        Literal["APPROVED_ITEM", "PAST_EXAM"], observed_source_class
+                    ),
+                    "source_display_label": display_label,
+                    "past_exam_context": past_exam_context,
+                    "item_id": item.item_id,
+                    "item_revision_id": revision.item_revision_id,
+                    "item_revision_state": revision.revision_state,
+                    "item_lifecycle_state": item.lifecycle_state,
+                    "item_current_revision": item.current_revision_id == revision.item_revision_id,
+                    "item_type_key": revision.item_type_key,
+                    "difficulty_band": revision.difficulty_band,
+                    "item_manifest_sha256": revision.manifest_sha256,
+                    "curriculum_units": linked_units,
+                    "content_profile": observed_profile,
+                    "content_component": component_view,
+                    "mock_exam_assembly_eligible": is_eligible,
+                    "hwpx_exam_eligible": is_eligible,
+                    "ineligibility_reasons": ordered_reasons,
+                }
+                if observed_profile == "CONTENT_TEAM_ITEM_CONTENT_V3":
+                    values.append(ProductionItemCandidateViewV2(**candidate_kwargs))
+                else:
+                    values.append(ProductionItemCandidateView(**candidate_kwargs))
             has_more = len(rows) > limit
             next_cursor = (
                 self.cursors.encode_ordinal(
@@ -2757,8 +2820,7 @@ class QueryAdapter:
             or resolution.content_pack_source_tree_sha256 != pack.get("source_tree_sha256")
             or not isinstance(plan, dict)
             or resolution.workflow_definition_key != plan.get("workflow_definition_key")
-            or resolution.workflow_definition_version
-            != plan.get("workflow_definition_version")
+            or resolution.workflow_definition_version != plan.get("workflow_definition_version")
             or resolution.workflow_definition_sha256 != plan.get("workflow_definition_sha256")
             or resolution.content_pack_release_id != plan.get("content_pack_release_id")
             or resolution.content_pack_bundle_sha256 != plan.get("content_pack_sha256")

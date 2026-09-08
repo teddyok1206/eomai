@@ -128,9 +128,7 @@ class WorkflowProductionOccurrenceV1(ApiModel):
 class WorkflowExpectedResolutionV1(ApiModel):
     """Exact immutable dependencies authorized before one Workflow start."""
 
-    schema_version: Literal["workflow-expected-resolution/1.0"] = (
-        "workflow-expected-resolution/1.0"
-    )
+    schema_version: Literal["workflow-expected-resolution/1.0"] = "workflow-expected-resolution/1.0"
     workflow_definition_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
     workflow_definition_version: str = Field(
         pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
@@ -255,8 +253,10 @@ class WorkflowStartRequest(ApiModel):
             ):
                 raise ValueError("generated item request is missing its workflow contract")
             if content_team_request:
-                expected_image_mode = "required" if self.definition_version == "1.8.0" else "skip"
-                if self.definition_version not in {"1.7.0", "1.8.0"}:
+                expected_image_mode = (
+                    "required" if self.definition_version in {"1.8.0", "1.9.0"} else "skip"
+                )
+                if self.definition_version not in {"1.7.0", "1.8.0", "1.9.0"}:
                     raise ValueError("content-team workflow definition is unsupported")
                 if self.image_mode != expected_image_mode:
                     raise ValueError(

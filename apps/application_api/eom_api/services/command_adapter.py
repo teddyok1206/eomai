@@ -73,6 +73,7 @@ from eom_workflow_runner.repository import (
     admitted_workflow_definition,
     create_workflow_instance,
     enqueue_command,
+    load_persisted_workflow_request,
     workflow_request_storage_document,
 )
 from sqlalchemy import Engine, select
@@ -729,6 +730,51 @@ class CommandAdapter:
                 idempotency_key=idempotency_key,
             )
             return command.command_id, workflow.lock_version
+
+    def require_public_workflow_action_allowed(
+        self,
+        workflow_id: str,
+        action: CommandType,
+    ) -> None:
+        """Reject public mutation of coordinator-owned production Workflows.
+
+        This read-only preflight is called by the HTTP boundary before API idempotency or audit
+        writes. Internal application callers intentionally continue to use ``workflow_action``
+        directly so the production coordinator remains the sole mutation authority.
+        """
+
+        if action not in {
+            CommandType.APPROVE_WORKFLOW,
+            CommandType.REQUEST_REWORK,
+            CommandType.CANCEL_WORKFLOW,
+        }:
+            return
+        with self.sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            if workflow is None:
+                raise ApiError(
+                    404,
+                    "WORKFLOW_NOT_FOUND",
+                    "Workflow not found",
+                    "The requested workflow does not exist.",
+                )
+            try:
+                persisted_request = load_persisted_workflow_request(workflow.initial_request)
+            except (TypeError, ValueError) as exc:
+                raise ApiError(
+                    500,
+                    "WORKFLOW_STORED_REQUEST_INVALID",
+                    "Workflow request is invalid",
+                    "The stored Workflow request cannot be validated.",
+                ) from exc
+            if persisted_request.production_occurrence is not None:
+                raise ApiError(
+                    403,
+                    "WORKFLOW_PRODUCTION_OCCURRENCE_INTERNAL_ONLY",
+                    "Production occurrence is internal-only",
+                    "Coordinated production Workflows may be changed only by the "
+                    "mock-exam production service.",
+                )
 
     def release_pack(
         self, release_id: str, actor: ActorContext, *, expected_version: int

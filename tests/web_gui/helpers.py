@@ -275,7 +275,7 @@ class FakeGateway:
     ) -> dict[str, Any]:
         del session, idempotency_key
         assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-        assert payload["definition_version"] == "1.8.0"
+        assert payload["definition_version"] == "1.9.0"
         assert payload["image_mode"] == "required"
         assert payload["pack_key"] == "generated-knowledge-item"
         expected_preset = (
@@ -614,9 +614,16 @@ class FakeGateway:
         assert build_id == "hwpxbuild_" + "3" * 32
         return MockExamHwpxBuildView(
             build_id=build_id,
+            assessment_assembly_id="assembly_" + "1" * 32,
             assessment_assembly_revision_id="assemblyrev_" + "1" * 32,
             assembly_manifest_sha256="sha256:" + "4" * 64,
+            policy_revision_id="assemblypolicyrev_" + "2" * 32,
+            policy_sha256="sha256:" + "3" * 64,
+            graph_snapshot_revision_id="graphrev_" + "4" * 32,
+            graph_snapshot_sha256="sha256:" + "5" * 64,
             item_set_sha256="sha256:" + "5" * 64,
+            renderer="content-team-exam",
+            renderer_version="3.0.0",
             state="SUCCEEDED",
             validation_state="PASS",
             item_count=25,
@@ -624,9 +631,15 @@ class FakeGateway:
             native_equation_count=18,
             native_table_count=7,
             visual_count=9,
+            output_artifact_id="artifact_" + "6" * 32,
             output_artifact_revision_id="rev_" + "6" * 32,
             output_sha256="sha256:" + "7" * 64,
             download_available=True,
+            failure_code=None,
+            failure_detail_sanitized=None,
+            created_by_operator_id="operator_" + "8" * 32,
+            created_at=NOW,
+            started_at=NOW,
             completed_at=NOW,
             resource_version=3,
         )

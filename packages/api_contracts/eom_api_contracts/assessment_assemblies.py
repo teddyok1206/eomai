@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from eom_catalog_contracts import MockExamAssemblyCohortV1, MockExamAssemblyPlanV1
+from eom_catalog_contracts import (
+    MockExamAssemblyCohortV1,
+    MockExamAssemblyPlanV1,
+    MockExamAssemblyPlanV2,
+)
 from pydantic import Field, model_validator
 
 from eom_api_contracts.common import ApiModel, Sha256, UtcDatetime
@@ -167,5 +171,18 @@ class MockExamAssemblyViewV2(ApiModel):
     created_by: str
 
 
-MockExamAssemblyPlanView = MockExamAssemblyPlanV1
-MockExamAssemblyViewContract = MockExamAssemblyView | MockExamAssemblyViewV2
+class MockExamAssemblyViewV3(MockExamAssemblyViewV2):
+    """Released Assembly view whose plan is pinned to the V3 Item-content family."""
+
+    schema_version: Literal["mock-exam-assembly-manifest/3.0"]  # type: ignore[assignment]
+    plan: MockExamAssemblyPlanV2
+
+
+type MockExamAssemblyPlanView = Annotated[
+    MockExamAssemblyPlanV1 | MockExamAssemblyPlanV2,
+    Field(discriminator="schema_version"),
+]
+type MockExamAssemblyViewContract = Annotated[
+    MockExamAssemblyView | MockExamAssemblyViewV2 | MockExamAssemblyViewV3,
+    Field(discriminator="schema_version"),
+]

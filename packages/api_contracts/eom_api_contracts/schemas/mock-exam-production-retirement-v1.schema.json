@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/mock-exam-production-retirement-v1.schema.json",
+  "title": "Mock-exam production retirement protocol v1",
+  "oneOf": [
+    {"$ref": "#/$defs/command"},
+    {"$ref": "#/$defs/receipt"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^(?:sha256:)?[0-9a-f]{64}$"},
+    "utcTimestamp": {"type": "string", "format": "date-time"},
+    "sourceState": {
+      "enum": [
+        "REQUESTED", "RUNNING", "AWAITING_HUMAN_APPROVAL", "REWORK_REQUESTED",
+        "APPROVED", "REGISTERING", "FAILED", "CANCELLED"
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "position", "workflow_call_id", "workflow_id", "start_command_id",
+        "expected_workflow_resource_version", "observed_workflow_state"
+      ],
+      "properties": {
+        "position": {"type": "integer", "minimum": 1, "maximum": 25},
+        "workflow_call_id": {"type": "string", "pattern": "^workflowcall_[0-9a-f]{32}$"},
+        "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+        "start_command_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "expected_workflow_resource_version": {"type": "integer", "minimum": 1},
+        "observed_workflow_state": {"$ref": "#/$defs/sourceState"}
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "retirement_id", "execution_id", "execution_revision_id",
+        "checkpoint_sha256", "production_request_id", "production_plan_id",
+        "production_plan_sha256", "operator_id", "reason_code", "authorized_at",
+        "bindings", "command_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "mock-exam-production-retirement-command/1.0"},
+        "retirement_id": {"type": "string", "pattern": "^productionretire_[0-9a-f]{32}$"},
+        "execution_id": {"type": "string", "pattern": "^productionexec_[0-9a-f]{32}$"},
+        "execution_revision_id": {"type": "string", "pattern": "^productionexecrev_[0-9a-f]{32}$"},
+        "checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+        "production_request_id": {"type": "string", "pattern": "^productionreq_[0-9a-f]{32}$"},
+        "production_plan_id": {"type": "string", "pattern": "^productionplan_[0-9a-f]{32}$"},
+        "production_plan_sha256": {"$ref": "#/$defs/sha256"},
+        "operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "reason_code": {"const": "SUPERSEDED_BY_CORRECTED_PROTOCOL"},
+        "authorized_at": {"$ref": "#/$defs/utcTimestamp"},
+        "bindings": {
+          "type": "array", "minItems": 25, "maxItems": 25,
+          "items": {"$ref": "#/$defs/binding"}
+        },
+        "command_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "position", "workflow_call_id", "workflow_id",
+        "expected_workflow_resource_version", "retirement_workflow_resource_version",
+        "retirement_event_sequence", "prior_workflow_state", "disposition",
+        "cancel_command_id"
+      ],
+      "properties": {
+        "position": {"type": "integer", "minimum": 1, "maximum": 25},
+        "workflow_call_id": {"type": "string", "pattern": "^workflowcall_[0-9a-f]{32}$"},
+        "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+        "expected_workflow_resource_version": {"type": "integer", "minimum": 1},
+        "retirement_workflow_resource_version": {"type": "integer", "minimum": 2},
+        "retirement_event_sequence": {"type": "integer", "minimum": 2},
+        "prior_workflow_state": {"$ref": "#/$defs/sourceState"},
+        "disposition": {"enum": ["CANCEL_QUEUED", "UNSUCCESSFUL_TERMINAL_PRESERVED"]},
+        "cancel_command_id": {
+          "anyOf": [
+            {"type": "string", "minLength": 1, "maxLength": 128},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "retirement_id", "command_sha256", "execution_id",
+        "execution_revision_id", "checkpoint_sha256", "production_request_id",
+        "production_plan_id", "production_plan_sha256", "operator_id", "reason_code",
+        "retired_at", "outcomes", "receipt_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "mock-exam-production-retirement-receipt/1.0"},
+        "retirement_id": {"type": "string", "pattern": "^productionretire_[0-9a-f]{32}$"},
+        "command_sha256": {"$ref": "#/$defs/sha256"},
+        "execution_id": {"type": "string", "pattern": "^productionexec_[0-9a-f]{32}$"},
+        "execution_revision_id": {"type": "string", "pattern": "^productionexecrev_[0-9a-f]{32}$"},
+        "checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+        "production_request_id": {"type": "string", "pattern": "^productionreq_[0-9a-f]{32}$"},
+        "production_plan_id": {"type": "string", "pattern": "^productionplan_[0-9a-f]{32}$"},
+        "production_plan_sha256": {"$ref": "#/$defs/sha256"},
+        "operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "reason_code": {"const": "SUPERSEDED_BY_CORRECTED_PROTOCOL"},
+        "retired_at": {"$ref": "#/$defs/utcTimestamp"},
+        "outcomes": {
+          "type": "array", "minItems": 25, "maxItems": 25,
+          "items": {"$ref": "#/$defs/outcome"}
+        },
+        "receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

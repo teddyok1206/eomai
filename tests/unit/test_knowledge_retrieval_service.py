@@ -1,25 +1,34 @@
 from __future__ import annotations
 
+import dataclasses
 from types import SimpleNamespace
 from typing import Any, cast
 
+import eom_catalog_service.knowledge_retrieval_service as retrieval_module
 import pytest
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     ContentIntakeKnowledgeSourceV2,
     CreateItemProductionEvidenceCommand,
     EducationRetrievalRequestV2,
+    KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisSourceArtifactMemberV2,
 )
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
     KnowledgeRetrievalServiceError,
+    _ArtifactMemberValidationKey,
     _bounded_seed_scores,
     _Candidate,
+    _ImmutableSourcePointerKey,
     _rank_lexical_seed_rows,
+    _RequestScopedArtifactValidationCache,
+    _SnapshotSourceResolutionCache,
 )
 from eom_identifiers import content_sha256
+from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
+from sqlalchemy.orm import Session
 
 NOW = "2026-08-24T00:00:00Z"
 
@@ -424,3 +433,231 @@ def test_item_production_private_idempotency_rejects_different_input() -> None:
             record,  # type: ignore[arg-type]
         )
     assert captured.value.code == "KNOWLEDGE_RETRIEVAL_IDEMPOTENCY_CONFLICT"
+
+
+class _BulkSourceSession:
+    def __init__(self, associations: tuple[object, ...], runs: tuple[object, ...]) -> None:
+        self._responses = iter((associations, runs))
+        self.query_count = 0
+
+    def scalars(self, _statement: object) -> tuple[object, ...]:
+        self.query_count += 1
+        return next(self._responses)
+
+
+def test_snapshot_source_preload_query_count_is_constant_for_repeated_pointers() -> None:
+    run_ids = tuple(f"analysisrun_{index:032x}" for index in range(64))
+    pointers = tuple(
+        SimpleNamespace(analysis_run_id=run_ids[index % len(run_ids)]) for index in range(256)
+    )
+    associations = tuple(SimpleNamespace(analysis_run_id=run_id) for run_id in reversed(run_ids))
+    runs = tuple(SimpleNamespace(analysis_run_id=run_id) for run_id in run_ids)
+    session = _BulkSourceSession(associations, runs)
+    delegate = SimpleNamespace()
+    service = object.__new__(KnowledgeRetrievalApplicationService)
+    cast(Any, service).artifacts = delegate
+
+    cache = service._snapshot_source_resolution_cache(
+        cast(Session, session),
+        "graphrev_" + "a" * 32,
+        cast(Any, pointers),
+    )
+
+    assert session.query_count == 2
+    assert set(cache.associations_by_run_id) == set(run_ids)
+    assert set(cache.runs_by_id) == set(run_ids)
+
+
+class _CountingArtifactService:
+    def __init__(self) -> None:
+        self.read_count = 0
+        self.verify_count = 0
+        self.fail_next_read = False
+
+    def read_member(self, **_kwargs: object) -> bytes:
+        self.read_count += 1
+        if self.fail_next_read:
+            self.fail_next_read = False
+            raise ValueError("invalid immutable member")
+        return b'{"validated":true}'
+
+    def verify_member(self, **_kwargs: object) -> None:
+        self.verify_count += 1
+
+
+def _artifact_member_arguments() -> dict[str, object]:
+    return {
+        "artifact_id": "artifact_" + "1" * 32,
+        "revision_id": "rev_" + "2" * 32,
+        "member_path": "evidence/result.json",
+        "sha256": "sha256:" + "3" * 64,
+        "media_type": "application/json",
+        "schema_ref": "eom://schemas/test/result/1.0",
+        "max_bytes": 1024,
+    }
+
+
+def test_artifact_validation_cache_is_exact_success_only_and_request_scoped() -> None:
+    delegate = _CountingArtifactService()
+    first_request = _RequestScopedArtifactValidationCache(cast(Any, delegate))
+    arguments = _artifact_member_arguments()
+
+    delegate.fail_next_read = True
+    with pytest.raises(ValueError, match="invalid immutable member"):
+        first_request.read_member(**arguments)  # type: ignore[arg-type]
+    assert first_request.read_member(**arguments) == b'{"validated":true}'  # type: ignore[arg-type]
+    assert first_request.read_member(**arguments) == b'{"validated":true}'  # type: ignore[arg-type]
+    assert delegate.read_count == 2
+
+    changed_limit = {**arguments, "max_bytes": 2048}
+    assert first_request.read_member(**changed_limit) == b'{"validated":true}'  # type: ignore[arg-type]
+    assert delegate.read_count == 3
+
+    first_request.verify_member(**arguments)  # type: ignore[arg-type]
+    first_request.verify_member(**arguments)  # type: ignore[arg-type]
+    assert delegate.verify_count == 0
+
+    second_request = _RequestScopedArtifactValidationCache(cast(Any, delegate))
+    assert second_request.read_member(**arguments) == b'{"validated":true}'  # type: ignore[arg-type]
+    assert delegate.read_count == 4
+
+
+def _content_intake_analysis_request(
+    source: ContentIntakeKnowledgeSourceV2,
+) -> KnowledgeAnalysisRequestV2:
+    value: dict[str, object] = {
+        "schema_version": "knowledge-analysis-request/2.0",
+        "predecessor_analysis_run_id": None,
+        "analysis_request_id": "knowledgeanalysis_" + "4" * 32,
+        "source": source.model_dump(mode="json"),
+        "execution_preset_id": "execpreset_" + "5" * 32,
+        "execution_preset_revision_id": "execpresetrev_" + "6" * 32,
+        "execution_preset_sha256": "sha256:" + "7" * 64,
+        "worker_proposal_schema_ref": (
+            "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+        ),
+        "accepted_result_schema_ref": "eom://schemas/knowledge/knowledge-analysis-result/2.0",
+        "prior_graph_snapshot": None,
+        "requested_outputs": [
+            "NORMALIZED_MARKDOWN",
+            "SOURCE_ANCHORS",
+            "NODES",
+            "EDGES",
+            "CLAIMS",
+            "COMPONENT_OBSERVATIONS",
+            "UNRESOLVED_AMBIGUITIES",
+        ],
+        "general_knowledge_mode": "DISABLED",
+        "risk_policy_revision_id": "analysisriskrev_" + "8" * 32,
+        "created_at": NOW,
+        "request_sha256": "sha256:" + "0" * 64,
+    }
+    value["request_sha256"] = content_sha256(
+        {key: member for key, member in value.items() if key != "request_sha256"}
+    )
+    return KnowledgeAnalysisRequestV2.model_validate(value)
+
+
+def test_snapshot_source_cache_reuses_run_but_rejects_changed_exact_pointer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = ContentIntakeKnowledgeSourceV2(
+        source_class="TEXTBOOK",
+        intake_batch_id="intake_" + "9" * 32,
+        source_file_id="sourcefile_" + "a" * 32,
+        artifact_member=_member("b", media_type="text/markdown", schema_ref=None),
+    )
+    request = _content_intake_analysis_request(source)
+    run_id = "analysisrun_" + "c" * 32
+    run = SimpleNamespace(
+        analysis_run_id=run_id,
+        state="ACCEPTED",
+        canonical_request=request.model_dump(mode="json"),
+    )
+    association = SimpleNamespace(
+        analysis_run_id=run_id,
+        source_revision_id=source.source_file_id,
+    )
+    pointer = SimpleNamespace(
+        analysis_run_id=run_id,
+        source_revision_id=source.source_file_id,
+        source_class=source.source_class,
+        source_artifact_id=source.artifact_member.artifact_id,
+        artifact_revision_id=source.artifact_member.artifact_revision_id,
+        source_sha256=source.artifact_member.sha256,
+        member_path=source.artifact_member.member_path,
+    )
+    cache = _SnapshotSourceResolutionCache(
+        associations_by_run_id={run_id: cast(Any, association)},
+        runs_by_id={run_id: cast(KnowledgeAnalysisRunRecord, run)},
+        artifacts=cast(Any, SimpleNamespace()),
+    )
+    calls = 0
+
+    def resolve_source(_session: Session, **_kwargs: object) -> ContentIntakeKnowledgeSourceV2:
+        nonlocal calls
+        calls += 1
+        return source
+
+    monkeypatch.setattr(retrieval_module, "resolve_content_intake_source", resolve_source)
+    service = object.__new__(KnowledgeRetrievalApplicationService)
+    snapshot_id = "graphrev_" + "d" * 32
+
+    first = service._resolve_snapshot_source(
+        cast(Session, SimpleNamespace()),
+        snapshot_id,
+        cast(Any, pointer),
+        cache=cache,
+    )
+    replay = service._resolve_snapshot_source(
+        cast(Session, SimpleNamespace()),
+        snapshot_id,
+        cast(Any, pointer),
+        cache=cache,
+    )
+
+    assert first == replay == source
+    assert calls == 1
+    assert len(cache.validated_sources_by_pointer) == 1
+    assert next(iter(cache.validated_sources_by_pointer)) == _ImmutableSourcePointerKey.from_record(
+        snapshot_id, cast(Any, pointer)
+    )
+
+    changed = SimpleNamespace(**{**vars(pointer), "source_sha256": "sha256:" + "e" * 64})
+    with pytest.raises(KnowledgeRetrievalServiceError) as captured:
+        service._resolve_snapshot_source(
+            cast(Session, SimpleNamespace()),
+            snapshot_id,
+            cast(Any, changed),
+            cache=cache,
+        )
+    assert captured.value.code == "KNOWLEDGE_RETRIEVAL_SOURCE_HASH_MISMATCH"
+    assert calls == 1
+    assert len(cache.validated_sources_by_pointer) == 1
+
+
+def test_artifact_member_validation_key_separates_every_security_field() -> None:
+    base = _ArtifactMemberValidationKey(
+        artifact_id="artifact_" + "1" * 32,
+        artifact_revision_id="rev_" + "2" * 32,
+        member_path="result.json",
+        sha256="sha256:" + "3" * 64,
+        media_type="application/json",
+        schema_ref="eom://schemas/test/result/1.0",
+        max_bytes=1024,
+    )
+    assert (
+        len(
+            {
+                base,
+                dataclasses.replace(base, artifact_id="artifact_" + "4" * 32),
+                dataclasses.replace(base, artifact_revision_id="rev_" + "4" * 32),
+                dataclasses.replace(base, member_path="other.json"),
+                dataclasses.replace(base, sha256="sha256:" + "4" * 64),
+                dataclasses.replace(base, media_type="text/plain"),
+                dataclasses.replace(base, schema_ref="eom://schemas/test/result/2.0"),
+                dataclasses.replace(base, max_bytes=2048),
+            }
+        )
+        == 8
+    )

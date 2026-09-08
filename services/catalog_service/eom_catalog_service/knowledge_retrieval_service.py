@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import tempfile
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
@@ -56,6 +56,7 @@ from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactService
 from eom_catalog_service.knowledge_analysis_sources import (
+    EducationalDocumentSourceResolutionCache,
     KnowledgeAnalysisSourceError,
     resolve_content_intake_source,
     resolve_educational_document_source,
@@ -134,6 +135,7 @@ type ItemProductionEvidencePublicationContract = (
 MAX_RETRIEVAL_CANDIDATES = 256
 MAX_POINTER_ROWS_PER_NODE = 32
 MAX_CONTEXT_BYTES = 64 * 1024
+MAX_REQUEST_ARTIFACT_CACHE_BYTES = 64 * 1024 * 1024
 
 
 class KnowledgeRetrievalServiceError(RuntimeError):
@@ -186,6 +188,173 @@ class _Candidate:
     node_types: tuple[str, ...]
     relevance_milli: int
     answer_bearing: bool
+
+
+type _ResolvedKnowledgeSource = (
+    KnowledgeAnalysisSourceV3
+    | EducationalDocumentKnowledgeSourceV4
+    | ApprovedPastExamItemKnowledgeSourceV3
+)
+
+
+@dataclass(frozen=True, order=True, slots=True)
+class _ImmutableSourcePointerKey:
+    """Identity needed to validate one Graph source member without implicit latest lookup."""
+
+    graph_snapshot_revision_id: str
+    analysis_run_id: str
+    source_revision_id: str
+    source_class: str
+    source_artifact_id: str
+    artifact_revision_id: str
+    source_sha256: str
+    member_path: str
+
+    @classmethod
+    def from_record(
+        cls,
+        graph_snapshot_revision_id: str,
+        pointer: KnowledgeNodeSourcePointerRecord,
+    ) -> _ImmutableSourcePointerKey:
+        return cls(
+            graph_snapshot_revision_id=graph_snapshot_revision_id,
+            analysis_run_id=pointer.analysis_run_id,
+            source_revision_id=pointer.source_revision_id,
+            source_class=pointer.source_class,
+            source_artifact_id=pointer.source_artifact_id,
+            artifact_revision_id=pointer.artifact_revision_id,
+            source_sha256=pointer.source_sha256,
+            member_path=pointer.member_path,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _ArtifactMemberValidationKey:
+    artifact_id: str
+    artifact_revision_id: str
+    member_path: str
+    sha256: str
+    media_type: str
+    schema_ref: str
+    max_bytes: int
+
+
+class _RequestScopedArtifactValidationCache:
+    """Reuse a completed exact immutable-member check only inside one retrieval request."""
+
+    def __init__(self, delegate: CatalogArtifactService) -> None:
+        self._delegate = delegate
+        self._member_bytes: dict[_ArtifactMemberValidationKey, bytes] = {}
+        self._member_bytes_total = 0
+        self._verified_members: set[_ArtifactMemberValidationKey] = set()
+
+    @staticmethod
+    def _key(
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        sha256: str,
+        media_type: str,
+        schema_ref: str,
+        max_bytes: int,
+    ) -> _ArtifactMemberValidationKey:
+        return _ArtifactMemberValidationKey(
+            artifact_id=artifact_id,
+            artifact_revision_id=revision_id,
+            member_path=member_path,
+            sha256=sha256,
+            media_type=media_type,
+            schema_ref=schema_ref,
+            max_bytes=max_bytes,
+        )
+
+    def read_member(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        sha256: str,
+        media_type: str,
+        schema_ref: str,
+        max_bytes: int,
+    ) -> bytes:
+        key = self._key(
+            artifact_id=artifact_id,
+            revision_id=revision_id,
+            member_path=member_path,
+            sha256=sha256,
+            media_type=media_type,
+            schema_ref=schema_ref,
+            max_bytes=max_bytes,
+        )
+        if key in self._member_bytes:
+            return self._member_bytes[key]
+        value = self._delegate.read_member(
+            artifact_id=artifact_id,
+            revision_id=revision_id,
+            member_path=member_path,
+            sha256=sha256,
+            media_type=media_type,
+            schema_ref=schema_ref,
+            max_bytes=max_bytes,
+        )
+        self._verified_members.add(key)
+        if self._member_bytes_total + len(value) <= MAX_REQUEST_ARTIFACT_CACHE_BYTES:
+            self._member_bytes[key] = value
+            self._member_bytes_total += len(value)
+        return value
+
+    def verify_member(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        sha256: str,
+        media_type: str,
+        schema_ref: str,
+        max_bytes: int,
+    ) -> None:
+        key = self._key(
+            artifact_id=artifact_id,
+            revision_id=revision_id,
+            member_path=member_path,
+            sha256=sha256,
+            media_type=media_type,
+            schema_ref=schema_ref,
+            max_bytes=max_bytes,
+        )
+        if key in self._verified_members:
+            return
+        self._delegate.verify_member(
+            artifact_id=artifact_id,
+            revision_id=revision_id,
+            member_path=member_path,
+            sha256=sha256,
+            media_type=media_type,
+            schema_ref=schema_ref,
+            max_bytes=max_bytes,
+        )
+        self._verified_members.add(key)
+
+
+@dataclass
+class _SnapshotSourceResolutionCache:
+    """One retrieval's immutable Graph association, run, and source-resolution indexes."""
+
+    associations_by_run_id: dict[str, KnowledgeSnapshotAnalysisRecord]
+    runs_by_id: dict[str, KnowledgeAnalysisRunRecord]
+    artifacts: _RequestScopedArtifactValidationCache
+    educational_documents: EducationalDocumentSourceResolutionCache = field(
+        default_factory=EducationalDocumentSourceResolutionCache
+    )
+    declared_sources_by_run_id: dict[str, _ResolvedKnowledgeSource] = field(default_factory=dict)
+    resolved_sources_by_run_id: dict[str, _ResolvedKnowledgeSource] = field(default_factory=dict)
+    validated_sources_by_pointer: dict[_ImmutableSourcePointerKey, _ResolvedKnowledgeSource] = (
+        field(default_factory=dict)
+    )
 
 
 def _typed_id(prefix: str, value: dict[str, object]) -> str:
@@ -939,8 +1108,8 @@ class KnowledgeRetrievalApplicationService:
                 .limit(max_nodes * MAX_POINTER_ROWS_PER_NODE)
             )
         )
-        grouped: dict[tuple[str, str, str], list[KnowledgeNodeSourcePointerRecord]] = defaultdict(
-            list
+        grouped: dict[_ImmutableSourcePointerKey, list[KnowledgeNodeSourcePointerRecord]] = (
+            defaultdict(list)
         )
         for pointer in pointer_rows:
             node = nodes.get(pointer.node_id)
@@ -948,18 +1117,26 @@ class KnowledgeRetrievalApplicationService:
                 continue
             if node.answer_bearing and command.requester_role not in policy.answer_bearing_roles:
                 continue
-            grouped[
-                (pointer.analysis_run_id, pointer.artifact_revision_id, pointer.member_path)
-            ].append(pointer)
+            grouped[_ImmutableSourcePointerKey.from_record(snapshot_id, pointer)].append(pointer)
 
-        source_cache: dict[
-            tuple[str, str, str],
-            KnowledgeAnalysisSourceV3
-            | EducationalDocumentKnowledgeSourceV4
-            | ApprovedPastExamItemKnowledgeSourceV3,
-        ] = {}
+        source_cache = self._snapshot_source_resolution_cache(
+            session,
+            snapshot_id,
+            tuple(pointers[0] for pointers in grouped.values()),
+        )
         values: list[_Candidate] = []
-        for key, pointers in sorted(grouped.items()):
+        for _key, pointers in sorted(
+            grouped.items(),
+            key=lambda item: (
+                item[0].analysis_run_id,
+                item[0].artifact_revision_id,
+                item[0].member_path,
+                item[0].source_revision_id,
+                item[0].source_class,
+                item[0].source_artifact_id,
+                item[0].source_sha256,
+            ),
+        ):
             nodes_for_source = {
                 pointer.node_id: nodes[pointer.node_id]
                 for pointer in pointers
@@ -969,10 +1146,12 @@ class KnowledgeRetrievalApplicationService:
             anchors = tuple(sorted({pointer.anchor_id for pointer in pointers}))[:32]
             if not ordered_nodes or not anchors:
                 continue
-            source = source_cache.get(key)
-            if source is None:
-                source = self._resolve_snapshot_source(session, snapshot_id, pointers[0])
-                source_cache[key] = source
+            source = self._resolve_snapshot_source(
+                session,
+                snapshot_id,
+                pointers[0],
+                cache=source_cache,
+            )
             if source.source_class not in command.source_classes:
                 continue
             values.append(
@@ -1008,117 +1187,98 @@ class KnowledgeRetrievalApplicationService:
             )[:MAX_RETRIEVAL_CANDIDATES]
         )
 
+    def _snapshot_source_resolution_cache(
+        self,
+        session: Session,
+        snapshot_id: str,
+        pointers: tuple[KnowledgeNodeSourcePointerRecord, ...],
+    ) -> _SnapshotSourceResolutionCache:
+        analysis_run_ids = tuple(sorted({pointer.analysis_run_id for pointer in pointers}))
+        if not analysis_run_ids:
+            return _SnapshotSourceResolutionCache(
+                associations_by_run_id={},
+                runs_by_id={},
+                artifacts=_RequestScopedArtifactValidationCache(self.artifacts),
+            )
+        associations = tuple(
+            session.scalars(
+                select(KnowledgeSnapshotAnalysisRecord).where(
+                    KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id == snapshot_id,
+                    KnowledgeSnapshotAnalysisRecord.analysis_run_id.in_(analysis_run_ids),
+                )
+            )
+        )
+        runs = tuple(
+            session.scalars(
+                select(KnowledgeAnalysisRunRecord).where(
+                    KnowledgeAnalysisRunRecord.analysis_run_id.in_(analysis_run_ids)
+                )
+            )
+        )
+        associations_by_run_id: dict[str, KnowledgeSnapshotAnalysisRecord] = {}
+        for association in associations:
+            if association.analysis_run_id in associations_by_run_id:
+                raise KnowledgeRetrievalServiceError(
+                    "KNOWLEDGE_RETRIEVAL_SOURCE_POINTER_INVALID",
+                    "graph snapshot contains duplicate accepted-analysis associations",
+                )
+            associations_by_run_id[association.analysis_run_id] = association
+        runs_by_id: dict[str, KnowledgeAnalysisRunRecord] = {}
+        for run in runs:
+            if run.analysis_run_id in runs_by_id:
+                raise KnowledgeRetrievalServiceError(
+                    "KNOWLEDGE_RETRIEVAL_SOURCE_POINTER_INVALID",
+                    "graph snapshot resolves an Analysis Run more than once",
+                )
+            runs_by_id[run.analysis_run_id] = run
+        return _SnapshotSourceResolutionCache(
+            associations_by_run_id=associations_by_run_id,
+            runs_by_id=runs_by_id,
+            artifacts=_RequestScopedArtifactValidationCache(self.artifacts),
+        )
+
     def _resolve_snapshot_source(
         self,
         session: Session,
         snapshot_id: str,
         pointer: KnowledgeNodeSourcePointerRecord,
-    ) -> (
-        KnowledgeAnalysisSourceV3
-        | EducationalDocumentKnowledgeSourceV4
-        | ApprovedPastExamItemKnowledgeSourceV3
-    ):
-        association = session.scalar(
-            select(KnowledgeSnapshotAnalysisRecord).where(
-                KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id == snapshot_id,
-                KnowledgeSnapshotAnalysisRecord.analysis_run_id == pointer.analysis_run_id,
-                KnowledgeSnapshotAnalysisRecord.source_revision_id == pointer.source_revision_id,
-            )
-        )
-        if association is None:
+        *,
+        cache: _SnapshotSourceResolutionCache,
+    ) -> _ResolvedKnowledgeSource:
+        pointer_key = _ImmutableSourcePointerKey.from_record(snapshot_id, pointer)
+        cached = cache.validated_sources_by_pointer.get(pointer_key)
+        if cached is not None:
+            return cached
+        association = cache.associations_by_run_id.get(pointer.analysis_run_id)
+        if association is None or association.source_revision_id != pointer.source_revision_id:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_SOURCE_POINTER_INVALID",
                 "graph source pointer has no pinned accepted analysis",
             )
-        run = session.get(KnowledgeAnalysisRunRecord, association.analysis_run_id)
+        run = cache.runs_by_id.get(association.analysis_run_id)
         if run is None or run.state != "ACCEPTED":
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_SOURCE_STALE",
                 "pinned graph analysis is absent or unaccepted",
             )
+        source = cache.declared_sources_by_run_id.get(run.analysis_run_id)
         try:
-            schema_version = run.canonical_request.get("schema_version")
-            visual_item_source: ApprovedPastExamItemKnowledgeSourceV3 | None = None
-            document_source: (
-                EducationalDocumentKnowledgeSourceV3 | EducationalDocumentKnowledgeSourceV4 | None
-            ) = None
-            if schema_version == "knowledge-analysis-request/9.0":
-                visual_item_source = KnowledgeAnalysisRequestV9.model_validate(
-                    run.canonical_request
-                ).source
-            elif schema_version == "knowledge-analysis-request/8.0":
-                document_source = KnowledgeAnalysisRequestV8.model_validate(
-                    run.canonical_request
-                ).source
-            elif schema_version == "knowledge-analysis-request/7.0":
-                document_source = KnowledgeAnalysisRequestV7.model_validate(
-                    run.canonical_request
-                ).source
-            elif schema_version == "knowledge-analysis-request/6.0":
-                document_source = KnowledgeAnalysisRequestV6.model_validate(
-                    run.canonical_request
-                ).source
-            elif schema_version == "knowledge-analysis-request/5.0":
-                document_source = KnowledgeAnalysisRequestV5.model_validate(
-                    run.canonical_request
-                ).source
-            elif schema_version == "knowledge-analysis-request/4.0":
-                document_source = KnowledgeAnalysisRequestV4.model_validate(
-                    run.canonical_request
-                ).source
-            elif schema_version == "knowledge-analysis-request/3.0":
-                document_source = KnowledgeAnalysisRequestV3.model_validate(
-                    run.canonical_request
-                ).source
-            source: (
-                KnowledgeAnalysisSourceV3
-                | EducationalDocumentKnowledgeSourceV4
-                | ApprovedPastExamItemKnowledgeSourceV3
-            )
-            actual: (
-                KnowledgeAnalysisSourceV3
-                | EducationalDocumentKnowledgeSourceV4
-                | ApprovedPastExamItemKnowledgeSourceV3
-            )
-            if visual_item_source is not None:
-                source = visual_item_source
-                actual = resolve_historically_approved_item_source(
+            if source is None:
+                source = self._declared_source(run)
+                cache.declared_sources_by_run_id[run.analysis_run_id] = source
+            actual = cache.resolved_sources_by_run_id.get(run.analysis_run_id)
+            if actual is None:
+                actual = self._resolve_declared_source(
                     session,
-                    artifacts=self.artifacts,
-                    item_revision_id=visual_item_source.item_revision_id,
-                    source_class=visual_item_source.source_class,
+                    source,
+                    cache=cache,
                 )
-            elif document_source is not None:
-                source = document_source
-                actual = resolve_educational_document_source(
-                    session,
-                    self.artifacts,
-                    document_revision_id=document_source.document_revision_id,
-                    source_class=document_source.source_class,
-                    first_physical_page=document_source.first_physical_page,
-                    last_physical_page=document_source.last_physical_page,
-                    curriculum_unit_keys=document_source.curriculum_unit_keys,
-                )
-            else:
-                legacy_source = KnowledgeAnalysisRequestV2.model_validate(
-                    run.canonical_request
-                ).source
-                source = legacy_source
-                actual = (
-                    resolve_content_intake_source(
-                        session,
-                        intake_batch_id=legacy_source.intake_batch_id,
-                        source_file_id=legacy_source.source_file_id,
-                        source_class=legacy_source.source_class,
+                if actual != source:
+                    raise KnowledgeRetrievalServiceError(
+                        "KNOWLEDGE_RETRIEVAL_SOURCE_HASH_MISMATCH",
+                        "accepted analysis source differs from the canonical source revision",
                     )
-                    if isinstance(legacy_source, ContentIntakeKnowledgeSourceV2)
-                    else resolve_historically_approved_item_source(
-                        session,
-                        artifacts=self.artifacts,
-                        item_revision_id=legacy_source.item_revision_id,
-                        source_class=legacy_source.source_class,
-                    )
-                )
+                cache.resolved_sources_by_run_id[run.analysis_run_id] = actual
         except (KnowledgeAnalysisSourceError, ValidationError, ValueError) as exc:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_SOURCE_STALE",
@@ -1142,18 +1302,80 @@ class KnowledgeRetrievalApplicationService:
                 )
                 for page in actual.page_inputs
             )
-        pointer_key = (
+        member_key = (
             pointer.source_artifact_id,
             pointer.artifact_revision_id,
             pointer.source_sha256,
             pointer.member_path,
         )
-        if actual != source or pointer_key not in allowed_member_keys:
+        if actual != source or member_key not in allowed_member_keys:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_SOURCE_HASH_MISMATCH",
                 "graph source pointer differs from the canonical source revision",
             )
+        cache.validated_sources_by_pointer[pointer_key] = actual
         return actual
+
+    @staticmethod
+    def _declared_source(run: KnowledgeAnalysisRunRecord) -> _ResolvedKnowledgeSource:
+        schema_version = run.canonical_request.get("schema_version")
+        if schema_version == "knowledge-analysis-request/9.0":
+            return KnowledgeAnalysisRequestV9.model_validate(run.canonical_request).source
+        if schema_version == "knowledge-analysis-request/8.0":
+            return KnowledgeAnalysisRequestV8.model_validate(run.canonical_request).source
+        if schema_version == "knowledge-analysis-request/7.0":
+            return KnowledgeAnalysisRequestV7.model_validate(run.canonical_request).source
+        if schema_version == "knowledge-analysis-request/6.0":
+            return KnowledgeAnalysisRequestV6.model_validate(run.canonical_request).source
+        if schema_version == "knowledge-analysis-request/5.0":
+            return KnowledgeAnalysisRequestV5.model_validate(run.canonical_request).source
+        if schema_version == "knowledge-analysis-request/4.0":
+            return KnowledgeAnalysisRequestV4.model_validate(run.canonical_request).source
+        if schema_version == "knowledge-analysis-request/3.0":
+            return KnowledgeAnalysisRequestV3.model_validate(run.canonical_request).source
+        return KnowledgeAnalysisRequestV2.model_validate(run.canonical_request).source
+
+    @staticmethod
+    def _resolve_declared_source(
+        session: Session,
+        source: _ResolvedKnowledgeSource,
+        *,
+        cache: _SnapshotSourceResolutionCache,
+    ) -> _ResolvedKnowledgeSource:
+        if isinstance(source, ApprovedPastExamItemKnowledgeSourceV3):
+            return resolve_historically_approved_item_source(
+                session,
+                artifacts=cast(CatalogArtifactService, cache.artifacts),
+                item_revision_id=source.item_revision_id,
+                source_class=source.source_class,
+            )
+        if isinstance(
+            source,
+            EducationalDocumentKnowledgeSourceV3 | EducationalDocumentKnowledgeSourceV4,
+        ):
+            return resolve_educational_document_source(
+                session,
+                cast(CatalogArtifactService, cache.artifacts),
+                document_revision_id=source.document_revision_id,
+                source_class=source.source_class,
+                first_physical_page=source.first_physical_page,
+                last_physical_page=source.last_physical_page,
+                curriculum_unit_keys=source.curriculum_unit_keys,
+                cache=cache.educational_documents,
+            )
+        if isinstance(source, ContentIntakeKnowledgeSourceV2):
+            return resolve_content_intake_source(
+                session,
+                intake_batch_id=source.intake_batch_id,
+                source_file_id=source.source_file_id,
+                source_class=source.source_class,
+            )
+        return resolve_historically_approved_item_source(
+            session,
+            artifacts=cast(CatalogArtifactService, cache.artifacts),
+            item_revision_id=source.item_revision_id,
+            source_class=source.source_class,
+        )
 
     @staticmethod
     def _rank_and_render(

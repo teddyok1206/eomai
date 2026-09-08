@@ -113,9 +113,7 @@ def test_prepare_prompt_reuses_the_exact_pinned_step_artifact() -> None:
 
 def test_prepare_prompt_rejects_runtime_pointer_drift() -> None:
     service, artifacts, workflow, step = _fixture()
-    workflow.runtime_context["prompt_artifacts"][0]["sha256"] = content_sha256(
-        {"drift": True}
-    )
+    workflow.runtime_context["prompt_artifacts"][0]["sha256"] = content_sha256({"drift": True})
 
     with pytest.raises(ValueError, match="not bound"):
         service.prepare_prompt(

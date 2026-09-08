@@ -10,11 +10,17 @@ from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
     ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
     ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+    ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF,
     AssessmentItemContentContract,
     AssessmentItemContentV2,
+    AssessmentItemContentV3,
     validate_contract,
 )
-from eom_hwpx_contracts import ContentTeamEditorialDraft, serialize_content_team_markdown
+from eom_hwpx_contracts import (
+    ContentTeamEditorialDraft,
+    ContentTeamEditorialDraftV2,
+    serialize_content_team_markdown,
+)
 from eom_identifiers import content_sha256
 from eom_item_registry import (
     ComponentPointer,
@@ -31,6 +37,8 @@ from sqlalchemy.orm import Session
 from eom_catalog_service.artifacts import (
     CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION,
     CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH,
+    CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION,
+    CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH,
     CatalogArtifactService,
 )
 from eom_catalog_service.models import (
@@ -77,11 +85,21 @@ class StructuredItemContentImportService:
         expected_version: int,
     ) -> StructuredItemContentImport:
         content_data = content.model_dump(mode="json")
-        is_content_team = isinstance(content, AssessmentItemContentV2)
-        schema_name = "assessment-item-content-v2" if is_content_team else "assessment-item-content"
+        is_content_team_v3 = isinstance(content, AssessmentItemContentV3)
+        is_content_team_v2 = isinstance(content, AssessmentItemContentV2)
+        is_content_team = is_content_team_v2 or is_content_team_v3
+        schema_name = (
+            "assessment-item-content-v3"
+            if is_content_team_v3
+            else "assessment-item-content-v2"
+            if is_content_team_v2
+            else "assessment-item-content"
+        )
         schema_ref = (
-            ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF
-            if is_content_team
+            ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF
+            if is_content_team_v3
+            else ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF
+            if is_content_team_v2
             else ASSESSMENT_ITEM_CONTENT_SCHEMA_REF
         )
         validate_contract(schema_name, content_data)
@@ -195,7 +213,10 @@ class StructuredItemContentImportService:
         if is_content_team:
             editorial_data = dict(content_data)
             editorial_data.pop("schema_version")
-            editorial = ContentTeamEditorialDraft.model_validate(editorial_data)
+            editorial_model = (
+                ContentTeamEditorialDraftV2 if is_content_team_v3 else ContentTeamEditorialDraft
+            )
+            editorial = editorial_model.model_validate(editorial_data)
             markdown = serialize_content_team_markdown(editorial)
             staged, staged_hash, staged_markdown, markdown_hash = (
                 stage_content_team_item_materialization(self.settings, content_data, markdown)
@@ -210,7 +231,11 @@ class StructuredItemContentImportService:
                     "media_type": ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
                 },
                 "content-team-item.md": {
-                    "schema_ref": "eom://schemas/hwpx/content-team-editorial-markdown/1.0",
+                    "schema_ref": (
+                        "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
+                        if is_content_team_v3
+                        else "eom://schemas/hwpx/content-team-editorial-markdown/1.0"
+                    ),
                     "media_type": "text/markdown",
                 },
             }
@@ -255,8 +280,16 @@ class StructuredItemContentImportService:
             expected_file_sha256=expected_file_sha256,
             **(
                 {
-                    "protocol_version": CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION,
-                    "protocol_schema_hash": CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH,
+                    "protocol_version": (
+                        CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION
+                        if is_content_team_v3
+                        else CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION
+                    ),
+                    "protocol_schema_hash": (
+                        CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH
+                        if is_content_team_v3
+                        else CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH
+                    ),
                 }
                 if is_content_team
                 else {}
@@ -274,7 +307,11 @@ class StructuredItemContentImportService:
             required=True,
             metadata={
                 "import_protocol": (
-                    "reviewed-content-team-item/2.0"
+                    (
+                        "reviewed-content-team-item/3.0"
+                        if is_content_team_v3
+                        else "reviewed-content-team-item/2.0"
+                    )
                     if is_content_team
                     else "reviewed-structured-item-content/1.0"
                 ),

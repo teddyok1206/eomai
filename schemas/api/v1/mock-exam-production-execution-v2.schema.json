@@ -1,0 +1,865 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/mock-exam-production-execution-v2.schema.json",
+  "title": "Mock Exam Production Execution Checkpoint V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "execution_id",
+    "execution_revision_id",
+    "production_request_id",
+    "production_plan_id",
+    "production_plan_sha256",
+    "operator_id",
+    "checkpoint_sequence",
+    "predecessor_execution_revision_id",
+    "predecessor_checkpoint_sha256",
+    "state",
+    "generation_block_resolution",
+    "analysis_policy",
+    "analysis_general_knowledge_mode",
+    "analysis_review_authorizations",
+    "item_runs",
+    "graph_publication_authorization",
+    "graph_publications",
+    "rating_authorization",
+    "assembly_intent",
+    "assembly_plan",
+    "assembly",
+    "hwpx_build",
+    "failure",
+    "created_at",
+    "checkpointed_at",
+    "checkpoint_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "mock-exam-production-execution/2.0"},
+    "execution_id": {"type": "string", "pattern": "^productionexec_[0-9a-f]{32}$"},
+    "execution_revision_id": {"type": "string", "pattern": "^productionexecrev_[0-9a-f]{32}$"},
+    "production_request_id": {"type": "string", "pattern": "^productionreq_[0-9a-f]{32}$"},
+    "production_plan_id": {"type": "string", "pattern": "^productionplan_[0-9a-f]{32}$"},
+    "production_plan_sha256": {"$ref": "#/$defs/sha256"},
+    "operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "checkpoint_sequence": {"type": "integer", "minimum": 0},
+    "predecessor_execution_revision_id": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^productionexecrev_[0-9a-f]{32}$"}
+      ]
+    },
+    "predecessor_checkpoint_sha256": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+    },
+    "state": {
+      "enum": [
+        "ITEM_PRODUCTION",
+        "ANALYSIS",
+        "GRAPH_PUBLICATION",
+        "RATING",
+        "ASSEMBLY",
+        "HWPX",
+        "COMPLETED",
+        "BLOCKED"
+      ]
+    },
+    "generation_block_resolution": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/generation_block_resolution"}]
+    },
+    "analysis_policy": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/analysis_policy"}]
+    },
+    "analysis_general_knowledge_mode": {
+      "oneOf": [
+        {"type": "null"},
+        {"enum": ["DISABLED", "AUXILIARY_UNATTRIBUTED"]}
+      ]
+    },
+    "analysis_review_authorizations": {
+      "type": "array",
+      "maxItems": 25,
+      "items": {"$ref": "#/$defs/analysis_review_authorization"}
+    },
+    "item_runs": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "items": {"$ref": "#/$defs/item_run"}
+    },
+    "graph_publication_authorization": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/graph_publication_authorization"}
+      ]
+    },
+    "graph_publications": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {"$ref": "#/$defs/graph_publication"}
+    },
+    "rating_authorization": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/rating_authorization"}]
+    },
+    "assembly_intent": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/assembly_intent"}]
+    },
+    "assembly_plan": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/assembly_plan"}]
+    },
+    "assembly": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/assembly"}]
+    },
+    "hwpx_build": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/hwpx_build"}]
+    },
+    "failure": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/failure"}]
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "checkpointed_at": {"type": "string", "format": "date-time"},
+    "checkpoint_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "generation_block_resolution": {
+            "type": "object",
+            "properties": {"generation_block_revision": {"const": "1.0"}},
+            "required": ["generation_block_revision"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "item_runs": {
+            "items": {
+              "properties": {
+                "review": {
+                  "oneOf": [
+                    {"type": "null"},
+                    {
+                      "allOf": [
+                        {"$ref": "#/$defs/review_pointer"},
+                        {
+                          "properties": {
+                            "result_schema": {
+                              "enum": ["review-result@7.0", "review-result@8.0"]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "hwpx_build": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "allOf": [
+                  {"$ref": "#/$defs/hwpx_build"},
+                  {"properties": {"renderer_version": {"const": "2.0.0"}}}
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "generation_block_resolution": {
+            "type": "object",
+            "properties": {"generation_block_revision": {"const": "2.0"}},
+            "required": ["generation_block_revision"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "item_runs": {
+            "items": {
+              "properties": {
+                "review": {
+                  "oneOf": [
+                    {"type": "null"},
+                    {
+                      "allOf": [
+                        {"$ref": "#/$defs/review_pointer"},
+                        {"properties": {"result_schema": {"const": "review-result@9.0"}}}
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "hwpx_build": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "allOf": [
+                  {"$ref": "#/$defs/hwpx_build"},
+                  {"properties": {"renderer_version": {"const": "3.0.0"}}}
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "nullable_string": {"oneOf": [{"type": "null"}, {"type": "string"}]},
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "category", "code", "retryable", "observed_at"],
+      "properties": {
+        "stage": {
+          "enum": [
+            "PREFLIGHT",
+            "WORKFLOW_START",
+            "WORKFLOW_EXECUTION",
+            "REVIEW_GATE",
+            "HUMAN_APPROVAL",
+            "REGISTRATION",
+            "ANALYSIS",
+            "GRAPH_PUBLICATION",
+            "RATING",
+            "ASSEMBLY_PLAN",
+            "ASSEMBLY",
+            "HWPX"
+          ]
+        },
+        "category": {
+          "enum": [
+            "REQUEST_CONTRACT_FAILED",
+            "PIN_RESOLUTION_FAILED",
+            "WORKFLOW_EXECUTION_FAILED",
+            "QUALITY_GATE_FAILED",
+            "HUMAN_REJECTED",
+            "REGISTRATION_FAILED",
+            "ANALYSIS_FAILED",
+            "GRAPH_PUBLICATION_FAILED",
+            "RATING_FAILED",
+            "ASSEMBLY_FAILED",
+            "DELIVERY_FAILED",
+            "ARTIFACT_INTEGRITY_FAILED",
+            "RUNTIME_NOT_READY",
+            "OPERATION_OUTCOME_UNKNOWN"
+          ]
+        },
+        "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"},
+        "retryable": {"type": "boolean"},
+        "observed_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "generation_block_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generation_block_key",
+        "generation_block_revision",
+        "generation_block_sha256",
+        "workflow_definition_key",
+        "workflow_definition_version",
+        "workflow_definition_sha256",
+        "content_pack_release_id",
+        "content_pack_key",
+        "content_pack_version",
+        "content_pack_release_sha256",
+        "content_pack_source_tree_sha256",
+        "execution_preset_id",
+        "execution_preset_revision_id",
+        "execution_preset_key",
+        "execution_preset_sha256",
+        "resolved_at"
+      ],
+      "properties": {
+        "generation_block_key": {"const": "content-team-one-item-generation"},
+        "generation_block_revision": {"enum": ["1.0", "2.0"]},
+        "generation_block_sha256": {"$ref": "#/$defs/sha256"},
+        "workflow_definition_key": {"const": "generic-item-development"},
+        "workflow_definition_version": {"enum": ["1.8.0", "1.9.0"]},
+        "workflow_definition_sha256": {"$ref": "#/$defs/sha256"},
+        "content_pack_release_id": {"type": "string", "pattern": "^packrel_[0-9a-f]{32}$"},
+        "content_pack_key": {"const": "generated-knowledge-item"},
+        "content_pack_version": {"enum": ["1.13.0", "1.14.0"]},
+        "content_pack_release_sha256": {"$ref": "#/$defs/sha256"},
+        "content_pack_source_tree_sha256": {"$ref": "#/$defs/sha256"},
+        "execution_preset_id": {"type": "string", "pattern": "^execpreset_[0-9a-f]{32}$"},
+        "execution_preset_revision_id": {"type": "string", "pattern": "^execpresetrev_[0-9a-f]{32}$"},
+        "execution_preset_key": {"const": "knowledge-grounded-item"},
+        "execution_preset_sha256": {"$ref": "#/$defs/sha256"},
+        "resolved_at": {"type": "string", "format": "date-time"}
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "generation_block_revision": {"const": "1.0"},
+            "workflow_definition_version": {"const": "1.8.0"},
+            "content_pack_version": {"const": "1.13.0"}
+          }
+        },
+        {
+          "properties": {
+            "generation_block_revision": {"const": "2.0"},
+            "workflow_definition_version": {"const": "1.9.0"},
+            "content_pack_version": {"const": "1.14.0"}
+          }
+        }
+      ]
+    },
+    "analysis_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["risk_policy_revision_id", "risk_policy_sha256"],
+      "properties": {
+        "risk_policy_revision_id": {"type": "string", "pattern": "^analysisriskrev_[0-9a-f]{32}$"},
+        "risk_policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "analysis_review_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_call_id",
+        "position",
+        "analysis_run_id",
+        "expected_resource_version",
+        "decision"
+      ],
+      "properties": {
+        "workflow_call_id": {"type": "string", "pattern": "^workflowcall_[0-9a-f]{32}$"},
+        "position": {"type": "integer", "minimum": 1, "maximum": 25},
+        "analysis_run_id": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+        "expected_resource_version": {"type": "integer", "minimum": 1},
+        "decision": {"enum": ["APPROVE", "REJECT"]}
+      }
+    },
+    "analysis_review_authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision_set_sha256", "reviewer_operator_id", "authorized_at", "bindings"],
+      "properties": {
+        "decision_set_sha256": {"$ref": "#/$defs/sha256"},
+        "reviewer_operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "authorized_at": {"type": "string", "format": "date-time"},
+        "bindings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 25,
+          "items": {"$ref": "#/$defs/analysis_review_binding"}
+        }
+      }
+    },
+    "graph_publication_authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "current_graph_snapshot_revision_id",
+        "current_graph_snapshot_sha256",
+        "access_policy_revision_id",
+        "access_policy_sha256",
+        "authorized_at",
+        "supersedes_authorization_sha256",
+        "authorization_sha256"
+      ],
+      "properties": {
+        "current_graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+        "current_graph_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+        "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+        "access_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "authorized_at": {"type": "string", "format": "date-time"},
+        "supersedes_authorization_sha256": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        },
+        "authorization_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "rating_authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_set_sha256",
+        "reviewer_operator_id",
+        "authorized_at",
+        "rating_policy_revision_id",
+        "rating_policy_sha256"
+      ],
+      "properties": {
+        "decision_set_sha256": {"$ref": "#/$defs/sha256"},
+        "reviewer_operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "authorized_at": {"type": "string", "format": "date-time"},
+        "rating_policy_revision_id": {"type": "string", "pattern": "^ratingpolicyrev_[0-9a-f]{32}$"},
+        "rating_policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "assembly_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deliverable_id", "deliverable_revision_id", "form_key", "display_label"],
+      "properties": {
+        "deliverable_id": {"type": "string", "pattern": "^deliverable_[0-9a-f]{32}$"},
+        "deliverable_revision_id": {"type": "string", "pattern": "^delivrev_[0-9a-f]{32}$"},
+        "form_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+        "display_label": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "review_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approval_request_id",
+        "approval_resource_version",
+        "step_run_id",
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "result_schema",
+        "finding_info_count",
+        "finding_warning_count",
+        "finding_blocking_count"
+      ],
+      "properties": {
+        "approval_request_id": {"type": "string", "pattern": "^approval_[0-9a-f]{32}$"},
+        "approval_resource_version": {"type": "integer", "minimum": 1},
+        "step_run_id": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "result_schema": {"enum": ["review-result@7.0", "review-result@8.0", "review-result@9.0"]},
+        "finding_info_count": {"type": "integer", "minimum": 0, "maximum": 20},
+        "finding_warning_count": {"type": "integer", "minimum": 0, "maximum": 20},
+        "finding_blocking_count": {"const": 0}
+      }
+    },
+    "registration_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_id",
+        "item_revision_id",
+        "revision_number",
+        "manifest_artifact_id",
+        "manifest_artifact_revision_id",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "revision_number": {"const": 1},
+        "manifest_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "manifest_artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "analysis_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "analysis_run_id",
+        "source_item_revision_id",
+        "request_sha256",
+        "risk_policy_revision_id",
+        "risk_policy_sha256",
+        "state",
+        "resource_version",
+        "accepted_result_artifact_id",
+        "accepted_result_artifact_revision_id",
+        "accepted_result_sha256"
+      ],
+      "properties": {
+        "analysis_run_id": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+        "source_item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "request_sha256": {"$ref": "#/$defs/sha256"},
+        "risk_policy_revision_id": {"type": "string", "pattern": "^analysisriskrev_[0-9a-f]{32}$"},
+        "risk_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "state": {
+          "enum": [
+            "REQUESTED",
+            "RESOLVED",
+            "QUEUED",
+            "RUNNING",
+            "VALIDATING",
+            "NEEDS_REVIEW",
+            "ACCEPTED",
+            "REJECTED",
+            "FAILED",
+            "CANCELLED"
+          ]
+        },
+        "resource_version": {"type": "integer", "minimum": 1},
+        "accepted_result_artifact_id": {
+          "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"}]
+        },
+        "accepted_result_artifact_revision_id": {
+          "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"}]
+        },
+        "accepted_result_sha256": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        }
+      }
+    },
+    "rating_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_review_record_id",
+        "item_revision_id",
+        "workflow_id",
+        "human_approval_request_id",
+        "decision_sha256",
+        "final_rating",
+        "reviewer_operator_id",
+        "rating_policy_revision_id",
+        "rating_policy_sha256"
+      ],
+      "properties": {
+        "item_review_record_id": {"type": "string", "pattern": "^itemreview_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+        "human_approval_request_id": {"type": "string", "pattern": "^approval_[0-9a-f]{32}$"},
+        "decision_sha256": {"$ref": "#/$defs/sha256"},
+        "final_rating": {"enum": ["A", "B", "C"]},
+        "reviewer_operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "rating_policy_revision_id": {"type": "string", "pattern": "^ratingpolicyrev_[0-9a-f]{32}$"},
+        "rating_policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "item_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_call_id",
+        "position",
+        "state",
+        "start_command_id",
+        "workflow_id",
+        "workflow_resource_version",
+        "knowledge_provenance",
+        "review",
+        "approval_command_id",
+        "human_approval",
+        "registration",
+        "analysis",
+        "graph_publication_id",
+        "rating",
+        "failure"
+      ],
+      "properties": {
+        "workflow_call_id": {"type": "string", "pattern": "^workflowcall_[0-9a-f]{32}$"},
+        "position": {"type": "integer", "minimum": 1, "maximum": 25},
+        "state": {
+          "enum": [
+            "PLANNED",
+            "START_UNCONFIRMED",
+            "WORKFLOW_UNCONFIRMED",
+            "WORKFLOW_ACTIVE",
+            "REVIEW_BLOCKED",
+            "APPROVAL_UNCONFIRMED",
+            "APPROVAL_SUBMITTED",
+            "REGISTERED",
+            "ANALYSIS_UNCONFIRMED",
+            "ANALYSIS_ACTIVE",
+            "ANALYSIS_REVIEW_REQUIRED",
+            "ANALYSIS_ACCEPTED",
+            "GRAPH_PUBLISHED",
+            "RATING_UNCONFIRMED",
+            "RATED",
+            "FAILED"
+          ]
+        },
+        "start_command_id": {"$ref": "#/$defs/nullable_string"},
+        "workflow_id": {
+          "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"}]
+        },
+        "workflow_resource_version": {
+          "oneOf": [{"type": "null"}, {"type": "integer", "minimum": 1}]
+        },
+        "knowledge_provenance": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/knowledge_provenance"}]
+        },
+        "review": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/review_pointer"}]},
+        "approval_command_id": {"$ref": "#/$defs/nullable_string"},
+        "human_approval": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/human_approval"}]
+        },
+        "registration": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/registration_pointer"}]
+        },
+        "analysis": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/analysis_pointer"}]},
+        "graph_publication_id": {
+          "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^graphpub_[0-9a-f]{32}$"}]
+        },
+        "rating": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/rating_pointer"}]},
+        "failure": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/failure"}]}
+      }
+    },
+    "knowledge_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "plan_id",
+        "plan_sha256",
+        "preset_revision_id",
+        "corpus_key",
+        "query_kind",
+        "curriculum_root_key",
+        "required_item_elements",
+        "source_classes",
+        "graph_snapshot_revision_id",
+        "evidence_bundle_revision_id",
+        "retrieval_request_id",
+        "retrieval_request_sha256",
+        "access_policy_revision_id",
+        "access_policy_sha256",
+        "evidence_manifest_sha256",
+        "resolved_at"
+      ],
+      "properties": {
+        "schema_version": {"const": "workflow-knowledge-provenance/1.0"},
+        "plan_id": {"type": "string", "pattern": "^execplan_[0-9a-f]{32}$"},
+        "plan_sha256": {"$ref": "#/$defs/sha256"},
+        "preset_revision_id": {"type": "string", "pattern": "^execpresetrev_[0-9a-f]{32}$"},
+        "corpus_key": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,63}$"},
+        "query_kind": {
+          "enum": ["CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE", "ITEM_PREPARATION"]
+        },
+        "curriculum_root_key": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$"}
+          ]
+        },
+        "required_item_elements": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["paragraph", "table", "image", "equation", "statement_set", "choice"]
+          }
+        },
+        "source_classes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["CURRICULUM", "TEXTBOOK", "APPROVED_ITEM", "PAST_EXAM", "INTERNAL_GUIDE"]
+          }
+        },
+        "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+        "evidence_bundle_revision_id": {"type": "string", "pattern": "^evidencerev_[0-9a-f]{32}$"},
+        "retrieval_request_id": {"type": "string", "pattern": "^retrieval_[0-9a-f]{32}$"},
+        "retrieval_request_sha256": {"$ref": "#/$defs/sha256"},
+        "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+        "access_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "evidence_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "resolved_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "human_approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approval_request_id", "reviewer_operator_id", "approved_at"],
+      "properties": {
+        "approval_request_id": {"type": "string", "pattern": "^approval_[0-9a-f]{32}$"},
+        "reviewer_operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "approved_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "graph_publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batch_number",
+        "publication_id",
+        "previous_graph_snapshot_revision_id",
+        "previous_graph_snapshot_sha256",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256",
+        "access_policy_revision_id",
+        "access_policy_sha256",
+        "analysis_run_ids",
+        "workflow_ids",
+        "item_revision_ids",
+        "authorized_at",
+        "outcome",
+        "result_sha256",
+        "published_at"
+      ],
+      "properties": {
+        "batch_number": {"const": 1},
+        "publication_id": {"type": "string", "pattern": "^graphpub_[0-9a-f]{32}$"},
+        "previous_graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+        "previous_graph_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+        "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+        "graph_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+        "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+        "access_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "analysis_run_ids": {
+          "type": "array",
+          "minItems": 25,
+          "maxItems": 25,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"}
+        },
+        "workflow_ids": {
+          "type": "array",
+          "minItems": 25,
+          "maxItems": 25,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"}
+        },
+        "item_revision_ids": {
+          "type": "array",
+          "minItems": 25,
+          "maxItems": 25,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"}
+        },
+        "authorized_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+        "outcome": {"enum": ["CREATED", "REPLAYED"]},
+        "result_sha256": {"$ref": "#/$defs/sha256"},
+        "published_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "assembly_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_sha256",
+        "cohort_id",
+        "cohort_sha256",
+        "assembly_idempotency_key_sha256",
+        "policy_revision_id",
+        "policy_sha256",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256",
+        "item_revision_ids",
+        "planned_at"
+      ],
+      "properties": {
+        "plan_sha256": {"$ref": "#/$defs/sha256"},
+        "cohort_id": {"type": "string", "pattern": "^assemblycohort_[0-9a-f]{32}$"},
+        "cohort_sha256": {"$ref": "#/$defs/sha256"},
+        "assembly_idempotency_key_sha256": {"$ref": "#/$defs/sha256"},
+        "policy_revision_id": {"type": "string", "pattern": "^assemblypolicyrev_[0-9a-f]{32}$"},
+        "policy_sha256": {"$ref": "#/$defs/sha256"},
+        "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+        "graph_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+        "item_revision_ids": {
+          "type": "array",
+          "minItems": 25,
+          "maxItems": 25,
+          "items": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"}
+        },
+        "planned_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "assembly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessment_assembly_id",
+        "assessment_assembly_revision_id",
+        "manifest_sha256",
+        "item_set_sha256",
+        "item_revision_ids",
+        "created_at"
+      ],
+      "properties": {
+        "assessment_assembly_id": {"type": "string", "pattern": "^assembly_[0-9a-f]{32}$"},
+        "assessment_assembly_revision_id": {"type": "string", "pattern": "^assemblyrev_[0-9a-f]{32}$"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "item_set_sha256": {"$ref": "#/$defs/sha256"},
+        "item_revision_ids": {
+          "type": "array",
+          "minItems": 25,
+          "maxItems": 25,
+          "items": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"}
+        },
+        "created_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "hwpx_build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "build_id",
+        "assessment_assembly_id",
+        "assessment_assembly_revision_id",
+        "assembly_manifest_sha256",
+        "policy_revision_id",
+        "policy_sha256",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256",
+        "item_set_sha256",
+        "item_revision_ids",
+        "renderer",
+        "renderer_version",
+        "state",
+        "validation_state",
+        "item_count",
+        "section_count",
+        "output_artifact_id",
+        "output_artifact_revision_id",
+        "output_sha256",
+        "download_available",
+        "resource_version",
+        "failure_code",
+        "created_by_operator_id",
+        "created_at",
+        "completed_at"
+      ],
+      "properties": {
+        "build_id": {"type": "string", "pattern": "^hwpxbuild_[0-9a-f]{32}$"},
+        "assessment_assembly_id": {"type": "string", "pattern": "^assembly_[0-9a-f]{32}$"},
+        "assessment_assembly_revision_id": {"type": "string", "pattern": "^assemblyrev_[0-9a-f]{32}$"},
+        "assembly_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "policy_revision_id": {"type": "string", "pattern": "^assemblypolicyrev_[0-9a-f]{32}$"},
+        "policy_sha256": {"$ref": "#/$defs/sha256"},
+        "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+        "graph_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+        "item_set_sha256": {"$ref": "#/$defs/sha256"},
+        "item_revision_ids": {
+          "type": "array",
+          "minItems": 25,
+          "maxItems": 25,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"}
+        },
+        "renderer": {"const": "content-team-exam"},
+        "renderer_version": {"enum": ["2.0.0", "3.0.0"]},
+        "state": {"enum": ["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]},
+        "validation_state": {"enum": ["PENDING", "PASS", "FAIL"]},
+        "item_count": {"const": 25},
+        "section_count": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0, "maximum": 25}]},
+        "output_artifact_id": {
+          "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"}]
+        },
+        "output_artifact_revision_id": {
+          "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"}]
+        },
+        "output_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "download_available": {"type": "boolean"},
+        "resource_version": {"type": "integer", "minimum": 1},
+        "failure_code": {
+          "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}]
+        },
+        "created_by_operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "completed_at": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]}
+      }
+    }
+  }
+}

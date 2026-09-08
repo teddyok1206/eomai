@@ -251,6 +251,7 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "catalog-application/catalog-application-request-v10.schema.json",
         "catalog-application/catalog-application-response-v10.schema.json",
         "item-registry/assessment-item-content-v2.schema.json",
+        "item-registry/assessment-item-content-v3.schema.json",
         "catalog-application/catalog-item-media-request-v1.schema.json",
         "catalog-application/catalog-item-media-response-v1.schema.json",
         "catalog-application/catalog-assessment-page-list-request-v1.schema.json",
@@ -500,7 +501,10 @@ def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> 
         "mock-exam-assembly-cohort-v1.schema.json",
         "mock-exam-assembly-manifest-v1.schema.json",
         "mock-exam-assembly-manifest-v2.schema.json",
+        "mock-exam-assembly-manifest-v3.schema.json",
         "mock-exam-assembly-plan-v1.schema.json",
+        "mock-exam-assembly-plan-v2.schema.json",
+        "mock-exam-production-plan-v2.schema.json",
         "mock-exam-assembly-policy-v1.schema.json",
         "mock-exam-layout-policy-v1.schema.json",
         "mock-exam-rating-policy-v1.schema.json",
@@ -539,11 +543,14 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
 
     for resource in (
         "mock-exam-item-review-decision-v1.schema.json",
+        "mock-exam-item-review-decision-v2.schema.json",
         "mock-exam-item-review-publication-command-v1.schema.json",
         "mock-exam-item-review-publication-result-v1.schema.json",
+        "mock-exam-item-review-publication-result-v2.schema.json",
         "mock-exam-production-plan-v1.schema.json",
         "mock-exam-review-eligibility-query-v1.schema.json",
         "mock-exam-review-eligibility-result-v1.schema.json",
+        "mock-exam-review-eligibility-result-v2.schema.json",
     ):
         assert f'"assessment-assembly/{resource}": ' in deployment
         assert f'"schemas/assessment-assembly/{resource}"' in deployment
@@ -556,6 +563,8 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
     for resource in (
         "catalog-application-request-v11.schema.json",
         "catalog-application-response-v11.schema.json",
+        "catalog-application-request-v12.schema.json",
+        "catalog-application-response-v12.schema.json",
     ):
         assert f'"catalog-application/{resource}": ' in deployment
         assert f'"schemas/catalog-application/{resource}"' in deployment
@@ -565,10 +574,12 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
     assert "schemas != expected_api_schemas" in deployment
-    assert "expected exactly 20 packaged API schemas" in deployment
+    assert "expected exactly 26 packaged API schemas" in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/production-item-candidate-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/mock-exam-assembly-plan-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"' in deployment
@@ -576,16 +587,26 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-page-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/mock-exam-production-execution-v2.schema.json"' in deployment
+    assert (
+        '"eom_api_contracts/schemas/mock-exam-production-retirement-v1.schema.json"' in deployment
+    )
     assert '"eom_api_contracts/schemas/mock-exam-review-eligibility-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/mock-exam-review-eligibility-v2.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/hwpx-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/workflow-start-v1.schema.json"' in deployment
     assert '"eom_api_contracts/mock_exam_execution.py"' in deployment
+    assert '"eom_api_contracts/item_bank.py"' in deployment
+    assert '"eom_api_contracts/mock_exam_retirement.py"' in deployment
     assert '"eom_api_contracts/workflows.py"' in deployment
+    assert '"eom_api/routers/item_bank.py"' in deployment
     assert "API schema resource drift" in deployment
     assert "API schema resource missing from RECORD" in deployment
     assert "packaged OpenAPI differs from canonical release artifacts" in deployment
     assert "packaged OpenAPI checksum mismatch" in deployment
     assert "mock-exam contract package exports are incomplete" in deployment
     assert "mock-exam terminal-state contract export is incomplete" in deployment
+    assert "mock-exam retirement contract package exports are incomplete" in deployment
     assert "legacy Graph automation must preserve its local 1..16 batch contract" in deployment
     assert 'CURRENT_MIGRATION_REVISION != "20260908_0032"' in deployment
 
@@ -628,6 +649,44 @@ def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions()
         '"5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0"}' in deployment
     )
     assert 'load_role_input_schema("support", "workflow-role/1.18.0")' in deployment
+
+
+def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+    hwpx_deployment = _source("scripts/hwpx/deploy_builder.sh")
+    runbook = _source("docs/architecture/CONTENT_TEAM_MOCK_EXAM_ITEM_PROTOCOL_V3.md")
+
+    assert '"1.8", "1.9")' in deployment
+    assert "definition_v1_8, definition_v1_9" in deployment
+    assert '"1.7.0", "1.8.0", "1.9.0"}' in deployment
+    for role in ("authoring", "image", "review", "item_management"):
+        assert f'load_role_input_schema("{role}", "workflow-role/1.19.0")' in deployment
+    for runtime in (
+        "eom_image_contracts/safe_svg.py",
+        "hwpx-content-team-editorial-question-v2.schema.json",
+        "hwpx-content-team-render-request-v3.schema.json",
+        "hwpx-content-team-build-result-v3.schema.json",
+        "hwpx-content-team-exam-render-request-v3.schema.json",
+        "hwpx-content-team-exam-build-result-v3.schema.json",
+    ):
+        assert runtime in deployment
+    assert '"eom_hwpx_builder/cli.py"' in hwpx_deployment
+    assert "CONTENT_TEAM_EXAM_V3_RUNTIME=READY" in hwpx_deployment
+    assert "installed HWPX V3 source drift" in hwpx_deployment
+    assert "sha256:43b7659bb96845f97fc2c29f5b26eaf561b4ba36ed0a1ee811088aa7cd9675a8" in (
+        hwpx_deployment
+    )
+    assert "content-team-exam-render-request/3.0" in hwpx_deployment
+    api_deploy = "scripts/api/deploy_release.sh --install-preserve-workflow-runner-inactive"
+    builder_install = "scripts/hwpx/deploy_builder.sh --install"
+    builder_verify = "scripts/hwpx/deploy_builder.sh --verify"
+    assert (
+        runbook.index(api_deploy) < runbook.index(builder_install) < runbook.index(builder_verify)
+    )
+    knowledge_bootstrap = runbook.partition('"${EOMCTL}" control-plane bootstrap-knowledge-item')[
+        2
+    ].partition("\n\n")[0]
+    assert "--evaluation-cases-total 4" in knowledge_bootstrap
 
 
 def test_release_verifies_legacy_item_extraction_runtime_and_contracts() -> None:
@@ -732,6 +791,7 @@ def test_shared_platform_release_restarts_every_long_lived_consumer() -> None:
         "scripts/api/migrate_release.sh",
         "scripts/api/verify_deployment_metadata.sh",
         "scripts/api/verify_runtime_isolation.sh",
+        "scripts/api/workflow_runner_deployment_hold.sh",
     ],
 )
 def test_deployment_shell_has_valid_syntax(relative: str) -> None:
@@ -742,3 +802,13 @@ def test_deployment_shell_has_valid_syntax(relative: str) -> None:
         text=True,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_integration_fixture_requires_explicit_database_url_without_secret_fallback() -> None:
+    source = _source("tests/integration/conftest.py")
+
+    assert 'explicit_url = os.environ.get("EOM_DATABASE_URL")' in source
+    assert "if not explicit_url:" in source
+    assert "build_engine(explicit_url)" in source
+    assert "engine = build_engine()" not in source
+    assert "runtime secret-file fallback is forbidden" in source

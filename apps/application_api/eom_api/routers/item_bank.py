@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from eom_api_contracts import ItemBankEntryView, ListResponse, ProductionItemCandidateView
+from eom_api_contracts import (
+    ItemBankEntryView,
+    ListResponse,
+    ProductionContentProfileV2,
+    ProductionItemCandidateViewContract,
+)
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Query, Request
 
@@ -63,23 +68,20 @@ def item_bank_entries(
 @router.get(
     "/item-bank/production-candidates",
     operation_id="production_item_candidate_list",
-    response_model=ListResponse[ProductionItemCandidateView],
+    response_model=ListResponse[ProductionItemCandidateViewContract],
     dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
 )
 def production_item_candidates(
     request: Request,
     curriculum_unit_key: str | None = Query(default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$"),
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"] | None = Query(default=None),
-    content_profile: Literal[
-        "LEGACY_ITEM_CONTENT_V1", "CONTENT_TEAM_ITEM_CONTENT_V2", "UNSUPPORTED"
-    ]
-    | None = Query(default=None),
+    content_profile: Annotated[ProductionContentProfileV2 | None, Query()] = None,
     eligible: bool | None = Query(default=None),
     item_type_key: str | None = Query(default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$"),
     difficulty_band: str | None = Query(default=None, min_length=1, max_length=64),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None, min_length=1, max_length=1024),
-) -> ListResponse[ProductionItemCandidateView]:
+) -> ListResponse[ProductionItemCandidateViewContract]:
     page = request.app.state.services.queries.production_item_candidates(
         curriculum_unit_key=curriculum_unit_key,
         source_class=source_class,

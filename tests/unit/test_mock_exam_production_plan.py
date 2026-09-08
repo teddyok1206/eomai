@@ -202,6 +202,11 @@ def test_typed_slot_survives_api_to_domain_v3_mapping_without_a_prompt_rewrite()
     assert isinstance(internal.item_brief, ContentTeamItemBrief)
     assert internal.item_brief.mock_exam_slot == planned.item_brief.mock_exam_slot
     assert internal.item_brief.curriculum_scope is not None
+    assert internal.educational_retrieval is not None
+    assert (
+        internal.educational_retrieval.curriculum_root_key
+        == internal.item_brief.curriculum_scope.graph_root_stable_key
+    )
     assert (
         internal.item_brief.curriculum_scope.selected_unit_key
         == planned.item_brief.curriculum_selected_unit_key

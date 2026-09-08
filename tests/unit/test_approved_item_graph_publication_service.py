@@ -47,6 +47,10 @@ from eom_catalog_service.knowledge_graph_publication_service import (
     KnowledgeGraphPublicationService,
 )
 from eom_identifiers import content_sha256
+from eom_workflow_runner.repository import (
+    load_persisted_workflow_request,
+    workflow_business_fingerprint,
+)
 from jsonschema import Draft202012Validator, FormatChecker
 from sqlalchemy.orm import Session
 
@@ -218,9 +222,7 @@ def _origin_rows(*, stale_position: int | None = None) -> tuple[tuple[Any, ...],
         item = SimpleNamespace(
             lifecycle_state="ACTIVE",
             current_revision_id=(
-                "itemrev_" + "f" * 32
-                if stale_position == index
-                else ITEM_REVISION_IDS[index]
+                "itemrev_" + "f" * 32 if stale_position == index else ITEM_REVISION_IDS[index]
             ),
         )
         run = SimpleNamespace(
@@ -235,9 +237,17 @@ def _origin_rows(*, stale_position: int | None = None) -> tuple[tuple[Any, ...],
             item_revision_id=ITEM_REVISION_IDS[index],
             workflow_id=WORKFLOW_IDS[index],
         )
+        definition = SimpleNamespace(
+            definition_id="workflowdef_" + "1" * 32,
+            definition_key="generic-item-development",
+            definition_version="1.8.0",
+            definition_hash=definition_sha256,
+            canonical_definition=definition_document,
+            active=False,
+        )
         workflow = SimpleNamespace(
             workflow_id=WORKFLOW_IDS[index],
-            definition_id="workflowdef_" + "1" * 32,
+            definition_id=definition.definition_id,
             definition_key="generic-item-development",
             definition_version="1.8.0",
             definition_hash=definition_sha256,
@@ -248,7 +258,7 @@ def _origin_rows(*, stale_position: int | None = None) -> tuple[tuple[Any, ...],
             completed_at=PUBLISHED_AT,
             request_payload=request_document,
             initial_request=request_document,
-            request_hash=content_sha256(request_document),
+            request_hash=workflow_business_fingerprint(cast(Any, definition), request),
             runtime_context={
                 "accepted_resolution": request.expected_resolution.model_dump(mode="json"),
                 "item_registration": {
@@ -257,14 +267,6 @@ def _origin_rows(*, stale_position: int | None = None) -> tuple[tuple[Any, ...],
                     "revision_number": 1,
                 },
             },
-        )
-        definition = SimpleNamespace(
-            definition_id=workflow.definition_id,
-            definition_key="generic-item-development",
-            definition_version="1.8.0",
-            definition_hash=definition_sha256,
-            canonical_definition=definition_document,
-            active=False,
         )
         rows.append((run, revision, item, workflow, definition))
     return tuple(rows)
@@ -307,9 +309,7 @@ def test_command_preserves_exact_order_and_rejects_duplicates_or_hash_drift() ->
 
     assert command.accepted_analysis_run_ids == reordered
 
-    duplicate = _command_value(
-        analysis_ids=(*ANALYSIS_RUN_IDS[:-1], ANALYSIS_RUN_IDS[0])
-    )
+    duplicate = _command_value(analysis_ids=(*ANALYSIS_RUN_IDS[:-1], ANALYSIS_RUN_IDS[0]))
     with pytest.raises(ValueError, match="unique and ordered"):
         PublishApprovedItemAnalysesCommand.model_validate(duplicate)
 
@@ -535,9 +535,7 @@ def test_exact_replay_precedes_mutable_current_admission() -> None:
         side_effect=AssertionError("replay must not resolve mutable current state")
     )
 
-    with patch(
-        "eom_catalog_service.approved_item_graph_publication_service.validate_contract"
-    ):
+    with patch("eom_catalog_service.approved_item_graph_publication_service.validate_contract"):
         result = service.publish(command)
 
     assert result is expected
@@ -761,12 +759,15 @@ def test_current_v2_validator_requires_one_production_request_and_unique_calls()
     first_request = rows[0][3].initial_request
     second_workflow = rows[1][3]
     changed = deepcopy(second_workflow.initial_request)
-    changed["production_occurrence"]["workflow_call_id"] = first_request[
-        "production_occurrence"
-    ]["workflow_call_id"]
+    changed["production_occurrence"]["workflow_call_id"] = first_request["production_occurrence"][
+        "workflow_call_id"
+    ]
     second_workflow.initial_request = changed
     second_workflow.request_payload = changed
-    second_workflow.request_hash = content_sha256(changed)
+    second_workflow.request_hash = workflow_business_fingerprint(
+        cast(Any, rows[1][4]),
+        load_persisted_workflow_request(changed),
+    )
     session = Mock(spec=Session)
     session.execute.return_value = tuple(rows)
 
@@ -792,9 +793,7 @@ def test_exact_replay_returns_original_snapshot_without_republication() -> None:
     )
     retrievals = tuple(
         SimpleNamespace(
-            idempotency_key=(
-                f"approved-item-auto-alignment:{analysis_run_id}:{GRAPH_REVISION_ID}"
-            ),
+            idempotency_key=(f"approved-item-auto-alignment:{analysis_run_id}:{GRAPH_REVISION_ID}"),
             access_policy_revision_id=ACCESS_POLICY_REVISION_ID,
             graph_snapshot_revision_id=GRAPH_REVISION_ID,
             requester_operator_id=OPERATOR_ID,

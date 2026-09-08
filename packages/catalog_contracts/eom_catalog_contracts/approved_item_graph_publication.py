@@ -63,10 +63,9 @@ class PublishApprovedItemAnalysesCommand(FrozenModel):
 
     @model_validator(mode="after")
     def exact_ordered_analysis_set_and_hash(self) -> PublishApprovedItemAnalysesCommand:
-        if (
-            len(self.accepted_analysis_run_ids) != len(set(self.accepted_analysis_run_ids))
-            or len(self.expected_workflow_ids) != len(set(self.expected_workflow_ids))
-        ):
+        if len(self.accepted_analysis_run_ids) != len(set(self.accepted_analysis_run_ids)) or len(
+            self.expected_workflow_ids
+        ) != len(set(self.expected_workflow_ids)):
             raise ValueError("analysis and Workflow IDs must be unique and ordered")
         canonical = self.model_dump(
             mode="json",

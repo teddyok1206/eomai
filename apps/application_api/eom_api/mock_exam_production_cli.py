@@ -178,6 +178,24 @@ def advance_items(
     )
 
 
+@mock_exam_production_app.command("retire-items")
+def retire_items(
+    execution_id: str,
+    access_token_file: AccessTokenFile,
+    checkpoint_root: CheckpointRoot = DEFAULT_CHECKPOINT_ROOT,
+) -> None:
+    """Atomically fence the exact 25-Workflow occurrence before runner restart."""
+
+    _execute(
+        access_token_file,
+        checkpoint_root,
+        lambda session: session.runtime.application.retire_items(
+            execution_id,
+            session.actor,
+        ),
+    )
+
+
 @mock_exam_production_app.command("advance-analyses")
 def advance_analyses(
     execution_id: str,

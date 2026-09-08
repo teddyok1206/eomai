@@ -12,8 +12,10 @@ from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
     ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
     ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+    ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF,
     AssessmentItemContent,
     AssessmentItemContentV2,
+    AssessmentItemContentV3,
     ImageBlock,
     MediaArtifactPointer,
     validate_contract,
@@ -21,23 +23,31 @@ from eom_catalog_contracts import (
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
     validate_content_team_mock_exam_slot_output,
+    validate_content_team_mock_exam_slot_output_v2,
 )
 from eom_content_pack import ContentPackError, ContentPackErrorCode, render_prompt
 from eom_hwpx_contracts import (
     ContentTeamEditorialDraft,
+    ContentTeamEditorialDraftV2,
     derive_content_team_equation_sources,
     normalize_content_team_stem,
     serialize_content_team_markdown,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
-from eom_image_contracts import LocalImageProviderBinding, content_json_bytes
+from eom_image_contracts import (
+    SVG_ALLOWED_FONT_FAMILIES,
+    LocalImageProviderBinding,
+    content_json_bytes,
+)
 from eom_item_registry import ComponentPointer, RegistrationRequest
 from eom_orchestrator.database import build_session_factory
 from eom_workflow import ArtifactPointer, ContentTeamItemBrief, ItemBriefV2, WorkflowRequest
 from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV7,
     ContentTeamAuthoringRoleResultV8,
+    ContentTeamAuthoringRoleResultV9,
     ContentTeamImageRoleResultV8,
+    ContentTeamImageRoleResultV9,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
     GeneratedAuthoringRoleResultV5,
@@ -68,6 +78,8 @@ from sqlalchemy.orm import Session
 from eom_catalog_service.artifacts import (
     CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION,
     CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH,
+    CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION,
+    CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH,
     CatalogArtifactService,
 )
 from eom_catalog_service.generated_stimulus import (
@@ -103,7 +115,6 @@ from eom_catalog_service.staging import (
     stage_registry_item_content,
 )
 from eom_catalog_service.vector_stimulus import (
-    SVG_ALLOWED_FONT_FAMILIES,
     SVG_FONT_FAMILY,
     SVG_FONT_PROFILE,
     SVG_MEDIA_TYPE,
@@ -156,6 +167,10 @@ ROLE_BY_RESULT_SCHEMA = {
     "image-result@8.0": "image",
     "review-result@8.0": "review",
     "registration-result@8.0": "item_management",
+    "authoring-result@9.0": "authoring",
+    "image-result@9.0": "image",
+    "review-result@9.0": "review",
+    "registration-result@9.0": "item_management",
     "review-result@7.0": "review",
     "registration-result@7.0": "item_management",
     "knowledge-analysis-proposal-result@1.0": "support",
@@ -302,8 +317,7 @@ class WorkflowCatalogService:
                 activation = resolved_session.scalar(
                     select(ContentPackActivationRecord).where(
                         ContentPackActivationRecord.pack_key == request.content_pack.pack_key,
-                        ContentPackActivationRecord.environment
-                        == request.content_pack.environment,
+                        ContentPackActivationRecord.environment == request.content_pack.environment,
                         ContentPackActivationRecord.active.is_(True),
                     )
                 )
@@ -322,8 +336,7 @@ class WorkflowCatalogService:
                     select(ContentPackActivationRecord)
                     .where(
                         ContentPackActivationRecord.pack_key == expected.content_pack_key,
-                        ContentPackActivationRecord.environment
-                        == request.content_pack.environment,
+                        ContentPackActivationRecord.environment == request.content_pack.environment,
                         ContentPackActivationRecord.content_pack_release_id
                         == expected.content_pack_release_id,
                         ContentPackActivationRecord.active.is_(True),
@@ -865,10 +878,18 @@ class WorkflowCatalogService:
     ) -> int:
         """Count only validated IMAGE slots in one pinned content-team authoring result."""
 
-        if authoring.step_key != "authoring" or authoring.result_schema != "authoring-result@8.0":
-            raise ValueError("image decision does not reference content-team authoring V8")
+        if authoring.step_key != "authoring" or authoring.result_schema not in {
+            "authoring-result@8.0",
+            "authoring-result@9.0",
+        }:
+            raise ValueError(
+                "image decision does not reference a supported content-team authoring result"
+            )
         _, parsed = self._load_upstream_result(workflow, authoring)
-        if not isinstance(parsed, ContentTeamAuthoringRoleResultV8):
+        if not isinstance(
+            parsed,
+            ContentTeamAuthoringRoleResultV8 | ContentTeamAuthoringRoleResultV9,
+        ):
             raise ValueError("content-team image decision result type is invalid")
         return sum(visual.kind == "IMAGE" for visual in parsed.output.draft.visuals)
 
@@ -878,22 +899,30 @@ class WorkflowCatalogService:
         workflow: WorkflowInstanceRecord,
         artifacts: tuple[ArtifactPointer, ...],
     ) -> tuple[ContentTeamStimulusPointer, ...]:
-        """Render and commit the exact ordered IMAGE slots declared by authoring V8."""
+        """Render and commit the exact ordered IMAGE slots from one paired schema family."""
 
         authoring = next(
             (
                 pointer
                 for pointer in artifacts
                 if pointer.step_key == "authoring"
-                and pointer.result_schema == "authoring-result@8.0"
+                and pointer.result_schema in {"authoring-result@8.0", "authoring-result@9.0"}
             ),
             None,
+        )
+        expected_image_schema = (
+            {
+                "authoring-result@8.0": "image-result@8.0",
+                "authoring-result@9.0": "image-result@9.0",
+            }.get(authoring.result_schema)
+            if authoring is not None
+            else None
         )
         image = next(
             (
                 pointer
                 for pointer in artifacts
-                if pointer.step_key == "image" and pointer.result_schema == "image-result@8.0"
+                if pointer.step_key == "image" and pointer.result_schema == expected_image_schema
             ),
             None,
         )
@@ -901,18 +930,25 @@ class WorkflowCatalogService:
             raise ValueError("content-team image artifacts are incomplete")
         _, authoring_result = self._load_upstream_result(workflow, authoring)
         _, image_result = self._load_upstream_result(workflow, image)
-        if not isinstance(authoring_result, ContentTeamAuthoringRoleResultV8) or not isinstance(
-            image_result, ContentTeamImageRoleResultV8
-        ):
+        authoring_draft: AssessmentItemContentV2 | AssessmentItemContentV3
+        if isinstance(authoring_result, ContentTeamAuthoringRoleResultV8):
+            if not isinstance(image_result, ContentTeamImageRoleResultV8):
+                raise ValueError("content-team image result types are invalid")
+            authoring_draft = authoring_result.output.draft
+            image_drawings = image_result.output.drawings
+        elif isinstance(authoring_result, ContentTeamAuthoringRoleResultV9):
+            if not isinstance(image_result, ContentTeamImageRoleResultV9):
+                raise ValueError("content-team image result types are invalid")
+            authoring_draft = authoring_result.output.draft
+            image_drawings = image_result.output.drawings
+        else:
             raise ValueError("content-team image result types are invalid")
         expected_slots = tuple(
             (ordinal, visual.label)
-            for ordinal, visual in enumerate(authoring_result.output.draft.visuals)
+            for ordinal, visual in enumerate(authoring_draft.visuals)
             if visual.kind == "IMAGE"
         )
-        actual_slots = tuple(
-            (item.visual_ordinal, item.label) for item in image_result.output.drawings
-        )
+        actual_slots = tuple((item.visual_ordinal, item.label) for item in image_drawings)
         if not expected_slots or actual_slots != expected_slots:
             raise ValueError("content-team image output changed the ordered IMAGE slots")
 
@@ -923,7 +959,7 @@ class WorkflowCatalogService:
             else None
         )
         committed: list[ContentTeamStimulusPointer] = []
-        for item in image_result.output.drawings:
+        for item in image_drawings:
             drawing = item.drawing
             drawing_hash = content_sha256(drawing.model_dump(mode="json"))
             suffix = f"visual-{item.visual_ordinal}"
@@ -1091,7 +1127,8 @@ class WorkflowCatalogService:
         }:
             components = (*components, self._knowledge_item_content(workflow, request, artifacts))
             if any(
-                pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@8.0"
+                pointer.step_key == "authoring"
+                and pointer.result_schema in {"authoring-result@8.0", "authoring-result@9.0"}
                 for pointer in artifacts
             ):
                 components = (
@@ -1211,6 +1248,7 @@ class WorkflowCatalogService:
         expects_content_team = pack_key == "generated-knowledge-item" and release_version in {
             "1.12.0",
             "1.13.0",
+            "1.14.0",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1218,7 +1256,7 @@ class WorkflowCatalogService:
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "content-team pack requires the V3 item brief",
                 )
-            if release_version == "1.13.0" and (
+            if release_version in {"1.13.0", "1.14.0"} and (
                 request.image_mode != "required"
                 or request.profiles is None
                 or request.profiles.image != "generated-stimulus-drawing"
@@ -1378,7 +1416,12 @@ class WorkflowCatalogService:
     ) -> ComponentPointer:
         if any(
             pointer.step_key == "authoring"
-            and pointer.result_schema in {"authoring-result@7.0", "authoring-result@8.0"}
+            and pointer.result_schema
+            in {
+                "authoring-result@7.0",
+                "authoring-result@8.0",
+                "authoring-result@9.0",
+            }
             for pointer in artifacts
         ):
             return self._content_team_knowledge_item_content(workflow, request, artifacts)
@@ -1461,15 +1504,18 @@ class WorkflowCatalogService:
                 pointer
                 for pointer in artifacts
                 if pointer.step_key == "authoring"
-                and pointer.result_schema == "authoring-result@8.0"
+                and pointer.result_schema in {"authoring-result@8.0", "authoring-result@9.0"}
             ),
             None,
         )
         if authoring is None:
             raise ValueError("content-team V8 authoring result is missing")
         _, parsed = self._load_upstream_result(workflow, authoring)
-        if not isinstance(parsed, ContentTeamAuthoringRoleResultV8):
-            raise ValueError("content-team V8 authoring result type is invalid")
+        if not isinstance(
+            parsed,
+            ContentTeamAuthoringRoleResultV8 | ContentTeamAuthoringRoleResultV9,
+        ):
+            raise ValueError("content-team authoring result type is invalid")
         slots = tuple(
             (ordinal, visual.label)
             for ordinal, visual in enumerate(parsed.output.draft.visuals)
@@ -1486,7 +1532,13 @@ class WorkflowCatalogService:
             (
                 pointer
                 for pointer in artifacts
-                if pointer.step_key == "image" and pointer.result_schema == "image-result@8.0"
+                if pointer.step_key == "image"
+                and pointer.result_schema
+                == (
+                    "image-result@9.0"
+                    if isinstance(parsed, ContentTeamAuthoringRoleResultV9)
+                    else "image-result@8.0"
+                )
             ),
             None,
         )
@@ -1554,14 +1606,19 @@ class WorkflowCatalogService:
         request: WorkflowRequest,
         artifacts: tuple[ArtifactPointer, ...],
     ) -> ComponentPointer:
-        """Commit V2 JSON plus the lossless Markdown materialization as one artifact."""
+        """Commit the schema-paired JSON and lossless Markdown as one artifact."""
 
         authoring = next(
             (
                 pointer
                 for pointer in artifacts
                 if pointer.step_key == "authoring"
-                and pointer.result_schema in {"authoring-result@7.0", "authoring-result@8.0"}
+                and pointer.result_schema
+                in {
+                    "authoring-result@7.0",
+                    "authoring-result@8.0",
+                    "authoring-result@9.0",
+                }
             ),
             None,
         )
@@ -1569,28 +1626,66 @@ class WorkflowCatalogService:
             raise ValueError("content-team workflow has no authoring result")
         _, parsed = self._load_upstream_result(workflow, authoring)
         if not isinstance(
-            parsed, ContentTeamAuthoringRoleResultV7 | ContentTeamAuthoringRoleResultV8
+            parsed,
+            ContentTeamAuthoringRoleResultV7
+            | ContentTeamAuthoringRoleResultV8
+            | ContentTeamAuthoringRoleResultV9,
         ):
             raise ValueError("content-team authoring result type is invalid")
-        content: AssessmentItemContentV2 = parsed.output.draft
+        is_v3 = isinstance(parsed, ContentTeamAuthoringRoleResultV9)
+        content: AssessmentItemContentV2 | AssessmentItemContentV3 = parsed.output.draft
+        expected_source_mode = self._knowledge_source_mode(request)
+        if is_v3 and parsed.output.metadata.knowledge_source_mode != expected_source_mode:
+            raise ValueError(
+                "content-team V3 authoring provenance differs from the authoritative request"
+            )
         brief = request.item_brief
         if isinstance(brief, ContentTeamItemBrief) and brief.mock_exam_slot is not None:
-            validate_content_team_mock_exam_slot_output(
-                slot=brief.mock_exam_slot,
-                content=content,
-                authoring_difficulty=parsed.output.metadata.difficulty,
-            )
+            if isinstance(content, AssessmentItemContentV3):
+                validate_content_team_mock_exam_slot_output_v2(
+                    slot=brief.mock_exam_slot,
+                    content=content,
+                    authoring_difficulty=parsed.output.metadata.difficulty,
+                )
+            else:
+                validate_content_team_mock_exam_slot_output(
+                    slot=brief.mock_exam_slot,
+                    content=content,
+                    authoring_difficulty=parsed.output.metadata.difficulty,
+                )
+        content_model = AssessmentItemContentV3 if is_v3 else AssessmentItemContentV2
+        editorial_model = ContentTeamEditorialDraftV2 if is_v3 else ContentTeamEditorialDraft
+        schema_name = "assessment-item-content-v3" if is_v3 else "assessment-item-content-v2"
+        schema_ref = (
+            ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF
+            if is_v3
+            else ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF
+        )
+        schema_version = "3.0" if is_v3 else "2.0"
+        markdown_schema_ref = (
+            "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
+            if is_v3
+            else "eom://schemas/hwpx/content-team-editorial-markdown/1.0"
+        )
+        protocol_version = (
+            CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION
+            if is_v3
+            else CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION
+        )
+        protocol_hash = (
+            CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH if is_v3 else CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH
+        )
         content_data = content.model_dump(mode="json")
         content_data["stem"] = normalize_content_team_stem(content.item_number, content.stem)
         content_data["equation_sources"] = []
-        content = AssessmentItemContentV2.model_validate(content_data)
+        content = content_model.model_validate(content_data)
         content_data["equation_sources"] = list(derive_content_team_equation_sources(content))
-        content = AssessmentItemContentV2.model_validate(content_data)
+        content = content_model.model_validate(content_data)
         content_data = content.model_dump(mode="json")
-        validate_contract("assessment-item-content-v2", content_data)
+        validate_contract(schema_name, content_data)
         editorial_data = dict(content_data)
         editorial_data.pop("schema_version")
-        editorial = ContentTeamEditorialDraft.model_validate(editorial_data)
+        editorial = editorial_model.model_validate(editorial_data)
         markdown = serialize_content_team_markdown(editorial)
         staged, staged_hash, staged_markdown, markdown_hash = (
             stage_content_team_item_materialization(self.settings, content_data, markdown)
@@ -1605,19 +1700,23 @@ class WorkflowCatalogService:
             },
             primary_file=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             artifact_type="assessment-item-content",
-            idempotency_key=f"workflow-item-content-v2:{workflow.workflow_id}:{expected_hash}",
-            request={"workflow_id": workflow.workflow_id, "schema_version": "2.0"},
+            idempotency_key=(
+                f"workflow-item-content-v3:{workflow.workflow_id}:{expected_hash}"
+                if is_v3
+                else f"workflow-item-content-v2:{workflow.workflow_id}:{expected_hash}"
+            ),
+            request={"workflow_id": workflow.workflow_id, "schema_version": schema_version},
             result={
                 "content_sha256": expected_hash,
                 "editorial_markdown_sha256": markdown_hash,
             },
             file_metadata={
                 ASSESSMENT_ITEM_CONTENT_FILE_NAME: {
-                    "schema_ref": ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+                    "schema_ref": schema_ref,
                     "media_type": ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
                 },
                 "content-team-item.md": {
-                    "schema_ref": "eom://schemas/hwpx/content-team-editorial-markdown/1.0",
+                    "schema_ref": markdown_schema_ref,
                     "media_type": "text/markdown",
                 },
             },
@@ -1625,13 +1724,13 @@ class WorkflowCatalogService:
                 ASSESSMENT_ITEM_CONTENT_FILE_NAME: expected_hash,
                 "content-team-item.md": markdown_hash,
             },
-            protocol_version=CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION,
-            protocol_schema_hash=CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH,
+            protocol_version=protocol_version,
+            protocol_schema_hash=protocol_hash,
         )
         return ComponentPointer(
             component_type="ITEM_CONTENT",
             ordinal=0,
-            schema_ref=ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+            schema_ref=schema_ref,
             media_type=ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
             artifact_id=artifact.artifact_id,
             artifact_revision_id=artifact.revision_id,
@@ -1641,6 +1740,7 @@ class WorkflowCatalogService:
                 "authoring_artifact_revision_id": authoring.revision_id,
                 "editorial_markdown_member": "content-team-item.md",
                 "editorial_markdown_sha256": markdown_hash,
+                "editorial_markdown_schema_ref": markdown_schema_ref,
                 "renderer_profile": content.renderer_profile,
                 **self._brief_provenance_metadata(request),
             },
@@ -1815,7 +1915,8 @@ class WorkflowCatalogService:
             raise ValueError("upstream result identity does not match its immutable pointer")
         canonical_result = (
             parsed.model_dump(mode="json")
-            if pointer.result_schema in {"authoring-result@7.0", "authoring-result@8.0"}
+            if pointer.result_schema
+            in {"authoring-result@7.0", "authoring-result@8.0", "authoring-result@9.0"}
             else result
         )
         return canonical_result, parsed

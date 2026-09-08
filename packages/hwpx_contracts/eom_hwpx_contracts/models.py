@@ -274,11 +274,30 @@ class ContentTeamEditorialDraft(StrictModel):
         return self
 
 
+class ContentTeamEditorialDraftV2(ContentTeamEditorialDraft):
+    """Additive score-corrected draft; historical V1 validation remains unchanged."""
+
+    score_display: Literal["1.5", "2", "2.5", "3"]  # type: ignore[assignment]
+
+
 class ContentTeamEditorialQuestion(ContentTeamEditorialDraft):
     """A draft bound to the exact Markdown materialization that produced it."""
 
     schema_version: Literal["1.0"] = "1.0"
     source_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+
+
+class ContentTeamEditorialQuestionV2(ContentTeamEditorialDraftV2):
+    """Markdown-bound V2 question supporting every released mock-exam score."""
+
+    schema_version: Literal["2.0"] = "2.0"
+    source_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+
+
+type ContentTeamEditorialDraftContract = ContentTeamEditorialDraft | ContentTeamEditorialDraftV2
+type ContentTeamEditorialQuestionContract = (
+    ContentTeamEditorialQuestion | ContentTeamEditorialQuestionV2
+)
 
 
 class ContentTeamItemSource(StrictModel):
@@ -291,6 +310,15 @@ class ContentTeamItemSource(StrictModel):
     json_file: Literal["input/item-content.json"] = "input/item-content.json"
     markdown_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
     markdown_file: Literal["input/content-team-item.md"] = "input/content-team-item.md"
+
+
+class ContentTeamItemSourceV2(ContentTeamItemSource):
+    """Pinned V3 Catalog content and its version-bound editorial Markdown."""
+
+    schema_ref: Literal["eom.assessment.item-content/3.0"] = "eom.assessment.item-content/3.0"  # type: ignore[assignment]
+    markdown_schema_ref: Literal["eom://schemas/hwpx/content-team-editorial-markdown/2.0"] = (
+        "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
+    )
 
 
 class ContentTeamHandoffMember(StrictModel):
@@ -443,6 +471,28 @@ class ContentTeamRenderRequestV2(StrictModel):
         return self
 
 
+class ContentTeamRenderRequestV3(StrictModel):
+    """Score-corrected render request pinned to ITEM_CONTENT V3."""
+
+    schema_version: Literal["3.0"] = "3.0"
+    renderer_profile: Literal["content-team-hwp-question-editor-v2"] = (
+        "content-team-hwp-question-editor-v2"
+    )
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
+    source: ContentTeamItemSourceV2
+    handoff: ContentTeamHandoffSnapshot
+    images: tuple[ContentTeamImageSource, ...] = Field(max_length=2)
+    output_directory: Literal["output"] = "output"
+
+    @model_validator(mode="after")
+    def ordered_unique_images(self) -> ContentTeamRenderRequestV3:
+        ordinals = tuple(image.visual_ordinal for image in self.images)
+        if ordinals != tuple(sorted(set(ordinals))):
+            raise ValueError("content-team images must be unique and ordered")
+        return self
+
+
 class ContentTeamExamAssemblyPointer(StrictModel):
     """Immutable Assembly/Graph/policy identity consumed by one exam build."""
 
@@ -513,6 +563,14 @@ class ContentTeamExamAssemblyPointerV2(ContentTeamExamAssemblyPointer):
     plan_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
 
 
+class ContentTeamExamAssemblyPointerV3(ContentTeamExamAssemblyPointerV2):
+    """Exact V3 Assembly identity for score-preserving content V3 rendering."""
+
+    assembly_schema_version: Literal["mock-exam-assembly-manifest/3.0"] = (
+        "mock-exam-assembly-manifest/3.0"  # type: ignore[assignment]
+    )
+
+
 class ContentTeamExamItemSourceV2(ContentTeamExamItemSource):
     """V2 placement fields that control exam-only numbering and score presentation."""
 
@@ -524,6 +582,18 @@ class ContentTeamExamItemSourceV2(ContentTeamExamItemSource):
         if self.display_number != str(self.position):
             raise ValueError("exam display number differs from its position")
         return self
+
+
+class ContentTeamExamItemSourceV3(ContentTeamExamItemSourceV2):
+    """Exam member pointers bound to ITEM_CONTENT V3 and Markdown V2."""
+
+    points_milli: Literal[1500, 2000, 2500, 3000]  # type: ignore[assignment]
+    source_schema_ref: Literal["eom.assessment.item-content/3.0"] = (
+        "eom.assessment.item-content/3.0"
+    )
+    source_markdown_schema_ref: Literal[
+        "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
+    ] = "eom://schemas/hwpx/content-team-editorial-markdown/2.0"
 
 
 class ContentTeamExamRenderRequest(StrictModel):
@@ -578,7 +648,35 @@ class ContentTeamExamRenderRequestV2(StrictModel):
         return self
 
 
-ContentTeamExamRenderRequestContract = ContentTeamExamRenderRequest | ContentTeamExamRenderRequestV2
+class ContentTeamExamRenderRequestV3(StrictModel):
+    schema_version: Literal["content-team-exam-render-request/3.0"] = (
+        "content-team-exam-render-request/3.0"
+    )
+    renderer_profile: Literal["content-team-hwp-question-editor-exam-v1"] = (
+        "content-team-hwp-question-editor-exam-v1"
+    )
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    assembly: ContentTeamExamAssemblyPointerV3
+    handoff: ContentTeamHandoffSnapshot
+    items: tuple[ContentTeamExamItemSourceV3, ...] = Field(min_length=1, max_length=200)
+    output_directory: Literal["output"] = "output"
+
+    @model_validator(mode="after")
+    def ordered_unique_item_set(self) -> ContentTeamExamRenderRequestV3:
+        if tuple(item.position for item in self.items) != tuple(range(1, len(self.items) + 1)):
+            raise ValueError("exam items must be contiguous and ordered")
+        revision_ids = tuple(item.item_revision_id for item in self.items)
+        placement_ids = tuple(item.placement_id for item in self.items)
+        if len(revision_ids) != len(set(revision_ids)) or len(placement_ids) != len(
+            set(placement_ids)
+        ):
+            raise ValueError("exam item and placement identities must be unique")
+        return self
+
+
+ContentTeamExamRenderRequestContract = (
+    ContentTeamExamRenderRequest | ContentTeamExamRenderRequestV2 | ContentTeamExamRenderRequestV3
+)
 
 
 def content_team_exam_item_set_projection(
@@ -599,7 +697,7 @@ def content_team_exam_item_set_projection(
 
 
 def content_team_exam_render_plan_projection(
-    request: ContentTeamExamRenderRequestV2,
+    request: ContentTeamExamRenderRequestV2 | ContentTeamExamRenderRequestV3,
 ) -> tuple[dict[str, Any], ...]:
     """Canonical V2 placement presentation projected into the final HWPX."""
 
@@ -713,6 +811,13 @@ class ContentTeamBuildResultV2(StrictModel):
         return self
 
 
+class ContentTeamBuildResultV3(ContentTeamBuildResultV2):
+    """Builder result paired with a V3 item-content render request."""
+
+    schema_version: Literal["3.0"] = "3.0"  # type: ignore[assignment]
+    renderer_version: Literal["3.0.0"] = "3.0.0"  # type: ignore[assignment]
+
+
 class _ContentTeamExamBuildResultBase(StrictModel):
     renderer_profile: Literal["content-team-hwp-question-editor-exam-v1"] = (
         "content-team-hwp-question-editor-exam-v1"
@@ -774,7 +879,16 @@ class ContentTeamExamBuildResultV2(_ContentTeamExamBuildResultBase):
     render_plan_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
 
 
-ContentTeamExamBuildResultContract = ContentTeamExamBuildResult | ContentTeamExamBuildResultV2
+class ContentTeamExamBuildResultV3(ContentTeamExamBuildResultV2):
+    schema_version: Literal["content-team-exam-build-result/3.0"] = (
+        "content-team-exam-build-result/3.0"  # type: ignore[assignment]
+    )
+    renderer_version: Literal["3.0.0"] = "3.0.0"  # type: ignore[assignment]
+
+
+ContentTeamExamBuildResultContract = (
+    ContentTeamExamBuildResult | ContentTeamExamBuildResultV2 | ContentTeamExamBuildResultV3
+)
 
 
 class TableData(StrictModel):
