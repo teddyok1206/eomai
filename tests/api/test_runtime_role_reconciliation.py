@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from eom_api.runtime_privileges import INSERT_TABLES, READ_TABLES, UPDATE_TABLES
+from eom_api.runtime_privileges import (
+    INSERT_TABLES,
+    READ_TABLES,
+    UPDATE_COLUMN_PRIVILEGES,
+    UPDATE_TABLES,
+)
 
 from scripts.api import testdb_guard
 
@@ -29,9 +34,22 @@ def test_runtime_role_bootstrap_revokes_drift_before_exact_grants() -> None:
     assert "UPDATE app.alembic_version" in source
     assert "CREATE ROLE eom_api_privilege_probe" in source
     assert "TABLE_PRIVILEGES" in source
+    assert "UPDATE_COLUMN_PRIVILEGES" in source
+    assert "GRANT UPDATE ({}) ON TABLE" in source
+    assert "has_column_privilege" in source
+    assert "column-scoped UPDATE table also has table-wide UPDATE" in source
     assert "workflow_instances" in READ_TABLES
     assert "workflow_instances" in UPDATE_TABLES
     assert "workflow_commands" in INSERT_TABLES
+    assert "job_events" in READ_TABLES
+    assert "job_events" in INSERT_TABLES
+    assert "worker_lease_events" in INSERT_TABLES
+    assert dict(UPDATE_COLUMN_PRIVILEGES) == {
+        "jobs": ("completed_at", "status", "updated_at"),
+        "worker_leases": ("release_reason", "released_at", "state"),
+        "workflow_commands": ("processed_at", "state"),
+    }
+    assert set(dict(UPDATE_COLUMN_PRIVILEGES)).isdisjoint(UPDATE_TABLES)
     assert "hwpx_application_builds" in READ_TABLES
     assert "hwpx_application_builds" in INSERT_TABLES
     assert "hwpx_application_builds" in UPDATE_TABLES
@@ -46,6 +64,7 @@ def test_disposable_reconciliation_proves_idempotency_and_removes_drift() -> Non
     assert "reconcile_runtime_role" in source
     assert source.count("reconcile_runtime_role") >= 4  # definition plus three invocations
     assert "GRANT DELETE ON TABLE app.workflow_instances" in source
+    assert "GRANT UPDATE (request) ON TABLE app.jobs" in source
 
 
 def test_disposable_prepare_matches_production_application_schema_contract() -> None:

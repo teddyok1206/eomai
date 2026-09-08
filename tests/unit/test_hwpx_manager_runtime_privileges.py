@@ -5,6 +5,7 @@ from typing import cast
 from unittest.mock import Mock
 
 from eom_api.runtime_privileges import INSERT_TABLES as API_INSERT_TABLES
+from eom_api.runtime_privileges import UPDATE_COLUMN_PRIVILEGES as API_UPDATE_COLUMN_PRIVILEGES
 from eom_api.runtime_privileges import UPDATE_TABLES as API_UPDATE_TABLES
 from eom_hwpx_manager.runtime_privileges import (
     INSERT_TABLES,
@@ -46,8 +47,15 @@ def test_manager_privilege_matrix_matches_owned_access_patterns() -> None:
     }
     assert "hwpx_application_builds" not in INSERT_TABLES
     assert "hwpx_assessment_assembly_builds" not in INSERT_TABLES
-    assert not set(INSERT_TABLES) & set(API_INSERT_TABLES)
+    # Both runtimes append independently owned lifecycle events to the shared Job event stream.
+    # No other HWPX-manager insert surface is shared with the API runtime.
+    assert set(INSERT_TABLES) & set(API_INSERT_TABLES) == {"job_events"}
     assert "jobs" not in API_UPDATE_TABLES
+    assert dict(API_UPDATE_COLUMN_PRIVILEGES)["jobs"] == (
+        "completed_at",
+        "status",
+        "updated_at",
+    )
     assert {privilege for privilege, _tables in TABLE_PRIVILEGES} == {
         "SELECT",
         "INSERT",

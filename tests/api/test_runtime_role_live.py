@@ -5,7 +5,7 @@ from pathlib import Path
 
 import psycopg
 import pytest
-from eom_api.runtime_privileges import TABLE_PRIVILEGES
+from eom_api.runtime_privileges import TABLE_PRIVILEGES, UPDATE_COLUMN_PRIVILEGES
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from psycopg import sql
 
@@ -40,6 +40,40 @@ def test_disposable_runtime_role_allows_dml_and_denies_schema_changes() -> None:
                 )
                 assert cursor.fetchone() == (True,)
         cursor.execute("SELECT workflow_id FROM app.workflow_instances WHERE false FOR UPDATE")
+        for table_name, expected_columns in UPDATE_COLUMN_PRIVILEGES:
+            cursor.execute(
+                "SELECT has_table_privilege(current_user, %s, 'UPDATE')",
+                (f"app.{table_name}",),
+            )
+            assert cursor.fetchone() == (False,)
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = 'app' AND table_name = %s ORDER BY column_name",
+                (table_name,),
+            )
+            observed_columns: set[str] = set()
+            for (column_name,) in cursor.fetchall():
+                cursor.execute(
+                    "SELECT has_column_privilege(current_user, %s, %s, 'UPDATE')",
+                    (f"app.{table_name}", column_name),
+                )
+                if cursor.fetchone() == (True,):
+                    observed_columns.add(str(column_name))
+            assert observed_columns == set(expected_columns)
+            cursor.execute(
+                sql.SQL("SELECT 1 FROM app.{} WHERE false FOR UPDATE").format(
+                    sql.Identifier(table_name)
+                )
+            )
+        for statement in (
+            "UPDATE app.jobs SET status = status, updated_at = updated_at, "
+            "completed_at = completed_at WHERE false",
+            "UPDATE app.worker_leases SET state = state, released_at = released_at, "
+            "release_reason = release_reason WHERE false",
+            "UPDATE app.workflow_commands SET state = state, processed_at = processed_at "
+            "WHERE false",
+        ):
+            cursor.execute(statement)
         cursor.execute(
             "INSERT INTO app.api_audit_events "
             "(api_audit_event_id, request_id, event_type, operation_id, http_method, "
@@ -63,6 +97,16 @@ def test_disposable_runtime_role_allows_dml_and_denies_schema_changes() -> None:
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             cursor.execute("UPDATE app.alembic_version SET version_num = version_num")
         connection.rollback()
+        for statement in (
+            "UPDATE app.jobs SET request = request WHERE false",
+            "UPDATE app.worker_leases SET job_id = job_id WHERE false",
+            "UPDATE app.workflow_commands SET payload = payload WHERE false",
+            "UPDATE app.workflow_events SET payload = payload WHERE false",
+            "UPDATE app.workflow_step_runs SET platform_job_id = platform_job_id WHERE false",
+        ):
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                cursor.execute(statement)
+            connection.rollback()
     connection.close()
 
 

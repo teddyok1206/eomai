@@ -78,6 +78,67 @@ remain blocked at the HTTP boundary.
     and stale processing commands/jobs can resume. Direct DB updates would bypass state machines and
     erase application-level ownership, CAS, and audit guarantees.
 
+## Runtime database privilege boundary
+
+The installed local retirement command connects as `eom_api_runtime`, so its cross-service write
+surface is part of the reviewed design rather than an incidental deployment grant. This amendment
+applies the required design procedure specifically to that privilege boundary:
+
+1. **Responsibility and boundary.** Only the authenticated local Application API retirement use case
+   invokes these existing orchestrator and Workflow-runner application services; no HTTP route
+   exposes it, and application authorization limits invocation. Workers, direct SQL recovery, NAS
+   access, and general orchestration remain outside the use case.
+2. **Canonical source.** `eom_api.runtime_privileges` is the canonical required-grant matrix;
+   `bootstrap_runtime_role.sh` first revokes drift, then reconstructs and verifies that matrix.
+3. **Entity and revision model.** The change adds no entity or revision. Identity, request,
+   provenance, revision, and hash columns remain outside every new UPDATE grant.
+4. **Pointers and resolution.** Existing Workflow, step-run, Job, lease, command, and event pointer
+   validation runs before a transition. Column grants cannot rewrite any of those pointers.
+5. **Access patterns.** Retirement performs bounded indexed reads, append-only event insertion, and
+   row-locked state transitions for the exact 25-member cohort. Event sequence allocation requires
+   read access to existing Job and lease events.
+6. **Structures and indexes.** Ordered immutable tuples define the allowed table and column sets.
+   Existing primary-key, foreign-key, Workflow adjacency, and lease indexes serve the operation; no
+   schema or index change is required.
+7. **Scale and complexity.** Runtime work remains O(25 + C + J + L) with bounded adjacent commands,
+   Jobs, and leases. Deployment reconciliation scans schema metadata once; its cost is proportional
+   to the table/column catalog, not production row count.
+8. **Transaction and concurrency.** PostgreSQL row locks require UPDATE authority. It is granted
+   only on `jobs(completed_at,status,updated_at)`,
+   `worker_leases(release_reason,released_at,state)`, and
+   `workflow_commands(processed_at,state)`. The owning Workflow rows retain their pre-existing
+   table UPDATE grant. Step-to-Job edges remain SELECT-only: the verified persistent runner hold,
+   owning Workflow locks, and no-held-lease check freeze their sole valid writer, so
+   `workflow_step_runs` does not need `FOR UPDATE` or UPDATE privilege.
+9. **Dependency direction.** The API infrastructure matrix and privileged bootstrap express the DB
+   adapter boundary. Retirement still delegates lease and Job rules to orchestrator services and
+   Workflow command/event rules to the Workflow-runner service; no domain layer imports API or SQL
+   infrastructure.
+10. **Failure, retry, and idempotency.** Missing scoped columns or accidental table-wide UPDATE make
+    readiness fail. Bootstrap is revoke-then-grant idempotent and verifies effective privileges per
+    table and column. Any runtime denial rolls back the enclosing transition; deterministic command
+    and retirement identities make the retry safe.
+11. **Simpler alternative and trade-off.** Table-wide UPDATE on Jobs, leases, commands, events, or
+    step runs is operationally simpler but permits unrelated provenance/history mutation and is
+    rejected. A permanent second DB role would add credential and deployment surfaces for one
+    tightly bounded local use case without narrowing the three required state transitions further.
+
+The resulting event permissions are deliberately append-only:
+
+| Table | SELECT | INSERT | UPDATE | Retirement reason |
+| --- | --- | --- | --- | --- |
+| `job_events` | yes | yes | none | allocate the next sequence and append Job cancellation |
+| `worker_lease_events` | yes | yes | none | inspect and append lease reconciliation history |
+| `jobs` | yes | none | three columns above | lock and terminalize cancellable Jobs |
+| `worker_leases` | yes | none | three columns above | lock and reconcile only expired cohort leases |
+| `workflow_commands` | yes | yes | two columns above | fence old commands and enqueue cancellation |
+| `workflow_events` | yes | yes | none | append the complete retirement audit payload once |
+| `workflow_step_runs` | yes | none | none | validate the pinned step-to-Job edge |
+
+`workflow_instances` continues to use its already-reviewed table UPDATE grant because ordinary API
+Workflow actions also lock and advance its resource version. The retirement audit now calculates
+that next locked version before insertion, so it never updates an event after append.
+
 ## Deployment hold and safe sequence
 
 The shared release installer normally restarts every platform consumer. For this exceptional

@@ -270,8 +270,8 @@ reconcile_runtime_role() {
 reconcile_runtime_role
 reconcile_runtime_role
 
-# The third pass proves a stale, overprivileged table grant is removed rather
-# than retained by an additive-only bootstrap.
+# The third pass proves stale overprivileged table and column grants are removed
+# rather than retained by an additive-only bootstrap.
 export EOM_API_TEST_RUNTIME_ROLE="${runtime_role}"
 export EOM_API_DATABASE_NAME="${database_name}"
 "${PYTHON}" <<'PY'
@@ -291,6 +291,11 @@ connection = psycopg.connect(
 with connection.cursor() as cursor:
     cursor.execute(
         sql.SQL("GRANT DELETE ON TABLE app.workflow_instances TO {}").format(
+            sql.Identifier(os.environ["EOM_API_TEST_RUNTIME_ROLE"])
+        )
+    )
+    cursor.execute(
+        sql.SQL("GRANT UPDATE (request) ON TABLE app.jobs TO {}").format(
             sql.Identifier(os.environ["EOM_API_TEST_RUNTIME_ROLE"])
         )
     )

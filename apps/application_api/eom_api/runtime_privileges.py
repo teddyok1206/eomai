@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 TablePrivilege = Literal["SELECT", "INSERT", "UPDATE"]
+UpdateColumnPrivilege = tuple[str, tuple[str, ...]]
 
 READ_TABLES: Final[tuple[str, ...]] = (
     "alembic_version",
@@ -67,6 +68,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "item_relationships",
     "item_revisions",
     "items",
+    "job_events",
     "jobs",
     "knowledge_analysis_events",
     "knowledge_analysis_batch_events",
@@ -139,6 +141,7 @@ INSERT_TABLES: Final[tuple[str, ...]] = (
     "hwpx_application_builds",
     "hwpx_assessment_assembly_builds",
     "item_events",
+    "job_events",
     "operator_credentials",
     "operator_events",
     "operator_role_assignments",
@@ -147,6 +150,7 @@ INSERT_TABLES: Final[tuple[str, ...]] = (
     "resolved_execution_plans",
     "usage_plans",
     "usage_records",
+    "worker_lease_events",
     "workflow_commands",
     "workflow_events",
     "workflow_instances",
@@ -179,6 +183,16 @@ UPDATE_TABLES: Final[tuple[str, ...]] = (
     "workflow_instances",
 )
 
+# The exceptional authenticated local retirement command needs row locks and narrowly scoped state
+# transitions in orchestrator/Workflow-runner tables otherwise owned by their service processes.
+# Keep these column grants separate from table-wide UPDATE so the API role cannot rewrite identity,
+# provenance, lease ownership, command payload, or append-only event history.
+UPDATE_COLUMN_PRIVILEGES: Final[tuple[UpdateColumnPrivilege, ...]] = (
+    ("jobs", ("completed_at", "status", "updated_at")),
+    ("worker_leases", ("release_reason", "released_at", "state")),
+    ("workflow_commands", ("processed_at", "state")),
+)
+
 TABLE_PRIVILEGES: Final[tuple[tuple[TablePrivilege, tuple[str, ...]], ...]] = (
     ("SELECT", READ_TABLES),
     ("INSERT", INSERT_TABLES),
@@ -195,22 +209,57 @@ _REQUIRED_PRIVILEGES_JSON: Final[str] = json.dumps(
     sort_keys=True,
 )
 
+_REQUIRED_UPDATE_COLUMNS_JSON: Final[str] = json.dumps(
+    [
+        {"table_name": table_name, "column_name": column_name}
+        for table_name, column_names in UPDATE_COLUMN_PRIVILEGES
+        for column_name in column_names
+    ],
+    separators=(",", ":"),
+    sort_keys=True,
+)
+
 
 def runtime_table_privileges_ready(connection: Connection) -> bool:
-    """Return whether the connected role has the exact required positive grants.
+    """Return whether the connected role has every required runtime grant.
 
-    Prohibited grants remain enforced by the reconciliation script. Readiness only
-    needs to detect a missing runtime capability without mutating production data.
+    The column-scoped retirement updates are checked positively and exactly across
+    each scoped table, and must remain narrower than table-wide UPDATE. Other
+    prohibited grants remain enforced by the reconciliation script.
     """
 
     value = connection.scalar(
         text(
-            "SELECT COALESCE(bool_and(has_table_privilege("
+            "SELECT "
+            "COALESCE((SELECT bool_and(has_table_privilege("
             "current_user, format('app.%I', required.table_name), required.privilege"
-            ")), false) "
-            "FROM jsonb_to_recordset(CAST(:requirements AS jsonb)) "
-            "AS required(table_name text, privilege text)"
+            ")) FROM jsonb_to_recordset(CAST(:requirements AS jsonb)) "
+            "AS required(table_name text, privilege text)), false) "
+            "AND COALESCE((SELECT bool_and(has_column_privilege("
+            "current_user, format('app.%I', required.table_name), "
+            "required.column_name, 'UPDATE'"
+            ")) FROM jsonb_to_recordset(CAST(:update_columns AS jsonb)) "
+            "AS required(table_name text, column_name text)), false) "
+            "AND COALESCE((SELECT bool_and(has_column_privilege("
+            "current_user, format('app.%I', observed.table_name), "
+            "observed.column_name, 'UPDATE') = EXISTS ("
+            "SELECT 1 FROM jsonb_to_recordset(CAST(:update_columns AS jsonb)) "
+            "AS required(table_name text, column_name text) "
+            "WHERE required.table_name = observed.table_name "
+            "AND required.column_name = observed.column_name"
+            ")) FROM information_schema.columns AS observed "
+            "WHERE observed.table_schema = 'app' AND observed.table_name IN ("
+            "SELECT DISTINCT required.table_name "
+            "FROM jsonb_to_recordset(CAST(:update_columns AS jsonb)) "
+            "AS required(table_name text, column_name text))), false) "
+            "AND NOT COALESCE((SELECT bool_or(has_table_privilege("
+            "current_user, format('app.%I', required.table_name), 'UPDATE'"
+            ")) FROM jsonb_to_recordset(CAST(:update_columns AS jsonb)) "
+            "AS required(table_name text, column_name text)), false)"
         ),
-        {"requirements": _REQUIRED_PRIVILEGES_JSON},
+        {
+            "requirements": _REQUIRED_PRIVILEGES_JSON,
+            "update_columns": _REQUIRED_UPDATE_COLUMNS_JSON,
+        },
     )
     return value is True

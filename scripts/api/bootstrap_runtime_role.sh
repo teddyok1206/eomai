@@ -88,7 +88,12 @@ from psycopg import sql
 
 repository_root = Path(os.environ["EOM_REPOSITORY_ROOT"])
 sys.path.insert(0, str(repository_root / "apps/application_api"))
-from eom_api.runtime_privileges import INSERT_TABLES, TABLE_PRIVILEGES
+from eom_api.runtime_privileges import (
+    INSERT_TABLES,
+    TABLE_PRIVILEGES,
+    UPDATE_COLUMN_PRIVILEGES,
+    UPDATE_TABLES,
+)
 
 ROLE = os.environ["EOM_API_RUNTIME_ROLE"]
 DATABASE = os.environ["EOM_API_DATABASE_NAME"]
@@ -260,6 +265,14 @@ with connection.cursor() as cursor:
                 sql.Identifier(ROLE),
             )
         )
+    for table, columns in UPDATE_COLUMN_PRIVILEGES:
+        cursor.execute(
+            sql.SQL("GRANT UPDATE ({}) ON TABLE app.{} TO {}").format(
+                sql.SQL(", ").join(sql.Identifier(column) for column in columns),
+                sql.Identifier(table),
+                sql.Identifier(ROLE),
+            )
+        )
     cursor.execute(
         "SELECT sequence_namespace.nspname, sequence.relname "
         "FROM pg_class sequence "
@@ -339,6 +352,34 @@ with connection.cursor() as cursor:
             )
             if cursor.fetchone() != (privilege in expected,):
                 raise SystemExit("runtime table privilege set differs from the reviewed plan")
+    expected_update_columns = {
+        table_name: frozenset(column_names)
+        for table_name, column_names in UPDATE_COLUMN_PRIVILEGES
+    }
+    if set(expected_update_columns).intersection(UPDATE_TABLES):
+        raise SystemExit("column-scoped UPDATE table also has table-wide UPDATE")
+    cursor.execute(
+        "SELECT table_name, column_name FROM information_schema.columns "
+        "WHERE table_schema = 'app'"
+    )
+    observed_update_columns: dict[str, set[str]] = {}
+    for table_name, column_name in cursor.fetchall():
+        cursor.execute(
+            "SELECT has_column_privilege(%s, %s, %s, 'UPDATE')",
+            (ROLE, f"app.{table_name}", column_name),
+        )
+        expected = table_name in UPDATE_TABLES or column_name in expected_update_columns.get(
+            table_name, ()
+        )
+        if cursor.fetchone() != (expected,):
+            raise SystemExit("runtime column privilege set differs from the reviewed plan")
+        if expected and table_name in expected_update_columns:
+            observed_update_columns.setdefault(table_name, set()).add(column_name)
+    if observed_update_columns != {
+        table_name: set(column_names)
+        for table_name, column_names in expected_update_columns.items()
+    }:
+        raise SystemExit("runtime column-scoped UPDATE target is missing")
     expected_sequence_names = {f"{schema}.{name}" for schema, name in required_sequences}
     cursor.execute(
         "SELECT sequence_schema, sequence_name FROM information_schema.sequences "

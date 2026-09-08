@@ -7,6 +7,7 @@ from eom_api.runtime_privileges import (
     INSERT_TABLES,
     READ_TABLES,
     TABLE_PRIVILEGES,
+    UPDATE_COLUMN_PRIVILEGES,
     UPDATE_TABLES,
     runtime_table_privileges_ready,
 )
@@ -114,6 +115,39 @@ def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
     }
 
 
+def test_runtime_privilege_matrix_covers_exact_mock_exam_retirement_dml() -> None:
+    assert "job_events" in READ_TABLES
+    assert "job_events" in INSERT_TABLES
+    assert "job_events" not in UPDATE_TABLES
+    assert "jobs" in READ_TABLES
+    assert "jobs" not in INSERT_TABLES
+    assert "jobs" not in UPDATE_TABLES
+    assert "worker_lease_events" in READ_TABLES
+    assert "worker_lease_events" in INSERT_TABLES
+    assert "worker_lease_events" not in UPDATE_TABLES
+    assert "worker_leases" in READ_TABLES
+    assert "worker_leases" not in INSERT_TABLES
+    assert "worker_leases" not in UPDATE_TABLES
+    assert "workflow_commands" in READ_TABLES
+    assert "workflow_commands" in INSERT_TABLES
+    assert "workflow_commands" not in UPDATE_TABLES
+    assert "workflow_events" in READ_TABLES
+    assert "workflow_events" in INSERT_TABLES
+    assert "workflow_events" not in UPDATE_TABLES
+    assert "workflow_instances" in READ_TABLES
+    assert "workflow_instances" in INSERT_TABLES
+    assert "workflow_instances" in UPDATE_TABLES
+    assert "workflow_step_runs" in READ_TABLES
+    assert "workflow_step_runs" not in INSERT_TABLES
+    assert "workflow_step_runs" not in UPDATE_TABLES
+    assert dict(UPDATE_COLUMN_PRIVILEGES) == {
+        "jobs": ("completed_at", "status", "updated_at"),
+        "worker_leases": ("release_reason", "released_at", "state"),
+        "workflow_commands": ("processed_at", "state"),
+    }
+    assert set(dict(UPDATE_COLUMN_PRIVILEGES)).isdisjoint(UPDATE_TABLES)
+
+
 def test_runtime_privilege_readiness_uses_one_read_only_matrix_query() -> None:
     connection = Mock(spec=Connection)
     connection.scalar.return_value = True
@@ -124,9 +158,15 @@ def test_runtime_privilege_readiness_uses_one_read_only_matrix_query() -> None:
     statement, parameters = connection.scalar.call_args.args
     sql = str(statement)
     assert "has_table_privilege" in sql
+    assert "has_column_privilege" in sql
+    assert "information_schema.columns" in sql
+    assert "= EXISTS" in sql
     assert "current_user" in sql
     assert "workflow_instances" in parameters["requirements"]
     assert "UPDATE" in parameters["requirements"]
+    assert "worker_leases" in parameters["update_columns"]
+    assert "release_reason" in parameters["update_columns"]
+    assert "NOT COALESCE" in sql
 
 
 def test_runtime_privilege_readiness_rejects_a_missing_grant() -> None:

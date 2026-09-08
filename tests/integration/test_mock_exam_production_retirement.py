@@ -67,6 +67,7 @@ from eom_workflow_runner.state_machine import (
     transition_workflow,
 )
 from sqlalchemy import Engine, delete, select
+from sqlalchemy import event as sqlalchemy_event
 
 pytestmark = pytest.mark.integration
 NOW = datetime(2026, 9, 8, 3, 4, 5, tzinfo=UTC)
@@ -472,7 +473,34 @@ def test_exact_occurrence_retirement_fences_start_commands_and_jobs_atomically(
                 )
             } == {CommandState.PENDING.value}
 
-        receipt = service.retire(checkpoint, _actor(), at=NOW + timedelta(minutes=1))
+        updated_workflow_event_ids: list[int] = []
+
+        def observe_workflow_event_update(
+            _mapper: object,
+            _connection: object,
+            target: WorkflowEventRecord,
+        ) -> None:
+            updated_workflow_event_ids.append(target.event_id)
+
+        sqlalchemy_event.listen(
+            WorkflowEventRecord,
+            "before_update",
+            observe_workflow_event_update,
+        )
+        try:
+            receipt = service.retire(checkpoint, _actor(), at=NOW + timedelta(minutes=1))
+
+            replay = service.retire(
+                checkpoint,
+                _actor(),
+                at=NOW + timedelta(minutes=2),
+            )
+        finally:
+            sqlalchemy_event.remove(
+                WorkflowEventRecord,
+                "before_update",
+                observe_workflow_event_update,
+            )
 
         assert len(receipt.outcomes) == 25
         assert sum(row.disposition == "CANCEL_QUEUED" for row in receipt.outcomes) == 24
@@ -480,14 +508,8 @@ def test_exact_occurrence_retirement_fences_start_commands_and_jobs_atomically(
             sum(row.disposition == "UNSUCCESSFUL_TERMINAL_PRESERVED" for row in receipt.outcomes)
             == 1
         )
-        assert (
-            service.retire(
-                checkpoint,
-                _actor(),
-                at=NOW + timedelta(minutes=2),
-            )
-            == receipt
-        )
+        assert replay == receipt
+        assert updated_workflow_event_ids == []
 
         with sessions() as session:
             starts = tuple(
@@ -530,6 +552,12 @@ def test_exact_occurrence_retirement_fences_start_commands_and_jobs_atomically(
                 )
             )
             assert len(audits) == 25
+            outcomes_by_workflow = {row.workflow_id: row for row in receipt.outcomes}
+            assert all(
+                event.payload["retirement_workflow_resource_version"]
+                == outcomes_by_workflow[event.workflow_id].retirement_workflow_resource_version
+                for event in audits
+            )
             assert job_id is not None
             job = session.get(JobRecord, job_id)
             assert job is not None and job.status == "CANCELLED"

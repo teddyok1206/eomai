@@ -309,6 +309,10 @@ class MockExamProductionRetirementService:
                         "PRODUCTION_RETIREMENT_WORKFLOW_STATE_INVALID",
                         "the Workflow cannot be retired by command fencing",
                     )
+                # Workflow history is append-only. The row is already locked, so the event's
+                # resource version is the current version plus the single increment performed by
+                # record_workflow_event; persist the complete payload in its initial INSERT.
+                retirement_workflow_resource_version = workflow.lock_version + 1
                 audited = record_workflow_event(
                     session,
                     workflow.workflow_id,
@@ -336,8 +340,16 @@ class MockExamProductionRetirementService:
                         "disposition": disposition,
                         "cancel_command_id": cancel_command_id,
                         "retired_at": command.authorized_at.isoformat().replace("+00:00", "Z"),
+                        "retirement_workflow_resource_version": (
+                            retirement_workflow_resource_version
+                        ),
                     },
                 )
+                if audited.lock_version != retirement_workflow_resource_version:
+                    _fail(
+                        "PRODUCTION_RETIREMENT_AUDIT_VERSION_INVALID",
+                        "retirement audit resource version was not allocated deterministically",
+                    )
                 session.flush()
                 event = session.scalar(
                     select(WorkflowEventRecord)
@@ -353,10 +365,6 @@ class MockExamProductionRetirementService:
                         "PRODUCTION_RETIREMENT_AUDIT_MISSING",
                         "retirement audit event was not persisted",
                     )
-                event.payload = {
-                    **event.payload,
-                    "retirement_workflow_resource_version": audited.lock_version,
-                }
                 outcomes.append(
                     MockExamProductionRetirementOutcomeV1(
                         position=binding.position,
@@ -365,7 +373,7 @@ class MockExamProductionRetirementService:
                         expected_workflow_resource_version=(
                             binding.expected_workflow_resource_version
                         ),
-                        retirement_workflow_resource_version=audited.lock_version,
+                        retirement_workflow_resource_version=(retirement_workflow_resource_version),
                         retirement_event_sequence=event.sequence,
                         prior_workflow_state=prior_state,
                         disposition=disposition,
@@ -691,7 +699,7 @@ def _fence_older_commands(
 def _fence_platform_jobs(session: Session, workflow_ids: tuple[str, ...]) -> None:
     fence_workflow_platform_jobs(
         session,
-        bindings=_workflow_job_bindings(session, workflow_ids, for_update=True),
+        bindings=_workflow_job_bindings(session, workflow_ids),
         reason_code=_RETIREMENT_REASON,
     )
 
@@ -699,9 +707,11 @@ def _fence_platform_jobs(session: Session, workflow_ids: tuple[str, ...]) -> Non
 def _workflow_job_bindings(
     session: Session,
     workflow_ids: tuple[str, ...],
-    *,
-    for_update: bool,
 ) -> tuple[WorkflowJobRetirementBinding, ...]:
+    # The verified systemd hold prevents the only step-run writer from advancing, and retirement
+    # separately proves that the cohort has no held worker lease. Lock the owning Workflow rows and
+    # the mutable Job rows instead; keeping this edge read-only avoids granting the API role UPDATE
+    # over immutable Workflow-step provenance.
     query = (
         select(WorkflowStepRunRecord)
         .where(
@@ -710,8 +720,6 @@ def _workflow_job_bindings(
         )
         .order_by(WorkflowStepRunRecord.workflow_id, WorkflowStepRunRecord.step_run_id)
     )
-    if for_update:
-        query = query.with_for_update()
     rows = tuple(session.scalars(query))
     bindings: list[WorkflowJobRetirementBinding] = []
     for row in rows:
@@ -740,7 +748,7 @@ def _require_receipt_fence(
     require_no_held_worker_leases(session, workflow_ids)
     require_workflow_platform_jobs_fenced(
         session,
-        bindings=_workflow_job_bindings(session, workflow_ids, for_update=False),
+        bindings=_workflow_job_bindings(session, workflow_ids),
     )
     cancel_ids = {
         outcome.cancel_command_id
