@@ -47,12 +47,13 @@ remain blocked at the HTTP boundary.
 7. **Scale and complexity.** The cohort is fixed at 25. Reads, validation, and writes are O(25 + C +
    J), where C and J are commands and jobs adjacent to those Workflows. Space is O(25 + C + J).
 8. **Transaction and concurrency.** Before any DB session is opened, a read-only infrastructure
-   adapter requires systemd `ActiveState=inactive`, `SubState=dead`, and
-   `UnitFileState=masked-runtime`; execution re-observes it immediately before its write
-   transaction. A read-only DB preflight first resolves all 25 Workflows and validates creator,
-   production-occurrence, call, and start-command ownership; only then may the application ask the
-   existing Codex capacity controller to reconcile expired leases whose `workflow_id` belongs to
-   the proven cohort. That controller inspects each
+   adapter requires systemd `loaded/inactive/dead/MainPID=0`, an empty systemd job, the exact local
+   base fragment, `UnitFileState=enabled`, and the exact root-owned persistent hold drop-in by path,
+   mode, SHA-256, loaded drop-in set, `RefuseManualStart=yes`, and `NeedDaemonReload=no`. Execution
+   re-observes it immediately before its write transaction. A read-only DB preflight first resolves
+   all 25 Workflows and validates creator, production-occurrence, call, and start-command ownership;
+   only then may the application ask the existing Codex capacity controller to reconcile expired
+   leases whose `workflow_id` belongs to the proven cohort. That controller inspects each
    exact fixed worker unit and appends `ACTIVE -> RECONCILING -> EXPIRED` only for proven `ABSENT`;
    `RUNNING`, `UNKNOWN`, and unexpired leases remain held and block retirement. Preparation then
    observes exact Workflow resource versions. Execution locks Workflows in ID order and requires
@@ -81,20 +82,24 @@ remain blocked at the HTTP boundary.
 
 The shared release installer normally restarts every platform consumer. For this exceptional
 recovery, `--install-preserve-workflow-runner-inactive` first requires the runner to be inactive,
-adds a runtime systemd mask, and verifies the mask before wheel replacement and after all other
-consumer restarts. The mask is deliberately retained on failure and success.
+installs the persistent systemd drop-in, and verifies its exact identity before wheel replacement
+and after all other consumer restarts. The hold is deliberately retained on failure and success.
 
 Run the sequence without a runnable gap:
 
 1. stop the Workflow runner and verify exact `inactive/dead/MainPID=0` state;
 2. install with `scripts/api/deploy_release.sh --install-preserve-workflow-runner-inactive`;
-3. run installed `eom-api mock-exam-production retire-items <execution-id>` with the owning fresh
-   operator session; this first reconciles any expired exact-cohort lease through the capacity
-   controller and retains the self-hashed 25-outcome receipt;
-4. verify the receipt contains 24 `CANCEL_QUEUED` outcomes and the known failed Workflow as
-   `UNSUCCESSFUL_TERMINAL_PRESERVED` (or the live state-equivalent exact totals);
-5. unmask the runtime unit, start the Workflow runner, and verify every old active Workflow reaches
-   `CANCELLED` before initializing the corrected production request;
+3. run the installed `eom-api mock-exam-production retire-items <execution-id>` as the `eom-api`
+   service identity, using its fresh owning operator token and canonical checkpoint root; atomically
+   publish the successful stdout envelope to the fixed eom-api-owned mode-0600 receipt path;
+4. independently review the immutable execution/revision/checkpoint/request/plan/operator pins and
+   verify the receipt contains exactly 24 `CANCEL_QUEUED` outcomes plus the one known failed
+   Workflow as `UNSUCCESSFUL_TERMINAL_PRESERVED`;
+5. run the fully pinned `scripts/api/deploy_release.sh --release-workflow-runner-hold RECEIPT_FILE
+   EXECUTION_ID EXECUTION_REVISION_ID CHECKPOINT_SHA256 PRODUCTION_REQUEST_ID PRODUCTION_PLAN_ID
+   PRODUCTION_PLAN_SHA256 OPERATOR_ID RECEIPT_SHA256` action documented in the privileged deployment
+   runbook; then explicitly enable and start the Workflow runner and verify every old active
+   Workflow reaches `CANCELLED` before initializing the corrected production request;
 6. run the normal release verifier only after the runner is active again.
 
 Because all prior START/ADVANCE commands become `CANCELLED` in the same transaction that creates

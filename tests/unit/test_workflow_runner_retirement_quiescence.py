@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import os
 import subprocess
 from collections.abc import Sequence
 from contextlib import nullcontext
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -29,7 +33,13 @@ from eom_workflow_runner.mock_exam_production_retirement import (
     MockExamProductionRetirementService,
 )
 from eom_workflow_runner.repository import CommandType, workflow_request_storage_document
-from eom_workflow_runner.retirement_quiescence import WorkflowRunnerQuiescenceEvidence
+from eom_workflow_runner.retirement_quiescence import (
+    WORKFLOW_RUNNER_DEPLOYMENT_HOLD_DIRECTORY,
+    WORKFLOW_RUNNER_DEPLOYMENT_HOLD_PATH,
+    WORKFLOW_RUNNER_DEPLOYMENT_HOLD_SHA256,
+    WORKFLOW_RUNNER_FRAGMENT_PATH,
+    WorkflowRunnerQuiescenceEvidence,
+)
 from eom_workflow_runner.systemd_retirement_quiescence import (
     SystemdWorkflowRunnerQuiescenceAdapter,
     WorkflowRunnerQuiescenceAdapterError,
@@ -40,13 +50,34 @@ NOW = datetime(2026, 9, 8, 10, 0, tzinfo=UTC)
 OPERATOR_ID = "operator_" + "a" * 32
 
 
+def _held_evidence(**changes: object) -> WorkflowRunnerQuiescenceEvidence:
+    evidence = WorkflowRunnerQuiescenceEvidence(
+        load_state="loaded",
+        active_state="inactive",
+        sub_state="dead",
+        main_pid=0,
+        unit_file_state="enabled",
+        job="",
+        fragment_path=WORKFLOW_RUNNER_FRAGMENT_PATH,
+        drop_in_paths=(WORKFLOW_RUNNER_DEPLOYMENT_HOLD_PATH,),
+        refuse_manual_start=True,
+        need_daemon_reload=False,
+        hold_directory_path=WORKFLOW_RUNNER_DEPLOYMENT_HOLD_DIRECTORY,
+        hold_directory_owner_uid=0,
+        hold_directory_group_gid=0,
+        hold_directory_mode=0o755,
+        hold_path=WORKFLOW_RUNNER_DEPLOYMENT_HOLD_PATH,
+        hold_sha256=WORKFLOW_RUNNER_DEPLOYMENT_HOLD_SHA256,
+        hold_owner_uid=0,
+        hold_group_gid=0,
+        hold_mode=0o644,
+    )
+    return replace(evidence, **changes)
+
+
 class _ObservedUnit:
-    def __init__(self, active: str, sub: str, unit_file: str) -> None:
-        self._evidence = WorkflowRunnerQuiescenceEvidence(
-            active_state=active,
-            sub_state=sub,
-            unit_file_state=unit_file,
-        )
+    def __init__(self, evidence: WorkflowRunnerQuiescenceEvidence | None = None) -> None:
+        self._evidence = evidence or _held_evidence()
 
     def observe(self) -> WorkflowRunnerQuiescenceEvidence:
         return self._evidence
@@ -193,18 +224,34 @@ def _actor() -> ActorContext:
 
 
 @pytest.mark.parametrize(
-    ("active", "sub", "unit_file"),
+    "changes",
     (
-        ("active", "running", "enabled"),
-        ("activating", "start", "masked-runtime"),
-        ("deactivating", "stop-sigterm", "masked-runtime"),
-        ("inactive", "dead", "enabled"),
+        {"active_state": "active", "sub_state": "running", "main_pid": 42},
+        {"active_state": "activating", "sub_state": "start", "main_pid": 42},
+        {"active_state": "deactivating", "sub_state": "stop-sigterm", "main_pid": 42},
+        {"active_state": "failed", "sub_state": "failed"},
+        {"load_state": "not-found"},
+        {"main_pid": 9},
+        {"unit_file_state": "masked-runtime"},
+        {"job": "1234"},
+        {"fragment_path": "/usr/lib/systemd/system/eom-workflow-runner.service"},
+        {"drop_in_paths": ()},
+        {"drop_in_paths": (WORKFLOW_RUNNER_DEPLOYMENT_HOLD_PATH, "/tmp/override.conf")},
+        {"refuse_manual_start": False},
+        {"need_daemon_reload": True},
+        {"hold_directory_path": "/tmp/foreign.d"},
+        {"hold_directory_owner_uid": 1000},
+        {"hold_directory_group_gid": 1000},
+        {"hold_directory_mode": 0o775},
+        {"hold_path": "/tmp/foreign.conf"},
+        {"hold_sha256": "sha256:" + "f" * 64},
+        {"hold_owner_uid": 1000},
+        {"hold_group_gid": 1000},
+        {"hold_mode": 0o664},
     ),
 )
 def test_unsafe_unit_state_is_rejected_before_any_database_statement(
-    active: str,
-    sub: str,
-    unit_file: str,
+    changes: dict[str, object],
 ) -> None:
     engine: Engine = create_engine("sqlite+pysqlite:///:memory:")
     statements: list[str] = []
@@ -222,7 +269,7 @@ def test_unsafe_unit_state_is_rejected_before_any_database_statement(
 
     service = MockExamProductionRetirementService(
         engine,
-        quiescence=_ObservedUnit(active, sub, unit_file),
+        quiescence=_ObservedUnit(_held_evidence(**changes)),
         lease_reconciler=_UnexpectedLeaseReconciliation(),
     )
     try:
@@ -283,7 +330,7 @@ def test_foreign_checkpoint_scope_fails_before_expired_lease_reconciliation(
     engine: Engine = create_engine("sqlite+pysqlite:///:memory:")
     service = MockExamProductionRetirementService(
         engine,
-        quiescence=_ObservedUnit("inactive", "dead", "masked-runtime"),
+        quiescence=_ObservedUnit(),
         lease_reconciler=RecordingLeaseReconciler(),
     )
     cast(Any, service)._sessions = lambda: nullcontext(session)
@@ -297,24 +344,58 @@ def test_foreign_checkpoint_scope_fails_before_expired_lease_reconciliation(
         engine.dispose()
 
 
-def test_systemd_adapter_reads_exact_runner_hold_without_shell() -> None:
+def test_systemd_adapter_reads_exact_runner_hold_without_shell(tmp_path: Path) -> None:
     calls: list[tuple[Sequence[str], dict[str, Any]]] = []
+    hold = tmp_path / "zzzz-eom-deployment-hold.conf"
+    content = b"[Unit]\nRefuseManualStart=yes\nConditionPathExists=!/\n"
+    hold.write_bytes(content)
+    hold.chmod(0o644)
 
     def run(argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
         calls.append((argv, kwargs))
         return subprocess.CompletedProcess(
             argv,
             0,
-            stdout=(b"ActiveState=inactive\nSubState=dead\nUnitFileState=masked-runtime\n"),
+            stdout=(
+                b"ActiveState=inactive\n"
+                b"SubState=dead\n"
+                b"MainPID=0\n"
+                b"UnitFileState=enabled\n"
+                b"Job=\n"
+                b"LoadState=loaded\n"
+                b"FragmentPath=/etc/systemd/system/eom-workflow-runner.service\n"
+                + f"DropInPaths={hold}\n".encode()
+                + b"RefuseManualStart=yes\n"
+                b"NeedDaemonReload=no\n"
+            ),
             stderr=b"",
         )
 
-    evidence = SystemdWorkflowRunnerQuiescenceAdapter(command_runner=run).observe()
+    evidence = SystemdWorkflowRunnerQuiescenceAdapter(
+        command_runner=run,
+        hold_path=hold,
+    ).observe()
 
     assert evidence == WorkflowRunnerQuiescenceEvidence(
+        load_state="loaded",
         active_state="inactive",
         sub_state="dead",
-        unit_file_state="masked-runtime",
+        main_pid=0,
+        unit_file_state="enabled",
+        job="",
+        fragment_path=WORKFLOW_RUNNER_FRAGMENT_PATH,
+        drop_in_paths=(str(hold),),
+        refuse_manual_start=True,
+        need_daemon_reload=False,
+        hold_directory_path=str(hold.parent),
+        hold_directory_owner_uid=hold.parent.stat().st_uid,
+        hold_directory_group_gid=hold.parent.stat().st_gid,
+        hold_directory_mode=hold.parent.stat().st_mode & 0o777,
+        hold_path=str(hold),
+        hold_sha256="sha256:" + hashlib.sha256(content).hexdigest(),
+        hold_owner_uid=hold.stat().st_uid,
+        hold_group_gid=hold.stat().st_gid,
+        hold_mode=0o644,
     )
     assert calls[0][0][0] == "/usr/bin/systemctl"
     assert calls[0][0][1:3] == ("show", "eom-workflow-runner.service")
@@ -327,7 +408,7 @@ def test_systemd_adapter_rejects_incomplete_or_noisy_evidence() -> None:
         return subprocess.CompletedProcess(
             argv,
             0,
-            stdout=b"ActiveState=inactive\nSubState=dead\n",
+            stdout=b"ActiveState=inactive\nSubState=dead\nMainPID=0\nJob=\n",
             stderr=b"",
         )
 
@@ -339,10 +420,69 @@ def test_systemd_adapter_rejects_incomplete_or_noisy_evidence() -> None:
         return subprocess.CompletedProcess(
             argv,
             0,
-            stdout=(b"ActiveState=inactive\nSubState=dead\nUnitFileState=masked-runtime\n"),
+            stdout=(
+                b"ActiveState=inactive\n"
+                b"SubState=dead\n"
+                b"MainPID=0\n"
+                b"UnitFileState=enabled\n"
+                b"Job=\n"
+                b"LoadState=loaded\n"
+                b"FragmentPath=/etc/systemd/system/eom-workflow-runner.service\n"
+                b"DropInPaths=/etc/systemd/system/eom-workflow-runner.service.d/"
+                b"zzzz-eom-deployment-hold.conf\n"
+                b"RefuseManualStart=yes\n"
+                b"NeedDaemonReload=no\n"
+            ),
             stderr=b"warning",
         )
 
     with pytest.raises(WorkflowRunnerQuiescenceAdapterError) as unavailable:
         SystemdWorkflowRunnerQuiescenceAdapter(command_runner=noisy).observe()
     assert unavailable.value.code == "PRODUCTION_RETIREMENT_QUIESCENCE_UNAVAILABLE"
+
+
+@pytest.mark.parametrize("tamper", ("symlink", "hardlink", "empty", "fifo", "oversized"))
+def test_systemd_adapter_rejects_non_regular_or_unbounded_hold(
+    tmp_path: Path,
+    tamper: str,
+) -> None:
+    hold = tmp_path / "zzzz-eom-deployment-hold.conf"
+    if tamper == "symlink":
+        target = tmp_path / "foreign.conf"
+        target.write_text("foreign", encoding="ascii")
+        hold.symlink_to(target)
+    elif tamper == "hardlink":
+        hold.write_text("foreign", encoding="ascii")
+        (tmp_path / "foreign.conf").hardlink_to(hold)
+    elif tamper == "empty":
+        hold.write_bytes(b"")
+    elif tamper == "fifo":
+        os.mkfifo(hold, mode=0o600)
+    else:
+        hold.write_bytes(b"x" * 4097)
+
+    def valid(argv: Sequence[str], **_: Any) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=(
+                b"ActiveState=inactive\n"
+                b"SubState=dead\n"
+                b"MainPID=0\n"
+                b"UnitFileState=enabled\n"
+                b"Job=\n"
+                b"LoadState=loaded\n"
+                b"FragmentPath=/etc/systemd/system/eom-workflow-runner.service\n"
+                + f"DropInPaths={hold}\n".encode()
+                + b"RefuseManualStart=yes\n"
+                b"NeedDaemonReload=no\n"
+            ),
+            stderr=b"",
+        )
+
+    with pytest.raises(WorkflowRunnerQuiescenceAdapterError) as invalid:
+        SystemdWorkflowRunnerQuiescenceAdapter(
+            command_runner=valid,
+            hold_path=hold,
+        ).observe()
+    assert invalid.value.code == "PRODUCTION_RETIREMENT_QUIESCENCE_INVALID"

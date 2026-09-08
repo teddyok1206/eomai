@@ -223,7 +223,7 @@ Before allowing new work, compare the returned and installed values with this cl
 
 The installed runner definition must produce the Workflow source-byte hash shown above. Only after
 the retirement receipt and these pointer/hash checks pass may the reviewed retirement runbook
-unmask and start the runner. Do not use the normal deploy path while the hold is required: it would
-restart the runner. Historical Workflow 1.8, Pack 1.13, V2 Item, @8 results, and HWPX V2 remain
-installed and readable; new production plan V2 requires the exact V3 family and rejects a mixed
-manifest, content, review, or renderer tuple.
+release the persistent hold and start the runner. Do not use the normal deploy path while the hold
+is required: it would restart the runner. Historical Workflow 1.8, Pack 1.13, V2 Item, @8 results,
+and HWPX V2 remain installed and readable; new production plan V2 requires the exact V3 family and
+rejects a mixed manifest, content, review, or renderer tuple.

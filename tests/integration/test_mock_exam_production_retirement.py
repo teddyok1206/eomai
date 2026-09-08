@@ -50,7 +50,13 @@ from eom_workflow_runner.repository import (
     enqueue_command,
     workflow_request_storage_document,
 )
-from eom_workflow_runner.retirement_quiescence import WorkflowRunnerQuiescenceEvidence
+from eom_workflow_runner.retirement_quiescence import (
+    WORKFLOW_RUNNER_DEPLOYMENT_HOLD_DIRECTORY,
+    WORKFLOW_RUNNER_DEPLOYMENT_HOLD_PATH,
+    WORKFLOW_RUNNER_DEPLOYMENT_HOLD_SHA256,
+    WORKFLOW_RUNNER_FRAGMENT_PATH,
+    WorkflowRunnerQuiescenceEvidence,
+)
 from eom_workflow_runner.state_machine import (
     CommandState,
     WorkflowStage,
@@ -114,9 +120,25 @@ class _HeldRunner:
     @staticmethod
     def observe() -> WorkflowRunnerQuiescenceEvidence:
         return WorkflowRunnerQuiescenceEvidence(
+            load_state="loaded",
             active_state="inactive",
             sub_state="dead",
-            unit_file_state="masked-runtime",
+            main_pid=0,
+            unit_file_state="enabled",
+            job="",
+            fragment_path=WORKFLOW_RUNNER_FRAGMENT_PATH,
+            drop_in_paths=(WORKFLOW_RUNNER_DEPLOYMENT_HOLD_PATH,),
+            refuse_manual_start=True,
+            need_daemon_reload=False,
+            hold_directory_path=WORKFLOW_RUNNER_DEPLOYMENT_HOLD_DIRECTORY,
+            hold_directory_owner_uid=0,
+            hold_directory_group_gid=0,
+            hold_directory_mode=0o755,
+            hold_path=WORKFLOW_RUNNER_DEPLOYMENT_HOLD_PATH,
+            hold_sha256=WORKFLOW_RUNNER_DEPLOYMENT_HOLD_SHA256,
+            hold_owner_uid=0,
+            hold_group_gid=0,
+            hold_mode=0o644,
         )
 
 

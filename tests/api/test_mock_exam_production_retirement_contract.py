@@ -127,11 +127,12 @@ def test_retirement_contract_rejects_duplicate_cohort_and_tampered_hash() -> Non
         MockExamProductionRetirementCommandV1.model_validate(tampered)
 
 
-def test_held_release_mode_masks_and_never_restarts_workflow_runner() -> None:
+def test_held_release_mode_uses_persistent_drop_in_and_never_restarts_workflow_runner() -> None:
     source = (ROOT / "scripts/api/deploy_release.sh").read_text(encoding="utf-8")
 
     assert "--install-preserve-workflow-runner-inactive" in source
-    assert 'systemctl mask --runtime "${WORKFLOW_RUNNER_SERVICE}"' in source
+    assert "zzzz-eom-workflow-runner-deployment-hold.conf" in source
+    assert 'systemctl mask --runtime "${WORKFLOW_RUNNER_SERVICE}"' not in source
     assert "activate_workflow_runner_deployment_hold\n" in source
     assert "verify_workflow_runner_deployment_hold\n" in source
     assert '"${consumer}" == "${WORKFLOW_RUNNER_SERVICE}"' in source
@@ -139,6 +140,8 @@ def test_held_release_mode_masks_and_never_restarts_workflow_runner() -> None:
         "install_wheels\n"
     )
     assert "workflow_runner_deployment_hold=ACTIVE" in source
+    assert "--release-workflow-runner-hold" in source
+    assert "workflow_runner_deployment_hold=RELEASED_INACTIVE" in source
     assert "systemctl unmask" not in source
     assert '"eom_workflow_runner/retirement_quiescence.py"' in source
     assert '"eom_workflow_runner/systemd_retirement_quiescence.py"' in source

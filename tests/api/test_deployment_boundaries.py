@@ -114,11 +114,14 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
 def test_mock_exam_deployment_admission_uses_installed_unprivileged_contract_boundary() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
     guard = _source("scripts/api/verify_mock_exam_deployment_admission.py")
+    boundary_start = deployment.index("verify_mock_exam_deployment_admission() {")
+    boundary_end = deployment.index("\n}\n", boundary_start)
+    boundary = deployment[boundary_start:boundary_end]
 
     install = "sudo -n install -o root -g root -m 0755 \\\n"
     execute = "sudo -n -u eom-api /usr/bin/env -i"
-    assert deployment.index(install) < deployment.index(execute)
-    assert '"${API_PYTHON}" -I "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}"' in deployment
+    assert boundary.index(install) < boundary.index(execute)
+    assert '"${API_PYTHON}" -I "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}"' in boundary
     assert "from eom_api_contracts.mock_exam_execution import (" in guard
     assert "MockExamProductionExecutionV1," in guard
     assert "mock_exam_production_is_terminal," in guard

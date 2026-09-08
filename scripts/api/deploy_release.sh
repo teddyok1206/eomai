@@ -22,20 +22,45 @@ RUNTIME_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-runtime-isolation"
 MOCK_EXAM_DEPLOYMENT_ADMISSION_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_mock_exam_deployment_admission.py"
 MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET="/usr/local/libexec/eom-api/verify-mock-exam-deployment-admission"
 WORKFLOW_RUNNER_HOLD_LIBRARY="${REPOSITORY_ROOT}/scripts/api/workflow_runner_deployment_hold.sh"
+WORKFLOW_RUNNER_HOLD_SOURCE="${REPOSITORY_ROOT}/infra/systemd/zzzz-eom-workflow-runner-deployment-hold.conf"
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_workflow_runner_hold_release.py"
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT="/usr/local/libexec/eom-api"
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-workflow-runner-hold-release"
+WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT="/var/lib/eom-api/mock-exam-retirement-receipts"
 ACTION="verify"
 PRESERVE_WORKFLOW_RUNNER_INACTIVE=false
 STAGING_ROOT=""
+RELEASE_RECEIPT_FILE=""
+RELEASE_EXECUTION_ID=""
+RELEASE_EXECUTION_REVISION_ID=""
+RELEASE_CHECKPOINT_SHA256=""
+RELEASE_PRODUCTION_REQUEST_ID=""
+RELEASE_PRODUCTION_PLAN_ID=""
+RELEASE_PRODUCTION_PLAN_SHA256=""
+RELEASE_OPERATOR_ID=""
+RELEASE_RECEIPT_SHA256=""
 
 usage() {
-  printf '%s\n' \
-    "usage: $0 [--build-only|--install|--install-preserve-workflow-runner-inactive|--verify]"
+  printf '%s\n' "usage: $0 [--build-only|--install|--install-preserve-workflow-runner-inactive|--verify]" \
+    "       $0 --release-workflow-runner-hold RECEIPT_FILE EXECUTION_ID EXECUTION_REVISION_ID CHECKPOINT_SHA256 PRODUCTION_REQUEST_ID PRODUCTION_PLAN_ID PRODUCTION_PLAN_SHA256 OPERATOR_ID RECEIPT_SHA256"
 }
 
-if (($# > 1)); then
+if (($# > 0)) && [[ "$1" == "--release-workflow-runner-hold" ]]; then
+  (($# == 10)) || { usage >&2; exit 2; }
+  ACTION="release-workflow-runner-hold"
+  RELEASE_RECEIPT_FILE="$2"
+  RELEASE_EXECUTION_ID="$3"
+  RELEASE_EXECUTION_REVISION_ID="$4"
+  RELEASE_CHECKPOINT_SHA256="$5"
+  RELEASE_PRODUCTION_REQUEST_ID="$6"
+  RELEASE_PRODUCTION_PLAN_ID="$7"
+  RELEASE_PRODUCTION_PLAN_SHA256="$8"
+  RELEASE_OPERATOR_ID="$9"
+  RELEASE_RECEIPT_SHA256="${10}"
+elif (($# > 1)); then
   usage >&2
   exit 2
-fi
-if (($# == 1)); then
+elif (($# == 1)); then
   case "$1" in
     --build-only) ACTION="build" ;;
     --install) ACTION="install" ;;
@@ -58,21 +83,353 @@ fail() {
 source "${WORKFLOW_RUNNER_HOLD_LIBRARY}"
 
 activate_workflow_runner_deployment_hold() {
+  local activation_identity_before activation_identity_after runtime_mask_state staged_hold
   [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true ]] || return 0
-  workflow_runner_require_stopped /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}" || \
+  activation_identity_before="$(
+    workflow_runner_stopped_activation_identity \
+      /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+  )" || \
     fail "${WORKFLOW_RUNNER_SERVICE} must be inactive/dead with MainPID=0 before the hold"
-  # A runtime mask closes the interval between wheel replacement and retirement.  Deliberately
-  # leave it in place on both success and failure; only the reviewed post-retirement runbook may
-  # unmask and start the runner.
-  sudo -n systemctl mask --runtime "${WORKFLOW_RUNNER_SERVICE}" >/dev/null
-  workflow_runner_require_runtime_hold /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}" || \
-    fail "workflow runner runtime deployment hold was not installed in a quiescent state"
+  workflow_runner_require_base_unit_file "${WORKFLOW_RUNNER_FRAGMENT}" || \
+    fail "workflow runner base unit identity mismatch"
+  workflow_runner_require_source_hold_file \
+    "${WORKFLOW_RUNNER_HOLD_SOURCE}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
+    fail "canonical workflow runner deployment hold source mismatch"
+
+  # Close the reboot window before materializing the hold. A concurrent activation in this short
+  # disabled-but-not-yet-held interval is detected by the immutable invocation identity and aborts
+  # the install before any wheel, migration, or service mutation.
+  sudo -n /usr/bin/systemctl disable "${WORKFLOW_RUNNER_SERVICE}" >/dev/null
+  activation_identity_after="$(
+    workflow_runner_stopped_activation_identity \
+      /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+  )" || \
+    fail "workflow runner did not remain stopped while its reboot fence was installed"
+  workflow_runner_require_same_activation_identity \
+    "${activation_identity_before}" "${activation_identity_after}" || \
+    fail "workflow runner was invoked while its reboot fence was installed"
+  activation_identity_before="${activation_identity_after}"
+  if [[ -e "${WORKFLOW_RUNNER_HOLD_DIRECTORY}" || -L "${WORKFLOW_RUNNER_HOLD_DIRECTORY}" ]]; then
+    workflow_runner_require_hold_directory "${WORKFLOW_RUNNER_HOLD_DIRECTORY}" || \
+      fail "workflow runner deployment hold directory identity mismatch"
+  else
+    sudo -n /usr/bin/install -d -o root -g root -m 0755 \
+      "${WORKFLOW_RUNNER_HOLD_DIRECTORY}"
+  fi
+  workflow_runner_require_hold_directory "${WORKFLOW_RUNNER_HOLD_DIRECTORY}" || \
+    fail "workflow runner deployment hold directory was not installed safely"
+
+  staged_hold="${WORKFLOW_RUNNER_HOLD_DIRECTORY}/.zzzz-eom-deployment-hold.staged"
+  if [[ -e "${WORKFLOW_RUNNER_HOLD_TARGET}" || -L "${WORKFLOW_RUNNER_HOLD_TARGET}" ]]; then
+    [[ ! -e "${staged_hold}" && ! -L "${staged_hold}" && \
+      ! -e "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" && \
+      ! -L "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" ]] || \
+      fail "conflicting workflow runner deployment hold materializations require review"
+    workflow_runner_require_hold_file \
+      "${WORKFLOW_RUNNER_HOLD_TARGET}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
+      fail "existing workflow runner deployment hold identity mismatch"
+  else
+    if [[ -e "${staged_hold}" || -L "${staged_hold}" ]] && \
+      [[ -e "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" || \
+        -L "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" ]]; then
+      fail "conflicting workflow runner deployment hold recovery files require review"
+    fi
+    if [[ -e "${staged_hold}" || -L "${staged_hold}" ]]; then
+      workflow_runner_require_hold_file "${staged_hold}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
+        fail "staged workflow runner deployment hold identity mismatch"
+    elif [[ -e "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" || \
+      -L "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" ]]; then
+      workflow_runner_require_hold_file \
+        "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
+        fail "released workflow runner deployment hold backup identity mismatch"
+      sudo -n /usr/bin/mv -T \
+        "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" "${staged_hold}"
+    else
+      sudo -n /usr/bin/install -o root -g root -m 0644 \
+        "${WORKFLOW_RUNNER_HOLD_SOURCE}" "${staged_hold}"
+      workflow_runner_require_hold_file "${staged_hold}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
+        fail "staged workflow runner deployment hold was not materialized safely"
+    fi
+    sudo -n /usr/bin/mv -T "${staged_hold}" "${WORKFLOW_RUNNER_HOLD_TARGET}"
+  fi
+
+  # No release mutation is allowed until systemd has loaded and exposed the exact persistent hold.
+  sudo -n /usr/bin/systemctl daemon-reload
+  activation_identity_after="$(
+    workflow_runner_release_fenced_activation_identity \
+      /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+  )" || \
+    fail "workflow runner persistent deployment hold was not loaded under its reboot fence"
+  workflow_runner_require_same_activation_identity \
+    "${activation_identity_before}" "${activation_identity_after}" || \
+    fail "workflow runner was invoked while the persistent hold was being activated"
+  sudo -n /usr/bin/systemctl enable "${WORKFLOW_RUNNER_SERVICE}" >/dev/null
+  activation_identity_after="$(
+    workflow_runner_deployment_hold_activation_identity \
+      /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+  )" || \
+    fail "workflow runner persistent deployment hold was not enabled safely"
+  workflow_runner_require_same_activation_identity \
+    "${activation_identity_before}" "${activation_identity_after}" || \
+    fail "workflow runner was invoked while the held unit was re-enabled"
+
+  # Commit 6691567 may have left this exact ineffective lower-precedence runtime mask. Remove only
+  # that reviewed identity and only while the effective persistent hold is already proven.
+  runtime_mask_state="$(workflow_runner_ineffective_runtime_mask_state)" || \
+    fail "foreign workflow runner runtime-mask residue requires manual review"
+  if [[ "${runtime_mask_state}" == "EXACT" ]]; then
+    sudo -n /usr/bin/rm -- "${WORKFLOW_RUNNER_INEFFECTIVE_RUNTIME_MASK}"
+    sudo -n /usr/bin/systemctl daemon-reload
+  fi
+  workflow_runner_require_no_ineffective_runtime_mask || \
+    fail "ineffective workflow runner runtime-mask residue remains"
+  activation_identity_after="$(
+    workflow_runner_deployment_hold_activation_identity \
+      /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+  )" || \
+    fail "workflow runner persistent deployment hold was lost during residue cleanup"
+  workflow_runner_require_same_activation_identity \
+    "${activation_identity_before}" "${activation_identity_after}" || \
+    fail "workflow runner was invoked during persistent-hold activation"
 }
 
 verify_workflow_runner_deployment_hold() {
   [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true ]] || return 0
-  workflow_runner_require_runtime_hold /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}" || \
-    fail "workflow runner runtime deployment hold was lost or is not quiescent"
+  workflow_runner_require_no_ineffective_runtime_mask || \
+    fail "ineffective workflow runner runtime-mask residue reappeared"
+  workflow_runner_require_deployment_hold /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}" || \
+    fail "workflow runner persistent deployment hold was lost or is not quiescent"
+}
+
+require_installed_workflow_runner_hold_release_verifier() {
+  local metadata parent_metadata source_sha256 target_sha256
+  [[ ! -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}" && \
+    -f "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}" ]] || \
+    fail "workflow runner hold-release verifier source is unavailable"
+  [[ ! -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}" && \
+    -f "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}" ]] || \
+    fail "installed workflow runner hold-release verifier is unavailable"
+  [[ ! -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" && \
+    -d "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" ]] || \
+    fail "installed workflow runner hold-release verifier directory is unavailable"
+  parent_metadata="$(
+    /usr/bin/stat --format='%u:%g:%a' -- \
+      "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" 2>/dev/null
+  )" || fail "installed workflow runner hold-release verifier directory metadata is unavailable"
+  [[ "${parent_metadata}" == "0:0:755" ]] || \
+    fail "installed workflow runner hold-release verifier directory identity mismatch"
+  metadata="$(
+    /usr/bin/stat --format='%u:%g:%a:%h' -- \
+      "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}" 2>/dev/null
+  )" || fail "installed workflow runner hold-release verifier metadata is unavailable"
+  [[ "${metadata}" == "0:0:755:1" ]] || \
+    fail "installed workflow runner hold-release verifier identity mismatch"
+  source_sha256="$(workflow_runner_file_sha256 \
+    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}")" || \
+    fail "workflow runner hold-release verifier source hash is unavailable"
+  target_sha256="$(workflow_runner_file_sha256 \
+    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}")" || \
+    fail "installed workflow runner hold-release verifier hash is unavailable"
+  [[ "${target_sha256}" == "${source_sha256}" ]] || \
+    fail "installed workflow runner hold-release verifier source drift"
+}
+
+require_workflow_runner_retirement_receipt_root() {
+  local expected_uid expected_gid metadata
+  expected_uid="$(id -u eom-api)" || fail "eom-api user identity is unavailable"
+  expected_gid="$(id -g eom-api)" || fail "eom-api group identity is unavailable"
+  metadata="$(
+    sudo -n -u eom-api /usr/bin/stat --format='%F:%u:%g:%a' -- \
+      "${WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT}" 2>/dev/null
+  )" || fail "workflow runner retirement receipt directory metadata is unavailable"
+  [[ "${metadata}" == "directory:${expected_uid}:${expected_gid}:700" ]] || \
+    fail "workflow runner retirement receipt directory identity mismatch"
+}
+
+verify_workflow_runner_hold_release_receipt() {
+  local -a verifier_mode=()
+  if (($# == 1)) && [[ "$1" == "--hold-lock-until-release-signal" ]]; then
+    verifier_mode=("$1")
+  elif (($# != 0)); then
+    return 64
+  fi
+  [[ "${RELEASE_RECEIPT_FILE}" == \
+    "${WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT}/${RELEASE_EXECUTION_ID}.retirement-receipt.json" \
+  ]] || fail "workflow runner retirement receipt path must match the expected execution"
+  require_installed_workflow_runner_hold_release_verifier
+  sudo -n -u eom-api /usr/bin/env -i \
+    HOME=/var/lib/eom-api \
+    PATH=/usr/bin:/bin \
+    PYTHONSAFEPATH=1 \
+    "${API_PYTHON}" -I "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}" \
+    --receipt-file "${RELEASE_RECEIPT_FILE}" \
+    --execution-id "${RELEASE_EXECUTION_ID}" \
+    --execution-revision-id "${RELEASE_EXECUTION_REVISION_ID}" \
+    --checkpoint-sha256 "${RELEASE_CHECKPOINT_SHA256}" \
+    --production-request-id "${RELEASE_PRODUCTION_REQUEST_ID}" \
+    --production-plan-id "${RELEASE_PRODUCTION_PLAN_ID}" \
+    --production-plan-sha256 "${RELEASE_PRODUCTION_PLAN_SHA256}" \
+    --operator-id "${RELEASE_OPERATOR_ID}" \
+    --receipt-sha256 "${RELEASE_RECEIPT_SHA256}" \
+    "${verifier_mode[@]}"
+}
+
+release_workflow_runner_deployment_hold() {
+  local target_present=false backup_present=false base_sha256_before base_sha256_after
+  local activation_identity_before activation_identity_after
+  workflow_runner_require_source_hold_file \
+    "${WORKFLOW_RUNNER_HOLD_SOURCE}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
+    fail "canonical workflow runner deployment hold source mismatch"
+  workflow_runner_require_no_ineffective_runtime_mask || \
+    fail "workflow runner runtime-mask residue must be reviewed before hold release"
+  workflow_runner_require_base_unit_file "${WORKFLOW_RUNNER_FRAGMENT}" || \
+    fail "workflow runner base unit identity mismatch before hold release"
+  base_sha256_before="$(workflow_runner_file_sha256 "${WORKFLOW_RUNNER_FRAGMENT}")" || \
+    fail "workflow runner base unit hash is unavailable before hold release"
+  if [[ -e "${WORKFLOW_RUNNER_HOLD_TARGET}" || -L "${WORKFLOW_RUNNER_HOLD_TARGET}" ]]; then
+    target_present=true
+  fi
+  if [[ -e "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" || \
+    -L "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" ]]; then
+    backup_present=true
+  fi
+  [[ "${target_present}" != true || "${backup_present}" != true ]] || \
+    fail "conflicting workflow runner deployment hold materializations require review"
+
+  # An output-loss retry after a completed release must be an exact no-op. The disabled state is
+  # the durable reboot fence between release and the separate explicit enable-and-start action.
+  if [[ "${target_present}" != true && "${backup_present}" != true ]]; then
+    workflow_runner_released_activation_identity \
+      /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}" >/dev/null || \
+      fail "workflow runner deployment hold is absent without a completed disabled release"
+    printf '%s\n' "workflow_runner_deployment_hold=REPLAYED_RELEASED_INACTIVE_DISABLED"
+    return 0
+  fi
+
+  if [[ "${target_present}" == true ]]; then
+    if activation_identity_before="$(
+      workflow_runner_deployment_hold_activation_identity \
+        /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+    )"; then
+      # Disable before removing the persistent .conf. A power loss at every later instruction
+      # therefore reboots to an unscheduled runner even if systemd has not yet reloaded the move.
+      sudo -n /usr/bin/systemctl disable "${WORKFLOW_RUNNER_SERVICE}" >/dev/null || \
+        fail "workflow runner could not be disabled before hold release"
+      activation_identity_after="$(
+        workflow_runner_release_fenced_activation_identity \
+          /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+      )" || \
+        fail "workflow runner was not disabled under the persistent hold"
+      workflow_runner_require_same_activation_identity \
+        "${activation_identity_before}" "${activation_identity_after}" || \
+        fail "workflow runner was invoked while its release reboot fence was installed"
+      activation_identity_before="${activation_identity_after}"
+    elif activation_identity_before="$(
+      workflow_runner_release_fenced_activation_identity \
+        /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+    )"; then
+      : # Idempotent retry after disable and before the atomic hold move.
+    else
+      fail "workflow runner deployment hold is not exact, disabled, and quiescent"
+    fi
+    sudo -n /usr/bin/mv -T \
+      "${WORKFLOW_RUNNER_HOLD_TARGET}" "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" || \
+      fail "workflow runner deployment hold could not be moved to its release backup"
+  else
+    workflow_runner_require_hold_file \
+      "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
+      fail "workflow runner deployment hold release backup identity mismatch"
+    if activation_identity_before="$(
+      workflow_runner_cached_release_fenced_activation_identity \
+        /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+    )"; then
+      : # Same-boot retry before daemon-reload; the manager still holds the removed path.
+    elif activation_identity_before="$(
+      workflow_runner_released_activation_identity \
+        /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+    )"; then
+      : # Retry after daemon-reload or reboot, before the exact backup was removed.
+    else
+      fail "workflow runner must remain stopped and disabled while resuming hold release"
+    fi
+  fi
+
+  # The unit is already persistently disabled. Removing the loaded drop-in never starts it, and a
+  # reboot before or after this reload keeps it unscheduled. The exact backup makes the operation
+  # resumable until the released state has been proven.
+  sudo -n /usr/bin/systemctl daemon-reload || \
+    fail "systemd could not reload the workflow runner hold release"
+  activation_identity_after="$(
+    workflow_runner_released_activation_identity \
+      /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+  )" || \
+    fail "workflow runner deployment hold release did not leave a quiescent unit"
+  workflow_runner_require_same_activation_identity \
+    "${activation_identity_before}" "${activation_identity_after}" || \
+    fail "workflow runner was invoked during deployment hold release"
+  workflow_runner_require_base_unit_file "${WORKFLOW_RUNNER_FRAGMENT}" || \
+    fail "workflow runner base unit identity changed during hold release"
+  base_sha256_after="$(workflow_runner_file_sha256 "${WORKFLOW_RUNNER_FRAGMENT}")" || \
+    fail "workflow runner base unit hash is unavailable after hold release"
+  [[ "${base_sha256_after}" == "${base_sha256_before}" ]] || \
+    fail "workflow runner base unit hash changed during hold release"
+  workflow_runner_require_hold_file \
+    "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
+    fail "workflow runner deployment hold release backup changed unexpectedly"
+  sudo -n /usr/bin/rm -- "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" || \
+    fail "workflow runner deployment hold release backup could not be removed"
+  [[ ! -e "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" && \
+    ! -L "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" ]] || \
+    fail "workflow runner deployment hold release backup remains after removal"
+  activation_identity_after="$(
+    workflow_runner_released_activation_identity \
+      /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+  )" || \
+    fail "workflow runner changed state after deployment hold release"
+  workflow_runner_require_same_activation_identity \
+    "${activation_identity_before}" "${activation_identity_after}" || \
+    fail "workflow runner was invoked after deployment hold release"
+  printf '%s\n' "workflow_runner_deployment_hold=RELEASED_INACTIVE_DISABLED"
+  printf '%s\n' \
+    "Explicitly enable --now eom-workflow-runner.service after the retirement receipt release."
+}
+
+release_workflow_runner_deployment_hold_after_verified_receipt() {
+  local verifier_pid verifier_read_fd verifier_write_fd verifier_status verifier_confirmation
+  coproc WORKFLOW_RUNNER_RECEIPT_VERIFIER {
+    verify_workflow_runner_hold_release_receipt --hold-lock-until-release-signal
+  }
+  verifier_pid="${WORKFLOW_RUNNER_RECEIPT_VERIFIER_PID}"
+  verifier_read_fd="${WORKFLOW_RUNNER_RECEIPT_VERIFIER[0]}"
+  verifier_write_fd="${WORKFLOW_RUNNER_RECEIPT_VERIFIER[1]}"
+  if ! IFS= read -r verifier_status <&"${verifier_read_fd}" || \
+    [[ "${verifier_status}" != \
+      "workflow_runner_hold_release_receipt=VERIFIED_LOCKED" ]]; then
+    exec {verifier_write_fd}>&-
+    wait "${verifier_pid}" || true
+    return 1
+  fi
+
+  # The verifier keeps an exclusive flock on the exact checkpoint until this mutation has either
+  # completed or failed. No official checkpoint writer can advance between validation and release.
+  if ! release_workflow_runner_deployment_hold; then
+    exec {verifier_write_fd}>&-
+    wait "${verifier_pid}" || true
+    return 1
+  fi
+  if ! printf '%s\n' "RELEASE_COMPLETE" >&"${verifier_write_fd}"; then
+    exec {verifier_write_fd}>&-
+    wait "${verifier_pid}" || true
+    return 1
+  fi
+  exec {verifier_write_fd}>&-
+  if ! IFS= read -r verifier_confirmation <&"${verifier_read_fd}" || \
+    [[ "${verifier_confirmation}" != \
+      "workflow_runner_hold_release_receipt=RELEASE_CONFIRMED" ]]; then
+    wait "${verifier_pid}" || true
+    return 1
+  fi
+  wait "${verifier_pid}"
 }
 
 verify_mock_exam_deployment_admission() {
@@ -1477,6 +1834,20 @@ install_service() {
     "${METADATA_VERIFIER_SOURCE}" "${METADATA_VERIFIER_TARGET}"
   sudo -n install -o root -g root -m 0755 \
     "${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}"
+  sudo -n install -o root -g root -m 0755 \
+    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}" \
+    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}"
+  if sudo -n -u eom-api /usr/bin/test -e "${WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT}" || \
+    sudo -n -u eom-api /usr/bin/test -L "${WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT}"; then
+    require_workflow_runner_retirement_receipt_root
+  else
+    # The parent is eom-api-owned and mode 0700. Create the absent leaf without root authority;
+    # even an EEXIST symlink race therefore cannot become a privileged chmod/chown write gadget.
+    sudo -n -u eom-api /usr/bin/install -d -m 0700 \
+      "${WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT}"
+  fi
+  require_workflow_runner_retirement_receipt_root
+  require_installed_workflow_runner_hold_release_verifier
   sudo -n install -o root -g root -m 0644 "${UNIT_SOURCE}" "${UNIT_TARGET}"
   sudo -n "${METADATA_VERIFIER_TARGET}"
   sudo -n systemctl daemon-reload
@@ -1504,6 +1875,7 @@ verify_service() {
     fail "installed metadata verifier source drift"
   cmp --silent "${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}" || \
     fail "installed runtime verifier source drift"
+  require_installed_workflow_runner_hold_release_verifier
   cmp --silent \
     "${MOCK_EXAM_DEPLOYMENT_ADMISSION_SOURCE}" \
     "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}" || \
@@ -1538,8 +1910,13 @@ case "${ACTION}" in
     if [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true ]]; then
       printf '%s\n' "workflow_runner_deployment_hold=ACTIVE"
       printf '%s\n' \
-        "Retire the pinned occurrence before unmasking and starting eom-workflow-runner.service."
+        "Retire the pinned occurrence before releasing the hold and starting eom-workflow-runner.service."
     fi
+    ;;
+  release-workflow-runner-hold)
+    sudo -n true || fail "noninteractive privileged access is required before hold release"
+    require_clean_tree
+    release_workflow_runner_deployment_hold_after_verified_receipt
     ;;
   verify)
     verify_service

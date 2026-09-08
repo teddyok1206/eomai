@@ -43,6 +43,10 @@ from eom_workflow_runner.repository import (
     load_persisted_workflow_request,
 )
 from eom_workflow_runner.retirement_quiescence import (
+    WORKFLOW_RUNNER_DEPLOYMENT_HOLD_DIRECTORY,
+    WORKFLOW_RUNNER_DEPLOYMENT_HOLD_PATH,
+    WORKFLOW_RUNNER_DEPLOYMENT_HOLD_SHA256,
+    WORKFLOW_RUNNER_FRAGMENT_PATH,
     ExpiredLeaseReconciliationPort,
     WorkflowRunnerQuiescenceEvidence,
     WorkflowRunnerQuiescencePort,
@@ -226,8 +230,8 @@ class MockExamProductionRetirementService:
         *,
         checkpoint: MockExamProductionExecutionV1,
     ) -> MockExamProductionRetirementReceiptV1:
-        # Re-observe immediately before entering the write transaction. The runtime systemd mask
-        # makes this evidence stable until an explicit privileged unmask in the runbook.
+        # Re-observe immediately before entering the write transaction. The persistent systemd
+        # drop-in makes this evidence stable until its explicit privileged post-retirement release.
         self._require_runner_quiescence()
         with transaction(self._sessions) as session:
             workflow_ids = tuple(binding.workflow_id for binding in command.bindings)
@@ -893,13 +897,29 @@ def _require_runner_quiescence_evidence(
     evidence: WorkflowRunnerQuiescenceEvidence,
 ) -> None:
     if (
-        evidence.active_state != "inactive"
+        evidence.load_state != "loaded"
+        or evidence.active_state != "inactive"
         or evidence.sub_state != "dead"
-        or evidence.unit_file_state != "masked-runtime"
+        or evidence.main_pid != 0
+        or evidence.unit_file_state != "enabled"
+        or evidence.job != ""
+        or evidence.fragment_path != WORKFLOW_RUNNER_FRAGMENT_PATH
+        or evidence.drop_in_paths != (WORKFLOW_RUNNER_DEPLOYMENT_HOLD_PATH,)
+        or evidence.refuse_manual_start is not True
+        or evidence.need_daemon_reload is not False
+        or evidence.hold_directory_path != WORKFLOW_RUNNER_DEPLOYMENT_HOLD_DIRECTORY
+        or evidence.hold_directory_owner_uid != 0
+        or evidence.hold_directory_group_gid != 0
+        or evidence.hold_directory_mode != 0o755
+        or evidence.hold_path != WORKFLOW_RUNNER_DEPLOYMENT_HOLD_PATH
+        or evidence.hold_sha256 != WORKFLOW_RUNNER_DEPLOYMENT_HOLD_SHA256
+        or evidence.hold_owner_uid != 0
+        or evidence.hold_group_gid != 0
+        or evidence.hold_mode != 0o644
     ):
         _fail(
             "PRODUCTION_RETIREMENT_RUNNER_NOT_QUIESCENT",
-            "Workflow runner must be inactive, dead, and runtime-masked before retirement",
+            "Workflow runner must be inactive under the exact persistent deployment hold",
         )
 
 
