@@ -646,6 +646,50 @@ def test_v5_exam_ontology_reaches_exam_and_item_from_curriculum_in_two_hops() ->
     assert any("2025학년도" in nodes_by_id[node_id].label for node_id in second_hop)
 
 
+def test_v4_approved_item_alignment_creates_canonical_item_bank_node() -> None:
+    documents = _complete_analyses()
+    base = build_integrated_science_structure_manifest(
+        documents, reviewed_by_operator_id=OPERATOR_ID, created_at=NOW
+    )
+    item_analysis = _approved_item_analysis()
+    unit_id = next(
+        unit.curriculum_unit_id for unit in base.curriculum_units if unit.unit_level == "MINOR"
+    )
+    structure = extend_integrated_science_structure_manifest_with_automatic_item_alignments(
+        base,
+        (_automatic_item_alignment(item_analysis, unit_id),),
+        created_at=NOW,
+    )
+
+    projection = build_education_graph_projection(
+        tuple(sorted((*documents, item_analysis), key=lambda item: item.analysis_run_id)),
+        structure,
+    )
+    item_node = next(
+        node
+        for node in projection.nodes
+        if node.stable_key == f"item-revision:{item_analysis.source.item_revision_id}"
+    )
+    unit_node = next(
+        node
+        for node in projection.nodes
+        if node.stable_key
+        == next(
+            unit.node_stable_key
+            for unit in structure.curriculum_units
+            if unit.curriculum_unit_id == unit_id
+        )
+    )
+    assert item_node.node_type == "ITEM_REVISION"
+    assert any(
+        edge.edge_type == "ALIGNS_WITH_CURRICULUM"
+        and edge.from_node_id == item_node.node_id
+        and edge.to_node_id == unit_node.node_id
+        for edge in projection.edges
+    )
+    assert not any(node.node_type == "ASSESSMENT_ITEM_OCCURRENCE" for node in projection.nodes)
+
+
 def test_v4_structure_rejects_automatic_reclassification_of_human_alignment() -> None:
     documents = _complete_analyses()
     base = build_integrated_science_structure_manifest(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from eom_api_contracts import ItemBankEntryView, ListResponse
+from eom_api_contracts import ItemBankEntryView, ListResponse, ProductionItemCandidateView
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Query, Request
 
@@ -46,6 +46,45 @@ def item_bank_entries(
         target_grade=target_grade,
         assessment_occurrence_revision_id=assessment_occurrence_revision_id,
         item_number=item_number,
+        item_type_key=item_type_key,
+        difficulty_band=difficulty_band,
+        limit=limit,
+        cursor=cursor,
+    )
+    return many(
+        request,
+        page.data,
+        limit=limit,
+        next_cursor=page.next_cursor,
+        has_more=page.has_more,
+    )
+
+
+@router.get(
+    "/item-bank/production-candidates",
+    operation_id="production_item_candidate_list",
+    response_model=ListResponse[ProductionItemCandidateView],
+    dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
+)
+def production_item_candidates(
+    request: Request,
+    curriculum_unit_key: str | None = Query(default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$"),
+    source_class: Literal["APPROVED_ITEM", "PAST_EXAM"] | None = Query(default=None),
+    content_profile: Literal[
+        "LEGACY_ITEM_CONTENT_V1", "CONTENT_TEAM_ITEM_CONTENT_V2", "UNSUPPORTED"
+    ]
+    | None = Query(default=None),
+    eligible: bool | None = Query(default=None),
+    item_type_key: str | None = Query(default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$"),
+    difficulty_band: str | None = Query(default=None, min_length=1, max_length=64),
+    limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+) -> ListResponse[ProductionItemCandidateView]:
+    page = request.app.state.services.queries.production_item_candidates(
+        curriculum_unit_key=curriculum_unit_key,
+        source_class=source_class,
+        content_profile=content_profile,
+        eligible=eligible,
         item_type_key=item_type_key,
         difficulty_band=difficulty_band,
         limit=limit,

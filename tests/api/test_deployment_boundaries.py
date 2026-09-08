@@ -471,8 +471,9 @@ def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> 
 def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
-    assert "len(schemas) != 14" in deployment
+    assert "len(schemas) != 15" in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"' in deployment

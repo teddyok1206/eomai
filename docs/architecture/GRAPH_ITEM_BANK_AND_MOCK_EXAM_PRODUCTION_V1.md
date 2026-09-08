@@ -2,7 +2,7 @@
 
 Status: implementation design
 
-Last reviewed: 2026-09-07 UTC
+Last reviewed: 2026-09-08 UTC
 
 Normative editorial source: `content/authoring-rules/integrated-science-mock-exam-assembly-v1.md`.
 The source guide is pinned by revision and SHA-256. Its subject-specific slot policy is policy data;
@@ -87,6 +87,41 @@ snapshot identity, policy provenance, item hashes, concurrency, replay, or repro
 Copying Item JSON into a form would also create a second authority. Therefore the implementation
 extends the existing pointer-oriented Form/Assembly model and materializes bytes only at preview and
 render boundaries.
+
+## Production-candidate projection
+
+The occurrence browser remains a backward-compatible examination-history view.  Production uses a
+separate `production-item-candidate-view/1.0` projection so an approved authored Item does not need
+invented examination coordinates and a past-exam Item keeps its real occurrence identity.  The
+canonical source is the current published Graph Snapshot's accepted
+`APPROVED_ITEM_REVISION` analysis membership, its canonical `item-revision:<revision-id>` node, the
+node's reviewed curriculum edges, and the immutable Item/Item Revision/component rows.  A past-exam
+context is attached only when the same analysis resolves to one typed occurrence reference.
+
+The projection keeps logical Item ID, immutable Item Revision ID, component ID, Artifact ID,
+Artifact Revision ID, and content SHA-256 separate.  It never resolves an implicit latest Artifact
+revision.  Basic mock-exam/HWPX eligibility is deliberately structural: active Item lifecycle,
+eligible immutable revision state, exactly one ordinal-zero JSON `ITEM_CONTENT` pointer using the
+V2 content-team schema, and an exact editorial-Markdown member/hash pointer.  Rating, usage,
+inquiry, material, scoring, and slot-policy decisions remain Stage 3 application rules and are not
+fabricated by this read model.  Ineligible rows remain observable with stable reason codes.
+
+Primary access is ordered snapshot-local iteration, optional source/profile/eligibility membership,
+and curriculum-subtree traversal.  The adapter uses existing B-tree Graph source/node/edge and Item
+component indexes, fetches one bounded page, then bulk-loads occurrence, curriculum, and component
+maps.  Work is `O(page size + linked units + components)` time and space; no per-row query or binary
+materialization is allowed.  The snapshot is immutable, so offset cursors are stable within its
+hash-pinned identity.  Publication creates one canonical structural Item Revision node per reviewed
+Item binding and direct adjacency edges to its reviewed units; sets merge repeated evidence and
+prevent duplicate edges.
+
+The query is read-only.  Missing nodes, ambiguous source classes, stale Item pointers, duplicate
+canonical components, unknown curriculum targets, and incoherent past-exam context fail explicitly;
+an unsupported but coherent component produces an ineligible candidate instead of a guessed
+conversion.  Graph publication remains one existing transaction with deterministic replay.  The
+API layer depends on typed contracts, while SQL/Graph resolution stays in its infrastructure
+adapter.  No new persistent cache, table, dependency, or index is introduced because the existing
+snapshot adjacency and component indexes already serve the bounded access paths.
 
 ## Acceptance checks
 

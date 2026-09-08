@@ -41,7 +41,13 @@ from eom_api_contracts.hwpx import (
     HwpxSupports,
     HwpxValidationState,
 )
-from eom_api_contracts.item_bank import ItemBankCurriculumUnitView, ItemBankEntryView
+from eom_api_contracts.item_bank import (
+    ItemBankCurriculumUnitView,
+    ItemBankEntryView,
+    ProductionItemCandidateView,
+    ProductionItemContentComponentView,
+    ProductionPastExamContextView,
+)
 from eom_api_contracts.knowledge_analysis import (
     ApprovedItemAnalysisSourceInput,
     ContentIntakeAnalysisSourceInput,
@@ -111,6 +117,9 @@ __all__ = [
     "MockExamAssemblyView",
     "PageMeta",
     "ProblemDetails",
+    "ProductionItemCandidateView",
+    "ProductionItemContentComponentView",
+    "ProductionPastExamContextView",
     "ResponseMeta",
     "SingleResponse",
     "ValidationIssue",

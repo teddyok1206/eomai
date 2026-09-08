@@ -699,6 +699,53 @@ def _add_reviewed_curriculum_structure(
             source_pointers=set(pointers_by_unit[unit.curriculum_unit_id]),
         )
 
+    # Every reviewed approved-Item binding owns one canonical structural Item Revision node.
+    # Past-exam placements merge into this same stable identity; authored Items no longer need a
+    # fabricated examination placement to participate in the production Item Bank.
+    for run_id, item_binding in item_bindings_by_run.items():
+        analysis = analysis_by_id[run_id]
+        source = analysis.source
+        if not isinstance(source, ApprovedItemKnowledgeSourceV2):
+            raise KnowledgeGraphProjectionError(
+                "KNOWLEDGE_GRAPH_ITEM_ALIGNMENT_SOURCE_INVALID",
+                "approved Item curriculum binding differs from its accepted source",
+            )
+        pointers = set(
+            pointer for values in node_pointers_by_run[run_id].values() for pointer in values
+        )
+        stable_key = "item-revision:" + item_binding.item_revision_id
+        node_id = _stable_id(
+            "knode_", {"node_type": KnowledgeNodeType.ITEM_REVISION, "stable_key": stable_key}
+        )
+        label = f"승인 문항 {item_binding.item_revision_id}"
+        existing = node_accumulators.get(stable_key)
+        if existing is None:
+            node_accumulators[stable_key] = _NodeAccumulator(
+                node_id=node_id,
+                node_type=KnowledgeNodeType.ITEM_REVISION,
+                stable_key=stable_key,
+                label_counts={label: 1},
+                reviewed_label=None,
+                source_pointers=pointers,
+            )
+        elif existing.node_id != node_id or existing.node_type != KnowledgeNodeType.ITEM_REVISION:
+            raise KnowledgeGraphProjectionError(
+                "KNOWLEDGE_GRAPH_ITEM_NODE_CONFLICT",
+                "approved Item binding conflicts with an existing Graph node",
+            )
+        else:
+            existing.add_label(label)
+            existing.source_pointers.update(pointers)
+        for unit_id in item_binding.curriculum_unit_ids:
+            _merge_edge(
+                edge_accumulators,
+                edge_type="ALIGNS_WITH_CURRICULUM",
+                from_node_id=node_id,
+                to_node_id=unit_node_ids[unit_id],
+                confidence_milli=1000,
+                source_pointers=pointers,
+            )
+
     for run_id, document_binding in bindings_by_run.items():
         analysis = analysis_by_id[run_id]
         pointers_by_stable_key = node_pointers_by_run[run_id]

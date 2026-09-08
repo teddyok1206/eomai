@@ -19,7 +19,12 @@ from eom_api_contracts.curriculum import (
     AssessmentItemOccurrenceView,
     AssessmentItemOccurrenceViewV2,
 )
-from eom_api_contracts.item_bank import ItemBankCurriculumUnitView, ItemBankEntryView
+from eom_api_contracts.item_bank import (
+    ItemBankCurriculumUnitView,
+    ItemBankEntryView,
+    ProductionItemCandidateView,
+    ProductionItemContentComponentView,
+)
 from eom_api_contracts.knowledge_analysis import (
     CreateKnowledgeAnalysisRequest,
     KnowledgeAnalysisReviewRequest,
@@ -170,6 +175,72 @@ def test_item_bank_schema_matches_typed_graph_projection() -> None:
         ItemBankEntryView.model_validate(
             value | {"curriculum_units": [*value["curriculum_units"], *value["curriculum_units"]]}
         )
+
+
+def test_production_item_candidate_schema_matches_structural_eligibility() -> None:
+    canonical_path = SCHEMA_ROOT / "production-item-candidate-v1.schema.json"
+    packaged_path = (
+        Path(__file__).resolve().parents[2]
+        / "packages/api_contracts/eom_api_contracts/schemas"
+        / canonical_path.name
+    )
+    assert canonical_path.read_bytes() == packaged_path.read_bytes()
+    value = ProductionItemCandidateView(
+        graph_snapshot_revision_id="graphrev_" + "1" * 32,
+        snapshot_sha256="sha256:" + "2" * 64,
+        analysis_run_id="analysisrun_" + "3" * 32,
+        graph_item_node_id="knode_" + "4" * 32,
+        source_class="APPROVED_ITEM",
+        source_display_label="검토 완료 문항 2026-001",
+        past_exam_context=None,
+        item_id="item_" + "5" * 32,
+        item_revision_id="itemrev_" + "6" * 32,
+        item_revision_state="APPROVED",
+        item_lifecycle_state="ACTIVE",
+        item_current_revision=True,
+        item_type_key="multiple-choice",
+        difficulty_band="MEDIUM",
+        item_manifest_sha256="sha256:" + "7" * 64,
+        curriculum_units=(
+            ItemBankCurriculumUnitView(
+                curriculum_unit_id="currunit_" + "8" * 32,
+                unit_key="eom.is.middle.3-3",
+                unit_code="3-(3)",
+                label="중력장 내의 운동",
+                unit_level="MINOR",
+                parent_unit_id="currunit_" + "9" * 32,
+            ),
+        ),
+        content_profile="CONTENT_TEAM_ITEM_CONTENT_V2",
+        content_component=ProductionItemContentComponentView(
+            item_component_id="itemcomponent_" + "a" * 32,
+            artifact_id="artifact_" + "b" * 32,
+            artifact_revision_id="rev_" + "c" * 32,
+            sha256="sha256:" + "d" * 64,
+            schema_ref="eom.assessment.item-content/2.0",
+            media_type="application/json",
+            logical_name="item-content.json",
+            editorial_markdown_member="content-team-item.md",
+            editorial_markdown_sha256="sha256:" + "e" * 64,
+        ),
+        mock_exam_assembly_eligible=True,
+        hwpx_exam_eligible=True,
+        ineligibility_reasons=(),
+    ).model_dump(mode="json")
+    schema = json.loads(canonical_path.read_text(encoding="utf-8"))
+    assert tuple(Draft202012Validator(schema).iter_errors(value)) == ()
+
+    with pytest.raises(ValidationError, match="eligibility differs"):
+        ProductionItemCandidateView.model_validate(
+            value
+            | {
+                "content_profile": "LEGACY_ITEM_CONTENT_V1",
+                "content_component": value["content_component"]
+                | {"schema_ref": "eom.assessment.item-content/1.0"},
+            }
+        )
+    with pytest.raises(ValidationError, match="source class"):
+        ProductionItemCandidateView.model_validate(value | {"source_class": "PAST_EXAM"})
 
 
 def test_assessment_learning_schemas_match_typed_progress_and_exclude_march() -> None:

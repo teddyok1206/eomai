@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal, Never, cast
@@ -39,7 +40,14 @@ from eom_api_contracts.curriculum import (
 from eom_api_contracts.deliverables import DeliverableView
 from eom_api_contracts.events import EventView
 from eom_api_contracts.hwpx import HwpxBuildView
-from eom_api_contracts.item_bank import ItemBankCurriculumUnitView, ItemBankEntryView
+from eom_api_contracts.item_bank import (
+    ItemBankCurriculumUnitView,
+    ItemBankEntryView,
+    ProductionIneligibilityReason,
+    ProductionItemCandidateView,
+    ProductionItemContentComponentView,
+    ProductionPastExamContextView,
+)
 from eom_api_contracts.items import (
     ItemComponentView,
     ItemRelationshipView,
@@ -87,6 +95,7 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeEdgeRecord,
     KnowledgeGraphSnapshotRecord,
     KnowledgeNodeRecord,
+    KnowledgeNodeSourcePointerRecord,
     KnowledgeSnapshotAnalysisRecord,
 )
 from eom_catalog_service.legacy_assessment_models import (
@@ -139,6 +148,21 @@ from sqlalchemy.orm import Session
 
 from eom_api.errors import ApiError
 from eom_api.services.hwpx_projection import project_hwpx_build
+
+_LEGACY_ITEM_CONTENT_SCHEMA_REFS = frozenset(
+    {
+        "eom.assessment.item-content/1.0",
+        "eom://schemas/item-registry/assessment-item-content-v1",
+    }
+)
+_CONTENT_TEAM_ITEM_CONTENT_SCHEMA_REFS = frozenset(
+    {
+        "eom.assessment.item-content/2.0",
+        "eom://schemas/item-registry/assessment-item-content-v2",
+    }
+)
+_SHA256_PATTERN = r"^sha256:[0-9a-f]{64}$"
+_SHA256_RE = re.compile(_SHA256_PATTERN)
 
 
 @dataclass(frozen=True)
@@ -593,7 +617,6 @@ class QueryAdapter:
         ).hexdigest()
         offset = self.cursors.decode_ordinal(cursor, "item-bank", aggregate) if cursor else 0
         expected_units = integrated_science_curriculum_units()
-        expected_by_key = {unit.unit_key: unit for unit in expected_units}
         expected_by_id = {unit.curriculum_unit_id: unit for unit in expected_units}
         with self.sessions() as session:
             snapshot_id = self._current_assessment_snapshot_id(session)
@@ -648,62 +671,10 @@ class QueryAdapter:
                 == AssessmentItemOccurrenceReferenceRecord.item_revision_id,
             )
             if curriculum_unit_key is not None:
-                expected_unit = expected_by_key.get(curriculum_unit_key)
-                if expected_unit is None:
-                    return PageResult((), None, False)
-                observed_unit = session.get(
-                    CurriculumUnitRecord,
-                    (snapshot_id, expected_unit.curriculum_unit_id),
+                descendant_node_ids = self._curriculum_descendant_node_ids(
+                    session, snapshot_id, curriculum_unit_key
                 )
-                observed_node = (
-                    session.get(KnowledgeNodeRecord, (snapshot_id, observed_unit.node_id))
-                    if observed_unit is not None
-                    else None
-                )
-                if (
-                    observed_unit is None
-                    or observed_node is None
-                    or observed_unit.framework_revision_id != expected_unit.framework_revision_id
-                    or observed_unit.parent_unit_id != expected_unit.parent_unit_id
-                    or observed_unit.unit_level != expected_unit.unit_level
-                    or observed_unit.ordinal != expected_unit.ordinal
-                    or observed_node.stable_key != expected_unit.node_stable_key
-                ):
-                    return PageResult((), None, False)
-                descendant_ids = tuple(
-                    session.scalars(
-                        select(CurriculumUnitClosureRecord.descendant_unit_id)
-                        .where(
-                            CurriculumUnitClosureRecord.graph_snapshot_revision_id == snapshot_id,
-                            CurriculumUnitClosureRecord.framework_revision_id
-                            == expected_unit.framework_revision_id,
-                            CurriculumUnitClosureRecord.ancestor_unit_id
-                            == expected_unit.curriculum_unit_id,
-                        )
-                        .order_by(CurriculumUnitClosureRecord.descendant_unit_id)
-                    )
-                )
-                expected_descendant_ids: set[str] = set()
-                for candidate in expected_units:
-                    current = candidate
-                    while True:
-                        if current.curriculum_unit_id == expected_unit.curriculum_unit_id:
-                            expected_descendant_ids.add(candidate.curriculum_unit_id)
-                            break
-                        if current.parent_unit_id is None:
-                            break
-                        current = expected_by_id[current.parent_unit_id]
-                if set(descendant_ids) != expected_descendant_ids:
-                    return PageResult((), None, False)
-                descendant_node_ids = tuple(
-                    session.scalars(
-                        select(CurriculumUnitRecord.node_id).where(
-                            CurriculumUnitRecord.graph_snapshot_revision_id == snapshot_id,
-                            CurriculumUnitRecord.curriculum_unit_id.in_(descendant_ids),
-                        )
-                    )
-                )
-                if len(descendant_node_ids) != len(descendant_ids):
+                if descendant_node_ids is None:
                     return PageResult((), None, False)
                 statement = statement.join(
                     KnowledgeEdgeRecord,
@@ -842,6 +813,461 @@ class QueryAdapter:
             )
             return PageResult(tuple(values), next_cursor, has_more)
 
+    def production_item_candidates(
+        self,
+        *,
+        curriculum_unit_key: str | None,
+        source_class: Literal["APPROVED_ITEM", "PAST_EXAM"] | None,
+        content_profile: Literal[
+            "LEGACY_ITEM_CONTENT_V1", "CONTENT_TEAM_ITEM_CONTENT_V2", "UNSUPPORTED"
+        ]
+        | None,
+        eligible: bool | None,
+        item_type_key: str | None,
+        difficulty_band: str | None,
+        limit: int,
+        cursor: str | None,
+    ) -> PageResult[ProductionItemCandidateView]:
+        """List Graph-accepted Item revisions without inventing examination placement data."""
+
+        filters = {
+            "curriculum_unit_key": curriculum_unit_key,
+            "source_class": source_class,
+            "content_profile": content_profile,
+            "eligible": eligible,
+            "item_type_key": item_type_key,
+            "difficulty_band": difficulty_band,
+        }
+        aggregate = hashlib.sha256(
+            json.dumps(filters, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        offset = (
+            self.cursors.decode_ordinal(cursor, "production-item-candidate", aggregate)
+            if cursor
+            else 0
+        )
+        expected_units = integrated_science_curriculum_units()
+        expected_by_id = {unit.curriculum_unit_id: unit for unit in expected_units}
+        with self.sessions() as session:
+            snapshot_id = self._current_assessment_snapshot_id(session)
+            if snapshot_id is None:
+                return PageResult((), None, False)
+            snapshot = session.get(KnowledgeGraphSnapshotRecord, snapshot_id)
+            if snapshot is None:
+                return PageResult((), None, False)
+
+            source_pointer_exists = (
+                select(literal(1))
+                .select_from(KnowledgeNodeSourcePointerRecord)
+                .where(
+                    KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id == snapshot_id,
+                    KnowledgeNodeSourcePointerRecord.node_id == KnowledgeNodeRecord.node_id,
+                    KnowledgeNodeSourcePointerRecord.analysis_run_id
+                    == KnowledgeSnapshotAnalysisRecord.analysis_run_id,
+                    KnowledgeNodeSourcePointerRecord.source_revision_id
+                    == KnowledgeSnapshotAnalysisRecord.source_revision_id,
+                )
+                .exists()
+            )
+            conditions = [
+                KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id == snapshot_id,
+                KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM_REVISION",
+                source_pointer_exists,
+            ]
+            if source_class is not None:
+                conditions.append(
+                    select(literal(1))
+                    .select_from(KnowledgeNodeSourcePointerRecord)
+                    .where(
+                        KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id == snapshot_id,
+                        KnowledgeNodeSourcePointerRecord.node_id == KnowledgeNodeRecord.node_id,
+                        KnowledgeNodeSourcePointerRecord.analysis_run_id
+                        == KnowledgeSnapshotAnalysisRecord.analysis_run_id,
+                        KnowledgeNodeSourcePointerRecord.source_revision_id
+                        == KnowledgeSnapshotAnalysisRecord.source_revision_id,
+                        KnowledgeNodeSourcePointerRecord.source_class == source_class,
+                    )
+                    .exists()
+                )
+            if item_type_key is not None:
+                conditions.append(ItemRevisionRecord.item_type_key == item_type_key)
+            if difficulty_band is not None:
+                conditions.append(ItemRevisionRecord.difficulty_band == difficulty_band)
+
+            legacy_profile = and_(
+                ItemComponentRecord.item_component_id.is_not(None),
+                ItemComponentRecord.media_type == "application/json",
+                ItemComponentRecord.schema_ref.in_(_LEGACY_ITEM_CONTENT_SCHEMA_REFS),
+            )
+            content_team_profile = and_(
+                ItemComponentRecord.item_component_id.is_not(None),
+                ItemComponentRecord.media_type == "application/json",
+                ItemComponentRecord.schema_ref.in_(_CONTENT_TEAM_ITEM_CONTENT_SCHEMA_REFS),
+            )
+            if content_profile == "LEGACY_ITEM_CONTENT_V1":
+                conditions.append(legacy_profile)
+            elif content_profile == "CONTENT_TEAM_ITEM_CONTENT_V2":
+                conditions.append(content_team_profile)
+            elif content_profile == "UNSUPPORTED":
+                conditions.append(
+                    or_(
+                        ItemComponentRecord.item_component_id.is_(None),
+                        ~or_(legacy_profile, content_team_profile),
+                    )
+                )
+
+            structural_eligibility = and_(
+                ItemRecord.lifecycle_state == "ACTIVE",
+                ItemRevisionRecord.revision_state.in_(("APPROVED", "SUPERSEDED")),
+                content_team_profile,
+                ItemComponentRecord.metadata_json["editorial_markdown_member"].as_string()
+                == "content-team-item.md",
+                ItemComponentRecord.metadata_json["editorial_markdown_sha256"]
+                .as_string()
+                .op("~")(_SHA256_PATTERN),
+            )
+            if eligible is not None:
+                conditions.append(func.coalesce(structural_eligibility, False).is_(eligible))
+
+            if curriculum_unit_key is not None:
+                descendant_node_ids = self._curriculum_descendant_node_ids(
+                    session, snapshot_id, curriculum_unit_key
+                )
+                if descendant_node_ids is None:
+                    return PageResult((), None, False)
+                direct_alignment = (
+                    select(literal(1))
+                    .select_from(KnowledgeEdgeRecord)
+                    .where(
+                        KnowledgeEdgeRecord.graph_snapshot_revision_id == snapshot_id,
+                        KnowledgeEdgeRecord.from_node_id == KnowledgeNodeRecord.node_id,
+                        KnowledgeEdgeRecord.to_node_id.in_(descendant_node_ids),
+                        KnowledgeEdgeRecord.edge_type == "ALIGNS_WITH_CURRICULUM",
+                    )
+                    .exists()
+                )
+                occurrence_alignment = (
+                    select(literal(1))
+                    .select_from(AssessmentItemOccurrenceReferenceRecord)
+                    .join(
+                        KnowledgeEdgeRecord,
+                        and_(
+                            KnowledgeEdgeRecord.graph_snapshot_revision_id
+                            == AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id,
+                            KnowledgeEdgeRecord.from_node_id
+                            == AssessmentItemOccurrenceReferenceRecord.placement_node_id,
+                        ),
+                    )
+                    .where(
+                        AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id
+                        == snapshot_id,
+                        AssessmentItemOccurrenceReferenceRecord.analysis_run_id
+                        == KnowledgeSnapshotAnalysisRecord.analysis_run_id,
+                        KnowledgeEdgeRecord.to_node_id.in_(descendant_node_ids),
+                        KnowledgeEdgeRecord.edge_type == "ALIGNS_WITH_CURRICULUM",
+                    )
+                    .exists()
+                )
+                conditions.append(or_(direct_alignment, occurrence_alignment))
+
+            statement = (
+                select(
+                    KnowledgeSnapshotAnalysisRecord,
+                    KnowledgeNodeRecord,
+                    ItemRevisionRecord,
+                    ItemRecord,
+                    ItemComponentRecord,
+                )
+                .join(
+                    ItemRevisionRecord,
+                    ItemRevisionRecord.item_revision_id
+                    == KnowledgeSnapshotAnalysisRecord.source_revision_id,
+                )
+                .join(ItemRecord, ItemRecord.item_id == ItemRevisionRecord.item_id)
+                .join(
+                    KnowledgeNodeRecord,
+                    and_(
+                        KnowledgeNodeRecord.graph_snapshot_revision_id == snapshot_id,
+                        KnowledgeNodeRecord.node_type == "ITEM_REVISION",
+                        KnowledgeNodeRecord.stable_key
+                        == literal("item-revision:") + ItemRevisionRecord.item_revision_id,
+                    ),
+                )
+                .outerjoin(
+                    ItemComponentRecord,
+                    and_(
+                        ItemComponentRecord.item_revision_id == ItemRevisionRecord.item_revision_id,
+                        ItemComponentRecord.component_type == "ITEM_CONTENT",
+                        ItemComponentRecord.ordinal == 0,
+                    ),
+                )
+            )
+            rows = tuple(
+                session.execute(
+                    statement.where(*conditions)
+                    .order_by(
+                        ItemRevisionRecord.created_at.desc(),
+                        ItemRevisionRecord.item_revision_id,
+                        KnowledgeSnapshotAnalysisRecord.analysis_run_id,
+                    )
+                    .offset(offset)
+                    .limit(limit + 1)
+                ).all()
+            )
+            page_rows = rows[:limit]
+            run_ids = {analysis.analysis_run_id for analysis, *_rest in page_rows}
+            node_ids = {node.node_id for _analysis, node, *_rest in page_rows}
+            source_pointer_keys = {
+                (analysis.analysis_run_id, node.node_id, analysis.source_revision_id)
+                for analysis, node, *_rest in page_rows
+            }
+            source_classes_by_run: dict[str, set[str]] = {}
+            if run_ids and node_ids:
+                for run_id, node_id, source_revision_id, observed_source_class in session.execute(
+                    select(
+                        KnowledgeNodeSourcePointerRecord.analysis_run_id,
+                        KnowledgeNodeSourcePointerRecord.node_id,
+                        KnowledgeNodeSourcePointerRecord.source_revision_id,
+                        KnowledgeNodeSourcePointerRecord.source_class,
+                    )
+                    .where(
+                        KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id == snapshot_id,
+                        KnowledgeNodeSourcePointerRecord.analysis_run_id.in_(run_ids),
+                        KnowledgeNodeSourcePointerRecord.node_id.in_(node_ids),
+                    )
+                    .distinct()
+                ):
+                    if (run_id, node_id, source_revision_id) not in source_pointer_keys:
+                        continue
+                    source_classes_by_run.setdefault(run_id, set()).add(observed_source_class)
+
+            occurrences_by_run = {
+                row.analysis_run_id: row
+                for row in session.scalars(
+                    select(AssessmentItemOccurrenceReferenceRecord).where(
+                        AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id
+                        == snapshot_id,
+                        AssessmentItemOccurrenceReferenceRecord.analysis_run_id.in_(run_ids),
+                    )
+                )
+            }
+            placement_ids = {row.placement_node_id for row in occurrences_by_run.values()}
+            from_node_ids = node_ids | placement_ids
+            unit_ids_by_node: dict[str, set[str]] = {}
+            if from_node_ids:
+                for from_node_id, unit in session.execute(
+                    select(KnowledgeEdgeRecord.from_node_id, CurriculumUnitRecord)
+                    .join(
+                        CurriculumUnitRecord,
+                        and_(
+                            CurriculumUnitRecord.graph_snapshot_revision_id
+                            == KnowledgeEdgeRecord.graph_snapshot_revision_id,
+                            CurriculumUnitRecord.node_id == KnowledgeEdgeRecord.to_node_id,
+                        ),
+                    )
+                    .where(
+                        KnowledgeEdgeRecord.graph_snapshot_revision_id == snapshot_id,
+                        KnowledgeEdgeRecord.from_node_id.in_(from_node_ids),
+                        KnowledgeEdgeRecord.edge_type == "ALIGNS_WITH_CURRICULUM",
+                    )
+                ):
+                    expected = expected_by_id.get(unit.curriculum_unit_id)
+                    if (
+                        expected is None
+                        or unit.framework_revision_id != expected.framework_revision_id
+                        or unit.parent_unit_id != expected.parent_unit_id
+                        or unit.unit_level != expected.unit_level
+                        or unit.ordinal != expected.ordinal
+                    ):
+                        raise ApiError(
+                            500,
+                            "PRODUCTION_ITEM_CURRICULUM_POINTER_INVALID",
+                            "Production Item curriculum pointer invalid",
+                            "A production Item points outside the reviewed curriculum outline.",
+                        )
+                    unit_ids_by_node.setdefault(from_node_id, set()).add(unit.curriculum_unit_id)
+
+            values: list[ProductionItemCandidateView] = []
+            for analysis, node, revision, item, component in page_rows:
+                classes = source_classes_by_run.get(analysis.analysis_run_id, set())
+                if len(classes) != 1 or not classes.issubset({"APPROVED_ITEM", "PAST_EXAM"}):
+                    raise ApiError(
+                        500,
+                        "PRODUCTION_ITEM_SOURCE_POINTER_INVALID",
+                        "Production Item source pointer invalid",
+                        "A production Item does not have one coherent Graph source class.",
+                    )
+                observed_source_class = next(iter(classes))
+                occurrence = occurrences_by_run.get(analysis.analysis_run_id)
+                if (observed_source_class == "PAST_EXAM") != (occurrence is not None):
+                    raise ApiError(
+                        500,
+                        "PRODUCTION_ITEM_SOURCE_CONTEXT_INVALID",
+                        "Production Item source context invalid",
+                        "A production Item source differs from its typed examination context.",
+                    )
+                if revision.item_id != item.item_id:
+                    raise ApiError(
+                        500,
+                        "PRODUCTION_ITEM_POINTER_INVALID",
+                        "Production Item pointer invalid",
+                        "A Graph Item pointer does not resolve to its logical Item.",
+                    )
+                direct_units = unit_ids_by_node.get(node.node_id, set())
+                occurrence_units = (
+                    unit_ids_by_node.get(occurrence.placement_node_id, set())
+                    if occurrence is not None
+                    else set()
+                )
+                if direct_units and occurrence_units and direct_units != occurrence_units:
+                    raise ApiError(
+                        500,
+                        "PRODUCTION_ITEM_CURRICULUM_POINTER_INVALID",
+                        "Production Item curriculum pointer invalid",
+                        "Canonical Item and examination placement curriculum pointers differ.",
+                    )
+                unit_ids = direct_units or occurrence_units
+                if not unit_ids:
+                    raise ApiError(
+                        500,
+                        "PRODUCTION_ITEM_CURRICULUM_POINTER_INVALID",
+                        "Production Item curriculum pointer invalid",
+                        "A production Item has no reviewed curriculum unit.",
+                    )
+                linked_units = tuple(
+                    ItemBankCurriculumUnitView(
+                        curriculum_unit_id=expected_by_id[unit_id].curriculum_unit_id,
+                        unit_key=expected_by_id[unit_id].unit_key,
+                        unit_code=expected_by_id[unit_id].unit_code,
+                        label=expected_by_id[unit_id].label,
+                        unit_level=expected_by_id[unit_id].unit_level,
+                        parent_unit_id=expected_by_id[unit_id].parent_unit_id,
+                    )
+                    for unit_id in sorted(
+                        unit_ids, key=lambda value: expected_by_id[value].unit_key
+                    )
+                )
+
+                component_view: ProductionItemContentComponentView | None = None
+                observed_profile: Literal[
+                    "LEGACY_ITEM_CONTENT_V1", "CONTENT_TEAM_ITEM_CONTENT_V2", "UNSUPPORTED"
+                ] = "UNSUPPORTED"
+                if component is not None:
+                    if (
+                        component.media_type == "application/json"
+                        and component.schema_ref in _LEGACY_ITEM_CONTENT_SCHEMA_REFS
+                    ):
+                        observed_profile = "LEGACY_ITEM_CONTENT_V1"
+                    elif (
+                        component.media_type == "application/json"
+                        and component.schema_ref in _CONTENT_TEAM_ITEM_CONTENT_SCHEMA_REFS
+                    ):
+                        observed_profile = "CONTENT_TEAM_ITEM_CONTENT_V2"
+                    metadata = component.metadata_json
+                    markdown_member = metadata.get("editorial_markdown_member")
+                    markdown_sha256 = metadata.get("editorial_markdown_sha256")
+                    if not (
+                        markdown_member == "content-team-item.md"
+                        and isinstance(markdown_sha256, str)
+                        and _SHA256_RE.fullmatch(markdown_sha256)
+                    ):
+                        markdown_member = None
+                        markdown_sha256 = None
+                    component_view = ProductionItemContentComponentView(
+                        item_component_id=component.item_component_id,
+                        artifact_id=component.artifact_id,
+                        artifact_revision_id=component.artifact_revision_id,
+                        sha256=component.sha256,
+                        schema_ref=component.schema_ref,
+                        media_type=component.media_type,
+                        logical_name=component.logical_name,
+                        editorial_markdown_member=markdown_member,
+                        editorial_markdown_sha256=markdown_sha256,
+                    )
+
+                reasons: list[ProductionIneligibilityReason] = []
+                if item.lifecycle_state != "ACTIVE":
+                    reasons.append("ITEM_NOT_ACTIVE")
+                if revision.revision_state not in {"APPROVED", "SUPERSEDED"}:
+                    reasons.append("ITEM_REVISION_NOT_ELIGIBLE")
+                if component_view is None:
+                    reasons.append("ITEM_CONTENT_COMPONENT_MISSING")
+                elif observed_profile == "LEGACY_ITEM_CONTENT_V1":
+                    reasons.append("CONTENT_TEAM_ITEM_V2_REQUIRED")
+                elif observed_profile == "CONTENT_TEAM_ITEM_CONTENT_V2":
+                    if component_view.editorial_markdown_member is None:
+                        reasons.append("CONTENT_TEAM_EDITORIAL_MARKDOWN_POINTER_REQUIRED")
+                else:
+                    reasons.append("ITEM_CONTENT_SCHEMA_UNSUPPORTED")
+                ordered_reasons = tuple(sorted(reasons))
+                is_eligible = not ordered_reasons
+                past_exam_context = (
+                    ProductionPastExamContextView(
+                        graph_placement_node_id=occurrence.placement_node_id,
+                        assessment_occurrence_id=occurrence.assessment_occurrence_id,
+                        assessment_occurrence_revision_id=(
+                            occurrence.assessment_occurrence_revision_id
+                        ),
+                        assessment_occurrence_revision_sha256=(
+                            occurrence.assessment_occurrence_revision_sha256
+                        ),
+                        occurrence_display_label=occurrence.occurrence_display_label,
+                        administration_year=occurrence.administration_year,
+                        administration_month=occurrence.administration_month,
+                        target_school_level=cast(
+                            Literal["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"],
+                            occurrence.target_school_level,
+                        ),
+                        target_grade=occurrence.target_grade,
+                        subject_key=occurrence.subject_key,
+                        item_number=occurrence.item_number,
+                        placement_sha256=occurrence.placement_sha256,
+                    )
+                    if occurrence is not None
+                    else None
+                )
+                display_label = (
+                    f"{occurrence.occurrence_display_label} {occurrence.item_number}번"
+                    if occurrence is not None
+                    else item.human_reference_code or revision.item_revision_id
+                )
+                values.append(
+                    ProductionItemCandidateView(
+                        graph_snapshot_revision_id=snapshot_id,
+                        snapshot_sha256=snapshot.snapshot_sha256,
+                        analysis_run_id=analysis.analysis_run_id,
+                        graph_item_node_id=node.node_id,
+                        source_class=cast(
+                            Literal["APPROVED_ITEM", "PAST_EXAM"], observed_source_class
+                        ),
+                        source_display_label=display_label,
+                        past_exam_context=past_exam_context,
+                        item_id=item.item_id,
+                        item_revision_id=revision.item_revision_id,
+                        item_revision_state=cast(Any, revision.revision_state),
+                        item_lifecycle_state=cast(Any, item.lifecycle_state),
+                        item_current_revision=item.current_revision_id == revision.item_revision_id,
+                        item_type_key=revision.item_type_key,
+                        difficulty_band=revision.difficulty_band,
+                        item_manifest_sha256=revision.manifest_sha256,
+                        curriculum_units=linked_units,
+                        content_profile=observed_profile,
+                        content_component=component_view,
+                        mock_exam_assembly_eligible=is_eligible,
+                        hwpx_exam_eligible=is_eligible,
+                        ineligibility_reasons=ordered_reasons,
+                    )
+                )
+            has_more = len(rows) > limit
+            next_cursor = (
+                self.cursors.encode_ordinal(
+                    "production-item-candidate", aggregate, offset + len(values)
+                )
+                if has_more
+                else None
+            )
+            return PageResult(tuple(values), next_cursor, has_more)
+
     @staticmethod
     def _current_assessment_snapshot_id(session: Session) -> str | None:
         corpus = session.scalar(
@@ -863,6 +1289,72 @@ class QueryAdapter:
         ):
             return None
         return snapshot.graph_snapshot_revision_id
+
+    @staticmethod
+    def _curriculum_descendant_node_ids(
+        session: Session, snapshot_id: str, curriculum_unit_key: str
+    ) -> tuple[str, ...] | None:
+        expected_units = integrated_science_curriculum_units()
+        expected_by_key = {unit.unit_key: unit for unit in expected_units}
+        expected_by_id = {unit.curriculum_unit_id: unit for unit in expected_units}
+        expected_unit = expected_by_key.get(curriculum_unit_key)
+        if expected_unit is None:
+            return None
+        observed_unit = session.get(
+            CurriculumUnitRecord,
+            (snapshot_id, expected_unit.curriculum_unit_id),
+        )
+        observed_node = (
+            session.get(KnowledgeNodeRecord, (snapshot_id, observed_unit.node_id))
+            if observed_unit is not None
+            else None
+        )
+        if (
+            observed_unit is None
+            or observed_node is None
+            or observed_unit.framework_revision_id != expected_unit.framework_revision_id
+            or observed_unit.parent_unit_id != expected_unit.parent_unit_id
+            or observed_unit.unit_level != expected_unit.unit_level
+            or observed_unit.ordinal != expected_unit.ordinal
+            or observed_node.stable_key != expected_unit.node_stable_key
+        ):
+            return None
+        descendant_ids = tuple(
+            session.scalars(
+                select(CurriculumUnitClosureRecord.descendant_unit_id)
+                .where(
+                    CurriculumUnitClosureRecord.graph_snapshot_revision_id == snapshot_id,
+                    CurriculumUnitClosureRecord.framework_revision_id
+                    == expected_unit.framework_revision_id,
+                    CurriculumUnitClosureRecord.ancestor_unit_id
+                    == expected_unit.curriculum_unit_id,
+                )
+                .order_by(CurriculumUnitClosureRecord.descendant_unit_id)
+            )
+        )
+        expected_descendant_ids: set[str] = set()
+        for candidate in expected_units:
+            current = candidate
+            while True:
+                if current.curriculum_unit_id == expected_unit.curriculum_unit_id:
+                    expected_descendant_ids.add(candidate.curriculum_unit_id)
+                    break
+                if current.parent_unit_id is None:
+                    break
+                current = expected_by_id[current.parent_unit_id]
+        if set(descendant_ids) != expected_descendant_ids:
+            return None
+        descendant_node_ids = tuple(
+            session.scalars(
+                select(CurriculumUnitRecord.node_id).where(
+                    CurriculumUnitRecord.graph_snapshot_revision_id == snapshot_id,
+                    CurriculumUnitRecord.curriculum_unit_id.in_(descendant_ids),
+                )
+            )
+        )
+        if len(descendant_node_ids) != len(descendant_ids):
+            return None
+        return descendant_node_ids
 
     def _assessment_item_page(
         self,

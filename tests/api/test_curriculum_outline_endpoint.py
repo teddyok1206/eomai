@@ -10,7 +10,7 @@ from eom_api.routers.curriculum import (
     integrated_science_editorial_outline,
     integrated_science_graph_capability,
 )
-from eom_api.routers.item_bank import item_bank_entries
+from eom_api.routers.item_bank import item_bank_entries, production_item_candidates
 from eom_api_contracts import (
     AssessmentItemOccurrenceViewV2,
     CurriculumGraphCapabilityView,
@@ -31,6 +31,7 @@ CAPABILITY_PATH = "/api/v1/curriculum/integrated-science-graph-capability"
 EXAM_ITEMS_PATH = "/api/v1/curriculum/assessment-occurrences/items"
 UNIT_ITEMS_PATH = "/api/v1/curriculum/integrated-science-units/{curriculum_unit_id}/past-exam-items"
 ITEM_BANK_PATH = "/api/v1/item-bank/entries"
+PRODUCTION_CANDIDATES_PATH = "/api/v1/item-bank/production-candidates"
 
 
 def test_curriculum_outline_endpoint_is_authenticated_and_author_permissioned() -> None:
@@ -52,6 +53,9 @@ def test_curriculum_outline_endpoint_is_authenticated_and_author_permissioned() 
         item_bank_operation = app.openapi()["paths"][ITEM_BANK_PATH]["get"]
         assert item_bank_operation["operationId"] == "item_bank_entry_list"
         assert item_bank_operation["x-eom-permission"] == "item:read"
+        production_operation = app.openapi()["paths"][PRODUCTION_CANDIDATES_PATH]["get"]
+        assert production_operation["operationId"] == "production_item_candidate_list"
+        assert production_operation["x-eom-permission"] == "item:read"
         with TestClient(app, base_url="http://localhost") as client:
             response = client.get(PATH)
         assert response.status_code == 401
@@ -267,5 +271,45 @@ def test_item_bank_route_forwards_optional_graph_and_exam_filters() -> None:
         "item_type_key": None,
         "difficulty_band": None,
         "limit": 50,
+        "cursor": None,
+    }
+
+
+def test_production_candidate_route_forwards_server_owned_capability_filters() -> None:
+    class Queries:
+        kwargs: dict[str, object] | None = None
+
+        def production_item_candidates(self, **kwargs: object) -> SimpleNamespace:
+            self.kwargs = kwargs
+            return SimpleNamespace(data=(), next_cursor=None, has_more=False)
+
+    queries = Queries()
+    request = cast(
+        Request,
+        SimpleNamespace(
+            state=SimpleNamespace(request_context=SimpleNamespace(request_id="req_candidates")),
+            app=SimpleNamespace(state=SimpleNamespace(services=SimpleNamespace(queries=queries))),
+        ),
+    )
+    response = production_item_candidates(
+        request,
+        curriculum_unit_key="eom.is.middle.3-3",
+        source_class="APPROVED_ITEM",
+        content_profile="CONTENT_TEAM_ITEM_CONTENT_V2",
+        eligible=True,
+        item_type_key="multiple-choice",
+        difficulty_band="MEDIUM",
+        limit=25,
+        cursor=None,
+    )
+    assert response.data == ()
+    assert queries.kwargs == {
+        "curriculum_unit_key": "eom.is.middle.3-3",
+        "source_class": "APPROVED_ITEM",
+        "content_profile": "CONTENT_TEAM_ITEM_CONTENT_V2",
+        "eligible": True,
+        "item_type_key": "multiple-choice",
+        "difficulty_band": "MEDIUM",
+        "limit": 25,
         "cursor": None,
     }
