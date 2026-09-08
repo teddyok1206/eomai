@@ -52,8 +52,10 @@ foreign keys; no list scan, cache, queue, or binary duplication is introduced.
 Admission is read-only and deterministic. Existing instances are unaffected because execution loads
 their pinned definition by ID rather than asking the admission policy. New imports store
 `active=false` for non-admitted identities; re-import of an existing definition never mutates the
-immutable snapshot. Re-enabling an old route requires a reviewed code-policy change, not an ad-hoc
-DB edit.
+immutable snapshot. The audit reports an invalid protocol as nullable diagnostic data only when the
+stored identity is both inactive and outside the admission table, so malformed immutable history
+does not hide the effective policy. An active or admitted definition with the same defect still
+fails closed. Re-enabling an old route requires a reviewed code-policy change, not an ad-hoc DB edit.
 
 ## Dependency direction and adapter ownership
 

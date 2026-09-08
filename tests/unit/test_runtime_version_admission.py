@@ -22,6 +22,7 @@ from eom_workflow_runner.models import WorkflowDefinitionRecord
 from eom_workflow_runner.repository import (
     admitted_workflow_definition,
     import_workflow_definition,
+    workflow_definition_admission_statuses,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -183,6 +184,82 @@ def test_admission_lookup_rejects_a_stored_role_protocol_mismatch() -> None:
             definition_key=record.definition_key,
             definition_version=record.definition_version,
         )
+
+
+@pytest.mark.parametrize(
+    ("historical_steps", "expected_error"),
+    [
+        ([], "stored definition has no role protocol version"),
+        (
+            [
+                {"type": "agent", "result_schema": "authoring-result@8.0"},
+                {"type": "agent", "result_schema": "authoring-result@9.0"},
+            ],
+            "stored definition has inconsistent role protocol versions",
+        ),
+    ],
+    ids=["missing", "inconsistent"],
+)
+def test_admission_audit_reports_invalid_inactive_unadmitted_history(
+    historical_steps: list[dict[str, str]],
+    expected_error: str,
+) -> None:
+    current = compile_definition(
+        ROOT / "config/workflows/generic-item-development.v1.9.yaml",
+        ROLES,
+    )
+    historical_record = WorkflowDefinitionRecord(
+        definition_id="wfdef_d9970000000000000000000000000000",
+        definition_key="test-residue",
+        definition_version="0.0.0",
+        schema_version="1.0",
+        canonical_definition={"steps": historical_steps},
+        definition_hash="sha256:" + "0" * 64,
+        active=False,
+        source_path="test-residue.yaml",
+    )
+    current_record = WorkflowDefinitionRecord(
+        definition_id="wfdef_19000000000000000000000000000000",
+        definition_key=current.definition.definition_key,
+        definition_version=current.definition.definition_version,
+        schema_version=current.definition.schema_version,
+        canonical_definition=current.as_dict(),
+        definition_hash=current.sha256,
+        active=True,
+        source_path=current.source_path,
+    )
+    session = Mock()
+    session.scalars.return_value = (historical_record, current_record)
+
+    historical, admitted = workflow_definition_admission_statuses(session)
+
+    assert historical.definition_id == historical_record.definition_id
+    assert historical.role_protocol_version is None
+    assert historical.role_protocol_error == expected_error
+    assert not historical.admitted
+    assert not historical.accepts_new_work
+    assert admitted.role_protocol_version == "workflow-role/1.19.0"
+    assert admitted.role_protocol_error is None
+    assert admitted.admitted
+    assert admitted.accepts_new_work
+
+
+def test_admission_audit_fails_closed_for_invalid_active_admitted_definition() -> None:
+    record = WorkflowDefinitionRecord(
+        definition_id="wfdef_19000000000000000000000000000000",
+        definition_key="generic-item-development",
+        definition_version="1.9.0",
+        schema_version="1.0",
+        canonical_definition={"steps": []},
+        definition_hash="sha256:" + "0" * 64,
+        active=True,
+        source_path="invalid-current.yaml",
+    )
+    session = Mock()
+    session.scalars.return_value = (record,)
+
+    with pytest.raises(WorkflowError, match="no role protocol"):
+        workflow_definition_admission_statuses(session)
 
 
 def test_reimport_does_not_mutate_an_immutable_historical_snapshot() -> None:

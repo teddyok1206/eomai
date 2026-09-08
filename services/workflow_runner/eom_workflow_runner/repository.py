@@ -65,7 +65,8 @@ class WorkflowDefinitionAdmissionStatus:
     definition_id: str
     definition_key: str
     definition_version: str
-    role_protocol_version: str
+    role_protocol_version: str | None
+    role_protocol_error: str | None
     active: bool
     admitted: bool
 
@@ -164,6 +165,11 @@ def _stored_role_protocol(record: WorkflowDefinitionRecord) -> str:
         and step.get("type") == "agent"
         and isinstance(step.get("result_schema"), str)
     }
+    if not role_protocols:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
+            "stored definition has no role protocol version",
+        )
     if len(role_protocols) != 1:
         raise WorkflowError(
             WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
@@ -207,17 +213,30 @@ def _workflow_definition_admission_statuses(
 ) -> tuple[WorkflowDefinitionAdmissionStatus, ...]:
     values: list[WorkflowDefinitionAdmissionStatus] = []
     for record in records:
+        admitted = workflow_definition_is_admitted(
+            record.definition_key,
+            record.definition_version,
+        )
+        try:
+            role_protocol_version = _stored_role_protocol(record)
+            role_protocol_error = None
+        except WorkflowError as exc:
+            # Immutable historical residue can predate the single-protocol invariant. It is still
+            # audit history, but only an inactive identity outside the current policy may be
+            # represented as invalid. Every active or admitted definition retains the strict gate.
+            if record.active or admitted:
+                raise
+            role_protocol_version = None
+            role_protocol_error = str(exc)
         values.append(
             WorkflowDefinitionAdmissionStatus(
                 definition_id=record.definition_id,
                 definition_key=record.definition_key,
                 definition_version=record.definition_version,
-                role_protocol_version=_stored_role_protocol(record),
+                role_protocol_version=role_protocol_version,
+                role_protocol_error=role_protocol_error,
                 active=record.active,
-                admitted=workflow_definition_is_admitted(
-                    record.definition_key,
-                    record.definition_version,
-                ),
+                admitted=admitted,
             )
         )
     return tuple(values)

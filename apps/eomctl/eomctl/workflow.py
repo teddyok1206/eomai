@@ -111,6 +111,7 @@ def definition_admission() -> None:
             "definition_key": status.definition_key,
             "definition_version": status.definition_version,
             "role_protocol_version": status.role_protocol_version,
+            "role_protocol_error": status.role_protocol_error,
             "stored_active": status.active,
             "admitted": status.admitted,
             "accepts_new_work": status.accepts_new_work,
