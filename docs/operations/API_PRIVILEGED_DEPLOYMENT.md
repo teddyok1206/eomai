@@ -32,7 +32,10 @@ drop-in and proves the exact loaded path, SHA-256, metadata, `RefuseManualStart=
 skips dependency activation before `ExecStart`, including across reboot. Hold acquisition disables
 the stopped unit with `--no-reload`, writes the barrier, re-enables with `--no-reload` only after the
 barrier is durable on disk, then reloads once and proves the enabled barrier. Hold release disables
-without reload before removing the barrier.
+without reload before removing the barrier. That on-disk enablement change is observed before the
+move as `NeedDaemonReload=yes` with the cached hold still loaded; an interrupted release resumes only
+from that exact target-present state (or the documented reboot/backup states). Re-running hold
+acquisition from it restores the enabled, synchronized hold before any later admission step.
 
 Commit `6691567` may have left `/run/systemd/system/eom-workflow-runner.service -> /dev/null`. That
 lower-precedence mask does not hold a complete unit installed under `/etc`. The installer removes it

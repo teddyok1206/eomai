@@ -74,8 +74,55 @@ def _run(function: str, *args: str | Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _run_release_transition_snapshot(
+    tmp_path: Path,
+    output: str,
+    *,
+    disabled_on_disk: bool,
+) -> subprocess.CompletedProcess[str]:
+    fake = tmp_path / "transition-systemctl"
+    snapshot = tmp_path / "transition-systemctl.snapshot"
+    snapshot.write_text(output, encoding="utf-8")
+    fake.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        'case "$1" in\n'
+        '  show) /usr/bin/cat -- "${0}.snapshot" ;;\n'
+        + (
+            "  is-enabled) printf '%s\\n' disabled; exit 1 ;;\n"
+            if disabled_on_disk
+            else "  is-enabled) printf '%s\\n' enabled; exit 0 ;;\n"
+        )
+        + "  *) exit 91 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    fake.chmod(0o700)
+    harness = (
+        "set -euo pipefail\n"
+        'source "$1"\n'
+        "workflow_runner_require_hold_directory() { :; }\n"
+        "workflow_runner_require_hold_file() { :; }\n"
+        'workflow_runner_release_transition_activation_identity "$2" '
+        '"eom-workflow-runner.service"\n'
+    )
+    return subprocess.run(
+        ("/usr/bin/bash", "-c", harness, "release-transition-test", str(LIBRARY), str(fake)),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
 def _deploy_function(name: str) -> str:
     source = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+    start = source.index(f"{name}() {{")
+    end = source.index("\n}\n", start) + len("\n}\n")
+    return source[start:end]
+
+
+def _library_function(name: str) -> str:
+    source = LIBRARY.read_text(encoding="utf-8")
     start = source.index(f"{name}() {{")
     end = source.index("\n}\n", start) + len("\n}\n")
     return source[start:end]
@@ -213,6 +260,65 @@ def test_hold_helper_accepts_exact_stopped_local_unit_snapshot(tmp_path: Path) -
 
     assert result.returncode == 0
     assert result.stdout == ""
+
+
+def test_hold_acquisition_recovery_accepts_target_present_pending_reload(
+    tmp_path: Path,
+) -> None:
+    stopped = _systemctl(
+        tmp_path,
+        _snapshot(
+            DropInPaths=(
+                "/etc/systemd/system/eom-workflow-runner.service.d/zzzz-eom-deployment-hold.conf"
+            ),
+            RefuseManualStart="yes",
+            NeedDaemonReload="yes",
+            InvocationID="",
+            ActiveEnterTimestampMonotonic="0",
+        ),
+    )
+
+    result = _run(
+        "workflow_runner_stopped_activation_identity",
+        stopped,
+        "eom-workflow-runner.service",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ":0\n"
+    activation = _deploy_function("activate_workflow_runner_deployment_hold")
+    assert activation.index("workflow_runner_stopped_activation_identity") < activation.index(
+        'systemctl disable --no-reload "${WORKFLOW_RUNNER_SERVICE}"'
+    )
+
+
+@pytest.mark.parametrize(
+    ("need_daemon_reload", "disabled_on_disk", "expected_returncode"),
+    (("yes", True, 0), ("no", True, 1), ("yes", False, 1)),
+)
+def test_release_transition_requires_pending_reload_and_disabled_on_disk(
+    tmp_path: Path,
+    need_daemon_reload: str,
+    disabled_on_disk: bool,
+    expected_returncode: int,
+) -> None:
+    result = _run_release_transition_snapshot(
+        tmp_path,
+        _snapshot(
+            UnitFileState="enabled",
+            DropInPaths=(
+                "/etc/systemd/system/eom-workflow-runner.service.d/zzzz-eom-deployment-hold.conf"
+            ),
+            RefuseManualStart="yes",
+            NeedDaemonReload=need_daemon_reload,
+            InvocationID="",
+            ActiveEnterTimestampMonotonic="0",
+        ),
+        disabled_on_disk=disabled_on_disk,
+    )
+
+    assert result.returncode == expected_returncode
+    assert result.stdout == (":0\n" if expected_returncode == 0 else "")
 
 
 @pytest.mark.parametrize("unit_file_state", ("enabled", "disabled"))
@@ -1038,6 +1144,174 @@ def test_partial_unique_incoming_is_ignored_and_never_removed_or_trusted(
     ]
 
 
+@pytest.mark.parametrize(
+    ("unit_file_state", "need_daemon_reload", "expected_candidates"),
+    (
+        (
+            "enabled",
+            "yes",
+            (
+                "deployment-hold-candidate",
+                "reboot-fenced-candidate",
+                "transition-candidate",
+                "disable-no-reload",
+                "transition-candidate",
+            ),
+        ),
+        (
+            "disabled",
+            "no",
+            (
+                "deployment-hold-candidate",
+                "reboot-fenced-candidate",
+                "disable-no-reload",
+                "transition-candidate",
+                "reboot-fenced-candidate",
+            ),
+        ),
+    ),
+)
+def test_hold_release_retries_target_present_exact_state_before_move(
+    tmp_path: Path,
+    unit_file_state: str,
+    need_daemon_reload: str,
+    expected_candidates: tuple[str, ...],
+) -> None:
+    hold = tmp_path / "zzzz-eom-deployment-hold.conf"
+    backup = tmp_path / ".zzzz-eom-deployment-hold.released"
+    fragment = tmp_path / "eom-workflow-runner.service"
+    events = tmp_path / "events"
+    fake_systemctl = tmp_path / "systemctl"
+    snapshot = tmp_path / "systemctl.snapshot"
+    hold.write_bytes(HOLD_BYTES)
+    fragment.write_text("[Service]\nExecStart=/bin/true\n", encoding="ascii")
+    snapshot.write_text(
+        _snapshot(
+            UnitFileState=unit_file_state,
+            FragmentPath=str(fragment),
+            DropInPaths=str(hold),
+            RefuseManualStart="yes",
+            NeedDaemonReload=need_daemon_reload,
+            InvocationID="",
+            ActiveEnterTimestampMonotonic="0",
+        ),
+        encoding="utf-8",
+    )
+    fake_systemctl.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        'case "$1" in\n'
+        '  show) /usr/bin/cat -- "${0}.snapshot" ;;\n'
+        "  is-enabled) printf '%s\\n' disabled; exit 1 ;;\n"
+        "  *) exit 91 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    fake_systemctl.chmod(0o700)
+
+    transition = _library_function(
+        "workflow_runner_release_transition_activation_identity"
+    ).replace(
+        "workflow_runner_release_transition_activation_identity()",
+        "workflow_runner_release_transition_activation_identity_exact()",
+        1,
+    )
+    release_fenced = _library_function(
+        "workflow_runner_release_fenced_activation_identity"
+    ).replace(
+        "workflow_runner_release_fenced_activation_identity()",
+        "workflow_runner_release_fenced_activation_identity_exact()",
+        1,
+    )
+    harness = (
+        "set -euo pipefail\n"
+        'WORKFLOW_RUNNER_HOLD_TARGET="$1"\n'
+        'WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP="$2"\n'
+        'WORKFLOW_RUNNER_FRAGMENT="$3"\n'
+        'fake_systemctl="$4"\n'
+        'events="$5"\n'
+        'WORKFLOW_RUNNER_HOLD_DIRECTORY="$(dirname -- "${WORKFLOW_RUNNER_HOLD_TARGET}")"\n'
+        'WORKFLOW_RUNNER_HOLD_SOURCE="${WORKFLOW_RUNNER_HOLD_TARGET}"\n'
+        f'WORKFLOW_RUNNER_HOLD_SHA256="sha256:{HOLD_SHA256}"\n'
+        'WORKFLOW_RUNNER_INEFFECTIVE_RUNTIME_MASK="${WORKFLOW_RUNNER_HOLD_DIRECTORY}/mask"\n'
+        'WORKFLOW_RUNNER_SERVICE="eom-workflow-runner.service"\n'
+        "fail() { printf 'ERROR: %s\\n' \"$1\" >&2; exit 1; }\n"
+        "workflow_runner_require_hold_directory() { :; }\n"
+        "workflow_runner_require_hold_file() { :; }\n"
+        "workflow_runner_require_source_hold_file() { :; }\n"
+        "workflow_runner_require_no_ineffective_runtime_mask() { :; }\n"
+        "workflow_runner_require_base_unit_file() { :; }\n"
+        "workflow_runner_file_sha256() { printf '%s\\n' sha256:base; }\n"
+        "workflow_runner_journal_cursor_at_or_before() { printf '%s\\n' cursor; }\n"
+        "workflow_runner_deployment_hold_activation_identity() { "
+        "printf '%s\\n' deployment-hold-candidate >>\"${events}\"; return 1; }\n"
+        + _library_function("workflow_runner_unit_snapshot")
+        + _library_function("workflow_runner_unit_disabled_on_disk")
+        + release_fenced
+        + transition
+        + _library_function("workflow_runner_require_same_activation_identity")
+        + "\nworkflow_runner_release_fenced_activation_identity() {\n"
+        "  printf '%s\\n' reboot-fenced-candidate >>\"${events}\"\n"
+        "  workflow_runner_release_fenced_activation_identity_exact "
+        '"${fake_systemctl}" "$2"\n'
+        "}\n" + "\nworkflow_runner_release_transition_activation_identity() {\n"
+        "  printf '%s\\n' transition-candidate >>\"${events}\"\n"
+        "  workflow_runner_release_transition_activation_identity_exact "
+        '"${fake_systemctl}" "$2"\n'
+        "}\n"
+        "workflow_runner_released_activation_identity() { printf '%s\\n' :0; }\n"
+        "workflow_runner_require_release_identity_with_journal_fence() { :; }\n"
+        "sudo() {\n"
+        '  [[ "$1" == -n ]]; shift\n'
+        '  if [[ "$1" == /usr/bin/systemctl && "$2" == disable ]]; then\n'
+        '    [[ "$3" == --no-reload && "$4" == "${WORKFLOW_RUNNER_SERVICE}" ]]\n'
+        "    printf '%s\\n' disable-no-reload >>\"${events}\"\n"
+        '  elif [[ "$1" == /usr/bin/systemctl && "$2" == daemon-reload ]]; then\n'
+        "    printf '%s\\n' daemon-reload >>\"${events}\"\n"
+        '  elif [[ "$1" == /usr/bin/mv ]]; then\n'
+        "    printf '%s\\n' move-hold >>\"${events}\"\n"
+        '    command "$@"\n'
+        '  elif [[ "$1" == /usr/bin/rm ]]; then\n'
+        "    printf '%s\\n' remove-backup >>\"${events}\"\n"
+        '    command "$@"\n'
+        "  else\n"
+        "    return 91\n"
+        "  fi\n"
+        "}\n"
+        + _deploy_function("release_workflow_runner_deployment_hold")
+        + "\nrelease_workflow_runner_deployment_hold "
+        "2026-09-08T23:28:08Z 1788910088000000"
+    )
+
+    result = subprocess.run(
+        (
+            "/usr/bin/bash",
+            "-c",
+            harness,
+            "release-target-present-retry-test",
+            str(hold),
+            str(backup),
+            str(fragment),
+            str(fake_systemctl),
+            str(events),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("workflow_runner_deployment_hold=RELEASED_INACTIVE_DISABLED\n")
+    assert not hold.exists()
+    assert not backup.exists()
+    assert events.read_text(encoding="ascii").splitlines() == [
+        *expected_candidates,
+        "move-hold",
+        "daemon-reload",
+        "remove-backup",
+    ]
+
+
 def test_hold_release_is_reboot_fenced_retryable_and_checks_every_mutation() -> None:
     source = DEPLOY_SCRIPT.read_text(encoding="utf-8")
     release_start = source.index("release_workflow_runner_deployment_hold() {")
@@ -1065,6 +1339,15 @@ def test_hold_release_is_reboot_fenced_retryable_and_checks_every_mutation() -> 
     assert first_journal_fence < second_journal_fence < cleanup
     assert release.count("workflow_runner_require_release_identity_with_journal_fence") == 2
     assert "workflow_runner_cached_release_fenced_activation_identity" in release
+    transition_pre_state = release.index(
+        "workflow_runner_release_transition_activation_identity",
+        release.index("workflow_runner_release_fenced_activation_identity") + 1,
+    )
+    transition_post_disable = release.index(
+        "workflow_runner_release_transition_activation_identity",
+        transition_pre_state + 1,
+    )
+    assert transition_pre_state < disable < transition_post_disable < move
     assert "REPLAYED_RELEASED_INACTIVE_DISABLED" in release
     assert "RELEASED_INACTIVE_DISABLED" in release
     assert "could not be disabled before hold release" in release

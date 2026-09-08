@@ -378,7 +378,10 @@ workflow_runner_release_transition_activation_identity() {
   [[ "${fragment}" == "${WORKFLOW_RUNNER_FRAGMENT}" ]] || return 1
   [[ "${drop_ins}" == "${WORKFLOW_RUNNER_HOLD_TARGET}" ]] || return 1
   [[ "${refuse}" == "yes" ]] || return 1
-  [[ "${reload}" == "no" ]] || return 1
+  # disable --no-reload changes enablement on disk without refreshing the manager. The loaded hold
+  # and cached UnitFileState may therefore remain unchanged, but systemd must report the pending
+  # on-disk change through NeedDaemonReload=yes before the hold is moved.
+  [[ "${reload}" == "yes" ]] || return 1
   [[ -z "${job}" ]] || return 1
   printf '%s:%s\n' "${invocation_id}" "${active_enter_timestamp}"
 }

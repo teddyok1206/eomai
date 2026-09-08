@@ -19,7 +19,9 @@ The installed hold is one canonical, root-owned regular file at
 SHA-256 and verifies the loaded fragment, singleton drop-in path, file type, owner, group, mode,
 content hash, `RefuseManualStart`, `NeedDaemonReload=no`, and quiescent process state. Acquisition
 pins `InvocationID` and `ActiveEnterTimestampMonotonic` through its one reload. Release keeps that
-identity through `disable --no-reload`; after the disabled unit can legitimately be garbage-collected,
+identity through `disable --no-reload`; the exact same-boot transition is disabled on disk while the
+manager still exposes the cached hold and reports `NeedDaemonReload=yes`, and is an idempotent release
+retry state. After the disabled unit can legitimately be garbage-collected,
 it accepts only the exact old identity or systemd's empty `:0` baseline together with a clean journal
 fence derived from the immutable retirement time. An unrelated or tampered path is never overwritten
 or removed. The ineffective legacy runtime-mask symlink may be removed only after it is proven to be
@@ -103,9 +105,12 @@ not merely retain the same hash across release.
     no-follow/nonblocking regular-file reads with exact owner, mode, link count, and pre/post
     identity checks; any failure occurs before hold mutation. Release removes only the verified
     canonical file, reloads systemd, and proves the still-quiescent disabled/unheld state; a failed
-    release never starts the runner. The reviewed backup supports retry before or after reload; every
-    retry with a backup derives the same receipt-time lower bound, while a retry after completed
-    backup removal is an exact disabled-state no-op.
+    release never starts the runner. A target-present retry accepts the exact disabled-on-disk,
+    cached-hold, reload-required transition and repeats `disable --no-reload` before moving the hold.
+    Hold acquisition likewise accepts that stopped target-present state and restores the enabled,
+    synchronized hold. The reviewed backup supports retry before or after reload; every retry with a
+    backup derives the same receipt-time lower bound, while a retry after completed backup removal is
+    an exact disabled-state no-op.
 11. **Simpler alternative.** `systemctl mask --runtime` is insufficient for an `/etc`-local unit.
     `disable` does not block manual or dependency starts.  Moving/replacing the base unit would
     require backup identity and restoration logic.  The exact drop-in provides both activation

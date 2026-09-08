@@ -519,7 +519,8 @@ verify_workflow_runner_hold_release_receipt() {
 
 release_workflow_runner_deployment_hold() {
   (($# == 2)) || return 64
-  local target_present=false backup_present=false base_sha256_before base_sha256_after
+  local target_present=false backup_present=false release_pre_state="UNSET"
+  local base_sha256_before base_sha256_after
   local activation_identity_before activation_identity_after journal_cursor
   local retired_at="$1" retired_at_unix_us="$2"
   workflow_runner_require_source_hold_file \
@@ -561,11 +562,19 @@ release_workflow_runner_deployment_hold() {
         /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
     )"; then
       : # Normal release from the exact enabled hold.
+      release_pre_state="HELD"
     elif activation_identity_before="$(
       workflow_runner_release_fenced_activation_identity \
         /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
     )"; then
       : # Retry after a reboot preserved the disabled on-disk fence and loaded hold.
+      release_pre_state="RELEASE_FENCED"
+    elif activation_identity_before="$(
+      workflow_runner_release_transition_activation_identity \
+        /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+    )"; then
+      : # Same-boot retry after disable --no-reload left the loaded hold pending reload.
+      release_pre_state="TRANSITION"
     else
       fail "workflow runner deployment hold is not exact, disabled, and quiescent"
     fi
@@ -574,11 +583,19 @@ release_workflow_runner_deployment_hold() {
     # same-boot manual/dependency fence until the explicit release reload below.
     sudo -n /usr/bin/systemctl disable --no-reload "${WORKFLOW_RUNNER_SERVICE}" >/dev/null || \
       fail "workflow runner could not be disabled before hold release"
-    activation_identity_after="$(
+    if activation_identity_after="$(
       workflow_runner_release_transition_activation_identity \
         /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
-    )" || \
+    )"; then
+      : # A changed enablement link is pending manager reload under the cached hold.
+    elif [[ "${release_pre_state}" == "RELEASE_FENCED" ]] && activation_identity_after="$(
+      workflow_runner_release_fenced_activation_identity \
+        /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+    )"; then
+      : # An already-disabled reboot state remains synchronized after the idempotent disable.
+    else
       fail "workflow runner was not disabled on disk under its loaded persistent hold"
+    fi
     workflow_runner_require_same_activation_identity \
       "${activation_identity_before}" "${activation_identity_after}" || \
       fail "workflow runner was invoked while its release reboot fence was installed"
