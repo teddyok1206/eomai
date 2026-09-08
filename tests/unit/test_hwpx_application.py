@@ -4,12 +4,13 @@ import os
 import re
 import stat
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from eom_catalog_contracts import MockExamAssemblyManifestV1
+from eom_catalog_contracts import MockExamAssemblyManifestV1, MockExamAssemblyManifestV2
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
     ContentTeamHandoffMember,
@@ -30,13 +31,186 @@ from eom_hwpx_manager.application_state import (
     ApplicationBuildState,
     require_application_transition,
 )
+from eom_hwpx_manager.assembly_render_projection import project_assembly_for_render
 from eom_hwpx_manager.capability import HwpxCapabilityService
+from eom_hwpx_manager.content_team_exam_service import ContentTeamExamBuildReceipt
 from eom_hwpx_manager.content_team_service import ArtifactMemberPointer, ContentTeamHwpxService
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
-from eom_hwpx_manager.exam_application_service import ExamHwpxApplicationService
+from eom_hwpx_manager.exam_application_service import (
+    ExamHwpxApplicationService,
+    ExamRecoveryResult,
+    ExamRecoveryState,
+)
 from eom_hwpx_manager.markdown_structure import inspect_markdown_structure
 from eom_hwpx_manager.settings import HwpxSettings
-from eom_identifiers import sha256_file
+from eom_identifiers import content_sha256, sha256_file
+
+
+def _v2_manifest() -> MockExamAssemblyManifestV2:
+    planned_at = "2026-09-08T05:00:00Z"
+    usage_value: dict[str, Any] = {
+        "schema_version": "mock-exam-usage-snapshot/1.0",
+        "captured_at": planned_at,
+        "candidate_revision_count": 1,
+        "usage_record_count": 0,
+        "usage_records_sha256": content_sha256([]),
+    }
+    usage_sha256 = content_sha256(usage_value)
+    usage = usage_value | {
+        "usage_snapshot_id": "usagesnapshot_" + usage_sha256.removeprefix("sha256:")[:32],
+        "snapshot_sha256": usage_sha256,
+    }
+    placement = {
+        "slot_id": "slot-01",
+        "position": 1,
+        "display_number": "1",
+        "item_id": "item_" + "1" * 32,
+        "item_revision_id": "itemrev_" + "2" * 32,
+        "item_manifest_sha256": "sha256:" + "3" * 64,
+        "graph_item_node_id": "knode_" + "4" * 32,
+        "graph_analysis_run_id": "analysisrun_" + "5" * 32,
+        "graph_source_class": "APPROVED_ITEM",
+        "graph_occurrence_placement_node_id": None,
+        "curriculum_unit_keys": ["eom.is.middle.1-1"],
+        "large_unit_key": "eom.is.large.1",
+        "points_milli": 2000,
+        "coverage_role": "BALANCE",
+        "coverage_requirement_id": None,
+        "coverage_unit_key": None,
+        "is_inquiry": False,
+        "item_type_key": "multiple-choice",
+        "difficulty_band": "MEDIUM",
+        "material_profile": "TEXT",
+        "source_score_display": "2",
+        "content": {
+            "item_component_id": "itemcomponent_" + "6" * 32,
+            "artifact_id": "artifact_" + "7" * 32,
+            "artifact_revision_id": "rev_" + "8" * 32,
+            "member_path": "assessment-item-content.json",
+            "schema_ref": "eom.assessment.item-content/2.0",
+            "media_type": "application/json",
+            "sha256": "sha256:" + "9" * 64,
+            "editorial_markdown_member": "content-team-item.md",
+            "editorial_markdown_sha256": "sha256:" + "a" * 64,
+        },
+        "review": {
+            "item_review_record_id": "itemreview_" + "b" * 32,
+            "review_artifact_id": "artifact_" + "c" * 32,
+            "review_artifact_revision_id": "rev_" + "d" * 32,
+            "review_sha256": "sha256:" + "e" * 64,
+            "decision": "APPROVE",
+            "final_rating": "A",
+        },
+        "usage_count": 0,
+        "latest_usage_at": None,
+        "usage_fingerprint_sha256": content_sha256(
+            {"item_revision_id": "itemrev_" + "2" * 32, "records": []}
+        ),
+        "selection_reason_sha256": "sha256:" + "f" * 64,
+    }
+    validation = {
+        "item_count": 1,
+        "total_points_milli": 2000,
+        "score_distribution": {"2000": 1},
+        "required_slot_count": 0,
+        "balance_slot_count": 1,
+        "inquiry_count": 0,
+        "coverage_requirement_ids": [],
+        "major_unit_counts": {"eom.is.large.1": 1},
+    }
+    plan_value: dict[str, Any] = {
+        "schema_version": "mock-exam-assembly-plan/1.0",
+        "status": "READY",
+        "policy_revision_id": "assemblypolicyrev_" + "1" * 32,
+        "policy_sha256": "sha256:" + "2" * 64,
+        "layout_policy_revision_id": "layoutpolicyrev_" + "3" * 32,
+        "layout_policy_sha256": "sha256:" + "4" * 64,
+        "rating_policy_revision_id": "ratingpolicyrev_" + "5" * 32,
+        "rating_policy_sha256": "sha256:" + "6" * 64,
+        "graph_snapshot_revision_id": "graphrev_" + "7" * 32,
+        "graph_snapshot_sha256": "sha256:" + "8" * 64,
+        "usage_snapshot": usage,
+        "resolved_candidate_count": 1,
+        "rated_candidate_count": 1,
+        "placements": [placement],
+        "shortages": [],
+        "validation": validation,
+        "search_visited_nodes": 1,
+        "planned_at": planned_at,
+    }
+    plan_value["plan_sha256"] = content_sha256(plan_value)
+    manifest_value: dict[str, Any] = {
+        "schema_version": "mock-exam-assembly-manifest/2.0",
+        "assessment_assembly_revision_id": "assemblyrev_" + "9" * 32,
+        "assessment_assembly_id": "assembly_" + "a" * 32,
+        "assessment_form_id": "form_" + "b" * 32,
+        "assessment_form_revision_id": "formrev_" + "c" * 32,
+        "deliverable_id": "deliverable_" + "d" * 32,
+        "deliverable_revision_id": "delivrev_" + "e" * 32,
+        "form_key": "main",
+        "display_label": "본시험지",
+        "plan": plan_value,
+        "revision_state": "RELEASED",
+        "created_at": planned_at,
+        "created_by": "operator_" + "f" * 32,
+    }
+    manifest_value["manifest_sha256"] = content_sha256(manifest_value)
+    return MockExamAssemblyManifestV2.model_validate(manifest_value)
+
+
+def _v1_manifest() -> MockExamAssemblyManifestV1:
+    created_at = "2026-09-08T05:00:00Z"
+    placement = {
+        "placement_id": "placement_" + "1" * 32,
+        "position": 1,
+        "display_number": "1",
+        "item_id": "item_" + "2" * 32,
+        "item_revision_id": "itemrev_" + "3" * 32,
+        "item_manifest_sha256": "sha256:" + "4" * 64,
+        "graph_placement_node_id": "knode_" + "5" * 32,
+        "curriculum_unit_keys": ["eom.is.middle.1-1"],
+        "major_unit_key": "eom.is.large.1",
+        "points_milli": 2000,
+        "coverage_role": "BALANCE",
+        "coverage_requirement_id": None,
+        "is_inquiry": False,
+        "material_type": "TEXT",
+        "item_type_key": "multiple-choice",
+        "difficulty_band": "MEDIUM",
+        "review_annotation_sha256": "sha256:" + "6" * 64,
+    }
+    value: dict[str, Any] = {
+        "schema_version": "mock-exam-assembly-manifest/1.0",
+        "assessment_assembly_revision_id": "assemblyrev_" + "7" * 32,
+        "assessment_assembly_id": "assembly_" + "8" * 32,
+        "assessment_form_id": "form_" + "9" * 32,
+        "assessment_form_revision_id": "formrev_" + "a" * 32,
+        "deliverable_id": "deliverable_" + "b" * 32,
+        "deliverable_revision_id": "delivrev_" + "c" * 32,
+        "policy_revision_id": "assemblypolicyrev_" + "d" * 32,
+        "policy_sha256": "sha256:" + "e" * 64,
+        "outline_key": "integrated-science",
+        "outline_revision": "1",
+        "outline_sha256": "sha256:" + "f" * 64,
+        "graph_snapshot_revision_id": "graphrev_" + "1" * 32,
+        "graph_snapshot_sha256": "sha256:" + "2" * 64,
+        "placements": [placement],
+        "validation": {
+            "item_count": 1,
+            "total_points_milli": 2000,
+            "score_distribution": {"2000": 1},
+            "required_slot_count": 0,
+            "balance_slot_count": 1,
+            "inquiry_count": 0,
+            "coverage_requirement_ids": [],
+            "major_unit_counts": {"eom.is.large.1": 1},
+        },
+        "revision_state": "RELEASED",
+        "created_at": created_at,
+        "created_by": "operator_" + "3" * 32,
+    }
+    value["manifest_sha256"] = content_sha256(value)
+    return MockExamAssemblyManifestV1.model_validate(value)
 
 
 def test_capability_is_prepared_when_runtime_is_absent(tmp_path: Path) -> None:
@@ -193,6 +367,91 @@ def test_application_build_transition_table_fails_closed() -> None:
         )
 
 
+@pytest.mark.parametrize("initial", ("RUNNING", "VALIDATING"))
+def test_interrupted_assessment_build_is_terminalized_without_retry(initial: str) -> None:
+    completed_at = datetime(2026, 9, 8, tzinfo=UTC)
+    record = SimpleNamespace(
+        state=initial,
+        validation_state="PENDING",
+        failure_code=None,
+        failure_detail_sanitized=None,
+        completed_at=None,
+        resource_version=3,
+    )
+
+    ExamHwpxApplicationService._terminalize_interrupted(cast(Any, record), completed_at)
+
+    assert record.state == "FAILED"
+    assert record.validation_state == "FAIL"
+    assert record.failure_code == "HWPX_BUILD_INTERRUPTED"
+    assert record.completed_at == completed_at
+    assert record.resource_version == 4
+
+
+def test_interrupted_assessment_build_accepts_only_a_completed_immutable_receipt() -> None:
+    completed_at = datetime(2026, 9, 8, tzinfo=UTC)
+    record = SimpleNamespace(
+        build_id="hwpxbuild_" + "2" * 32,
+        state="RUNNING",
+        assessment_assembly_revision_id="assemblyrev_" + "1" * 32,
+        assembly_manifest_sha256="sha256:" + "7" * 64,
+        item_set_sha256="sha256:" + "8" * 64,
+        renderer_version="2.0.0",
+        validation_state="PENDING",
+        platform_job_id=None,
+        item_count=25,
+        section_count=None,
+        native_equation_count=None,
+        native_table_count=None,
+        visual_count=None,
+        output_artifact_id=None,
+        output_artifact_revision_id=None,
+        output_sha256=None,
+        output_filename=None,
+        completed_at=None,
+        resource_version=2,
+    )
+    receipt = ContentTeamExamBuildReceipt(
+        build_id="hwpxbuild_" + "2" * 32,
+        job_id="job_" + "3" * 32,
+        renderer_version="2.0.0",
+        assessment_assembly_revision_id="assemblyrev_" + "1" * 32,
+        assembly_manifest_sha256="sha256:" + "7" * 64,
+        item_set_sha256="sha256:" + "8" * 64,
+        artifact_id="artifact_" + "4" * 32,
+        artifact_revision_id="rev_" + "5" * 32,
+        output_sha256="sha256:" + "6" * 64,
+        item_count=25,
+        section_count=25,
+        native_equation_count=12,
+        native_table_count=8,
+        visual_count=7,
+    )
+
+    ExamHwpxApplicationService._complete_build(cast(Any, record), receipt, completed_at)
+
+    assert record.state == "SUCCEEDED"
+    assert record.validation_state == "PASS"
+    assert record.platform_job_id == receipt.job_id
+    assert record.item_count == record.section_count == 25
+    assert record.output_artifact_revision_id == receipt.artifact_revision_id
+    assert record.completed_at == completed_at
+    assert record.resource_version == 3
+
+    mismatch = SimpleNamespace(**record.__dict__)
+    mismatch.state = "RUNNING"
+    mismatch.validation_state = "PENDING"
+    mismatch.resource_version = 3
+    with pytest.raises(RuntimeError, match="admitted Item set"):
+        ExamHwpxApplicationService._complete_build(
+            cast(Any, mismatch),
+            ContentTeamExamBuildReceipt(
+                **(receipt.__dict__ | {"section_count": receipt.section_count - 1})
+            ),
+            completed_at,
+        )
+
+
 def test_secure_download_fd_rejects_hash_mismatch_and_directory(tmp_path: Path) -> None:
     output = tmp_path / "output.hwpx"
     output.write_bytes(b"HWPX_TEST_BYTES")
@@ -346,11 +605,20 @@ def test_runner_returns_sanitized_failure_without_traceback(
                 "SECRET_SOURCE_PATH",
             )
 
+    class IdleExamService:
+        def __init__(self, _engine: object, **_kwargs: object) -> None:
+            pass
+
+        @staticmethod
+        def recover_interrupted() -> ExamRecoveryResult:
+            return ExamRecoveryResult(ExamRecoveryState.NONE)
+
     monkeypatch.setattr(runner, "build_engine", FakeEngine)
     monkeypatch.setattr(runner, "_runtime_privileges_ready", lambda _engine: True)
     monkeypatch.setattr(runner, "_runtime_staging_ready", lambda _path: True)
     monkeypatch.setattr(runner, "RegistryService", lambda _engine: object())
     monkeypatch.setattr(runner, "HwpxApplicationService", FailingService)
+    monkeypatch.setattr(runner, "ExamHwpxApplicationService", IdleExamService)
 
     assert runner.run_once() == 1
     captured = capsys.readouterr()
@@ -379,6 +647,10 @@ def test_runner_processes_assessment_queue_after_item_queue_is_idle(
             pass
 
         @staticmethod
+        def recover_interrupted() -> ExamRecoveryResult:
+            return ExamRecoveryResult(ExamRecoveryState.NONE)
+
+        @staticmethod
         def process_next() -> SimpleNamespace:
             return SimpleNamespace(build_id="hwpxbuild_" + "1" * 32, state="SUCCEEDED")
 
@@ -393,23 +665,54 @@ def test_runner_processes_assessment_queue_after_item_queue_is_idle(
     assert "hwpxbuild_" + "1" * 32 + ":SUCCEEDED" in capsys.readouterr().out
 
 
+def test_runner_preference_alternates_queue_precedence(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[str] = []
+
+    class FakeEngine:
+        def dispose(self) -> None:
+            pass
+
+    class ItemService:
+        def __init__(self, _engine: object, **_kwargs: object) -> None:
+            pass
+
+        @staticmethod
+        def process_next() -> SimpleNamespace:
+            calls.append("item")
+            return SimpleNamespace(build_id="hwpxbuild_" + "1" * 32, state="SUCCEEDED")
+
+    class AssessmentService:
+        def __init__(self, _engine: object, **_kwargs: object) -> None:
+            pass
+
+        @staticmethod
+        def recover_interrupted() -> ExamRecoveryResult:
+            return ExamRecoveryResult(ExamRecoveryState.NONE)
+
+        @staticmethod
+        def process_next() -> SimpleNamespace:
+            calls.append("assessment")
+            return SimpleNamespace(build_id="hwpxbuild_" + "2" * 32, state="SUCCEEDED")
+
+    monkeypatch.setattr(runner, "build_engine", FakeEngine)
+    monkeypatch.setattr(runner, "_runtime_privileges_ready", lambda _engine: True)
+    monkeypatch.setattr(runner, "_runtime_staging_ready", lambda _path: True)
+    monkeypatch.setattr(runner, "RegistryService", lambda _engine: object())
+    monkeypatch.setattr(runner, "HwpxApplicationService", ItemService)
+    monkeypatch.setattr(runner, "ExamHwpxApplicationService", AssessmentService)
+
+    assert runner.run_once(prefer_exam=False) == 0
+    assert calls == ["item"]
+    calls.clear()
+    assert runner.run_once(prefer_exam=True) == 0
+    assert calls == ["assessment"]
+    assert "queue=assessment" in capsys.readouterr().out
+
+
 def test_assessment_build_request_identity_pins_content_team_handoff_revision() -> None:
-    placement = SimpleNamespace(
-        position=1,
-        placement_id="placement_" + "1" * 32,
-        item_id="item_" + "2" * 32,
-        item_revision_id="itemrev_" + "3" * 32,
-        item_manifest_sha256="sha256:" + "4" * 64,
-    )
-    manifest = SimpleNamespace(
-        assessment_assembly_revision_id="assemblyrev_" + "5" * 32,
-        manifest_sha256="sha256:" + "6" * 64,
-        policy_revision_id="assemblypolicyrev_" + "7" * 32,
-        policy_sha256="sha256:" + "8" * 64,
-        graph_snapshot_revision_id="graphrev_" + "9" * 32,
-        graph_snapshot_sha256="sha256:" + "a" * 64,
-        placements=(placement,),
-    )
+    manifest = _v2_manifest()
     handoff = ContentTeamHandoffSnapshot(
         artifact_id="artifact_" + "b" * 32,
         artifact_revision_id="rev_" + "c" * 32,
@@ -419,14 +722,123 @@ def test_assessment_build_request_identity_pins_content_team_handoff_revision() 
         ),
     )
 
-    typed_manifest = cast(MockExamAssemblyManifestV1, manifest)
-    admitted = ExamHwpxApplicationService._request_sha256(typed_manifest, handoff)
+    admitted = ExamHwpxApplicationService._request_sha256(manifest, handoff)
     changed = ExamHwpxApplicationService._request_sha256(
-        typed_manifest,
+        manifest,
         handoff.model_copy(update={"artifact_revision_id": "rev_" + "d" * 32}),
     )
 
     assert admitted != changed
+    assert admitted == content_sha256(
+        {
+            **project_assembly_for_render(manifest).request_identity(),
+            "renderer": "content-team-exam",
+            "renderer_version": "2.0.0",
+            "handoff": handoff.model_dump(mode="json"),
+        }
+    )
+
+
+def test_v1_assessment_request_hash_remains_backward_compatible() -> None:
+    manifest = _v1_manifest()
+    handoff = ContentTeamHandoffSnapshot(
+        artifact_id="artifact_" + "b" * 32,
+        artifact_revision_id="rev_" + "c" * 32,
+        members=tuple(
+            ContentTeamHandoffMember(purpose=purpose, sha256=sha256, size=size)
+            for purpose, sha256, size in CONTENT_TEAM_HANDOFF_MEMBERS
+        ),
+    )
+    projection = project_assembly_for_render(manifest)
+    identity = projection.request_identity()
+
+    assert "assembly_schema_version" not in identity
+    assert "plan_sha256" not in identity
+    assert ExamHwpxApplicationService._request_sha256(manifest, handoff) == content_sha256(
+        {
+            "assessment_assembly_revision_id": manifest.assessment_assembly_revision_id,
+            "assembly_manifest_sha256": manifest.manifest_sha256,
+            "policy_revision_id": manifest.policy_revision_id,
+            "policy_sha256": manifest.policy_sha256,
+            "graph_snapshot_revision_id": manifest.graph_snapshot_revision_id,
+            "graph_snapshot_sha256": manifest.graph_snapshot_sha256,
+            "item_set_sha256": projection.item_set_sha256(),
+            "renderer": "content-team-exam",
+            "renderer_version": "1.0.0",
+            "handoff": handoff.model_dump(mode="json"),
+        }
+    )
+
+
+def test_v2_assembly_render_projection_preserves_plan_and_content_pointers() -> None:
+    manifest = _v2_manifest()
+    projection = project_assembly_for_render(manifest)
+    placement = projection.placements[0]
+    expected_placement_id = (
+        "placement_"
+        + content_sha256(
+            {
+                "assessment_assembly_revision_id": manifest.assessment_assembly_revision_id,
+                "slot_id": "slot-01",
+                "item_revision_id": "itemrev_" + "2" * 32,
+            }
+        ).removeprefix("sha256:")[:32]
+    )
+
+    assert projection.schema_version == "mock-exam-assembly-manifest/2.0"
+    assert projection.plan_sha256 == manifest.plan.plan_sha256
+    assert projection.policy_revision_id == manifest.plan.policy_revision_id
+    assert placement.placement_id == expected_placement_id
+    assert placement.display_number == "1"
+    assert placement.points_milli == 2000
+    assert placement.content == manifest.plan.placements[0].content
+    assert projection.request_identity()["item_set_sha256"] == projection.item_set_sha256()
+
+
+def test_v2_assembly_item_resolution_uses_and_cross_checks_direct_content_pointer() -> None:
+    manifest = _v2_manifest()
+    planned = manifest.plan.placements[0]
+    component = {
+        "item_component_id": planned.content.item_component_id,
+        "component_type": "ITEM_CONTENT",
+        "ordinal": 0,
+        "logical_name": planned.content.member_path,
+        "artifact_id": planned.content.artifact_id,
+        "artifact_revision_id": planned.content.artifact_revision_id,
+        "sha256": planned.content.sha256,
+        "schema_ref": planned.content.schema_ref,
+        "media_type": planned.content.media_type,
+        "required": True,
+        "metadata": {
+            "editorial_markdown_member": planned.content.editorial_markdown_member,
+            "editorial_markdown_sha256": planned.content.editorial_markdown_sha256,
+        },
+    }
+    revision = {
+        "item_id": planned.item_id,
+        "item_revision_id": planned.item_revision_id,
+        "manifest_sha256": planned.item_manifest_sha256,
+        "revision_state": "APPROVED",
+        "components": [component],
+    }
+
+    class Registry:
+        @staticmethod
+        def inspect_revisions(_revision_ids: tuple[str, ...]) -> tuple[dict[str, Any], ...]:
+            return (revision,)
+
+    service = object.__new__(ExamHwpxApplicationService)
+    service.registry = Registry()  # type: ignore[assignment]
+    resolved = service._resolve_items(manifest)
+
+    assert len(resolved) == 1
+    assert resolved[0].source.artifact_revision_id == planned.content.artifact_revision_id
+    assert resolved[0].source.json_sha256 == planned.content.sha256
+    assert resolved[0].display_number == planned.display_number
+    assert resolved[0].points_milli == planned.points_milli
+    component["artifact_revision_id"] = "rev_" + "0" * 32
+    with pytest.raises(HwpxManagerError, match="differs from its Item Revision"):
+        service._resolve_items(manifest)
 
 
 def test_content_team_batch_member_resolver_uses_two_indexed_queries(tmp_path: Path) -> None:
@@ -553,6 +965,28 @@ def test_application_adapter_root_contract_is_private_group_only() -> None:
     assert not FixedKordocBuilderAdapter._root_contract_ready(metadata, 986, [])
     wrong_mode = os.stat_result((stat.S_IFDIR | 0o2777, 1, 1, 1, 0, 986, 0, 0, 0, 0))
     assert not FixedKordocBuilderAdapter._root_contract_ready(wrong_mode, 986, [986])
+
+
+def test_application_adapter_proves_fixed_unit_quiescence_or_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = "LoadState=loaded\nActiveState=inactive\n"
+
+    def show_unit(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(argv, 0, output, "")
+
+    monkeypatch.setattr("eom_hwpx_manager.application_adapter.subprocess.run", show_unit)
+    adapter = FixedContentTeamBuilderAdapter(
+        HwpxSettings(workspace_root=tmp_path, timeout_seconds=300)
+    )
+    build_id = "hwpxbuild_" + "a" * 32
+    assert not adapter.build_may_be_active(build_id)
+
+    output = "LoadState=loaded\nActiveState=activating\n"
+    assert adapter.build_may_be_active(build_id)
+    output = "unexpected"
+    assert adapter.build_may_be_active(build_id)
+    assert adapter.build_may_be_active("not-a-build-id")
 
 
 def test_application_adapter_finalizes_private_group_paths_without_setgid(tmp_path: Path) -> None:

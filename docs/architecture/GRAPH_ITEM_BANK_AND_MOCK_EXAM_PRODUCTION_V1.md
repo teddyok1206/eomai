@@ -54,10 +54,11 @@ A whole-exam HWPX build resolves the ordered Item Revision set in two indexed Ca
 resolves all unique Artifact/ArtifactRevision member pointers in two additional indexed queries.
 Maps keyed by immutable revision/member identity preserve Assembly order and make validation and
 materialization `O(item count + component count)` in time and space. Each item is rendered through
-the reviewed content-team program, with only its displayed item number projected from the immutable
-Assembly position; the original Item JSON and editorial Markdown hashes remain unchanged. The final
-package contains one ordered HWPX section per item, while equation, table, and visual counts remain
-content-driven rather than fixed template quotas.
+the reviewed content-team program. Its displayed number and exam score are presentation values
+projected from the immutable Assembly slot; the original Item JSON, original item-level score, and
+editorial Markdown hashes remain unchanged. The final package contains one ordered HWPX section per
+item, while equation, table, and visual counts remain content-driven rather than fixed template
+quotas.
 
 ## Transactions, concurrency, failure, and replay
 
@@ -163,6 +164,56 @@ pointer fails.  Candidate shortage, search-bound exhaustion, pointer drift, or a
 rolls back without a partial Assembly Revision.  The simpler client-authored placement array was
 rejected because it lets presentation code invent domain facts and cannot reproduce review or usage
 provenance.
+
+## Released V2 Assembly to HWPX
+
+The HWPX application service accepts both released Assembly manifest revisions. V1 placements
+continue to resolve their canonical Item Revision components. V2 placements use the content
+Artifact Revision pointer already embedded in the server-authored plan and cross-check it against
+the same immutable Item Revision before materialization; image components remain pinned by the Item
+Revision manifest. The renderer receives one version-neutral, hash-pinned Assembly pointer and an
+ordered tuple of item materialization pointers. The V2 database placement identity is derived from
+the Assembly Revision, slot ID, and Item Revision using the same content-addressed rule used when the
+Assembly transaction was committed. No Item JSON, Markdown, image, or HWPX bytes are copied into
+PostgreSQL.
+
+The dominant operations are an exact Assembly Revision lookup, two indexed bulk Item/component
+queries, and two indexed bulk Artifact/member queries for at most 200 placements. Maps keyed by
+Item Revision and artifact/revision/member identity give `O(n)` time and space while preserving the
+immutable position tuple. The existing requested-build partial index and row lock remain the queue
+claim boundary; no new persistent cache or index is needed at the reviewed 25-item scale.
+
+Admission validates the released manifest, its policy/Graph identity, the full ordered Item set,
+the V2 plan's direct content pointers, and the released content-team handoff before appending one
+idempotent build request. Processing repeats those checks before staging. A manager restart never
+silently retries a renderer: an interrupted `RUNNING` or `VALIDATING` assessment build is left alone
+while its fixed renderer unit may still be active, then terminalized with a stable interrupted-build
+code once that unit is absent. If the internal HWPX job and Artifact Revision were already committed
+before the manager stopped, recovery accepts that exact immutable receipt instead of rendering
+again. A caller may explicitly request a new build under a new idempotency key after any failure.
+Item and assessment queues are alternated by the single manager loop, so a continuous stream
+in one queue cannot starve the other; each individual claim remains FIFO and `SKIP LOCKED`.
+
+The V1 content-team exam render protocol remains immutable for historical Assembly V1 builds. A V2
+render protocol is used for planned Assembly V2 builds because the isolated builder must receive
+the exact `plan_sha256`, displayed number, and `points_milli` for every placement; the Assembly
+manifest hash alone proves provenance but cannot tell a renderer which presentation values to put
+on the page. V2 accepts only the reviewed 1500/2000/2500 milli-point values, deterministically maps
+them to `1.5`/`2`/`2.5`, and returns a `render_plan_sha256` over the complete ordered presentation
+projection. The manager and builder derive that hash from one contract-owned projection function,
+and the package manifest, validation report, and terminal result must all agree before the
+Orchestrator commits the artifact. Protocol V1 continues to produce byte-compatible requests and
+uses the source item's score; no queued historical request is reinterpreted.
+
+The renderer boundary is one fixed systemd worker with no DB or NAS write authority. The manager
+materializes only validated files in its temporary workspace, and the Orchestrator remains the sole
+artifact committer. Protocol history is append-only and keyed by version plus schema-bundle hash;
+new V2 jobs cannot collide with V1 idempotency history. Failure publishes no successful pointer,
+and interrupted work follows the no-replay recovery rule above. The simpler alternatives—mutating
+the canonical Item score, inferring score from position inside the renderer, or resolving current
+Item/policy pointers at render time—were rejected because they introduce a second authority or make
+a released exam non-reproducible. Recovery by automatic renderer replay was also rejected because
+an interrupted external process cannot be proven safe to repeat without a new operator request.
 
 ## Acceptance checks
 

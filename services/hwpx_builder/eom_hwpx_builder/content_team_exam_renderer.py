@@ -13,9 +13,16 @@ from typing import Any
 
 from eom_hwpx_contracts import (
     ContentTeamExamBuildResult,
+    ContentTeamExamBuildResultContract,
+    ContentTeamExamBuildResultV2,
     ContentTeamExamImageSource,
+    ContentTeamExamItemSourceV2,
     ContentTeamExamRenderRequest,
+    ContentTeamExamRenderRequestContract,
+    ContentTeamExamRenderRequestV2,
     ContentTeamImageSource,
+    content_team_exam_item_set_projection,
+    content_team_exam_render_plan_projection,
     parse_content_team_markdown,
     serialize_content_team_markdown,
     validate_contract,
@@ -51,8 +58,27 @@ from eom_hwpx_builder.util import canonical_json_bytes, sha256_bytes, sha256_fil
 from eom_hwpx_builder.xmlsafe import ParsedXml, local_name, parse_xml, serialize_xml
 
 EXAM_RENDERER_VERSION = "1.0.0"
+EXAM_RENDERER_VERSION_V2 = "2.0.0"
 MAX_EXAM_PACKAGE_BYTES = 64 * 1024 * 1024
 MAX_HANDOFF_BYTES = 64 * 1024 * 1024
+
+_PLANNED_SCORE_DISPLAY = {1500: "1.5", 2000: "2", 2500: "2.5"}
+
+
+def _load_exam_request(raw: dict[str, Any]) -> ContentTeamExamRenderRequestContract:
+    if raw.get("schema_version") == "content-team-exam-render-request/2.0":
+        validate_contract("content-team-exam-render-request-v2", raw)
+        return ContentTeamExamRenderRequestV2.model_validate(raw)
+    validate_contract("content-team-exam-render-request", raw)
+    return ContentTeamExamRenderRequest.model_validate(raw)
+
+
+def _item_set_sha256(request: ContentTeamExamRenderRequestContract) -> str:
+    return sha256_bytes(canonical_json_bytes(content_team_exam_item_set_projection(request)))
+
+
+def _render_plan_sha256(request: ContentTeamExamRenderRequestV2) -> str:
+    return sha256_bytes(canonical_json_bytes(content_team_exam_render_plan_projection(request)))
 
 
 def _read_request(path: Path) -> bytes:
@@ -398,7 +424,7 @@ def _as_item_image(value: ContentTeamExamImageSource) -> ContentTeamImageSource:
 
 def render_content_team_exam_workspace(
     request_path: Path, result_path: Path
-) -> ContentTeamExamBuildResult:
+) -> ContentTeamExamBuildResultContract:
     started = datetime.now(UTC)
     workspace = request_path.parent.resolve(strict=True)
     if result_path.resolve(strict=False).parent != workspace or result_path.name != "result.json":
@@ -408,8 +434,7 @@ def render_content_team_exam_workspace(
         request_raw: object = json.loads(request_bytes.decode("utf-8"))
         if not isinstance(request_raw, dict):
             raise ValueError("request is not an object")
-        validate_contract("content-team-exam-render-request", request_raw)
-        request = ContentTeamExamRenderRequest.model_validate(request_raw)
+        request = _load_exam_request(request_raw)
     except (OSError, UnicodeError, json.JSONDecodeError, ValidationError, ValueError) as exc:
         raise HwpxError(
             HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
@@ -465,13 +490,22 @@ def render_content_team_exam_workspace(
                 HwpxErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
                 "exam item Markdown identity differs",
             )
-        placed_draft = draft.model_copy(update={"item_number": item.position})
-        placed_markdown = serialize_content_team_markdown(placed_draft)
+        rendered_score_display: str = draft.score_display
+        if isinstance(item, ContentTeamExamItemSourceV2):
+            rendered_score_display = _PLANNED_SCORE_DISPLAY[item.points_milli]
         output = item_output_root / f"item-{item.position:03d}.hwpx"
-        report = _external_render(runtime, template, placed_markdown, output, placed_draft)
+        report = _external_render(
+            runtime,
+            template,
+            markdown_bytes,
+            output,
+            draft,
+            item_number_override=item.position,
+            score_display_override=rendered_score_display,
+        )
         expected_slots = tuple(
             (ordinal, visual.label)
-            for ordinal, visual in enumerate(placed_draft.visuals)
+            for ordinal, visual in enumerate(draft.visuals)
             if visual.kind == "IMAGE"
         )
         actual_slots = tuple((image.visual_ordinal, image.label) for image in item.images)
@@ -496,44 +530,47 @@ def render_content_team_exam_workspace(
         total_equations += int(report["equation_count"])
         total_tables += int(report["table_count"])
         total_visuals += int(report["visual_count"])
-        item_reports.append(
-            {
-                "position": item.position,
-                "placement_id": item.placement_id,
-                "item_id": item.item_id,
-                "item_revision_id": item.item_revision_id,
-                "item_manifest_sha256": item.item_manifest_sha256,
-                "source_artifact_revision_id": item.source_artifact_revision_id,
-                "source_json_sha256": item.source_json_sha256,
-                "source_markdown_sha256": item.source_markdown_sha256,
-                "source_item_number": draft.item_number,
-                "rendered_item_number": placed_draft.item_number,
-                "equation_count": int(report["equation_count"]),
-                "table_count": int(report["table_count"]),
-                "visual_count": int(report["visual_count"]),
-            }
-        )
+        item_report: dict[str, Any] = {
+            "position": item.position,
+            "placement_id": item.placement_id,
+            "item_id": item.item_id,
+            "item_revision_id": item.item_revision_id,
+            "item_manifest_sha256": item.item_manifest_sha256,
+            "source_artifact_revision_id": item.source_artifact_revision_id,
+            "source_json_sha256": item.source_json_sha256,
+            "source_markdown_sha256": item.source_markdown_sha256,
+            "source_item_number": draft.item_number,
+            "rendered_item_number": int(report["rendered_item_number"]),
+            "equation_count": int(report["equation_count"]),
+            "table_count": int(report["table_count"]),
+            "visual_count": int(report["visual_count"]),
+        }
+        if isinstance(item, ContentTeamExamItemSourceV2):
+            item_report.update(
+                display_number=item.display_number,
+                points_milli=item.points_milli,
+                source_score_display=draft.score_display,
+                rendered_score_display=str(report["rendered_score_display"]),
+            )
+        item_reports.append(item_report)
 
     output = _workspace_path(workspace, "output/content-team-exam.hwpx", must_exist=False)
     merge_report = _merge_item_packages(tuple(item_outputs), output)
-    item_set_sha256 = sha256_bytes(
-        canonical_json_bytes(
-            [
-                {
-                    "position": item.position,
-                    "placement_id": item.placement_id,
-                    "item_id": item.item_id,
-                    "item_revision_id": item.item_revision_id,
-                    "item_manifest_sha256": item.item_manifest_sha256,
-                }
-                for item in request.items
-            ]
-        )
+    item_set_sha256 = _item_set_sha256(request)
+    render_plan_sha256 = (
+        _render_plan_sha256(request)
+        if isinstance(request, ContentTeamExamRenderRequestV2)
+        else None
+    )
+    renderer_version = (
+        EXAM_RENDERER_VERSION_V2
+        if isinstance(request, ContentTeamExamRenderRequestV2)
+        else EXAM_RENDERER_VERSION
     )
     report = {
         "status": "PASS",
         "renderer_profile": request.renderer_profile,
-        "renderer_version": EXAM_RENDERER_VERSION,
+        "renderer_version": renderer_version,
         "assessment_assembly_revision_id": request.assembly.assessment_assembly_revision_id,
         "assembly_manifest_sha256": request.assembly.manifest_sha256,
         "item_set_sha256": item_set_sha256,
@@ -544,12 +581,18 @@ def render_content_team_exam_workspace(
         "items": item_reports,
         "package": merge_report,
     }
+    if render_plan_sha256 is not None:
+        report["render_plan_sha256"] = render_plan_sha256
     output_dir = output.parent
     write_private_json(output_dir / "content-team-exam-validation.json", report)
-    package_manifest = {
-        "manifest_version": "content-team-exam-hwpx/1.0",
+    package_manifest: dict[str, Any] = {
+        "manifest_version": (
+            "content-team-exam-hwpx/2.0"
+            if isinstance(request, ContentTeamExamRenderRequestV2)
+            else "content-team-exam-hwpx/1.0"
+        ),
         "renderer_profile": request.renderer_profile,
-        "renderer_version": EXAM_RENDERER_VERSION,
+        "renderer_version": renderer_version,
         "assembly": request.assembly.model_dump(mode="json"),
         "handoff": request.handoff.model_dump(mode="json"),
         "item_set_sha256": item_set_sha256,
@@ -558,30 +601,43 @@ def render_content_team_exam_workspace(
         "package_sha256": sha256_file(output),
         "renderer_report": report,
     }
+    if render_plan_sha256 is not None:
+        package_manifest["render_plan_sha256"] = render_plan_sha256
     write_private_json(output_dir / "package-manifest.json", package_manifest)
     prepare_private_handoff_file(output)
-    result = ContentTeamExamBuildResult(
-        build_id=request.build_id,
-        assessment_assembly_revision_id=request.assembly.assessment_assembly_revision_id,
-        assembly_manifest_sha256=request.assembly.manifest_sha256,
-        item_set_sha256=item_set_sha256,
-        handoff_archive_sha256=request.handoff.archive_sha256,
-        status="SUCCEEDED",
-        output_file="output/content-team-exam.hwpx",
-        output_sha256=sha256_file(output),
-        package_manifest_file="output/package-manifest.json",
-        renderer_report_file="output/content-team-exam-validation.json",
-        item_count=len(request.items),
-        section_count=int(merge_report["section_count"]),
-        equation_count=total_equations,
-        table_count=total_tables,
-        visual_count=total_visuals,
-        warnings=(),
-        errors=(),
-        started_at=started,
-        completed_at=datetime.now(UTC),
-    )
-    validate_contract("content-team-exam-build-result", result.model_dump(mode="json"))
+    result_values: dict[str, Any] = {
+        "build_id": request.build_id,
+        "assessment_assembly_revision_id": request.assembly.assessment_assembly_revision_id,
+        "assembly_manifest_sha256": request.assembly.manifest_sha256,
+        "item_set_sha256": item_set_sha256,
+        "handoff_archive_sha256": request.handoff.archive_sha256,
+        "status": "SUCCEEDED",
+        "output_file": "output/content-team-exam.hwpx",
+        "output_sha256": sha256_file(output),
+        "package_manifest_file": "output/package-manifest.json",
+        "renderer_report_file": "output/content-team-exam-validation.json",
+        "item_count": len(request.items),
+        "section_count": int(merge_report["section_count"]),
+        "equation_count": total_equations,
+        "table_count": total_tables,
+        "visual_count": total_visuals,
+        "warnings": (),
+        "errors": (),
+        "started_at": started,
+        "completed_at": datetime.now(UTC),
+    }
+    result: ContentTeamExamBuildResultContract
+    if isinstance(request, ContentTeamExamRenderRequestV2):
+        assert render_plan_sha256 is not None
+        result = ContentTeamExamBuildResultV2(
+            **result_values,
+            render_plan_sha256=render_plan_sha256,
+        )
+        result_contract = "content-team-exam-build-result-v2"
+    else:
+        result = ContentTeamExamBuildResult(**result_values)
+        result_contract = "content-team-exam-build-result"
+    validate_contract(result_contract, result.model_dump(mode="json"))
     write_private_json(result_path, result.model_dump(mode="json"))
     finalize_success_handoff(
         workspace,
@@ -597,52 +653,49 @@ def render_content_team_exam_workspace(
 
 def failed_content_team_exam_result(
     request_path: Path, result_path: Path, started: datetime, error: Exception
-) -> ContentTeamExamBuildResult | None:
+) -> ContentTeamExamBuildResultContract | None:
     try:
         raw: object = json.loads(_read_request(request_path).decode("utf-8"))
         if not isinstance(raw, dict):
             return None
-        request = ContentTeamExamRenderRequest.model_validate(raw)
+        request = _load_exam_request(raw)
     except (OSError, UnicodeError, json.JSONDecodeError, ValidationError, ValueError):
         return None
     code = (
         error.code.value if isinstance(error, HwpxError) else "HWPX_CONTENT_TEAM_EXAM_RENDER_FAILED"
     )
-    result = ContentTeamExamBuildResult(
-        build_id=request.build_id,
-        assessment_assembly_revision_id=request.assembly.assessment_assembly_revision_id,
-        assembly_manifest_sha256=request.assembly.manifest_sha256,
-        item_set_sha256=sha256_bytes(
-            canonical_json_bytes(
-                [
-                    {
-                        "position": item.position,
-                        "placement_id": item.placement_id,
-                        "item_id": item.item_id,
-                        "item_revision_id": item.item_revision_id,
-                        "item_manifest_sha256": item.item_manifest_sha256,
-                    }
-                    for item in request.items
-                ]
-            )
-        ),
-        handoff_archive_sha256=request.handoff.archive_sha256,
-        status="FAILED",
-        output_file=None,
-        output_sha256=None,
-        package_manifest_file=None,
-        renderer_report_file=None,
-        item_count=0,
-        section_count=0,
-        equation_count=0,
-        table_count=0,
-        visual_count=0,
-        warnings=(),
-        errors=(code,),
-        started_at=started,
-        completed_at=datetime.now(UTC),
-    )
-    validate_contract("content-team-exam-build-result", result.model_dump(mode="json"))
+    result_values: dict[str, Any] = {
+        "build_id": request.build_id,
+        "assessment_assembly_revision_id": request.assembly.assessment_assembly_revision_id,
+        "assembly_manifest_sha256": request.assembly.manifest_sha256,
+        "item_set_sha256": _item_set_sha256(request),
+        "handoff_archive_sha256": request.handoff.archive_sha256,
+        "status": "FAILED",
+        "output_file": None,
+        "output_sha256": None,
+        "package_manifest_file": None,
+        "renderer_report_file": None,
+        "item_count": 0,
+        "section_count": 0,
+        "equation_count": 0,
+        "table_count": 0,
+        "visual_count": 0,
+        "warnings": (),
+        "errors": (code,),
+        "started_at": started,
+        "completed_at": datetime.now(UTC),
+    }
+    result: ContentTeamExamBuildResultContract
+    if isinstance(request, ContentTeamExamRenderRequestV2):
+        result = ContentTeamExamBuildResultV2(
+            **result_values,
+            render_plan_sha256=_render_plan_sha256(request),
+        )
+        result_contract = "content-team-exam-build-result-v2"
+    else:
+        result = ContentTeamExamBuildResult(**result_values)
+        result_contract = "content-team-exam-build-result"
+    validate_contract(result_contract, result.model_dump(mode="json"))
     write_private_json(result_path, result.model_dump(mode="json"))
     finalize_failure_result(request_path.parent.resolve(strict=True), result_path)
     return result

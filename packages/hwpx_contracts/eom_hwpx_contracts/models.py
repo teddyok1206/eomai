@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from enum import StrEnum
 from pathlib import PurePosixPath
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -504,6 +504,28 @@ class ContentTeamExamItemSource(StrictModel):
         return self
 
 
+class ContentTeamExamAssemblyPointerV2(ContentTeamExamAssemblyPointer):
+    """V2 Assembly identity including the immutable server-authored plan."""
+
+    assembly_schema_version: Literal["mock-exam-assembly-manifest/2.0"] = (
+        "mock-exam-assembly-manifest/2.0"
+    )
+    plan_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+
+
+class ContentTeamExamItemSourceV2(ContentTeamExamItemSource):
+    """V2 placement fields that control exam-only numbering and score presentation."""
+
+    display_number: str = Field(pattern=r"^[1-9][0-9]{0,2}$")
+    points_milli: Literal[1500, 2000, 2500]
+
+    @model_validator(mode="after")
+    def display_number_matches_position(self) -> ContentTeamExamItemSourceV2:
+        if self.display_number != str(self.position):
+            raise ValueError("exam display number differs from its position")
+        return self
+
+
 class ContentTeamExamRenderRequest(StrictModel):
     schema_version: Literal["content-team-exam-render-request/1.0"] = (
         "content-team-exam-render-request/1.0"
@@ -528,6 +550,71 @@ class ContentTeamExamRenderRequest(StrictModel):
         ):
             raise ValueError("exam item and placement identities must be unique")
         return self
+
+
+class ContentTeamExamRenderRequestV2(StrictModel):
+    schema_version: Literal["content-team-exam-render-request/2.0"] = (
+        "content-team-exam-render-request/2.0"
+    )
+    renderer_profile: Literal["content-team-hwp-question-editor-exam-v1"] = (
+        "content-team-hwp-question-editor-exam-v1"
+    )
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    assembly: ContentTeamExamAssemblyPointerV2
+    handoff: ContentTeamHandoffSnapshot
+    items: tuple[ContentTeamExamItemSourceV2, ...] = Field(min_length=1, max_length=200)
+    output_directory: Literal["output"] = "output"
+
+    @model_validator(mode="after")
+    def ordered_unique_item_set(self) -> ContentTeamExamRenderRequestV2:
+        if tuple(item.position for item in self.items) != tuple(range(1, len(self.items) + 1)):
+            raise ValueError("exam items must be contiguous and ordered")
+        revision_ids = tuple(item.item_revision_id for item in self.items)
+        placement_ids = tuple(item.placement_id for item in self.items)
+        if len(revision_ids) != len(set(revision_ids)) or len(placement_ids) != len(
+            set(placement_ids)
+        ):
+            raise ValueError("exam item and placement identities must be unique")
+        return self
+
+
+ContentTeamExamRenderRequestContract = ContentTeamExamRenderRequest | ContentTeamExamRenderRequestV2
+
+
+def content_team_exam_item_set_projection(
+    request: ContentTeamExamRenderRequestContract,
+) -> tuple[dict[str, Any], ...]:
+    """Canonical ordered Item identity shared by manager and isolated renderer."""
+
+    return tuple(
+        {
+            "position": item.position,
+            "placement_id": item.placement_id,
+            "item_id": item.item_id,
+            "item_revision_id": item.item_revision_id,
+            "item_manifest_sha256": item.item_manifest_sha256,
+        }
+        for item in request.items
+    )
+
+
+def content_team_exam_render_plan_projection(
+    request: ContentTeamExamRenderRequestV2,
+) -> tuple[dict[str, Any], ...]:
+    """Canonical V2 placement presentation projected into the final HWPX."""
+
+    return tuple(
+        {
+            "position": item.position,
+            "display_number": item.display_number,
+            "points_milli": item.points_milli,
+            "placement_id": item.placement_id,
+            "item_id": item.item_id,
+            "item_revision_id": item.item_revision_id,
+            "item_manifest_sha256": item.item_manifest_sha256,
+        }
+        for item in request.items
+    )
 
 
 class ContentTeamBuildResult(StrictModel):
@@ -626,14 +713,10 @@ class ContentTeamBuildResultV2(StrictModel):
         return self
 
 
-class ContentTeamExamBuildResult(StrictModel):
-    schema_version: Literal["content-team-exam-build-result/1.0"] = (
-        "content-team-exam-build-result/1.0"
-    )
+class _ContentTeamExamBuildResultBase(StrictModel):
     renderer_profile: Literal["content-team-hwp-question-editor-exam-v1"] = (
         "content-team-hwp-question-editor-exam-v1"
     )
-    renderer_version: Literal["1.0.0"] = "1.0.0"
     build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
     assessment_assembly_revision_id: str = Field(pattern=r"^assemblyrev_[a-f0-9]{32}$")
     assembly_manifest_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
@@ -657,7 +740,7 @@ class ContentTeamExamBuildResult(StrictModel):
     completed_at: datetime
 
     @model_validator(mode="after")
-    def terminal_files_match_status(self) -> ContentTeamExamBuildResult:
+    def terminal_files_match_status(self) -> Self:
         materialized = (
             self.output_file,
             self.output_sha256,
@@ -674,6 +757,24 @@ class ContentTeamExamBuildResult(StrictModel):
         if self.completed_at < self.started_at:
             raise ValueError("exam build completion precedes its start")
         return self
+
+
+class ContentTeamExamBuildResult(_ContentTeamExamBuildResultBase):
+    schema_version: Literal["content-team-exam-build-result/1.0"] = (
+        "content-team-exam-build-result/1.0"
+    )
+    renderer_version: Literal["1.0.0"] = "1.0.0"
+
+
+class ContentTeamExamBuildResultV2(_ContentTeamExamBuildResultBase):
+    schema_version: Literal["content-team-exam-build-result/2.0"] = (
+        "content-team-exam-build-result/2.0"
+    )
+    renderer_version: Literal["2.0.0"] = "2.0.0"
+    render_plan_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+
+
+ContentTeamExamBuildResultContract = ContentTeamExamBuildResult | ContentTeamExamBuildResultV2
 
 
 class TableData(StrictModel):

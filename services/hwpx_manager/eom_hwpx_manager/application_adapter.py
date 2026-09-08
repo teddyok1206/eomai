@@ -30,6 +30,40 @@ class _FixedApplicationBuilderAdapter(HwpxBuilderAdapter):
     unit_template: str
     log_name: str
 
+    def build_may_be_active(self, workspace_id: str) -> bool:
+        """Fail closed when a fixed renderer unit cannot be proven quiescent."""
+
+        if BUILD_ID.fullmatch(workspace_id) is None:
+            return True
+        unit_name = f"{self.unit_template}@{workspace_id}.service"
+        try:
+            completed = subprocess.run(
+                [
+                    str(SYSTEMCTL),
+                    "show",
+                    "--property=LoadState",
+                    "--property=ActiveState",
+                    unit_name,
+                ],
+                capture_output=True,
+                timeout=5,
+                check=False,
+                env=SYSTEMCTL_ENV,
+                text=True,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return True
+        properties = dict(
+            line.split("=", 1) for line in completed.stdout.splitlines() if "=" in line
+        )
+        load_state = properties.get("LoadState")
+        active_state = properties.get("ActiveState")
+        return not (
+            completed.returncode == 0
+            and load_state in {"loaded", "not-found"}
+            and active_state in {"inactive", "failed"}
+        )
+
     def create_workspace(self, workspace_id: str) -> Path:
         if BUILD_ID.fullmatch(workspace_id) is None:
             raise HwpxManagerError(

@@ -19,7 +19,10 @@ from sqlalchemy import Engine
 from eom_hwpx_manager.application_service import HwpxApplicationService, SecureHwpxDownload
 from eom_hwpx_manager.download_server import HwpxDownloadServer
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
-from eom_hwpx_manager.exam_application_service import ExamHwpxApplicationService
+from eom_hwpx_manager.exam_application_service import (
+    ExamHwpxApplicationService,
+    ExamRecoveryState,
+)
 from eom_hwpx_manager.runtime_privileges import manager_runtime_privileges_ready
 from eom_hwpx_manager.settings import HwpxSettings
 
@@ -53,7 +56,7 @@ def _runtime_staging_ready(path: Path) -> bool:
     )
 
 
-def run_once(*, verify_privileges: bool = True) -> int:
+def run_once(*, verify_privileges: bool = True, prefer_exam: bool = False) -> int:
     engine = build_engine()
     try:
         if verify_privileges and not _runtime_privileges_ready(engine):
@@ -70,19 +73,23 @@ def run_once(*, verify_privileges: bool = True) -> int:
             )
             return 1
         registry = RegistryService(engine)
-        item_record = HwpxApplicationService(
+        item_service = HwpxApplicationService(
             engine,
             registry=registry,
-        ).process_next()
-        if item_record is not None:
-            print(f"hwpx_application_build={item_record.build_id}:{item_record.state}")
-            return 0
-        exam_record = ExamHwpxApplicationService(engine, registry=registry).process_next()
-        if exam_record is None:
-            print("hwpx_application_build=IDLE")
-            return 2
-        print(f"hwpx_application_build={exam_record.build_id}:{exam_record.state}")
-        return 0
+        )
+        exam_service = ExamHwpxApplicationService(engine, registry=registry)
+        queues = (
+            (("assessment", exam_service), ("item", item_service))
+            if prefer_exam
+            else (("item", item_service), ("assessment", exam_service))
+        )
+        for queue_name, service in queues:
+            record = service.process_next()
+            if record is not None:
+                print(f"hwpx_application_build={record.build_id}:{record.state} queue={queue_name}")
+                return 0
+        print("hwpx_application_build=IDLE")
+        return 2
     except HwpxManagerError as exc:
         print(
             f"hwpx_application_build=FAILED error_code={exc.code.value}",
@@ -101,6 +108,7 @@ def run_once(*, verify_privileges: bool = True) -> int:
 
 def serve(interval_seconds: float) -> int:
     stopping = False
+    prefer_exam = False
 
     def stop(_signum: int, _frame: object) -> None:
         nonlocal stopping
@@ -139,8 +147,24 @@ def serve(interval_seconds: float) -> int:
             daemon=True,
         )
         server_thread.start()
+        recovering_interrupted = True
         while not stopping:
-            result = run_once(verify_privileges=False)
+            if recovering_interrupted:
+                recovery = exam_service.recover_interrupted()
+                if recovery.state is ExamRecoveryState.ACTIVE:
+                    assert recovery.record is not None
+                    print(f"hwpx_assessment_build={recovery.record.build_id}:RECOVERING")
+                    time.sleep(interval_seconds)
+                    continue
+                if recovery.state is ExamRecoveryState.TERMINALIZED:
+                    assert recovery.record is not None
+                    print(
+                        f"hwpx_assessment_build={recovery.record.build_id}:{recovery.record.state}"
+                    )
+                    continue
+                recovering_interrupted = False
+            result = run_once(verify_privileges=False, prefer_exam=prefer_exam)
+            prefer_exam = not prefer_exam
             if result == 2:
                 time.sleep(interval_seconds)
             elif result != 0:

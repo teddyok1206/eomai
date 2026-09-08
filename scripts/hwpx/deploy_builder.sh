@@ -233,6 +233,8 @@ required = {
         "eom_hwpx_contracts/schemas/hwpx-content-team-build-result-v2.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-content-team-exam-render-request-v1.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-content-team-exam-build-result-v1.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-exam-render-request-v2.schema.json",
+        "eom_hwpx_contracts/schemas/hwpx-content-team-exam-build-result-v2.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-manager-download-v1.schema.json",
     },
     "eom_hwpx_builder": {

@@ -302,12 +302,52 @@ def _external_render(
     markdown: bytes,
     output: Path,
     draft: ContentTeamEditorialDraft,
+    *,
+    item_number_override: int | None = None,
+    score_display_override: str | None = None,
 ) -> dict[str, Any]:
     handoff_value = draft.model_dump(mode="json")
     for block in handoff_value["labeled_blocks"]:
         block["content"] = normalize_content_team_labeled_block_content(block["content"])
     handoff_draft = ContentTeamEditorialDraft.model_validate(handoff_value)
     handoff_markdown = serialize_content_team_markdown(handoff_draft)
+    rendered_item_number = (
+        handoff_draft.item_number if item_number_override is None else item_number_override
+    )
+    rendered_score_display = (
+        handoff_draft.score_display if score_display_override is None else score_display_override
+    )
+    if not 1 <= rendered_item_number <= 200 or rendered_score_display not in {
+        "1.5",
+        "2",
+        "2.5",
+        "3",
+    }:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
+            "exam presentation values are outside the reviewed policy",
+        )
+    if rendered_item_number != handoff_draft.item_number:
+        source_prefix = f"{handoff_draft.item_number}. "
+        if not handoff_markdown.startswith(source_prefix.encode()):
+            raise HwpxError(
+                HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
+                "canonical item number marker is ambiguous",
+            )
+        handoff_markdown = (
+            f"{rendered_item_number}. ".encode() + handoff_markdown[len(source_prefix.encode()) :]
+        )
+    if rendered_score_display != handoff_draft.score_display:
+        source_score = (
+            f"{handoff_draft.bottom_stem} [{handoff_draft.score_display}점]\n\n"
+        ).encode()
+        target_score = f"{handoff_draft.bottom_stem} [{rendered_score_display}점]\n\n".encode()
+        if handoff_markdown.count(source_score) != 1:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
+                "canonical score marker is ambiguous",
+            )
+        handoff_markdown = handoff_markdown.replace(source_score, target_score, 1)
     source_root = runtime / "src"
     sys.path.insert(0, str(source_root))
     try:
@@ -317,7 +357,7 @@ def _external_render(
         validator_module = importlib.import_module("hwp_question_editor.services.hwpx_validator")
         question = parser_module.QuestionParser().parse(
             handoff_markdown.decode("utf-8"),
-            question_name=f"item-{handoff_draft.item_number}",
+            question_name=f"item-{rendered_item_number}",
         )
         equation_report = equation_module.EquationPreflight().assert_supported(question)
         dynamic_validator_module: Any = validator_module
@@ -334,7 +374,7 @@ def _external_render(
             expected_labeled_blocks=tuple(block.kind for block in draft.labeled_blocks),
             expected_answer_combination=question.answer_combination,
         )
-        return {
+        report: dict[str, Any] = {
             "status": "PASS",
             "equation_count": equation_report.total_equation_count,
             "table_count": len(engine.last_table_render_reports),
@@ -345,6 +385,12 @@ def _external_render(
             "handoff_projection_applied": handoff_markdown != markdown,
             "handoff_projection_sha256": sha256_bytes(handoff_markdown),
         }
+        if item_number_override is not None or score_display_override is not None:
+            report.update(
+                rendered_item_number=rendered_item_number,
+                rendered_score_display=rendered_score_display,
+            )
+        return report
     except Exception as exc:
         raise HwpxError(
             HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED,

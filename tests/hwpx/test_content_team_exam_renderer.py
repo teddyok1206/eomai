@@ -17,14 +17,20 @@ from eom_hwpx_builder.errors import HwpxError
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
     ContentTeamExamAssemblyPointer,
+    ContentTeamExamAssemblyPointerV2,
     ContentTeamExamBuildResult,
+    ContentTeamExamBuildResultV2,
     ContentTeamExamItemSource,
+    ContentTeamExamItemSourceV2,
     ContentTeamExamRenderRequest,
+    ContentTeamExamRenderRequestV2,
     ContentTeamHandoffMember,
     ContentTeamHandoffSnapshot,
     parse_content_team_markdown,
     serialize_content_team_markdown,
+    validate_contract,
 )
+from eom_identifiers import content_sha256
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
@@ -80,10 +86,32 @@ def _request(*, positions: tuple[int, ...] = (1, 2)) -> ContentTeamExamRenderReq
     )
 
 
+def _request_v2(*, points: tuple[int, ...] = (1500, 2500)) -> ContentTeamExamRenderRequestV2:
+    legacy = _request(positions=tuple(range(1, len(points) + 1)))
+    return ContentTeamExamRenderRequestV2(
+        build_id=legacy.build_id,
+        assembly=ContentTeamExamAssemblyPointerV2(
+            **legacy.assembly.model_dump(mode="json"),
+            plan_sha256="sha256:" + "5" * 64,
+        ),
+        handoff=legacy.handoff,
+        items=tuple(
+            ContentTeamExamItemSourceV2(
+                **item.model_dump(mode="json"),
+                display_number=str(item.position),
+                points_milli=points[index],
+            )
+            for index, item in enumerate(legacy.items)
+        ),
+    )
+
+
 def test_exam_contract_schemas_match_packaged_copies_and_use_draft_2020_12() -> None:
     for name in (
         "hwpx-content-team-exam-render-request-v1.schema.json",
         "hwpx-content-team-exam-build-result-v1.schema.json",
+        "hwpx-content-team-exam-render-request-v2.schema.json",
+        "hwpx-content-team-exam-build-result-v2.schema.json",
     ):
         canonical = ROOT / "schemas/hwpx" / name
         packaged = ROOT / "packages/hwpx_contracts/eom_hwpx_contracts/schemas" / name
@@ -101,6 +129,21 @@ def test_exam_request_rejects_noncontiguous_positions_and_duplicate_revisions() 
     value["items"][1]["item_revision_id"] = value["items"][0]["item_revision_id"]
     with pytest.raises(ValidationError, match="unique"):
         ContentTeamExamRenderRequest.model_validate(value)
+
+
+def test_exam_v2_request_rejects_display_number_drift_and_unsupported_score() -> None:
+    validate_contract(
+        "content-team-exam-render-request-v2",
+        _request_v2().model_dump(mode="json"),
+    )
+    value = _request_v2().model_dump(mode="json")
+    value["items"][0]["display_number"] = "2"
+    with pytest.raises(ValidationError, match="display number"):
+        ContentTeamExamRenderRequestV2.model_validate(value)
+    value = _request_v2().model_dump(mode="json")
+    value["items"][0]["points_milli"] = 3000
+    with pytest.raises(ValidationError, match=r"1500|2000|2500"):
+        ContentTeamExamRenderRequestV2.model_validate(value)
 
 
 def test_exam_result_requires_one_section_per_item_and_no_fixed_component_counts() -> None:
@@ -128,6 +171,11 @@ def test_exam_result_requires_one_section_per_item_and_no_fixed_component_counts
     assert (result.equation_count, result.table_count, result.visual_count) == (0, 3, 1)
     with pytest.raises(ValidationError, match="one section per item"):
         ContentTeamExamBuildResult.model_validate(base | {"section_count": 1})
+    v2 = ContentTeamExamBuildResultV2(
+        **base,
+        render_plan_sha256="sha256:" + "f" * 64,
+    )
+    assert v2.renderer_version == "2.0.0"
 
 
 def test_exam_merger_is_deterministic_and_remaps_each_item_binary_pointer(tmp_path: Path) -> None:
@@ -209,6 +257,8 @@ def test_reviewed_handoff_builds_two_item_exam_and_applies_assembly_numbering(
     output = tmp_path / "output/content-team-exam.hwpx"
     analysis = analyze_package(output)
     assert result.status == "SUCCEEDED"
+    assert isinstance(result, ContentTeamExamBuildResult)
+    assert result.renderer_version == "1.0.0"
     assert result.item_count == result.section_count == 2
     assert result.equation_count == expected_equations
     assert result.table_count == 0
@@ -219,3 +269,73 @@ def test_reviewed_handoff_builds_two_item_exam_and_applies_assembly_numbering(
         second_section = archive.read("Contents/section1.xml").decode("utf-8")
     assert ">1. 다음" in first_section
     assert ">2. 다음" in second_section
+    package = json.loads((tmp_path / "output/package-manifest.json").read_text(encoding="utf-8"))
+    assert "render_plan_sha256" not in package
+
+
+@pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
+def test_reviewed_handoff_v2_applies_planned_scores_without_mutating_sources(
+    tmp_path: Path,
+) -> None:
+    raw = _request_v2().model_dump(mode="json")
+    input_root = tmp_path / "input"
+    input_root.mkdir()
+    (input_root / "handoff.zip").write_bytes(HANDOFF.read_bytes())
+    source_scores: list[str] = []
+    for position, item in enumerate(raw["items"], start=1):
+        draft = parse_content_team_markdown(LABELED_BLOCK_ITEM.encode("utf-8"))
+        source_scores.append(draft.score_display)
+        markdown = serialize_content_team_markdown(draft)
+        item_value = {
+            "schema_version": "2.0",
+            **draft.model_dump(mode="json", exclude={"schema_version", "source_sha256"}),
+        }
+        item_bytes = json.dumps(
+            item_value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        item_root = input_root / "items" / f"{position:03d}"
+        item_root.mkdir(parents=True)
+        (item_root / "item-content.json").write_bytes(item_bytes)
+        (item_root / "content-team-item.md").write_bytes(markdown)
+        item["source_json_sha256"] = _sha256(item_bytes)
+        item["source_markdown_sha256"] = _sha256(markdown)
+
+    request = ContentTeamExamRenderRequestV2.model_validate(raw)
+    request_path = tmp_path / "request.json"
+    result_path = tmp_path / "result.json"
+    request_path.write_text(request.model_dump_json(), encoding="utf-8")
+
+    result = render_content_team_exam_workspace(request_path, result_path)
+
+    assert isinstance(result, ContentTeamExamBuildResultV2)
+    with zipfile.ZipFile(tmp_path / "output/content-team-exam.hwpx") as archive:
+        first_section = archive.read("Contents/section0.xml").decode("utf-8")
+        second_section = archive.read("Contents/section1.xml").decode("utf-8")
+    assert "1.5점" in first_section
+    assert "2.5점" in second_section
+    report = json.loads(
+        (tmp_path / "output/content-team-exam-validation.json").read_text(encoding="utf-8")
+    )
+    assert [row["source_score_display"] for row in report["items"]] == source_scores
+    assert [row["rendered_score_display"] for row in report["items"]] == ["1.5", "2.5"]
+    assert [row["points_milli"] for row in report["items"]] == [1500, 2500]
+    package = json.loads((tmp_path / "output/package-manifest.json").read_text(encoding="utf-8"))
+    assert package["render_plan_sha256"] == result.render_plan_sha256
+    assert report["render_plan_sha256"] == result.render_plan_sha256
+    assert result.render_plan_sha256 == content_sha256(
+        tuple(
+            {
+                "position": item.position,
+                "display_number": item.display_number,
+                "points_milli": item.points_milli,
+                "placement_id": item.placement_id,
+                "item_id": item.item_id,
+                "item_revision_id": item.item_revision_id,
+                "item_manifest_sha256": item.item_manifest_sha256,
+            }
+            for item in request.items
+        )
+    )

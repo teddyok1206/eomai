@@ -149,23 +149,27 @@ def render_content_team(
     request_value: object = None
     try:
         request_value = json.loads(_read_request(request).decode("utf-8"))
-        if isinstance(request_value, dict) and request_value.get("schema_version") == (
-            "content-team-exam-render-request/1.0"
-        ):
-            build_result = render_content_team_exam_workspace(request, result)
+        if isinstance(request_value, dict) and request_value.get("schema_version") in {
+            "content-team-exam-render-request/1.0",
+            "content-team-exam-render-request/2.0",
+        }:
+            status = render_content_team_exam_workspace(request, result).status
         else:
-            build_result = render_content_team_workspace(request, result)
+            status = render_content_team_workspace(request, result).status
     except Exception as exc:
-        if isinstance(request_value, dict) and request_value.get("schema_version") == (
-            "content-team-exam-render-request/1.0"
-        ):
-            failed = failed_content_team_exam_result(request, result, started, exc)
+        if isinstance(request_value, dict) and request_value.get("schema_version") in {
+            "content-team-exam-render-request/1.0",
+            "content-team-exam-render-request/2.0",
+        }:
+            result_written = (
+                failed_content_team_exam_result(request, result, started, exc) is not None
+            )
         else:
-            failed = failed_content_team_result(request, result, started, exc)
+            result_written = failed_content_team_result(request, result, started, exc) is not None
         code = exc.code.value if isinstance(exc, HwpxError) else "HWPX_CONTENT_TEAM_RENDER_FAILED"
-        _echo({"status": "FAILED", "error_code": code, "result_written": failed is not None})
+        _echo({"status": "FAILED", "error_code": code, "result_written": result_written})
         raise typer.Exit(1) from None
-    _echo({"status": build_result.status, "result": result.name})
+    _echo({"status": status, "result": result.name})
 
 
 def _bindings(path: Path | None, input_path: Path) -> BindingManifest:

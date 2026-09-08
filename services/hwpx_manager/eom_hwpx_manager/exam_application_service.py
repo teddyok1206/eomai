@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
-from eom_catalog_contracts import MockExamAssemblyManifestV1
+from eom_catalog_contracts import MockExamAssemblyManifestContract
 from eom_catalog_service.mock_exam_assembly_service import MockExamAssemblyService
 from eom_hwpx_contracts import (
     ContentTeamHandoffSnapshot,
@@ -24,14 +26,31 @@ from eom_hwpx_manager.application_service import (
     SecureHwpxDownload,
 )
 from eom_hwpx_manager.application_state import ApplicationBuildState, require_application_transition
+from eom_hwpx_manager.assembly_render_projection import (
+    AssemblyRenderPlacement,
+    project_assembly_for_render,
+)
 from eom_hwpx_manager.content_team_exam_service import (
     EXAM_RENDERER,
-    EXAM_RENDERER_VERSION,
+    ContentTeamExamBuildReceipt,
     ContentTeamExamHwpxService,
     ContentTeamExamItemPointer,
+    exam_renderer_version,
 )
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.models import HwpxAssessmentAssemblyBuildRecord
+
+
+class ExamRecoveryState(StrEnum):
+    NONE = "NONE"
+    ACTIVE = "ACTIVE"
+    TERMINALIZED = "TERMINALIZED"
+
+
+@dataclass(frozen=True)
+class ExamRecoveryResult:
+    state: ExamRecoveryState
+    record: HwpxAssessmentAssemblyBuildRecord | None = None
 
 
 class ExamHwpxApplicationService:
@@ -56,8 +75,11 @@ class ExamHwpxApplicationService:
         idempotency_key: str,
     ) -> tuple[HwpxAssessmentAssemblyBuildRecord, bool]:
         manifest = self._manifest(assembly_revision_id)
+        projection = project_assembly_for_render(manifest)
+        self._resolve_items(manifest)
         handoff = self.renderer.snapshot()
-        item_set_sha256 = self._item_set_sha256(manifest)
+        item_set_sha256 = projection.item_set_sha256()
+        renderer_version = exam_renderer_version(manifest)
         request_sha256 = self._request_sha256(manifest, handoff)
         with transaction(self.sessions) as session:
             existing = session.scalar(
@@ -76,22 +98,22 @@ class ExamHwpxApplicationService:
                 return existing, False
             record = HwpxAssessmentAssemblyBuildRecord(
                 build_id=new_hwpx_build_id(),
-                assessment_assembly_id=manifest.assessment_assembly_id,
-                assessment_assembly_revision_id=manifest.assessment_assembly_revision_id,
-                assembly_manifest_sha256=manifest.manifest_sha256,
-                policy_revision_id=manifest.policy_revision_id,
-                policy_sha256=manifest.policy_sha256,
-                graph_snapshot_revision_id=manifest.graph_snapshot_revision_id,
-                graph_snapshot_sha256=manifest.graph_snapshot_sha256,
+                assessment_assembly_id=projection.assessment_assembly_id,
+                assessment_assembly_revision_id=projection.assessment_assembly_revision_id,
+                assembly_manifest_sha256=projection.manifest_sha256,
+                policy_revision_id=projection.policy_revision_id,
+                policy_sha256=projection.policy_sha256,
+                graph_snapshot_revision_id=projection.graph_snapshot_revision_id,
+                graph_snapshot_sha256=projection.graph_snapshot_sha256,
                 item_set_sha256=item_set_sha256,
                 renderer=EXAM_RENDERER,
-                renderer_version=EXAM_RENDERER_VERSION,
+                renderer_version=renderer_version,
                 request_sha256=request_sha256,
                 idempotency_key=idempotency_key,
                 created_by_operator_id=operator_id,
                 state=ApplicationBuildState.REQUESTED.value,
                 validation_state="PENDING",
-                item_count=len(manifest.placements),
+                item_count=len(projection.placements),
                 resource_version=1,
             )
             session.add(record)
@@ -109,6 +131,66 @@ class ExamHwpxApplicationService:
                 )
             session.expunge(record)
             return record
+
+    def recover_interrupted(self) -> ExamRecoveryResult:
+        """Terminalize one orphaned build only after its fixed renderer is absent.
+
+        The application runner invokes this only during its startup recovery phase. A nonterminal
+        row therefore belongs to an earlier manager process. An independently running fixed unit is
+        allowed to finish, but it is never replayed automatically.
+        """
+
+        with self.sessions() as session:
+            record = session.scalar(
+                select(HwpxAssessmentAssemblyBuildRecord)
+                .where(
+                    HwpxAssessmentAssemblyBuildRecord.state.in_(
+                        (
+                            ApplicationBuildState.RUNNING.value,
+                            ApplicationBuildState.VALIDATING.value,
+                        )
+                    )
+                )
+                .order_by(
+                    HwpxAssessmentAssemblyBuildRecord.started_at,
+                    HwpxAssessmentAssemblyBuildRecord.build_id,
+                )
+                .limit(1)
+            )
+            if record is None:
+                return ExamRecoveryResult(ExamRecoveryState.NONE)
+            session.expunge(record)
+        if self.renderer.build_may_be_active(record.build_id):
+            return ExamRecoveryResult(ExamRecoveryState.ACTIVE, record)
+        try:
+            receipt = self.renderer.recover_interrupted_result(
+                build_id=record.build_id,
+                idempotency_key=record.idempotency_key,
+            )
+        except Exception as exc:
+            self._fail_build(record.build_id, exc)
+            return ExamRecoveryResult(
+                ExamRecoveryState.TERMINALIZED,
+                self.get_build(record.build_id),
+            )
+        with transaction(self.sessions) as session:
+            current = session.execute(
+                select(HwpxAssessmentAssemblyBuildRecord)
+                .where(HwpxAssessmentAssemblyBuildRecord.build_id == record.build_id)
+                .with_for_update()
+            ).scalar_one_or_none()
+            if current is None or current.state not in {
+                ApplicationBuildState.RUNNING.value,
+                ApplicationBuildState.VALIDATING.value,
+            }:
+                return ExamRecoveryResult(ExamRecoveryState.NONE)
+            if receipt is None:
+                self._terminalize_interrupted(current, datetime.now(UTC))
+            else:
+                self._complete_build(current, receipt, datetime.now(UTC))
+            session.flush()
+            session.expunge(current)
+            return ExamRecoveryResult(ExamRecoveryState.TERMINALIZED, current)
 
     def process_next(self) -> HwpxAssessmentAssemblyBuildRecord | None:
         with transaction(self.sessions) as session:
@@ -133,14 +215,15 @@ class ExamHwpxApplicationService:
             session.expunge(record)
         try:
             manifest = self._manifest(record.assessment_assembly_revision_id)
+            projection = project_assembly_for_render(manifest)
             if (
-                manifest.assessment_assembly_id != record.assessment_assembly_id
-                or manifest.manifest_sha256 != record.assembly_manifest_sha256
-                or manifest.policy_revision_id != record.policy_revision_id
-                or manifest.policy_sha256 != record.policy_sha256
-                or manifest.graph_snapshot_revision_id != record.graph_snapshot_revision_id
-                or manifest.graph_snapshot_sha256 != record.graph_snapshot_sha256
-                or self._item_set_sha256(manifest) != record.item_set_sha256
+                projection.assessment_assembly_id != record.assessment_assembly_id
+                or projection.manifest_sha256 != record.assembly_manifest_sha256
+                or projection.policy_revision_id != record.policy_revision_id
+                or projection.policy_sha256 != record.policy_sha256
+                or projection.graph_snapshot_revision_id != record.graph_snapshot_revision_id
+                or projection.graph_snapshot_sha256 != record.graph_snapshot_sha256
+                or projection.item_set_sha256() != record.item_set_sha256
             ):
                 raise HwpxManagerError(
                     HwpxManagerErrorCode.HWPX_REFERENCE_MISSING,
@@ -160,26 +243,14 @@ class ExamHwpxApplicationService:
                 handoff_snapshot=handoff,
             )
             with transaction(self.sessions) as session:
-                current = session.get(HwpxAssessmentAssemblyBuildRecord, record.build_id)
+                current = session.execute(
+                    select(HwpxAssessmentAssemblyBuildRecord)
+                    .where(HwpxAssessmentAssemblyBuildRecord.build_id == record.build_id)
+                    .with_for_update()
+                ).scalar_one_or_none()
                 if current is None:
                     raise RuntimeError("claimed assessment HWPX build disappeared")
-                self._transition(current, ApplicationBuildState.VALIDATING)
-                current.platform_job_id = receipt.job_id
-                current.item_count = receipt.item_count
-                current.section_count = receipt.section_count
-                current.native_equation_count = receipt.native_equation_count
-                current.native_table_count = receipt.native_table_count
-                current.visual_count = receipt.visual_count
-                current.output_artifact_id = receipt.artifact_id
-                current.output_artifact_revision_id = receipt.artifact_revision_id
-                current.output_sha256 = receipt.output_sha256
-                current.output_filename = (
-                    f"eom-mock-exam-{current.assessment_assembly_revision_id}.hwpx"
-                )
-                current.validation_state = "PASS"
-                self._transition(current, ApplicationBuildState.SUCCEEDED)
-                current.completed_at = datetime.now(UTC)
-                current.resource_version += 1
+                self._complete_build(current, receipt, datetime.now(UTC))
                 session.flush()
                 session.expunge(current)
                 return current
@@ -223,23 +294,21 @@ class ExamHwpxApplicationService:
             record.output_sha256,
         )
 
-    def _manifest(self, revision_id: str) -> MockExamAssemblyManifestV1:
+    def _manifest(self, revision_id: str) -> MockExamAssemblyManifestContract:
         with self.sessions() as session:
             manifest = MockExamAssemblyService.inspect(session, revision_id)
-        if (
-            not isinstance(manifest, MockExamAssemblyManifestV1)
-            or manifest.revision_state != "RELEASED"
-        ):
+        if manifest is None or manifest.revision_state != "RELEASED":
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_APPLICATION_REVISION_INELIGIBLE,
-                "released V1 Assessment Assembly revision is not HWPX-eligible",
+                "released Assessment Assembly revision is not HWPX-eligible",
             )
         return manifest
 
     def _resolve_items(
-        self, manifest: MockExamAssemblyManifestV1
+        self, manifest: MockExamAssemblyManifestContract
     ) -> tuple[ContentTeamExamItemPointer, ...]:
-        revision_ids = tuple(placement.item_revision_id for placement in manifest.placements)
+        projection = project_assembly_for_render(manifest)
+        revision_ids = tuple(placement.item_revision_id for placement in projection.placements)
         try:
             revisions = self.registry.inspect_revisions(revision_ids)
         except Exception as exc:
@@ -254,7 +323,7 @@ class ExamHwpxApplicationService:
                 "Assembly Item Revision set is incomplete or duplicated",
             )
         resolved: list[ContentTeamExamItemPointer] = []
-        for placement in manifest.placements:
+        for placement in projection.placements:
             revision: dict[str, Any] = revision_by_id[placement.item_revision_id]
             if (
                 revision.get("item_id") != placement.item_id
@@ -276,19 +345,17 @@ class ExamHwpxApplicationService:
                     HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
                     "Assembly item has no canonical content-team Markdown pointer",
                 )
+            source = self._content_source(placement, component, metadata)
             resolved.append(
                 ContentTeamExamItemPointer(
                     position=placement.position,
+                    display_number=placement.display_number,
+                    points_milli=placement.points_milli,
                     placement_id=placement.placement_id,
                     item_id=placement.item_id,
                     item_revision_id=placement.item_revision_id,
                     item_manifest_sha256=placement.item_manifest_sha256,
-                    source=ContentTeamItemSource(
-                        artifact_id=str(component["artifact_id"]),
-                        artifact_revision_id=str(component["artifact_revision_id"]),
-                        json_sha256=str(component["sha256"]),
-                        markdown_sha256=str(metadata["editorial_markdown_sha256"]),
-                    ),
+                    source=source,
                     images=tuple(
                         ContentTeamImageSource.model_validate(value)
                         for value in HwpxApplicationService._content_team_image_sources(revision)
@@ -298,37 +365,56 @@ class ExamHwpxApplicationService:
         return tuple(resolved)
 
     @staticmethod
-    def _item_set_sha256(manifest: MockExamAssemblyManifestV1) -> str:
-        return content_sha256(
-            [
-                {
-                    "position": row.position,
-                    "placement_id": row.placement_id,
-                    "item_id": row.item_id,
-                    "item_revision_id": row.item_revision_id,
-                    "item_manifest_sha256": row.item_manifest_sha256,
-                }
-                for row in manifest.placements
-            ]
+    def _content_source(
+        placement: AssemblyRenderPlacement,
+        component: dict[str, Any],
+        metadata: dict[str, Any],
+    ) -> ContentTeamItemSource:
+        pointer = placement.content
+        if pointer is None:
+            return ContentTeamItemSource(
+                artifact_id=str(component["artifact_id"]),
+                artifact_revision_id=str(component["artifact_revision_id"]),
+                json_sha256=str(component["sha256"]),
+                markdown_sha256=str(metadata["editorial_markdown_sha256"]),
+            )
+        if (
+            component.get("item_component_id") != pointer.item_component_id
+            or component.get("logical_name") != pointer.member_path
+            or component.get("artifact_id") != pointer.artifact_id
+            or component.get("artifact_revision_id") != pointer.artifact_revision_id
+            or component.get("sha256") != pointer.sha256
+            or component.get("media_type") != pointer.media_type
+            or component.get("required") is not True
+            or metadata.get("editorial_markdown_member") != pointer.editorial_markdown_member
+            or metadata.get("editorial_markdown_sha256") != pointer.editorial_markdown_sha256
+        ):
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_REVISION_INELIGIBLE,
+                "planned Assembly content pointer differs from its Item Revision",
+            )
+        return ContentTeamItemSource(
+            artifact_id=pointer.artifact_id,
+            artifact_revision_id=pointer.artifact_revision_id,
+            json_sha256=pointer.sha256,
+            markdown_sha256=pointer.editorial_markdown_sha256,
         )
 
-    @classmethod
+    @staticmethod
+    def _item_set_sha256(manifest: MockExamAssemblyManifestContract) -> str:
+        return project_assembly_for_render(manifest).item_set_sha256()
+
+    @staticmethod
     def _request_sha256(
-        cls,
-        manifest: MockExamAssemblyManifestV1,
+        manifest: MockExamAssemblyManifestContract,
         handoff: ContentTeamHandoffSnapshot,
     ) -> str:
+        projection = project_assembly_for_render(manifest)
         return content_sha256(
             {
-                "assessment_assembly_revision_id": manifest.assessment_assembly_revision_id,
-                "assembly_manifest_sha256": manifest.manifest_sha256,
-                "policy_revision_id": manifest.policy_revision_id,
-                "policy_sha256": manifest.policy_sha256,
-                "graph_snapshot_revision_id": manifest.graph_snapshot_revision_id,
-                "graph_snapshot_sha256": manifest.graph_snapshot_sha256,
-                "item_set_sha256": cls._item_set_sha256(manifest),
+                **projection.request_identity(),
                 "renderer": EXAM_RENDERER,
-                "renderer_version": EXAM_RENDERER_VERSION,
+                "renderer_version": exam_renderer_version(manifest),
                 "handoff": handoff.model_dump(mode="json"),
             }
         )
@@ -339,6 +425,57 @@ class ExamHwpxApplicationService:
     ) -> None:
         require_application_transition(ApplicationBuildState(record.state), target)
         record.state = target.value
+
+    @classmethod
+    def _terminalize_interrupted(
+        cls,
+        record: HwpxAssessmentAssemblyBuildRecord,
+        completed_at: datetime,
+    ) -> None:
+        cls._transition(record, ApplicationBuildState.FAILED)
+        record.validation_state = "FAIL"
+        record.failure_code = HwpxManagerErrorCode.HWPX_BUILD_INTERRUPTED.value
+        record.failure_detail_sanitized = (
+            "Assessment HWPX build was interrupted before terminal acceptance"
+        )
+        record.completed_at = completed_at
+        record.resource_version += 1
+
+    @classmethod
+    def _complete_build(
+        cls,
+        record: HwpxAssessmentAssemblyBuildRecord,
+        receipt: ContentTeamExamBuildReceipt,
+        completed_at: datetime,
+    ) -> None:
+        if (
+            receipt.build_id != record.build_id
+            or receipt.renderer_version != record.renderer_version
+            or receipt.assessment_assembly_revision_id != record.assessment_assembly_revision_id
+            or receipt.assembly_manifest_sha256 != record.assembly_manifest_sha256
+            or receipt.item_set_sha256 != record.item_set_sha256
+            or receipt.item_count != record.item_count
+            or receipt.section_count != record.item_count
+        ):
+            raise RuntimeError("assessment HWPX receipt differs from its admitted Item set")
+        if record.state == ApplicationBuildState.RUNNING.value:
+            cls._transition(record, ApplicationBuildState.VALIDATING)
+        elif record.state != ApplicationBuildState.VALIDATING.value:
+            raise RuntimeError("assessment HWPX build cannot accept a terminal result")
+        record.platform_job_id = receipt.job_id
+        record.item_count = receipt.item_count
+        record.section_count = receipt.section_count
+        record.native_equation_count = receipt.native_equation_count
+        record.native_table_count = receipt.native_table_count
+        record.visual_count = receipt.visual_count
+        record.output_artifact_id = receipt.artifact_id
+        record.output_artifact_revision_id = receipt.artifact_revision_id
+        record.output_sha256 = receipt.output_sha256
+        record.output_filename = f"eom-mock-exam-{record.assessment_assembly_revision_id}.hwpx"
+        record.validation_state = "PASS"
+        cls._transition(record, ApplicationBuildState.SUCCEEDED)
+        record.completed_at = completed_at
+        record.resource_version += 1
 
     def _fail_build(self, build_id: str, error: Exception) -> None:
         with transaction(self.sessions) as session:
