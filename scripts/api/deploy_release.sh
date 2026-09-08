@@ -85,21 +85,34 @@ source "${WORKFLOW_RUNNER_HOLD_LIBRARY}"
 activate_workflow_runner_deployment_hold() {
   local activation_identity_before activation_identity_after runtime_mask_state staged_hold
   [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true ]] || return 0
-  activation_identity_before="$(
-    workflow_runner_stopped_activation_identity \
-      /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
-  )" || \
-    fail "${WORKFLOW_RUNNER_SERVICE} must be inactive/dead with MainPID=0 before the hold"
+  staged_hold="${WORKFLOW_RUNNER_HOLD_DIRECTORY}/.zzzz-eom-deployment-hold.staged"
+  if [[ ! -e "${WORKFLOW_RUNNER_HOLD_TARGET}" && ! -L "${WORKFLOW_RUNNER_HOLD_TARGET}" && \
+    ! -e "${staged_hold}" && ! -L "${staged_hold}" && \
+    ! -e "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" && \
+    ! -L "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" ]]; then
+    activation_identity_before="$(
+      workflow_runner_unheld_synchronized_activation_identity \
+        /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+    )" || \
+      fail "${WORKFLOW_RUNNER_SERVICE} must be synchronized, unheld, and stopped before acquisition"
+  else
+    activation_identity_before="$(
+      workflow_runner_stopped_activation_identity \
+        /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+    )" || \
+      fail "${WORKFLOW_RUNNER_SERVICE} hold recovery state is not stopped and bounded"
+  fi
   workflow_runner_require_base_unit_file "${WORKFLOW_RUNNER_FRAGMENT}" || \
     fail "workflow runner base unit identity mismatch"
   workflow_runner_require_source_hold_file \
     "${WORKFLOW_RUNNER_HOLD_SOURCE}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
     fail "canonical workflow runner deployment hold source mismatch"
 
-  # Close the reboot window before materializing the hold. A concurrent activation in this short
-  # disabled-but-not-yet-held interval is detected by the immutable invocation identity and aborts
-  # the install before any wheel, migration, or service mutation.
-  sudo -n /usr/bin/systemctl disable "${WORKFLOW_RUNNER_SERVICE}" >/dev/null
+  # Close the reboot window before materializing the hold, but do not reload here: an implicit
+  # reload can garbage-collect this inactive unit and erase its last InvocationID. A concurrent
+  # activation in this short disabled-but-not-yet-held interval is detected by the pinned identity.
+  sudo -n /usr/bin/systemctl disable --no-reload "${WORKFLOW_RUNNER_SERVICE}" >/dev/null || \
+    fail "workflow runner could not be disabled before hold activation"
   activation_identity_after="$(
     workflow_runner_stopped_activation_identity \
       /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
@@ -119,7 +132,6 @@ activate_workflow_runner_deployment_hold() {
   workflow_runner_require_hold_directory "${WORKFLOW_RUNNER_HOLD_DIRECTORY}" || \
     fail "workflow runner deployment hold directory was not installed safely"
 
-  staged_hold="${WORKFLOW_RUNNER_HOLD_DIRECTORY}/.zzzz-eom-deployment-hold.staged"
   if [[ -e "${WORKFLOW_RUNNER_HOLD_TARGET}" || -L "${WORKFLOW_RUNNER_HOLD_TARGET}" ]]; then
     [[ ! -e "${staged_hold}" && ! -L "${staged_hold}" && \
       ! -e "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" && \
@@ -153,25 +165,29 @@ activate_workflow_runner_deployment_hold() {
     sudo -n /usr/bin/mv -T "${staged_hold}" "${WORKFLOW_RUNNER_HOLD_TARGET}"
   fi
 
-  # No release mutation is allowed until systemd has loaded and exposed the exact persistent hold.
-  sudo -n /usr/bin/systemctl daemon-reload
+  # Re-enable only after the hold is durable on disk. --no-reload keeps the stopped unit's prior
+  # invocation identity available until the one reload that exposes the enabled hold.
+  sudo -n /usr/bin/systemctl enable --no-reload "${WORKFLOW_RUNNER_SERVICE}" >/dev/null || \
+    fail "workflow runner could not be re-enabled under its on-disk hold"
   activation_identity_after="$(
-    workflow_runner_release_fenced_activation_identity \
+    workflow_runner_stopped_activation_identity \
       /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
   )" || \
-    fail "workflow runner persistent deployment hold was not loaded under its reboot fence"
+    fail "workflow runner did not remain stopped before loading its persistent hold"
   workflow_runner_require_same_activation_identity \
     "${activation_identity_before}" "${activation_identity_after}" || \
-    fail "workflow runner was invoked while the persistent hold was being activated"
-  sudo -n /usr/bin/systemctl enable "${WORKFLOW_RUNNER_SERVICE}" >/dev/null
+    fail "workflow runner was invoked while its on-disk hold was being enabled"
+  activation_identity_before="${activation_identity_after}"
+  sudo -n /usr/bin/systemctl daemon-reload || \
+    fail "systemd could not load the workflow runner deployment hold"
   activation_identity_after="$(
     workflow_runner_deployment_hold_activation_identity \
       /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
   )" || \
-    fail "workflow runner persistent deployment hold was not enabled safely"
+    fail "workflow runner persistent deployment hold was not loaded safely"
   workflow_runner_require_same_activation_identity \
     "${activation_identity_before}" "${activation_identity_after}" || \
-    fail "workflow runner was invoked while the held unit was re-enabled"
+    fail "workflow runner was invoked while the persistent hold was loaded"
 
   # Commit 6691567 may have left this exact ineffective lower-precedence runtime mask. Remove only
   # that reviewed identity and only while the effective persistent hold is already proven.
@@ -275,8 +291,10 @@ verify_workflow_runner_hold_release_receipt() {
 }
 
 release_workflow_runner_deployment_hold() {
+  (($# == 2)) || return 64
   local target_present=false backup_present=false base_sha256_before base_sha256_after
-  local activation_identity_before activation_identity_after
+  local activation_identity_before activation_identity_after journal_cursor
+  local retired_at="$1" retired_at_unix_us="$2"
   workflow_runner_require_source_hold_file \
     "${WORKFLOW_RUNNER_HOLD_SOURCE}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
     fail "canonical workflow runner deployment hold source mismatch"
@@ -305,33 +323,39 @@ release_workflow_runner_deployment_hold() {
     printf '%s\n' "workflow_runner_deployment_hold=REPLAYED_RELEASED_INACTIVE_DISABLED"
     return 0
   fi
+  journal_cursor="$(
+    workflow_runner_journal_cursor_at_or_before \
+      /usr/bin/journalctl --system "${retired_at}" "${retired_at_unix_us}"
+  )" || fail "workflow runner release journal lower bound is unavailable"
 
   if [[ "${target_present}" == true ]]; then
     if activation_identity_before="$(
       workflow_runner_deployment_hold_activation_identity \
         /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
     )"; then
-      # Disable before removing the persistent .conf. A power loss at every later instruction
-      # therefore reboots to an unscheduled runner even if systemd has not yet reloaded the move.
-      sudo -n /usr/bin/systemctl disable "${WORKFLOW_RUNNER_SERVICE}" >/dev/null || \
-        fail "workflow runner could not be disabled before hold release"
-      activation_identity_after="$(
-        workflow_runner_release_fenced_activation_identity \
-          /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
-      )" || \
-        fail "workflow runner was not disabled under the persistent hold"
-      workflow_runner_require_same_activation_identity \
-        "${activation_identity_before}" "${activation_identity_after}" || \
-        fail "workflow runner was invoked while its release reboot fence was installed"
-      activation_identity_before="${activation_identity_after}"
+      : # Normal release from the exact enabled hold.
     elif activation_identity_before="$(
       workflow_runner_release_fenced_activation_identity \
         /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
     )"; then
-      : # Idempotent retry after disable and before the atomic hold move.
+      : # Retry after a reboot preserved the disabled on-disk fence and loaded hold.
     else
       fail "workflow runner deployment hold is not exact, disabled, and quiescent"
     fi
+    # Do not let disable reload and garbage-collect the stopped unit before its identity is checked.
+    # The removed enablement links are the durable reboot fence; the loaded hold remains the
+    # same-boot manual/dependency fence until the explicit release reload below.
+    sudo -n /usr/bin/systemctl disable --no-reload "${WORKFLOW_RUNNER_SERVICE}" >/dev/null || \
+      fail "workflow runner could not be disabled before hold release"
+    activation_identity_after="$(
+      workflow_runner_release_transition_activation_identity \
+        /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+    )" || \
+      fail "workflow runner was not disabled on disk under its loaded persistent hold"
+    workflow_runner_require_same_activation_identity \
+      "${activation_identity_before}" "${activation_identity_after}" || \
+      fail "workflow runner was invoked while its release reboot fence was installed"
+    activation_identity_before="${activation_identity_after}"
     sudo -n /usr/bin/mv -T \
       "${WORKFLOW_RUNNER_HOLD_TARGET}" "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" || \
       fail "workflow runner deployment hold could not be moved to its release backup"
@@ -364,9 +388,11 @@ release_workflow_runner_deployment_hold() {
       /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
   )" || \
     fail "workflow runner deployment hold release did not leave a quiescent unit"
-  workflow_runner_require_same_activation_identity \
-    "${activation_identity_before}" "${activation_identity_after}" || \
-    fail "workflow runner was invoked during deployment hold release"
+  workflow_runner_require_release_identity_with_journal_fence \
+    "${activation_identity_before}" "${activation_identity_after}" \
+    /usr/bin/journalctl --system "${WORKFLOW_RUNNER_SERVICE}" "${journal_cursor}" || \
+    fail "workflow runner release identity lacks a clean journal fence"
+  activation_identity_before="${activation_identity_after}"
   workflow_runner_require_base_unit_file "${WORKFLOW_RUNNER_FRAGMENT}" || \
     fail "workflow runner base unit identity changed during hold release"
   base_sha256_after="$(workflow_runner_file_sha256 "${WORKFLOW_RUNNER_FRAGMENT}")" || \
@@ -376,19 +402,23 @@ release_workflow_runner_deployment_hold() {
   workflow_runner_require_hold_file \
     "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
     fail "workflow runner deployment hold release backup changed unexpectedly"
+  activation_identity_after="$(
+    workflow_runner_released_activation_identity \
+      /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
+  )" || \
+    fail "workflow runner changed state before deployment hold cleanup"
+  workflow_runner_require_release_identity_with_journal_fence \
+    "${activation_identity_before}" "${activation_identity_after}" \
+    /usr/bin/journalctl --system "${WORKFLOW_RUNNER_SERVICE}" "${journal_cursor}" || \
+    fail "workflow runner changed or emitted journal activity before hold cleanup"
+  # Leave the exact backup in place until every fallible state/journal proof has passed. If a proof
+  # fails, the immutable receipt cursor and backup make retry exact; after unlink, output loss is the
+  # already-proven disabled/unheld no-op handled at the top of this function.
   sudo -n /usr/bin/rm -- "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" || \
     fail "workflow runner deployment hold release backup could not be removed"
   [[ ! -e "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" && \
     ! -L "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}" ]] || \
     fail "workflow runner deployment hold release backup remains after removal"
-  activation_identity_after="$(
-    workflow_runner_released_activation_identity \
-      /usr/bin/systemctl "${WORKFLOW_RUNNER_SERVICE}"
-  )" || \
-    fail "workflow runner changed state after deployment hold release"
-  workflow_runner_require_same_activation_identity \
-    "${activation_identity_before}" "${activation_identity_after}" || \
-    fail "workflow runner was invoked after deployment hold release"
   printf '%s\n' "workflow_runner_deployment_hold=RELEASED_INACTIVE_DISABLED"
   printf '%s\n' \
     "Explicitly enable --now eom-workflow-runner.service after the retirement receipt release."
@@ -396,15 +426,25 @@ release_workflow_runner_deployment_hold() {
 
 release_workflow_runner_deployment_hold_after_verified_receipt() {
   local verifier_pid verifier_read_fd verifier_write_fd verifier_status verifier_confirmation
+  local verifier_prefix release_retired_at release_retired_at_unix_us
   coproc WORKFLOW_RUNNER_RECEIPT_VERIFIER {
     verify_workflow_runner_hold_release_receipt --hold-lock-until-release-signal
   }
   verifier_pid="${WORKFLOW_RUNNER_RECEIPT_VERIFIER_PID}"
   verifier_read_fd="${WORKFLOW_RUNNER_RECEIPT_VERIFIER[0]}"
   verifier_write_fd="${WORKFLOW_RUNNER_RECEIPT_VERIFIER[1]}"
+  verifier_prefix="workflow_runner_hold_release_receipt=VERIFIED_LOCKED retired_at="
   if ! IFS= read -r verifier_status <&"${verifier_read_fd}" || \
-    [[ "${verifier_status}" != \
-      "workflow_runner_hold_release_receipt=VERIFIED_LOCKED" ]]; then
+    [[ "${verifier_status}" != "${verifier_prefix}"* ]]; then
+    exec {verifier_write_fd}>&-
+    wait "${verifier_pid}" || true
+    return 1
+  fi
+  release_retired_at="${verifier_status#"${verifier_prefix}"}"
+  release_retired_at_unix_us="${release_retired_at##* retired_at_unix_us=}"
+  release_retired_at="${release_retired_at%% retired_at_unix_us=*}"
+  if [[ ! "${release_retired_at}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$ || \
+    ! "${release_retired_at_unix_us}" =~ ^[0-9]{1,18}$ ]]; then
     exec {verifier_write_fd}>&-
     wait "${verifier_pid}" || true
     return 1
@@ -412,7 +452,8 @@ release_workflow_runner_deployment_hold_after_verified_receipt() {
 
   # The verifier keeps an exclusive flock on the exact checkpoint until this mutation has either
   # completed or failed. No official checkpoint writer can advance between validation and release.
-  if ! release_workflow_runner_deployment_hold; then
+  if ! release_workflow_runner_deployment_hold \
+    "${release_retired_at}" "${release_retired_at_unix_us}"; then
     exec {verifier_write_fd}>&-
     wait "${verifier_pid}" || true
     return 1
@@ -1519,8 +1560,8 @@ for schema_id in RESULT_SCHEMA_FILES:
     load_codex_result_schema(schema_id)
 control_schema_names = {name for name, _ in control_schema_inventory()}
 if not {
-    "standard-control-bootstrap-v9",
-    "knowledge-item-control-bootstrap-v6",
+    "standard-control-bootstrap-v10",
+    "knowledge-item-control-bootstrap-v7",
 }.issubset(control_schema_names):
     raise SystemExit("control-policy successor schema inventory is incomplete")
 for schema_name in control_schema_names:

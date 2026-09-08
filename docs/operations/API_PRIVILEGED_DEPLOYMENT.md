@@ -29,9 +29,10 @@ sequence. It requires the local runner unit to be loaded, inactive/dead, without
 systemd Job. Before any release mutation, it atomically installs the pinned root-owned persistent
 drop-in and proves the exact loaded path, SHA-256, metadata, `RefuseManualStart=yes`,
 `ConditionPathExists=!/`, and `NeedDaemonReload=no`. This blocks explicit start/restart requests and
-skips dependency activation before `ExecStart`, including across reboot. Hold acquisition briefly
-disables the stopped unit as a reboot fence, loads the barrier, and re-enables it only after the
-barrier is proven. Hold release disables it again before removing the barrier.
+skips dependency activation before `ExecStart`, including across reboot. Hold acquisition disables
+the stopped unit with `--no-reload`, writes the barrier, re-enables with `--no-reload` only after the
+barrier is durable on disk, then reloads once and proves the enabled barrier. Hold release disables
+without reload before removing the barrier.
 
 Commit `6691567` may have left `/run/systemd/system/eom-workflow-runner.service -> /dev/null`. That
 lower-precedence mask does not hold a complete unit installed under `/etc`. The installer removes it
@@ -125,11 +126,17 @@ scripts/api/deploy_release.sh --release-workflow-runner-hold \
 Release first runs the installed root-owned verifier as unprivileged `eom-api`. It safely reads the
 fixed receipt and current plus immutable checkpoint, validates installed JSON Schema and Pydantic
 contracts, all explicit pins, hashes, and the exact 24-cancel/one-failed-preserved cohort. Only then
-does it disable the runner under the still-loaded hold, atomically move the verified drop-in to a
-non-`.conf` recovery name, reload systemd, prove the base unit matches its canonical pinned hash,
-prove the pre/post invocation identity did not change, and prove the runner remains disabled and
-inactive with no drop-ins or Job. It then removes that exact backup and completes the verifier
-handshake while its checkpoint lock is still held. It does not start the runner.
+does it derive a retry-stable journal cursor from the immutable receipt retirement time, disable the
+runner without reload under the still-loaded hold, atomically move the verified drop-in to a
+non-`.conf` recovery name, reload systemd, and prove the base unit matches its canonical pinned hash.
+The stopped unit's invocation identity must either remain exact or become systemd's empty baseline
+after garbage collection; the latter is accepted only when the exact runner unit has no journal
+entry after the receipt cursor. Missing journal access, malformed output, or a rotated cursor fails
+closed. Release then proves the runner remains disabled and inactive with no drop-ins or Job,
+repeats the state and journal fence, removes the exact backup, and completes the verifier handshake
+while its checkpoint lock is still held. It does not start the runner. A retry with the backup uses
+the same receipt-time cursor; a retry after completed backup removal is an exact disabled-state
+no-op.
 Enable and start it in a separate explicit step with
 `sudo -n systemctl enable --now eom-workflow-runner.service`. If release is interrupted, rerun the
 same fully pinned command; do not delete or edit files under the unit drop-in directory manually.

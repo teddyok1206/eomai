@@ -7,6 +7,7 @@ import re
 import stat
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import MappingProxyType
 from typing import Literal
 
 import yaml
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.control_models import (
+    ExecutionBundleRevisionRecord,
     ExecutionPresetEvaluationRecord,
     ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
@@ -36,6 +38,25 @@ from eom_orchestrator.settings import Settings
 
 MAX_MANIFEST_BYTES = 64 * 1024
 EXPECTED_ROLES = ("authoring", "image", "item_management", "review")
+EXPECTED_V7_BASE_INSTRUCTION_BUNDLE_REVISION_IDS = MappingProxyType(
+    {
+        "authoring": "instrrev_4d9b9032a2212992e50bfb83e076776e",
+        "image": "instrrev_5465e863ee8c5bc7186449a9d5953ced",
+        "review": "instrrev_3868d73bc11ebfb17067ab51e4f44759",
+        "item_management": "instrrev_c7df93dbbc2d8dca23d633c75b6219e9",
+    }
+)
+EXPECTED_V7_BASE_INSTRUCTION_MEMBER_SHA256S = MappingProxyType(
+    {
+        "platform": "sha256:5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b",
+        "authoring": "sha256:2ecc15cfa8309843c9dd6b8528471602f7fc506a99c0f982726e8c8aa4c3d2ce",
+        "image": "sha256:7f9f1c9eb5dee44ef76981b04121f1a689a849e8388051f266c4d0ea80cd74ca",
+        "review": "sha256:5613e757e33555695ee3b3536e24744d33b940c6fb14bc489ee62992d9c06cdb",
+        "item_management": (
+            "sha256:c5af5ca1137f1ef2c2e724e3a3692178d6d48eeee7eac8f293d7014e67ec156a"
+        ),
+    }
+)
 
 
 class KnowledgeItemRetrievalBootstrapPolicy(BaseModel):
@@ -86,6 +107,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
         "knowledge-item-control-bootstrap/4.0",
         "knowledge-item-control-bootstrap/5.0",
         "knowledge-item-control-bootstrap/6.0",
+        "knowledge-item-control-bootstrap/7.0",
     ]
     preset_key: Literal["knowledge-grounded-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -93,6 +115,12 @@ class KnowledgeItemBootstrapManifest(BaseModel):
     created_at: datetime
     base_preset_key: Literal["standard-item"]
     base_preset_schema_version: Literal["execution-preset-revision/1.0"]
+    base_instruction_bundle_revision_ids: dict[str, str] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    base_instruction_member_sha256s: dict[str, str] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     general_knowledge_policy: Literal["ALLOW_WITH_PROVENANCE"]
     compatible_workflow_protocols: tuple[
         Literal[
@@ -110,6 +138,20 @@ class KnowledgeItemBootstrapManifest(BaseModel):
     def exact_role_and_protocol_boundary(self) -> KnowledgeItemBootstrapManifest:
         if self.created_at.tzinfo is None or self.created_at.utcoffset() != timedelta(0):
             raise ValueError("knowledge item bootstrap timestamp must use UTC")
+        if self.schema_version == "knowledge-item-control-bootstrap/7.0":
+            if self.base_instruction_bundle_revision_ids != dict(
+                EXPECTED_V7_BASE_INSTRUCTION_BUNDLE_REVISION_IDS
+            ):
+                raise ValueError("knowledge item V7 base instruction revisions differ")
+            if self.base_instruction_member_sha256s != dict(
+                EXPECTED_V7_BASE_INSTRUCTION_MEMBER_SHA256S
+            ):
+                raise ValueError("knowledge item V7 base instruction hashes differ")
+        elif (
+            self.base_instruction_bundle_revision_ids is not None
+            or self.base_instruction_member_sha256s is not None
+        ):
+            raise ValueError("legacy knowledge item bootstrap cannot pin V7 instructions")
         expected_protocol = {
             "knowledge-item-control-bootstrap/1.0": "workflow-role/1.12.0",
             "knowledge-item-control-bootstrap/2.0": "workflow-role/1.15.0",
@@ -117,6 +159,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
             "knowledge-item-control-bootstrap/4.0": "workflow-role/1.17.0",
             "knowledge-item-control-bootstrap/5.0": "workflow-role/1.19.0",
             "knowledge-item-control-bootstrap/6.0": "workflow-role/1.19.0",
+            "knowledge-item-control-bootstrap/7.0": "workflow-role/1.19.0",
         }[self.schema_version]
         if self.compatible_workflow_protocols != (expected_protocol,):
             raise ValueError("knowledge item workflow protocol differs")
@@ -165,6 +208,7 @@ def load_knowledge_item_bootstrap_manifest(
             "knowledge-item-control-bootstrap/4.0": "knowledge-item-control-bootstrap-v4",
             "knowledge-item-control-bootstrap/5.0": "knowledge-item-control-bootstrap-v5",
             "knowledge-item-control-bootstrap/6.0": "knowledge-item-control-bootstrap-v6",
+            "knowledge-item-control-bootstrap/7.0": "knowledge-item-control-bootstrap-v7",
         }.get(schema_version)
         if schema_name is None:
             raise ValueError("knowledge item bootstrap schema version is unsupported")
@@ -319,6 +363,14 @@ def _find_or_create_draft(
             "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID",
             "standard-item base policy differs from the reviewed Graph-item boundary",
         )
+    _require_base_instruction_revisions(
+        manifest,
+        {
+            str(policy.role): policy.instruction_bundle.bundle_revision_id
+            for policy in base_model.role_policies
+        },
+    )
+    _require_base_instruction_member_hashes(session, manifest=manifest, base=base_model)
     role_policies = []
     for policy in base_model.role_policies:
         projected = policy.model_dump(mode="json")
@@ -434,6 +486,96 @@ def _find_or_create_draft(
         created_at=manifest.created_at,
     )
     return base, draft
+
+
+def _require_base_instruction_revisions(
+    manifest: KnowledgeItemBootstrapManifest,
+    actual: dict[str, str],
+) -> None:
+    """Reject a V7 bootstrap unless current Standard is the exact V10 instruction successor."""
+
+    if manifest.schema_version != "knowledge-item-control-bootstrap/7.0":
+        return
+    expected = manifest.base_instruction_bundle_revision_ids
+    if expected is None or actual != expected:
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID",
+            "standard-item base does not pin the exact V10 instruction revisions",
+        )
+
+
+def _require_base_instruction_member_hashes(
+    session: Session,
+    *,
+    manifest: KnowledgeItemBootstrapManifest,
+    base: ExecutionPresetRevision,
+) -> None:
+    """Resolve V10 bundles and verify their exact platform/role member content hashes."""
+
+    if manifest.schema_version != "knowledge-item-control-bootstrap/7.0":
+        return
+    expected = manifest.base_instruction_member_sha256s
+    if expected is None:
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID",
+            "standard-item V10 instruction member hashes are missing",
+        )
+    for policy in base.role_policies:
+        role = str(policy.role)
+        pointer = policy.instruction_bundle
+        bundle = session.get(ExecutionBundleRevisionRecord, pointer.bundle_revision_id)
+        component_hashes = (
+            _instruction_component_hashes(bundle.canonical_document) if bundle is not None else None
+        )
+        if (
+            bundle is None
+            or bundle.bundle_id != pointer.bundle_id
+            or bundle.bundle_revision_id != pointer.bundle_revision_id
+            or bundle.bundle_kind != "INSTRUCTION"
+            or bundle.revision_number != 10
+            or bundle.schema_version != "instruction-bundle-manifest/1.0"
+            or bundle.state != "RELEASED"
+            or bundle.manifest_artifact_id != pointer.manifest_artifact.artifact_id
+            or bundle.manifest_artifact_revision_id
+            != pointer.manifest_artifact.artifact_revision_id
+            or bundle.manifest_sha256 != pointer.manifest_sha256
+            or bundle.manifest_sha256 != pointer.manifest_artifact.sha256
+            or bundle.content_sha256
+            != compute_control_document_hash(bundle.canonical_document, "content_sha256")
+            or bundle.canonical_document.get("bundle_id") != pointer.bundle_id
+            or bundle.canonical_document.get("bundle_revision_id") != pointer.bundle_revision_id
+            or bundle.canonical_document.get("revision_number") != 10
+            or component_hashes
+            != {
+                "PLATFORM": expected["platform"],
+                "ROLE": expected[role],
+            }
+        ):
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID",
+                "standard-item V10 instruction member pointer or hash differs",
+            )
+
+
+def _instruction_component_hashes(document: object) -> dict[str, str] | None:
+    if not isinstance(document, dict):
+        return None
+    components = document.get("components")
+    if not isinstance(components, list) or len(components) != 2:
+        return None
+    hashes: dict[str, str] = {}
+    for component in components:
+        if not isinstance(component, dict):
+            return None
+        layer = component.get("layer")
+        artifact = component.get("artifact")
+        if layer not in {"PLATFORM", "ROLE"} or not isinstance(artifact, dict):
+            return None
+        sha256 = artifact.get("sha256")
+        if not isinstance(sha256, str) or layer in hashes:
+            return None
+        hashes[layer] = sha256
+    return hashes if set(hashes) == {"PLATFORM", "ROLE"} else None
 
 
 def _released_evaluation(

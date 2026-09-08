@@ -4,6 +4,7 @@ import hashlib
 import os
 import subprocess
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,12 @@ BASE_UNIT_SOURCE = ROOT / "infra/systemd/eom-workflow-runner.service"
 HOLD_BYTES = b"[Unit]\nRefuseManualStart=yes\nConditionPathExists=!/\n"
 HOLD_SHA256 = "d63c1155611f0305d4bcc99da04be6ab89811b7ec1b0abff93e1af118df056e0"
 BASE_UNIT_SHA256 = "1688c77a606ea647d498aacbb3f8f75265f459cf888e1495ae82a8d2887b2878"
+JOURNAL_CURSOR = (
+    "s=0123456789abcdef0123456789abcdef;i=42;b=fedcba9876543210fedcba9876543210;m=123;t=456;x=789"
+)
+ROTATED_JOURNAL_CURSOR = (
+    "s=1123456789abcdef0123456789abcdef;i=43;b=aedcba9876543210fedcba9876543210;m=124;t=457;x=790"
+)
 
 
 def _snapshot(**changes: str) -> str:
@@ -92,6 +99,44 @@ def test_hold_helper_accepts_exact_stopped_local_unit_snapshot(tmp_path: Path) -
     )
 
     assert result.returncode == 0
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize("unit_file_state", ("enabled", "disabled"))
+def test_hold_helper_accepts_synchronized_unheld_acquisition_snapshot(
+    tmp_path: Path, unit_file_state: str
+) -> None:
+    stopped = _systemctl(tmp_path, _snapshot(UnitFileState=unit_file_state))
+
+    result = _run(
+        "workflow_runner_unheld_synchronized_activation_identity",
+        stopped,
+        "eom-workflow-runner.service",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == "0123456789abcdef0123456789abcdef:123456\n"
+
+
+@pytest.mark.parametrize(
+    "output",
+    (
+        _snapshot(UnitFileState="static"),
+        _snapshot(DropInPaths="/etc/systemd/system/foreign.conf"),
+        _snapshot(RefuseManualStart="yes"),
+        _snapshot(NeedDaemonReload="yes"),
+    ),
+)
+def test_synchronized_unheld_acquisition_rejects_nonexact_state(
+    tmp_path: Path, output: str
+) -> None:
+    stopped = _systemctl(tmp_path, output)
+    result = _run(
+        "workflow_runner_unheld_synchronized_activation_identity",
+        stopped,
+        "eom-workflow-runner.service",
+    )
+    assert result.returncode != 0
     assert result.stdout == ""
 
 
@@ -228,6 +273,249 @@ def test_activation_identity_rejects_any_invocation_or_timestamp_change() -> Non
     )
 
 
+def test_disable_no_reload_preserves_nonempty_stopped_invocation_identity(tmp_path: Path) -> None:
+    fake = tmp_path / "systemctl"
+    state = tmp_path / "systemctl.state"
+    invocation_id = "0123456789abcdef0123456789abcdef"
+    state.write_text(f"enabled:{invocation_id}\n", encoding="ascii")
+    fake.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        'state="${0}.state"\n'
+        'IFS=: read -r unit_file_state invocation_id <"${state}"\n'
+        'case "$1" in\n'
+        "  show)\n"
+        '    [[ "$2" == eom-workflow-runner.service ]]\n'
+        "    printf '%s\\n' "
+        "'ActiveState=inactive' 'SubState=dead' "
+        '"UnitFileState=${unit_file_state}" '
+        "'MainPID=0' 'LoadState=loaded' "
+        "'FragmentPath=/etc/systemd/system/eom-workflow-runner.service' "
+        "'DropInPaths=' 'RefuseManualStart=no' 'NeedDaemonReload=no' 'Job=' "
+        '"InvocationID=${invocation_id}" '
+        "'ActiveEnterTimestampMonotonic=123456'\n"
+        "    ;;\n"
+        "  disable)\n"
+        "    no_reload=false\n"
+        '    for argument in "$@"; do [[ "${argument}" == --no-reload ]] && no_reload=true; done\n'
+        '    [[ "${no_reload}" == true ]] || invocation_id=""\n'
+        '    printf "disabled:%s\\n" "${invocation_id}" >"${state}"\n'
+        "    ;;\n"
+        "  is-enabled)\n"
+        '    if [[ "${unit_file_state}" == disabled ]]; then printf "disabled\\n"; exit 1; fi\n'
+        '    printf "enabled\\n"\n'
+        "    ;;\n"
+        "  *) exit 91 ;;\n"
+        "esac\n",
+        encoding="ascii",
+    )
+    fake.chmod(0o700)
+
+    before = _run(
+        "workflow_runner_stopped_activation_identity", fake, "eom-workflow-runner.service"
+    )
+    assert before.returncode == 0
+    assert before.stdout == f"{invocation_id}:123456\n"
+    assert (
+        _run(
+            "workflow_runner_unit_disabled_on_disk", fake, "eom-workflow-runner.service"
+        ).returncode
+        != 0
+    )
+
+    implicit_reload = subprocess.run((fake, "disable", "eom-workflow-runner.service"), check=False)
+    assert implicit_reload.returncode == 0
+    after_gc = _run(
+        "workflow_runner_stopped_activation_identity", fake, "eom-workflow-runner.service"
+    )
+    assert after_gc.returncode == 0
+    assert after_gc.stdout == ":123456\n"
+    assert (
+        _run(
+            "workflow_runner_require_same_activation_identity",
+            before.stdout.strip(),
+            after_gc.stdout.strip(),
+        ).returncode
+        != 0
+    )
+
+    state.write_text(f"enabled:{invocation_id}\n", encoding="ascii")
+    no_reload = subprocess.run(
+        (fake, "disable", "--no-reload", "eom-workflow-runner.service"), check=False
+    )
+    assert no_reload.returncode == 0
+    assert (
+        _run(
+            "workflow_runner_unit_disabled_on_disk", fake, "eom-workflow-runner.service"
+        ).returncode
+        == 0
+    )
+    after_no_reload = _run(
+        "workflow_runner_stopped_activation_identity", fake, "eom-workflow-runner.service"
+    )
+    assert after_no_reload.stdout == before.stdout
+    assert (
+        _run(
+            "workflow_runner_require_same_activation_identity",
+            before.stdout.strip(),
+            after_no_reload.stdout.strip(),
+        ).returncode
+        == 0
+    )
+
+
+def test_hold_acquisition_defers_single_reload_until_hold_is_on_disk_and_enabled() -> None:
+    source = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+    start = source.index("activate_workflow_runner_deployment_hold() {")
+    end = source.index("\n\nverify_workflow_runner_deployment_hold()", start)
+    activation = source[start:end]
+    core = activation[: activation.index("# Commit 6691567")]
+
+    disable = core.index('systemctl disable --no-reload "${WORKFLOW_RUNNER_SERVICE}"')
+    materialize = core.index('"${staged_hold}" "${WORKFLOW_RUNNER_HOLD_TARGET}"')
+    enable = core.index('systemctl enable --no-reload "${WORKFLOW_RUNNER_SERVICE}"')
+    reload = core.index("systemctl daemon-reload")
+    held = core.index("workflow_runner_deployment_hold_activation_identity", reload)
+
+    assert disable < materialize < enable < reload < held
+    assert core.count("systemctl daemon-reload") == 1
+    assert core.count("workflow_runner_require_same_activation_identity") == 3
+    assert "workflow_runner_unheld_synchronized_activation_identity" in core
+
+
+def test_release_journal_fence_is_retry_stable_and_fails_closed(tmp_path: Path) -> None:
+    journalctl = tmp_path / "journalctl"
+    state = tmp_path / "journalctl.state"
+    state.write_text("clean\n", encoding="ascii")
+    journalctl.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        'state="$(cat -- "${0}.state")"\n'
+        'case " $* " in\n'
+        "  *' --until='*)\n"
+        '    [[ "${state}" != cursor-failure && "${state}" != permission-failure ]] || exit 1\n'
+        '    [[ "${state}" != malformed ]] || { printf "%s\\n" malformed; exit 0; }\n'
+        "    observed=1770000000000000\n"
+        '    [[ "${state}" != future-cursor ]] || observed=1790000000000000\n'
+        f'    printf \'{{"__CURSOR":"{JOURNAL_CURSOR}",\''
+        '\'"__REALTIME_TIMESTAMP":"%s"}\\n\' "${observed}"\n'
+        f"    printf '%s\\n' '-- cursor: {JOURNAL_CURSOR}'\n"
+        "    ;;\n"
+        "  *' --cursor='*)\n"
+        '    [[ "${state}" != permission-failure ]] || exit 1\n'
+        f'    retained="{JOURNAL_CURSOR}"\n'
+        f'    [[ "${{state}}" != rotated ]] || retained="{ROTATED_JOURNAL_CURSOR}"\n'
+        '    printf \'{"__CURSOR":"%s"}\\n\' "${retained}"\n'
+        "    ;;\n"
+        "  *' --after-cursor='*)\n"
+        '    [[ "${state}" != permission-failure ]] || exit 1\n'
+        f'    [[ "${{state}}" != activity ]] || printf \'{{"__CURSOR":"{JOURNAL_CURSOR}"}}\\n\'\n'
+        "    ;;\n"
+        "  *) exit 91 ;;\n"
+        "esac\n",
+        encoding="ascii",
+    )
+    journalctl.chmod(0o700)
+    retired_at = "2026-09-08T12:00:00Z"
+    retired_at_unix_us = "1780000000000000"
+
+    cursor = _run(
+        "workflow_runner_journal_cursor_at_or_before",
+        journalctl,
+        "--system",
+        retired_at,
+        retired_at_unix_us,
+    )
+    assert cursor.returncode == 0
+    assert cursor.stdout == f"{JOURNAL_CURSOR}\n"
+    before = "0123456789abcdef0123456789abcdef:123456"
+    assert (
+        _run(
+            "workflow_runner_require_release_identity_with_journal_fence",
+            before,
+            ":0",
+            journalctl,
+            "--system",
+            "eom-workflow-runner.service",
+            JOURNAL_CURSOR,
+        ).returncode
+        == 0
+    )
+
+    state.write_text("activity\n", encoding="ascii")
+    retry_cursor = _run(
+        "workflow_runner_journal_cursor_at_or_before",
+        journalctl,
+        "--system",
+        retired_at,
+        retired_at_unix_us,
+    )
+    assert retry_cursor.returncode == 0
+    assert retry_cursor.stdout == cursor.stdout
+    assert (
+        _run(
+            "workflow_runner_require_release_identity_with_journal_fence",
+            before,
+            ":0",
+            journalctl,
+            "--system",
+            "eom-workflow-runner.service",
+            JOURNAL_CURSOR,
+        ).returncode
+        != 0
+    )
+    for unavailable_state in ("rotated", "permission-failure"):
+        state.write_text(f"{unavailable_state}\n", encoding="ascii")
+        assert (
+            _run(
+                "workflow_runner_require_release_identity_with_journal_fence",
+                before,
+                ":0",
+                journalctl,
+                "--system",
+                "eom-workflow-runner.service",
+                JOURNAL_CURSOR,
+            ).returncode
+            != 0
+        )
+    state.write_text("future-cursor\n", encoding="ascii")
+    assert (
+        _run(
+            "workflow_runner_journal_cursor_at_or_before",
+            journalctl,
+            "--system",
+            retired_at,
+            retired_at_unix_us,
+        ).returncode
+        != 0
+    )
+    for unavailable_state in ("cursor-failure", "permission-failure", "malformed"):
+        state.write_text(f"{unavailable_state}\n", encoding="ascii")
+        assert (
+            _run(
+                "workflow_runner_journal_cursor_at_or_before",
+                journalctl,
+                "--system",
+                retired_at,
+                retired_at_unix_us,
+            ).returncode
+            != 0
+        )
+    state.write_text("clean\n", encoding="ascii")
+    assert (
+        _run(
+            "workflow_runner_require_release_identity_with_journal_fence",
+            before,
+            "fedcba9876543210fedcba9876543210:123457",
+            journalctl,
+            "--system",
+            "eom-workflow-runner.service",
+            JOURNAL_CURSOR,
+        ).returncode
+        != 0
+    )
+
+
 def test_runtime_mask_cleanup_identity_accepts_only_exact_dev_null_symlink(
     tmp_path: Path,
 ) -> None:
@@ -283,9 +571,10 @@ def test_release_receipt_verifier_is_installed_unprivileged_and_precedes_mutatio
     verifier = gate.index(
         "verify_workflow_runner_hold_release_receipt --hold-lock-until-release-signal"
     )
-    mutation = gate.index("if ! release_workflow_runner_deployment_hold; then")
+    mutation = gate.index("if ! release_workflow_runner_deployment_hold \\")
     assert verifier < mutation
     assert "workflow_runner_hold_release_receipt=VERIFIED_LOCKED" in gate
+    assert "release_retired_at_unix_us" in gate
     assert "printf '%s\\n' \"RELEASE_COMPLETE\"" in gate
     assert "workflow_runner_hold_release_receipt=RELEASE_CONFIRMED" in gate
     assert "sudo -n systemd-run --quiet --wait --pipe --collect" in operations
@@ -323,12 +612,24 @@ def test_hold_release_is_reboot_fenced_retryable_and_checks_every_mutation() -> 
     )
     release = source[release_start:release_end]
 
-    disable = release.index('systemctl disable "${WORKFLOW_RUNNER_SERVICE}"')
+    disable = release.index('systemctl disable --no-reload "${WORKFLOW_RUNNER_SERVICE}"')
     move = release.index(
         '"${WORKFLOW_RUNNER_HOLD_TARGET}" "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}"'
     )
     reload = release.index("systemctl daemon-reload")
-    assert disable < move < reload
+    replay = release.index("REPLAYED_RELEASED_INACTIVE_DISABLED")
+    cursor = release.index("workflow_runner_journal_cursor_at_or_before")
+    first_journal_fence = release.index(
+        "workflow_runner_require_release_identity_with_journal_fence"
+    )
+    cleanup = release.index('rm -- "${WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP}"')
+    second_journal_fence = release.index(
+        "workflow_runner_require_release_identity_with_journal_fence",
+        first_journal_fence + 1,
+    )
+    assert replay < cursor < disable < move < reload < first_journal_fence
+    assert first_journal_fence < second_journal_fence < cleanup
+    assert release.count("workflow_runner_require_release_identity_with_journal_fence") == 2
     assert "workflow_runner_cached_release_fenced_activation_identity" in release
     assert "REPLAYED_RELEASED_INACTIVE_DISABLED" in release
     assert "RELEASED_INACTIVE_DISABLED" in release
@@ -390,11 +691,13 @@ def test_successful_receipt_gate_holds_handshake_across_release(tmp_path: Path) 
         'events="$1"\n'
         "verify_workflow_runner_hold_release_receipt() { "
         "printf '%s\\n' locked >>\"${events}\"; "
-        "printf '%s\\n' workflow_runner_hold_release_receipt=VERIFIED_LOCKED; "
+        "printf '%s\\n' 'workflow_runner_hold_release_receipt=VERIFIED_LOCKED "
+        "retired_at=2026-09-08T12:00:00Z retired_at_unix_us=1788868800000000'; "
         'IFS= read -r signal; [[ "${signal}" == RELEASE_COMPLETE ]]; '
         "printf '%s\\n' confirmed >>\"${events}\"; "
         "printf '%s\\n' workflow_runner_hold_release_receipt=RELEASE_CONFIRMED; }\n"
         "release_workflow_runner_deployment_hold() { "
+        '[[ "$1" == 2026-09-08T12:00:00Z && "$2" == 1788868800000000 ]]; '
         "printf '%s\\n' release >>\"${events}\"; return 0; }\n"
         + gate
         + "\n"
@@ -439,6 +742,7 @@ def test_real_user_systemd_local_unit_hold_blocks_manual_dependency_and_restart_
     hold = drop_in_directory / "zzzz-eom-deployment-hold.conf"
     backup = drop_in_directory / ".zzzz-eom-deployment-hold.released"
     runtime_mask = runtime_root / unit_name
+    enable_link = persistent_root / "default.target.wants" / unit_name
     invoked = tmp_path / "exec-start-was-invoked"
 
     def systemctl(*arguments: str) -> subprocess.CompletedProcess[str]:
@@ -464,7 +768,6 @@ def test_real_user_systemd_local_unit_hold_blocks_manual_dependency_and_restart_
         "[Install]\nWantedBy=default.target\n",
         encoding="ascii",
     )
-    target.write_text(f"[Unit]\nWants={unit_name}\nAfter={unit_name}\n", encoding="ascii")
     runtime_mask.symlink_to("/dev/null")
     try:
         reloaded = systemctl("daemon-reload")
@@ -476,8 +779,29 @@ def test_real_user_systemd_local_unit_hold_blocks_manual_dependency_and_restart_
         assert show("LoadState") == "loaded"
         runtime_mask.unlink()
 
+        started = systemctl("start", unit_name)
+        assert started.returncode == 0, started.stderr
+        stopped = systemctl("stop", unit_name)
+        assert stopped.returncode == 0, stopped.stderr
+        assert invoked.is_file()
+        invoked.unlink()
+        invocation_before = show("InvocationID")
+        entered_before = show("ActiveEnterTimestampMonotonic")
+        assert invocation_before
+
+        disabled_for_hold = systemctl("disable", "--no-reload", unit_name)
+        assert disabled_for_hold.returncode == 0, disabled_for_hold.stderr
+        assert not enable_link.exists()
+        assert show("InvocationID") == invocation_before
+        assert show("ActiveEnterTimestampMonotonic") == entered_before
+
         hold.write_bytes(b"[Unit]\nRefuseManualStart=yes\nConditionPathExists=!/\n")
         hold.chmod(0o644)
+        enabled_under_hold = systemctl("enable", "--no-reload", unit_name)
+        assert enabled_under_hold.returncode == 0, enabled_under_hold.stderr
+        assert enable_link.is_symlink()
+        assert show("InvocationID") == invocation_before
+        assert show("ActiveEnterTimestampMonotonic") == entered_before
         reloaded = systemctl("daemon-reload")
         assert reloaded.returncode == 0, reloaded.stderr
         assert show("DropInPaths") == str(hold)
@@ -487,9 +811,13 @@ def test_real_user_systemd_local_unit_hold_blocks_manual_dependency_and_restart_
         assert show("SubState") == "dead"
         assert show("MainPID") == "0"
         assert show("Job") == ""
-        invocation_before = show("InvocationID")
-        entered_before = show("ActiveEnterTimestampMonotonic")
+        assert show("InvocationID") == invocation_before
+        assert show("ActiveEnterTimestampMonotonic") == entered_before
 
+        target.write_text(f"[Unit]\nWants={unit_name}\nAfter={unit_name}\n", encoding="ascii")
+        dependency_reloaded = systemctl("daemon-reload")
+        assert dependency_reloaded.returncode == 0, dependency_reloaded.stderr
+        assert show("InvocationID") == invocation_before
         manual = systemctl("start", unit_name)
         assert manual.returncode != 0
         assert not invoked.exists()
@@ -504,9 +832,40 @@ def test_real_user_systemd_local_unit_hold_blocks_manual_dependency_and_restart_
         assert show("ActiveEnterTimestampMonotonic") == entered_before
         assert show("Job") == ""
 
-        disabled = systemctl("disable", unit_name)
+        target.unlink()
+        reloaded_without_test_dependency = systemctl("daemon-reload")
+        assert reloaded_without_test_dependency.returncode == 0
+        assert show("InvocationID") == invocation_before
+        retired_at_value = datetime.now(UTC)
+        retired_at = retired_at_value.isoformat().replace("+00:00", "Z")
+        retired_delta = retired_at_value - datetime(1970, 1, 1, tzinfo=UTC)
+        retired_at_unix_us = str(
+            (retired_delta.days * 86_400 + retired_delta.seconds) * 1_000_000
+            + retired_delta.microseconds
+        )
+        journal_cursor = _run(
+            "workflow_runner_journal_cursor_at_or_before",
+            "/usr/bin/journalctl",
+            "--user",
+            retired_at,
+            retired_at_unix_us,
+        )
+        assert journal_cursor.returncode == 0, journal_cursor.stderr
+        assert (
+            _run(
+                "workflow_runner_require_journal_cursor_retained",
+                "/usr/bin/journalctl",
+                "--user",
+                JOURNAL_CURSOR,
+            ).returncode
+            != 0
+        )
+
+        disabled = systemctl("disable", "--no-reload", unit_name)
         assert disabled.returncode == 0, disabled.stderr
-        assert show("UnitFileState") == "disabled"
+        assert not enable_link.exists()
+        assert show("InvocationID") == invocation_before
+        assert show("ActiveEnterTimestampMonotonic") == entered_before
         hold.replace(backup)
         # A process interruption after the atomic rename but before daemon-reload remains held by
         # the manager's loaded configuration and is resumable from the exact backup.
@@ -519,8 +878,34 @@ def test_real_user_systemd_local_unit_hold_blocks_manual_dependency_and_restart_
         assert show("RefuseManualStart") == "no"
         assert show("ActiveState") == "inactive"
         assert show("Job") == ""
+        released_identity = f"{show('InvocationID')}:{show('ActiveEnterTimestampMonotonic')}"
+        assert released_identity == ":0"
+        assert (
+            _run(
+                "workflow_runner_require_release_identity_with_journal_fence",
+                f"{invocation_before}:{entered_before}",
+                released_identity,
+                "/usr/bin/journalctl",
+                "--user",
+                unit_name,
+                journal_cursor.stdout.strip(),
+            ).returncode
+            == 0
+        )
         backup.unlink()
         assert show("NeedDaemonReload") == "no"
+        assert (
+            _run(
+                "workflow_runner_require_release_identity_with_journal_fence",
+                released_identity,
+                f"{show('InvocationID')}:{show('ActiveEnterTimestampMonotonic')}",
+                "/usr/bin/journalctl",
+                "--user",
+                unit_name,
+                journal_cursor.stdout.strip(),
+            ).returncode
+            == 0
+        )
 
         released_start = systemctl("enable", "--now", unit_name)
         assert released_start.returncode == 0, released_start.stderr

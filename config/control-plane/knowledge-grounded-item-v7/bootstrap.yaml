@@ -1,0 +1,43 @@
+schema_version: knowledge-item-control-bootstrap/7.0
+preset_key: knowledge-grounded-item
+display_name: Graph 근거 통합과학 문항 제작 · 렌더러 안전 수식 계약
+description: HWPX renderer의 검증된 수식 경계를 선제 적용하는 표준 정책과 검증된 교과서·기출문항 Graph 근거를 authoring-result@9.0에 결속하는 통합과학 정책입니다.
+created_at: "2026-09-08T21:33:00Z"
+base_preset_key: standard-item
+base_preset_schema_version: execution-preset-revision/1.0
+base_instruction_bundle_revision_ids:
+  authoring: instrrev_4d9b9032a2212992e50bfb83e076776e
+  image: instrrev_5465e863ee8c5bc7186449a9d5953ced
+  review: instrrev_3868d73bc11ebfb17067ab51e4f44759
+  item_management: instrrev_c7df93dbbc2d8dca23d633c75b6219e9
+base_instruction_member_sha256s:
+  platform: sha256:5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b
+  authoring: sha256:2ecc15cfa8309843c9dd6b8528471602f7fc506a99c0f982726e8c8aa4c3d2ce
+  image: sha256:7f9f1c9eb5dee44ef76981b04121f1a689a849e8388051f266c4d0ea80cd74ca
+  review: sha256:5613e757e33555695ee3b3536e24744d33b940c6fb14bc489ee62992d9c06cdb
+  item_management: sha256:c5af5ca1137f1ef2c2e724e3a3692178d6d48eeee7eac8f293d7014e67ec156a
+general_knowledge_policy: ALLOW_WITH_PROVENANCE
+compatible_workflow_protocols:
+  - workflow-role/1.19.0
+evidence_access_by_role:
+  authoring: EVIDENCE_CONTEXT
+  image: EVIDENCE_CONTEXT
+  review: EVIDENCE_CONTEXT
+  item_management: NONE
+retrieval_policy:
+  access_policy_revision_id: accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9
+  access_policy_sha256: sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0
+  allowed_corpus_keys:
+    - integrated-science-textbooks
+  allowed_query_kinds:
+    - ITEM_PREPARATION
+  allowed_source_classes:
+    - APPROVED_ITEM
+    - PAST_EXAM
+    - TEXTBOOK
+  maximum_budget:
+    max_documents: 16
+    max_item_revisions: 32
+    max_graph_nodes: 128
+    max_claims: 64
+    max_context_tokens: 16000

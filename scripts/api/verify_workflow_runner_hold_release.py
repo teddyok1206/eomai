@@ -19,6 +19,7 @@ from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Never
 
@@ -53,6 +54,23 @@ _CANCELLABLE_WORKFLOW_STATES = frozenset(
 
 class HoldReleaseReceiptError(RuntimeError):
     """Stable failure before any deployment-hold mutation."""
+
+
+def _release_journal_lower_bound(
+    retired_at: datetime,
+    *,
+    observed_at: datetime | None = None,
+) -> tuple[str, int]:
+    """Return a stable retry lower bound only for an already-observed retirement."""
+
+    observed_at = observed_at or datetime.now(UTC)
+    if retired_at.utcoffset() != UTC.utcoffset(retired_at) or retired_at > observed_at:
+        _fail("retirement timestamp is not an observed UTC journal lower bound")
+    retired_delta = retired_at - datetime(1970, 1, 1, tzinfo=UTC)
+    retired_at_unix_us = (
+        retired_delta.days * 86_400 + retired_delta.seconds
+    ) * 1_000_000 + retired_delta.microseconds
+    return retired_at.isoformat().replace("+00:00", "Z"), retired_at_unix_us
 
 
 @dataclass(frozen=True)
@@ -674,8 +692,13 @@ def main() -> int:
             with _validated_release_receipt_lock(
                 receipt_path=arguments.receipt_file,
                 expected=expected,
-            ):
-                print("workflow_runner_hold_release_receipt=VERIFIED_LOCKED", flush=True)
+            ) as receipt:
+                retired_at, retired_at_unix_us = _release_journal_lower_bound(receipt.retired_at)
+                print(
+                    "workflow_runner_hold_release_receipt=VERIFIED_LOCKED "
+                    f"retired_at={retired_at} retired_at_unix_us={retired_at_unix_us}",
+                    flush=True,
+                )
                 signal = sys.stdin.buffer.readline(64)
                 if signal != b"RELEASE_COMPLETE\n":
                     _fail("hold release completion signal is invalid")

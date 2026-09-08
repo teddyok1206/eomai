@@ -117,6 +117,27 @@ workflow_runner_stopped_activation_identity() {
   printf '%s:%s\n' "${invocation_id}" "${active_enter_timestamp}"
 }
 
+workflow_runner_unheld_synchronized_activation_identity() {
+  (($# == 2)) || return 64
+  local snapshot active_state sub_state unit_file_state main_pid load_state fragment drop_ins refuse reload job invocation_id active_enter_timestamp
+  snapshot="$(workflow_runner_unit_snapshot "$1" "$2")" || return 1
+  IFS=$'\x1f' read -r \
+    active_state sub_state unit_file_state main_pid load_state fragment drop_ins refuse reload job \
+    invocation_id active_enter_timestamp \
+    <<<"${snapshot}"
+  [[ "${load_state}" == "loaded" ]] || return 1
+  [[ "${active_state}" == "inactive" ]] || return 1
+  [[ "${sub_state}" == "dead" ]] || return 1
+  [[ "${main_pid}" == "0" ]] || return 1
+  [[ "${unit_file_state}" == "enabled" || "${unit_file_state}" == "disabled" ]] || return 1
+  [[ "${fragment}" == "${WORKFLOW_RUNNER_FRAGMENT}" ]] || return 1
+  [[ -z "${drop_ins}" ]] || return 1
+  [[ "${refuse}" == "no" ]] || return 1
+  [[ "${reload}" == "no" ]] || return 1
+  [[ -z "${job}" ]] || return 1
+  printf '%s:%s\n' "${invocation_id}" "${active_enter_timestamp}"
+}
+
 workflow_runner_require_stopped() {
   (($# == 2)) || return 64
   workflow_runner_stopped_activation_identity "$1" "$2" >/dev/null
@@ -127,6 +148,100 @@ workflow_runner_require_same_activation_identity() {
   [[ "$1" =~ ^([0-9a-f]{32})?:[0-9]+$ ]] || return 1
   [[ "$2" =~ ^([0-9a-f]{32})?:[0-9]+$ ]] || return 1
   [[ "$1" == "$2" ]]
+}
+
+workflow_runner_journal_cursor_at_or_before() {
+  (($# == 4)) || return 64
+  local journalctl_path="$1" scope="$2" retired_at="$3" retired_at_unix_us="$4"
+  local output cursor observed_unix_us
+  local cursor_pattern='^[A-Za-z0-9_=;:.,+/@-]{16,1024}$'
+  local -a lines=()
+  [[ -x "${journalctl_path}" ]] || return 1
+  [[ "${scope}" == "--system" || "${scope}" == "--user" ]] || return 64
+  [[ "${retired_at}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$ ]] || \
+    return 64
+  [[ "${retired_at_unix_us}" =~ ^[0-9]{1,18}$ ]] || return 64
+  output="$(
+    "${journalctl_path}" "${scope}" --quiet --no-pager \
+      --until="${retired_at}" --lines=1 --show-cursor --output=json \
+      --output-fields=__CURSOR 2>/dev/null
+  )" || return 1
+  ((${#output} <= 4096)) || return 1
+  mapfile -t lines <<<"${output}"
+  ((${#lines[@]} == 2)) || return 1
+  [[ "${lines[1]}" == "-- cursor: "* ]] || return 1
+  cursor="${lines[1]#-- cursor: }"
+  [[ "${cursor}" =~ ${cursor_pattern} ]] || return 1
+  [[ "${lines[0]}" == *"\"__CURSOR\":\"${cursor}\""* ]] || return 1
+  [[ "${lines[0]}" =~ \"__REALTIME_TIMESTAMP\":\"([0-9]{1,18})\" ]] || return 1
+  observed_unix_us="${BASH_REMATCH[1]}"
+  ((10#${observed_unix_us} <= 10#${retired_at_unix_us})) || return 1
+  printf '%s\n' "${cursor}"
+}
+
+workflow_runner_require_no_unit_journal_after_cursor() {
+  (($# == 4)) || return 64
+  local journalctl_path="$1" scope="$2" unit_name="$3" cursor="$4" output
+  local cursor_pattern='^[A-Za-z0-9_=;:.,+/@-]{16,1024}$'
+  [[ -x "${journalctl_path}" ]] || return 1
+  [[ "${scope}" == "--system" || "${scope}" == "--user" ]] || return 64
+  [[ "${unit_name}" =~ ^[A-Za-z0-9_.@-]+\.service$ ]] || return 64
+  [[ "${cursor}" =~ ${cursor_pattern} ]] || return 64
+  # journalctl may return success and no matched unit rows for a missing --after-cursor. Prove the
+  # cursor itself is still retained immediately before and after the filtered query so journal
+  # rotation or an access change can never be mistaken for an empty activity range.
+  workflow_runner_require_journal_cursor_retained \
+    "${journalctl_path}" "${scope}" "${cursor}" || return 1
+  output="$(
+    "${journalctl_path}" "${scope}" --quiet --no-pager \
+      --after-cursor="${cursor}" --unit="${unit_name}" --lines=1 --output=json \
+      --output-fields=__CURSOR,MESSAGE_ID,JOB_TYPE 2>/dev/null
+  )" || return 1
+  ((${#output} <= 4096)) || return 1
+  [[ -z "${output}" ]] || return 1
+  workflow_runner_require_journal_cursor_retained \
+    "${journalctl_path}" "${scope}" "${cursor}"
+}
+
+workflow_runner_require_journal_cursor_retained() {
+  (($# == 3)) || return 64
+  local journalctl_path="$1" scope="$2" cursor="$3" output observed_cursor
+  local cursor_pattern='^[A-Za-z0-9_=;:.,+/@-]{16,1024}$'
+  local json_cursor_pattern='"__CURSOR":"([A-Za-z0-9_=;:.,+/@-]{16,1024})"'
+  local -a lines=()
+  [[ -x "${journalctl_path}" ]] || return 1
+  [[ "${scope}" == "--system" || "${scope}" == "--user" ]] || return 64
+  [[ "${cursor}" =~ ${cursor_pattern} ]] || return 64
+  output="$(
+    "${journalctl_path}" "${scope}" --quiet --no-pager \
+      --cursor="${cursor}" --lines=1 --output=json --output-fields=__CURSOR 2>/dev/null
+  )" || return 1
+  ((${#output} <= 4096)) || return 1
+  mapfile -t lines <<<"${output}"
+  ((${#lines[@]} == 1)) || return 1
+  [[ "${lines[0]}" =~ ${json_cursor_pattern} ]] || return 1
+  observed_cursor="${BASH_REMATCH[1]}"
+  [[ "${observed_cursor}" == "${cursor}" ]]
+}
+
+workflow_runner_require_release_identity_with_journal_fence() {
+  (($# == 6)) || return 64
+  [[ "$1" =~ ^([0-9a-f]{32})?:[0-9]+$ ]] || return 1
+  [[ "$2" =~ ^([0-9a-f]{32})?:[0-9]+$ ]] || return 1
+  workflow_runner_require_no_unit_journal_after_cursor "$3" "$4" "$5" "$6" || return 1
+  [[ "$2" == "$1" || "$2" == ":0" ]]
+}
+
+workflow_runner_unit_disabled_on_disk() {
+  (($# == 2)) || return 64
+  local systemctl_path="$1" unit_name="$2" output status
+  [[ -x "${systemctl_path}" ]] || return 1
+  if output="$("${systemctl_path}" is-enabled "${unit_name}" 2>/dev/null)"; then
+    return 1
+  else
+    status=$?
+  fi
+  [[ "${status}" == "1" && "${output}" == "disabled" ]]
 }
 
 workflow_runner_require_hold_directory() {
@@ -243,6 +358,31 @@ workflow_runner_release_fenced_activation_identity() {
   printf '%s:%s\n' "${invocation_id}" "${active_enter_timestamp}"
 }
 
+workflow_runner_release_transition_activation_identity() {
+  (($# == 2)) || return 64
+  local snapshot active_state sub_state unit_file_state main_pid load_state fragment drop_ins refuse reload job invocation_id active_enter_timestamp
+  workflow_runner_require_hold_directory "${WORKFLOW_RUNNER_HOLD_DIRECTORY}" || return 1
+  workflow_runner_require_hold_file \
+    "${WORKFLOW_RUNNER_HOLD_TARGET}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || return 1
+  workflow_runner_unit_disabled_on_disk "$1" "$2" || return 1
+  snapshot="$(workflow_runner_unit_snapshot "$1" "$2")" || return 1
+  IFS=$'\x1f' read -r \
+    active_state sub_state unit_file_state main_pid load_state fragment drop_ins refuse reload job \
+    invocation_id active_enter_timestamp \
+    <<<"${snapshot}"
+  [[ "${load_state}" == "loaded" ]] || return 1
+  [[ "${active_state}" == "inactive" ]] || return 1
+  [[ "${sub_state}" == "dead" ]] || return 1
+  [[ "${main_pid}" == "0" ]] || return 1
+  [[ "${unit_file_state}" == "enabled" || "${unit_file_state}" == "disabled" ]] || return 1
+  [[ "${fragment}" == "${WORKFLOW_RUNNER_FRAGMENT}" ]] || return 1
+  [[ "${drop_ins}" == "${WORKFLOW_RUNNER_HOLD_TARGET}" ]] || return 1
+  [[ "${refuse}" == "yes" ]] || return 1
+  [[ "${reload}" == "no" ]] || return 1
+  [[ -z "${job}" ]] || return 1
+  printf '%s:%s\n' "${invocation_id}" "${active_enter_timestamp}"
+}
+
 # Resume the exact post-rename/pre-reload state. The file has moved to its reviewed backup name,
 # while the live manager still enforces the cached hold and reports that a reload is required.
 workflow_runner_cached_release_fenced_activation_identity() {
@@ -262,7 +402,8 @@ workflow_runner_cached_release_fenced_activation_identity() {
   [[ "${active_state}" == "inactive" ]] || return 1
   [[ "${sub_state}" == "dead" ]] || return 1
   [[ "${main_pid}" == "0" ]] || return 1
-  [[ "${unit_file_state}" == "disabled" ]] || return 1
+  [[ "${unit_file_state}" == "enabled" || "${unit_file_state}" == "disabled" ]] || return 1
+  workflow_runner_unit_disabled_on_disk "$1" "$2" || return 1
   [[ "${fragment}" == "${WORKFLOW_RUNNER_FRAGMENT}" ]] || return 1
   [[ "${drop_ins}" == "${WORKFLOW_RUNNER_HOLD_TARGET}" ]] || return 1
   [[ "${refuse}" == "yes" ]] || return 1

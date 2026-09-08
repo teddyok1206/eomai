@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -10,6 +11,7 @@ from typing import get_args
 
 import eom_orchestrator.control_bootstrap as control_bootstrap
 import pytest
+from eom_hwpx_contracts.content_team_equations import SUPPORTED_COMMANDS
 from eom_orchestrator.control_bootstrap import (
     EXPECTED_ROLE_SLOTS,
     EXPECTED_STANDARD_V2_REFERENCE_KEYS,
@@ -18,6 +20,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_STANDARD_V7_REFERENCE_KEYS,
     EXPECTED_STANDARD_V8_REFERENCE_KEYS,
     EXPECTED_STANDARD_V9_REFERENCE_KEYS,
+    EXPECTED_STANDARD_V10_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
@@ -42,6 +45,7 @@ CONFIG_V6 = ROOT / "config/control-plane/standard-item-v6"
 CONFIG_V7 = ROOT / "config/control-plane/standard-item-v7"
 CONFIG_V8 = ROOT / "config/control-plane/standard-item-v8"
 CONFIG_V9 = ROOT / "config/control-plane/standard-item-v9"
+CONFIG_V10 = ROOT / "config/control-plane/standard-item-v10"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -446,6 +450,7 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/7.0": 7,
         "standard-control-bootstrap/8.0": 8,
         "standard-control-bootstrap/9.0": 9,
+        "standard-control-bootstrap/10.0": 10,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
@@ -483,6 +488,7 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
         "standard-control-bootstrap/7.0": 4,
         "standard-control-bootstrap/8.0": 4,
         "standard-control-bootstrap/9.0": 4,
+        "standard-control-bootstrap/10.0": 4,
     }
 
 
@@ -535,6 +541,47 @@ def test_standard_bootstrap_v9_pins_exact_mock_exam_slot_instruction() -> None:
     for unchanged in ("platform.md", "image.md", "item-management.md"):
         assert (CONFIG_V9 / "instructions" / unchanged).read_bytes() == (
             CONFIG_V8 / "instructions" / unchanged
+        ).read_bytes()
+
+
+def test_standard_bootstrap_v10_prevents_unrenderable_equation_commands() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V10)
+
+    assert manifest.schema_version == "standard-control-bootstrap/10.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.19.0",)
+    assert manifest.created_at.isoformat() == "2026-09-08T21:30:00+00:00"
+    assert load_standard_bootstrap_manifest(CONFIG_V9).created_at < manifest.created_at
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 10
+    assert STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version] == 4
+    assert not (CONFIG_V10 / "references").exists()
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V10_REFERENCE_KEYS
+    )
+
+    authoring_path = CONFIG_V10 / "instructions/authoring.md"
+    authoring = authoring_path.read_text(encoding="utf-8")
+    assert (
+        set(re.findall(r"`\\([A-Za-z]+)`", authoring))
+        == set(SUPPORTED_COMMANDS)
+        == {
+            "frac",
+            "max",
+            "prime",
+            "times",
+        }
+    )
+    normalized_authoring = " ".join(authoring.split())
+    assert "ordinary Unicode text outside `$...$` and `$$...$$`" in normalized_authoring
+    assert "fail explicitly before returning" in authoring
+    assert hashlib.sha256(authoring_path.read_bytes()).hexdigest() == (
+        "2ecc15cfa8309843c9dd6b8528471602f7fc506a99c0f982726e8c8aa4c3d2ce"
+    )
+    assert hashlib.sha256((CONFIG_V10 / "bootstrap.yaml").read_bytes()).hexdigest() == (
+        "5ffdb0f5727b681c89ff10188f3d6da9cdf42da857c49e78e2d1d0b30348402b"
+    )
+    for unchanged in ("platform.md", "image.md", "review.md", "item-management.md"):
+        assert (CONFIG_V10 / "instructions" / unchanged).read_bytes() == (
+            CONFIG_V9 / "instructions" / unchanged
         ).read_bytes()
 
 
