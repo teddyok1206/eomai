@@ -44,7 +44,15 @@ Keep the hold in place until `retire-items` returns and the operator has indepen
 immutable checkpoint pins and the self-hashed receipt for the exact 25-Workflow cohort. The access
 token must already be the invoking `eom-api` identity's non-symlinked mode-0600 file. Check only its
 metadata; never print its contents. The held installer creates the fixed receipt directory as
-`eom-api:eom-api:0700` and refuses an existing path with any other identity:
+`eom-api:eom-api:0700` and refuses an existing path with any other identity. Immediately after hold
+acquisition and before deployment admission, it also installs and verifies the source-exact
+root-owned hold-release verifier through a same-directory unique incoming file, a validated
+deterministic staged file, and atomic renames. A retry resumes the exact deterministic staged file;
+a crash orphan with the unique prefix is ignored rather than trusted or automatically removed; and
+a completed current verifier is a strict no-write replay. Therefore an admission denial leaves the
+persistent hold in place but does not strand it: retire the exact blocking execution and use the
+normal fully pinned release action below. The later service-install phase idempotently reuses the
+same helper and identities.
 
 Treat retirement through hold release as one exclusive recovery window. Do not run `initialize`,
 `advance-*`, `status`, or another mock-exam production CLI command concurrently. The release

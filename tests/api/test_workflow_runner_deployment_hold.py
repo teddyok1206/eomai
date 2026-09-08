@@ -74,6 +74,119 @@ def _run(function: str, *args: str | Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _deploy_function(name: str) -> str:
+    source = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+    start = source.index(f"{name}() {{")
+    end = source.index("\n}\n", start) + len("\n}\n")
+    return source[start:end]
+
+
+def _run_verifier_identity_check(
+    function: str,
+    *,
+    source_file: Path,
+    target_root: Path,
+) -> subprocess.CompletedProcess[str]:
+    functions = "\n".join(
+        _deploy_function(name)
+        for name in (
+            "require_workflow_runner_hold_release_verifier_root",
+            "require_workflow_runner_hold_release_verifier_target_identity",
+            "require_installed_workflow_runner_hold_release_verifier",
+        )
+    )
+    harness = (
+        "set -euo pipefail\n"
+        'source "$1"\n'
+        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE="$2"\n'
+        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT="$3"\n'
+        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET="${3}/verifier"\n'
+        "fail() { printf 'ERROR: %s\\n' \"$1\" >&2; exit 1; }\n"
+        + functions
+        + f'\n{function} "$(id -u)" "$(id -g)"\n'
+    )
+    return subprocess.run(
+        (
+            "/usr/bin/bash",
+            "-c",
+            harness,
+            "verifier-identity-test",
+            str(LIBRARY),
+            str(source_file),
+            str(target_root),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _run_verifier_install(
+    *,
+    source_file: Path,
+    target_root: Path,
+    current_sha256: str,
+    predecessor_sha256: str,
+    events: Path,
+) -> subprocess.CompletedProcess[str]:
+    functions = "\n".join(
+        _deploy_function(name)
+        for name in (
+            "require_workflow_runner_hold_release_verifier_root",
+            "require_workflow_runner_hold_release_verifier_target_identity",
+            "require_workflow_runner_hold_release_verifier_staged",
+            "require_workflow_runner_hold_release_verifier_empty_incoming",
+            "require_workflow_runner_hold_release_verifier_complete_incoming",
+            "cleanup_workflow_runner_hold_release_verifier_incoming",
+            "materialize_workflow_runner_hold_release_verifier_staged",
+            "require_installed_workflow_runner_hold_release_verifier",
+            "install_workflow_runner_hold_release_verifier",
+        )
+    )
+    harness = (
+        "set -euo pipefail\n"
+        'source "$1"\n'
+        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE="$2"\n'
+        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT="$3"\n'
+        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET="${3}/verifier"\n'
+        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED="${3}/.verifier.staged"\n'
+        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="$4"\n'
+        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="$5"\n'
+        'events="$6"\n'
+        "fail() { printf 'ERROR: %s\\n' \"$1\" >&2; exit 1; }\n"
+        "sudo() {\n"
+        '  [[ "$1" == -n ]]; shift\n'
+        '  printf \'%s\\n\' "$1" >>"${events}"\n'
+        '  command_path="$1"; shift\n'
+        "  arguments=()\n"
+        "  while (($#)); do\n"
+        '    if [[ "$1" == -o || "$1" == -g ]]; then shift 2; continue; fi\n'
+        '    arguments+=("$1"); shift\n'
+        "  done\n"
+        '  "${command_path}" "${arguments[@]}"\n'
+        "}\n"
+        + functions
+        + '\ninstall_workflow_runner_hold_release_verifier "$(id -u)" "$(id -g)"\n'
+    )
+    return subprocess.run(
+        (
+            "/usr/bin/bash",
+            "-c",
+            harness,
+            "verifier-install-test",
+            str(LIBRARY),
+            str(source_file),
+            str(target_root),
+            current_sha256,
+            predecessor_sha256,
+            str(events),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_canonical_hold_bytes_and_all_pinned_hashes_are_identical() -> None:
     assert HOLD_SOURCE.read_bytes() == HOLD_BYTES
     assert hashlib.sha256(HOLD_BYTES).hexdigest() == HOLD_SHA256
@@ -602,6 +715,327 @@ def test_release_receipt_verifier_is_installed_unprivileged_and_precedes_mutatio
         "RECEIPT_SHA256",
     ):
         assert f'"${{{pointer}}}"' in operations
+
+
+def test_hold_release_verifier_identity_rejects_owner_mode_link_and_hash_tamper(
+    tmp_path: Path,
+) -> None:
+    source_file = tmp_path / "source.py"
+    source_file.write_bytes(b"trusted verifier\n")
+    target_root = tmp_path / "libexec"
+    target_root.mkdir(mode=0o755)
+    target = target_root / "verifier"
+    target.write_bytes(source_file.read_bytes())
+    target.chmod(0o755)
+
+    exact = _run_verifier_identity_check(
+        "require_installed_workflow_runner_hold_release_verifier",
+        source_file=source_file,
+        target_root=target_root,
+    )
+    assert exact.returncode == 0, exact.stderr
+
+    target.chmod(0o775)
+    wrong_mode = _run_verifier_identity_check(
+        "require_installed_workflow_runner_hold_release_verifier",
+        source_file=source_file,
+        target_root=target_root,
+    )
+    assert wrong_mode.returncode != 0
+    target.chmod(0o755)
+
+    target.write_bytes(b"different verifier\n")
+    wrong_hash = _run_verifier_identity_check(
+        "require_installed_workflow_runner_hold_release_verifier",
+        source_file=source_file,
+        target_root=target_root,
+    )
+    assert wrong_hash.returncode != 0
+    target.unlink()
+    target.symlink_to(source_file)
+    symlink = _run_verifier_identity_check(
+        "require_installed_workflow_runner_hold_release_verifier",
+        source_file=source_file,
+        target_root=target_root,
+    )
+    assert symlink.returncode != 0
+
+    target.unlink()
+    target.write_bytes(source_file.read_bytes())
+    target.chmod(0o755)
+    hardlink = target_root / "verifier-hardlink"
+    os.link(target, hardlink)
+    linked = _run_verifier_identity_check(
+        "require_installed_workflow_runner_hold_release_verifier",
+        source_file=source_file,
+        target_root=target_root,
+    )
+    assert linked.returncode != 0
+    hardlink.unlink()
+
+    wrong_owner = subprocess.run(
+        (
+            "/usr/bin/bash",
+            "-c",
+            (
+                "set -euo pipefail\n"
+                'source "$1"\n'
+                'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE="$2"\n'
+                'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT="$3"\n'
+                'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET="${3}/verifier"\n'
+                "fail() { exit 1; }\n"
+                + _deploy_function("require_workflow_runner_hold_release_verifier_root")
+                + '\nrequire_workflow_runner_hold_release_verifier_root "$(( $(id -u) + 1 ))" '
+                '"$(id -g)"\n'
+            ),
+            "verifier-owner-test",
+            str(LIBRARY),
+            str(source_file),
+            str(target_root),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert wrong_owner.returncode != 0
+
+    target_root.chmod(0o775)
+    wrong_root_mode = _run_verifier_identity_check(
+        "require_installed_workflow_runner_hold_release_verifier",
+        source_file=source_file,
+        target_root=target_root,
+    )
+    assert wrong_root_mode.returncode != 0
+
+
+def test_pre_admission_release_boundary_survives_later_admission_failure(
+    tmp_path: Path,
+) -> None:
+    source = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+    prepare = _deploy_function("prepare_workflow_runner_hold_release_boundary_before_admission")
+    install_case = source[
+        source.index("  install)\n") : source.index(
+            "    ;;\n  release-workflow-runner-hold)", source.index("  install)\n")
+        )
+    ]
+    events = tmp_path / "events"
+    harness = (
+        "set -euo pipefail\n"
+        'events="$1"\n'
+        "PRESERVE_WORKFLOW_RUNNER_INACTIVE=true\n"
+        "verify_workflow_runner_deployment_hold() { printf '%s\\n' hold >>\"${events}\"; }\n"
+        "install_workflow_runner_hold_release_boundary() { "
+        "printf '%s\\n' boundary >>\"${events}\"; }\n"
+        "verify_mock_exam_deployment_admission() { "
+        "printf '%s\\n' admission >>\"${events}\"; return 23; }\n"
+        + prepare
+        + "\nprepare_workflow_runner_hold_release_boundary_before_admission\n"
+        + "set +e\nverify_mock_exam_deployment_admission\nstatus=$?\nset -e\n"
+        + "((status == 23))\n"
+        + '[[ "$(cat -- "${events}")" == $\'hold\\nboundary\\nhold\\nadmission\' ]]\n'
+    )
+
+    completed = subprocess.run(
+        ("/usr/bin/bash", "-c", harness, "pre-admission-boundary", str(events)),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert (
+        install_case.index("activate_workflow_runner_deployment_hold")
+        < install_case.index("prepare_workflow_runner_hold_release_boundary_before_admission")
+        < install_case.index("verify_mock_exam_deployment_admission")
+    )
+    install_service = source[
+        source.index("install_service() {") : source.index(
+            "\n}\n", source.index("install_service() {")
+        )
+    ]
+    assert "install_workflow_runner_hold_release_boundary" in install_service
+    assert (
+        '"${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}" \\\n'
+        '    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}"' not in install_service
+    )
+
+
+def test_hold_release_boundary_rechecks_source_and_protected_paths_around_install() -> None:
+    install = _deploy_function("install_workflow_runner_hold_release_verifier")
+
+    source_before = install.index("source_sha256_before=")
+    current_source = install.index('"${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256}"')
+    predecessor = install.index('"${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256}"')
+    materialize = install.index("materialize_workflow_runner_hold_release_verifier_staged")
+    source_after = install.index("source_sha256_after=")
+    stable_source = install.index('[[ "${source_sha256_after}" == "${source_sha256_before}" &&')
+    staged_exact = install.index("require_workflow_runner_hold_release_verifier_staged")
+    publish = install.index("/usr/bin/mv -T")
+    exact_verifier = install.index(
+        "require_installed_workflow_runner_hold_release_verifier", publish
+    )
+
+    assert (
+        source_before
+        < current_source
+        < predecessor
+        < materialize
+        < source_after
+        < stable_source
+        < publish
+        < exact_verifier
+    )
+    assert staged_exact < publish
+    assert "require_workflow_runner_hold_release_verifier_root" in install
+    assert "require_workflow_runner_hold_release_verifier_target_identity" in install
+    assert "current workflow runner hold-release verifier conflicts with a staged file" in install
+    staging = _deploy_function("materialize_workflow_runner_hold_release_verifier_staged")
+    unique = staging.index("/usr/bin/mktemp")
+    empty = staging.index("require_workflow_runner_hold_release_verifier_empty_incoming")
+    copy = staging.index("/usr/bin/install -o root -g root -m 0755 -T")
+    complete = staging.index("require_workflow_runner_hold_release_verifier_complete_incoming")
+    source_recheck = staging.index("source_sha256_after=")
+    staged_publish = staging.index("/usr/bin/mv -T")
+    deterministic = staging.index("require_workflow_runner_hold_release_verifier_staged")
+    assert unique < empty < copy < complete < source_recheck < staged_publish < deterministic
+    assert "cleanup_workflow_runner_hold_release_verifier_incoming" in staging
+    assert ".verify-workflow-runner-hold-release.incoming.XXXXXXXXXXXX" in staging
+    boundary = _deploy_function("install_workflow_runner_hold_release_boundary")
+    assert "install_workflow_runner_hold_release_verifier" in boundary
+    assert "sudo -n -u eom-api /usr/bin/install -d -m 0700" in boundary
+    source = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+    assert (
+        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="sha256:'
+        '39f1621c128abb2b2b4bfa0c71b6f3466e911c6b59f4e6c098405833fb5685c9"' in source
+    )
+    assert (
+        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:'
+        '76de2684ac013f53d7766ec5d445a3110962eadae1765ac71d5552031fe556a4"' in source
+    )
+
+
+def test_verifier_staged_publish_recovers_command_boundary_cuts_and_then_is_noop(
+    tmp_path: Path,
+) -> None:
+    source_file = tmp_path / "source.py"
+    source_file.write_bytes(b"current verifier\n")
+    current_sha256 = "sha256:" + hashlib.sha256(source_file.read_bytes()).hexdigest()
+    predecessor = b"predecessor verifier\n"
+    predecessor_sha256 = "sha256:" + hashlib.sha256(predecessor).hexdigest()
+    target_root = tmp_path / "libexec"
+    target_root.mkdir(mode=0o755)
+    target = target_root / "verifier"
+    staged = target_root / ".verifier.staged"
+    target.write_bytes(predecessor)
+    target.chmod(0o755)
+    staged.write_bytes(source_file.read_bytes())
+    staged.chmod(0o755)
+    events = tmp_path / "events"
+
+    resume_after_stage = _run_verifier_install(
+        source_file=source_file,
+        target_root=target_root,
+        current_sha256=current_sha256,
+        predecessor_sha256=predecessor_sha256,
+        events=events,
+    )
+    assert resume_after_stage.returncode == 0, resume_after_stage.stderr
+    assert target.read_bytes() == source_file.read_bytes()
+    assert not staged.exists()
+    assert events.read_text(encoding="ascii") == "/usr/bin/mv\n"
+
+    events.unlink()
+    replay_after_publish = _run_verifier_install(
+        source_file=source_file,
+        target_root=target_root,
+        current_sha256=current_sha256,
+        predecessor_sha256=predecessor_sha256,
+        events=events,
+    )
+    assert replay_after_publish.returncode == 0, replay_after_publish.stderr
+    assert target.read_bytes() == source_file.read_bytes()
+    assert not staged.exists()
+    assert not events.exists()
+
+
+def test_verifier_publish_rejects_foreign_stage_and_source_drift_without_touching_target(
+    tmp_path: Path,
+) -> None:
+    source_file = tmp_path / "source.py"
+    source_file.write_bytes(b"current verifier\n")
+    current_sha256 = "sha256:" + hashlib.sha256(source_file.read_bytes()).hexdigest()
+    predecessor = b"predecessor verifier\n"
+    predecessor_sha256 = "sha256:" + hashlib.sha256(predecessor).hexdigest()
+    target_root = tmp_path / "libexec"
+    target_root.mkdir(mode=0o755)
+    target = target_root / "verifier"
+    target.write_bytes(predecessor)
+    target.chmod(0o755)
+    staged = target_root / ".verifier.staged"
+    staged.write_bytes(b"foreign staged bytes\n")
+    staged.chmod(0o755)
+    events = tmp_path / "events"
+
+    foreign_stage = _run_verifier_install(
+        source_file=source_file,
+        target_root=target_root,
+        current_sha256=current_sha256,
+        predecessor_sha256=predecessor_sha256,
+        events=events,
+    )
+    assert foreign_stage.returncode != 0
+    assert target.read_bytes() == predecessor
+    assert not events.exists()
+
+    staged.unlink()
+    source_file.write_bytes(b"source drift\n")
+    source_drift = _run_verifier_install(
+        source_file=source_file,
+        target_root=target_root,
+        current_sha256=current_sha256,
+        predecessor_sha256=predecessor_sha256,
+        events=events,
+    )
+    assert source_drift.returncode != 0
+    assert target.read_bytes() == predecessor
+    assert not events.exists()
+
+
+def test_partial_unique_incoming_is_ignored_and_never_removed_or_trusted(
+    tmp_path: Path,
+) -> None:
+    source_file = tmp_path / "source.py"
+    source_file.write_bytes(b"current verifier\n")
+    current_sha256 = "sha256:" + hashlib.sha256(source_file.read_bytes()).hexdigest()
+    predecessor = b"predecessor verifier\n"
+    predecessor_sha256 = "sha256:" + hashlib.sha256(predecessor).hexdigest()
+    target_root = tmp_path / "libexec"
+    target_root.mkdir(mode=0o755)
+    target = target_root / "verifier"
+    target.write_bytes(predecessor)
+    target.chmod(0o755)
+    orphan = target_root / ".verify-workflow-runner-hold-release.incoming.ABCDEF123456"
+    orphan.write_bytes(b"partial orphan\n")
+    orphan.chmod(0o755)
+    events = tmp_path / "events"
+
+    result = _run_verifier_install(
+        source_file=source_file,
+        target_root=target_root,
+        current_sha256=current_sha256,
+        predecessor_sha256=predecessor_sha256,
+        events=events,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert target.read_bytes() == source_file.read_bytes()
+    assert orphan.read_bytes() == b"partial orphan\n"
+    assert events.read_text(encoding="ascii").splitlines() == [
+        "/usr/bin/mktemp",
+        "/usr/bin/install",
+        "/usr/bin/mv",
+        "/usr/bin/mv",
+    ]
 
 
 def test_hold_release_is_reboot_fenced_retryable_and_checks_every_mutation() -> None:

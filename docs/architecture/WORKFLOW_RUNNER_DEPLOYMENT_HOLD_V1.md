@@ -55,10 +55,16 @@ not merely retain the same hash across release.
    service-manager output is capped at 4096 bytes.
 8. **Transaction and concurrency.** No wheel, migration, DB, worker, or model action begins until
    the installed drop-in has been atomically placed, `daemon-reload` has completed, and the exact
-   hold is observed.  Once that boundary is reached, interruption is fail-closed across both
-   process death and reboot. Release is a separate privileged action. Before any systemd/file
-   mutation, an installed root-owned helper safely reads an explicit mode-0600 receipt file and the
-   canonical current plus immutable-revision checkpoints for the expected execution. It takes the
+   hold is observed. Immediately after acquisition, the exceptional installer materializes and
+   verifies the root-owned hold-release verifier and the eom-api-owned receipt directory before it
+   runs deployment admission. This deliberately bounded pre-admission mutation means a denied
+   deployment can still retire the execution that caused the denial and release the already-active
+   hold with the source-exact verifier. The regular service installation calls the same idempotent
+   helper rather than owning a second path implementation. Once that boundary is reached,
+   interruption is fail-closed across both process death and reboot. Release is a separate
+   privileged action. Before any systemd/file mutation, the installed root-owned helper safely
+   reads an explicit mode-0600 receipt file and the canonical current plus immutable-revision
+   checkpoints for the expected execution. It takes the
    checkpoint store's nonblocking exclusive flock and re-reads `current.json` while holding it. It
    validates installed JSON Schema 2020-12 and Pydantic contracts, self-hashes, and exact execution,
    revision, request, plan, operator, and checkpoint pointers. The validated receipt's UTC
@@ -77,8 +83,23 @@ not merely retain the same hash across release.
    implements a read-only application port.  Domain retirement code depends only on the frozen
    evidence contract; no domain package imports filesystem or subprocess infrastructure.
 10. **Failure, retry, and idempotency.** Exact existing hold bytes are accepted on retry. Partial,
-    foreign, or tampered files fail without replacement.  The persistent hold remains installed on
-    every deployment failure. Receipt/checkpoint validation uses same-file-descriptor, bounded,
+    foreign, or tampered files fail without replacement. The verifier parent and any existing
+    verifier target must already be non-symlinked root-owned objects with exact modes and link
+    counts before replacement. Both the current source and the only accepted predecessor bytes have
+    pinned hashes. An upgrade resumes an exact deterministic staged file or creates a root-owned
+    same-directory unique incoming file, copies and validates the current bytes there, atomically
+    renames it to the deterministic staged path, then atomically renames that path over the
+    predecessor. A normal-error trap cleans only the exact unique path created by that invocation.
+    A crash orphan is never scanned, trusted, or automatically deleted and does not block a later
+    unique staging attempt. A completed current target with no staged file is a strict no-write
+    replay. The source hash is checked before staging, before publication, and after publication;
+    the final root-owned target is revalidated against it and checked again after receipt-root
+    preparation.
+    A foreign staged file or source drift fails without touching the predecessor. The receipt leaf
+    is created as `eom-api` under its eom-api-owned parent, so an
+    `EEXIST` race cannot become a privileged owner/mode rewrite. The persistent hold remains
+    installed on every deployment failure, and the release boundary remains usable when admission
+    is the failing step. Receipt/checkpoint validation uses same-file-descriptor, bounded,
     no-follow/nonblocking regular-file reads with exact owner, mode, link count, and pre/post
     identity checks; any failure occurs before hold mutation. Release removes only the verified
     canonical file, reloads systemd, and proves the still-quiescent disabled/unheld state; a failed
@@ -97,7 +118,9 @@ not merely retain the same hash across release.
 2. Disable without reload, materialize the hold, re-enable without reload, then reload once and
    verify the persistent hold. Only then remove a proven ineffective runtime-mask
    residue and re-verify the hold.
-3. Build/install while rechecking the hold at every consumer restart boundary.
+3. Install and verify the hold-release verifier and receipt root. Run deployment admission only
+   after that recovery boundary exists. Build/install while rechecking the hold at every consumer
+   restart boundary; the final service install idempotently reuses the same boundary helper.
 4. Execute retirement and verify its self-hashed exact-cohort receipt.
 5. As `eom-api`, publish the successful `retire-items` JSON envelope atomically to the fixed
    eom-api-owned mode-0600 receipt path. Run the explicit hold-release action with that path and all

@@ -26,6 +26,12 @@ WORKFLOW_RUNNER_HOLD_SOURCE="${REPOSITORY_ROOT}/infra/systemd/zzzz-eom-workflow-
 WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_workflow_runner_hold_release.py"
 WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT="/usr/local/libexec/eom-api"
 WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-workflow-runner-hold-release"
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED="/usr/local/libexec/eom-api/.verify-workflow-runner-hold-release.staged"
+# The current and immediately preceding reviewed verifier bytes are immutable migration states.
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="sha256:39f1621c128abb2b2b4bfa0c71b6f3466e911c6b59f4e6c098405833fb5685c9"
+# Exact verifier installed by the immediately preceding reviewed release. Replacing any other
+# root-owned bytes is not an upgrade; it is unexplained privileged-state drift.
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:76de2684ac013f53d7766ec5d445a3110962eadae1765ac71d5552031fe556a4"
 WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT="/var/lib/eom-api/mock-exam-retirement-receipts"
 ACTION="verify"
 PRESERVE_WORKFLOW_RUNNER_INACTIVE=false
@@ -217,29 +223,153 @@ verify_workflow_runner_deployment_hold() {
     fail "workflow runner persistent deployment hold was lost or is not quiescent"
 }
 
-require_installed_workflow_runner_hold_release_verifier() {
-  local metadata parent_metadata source_sha256 target_sha256
-  [[ ! -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}" && \
-    -f "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}" ]] || \
-    fail "workflow runner hold-release verifier source is unavailable"
-  [[ ! -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}" && \
-    -f "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}" ]] || \
-    fail "installed workflow runner hold-release verifier is unavailable"
+require_workflow_runner_hold_release_verifier_root() {
+  (($# == 0 || $# == 2)) || return 64
+  local expected_uid="${1:-0}" expected_gid="${2:-0}" metadata
+  [[ "${expected_uid}" =~ ^[0-9]+$ && "${expected_gid}" =~ ^[0-9]+$ ]] || return 64
   [[ ! -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" && \
     -d "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" ]] || \
     fail "installed workflow runner hold-release verifier directory is unavailable"
-  parent_metadata="$(
+  metadata="$(
     /usr/bin/stat --format='%u:%g:%a' -- \
       "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" 2>/dev/null
   )" || fail "installed workflow runner hold-release verifier directory metadata is unavailable"
-  [[ "${parent_metadata}" == "0:0:755" ]] || \
+  [[ "${metadata}" == "${expected_uid}:${expected_gid}:755" ]] || \
     fail "installed workflow runner hold-release verifier directory identity mismatch"
+}
+
+require_workflow_runner_hold_release_verifier_target_identity() {
+  (($# == 0 || $# == 2)) || return 64
+  local expected_uid="${1:-0}" expected_gid="${2:-0}" metadata
+  require_workflow_runner_hold_release_verifier_root \
+    "${expected_uid}" "${expected_gid}"
+  [[ ! -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}" && \
+    -f "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}" ]] || \
+    fail "installed workflow runner hold-release verifier is unavailable"
   metadata="$(
     /usr/bin/stat --format='%u:%g:%a:%h' -- \
       "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}" 2>/dev/null
   )" || fail "installed workflow runner hold-release verifier metadata is unavailable"
-  [[ "${metadata}" == "0:0:755:1" ]] || \
+  [[ "${metadata}" == "${expected_uid}:${expected_gid}:755:1" ]] || \
     fail "installed workflow runner hold-release verifier identity mismatch"
+}
+
+require_workflow_runner_hold_release_verifier_staged() {
+  (($# == 0 || $# == 2)) || return 64
+  local expected_uid="${1:-0}" expected_gid="${2:-0}" metadata staged_sha256
+  require_workflow_runner_hold_release_verifier_root \
+    "${expected_uid}" "${expected_gid}"
+  [[ ! -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}" && \
+    -f "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}" ]] || \
+    fail "staged workflow runner hold-release verifier is unavailable"
+  metadata="$(
+    /usr/bin/stat --format='%u:%g:%a:%h' -- \
+      "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}" 2>/dev/null
+  )" || fail "staged workflow runner hold-release verifier metadata is unavailable"
+  [[ "${metadata}" == "${expected_uid}:${expected_gid}:755:1" ]] || \
+    fail "staged workflow runner hold-release verifier identity mismatch"
+  staged_sha256="$(workflow_runner_file_sha256 \
+    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}")" || \
+    fail "staged workflow runner hold-release verifier hash is unavailable"
+  [[ "${staged_sha256}" == "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256}" ]] || \
+    fail "staged workflow runner hold-release verifier hash mismatch"
+}
+
+require_workflow_runner_hold_release_verifier_empty_incoming() {
+  (($# == 1 || $# == 3)) || return 64
+  local path="$1" expected_uid="${2:-0}" expected_gid="${3:-0}" metadata name parent
+  parent="${path%/*}"
+  name="${path##*/}"
+  [[ "${parent}" == "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" && \
+    "${name}" =~ ^\.verify-workflow-runner-hold-release\.incoming\.[A-Za-z0-9]{12}$ ]] || \
+    return 64
+  require_workflow_runner_hold_release_verifier_root \
+    "${expected_uid}" "${expected_gid}"
+  [[ ! -L "${path}" && -f "${path}" ]] || \
+    fail "workflow runner hold-release verifier incoming file is unavailable"
+  metadata="$(/usr/bin/stat --format='%u:%g:%a:%h:%s' -- "${path}" 2>/dev/null)" || \
+    fail "workflow runner hold-release verifier incoming metadata is unavailable"
+  [[ "${metadata}" == "${expected_uid}:${expected_gid}:600:1:0" ]] || \
+    fail "workflow runner hold-release verifier incoming identity mismatch"
+}
+
+require_workflow_runner_hold_release_verifier_complete_incoming() {
+  (($# == 1 || $# == 3)) || return 64
+  local path="$1" expected_uid="${2:-0}" expected_gid="${3:-0}" incoming_sha256 metadata name parent
+  parent="${path%/*}"
+  name="${path##*/}"
+  [[ "${parent}" == "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" && \
+    "${name}" =~ ^\.verify-workflow-runner-hold-release\.incoming\.[A-Za-z0-9]{12}$ ]] || \
+    return 64
+  require_workflow_runner_hold_release_verifier_root \
+    "${expected_uid}" "${expected_gid}"
+  [[ ! -L "${path}" && -f "${path}" ]] || \
+    fail "complete workflow runner hold-release verifier incoming file is unavailable"
+  metadata="$(/usr/bin/stat --format='%u:%g:%a:%h' -- "${path}" 2>/dev/null)" || \
+    fail "complete workflow runner hold-release verifier incoming metadata is unavailable"
+  [[ "${metadata}" == "${expected_uid}:${expected_gid}:755:1" ]] || \
+    fail "complete workflow runner hold-release verifier incoming identity mismatch"
+  incoming_sha256="$(workflow_runner_file_sha256 "${path}")" || \
+    fail "complete workflow runner hold-release verifier incoming hash is unavailable"
+  [[ "${incoming_sha256}" == "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256}" ]] || \
+    fail "complete workflow runner hold-release verifier incoming hash mismatch"
+}
+
+cleanup_workflow_runner_hold_release_verifier_incoming() {
+  (($# == 1 || $# == 3)) || return 64
+  local path="$1" expected_uid="${2:-0}" expected_gid="${3:-0}" metadata name parent
+  [[ -n "${path}" ]] || return 0
+  [[ -e "${path}" || -L "${path}" ]] || return 0
+  parent="${path%/*}"
+  name="${path##*/}"
+  [[ "${parent}" == "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" && \
+    "${name}" =~ ^\.verify-workflow-runner-hold-release\.incoming\.[A-Za-z0-9]{12}$ ]] || \
+    return 1
+  [[ ! -L "${path}" && -f "${path}" ]] || return 1
+  metadata="$(/usr/bin/stat --format='%u:%g:%a:%h' -- "${path}" 2>/dev/null)" || return 1
+  [[ "${metadata}" == "${expected_uid}:${expected_gid}:600:1" || \
+    "${metadata}" == "${expected_uid}:${expected_gid}:755:1" ]] || return 1
+  sudo -n /usr/bin/rm -- "${path}"
+}
+
+materialize_workflow_runner_hold_release_verifier_staged() {
+  (($# == 0 || $# == 2)) || return 64
+  local expected_uid="${1:-0}" expected_gid="${2:-0}"
+  (
+    set -euo pipefail
+    local incoming_path="" source_sha256_after
+    trap 'cleanup_workflow_runner_hold_release_verifier_incoming \
+      "${incoming_path}" "${expected_uid}" "${expected_gid}"' EXIT
+    incoming_path="$(sudo -n /usr/bin/mktemp \
+      --tmpdir="${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" \
+      '.verify-workflow-runner-hold-release.incoming.XXXXXXXXXXXX')"
+    require_workflow_runner_hold_release_verifier_empty_incoming \
+      "${incoming_path}" "${expected_uid}" "${expected_gid}"
+    sudo -n /usr/bin/install -o root -g root -m 0755 -T \
+      "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}" "${incoming_path}"
+    require_workflow_runner_hold_release_verifier_complete_incoming \
+      "${incoming_path}" "${expected_uid}" "${expected_gid}"
+    source_sha256_after="$(workflow_runner_file_sha256 \
+      "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}")" || \
+      fail "workflow runner hold-release verifier source hash is unavailable after incoming copy"
+    [[ "${source_sha256_after}" == "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256}" ]] || \
+      fail "workflow runner hold-release verifier source changed during incoming copy"
+    sudo -n /usr/bin/mv -T \
+      "${incoming_path}" "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}"
+    incoming_path=""
+    require_workflow_runner_hold_release_verifier_staged \
+      "${expected_uid}" "${expected_gid}"
+  )
+}
+
+require_installed_workflow_runner_hold_release_verifier() {
+  (($# == 0 || $# == 2)) || return 64
+  local expected_uid="${1:-0}" expected_gid="${2:-0}" source_sha256 target_sha256
+  [[ ! -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}" && \
+    -f "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}" ]] || \
+    fail "workflow runner hold-release verifier source is unavailable"
+  require_workflow_runner_hold_release_verifier_target_identity \
+    "${expected_uid}" "${expected_gid}"
   source_sha256="$(workflow_runner_file_sha256 \
     "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}")" || \
     fail "workflow runner hold-release verifier source hash is unavailable"
@@ -248,6 +378,103 @@ require_installed_workflow_runner_hold_release_verifier() {
     fail "installed workflow runner hold-release verifier hash is unavailable"
   [[ "${target_sha256}" == "${source_sha256}" ]] || \
     fail "installed workflow runner hold-release verifier source drift"
+}
+
+install_workflow_runner_hold_release_verifier() {
+  (($# == 0 || $# == 2)) || return 64
+  local expected_uid="${1:-0}" expected_gid="${2:-0}"
+  local existing_target_sha256 source_sha256_before source_sha256_after
+  source_sha256_before="$(workflow_runner_file_sha256 \
+    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}")" || \
+    fail "workflow runner hold-release verifier source hash is unavailable before installation"
+  [[ "${source_sha256_before}" == "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256}" ]] || \
+    fail "workflow runner hold-release verifier source does not match the reviewed release"
+  if [[ -e "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" || \
+    -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}" ]]; then
+    require_workflow_runner_hold_release_verifier_root "${expected_uid}" "${expected_gid}"
+  else
+    sudo -n /usr/bin/install -d -o root -g root -m 0755 \
+      "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT}"
+  fi
+  require_workflow_runner_hold_release_verifier_root "${expected_uid}" "${expected_gid}"
+  if [[ -e "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}" || \
+    -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}" ]]; then
+    # The previous release may contain older reviewed bytes, but its filesystem identity must be
+    # exact before this release replaces it inside the root-owned directory.
+    require_workflow_runner_hold_release_verifier_target_identity \
+      "${expected_uid}" "${expected_gid}"
+    existing_target_sha256="$(workflow_runner_file_sha256 \
+      "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}")" || \
+      fail "installed workflow runner hold-release verifier hash is unavailable before installation"
+    [[ "${existing_target_sha256}" == "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256}" || \
+      "${existing_target_sha256}" == "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256}" \
+    ]] || \
+      fail "installed workflow runner hold-release verifier predecessor is unrecognized"
+  fi
+  if [[ "${existing_target_sha256:-}" == \
+    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256}" ]]; then
+    [[ ! -e "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}" && \
+      ! -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}" ]] || \
+      fail "current workflow runner hold-release verifier conflicts with a staged file"
+    require_installed_workflow_runner_hold_release_verifier \
+      "${expected_uid}" "${expected_gid}"
+    return 0
+  fi
+  if [[ -e "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}" || \
+    -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}" ]]; then
+    require_workflow_runner_hold_release_verifier_staged \
+      "${expected_uid}" "${expected_gid}"
+  else
+    materialize_workflow_runner_hold_release_verifier_staged \
+      "${expected_uid}" "${expected_gid}"
+  fi
+  source_sha256_after="$(workflow_runner_file_sha256 \
+    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}")" || \
+    fail "workflow runner hold-release verifier source hash is unavailable after installation"
+  [[ "${source_sha256_after}" == "${source_sha256_before}" && \
+    "${source_sha256_after}" == "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256}" ]] || \
+    fail "workflow runner hold-release verifier source changed during installation"
+  require_workflow_runner_hold_release_verifier_staged \
+    "${expected_uid}" "${expected_gid}"
+  sudo -n /usr/bin/mv -T \
+    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}" \
+    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}"
+  [[ ! -e "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}" && \
+    ! -L "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED}" ]] || \
+    fail "staged workflow runner hold-release verifier remains after installation"
+  require_installed_workflow_runner_hold_release_verifier \
+    "${expected_uid}" "${expected_gid}"
+  source_sha256_after="$(workflow_runner_file_sha256 \
+    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}")" || \
+    fail "workflow runner hold-release verifier source hash is unavailable after publication"
+  [[ "${source_sha256_after}" == "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256}" ]] || \
+    fail "workflow runner hold-release verifier source changed during publication"
+}
+
+install_workflow_runner_hold_release_boundary() {
+  id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
+  install_workflow_runner_hold_release_verifier
+
+  if sudo -n -u eom-api /usr/bin/test -e "${WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT}" || \
+    sudo -n -u eom-api /usr/bin/test -L "${WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT}"; then
+    require_workflow_runner_retirement_receipt_root
+  else
+    # The parent is eom-api-owned and mode 0700. Create the absent leaf without root authority;
+    # even an EEXIST symlink race therefore cannot become a privileged chmod/chown write gadget.
+    sudo -n -u eom-api /usr/bin/install -d -m 0700 \
+      "${WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT}"
+  fi
+  require_workflow_runner_retirement_receipt_root
+  # Recheck the independently protected verifier after the eom-api-owned path operation so an
+  # interrupted pre-admission deployment always leaves one exact releasable boundary.
+  require_installed_workflow_runner_hold_release_verifier
+}
+
+prepare_workflow_runner_hold_release_boundary_before_admission() {
+  [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true ]] || return 0
+  verify_workflow_runner_deployment_hold
+  install_workflow_runner_hold_release_boundary
+  verify_workflow_runner_deployment_hold
 }
 
 require_workflow_runner_retirement_receipt_root() {
@@ -1958,25 +2185,11 @@ restart_platform_consumers() {
 install_service() {
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
   systemd-analyze verify "${UNIT_SOURCE}"
-  sudo -n install -d -o root -g root -m 0755 /usr/local/libexec/eom-api
+  install_workflow_runner_hold_release_boundary
   sudo -n install -o root -g root -m 0755 \
     "${METADATA_VERIFIER_SOURCE}" "${METADATA_VERIFIER_TARGET}"
   sudo -n install -o root -g root -m 0755 \
     "${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}"
-  sudo -n install -o root -g root -m 0755 \
-    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE}" \
-    "${WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET}"
-  if sudo -n -u eom-api /usr/bin/test -e "${WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT}" || \
-    sudo -n -u eom-api /usr/bin/test -L "${WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT}"; then
-    require_workflow_runner_retirement_receipt_root
-  else
-    # The parent is eom-api-owned and mode 0700. Create the absent leaf without root authority;
-    # even an EEXIST symlink race therefore cannot become a privileged chmod/chown write gadget.
-    sudo -n -u eom-api /usr/bin/install -d -m 0700 \
-      "${WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT}"
-  fi
-  require_workflow_runner_retirement_receipt_root
-  require_installed_workflow_runner_hold_release_verifier
   sudo -n install -o root -g root -m 0644 "${UNIT_SOURCE}" "${UNIT_TARGET}"
   sudo -n "${METADATA_VERIFIER_TARGET}"
   sudo -n systemctl daemon-reload
@@ -2026,6 +2239,7 @@ case "${ACTION}" in
     sudo -n true || fail "noninteractive privileged access is required before installation"
     require_clean_tree
     activate_workflow_runner_deployment_hold
+    prepare_workflow_runner_hold_release_boundary_before_admission
     verify_mock_exam_deployment_admission
     prepare_runtime_dependencies
     build_release
