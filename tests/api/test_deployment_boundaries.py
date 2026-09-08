@@ -475,6 +475,30 @@ def test_release_installs_runtime_verifier_and_packages_fixed_helper() -> None:
     assert 'eom-api-runtime-isolation = "eom_api.runtime_isolation_verifier:main"' in package
 
 
+def test_release_verifies_emergency_admin_recovery_installed_wheel_boundary() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+
+    for runtime_member in (
+        "eom_operator_identity/errors.py",
+        "eom_identity_service/local_admin_recovery.py",
+        "eomctl/operator.py",
+    ):
+        assert f'"{runtime_member}"' in deployment
+    for installed_module in (
+        "eom_operator_identity.errors",
+        "eom_identity_service.local_admin_recovery",
+        "eomctl.operator",
+    ):
+        assert f'"{installed_module}"' in deployment
+    assert "identity recovery runtime missing from wheel" in deployment
+    assert "identity recovery runtime missing from RECORD" in deployment
+    assert "eomctl console entry point missing" in deployment
+    assert "eomctl = eomctl.cli:app" in deployment
+    assert "installed-wheel eomctl emergency recovery command is unavailable" in deployment
+    assert "installed eomctl emergency recovery command is unavailable" in deployment
+    assert '["operator", "emergency-reset-admin-password", "--help"]' in deployment
+
+
 def test_release_verifies_educational_document_schema_resources() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 

@@ -4,12 +4,19 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from threading import Barrier
+from typing import cast
 
 import pytest
 from eom_identity_service.auth_service import (
     AuthenticationFailure,
     AuthService,
     LoginPolicy,
+)
+from eom_identity_service.local_admin_recovery import (
+    EmergencyAdminPasswordResetCommand,
+    EmergencyAdminPasswordResetReason,
+    LocalAdminPasswordRecoveryService,
+    LocalAdminRecoveryAuthorization,
 )
 from eom_identity_service.models import (
     ApiAuditEventRecord,
@@ -26,7 +33,7 @@ from eom_identity_service.models import (
 )
 from eom_identity_service.repository import effective_permissions, seed_builtin_rbac
 from eom_identity_service.service import CreateOperatorCommand, OperatorService
-from eom_identity_service.tokens import SessionTokenService, TokenCodec
+from eom_identity_service.tokens import IssuedTokenPair, SessionTokenService, TokenCodec
 from eom_operator_identity.contracts import (
     ActorContext,
     ActorSource,
@@ -46,6 +53,13 @@ TOKEN_HASH_KEY = "TEST_ONLY_TOKEN_HASH_KEY_0123456789ABCDEF"
 ADMIN_REPLACEMENT_PASSWORD = "TEST_ONLY replacement password 84"
 REVIEWER_PASSWORD = "TEST_ONLY reviewer password 42"
 VIEWER_PASSWORD = "TEST_ONLY viewer password 42"
+EMERGENCY_TEMPORARY_PASSWORD = "TEST_ONLY emergency temporary password 84"
+EMERGENCY_FINAL_PASSWORD = "TEST_ONLY emergency final password 85"
+
+
+class _TestLocalAdminRecoveryAuthorizer:
+    def authorize(self) -> LocalAdminRecoveryAuthorization:
+        return LocalAdminRecoveryAuthorization(os_principal="eom", os_uid=1000, os_gid=1000)
 
 
 def _enabled() -> None:
@@ -240,8 +254,9 @@ def test_identity_rbac_session_and_refresh_concurrency() -> None:
         assert len(rotated) == 1
         assert len(rejected) == 1
         assert rejected[0].code is IdentityErrorCode.AUTH_REFRESH_TOKEN_REUSED
+        rotated_pair = cast(IssuedTokenPair, rotated[0])
         with pytest.raises(IdentityError) as family_revoked:
-            auth.authenticate_access(rotated[0].access_token)
+            auth.authenticate_access(rotated_pair.access_token)
         assert family_revoked.value.code is IdentityErrorCode.AUTH_SESSION_REVOKED
 
         operators.assign_role(reviewer.operator_id, RoleKey.ADMIN, admin_actor)
@@ -298,6 +313,115 @@ def test_account_lock_persists_failed_attempts() -> None:
             now=start + timedelta(seconds=902),
         )
         assert result.operator_id == bootstrap.operator.operator_id
+    finally:
+        _cleanup(engine)
+        engine.dispose()
+
+
+def test_emergency_admin_password_reset_revokes_sessions_and_forces_api_change() -> None:
+    _enabled()
+    engine = build_engine()
+    sessions = build_session_factory(engine)
+    with sessions() as session:
+        if int(session.scalar(select(func.count(OperatorRecord.operator_id))) or 0):
+            pytest.skip("identity integration requires a database without existing Operators")
+    try:
+        bootstrap = OperatorService(engine).bootstrap_admin(
+            username="admin", display_name="통합 관리자"
+        )
+        tokens = SessionTokenService(TokenCodec(TOKEN_HASH_KEY))
+        auth = AuthService(engine, tokens)
+        initial = auth.login(
+            username="admin",
+            password=bootstrap.temporary_password,
+            client_name="identity-emergency-reset",
+        )
+        normal = auth.change_password(
+            auth.authenticate_access(initial.pair.access_token),
+            current_password=bootstrap.temporary_password,
+            new_password=ADMIN_REPLACEMENT_PASSWORD,
+        )
+        second = auth.login(
+            username="admin",
+            password=ADMIN_REPLACEMENT_PASSWORD,
+            client_name="identity-emergency-reset-second",
+        )
+        with pytest.raises(AuthenticationFailure):
+            auth.login(
+                username="admin",
+                password="TEST_ONLY incorrect emergency password",
+                client_name="identity-emergency-reset",
+            )
+
+        result = LocalAdminPasswordRecoveryService(
+            engine, _TestLocalAdminRecoveryAuthorizer()
+        ).reset_admin_password(
+            EmergencyAdminPasswordResetCommand(
+                operator_id=bootstrap.operator.operator_id,
+                temporary_password=EMERGENCY_TEMPORARY_PASSWORD,
+                reason_code=EmergencyAdminPasswordResetReason.ADMIN_CREDENTIAL_LOSS,
+                request_id="cli_" + "d" * 24,
+            )
+        )
+
+        assert result.password_version == 3
+        assert result.revoked_sessions == 2
+        assert result.must_change_password
+        for access_token in (normal.access_token, second.pair.access_token):
+            with pytest.raises(IdentityError) as revoked:
+                auth.authenticate_access(access_token)
+            assert revoked.value.code is IdentityErrorCode.AUTH_SESSION_REVOKED
+        restricted = auth.login(
+            username="admin",
+            password=EMERGENCY_TEMPORARY_PASSWORD,
+            client_name="identity-emergency-reset",
+        )
+        restricted_auth = auth.authenticate_access(restricted.pair.access_token)
+        assert restricted_auth.password_change_required
+        final = auth.change_password(
+            restricted_auth,
+            current_password=EMERGENCY_TEMPORARY_PASSWORD,
+            new_password=EMERGENCY_FINAL_PASSWORD,
+        )
+        assert not auth.authenticate_access(final.access_token).password_change_required
+
+        with sessions() as session:
+            credential = session.scalar(
+                select(OperatorCredentialRecord).where(
+                    OperatorCredentialRecord.operator_id == bootstrap.operator.operator_id
+                )
+            )
+            assert credential is not None
+            assert credential.failed_login_count == 0
+            assert credential.first_failed_at is None
+            assert credential.last_failed_at is None
+            assert credential.locked_until is None
+            events = list(
+                session.scalars(
+                    select(OperatorEventRecord)
+                    .where(
+                        OperatorEventRecord.operator_id == bootstrap.operator.operator_id,
+                        OperatorEventRecord.event_type == "EMERGENCY_PASSWORD_RESET",
+                    )
+                    .order_by(OperatorEventRecord.sequence)
+                )
+            )
+            assert len(events) == 1
+            event = events[0]
+            assert event.actor_id == "system"
+            assert event.payload == {
+                "actor_type": "SYSTEM",
+                "source": "CLI",
+                "os_principal": "eom",
+                "os_uid": 1000,
+                "os_gid": 1000,
+                "password_version": 3,
+                "reason_code": "ADMIN_CREDENTIAL_LOSS",
+                "revoked_sessions": 2,
+            }
+            serialized = str(event.payload)
+            assert EMERGENCY_TEMPORARY_PASSWORD not in serialized
+            assert "argon2" not in serialized
     finally:
         _cleanup(engine)
         engine.dispose()

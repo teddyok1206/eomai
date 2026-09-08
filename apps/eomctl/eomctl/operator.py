@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import json
 import os
+import pwd
 import stat
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
 import typer
+from eom_identity_service.local_admin_recovery import (
+    EmergencyAdminPasswordResetCommand,
+    EmergencyAdminPasswordResetReason,
+    LocalAdminPasswordRecoveryService,
+    LocalAdminRecoveryAuthorization,
+)
 from eom_identity_service.service import CreateOperatorCommand, OperatorService
 from eom_operator_identity.contracts import (
     ActorContext,
@@ -18,11 +25,26 @@ from eom_operator_identity.contracts import (
     PermissionKey,
     RoleKey,
 )
-from eom_operator_identity.errors import IdentityError
+from eom_operator_identity.errors import IdentityError, IdentityErrorCode
 from eom_orchestrator.database import build_engine
 
 operator_app = typer.Typer(no_args_is_help=True)
 INITIAL_ADMIN_FILE = Path("/home/eom/.eom-api-initial-admin")
+MAX_PASSWORD_FILE_BYTES = 257
+
+
+def _stable_file_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_uid,
+        metadata.st_gid,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
 
 
 def _emit(value: object) -> None:
@@ -31,6 +53,50 @@ def _emit(value: object) -> None:
 
 def _service() -> OperatorService:
     return OperatorService(build_engine())
+
+
+class _PosixEomRecoveryAuthorizer:
+    """Derive the trusted principal from the process credentials at call time."""
+
+    def authorize(self) -> LocalAdminRecoveryAuthorization:
+        if os.getuid() != os.geteuid() or os.getgid() != os.getegid():
+            raise IdentityError(
+                IdentityErrorCode.EMERGENCY_RESET_UNAUTHORIZED,
+                "emergency password reset rejects set-id execution",
+            )
+        try:
+            principal = pwd.getpwuid(os.geteuid())
+        except KeyError as exc:
+            raise IdentityError(
+                IdentityErrorCode.EMERGENCY_RESET_UNAUTHORIZED,
+                "invoking operating-system principal is unknown",
+            ) from exc
+        if (
+            principal.pw_name != "eom"
+            or principal.pw_uid != os.geteuid()
+            or principal.pw_gid != os.getegid()
+            or principal.pw_uid == 0
+        ):
+            raise IdentityError(
+                IdentityErrorCode.EMERGENCY_RESET_UNAUTHORIZED,
+                "emergency password reset must run as the local eom user",
+            )
+        return LocalAdminRecoveryAuthorization(
+            os_principal=principal.pw_name,
+            os_uid=principal.pw_uid,
+            os_gid=principal.pw_gid,
+        )
+
+
+def _emergency_recovery_service() -> LocalAdminPasswordRecoveryService:
+    authorizer = _PosixEomRecoveryAuthorizer()
+    # Reject an untrusted process before opening the database or reading credential bytes.
+    if not isinstance(authorizer.authorize(), LocalAdminRecoveryAuthorization):
+        raise IdentityError(
+            IdentityErrorCode.EMERGENCY_RESET_UNAUTHORIZED,
+            "local recovery authorization adapter returned an invalid result",
+        )
+    return LocalAdminPasswordRecoveryService(build_engine(), authorizer)
 
 
 def _actor(operator_id: str) -> ActorContext:
@@ -46,16 +112,48 @@ def _actor(operator_id: str) -> ActorContext:
 
 
 def _password_file(path: Path) -> str:
-    metadata = path.lstat()
-    if not stat.S_ISREG(metadata.st_mode) or path.is_symlink():
-        raise typer.BadParameter("temporary password file must be a regular file")
-    if metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) & 0o077:
-        raise typer.BadParameter("temporary password file must be owned by eom with mode 0600")
-    value = path.read_text(encoding="utf-8")
-    if value.endswith("\n"):
-        value = value[:-1]
-        if value.endswith("\r"):
-            value = value[:-1]
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    flags |= getattr(os, "O_NONBLOCK", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise typer.BadParameter("password file cannot be opened safely") from exc
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != os.geteuid()
+            or stat.S_IMODE(before.st_mode) != 0o600
+            or before.st_nlink != 1
+            or not 0 < before.st_size <= MAX_PASSWORD_FILE_BYTES
+        ):
+            raise typer.BadParameter(
+                "password file must be a single-link regular file owned by the invoking user "
+                "with mode 0600"
+            )
+        payload = bytearray()
+        while len(payload) < before.st_size:
+            chunk = os.read(descriptor, before.st_size - len(payload))
+            if not chunk:
+                raise typer.BadParameter("password file changed while being read")
+            payload.extend(chunk)
+        if os.read(descriptor, 1):
+            raise typer.BadParameter("password file exceeds its validated size")
+        after = os.fstat(descriptor)
+        if _stable_file_identity(before) != _stable_file_identity(after):
+            raise typer.BadParameter("password file changed while being read")
+    finally:
+        os.close(descriptor)
+    if payload.endswith(b"\n"):
+        del payload[-1:]
+    if b"\n" in payload or b"\r" in payload:
+        raise typer.BadParameter("password file must contain exactly one line")
+    try:
+        value = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise typer.BadParameter("password file must contain valid UTF-8") from exc
+    finally:
+        payload[:] = b"\0" * len(payload)
     return value
 
 
@@ -223,3 +321,41 @@ def revoke_sessions(operator_id: str, actor_id: str = typer.Option(..., "--actor
         _identity_error(exc)
         return
     _emit({"operator_id": operator_id, "revoked_sessions": count})
+
+
+@operator_app.command("emergency-reset-admin-password")
+def emergency_reset_admin_password(
+    operator_id: str,
+    temporary_password_file: Annotated[
+        Path, typer.Option("--temporary-password-file", exists=True, dir_okay=False)
+    ],
+    reason_code: Annotated[EmergencyAdminPasswordResetReason, typer.Option("--reason-code")],
+    confirm_operator_id: Annotated[str, typer.Option("--confirm-operator-id")],
+) -> None:
+    """Issue a forced-change credential from the trusted local eom recovery boundary."""
+
+    if confirm_operator_id != operator_id:
+        raise typer.BadParameter("confirmed Operator ID does not match the reset target")
+    try:
+        result = _emergency_recovery_service().reset_admin_password(
+            EmergencyAdminPasswordResetCommand(
+                operator_id=operator_id,
+                temporary_password=_password_file(temporary_password_file),
+                reason_code=reason_code,
+                request_id=f"cli_{os.urandom(12).hex()}",
+            )
+        )
+    except IdentityError as exc:
+        _identity_error(exc)
+        return
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        {
+            "operator_id": result.operator_id,
+            "password_version": result.password_version,
+            "revoked_sessions": result.revoked_sessions,
+            "reset_at": result.reset_at,
+            "must_change_password": result.must_change_password,
+        }
+    )

@@ -757,6 +757,11 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_workflow_runner/actor_authorization_adapters.py",
         "eom_workflow_runner/settings.py",
     }
+    identity_recovery_runtime = {
+        "eom_operator_identity/errors.py",
+        "eom_identity_service/local_admin_recovery.py",
+        "eomctl/operator.py",
+    }
     control_plane_runtime = {
         "eom_orchestrator/capability_observer.py",
         "eom_orchestrator/capacity_controller.py",
@@ -889,6 +894,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_manager/runner.py",
         "eom_hwpx_manager/runtime_privileges.py",
     }
+    if missing := identity_recovery_runtime - names:
+        raise SystemExit(f"identity recovery runtime missing from wheel: {sorted(missing)}")
     if missing := (
         worker_runtime
         | actor_runtime
@@ -947,6 +954,9 @@ with zipfile.ZipFile(platform_wheel) as archive:
     for member in sorted(actor_runtime):
         if member not in record:
             raise SystemExit(f"workflow actor runtime missing from RECORD: {member}")
+    for member in sorted(identity_recovery_runtime):
+        if member not in record:
+            raise SystemExit(f"identity recovery runtime missing from RECORD: {member}")
     for member in sorted(control_plane_runtime):
         if member not in record:
             raise SystemExit(f"Codex control-plane runtime missing from RECORD: {member}")
@@ -957,6 +967,9 @@ with zipfile.ZipFile(platform_wheel) as archive:
         if member not in record:
             raise SystemExit(f"HWPX application runtime missing from RECORD: {member}")
     entry_points = next(name for name in names if name.endswith(".dist-info/entry_points.txt"))
+    entry_point_source = archive.read(entry_points).decode()
+    if "eomctl = eomctl.cli:app" not in entry_point_source:
+        raise SystemExit("eomctl console entry point missing")
     if "eom-hwpx-application-runner = eom_hwpx_manager.runner:main" not in archive.read(
         entry_points
     ).decode():
@@ -1367,6 +1380,8 @@ from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import DEFAULT_WORKER_CONFIG, Settings, WorkerConfigSource
 from eom_orchestrator.worker_systemd import WorkerSystemdReadiness
+from eomctl.cli import app as eomctl_app
+from typer.testing import CliRunner
 
 spec = importlib.util.find_spec("eom_workflow")
 if (
@@ -1392,6 +1407,27 @@ if (
     or repository in api_contract_spec.origin
 ):
     raise SystemExit("Application API contracts were not imported from the release wheel")
+for recovery_module in (
+    "eom_operator_identity.errors",
+    "eom_identity_service.local_admin_recovery",
+    "eomctl.operator",
+):
+    recovery_spec = importlib.util.find_spec(recovery_module)
+    if (
+        recovery_spec is None
+        or recovery_spec.origin is None
+        or not Path(recovery_spec.origin).resolve().is_relative_to(installed_root)
+        or repository in recovery_spec.origin
+    ):
+        raise SystemExit(
+            f"identity recovery module was not imported from the release wheel: {recovery_module}"
+        )
+recovery_help = CliRunner().invoke(
+    eomctl_app,
+    ["operator", "emergency-reset-admin-password", "--help"],
+)
+if recovery_help.exit_code != 0 or "emergency-reset-admin-password" not in recovery_help.stdout:
+    raise SystemExit("installed-wheel eomctl emergency recovery command is unavailable")
 if any(
     model.__module__ != "eom_api_contracts.mock_exam_execution"
     for model in (
@@ -1674,12 +1710,14 @@ verify_install_mode() {
   REPOSITORY_ROOT="${REPOSITORY_ROOT}" "${API_PYTHON}" - <<'PY'
 from __future__ import annotations
 
+import importlib
 import importlib.metadata
 import importlib.util
 import json
 import os
 import site
 import stat
+import subprocess
 from pathlib import Path
 
 site_roots = [Path(value).resolve() for value in site.getsitepackages()]
@@ -1688,6 +1726,9 @@ for module in (
     "eom_api",
     "eom_api_contracts",
     "eom_operator_identity",
+    "eom_operator_identity.errors",
+    "eom_identity_service.local_admin_recovery",
+    "eomctl.operator",
     "eom_catalog_contracts",
     "eom_workflow",
     "eom_workflow_runner",
@@ -1704,6 +1745,13 @@ for module in (
         raise SystemExit(f"source checkout import detected: {module}")
     runtime_package_roots.add(origin.parent)
 
+for module in (
+    "eom_operator_identity.errors",
+    "eom_identity_service.local_admin_recovery",
+    "eomctl.operator",
+):
+    importlib.import_module(module)
+
 expected_uid = os.getuid()
 expected_gid = os.getgid()
 for root in sorted(runtime_package_roots):
@@ -1718,6 +1766,7 @@ for root in sorted(runtime_package_roots):
             raise SystemExit(f"runtime package mode mismatch: {path.name}")
 
 for name in (
+    "eomctl",
     "eom-api",
     "eom-api-runtime-isolation",
     "eom-workflow-runner",
@@ -1733,6 +1782,26 @@ for name in (
         or stat.S_IMODE(metadata.st_mode) != 0o755
     ):
         raise SystemExit(f"runtime entry point mode mismatch: {name}")
+eomctl_environment = os.environ.copy()
+eomctl_environment.pop("PYTHONHOME", None)
+eomctl_environment.pop("PYTHONPATH", None)
+eomctl_entrypoint = Path(
+    os.environ.get("API_PYTHON", "/srv/eom/conda/envs/eom-api/bin/python")
+).resolve().parent / "eomctl"
+eomctl_help = subprocess.run(
+    [str(eomctl_entrypoint), "operator", "emergency-reset-admin-password", "--help"],
+    cwd=eomctl_entrypoint.parent,
+    env=eomctl_environment,
+    capture_output=True,
+    text=True,
+    check=False,
+)
+if (
+    eomctl_help.returncode != 0
+    or "emergency-reset-admin-password" not in eomctl_help.stdout
+    or eomctl_help.stderr
+):
+    raise SystemExit("installed eomctl emergency recovery command is unavailable")
 for name in ("eom-application-api", "eom-api-contracts", "eom-platform"):
     distribution = importlib.metadata.distribution(name)
     direct_url = distribution.read_text("direct_url.json")
