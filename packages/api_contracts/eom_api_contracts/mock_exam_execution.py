@@ -1265,11 +1265,22 @@ def mock_exam_production_is_terminal(checkpoint: MockExamProductionExecutionV1) 
         return True
     if checkpoint.state != "BLOCKED":
         return False
-    failures = (
-        *((checkpoint.failure,) if checkpoint.failure is not None else ()),
-        *(row.failure for row in checkpoint.item_runs if row.failure is not None),
-    )
-    return any(not failure.retryable for failure in failures)
+    if checkpoint.failure is not None and not checkpoint.failure.retryable:
+        return True
+    for row in checkpoint.item_runs:
+        failure = row.failure
+        if failure is None or failure.retryable:
+            continue
+        if not (
+            row.state == "ANALYSIS_REVIEW_REQUIRED"
+            and row.analysis is not None
+            and row.analysis.state == "NEEDS_REVIEW"
+            and failure.stage == "ANALYSIS"
+            and failure.category == "ANALYSIS_FAILED"
+            and failure.code == "ANALYSIS_REVIEW_REQUIRED"
+        ):
+            return True
+    return False
 
 
 def mock_exam_production_state_from_pointers(

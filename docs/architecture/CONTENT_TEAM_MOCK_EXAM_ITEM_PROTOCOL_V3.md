@@ -82,6 +82,11 @@ Stable failures cover unsupported score spelling, production slot score mismatch
 mismatch, unsafe SVG text, non-round-trippable Markdown, and unresolved artifact pointers. Existing
 V2/@8 values retain their former validation behavior.
 
+`ANALYSIS_REVIEW_REQUIRED` is a blocked quality gate with an explicit operator-review continuation,
+not a terminal execution, even though its row failure is intentionally non-retryable by the
+automatic analysis reconciler. Deployment admission treats only other non-retryable failures (and
+completed executions) as terminal.
+
 The historical direct `mock-exam-assembly-manifest/1.0` creation path remains V2-only. It bulk
 checks that every selected revision exposes exactly one canonical ordinal-zero V2 Item-content
 component and rejects V3, mixed, missing, ambiguous, or structurally incomplete pointers before

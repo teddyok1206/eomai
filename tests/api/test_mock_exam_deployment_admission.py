@@ -11,10 +11,16 @@ from eom_api.services.mock_exam_production_coordinator import (
     _advance_checkpoint,
 )
 from eom_api_contracts.mock_exam_execution import (
+    MockExamAnalysisPointerV1,
+    MockExamAnalysisPolicyPointerV1,
     MockExamGenerationBlockResolutionV2,
+    MockExamHumanApprovalPointerV1,
+    MockExamItemRegistrationPointerV1,
     MockExamProductionExecutionV1,
     MockExamProductionExecutionV2,
     MockExamProductionFailureV1,
+    MockExamReviewPointerV2,
+    MockExamWorkflowKnowledgeProvenancePointerV1,
     mock_exam_production_is_terminal,
 )
 from eom_catalog_contracts import (
@@ -170,6 +176,99 @@ def _generation_resolution_v2() -> MockExamGenerationBlockResolutionV2:
     )
 
 
+def _actionable_analysis_review_execution_v2() -> MockExamProductionExecutionV2:
+    initial = _initial_execution_v2()
+    resolution = _generation_resolution_v2()
+    policy = MockExamAnalysisPolicyPointerV1(
+        risk_policy_revision_id="analysisriskrev_" + "7" * 32,
+        risk_policy_sha256="sha256:" + "8" * 64,
+    )
+    provenance = MockExamWorkflowKnowledgeProvenancePointerV1(
+        schema_version="workflow-knowledge-provenance/1.0",
+        plan_id="execplan_" + "1" * 32,
+        plan_sha256="sha256:" + "2" * 64,
+        preset_revision_id=resolution.execution_preset_revision_id,
+        corpus_key="integrated-science-textbooks",
+        query_kind="ITEM_PREPARATION",
+        curriculum_root_key="integrated-science.2015.unit-1",
+        required_item_elements=("choice", "paragraph"),
+        source_classes=("APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"),
+        graph_snapshot_revision_id="graphrev_" + "3" * 32,
+        evidence_bundle_revision_id="evidencerev_" + "4" * 32,
+        retrieval_request_id="retrieval_" + "5" * 32,
+        retrieval_request_sha256="sha256:" + "6" * 64,
+        access_policy_revision_id="accessrev_" + "7" * 32,
+        access_policy_sha256="sha256:" + "8" * 64,
+        evidence_manifest_sha256="sha256:" + "9" * 64,
+        resolved_at=NOW,
+    )
+    review = MockExamReviewPointerV2(
+        approval_request_id="approval_" + "1" * 32,
+        approval_resource_version=1,
+        step_run_id="steprun_" + "2" * 32,
+        artifact_id="artifact_" + "3" * 32,
+        artifact_revision_id="rev_" + "4" * 32,
+        sha256="sha256:" + "5" * 64,
+        result_schema="review-result@9.0",
+        finding_info_count=0,
+        finding_warning_count=0,
+        finding_blocking_count=0,
+    )
+    registration = MockExamItemRegistrationPointerV1(
+        item_id="item_" + "6" * 32,
+        item_revision_id="itemrev_" + "7" * 32,
+        revision_number=1,
+        manifest_artifact_id="artifact_" + "8" * 32,
+        manifest_artifact_revision_id="rev_" + "9" * 32,
+        manifest_sha256="sha256:" + "a" * 64,
+    )
+    failure = MockExamProductionFailureV1(
+        stage="ANALYSIS",
+        category="ANALYSIS_FAILED",
+        code="ANALYSIS_REVIEW_REQUIRED",
+        retryable=False,
+        observed_at=NOW + timedelta(seconds=1),
+    )
+    review_required = type(initial.item_runs[0]).model_validate(
+        {
+            **initial.item_runs[0].model_dump(mode="json"),
+            "state": "ANALYSIS_REVIEW_REQUIRED",
+            "start_command_id": "wfcmd_" + "b" * 32,
+            "workflow_id": "workflow_" + "c" * 32,
+            "workflow_resource_version": 1,
+            "knowledge_provenance": provenance.model_dump(mode="json"),
+            "review": review.model_dump(mode="json"),
+            "approval_command_id": "wfcmd_" + "d" * 32,
+            "human_approval": MockExamHumanApprovalPointerV1(
+                approval_request_id=review.approval_request_id,
+                reviewer_operator_id=initial.operator_id,
+                approved_at=NOW,
+            ).model_dump(mode="json"),
+            "registration": registration.model_dump(mode="json"),
+            "analysis": MockExamAnalysisPointerV1(
+                analysis_run_id="analysisrun_" + "e" * 32,
+                source_item_revision_id=registration.item_revision_id,
+                request_sha256="sha256:" + "f" * 64,
+                risk_policy_revision_id=policy.risk_policy_revision_id,
+                risk_policy_sha256=policy.risk_policy_sha256,
+                state="NEEDS_REVIEW",
+                resource_version=2,
+            ).model_dump(mode="json"),
+            "failure": failure.model_dump(mode="json"),
+        }
+    )
+    checkpoint = _advance_checkpoint(
+        initial,
+        at=NOW + timedelta(seconds=1),
+        generation_block_resolution=resolution,
+        analysis_policy=policy,
+        analysis_general_knowledge_mode="AUXILIARY_UNATTRIBUTED",
+        item_runs=(review_required, *initial.item_runs[1:]),
+    )
+    assert isinstance(checkpoint, MockExamProductionExecutionV2)
+    return checkpoint
+
+
 def test_installed_contract_validator_dispatches_nonterminal_execution_v2() -> None:
     checkpoint = _initial_execution_v2()
 
@@ -179,6 +278,25 @@ def test_installed_contract_validator_dispatches_nonterminal_execution_v2() -> N
 
     assert execution_id == checkpoint.execution_id
     assert checkpoint.schema_version == "mock-exam-production-execution/2.0"
+    assert terminal is False
+
+
+def test_contract_terminal_rule_keeps_actionable_analysis_review_nonterminal() -> None:
+    checkpoint = _actionable_analysis_review_execution_v2()
+
+    assert checkpoint.state == "BLOCKED"
+    assert checkpoint.item_runs[0].state == "ANALYSIS_REVIEW_REQUIRED"
+    assert mock_exam_production_is_terminal(checkpoint) is False
+
+
+def test_installed_contract_validator_dispatches_actionable_analysis_review_v2() -> None:
+    checkpoint = _actionable_analysis_review_execution_v2()
+
+    execution_id, terminal = _installed_contract_validator(
+        checkpoint.model_dump_json().encode("utf-8")
+    )
+
+    assert execution_id == checkpoint.execution_id
     assert terminal is False
 
 
@@ -211,6 +329,7 @@ def test_installed_contract_validator_dispatches_terminal_execution_v2() -> None
         checkpoint.model_dump_json().encode("utf-8")
     )
 
+    assert isinstance(checkpoint, MockExamProductionExecutionV2)
     assert execution_id == checkpoint.execution_id
     assert checkpoint.schema_version == "mock-exam-production-execution/2.0"
     assert terminal is True
