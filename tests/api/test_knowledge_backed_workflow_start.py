@@ -17,6 +17,7 @@ from eom_operator_identity import (
     PermissionKey,
 )
 from eom_workflow import compile_definition
+from eom_workflow_runner.models import WorkflowInstanceRecord
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -65,6 +66,9 @@ class _ReadSession:
         return None
 
     def scalar(self, _statement: object) -> object:
+        descriptions = getattr(_statement, "column_descriptions", ())
+        if descriptions and descriptions[0].get("entity") is WorkflowInstanceRecord:
+            return None
         return self.definition
 
 

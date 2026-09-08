@@ -219,6 +219,9 @@ def test_catalog_socket_operation_schema_routes_are_total_and_immutable() -> Non
         "CREATE_KNOWLEDGE_ANALYSIS_BATCH": (9, 7),
         "CREATE_EVIDENCE_BUNDLE": (3, 9),
         "CREATE_ITEM_PRODUCTION_EVIDENCE": (4, 8),
+        "PUBLISH_APPROVED_ITEM_ANALYSES": (11, 11),
+        "PUBLISH_MOCK_EXAM_ITEM_REVIEW": (11, 11),
+        "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY": (11, 11),
     }
     assert set(CATALOG_APPLICATION_SCHEMA_ROUTES) == set(expected)
     for operation, (request_version, response_version) in expected.items():

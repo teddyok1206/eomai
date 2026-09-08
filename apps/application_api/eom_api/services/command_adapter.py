@@ -47,6 +47,7 @@ from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.execution_resolver import (
     ExecutionStepRequirement,
     current_knowledge_backed_preset,
+    pinned_knowledge_backed_preset,
     resolve_execution_plan,
     resolve_knowledge_backed_execution_plan,
     validate_educational_retrieval_policy,
@@ -61,13 +62,18 @@ from eom_workflow import (
 from eom_workflow.control_plane import WorkerRole
 from eom_workflow.schemas import result_schema_protocol
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
-from eom_workflow_runner.models import WorkflowCommandRecord
+from eom_workflow_runner.models import (
+    WorkflowCommandRecord,
+    WorkflowDefinitionRecord,
+    WorkflowInstanceRecord,
+)
 from eom_workflow_runner.repository import (
     CommandType,
     active_approval,
     admitted_workflow_definition,
     create_workflow_instance,
     enqueue_command,
+    workflow_request_storage_document,
 )
 from sqlalchemy import Engine, select
 
@@ -137,6 +143,16 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
         "image_mode": request.image_mode,
         "execution_preset_key": request.execution_preset_key,
         "educational_retrieval": retrieval_data,
+        "production_occurrence": (
+            request.production_occurrence.model_dump(mode="json")
+            if request.production_occurrence is not None
+            else None
+        ),
+        "expected_resolution": (
+            request.expected_resolution.model_dump(mode="json")
+            if request.expected_resolution is not None
+            else None
+        ),
     }
     if request.pack_key is not None:
         knowledge_request = request.request_name == "KNOWLEDGE_ITEM_REQUEST"
@@ -225,6 +241,15 @@ class CommandAdapter:
         idempotency_key: str,
     ) -> tuple[str, str, int]:
         workflow_request = _workflow_request_from_api(request)
+        replay = self._workflow_start_replay(
+            workflow_request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            definition_key=request.definition_key,
+            definition_version=request.definition_version,
+        )
+        if replay is not None:
+            return replay
         knowledge_preset = None
         knowledge_evidence = None
         preflight_definition_hash: str | None = None
@@ -242,6 +267,7 @@ class CommandAdapter:
                         "Workflow definition not found",
                         "The requested active workflow definition does not exist.",
                     )
+                self._require_expected_definition(workflow_request, preflight_definition)
                 assert workflow_request.execution_preset_key is not None
                 compiled_preflight = compile_definition_data(
                     preflight_definition.canonical_definition,
@@ -261,10 +287,22 @@ class CommandAdapter:
                         "The workflow definition has inconsistent role protocols.",
                     )
                 try:
-                    knowledge_preset = current_knowledge_backed_preset(
-                        preflight_session,
-                        preset_key=workflow_request.execution_preset_key,
-                        workflow_role_schema_version=str(next(iter(role_protocols))),
+                    expected = workflow_request.expected_resolution
+                    knowledge_preset = (
+                        pinned_knowledge_backed_preset(
+                            preflight_session,
+                            preset_id=expected.execution_preset_id,
+                            preset_revision_id=expected.execution_preset_revision_id,
+                            preset_key=expected.execution_preset_key,
+                            preset_content_sha256=expected.execution_preset_content_sha256,
+                            workflow_role_schema_version=str(next(iter(role_protocols))),
+                        )
+                        if expected is not None
+                        else current_knowledge_backed_preset(
+                            preflight_session,
+                            preset_key=workflow_request.execution_preset_key,
+                            workflow_role_schema_version=str(next(iter(role_protocols))),
+                        )
                     )
                     validate_educational_retrieval_policy(
                         knowledge_preset, workflow_request.educational_retrieval
@@ -325,6 +363,7 @@ class CommandAdapter:
                     "Workflow definition not found",
                     "The requested active workflow definition does not exist.",
                 )
+            self._require_expected_definition(workflow_request, definition)
             if (
                 preflight_definition_hash is not None
                 and definition.definition_hash != preflight_definition_hash
@@ -335,15 +374,71 @@ class CommandAdapter:
                     "Workflow definition changed",
                     "The workflow definition changed during evidence resolution.",
                 )
+            transaction_preset = None
+            if workflow_request.expected_resolution is not None:
+                compiled_resolution = compile_definition_data(
+                    definition.canonical_definition,
+                    definition.source_path,
+                    {"authoring", "image", "review", "item_management"},
+                )
+                resolution_protocols = {
+                    result_schema_protocol(step.result_schema)
+                    for step in compiled_resolution.definition.steps
+                    if isinstance(step, AgentStep)
+                }
+                if len(resolution_protocols) != 1:
+                    raise ApiError(
+                        409,
+                        "WORKFLOW_DEFINITION_INVALID",
+                        "Workflow definition invalid",
+                        "The workflow definition has inconsistent role protocols.",
+                    )
+                expected = workflow_request.expected_resolution
+                try:
+                    transaction_preset = pinned_knowledge_backed_preset(
+                        session,
+                        preset_id=expected.execution_preset_id,
+                        preset_revision_id=expected.execution_preset_revision_id,
+                        preset_key=expected.execution_preset_key,
+                        preset_content_sha256=expected.execution_preset_content_sha256,
+                        workflow_role_schema_version=str(next(iter(resolution_protocols))),
+                    )
+                except ControlPlaneError as exc:
+                    raise ApiError(
+                        409,
+                        exc.code,
+                        "Execution preset unavailable",
+                        "The expected execution preset does not resolve exactly.",
+                    ) from exc
             runtime_context = (
                 self.catalog.bind_request(
                     workflow_request,
                     definition_key=definition.definition_key,
                     definition_version=definition.definition_version,
+                    session=session,
                 )
                 if workflow_request.content_pack is not None
                 else None
             )
+            if runtime_context is not None and workflow_request.expected_resolution is not None:
+                expected = workflow_request.expected_resolution
+                pack = runtime_context["content_pack"]
+                assert transaction_preset is not None
+                runtime_context["accepted_resolution"] = {
+                    "schema_version": expected.schema_version,
+                    "workflow_definition_key": definition.definition_key,
+                    "workflow_definition_version": definition.definition_version,
+                    "workflow_definition_sha256": definition.definition_hash,
+                    "content_pack_release_id": str(pack["release_id"]),
+                    "content_pack_key": str(pack["pack_key"]),
+                    "content_pack_version": str(pack["version"]),
+                    "content_pack_bundle_sha256": str(pack["release_sha256"]),
+                    "content_pack_source_tree_sha256": str(pack["source_tree_sha256"]),
+                    "execution_preset_id": transaction_preset.preset_id,
+                    "execution_preset_revision_id": transaction_preset.preset_revision_id,
+                    "execution_preset_key": expected.execution_preset_key,
+                    "execution_preset_content_sha256": transaction_preset.content_sha256,
+                }
             workflow, created = create_workflow_instance(
                 session,
                 definition=definition,
@@ -397,11 +492,12 @@ class CommandAdapter:
                     )
                     plan: ResolvedExecutionPlan | ResolvedExecutionPlanV3
                     if knowledge_evidence is not None:
-                        assert knowledge_preset is not None
+                        selected_preset = transaction_preset or knowledge_preset
+                        assert selected_preset is not None
                         assert workflow_request.educational_retrieval is not None
                         plan = resolve_knowledge_backed_execution_plan(
                             session,
-                            preset_revision_id=knowledge_preset.preset_revision_id,
+                            preset_revision_id=selected_preset.preset_revision_id,
                             requirement=workflow_request.educational_retrieval,
                             evidence=knowledge_evidence,
                             dependencies=dependencies,
@@ -453,6 +549,83 @@ class CommandAdapter:
             assert command is not None
             command_id = command.command_id
             return command_id, workflow.workflow_id, workflow.lock_version
+
+    def _workflow_start_replay(
+        self,
+        request: WorkflowRequest,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+        definition_key: str,
+        definition_version: str,
+    ) -> tuple[str, str, int] | None:
+        """Return an exact prior receipt before consulting any mutable current pointer."""
+
+        with self.sessions() as session:
+            workflow = session.scalar(
+                select(WorkflowInstanceRecord).where(
+                    WorkflowInstanceRecord.idempotency_key == idempotency_key
+                )
+            )
+            if workflow is None:
+                return None
+            expected_document = workflow_request_storage_document(request)
+            if (
+                workflow.created_actor_type != "human"
+                or workflow.created_actor_id != actor.actor_id
+                or workflow.definition_key != definition_key
+                or workflow.definition_version != definition_version
+                or workflow.initial_request != expected_document
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_COMMAND_DUPLICATE,
+                    "workflow idempotency key was reused with different input",
+                )
+            expected = request.expected_resolution
+            if expected is not None and workflow.runtime_context.get(
+                "accepted_resolution"
+            ) != expected.model_dump(mode="json"):
+                raise ApiError(
+                    409,
+                    "WORKFLOW_ACCEPTED_RESOLUTION_MISMATCH",
+                    "Workflow resolution mismatch",
+                    "The stored Workflow did not accept the exact requested resolution.",
+                )
+            command = session.scalar(
+                select(WorkflowCommandRecord)
+                .where(
+                    WorkflowCommandRecord.workflow_id == workflow.workflow_id,
+                    WorkflowCommandRecord.command_type == CommandType.START_WORKFLOW.value,
+                )
+                .order_by(
+                    WorkflowCommandRecord.created_at,
+                    WorkflowCommandRecord.command_id,
+                )
+                .limit(1)
+            )
+            if command is None:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                    "existing workflow occurrence has no start command",
+                )
+            return command.command_id, workflow.workflow_id, workflow.lock_version
+
+    @staticmethod
+    def _require_expected_definition(
+        request: WorkflowRequest, definition: WorkflowDefinitionRecord
+    ) -> None:
+        expected = request.expected_resolution
+        if expected is not None and (
+            definition.definition_key != expected.workflow_definition_key
+            or definition.definition_version != expected.workflow_definition_version
+            or definition.definition_hash != expected.workflow_definition_sha256
+        ):
+            raise ApiError(
+                409,
+                "WORKFLOW_EXPECTED_DEFINITION_MISMATCH",
+                "Workflow definition mismatch",
+                "The active Workflow definition differs from the exact expected resolution.",
+            )
 
     @staticmethod
     def _knowledge_requester_role(
@@ -517,11 +690,29 @@ class CommandAdapter:
                         "Approval is not pending",
                         "The workflow does not have an active approval request.",
                     )
+                expectation = request.approval_expectation
+                if expectation is not None and (
+                    approval.approval_request_id != expectation.approval_request_id
+                    or approval.lock_version != expectation.approval_resource_version
+                ):
+                    raise ApiError(
+                        409,
+                        "WORKFLOW_APPROVAL_EXPECTATION_MISMATCH",
+                        "Workflow approval changed",
+                        "The active approval request differs from the observed approval pointer.",
+                    )
                 payload.update(
                     {
                         "approval_request_id": approval.approval_request_id,
                         "approval_lock_version": approval.lock_version,
                     }
+                )
+            elif request.approval_expectation is not None:
+                raise ApiError(
+                    409,
+                    "WORKFLOW_APPROVAL_EXPECTATION_UNSUPPORTED",
+                    "Workflow approval expectation unsupported",
+                    "Only approval and rework commands accept an approval expectation.",
                 )
             if request.reason:
                 payload["reason"] = request.reason

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/mock-exam-explicit-analysis-review-set-v1.schema.json",
+  "title": "Mock Exam Explicit Analysis Review Set V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "execution_id",
+    "operator_id",
+    "assignments",
+    "authorized_at",
+    "decision_set_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "mock-exam-explicit-analysis-review-set/1.0"},
+    "execution_id": {"type": "string", "pattern": "^productionexec_[0-9a-f]{32}$"},
+    "operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "assignments": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 25,
+      "items": {"$ref": "#/$defs/assignment"}
+    },
+    "authorized_at": {"type": "string", "format": "date-time"},
+    "decision_set_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_call_id",
+        "position",
+        "analysis_run_id",
+        "expected_resource_version",
+        "decision",
+        "notes"
+      ],
+      "properties": {
+        "workflow_call_id": {"type": "string", "pattern": "^workflowcall_[0-9a-f]{32}$"},
+        "position": {"type": "integer", "minimum": 1, "maximum": 25},
+        "analysis_run_id": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+        "expected_resource_version": {"type": "integer", "minimum": 1},
+        "decision": {"enum": ["APPROVE", "REJECT"]},
+        "notes": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    }
+  }
+}

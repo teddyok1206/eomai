@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-response-v11",
+  "title": "EOM Catalog Application Publication Response V11",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "graph_publication"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {"const": "PUBLISH_APPROVED_ITEM_ANALYSES"},
+        "graph_publication": {
+          "$ref": "eom://schemas/knowledge/approved-item-graph-publication-result/1.0"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "item_review"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {"const": "PUBLISH_MOCK_EXAM_ITEM_REVIEW"},
+        "item_review": {
+          "$ref": "https://eom.local/schemas/assessment-assembly/mock-exam-item-review-publication-result-v1.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "review_eligibility"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {"const": "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY"},
+        "review_eligibility": {
+          "$ref": "https://eom.local/schemas/assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "error_code"],
+      "properties": {
+        "status": {"const": "ERROR"},
+        "operation": {
+          "enum": [
+            "PUBLISH_APPROVED_ITEM_ANALYSES",
+            "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+            "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY"
+          ]
+        },
+        "error_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+        }
+      }
+    }
+  ]
+}

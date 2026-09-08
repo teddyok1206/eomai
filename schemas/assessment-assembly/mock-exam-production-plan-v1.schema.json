@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/assessment-assembly/mock-exam-production-plan/1.0",
+  "title": "Mock Exam Production Plan V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "production_plan_id",
+    "policy_revision_id",
+    "policy_sha256",
+    "layout_policy_revision_id",
+    "layout_policy_sha256",
+    "outline_key",
+    "outline_revision",
+    "outline_sha256",
+    "item_count",
+    "total_points_milli",
+    "score_distribution",
+    "required_slot_count",
+    "balance_slot_count",
+    "inquiry_count",
+    "one_item_generation_block",
+    "workflow_calls",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "mock-exam-production-plan/1.0"},
+    "production_plan_id": {"type": "string", "pattern": "^productionplan_[0-9a-f]{32}$"},
+    "policy_revision_id": {"type": "string", "pattern": "^assemblypolicyrev_[0-9a-f]{32}$"},
+    "policy_sha256": {"$ref": "#/$defs/sha256"},
+    "layout_policy_revision_id": {"type": "string", "pattern": "^layoutpolicyrev_[0-9a-f]{32}$"},
+    "layout_policy_sha256": {"$ref": "#/$defs/sha256"},
+    "outline_key": {"const": "eom-integrated-science-editorial-outline"},
+    "outline_revision": {"const": "1.0"},
+    "outline_sha256": {"$ref": "#/$defs/sha256"},
+    "item_count": {"const": 25},
+    "total_points_milli": {"const": 50000},
+    "score_distribution": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {"$ref": "#/$defs/score_bucket"}
+    },
+    "required_slot_count": {"const": 21},
+    "balance_slot_count": {"const": 4},
+    "inquiry_count": {"const": 4},
+    "one_item_generation_block": {"$ref": "#/$defs/generation_block"},
+    "workflow_calls": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "items": {"$ref": "#/$defs/workflow_call"}
+    },
+    "plan_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "score_bucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["points_milli", "count"],
+      "properties": {
+        "points_milli": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "count": {"type": "integer", "minimum": 1, "maximum": 200}
+      }
+    },
+    "generation_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "block_key",
+        "block_revision",
+        "workflow_definition_key",
+        "workflow_definition_version",
+        "request_name",
+        "image_mode",
+        "content_pack_key",
+        "content_pack_version",
+        "content_pack_source_tree_sha256",
+        "execution_preset_key",
+        "registry_mode",
+        "block_sha256"
+      ],
+      "properties": {
+        "block_key": {"const": "content-team-one-item-generation"},
+        "block_revision": {"const": "1.0"},
+        "workflow_definition_key": {"const": "generic-item-development"},
+        "workflow_definition_version": {"const": "1.8.0"},
+        "request_name": {"const": "GENERATED_KNOWLEDGE_ITEM_REQUEST"},
+        "image_mode": {"const": "required"},
+        "content_pack_key": {"const": "generated-knowledge-item"},
+        "content_pack_version": {"const": "1.13.0"},
+        "content_pack_source_tree_sha256": {
+          "const": "sha256:a91aa67eb4916166681f8f58ed665253dd491bea72ccaf775036d1e6f1cc48b3"
+        },
+        "execution_preset_key": {"const": "knowledge-grounded-item"},
+        "registry_mode": {"const": "CREATE_ITEM"},
+        "block_sha256": {
+          "const": "sha256:8bbd6c262edef592f4779f4ba63688badbb3fe15a85eb6997a9bb1ba0c3770e8"
+        }
+      }
+    },
+    "content_team_item_brief_v3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "subject",
+        "topic",
+        "task_type",
+        "difficulty",
+        "authoring_guidance",
+        "authoring_guidance_sha256",
+        "curriculum_selected_unit_key",
+        "mock_exam_slot",
+        "original_request_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "3.0"},
+        "subject": {"type": "string", "minLength": 1, "maxLength": 80},
+        "topic": {"type": "string", "minLength": 1, "maxLength": 160},
+        "task_type": {"enum": ["TEXT", "DATA", "TABLE", "IMAGE", "MIXED", "INQUIRY"]},
+        "difficulty": {"enum": ["LOW", "MEDIUM", "HIGH"]},
+        "authoring_guidance": {
+          "const": "검토된 요청 범위 안에서 콘텐츠팀 출제 원문과 편집 프로그램 계약을 그대로 적용하여 문항을 작성해 주세요."
+        },
+        "authoring_guidance_sha256": {
+          "const": "sha256:b60aba3badb50adf8d4b2919fa07f3d69962f06c53514cd1659d645862c48a64"
+        },
+        "curriculum_selected_unit_key": {
+          "type": "string",
+          "pattern": "^eom\\.is\\.middle\\.[1-6]-[1-7]$"
+        },
+        "mock_exam_slot": {"$ref": "#/$defs/mock_exam_slot"},
+        "original_request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "mock_exam_slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "assembly_policy_revision_id",
+        "assembly_policy_sha256",
+        "layout_policy_revision_id",
+        "layout_policy_sha256",
+        "slot_id",
+        "position",
+        "points_milli",
+        "coverage_role",
+        "coverage_requirement_id",
+        "balance_large_unit_key",
+        "curriculum_selected_unit_key",
+        "large_unit_key",
+        "inquiry_required",
+        "preferred_difficulty",
+        "preferred_material_profiles",
+        "slot_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "mock-exam-slot/1.0"},
+        "assembly_policy_revision_id": {
+          "type": "string",
+          "pattern": "^assemblypolicyrev_[0-9a-f]{32}$"
+        },
+        "assembly_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "layout_policy_revision_id": {
+          "type": "string",
+          "pattern": "^layoutpolicyrev_[0-9a-f]{32}$"
+        },
+        "layout_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "slot_id": {"type": "string", "pattern": "^slot-[0-9]{2,3}$"},
+        "position": {"type": "integer", "minimum": 1, "maximum": 200},
+        "points_milli": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "coverage_role": {"enum": ["REQUIRED", "BALANCE"]},
+        "coverage_requirement_id": {
+          "oneOf": [
+            {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+            {"type": "null"}
+          ]
+        },
+        "balance_large_unit_key": {
+          "oneOf": [
+            {"type": "string", "pattern": "^eom\\.is\\.large\\.[1-6]$"},
+            {"type": "null"}
+          ]
+        },
+        "curriculum_selected_unit_key": {
+          "type": "string",
+          "pattern": "^eom\\.is\\.middle\\.[1-6]-[1-7]$"
+        },
+        "large_unit_key": {"type": "string", "pattern": "^eom\\.is\\.large\\.[1-6]$"},
+        "inquiry_required": {"type": "boolean"},
+        "preferred_difficulty": {"enum": ["LOW", "MEDIUM", "HIGH"]},
+        "preferred_material_profiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {"enum": ["TEXT", "DATA", "TABLE", "IMAGE", "MIXED", "INQUIRY"]}
+        },
+        "slot_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"coverage_role": {"const": "REQUIRED"}}},
+          "then": {
+            "properties": {
+              "coverage_requirement_id": {"type": "string"},
+              "balance_large_unit_key": {"type": "null"}
+            }
+          },
+          "else": {
+            "properties": {
+              "coverage_requirement_id": {"type": "null"},
+              "balance_large_unit_key": {"type": "string"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"inquiry_required": {"const": true}}},
+          "then": {
+            "properties": {"preferred_material_profiles": {"contains": {"const": "INQUIRY"}}}
+          }
+        }
+      ]
+    },
+    "workflow_call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_call_id",
+        "generation_block_key",
+        "generation_block_revision",
+        "generation_block_sha256",
+        "item_brief"
+      ],
+      "properties": {
+        "workflow_call_id": {"type": "string", "pattern": "^workflowcall_[0-9a-f]{32}$"},
+        "generation_block_key": {"const": "content-team-one-item-generation"},
+        "generation_block_revision": {"const": "1.0"},
+        "generation_block_sha256": {
+          "const": "sha256:8bbd6c262edef592f4779f4ba63688badbb3fe15a85eb6997a9bb1ba0c3770e8"
+        },
+        "item_brief": {"$ref": "#/$defs/content_team_item_brief_v3"}
+      }
+    }
+  }
+}

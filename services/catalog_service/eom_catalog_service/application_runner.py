@@ -12,6 +12,9 @@ from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_engine
 
 from eom_catalog_service.application_server import CatalogApplicationServer
+from eom_catalog_service.approved_item_graph_publication_service import (
+    ApprovedItemGraphPublicationService,
+)
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.knowledge_analysis_batch_models import (
@@ -45,6 +48,9 @@ from eom_catalog_service.legacy_item_graph_learning_service import (
 from eom_catalog_service.legacy_item_learning_service import LegacyItemLearningCoordinator
 from eom_catalog_service.legacy_item_promotion_service import LegacyItemPromotionService
 from eom_catalog_service.legacy_usage_models import LegacyUsageImportRecord
+from eom_catalog_service.mock_exam_item_review_publication_service import (
+    MockExamItemReviewPublicationService,
+)
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.runtime_privileges import catalog_runtime_privileges_ready
 
@@ -191,6 +197,8 @@ def serve() -> int:
             knowledge_analysis,
             knowledge_analysis_batches,
             KnowledgeRetrievalApplicationService(engine),
+            approved_item_graph_publication=ApprovedItemGraphPublicationService(engine),
+            mock_exam_item_reviews=MockExamItemReviewPublicationService(engine),
         )
         thread = threading.Thread(
             target=server.serve_forever,

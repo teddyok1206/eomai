@@ -104,6 +104,50 @@ def current_knowledge_backed_preset(
         ) from exc
 
 
+def pinned_knowledge_backed_preset(
+    session: Session,
+    *,
+    preset_id: str,
+    preset_revision_id: str,
+    preset_key: str,
+    preset_content_sha256: str,
+    workflow_role_schema_version: str,
+) -> ExecutionPresetRevisionV2:
+    """Resolve one exact released V2 preset without consulting its mutable current pointer."""
+
+    logical = session.get(ExecutionPresetRecord, preset_id)
+    revision = session.get(ExecutionPresetRevisionRecord, preset_revision_id)
+    if (
+        logical is None
+        or logical.preset_key != preset_key
+        or logical.state != "ACTIVE"
+        or revision is None
+        or revision.preset_id != logical.preset_id
+        or revision.state != "RELEASED"
+        or revision.content_sha256 != preset_content_sha256
+        or workflow_role_schema_version not in revision.compatible_workflow_protocols
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POINTER_INVALID", "expected knowledge-backed preset is stale"
+        )
+    try:
+        resolved = ExecutionPresetRevisionV2.model_validate(revision.canonical_document)
+    except ValueError as exc:
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID", "knowledge-backed request requires a V2 preset"
+        ) from exc
+    if (
+        resolved.preset_id != preset_id
+        or resolved.preset_revision_id != preset_revision_id
+        or resolved.content_sha256 != preset_content_sha256
+        or resolved.state != "RELEASED"
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POINTER_INVALID", "expected preset document differs from its record"
+        )
+    return resolved
+
+
 def validate_educational_retrieval_policy(
     preset: ExecutionPresetRevisionV2,
     requirement: EducationalRetrievalRequirement,

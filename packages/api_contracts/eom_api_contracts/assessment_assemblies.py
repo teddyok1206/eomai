@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from eom_catalog_contracts import MockExamAssemblyPlanV1
+from eom_catalog_contracts import MockExamAssemblyCohortV1, MockExamAssemblyPlanV1
 from pydantic import Field, model_validator
 
 from eom_api_contracts.common import ApiModel, Sha256, UtcDatetime
@@ -86,6 +86,9 @@ class PreviewMockExamAssemblyPlanRequest(ApiModel):
     policy_sha256: Sha256
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
     graph_snapshot_sha256: Sha256
+    cohort: MockExamAssemblyCohortV1 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class CreatePlannedMockExamAssemblyRequest(ApiModel):
@@ -97,6 +100,9 @@ class CreatePlannedMockExamAssemblyRequest(ApiModel):
     policy_sha256: Sha256
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
     graph_snapshot_sha256: Sha256
+    cohort: MockExamAssemblyCohortV1 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     expected_plan_sha256: Sha256
     planned_at: UtcDatetime
 

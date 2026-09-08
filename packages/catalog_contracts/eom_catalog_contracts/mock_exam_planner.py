@@ -9,6 +9,7 @@ from typing import Literal, Never
 from eom_identifiers import content_sha256
 
 from eom_catalog_contracts.assessment_assembly import (
+    MockExamAssemblyCohortV1,
     MockExamAssemblyPlanV1,
     MockExamAssemblyPolicyV1,
     MockExamAssemblyShortageV1,
@@ -68,6 +69,7 @@ def build_mock_exam_assembly_plan(
     resolved_candidate_count: int,
     candidates: tuple[MockExamPlanningCandidateV1, ...],
     planned_at: datetime,
+    cohort: MockExamAssemblyCohortV1 | None = None,
 ) -> MockExamAssemblyPlanV1:
     """Select a complete immutable plan or return an empty, diagnosed shortage.
 
@@ -88,20 +90,48 @@ def build_mock_exam_assembly_plan(
     candidate_revision_ids = tuple(row.item_revision_id for row in candidates)
     if len(candidate_revision_ids) != len(set(candidate_revision_ids)):
         _fail("ASSEMBLY_CANDIDATE_DUPLICATE", "candidate Item revisions must be unique")
+    cohort_by_position: dict[int, str] | None = None
+    candidate_by_revision: dict[str, MockExamPlanningCandidateV1] | None = None
+    if cohort is not None:
+        cohort_by_position = {member.position: member.item_revision_id for member in cohort.members}
+        candidate_by_revision = {row.item_revision_id: row for row in candidates}
+        cohort_revision_ids = set(cohort_by_position.values())
+        if (
+            resolved_candidate_count != len(cohort.members)
+            or set(candidate_by_revision) != cohort_revision_ids
+        ):
+            _fail(
+                "ASSEMBLY_COHORT_CANDIDATES_INVALID",
+                "the pinned Graph/rating candidate set differs from the exact cohort",
+            )
+        # ``cohort`` is an immutable revision set, not a mutable Item-head query. A later Item
+        # revision must not invalidate the revision already admitted to this pinned Graph plan.
+        if any(row.graph_source_class != "APPROVED_ITEM" for row in candidates):
+            _fail(
+                "ASSEMBLY_COHORT_SOURCE_INVALID",
+                "an exact production cohort may contain only approved Item revisions",
+            )
 
     requirement_by_id = {row.requirement_id: row for row in policy.coverage_requirements}
     options_by_slot: dict[str, tuple[MockExamPlanningCandidateV1, ...]] = {}
     for slot in layout_policy.slots:
-        options = tuple(
-            sorted(
-                (
-                    candidate
-                    for candidate in candidates
-                    if _candidate_matches_slot(candidate, slot, requirement_by_id)
-                ),
-                key=lambda candidate: _candidate_rank(candidate, slot),
+        options: tuple[MockExamPlanningCandidateV1, ...]
+        if cohort_by_position is not None and candidate_by_revision is not None:
+            candidate = candidate_by_revision[cohort_by_position[slot.position]]
+            options = (
+                (candidate,) if _candidate_matches_slot(candidate, slot, requirement_by_id) else ()
             )
-        )
+        else:
+            options = tuple(
+                sorted(
+                    (
+                        candidate
+                        for candidate in candidates
+                        if _candidate_matches_slot(candidate, slot, requirement_by_id)
+                    ),
+                    key=lambda candidate: _candidate_rank(candidate, slot),
+                )
+            )
         options_by_slot[slot.slot_id] = options
 
     if resolved_candidate_count == 0:
@@ -118,6 +148,7 @@ def build_mock_exam_assembly_plan(
             options_by_slot=options_by_slot,
             reason="NO_STRUCTURAL_CANDIDATES",
             visited_nodes=0,
+            cohort=cohort,
         )
     if not candidates:
         return _shortage_plan(
@@ -133,6 +164,7 @@ def build_mock_exam_assembly_plan(
             options_by_slot=options_by_slot,
             reason="NO_RATED_CANDIDATES",
             visited_nodes=0,
+            cohort=cohort,
         )
     if any(not options_by_slot[slot.slot_id] for slot in layout_policy.slots):
         return _shortage_plan(
@@ -148,6 +180,7 @@ def build_mock_exam_assembly_plan(
             options_by_slot=options_by_slot,
             reason="SLOT_CANDIDATE_MISSING",
             visited_nodes=0,
+            cohort=cohort,
         )
 
     search_slots = tuple(
@@ -232,6 +265,7 @@ def build_mock_exam_assembly_plan(
             options_by_slot=options_by_slot,
             reason="CONSTRAINT_SEARCH_EXHAUSTED",
             visited_nodes=min(visited_nodes, MAX_PLANNER_VISITED_NODES),
+            cohort=cohort,
         )
 
     placements = tuple(
@@ -248,6 +282,7 @@ def build_mock_exam_assembly_plan(
                 graph_snapshot_sha256,
                 usage_snapshot,
                 planned_at,
+                cohort,
             ),
             "status": "READY",
             "resolved_candidate_count": resolved_candidate_count,
@@ -415,6 +450,7 @@ def _shortage_plan(
     options_by_slot: dict[str, tuple[MockExamPlanningCandidateV1, ...]],
     reason: MockExamShortageReason,
     visited_nodes: int,
+    cohort: MockExamAssemblyCohortV1 | None,
 ) -> MockExamAssemblyPlanV1:
     shortages = tuple(
         MockExamAssemblyShortageV1(
@@ -440,6 +476,7 @@ def _shortage_plan(
                 graph_snapshot_sha256,
                 usage_snapshot,
                 planned_at,
+                cohort,
             ),
             "status": "SHORTAGE",
             "resolved_candidate_count": resolved_candidate_count,
@@ -460,8 +497,9 @@ def _plan_header(
     graph_snapshot_sha256: str,
     usage_snapshot: MockExamUsageSnapshotV1,
     planned_at: datetime,
+    cohort: MockExamAssemblyCohortV1 | None,
 ) -> dict[str, object]:
-    return {
+    value: dict[str, object] = {
         "schema_version": "mock-exam-assembly-plan/1.0",
         "policy_revision_id": policy.policy_revision_id,
         "policy_sha256": content_sha256(policy.model_dump(mode="json")),
@@ -474,6 +512,9 @@ def _plan_header(
         "usage_snapshot": usage_snapshot.model_dump(mode="json"),
         "planned_at": planned_at.isoformat().replace("+00:00", "Z"),
     }
+    if cohort is not None:
+        value["cohort"] = cohort.model_dump(mode="json")
+    return value
 
 
 def _finish_plan(value: dict[str, object]) -> MockExamAssemblyPlanV1:

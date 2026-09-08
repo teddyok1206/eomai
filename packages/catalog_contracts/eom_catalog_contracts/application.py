@@ -10,7 +10,17 @@ from typing import Annotated, Final, Literal
 from eom_identifiers import content_sha256
 from pydantic import Field, RootModel, field_validator, model_validator
 
+from eom_catalog_contracts.approved_item_graph_publication import (
+    ApprovedItemGraphPublicationResult,
+    PublishApprovedItemAnalysesCommand,
+)
 from eom_catalog_contracts.assessment_item import AssessmentItemContentContract
+from eom_catalog_contracts.item_review import (
+    InspectMockExamReviewEligibilityQuery,
+    MockExamItemReviewPublicationResult,
+    MockExamReviewEligibilityResult,
+    PublishMockExamItemReviewCommand,
+)
 from eom_catalog_contracts.knowledge import (
     CurriculumRetrievalScope,
     EducationalRetrievalRequirement,
@@ -48,6 +58,9 @@ CatalogApplicationOperation = Literal[
     "CREATE_KNOWLEDGE_ANALYSIS_BATCH",
     "CREATE_EVIDENCE_BUNDLE",
     "CREATE_ITEM_PRODUCTION_EVIDENCE",
+    "PUBLISH_APPROVED_ITEM_ANALYSES",
+    "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+    "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
 ]
 
 
@@ -371,7 +384,10 @@ CatalogApplicationRequestValue = Annotated[
     | ReviewKnowledgeAnalysisCommand
     | CreateKnowledgeAnalysisBatchCommand
     | CreateEvidenceBundleCommand
-    | CreateItemProductionEvidenceCommand,
+    | CreateItemProductionEvidenceCommand
+    | PublishApprovedItemAnalysesCommand
+    | PublishMockExamItemReviewCommand
+    | InspectMockExamReviewEligibilityQuery,
     Field(discriminator="operation"),
 ]
 
@@ -429,6 +445,9 @@ class CatalogApplicationResponse(FrozenModel):
         | EvidenceBundlePublicationResultV4
         | None
     ) = None
+    graph_publication: ApprovedItemGraphPublicationResult | None = None
+    item_review: MockExamItemReviewPublicationResult | None = None
+    review_eligibility: MockExamReviewEligibilityResult | None = None
     content: AssessmentItemContentContract | None = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
 
@@ -442,6 +461,9 @@ class CatalogApplicationResponse(FrozenModel):
                 self.analysis_batch,
                 self.evidence,
                 self.item_production_evidence,
+                self.graph_publication,
+                self.item_review,
+                self.review_eligibility,
                 self.content,
                 self.error_code,
             )
@@ -477,6 +499,15 @@ class CatalogApplicationResponse(FrozenModel):
             and self.item_production_evidence is None
         ):
             raise ValueError("item production evidence response requires publication result")
+        if self.operation == "PUBLISH_APPROVED_ITEM_ANALYSES" and self.graph_publication is None:
+            raise ValueError("approved Item Graph response requires publication result")
+        if self.operation == "PUBLISH_MOCK_EXAM_ITEM_REVIEW" and self.item_review is None:
+            raise ValueError("mock-exam Item review response requires publication result")
+        if (
+            self.operation == "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY"
+            and self.review_eligibility is None
+        ):
+            raise ValueError("mock-exam review eligibility response requires result")
         return self
 
 
@@ -513,6 +544,18 @@ CATALOG_APPLICATION_SCHEMA_ROUTES: Final = MappingProxyType(
         "CREATE_ITEM_PRODUCTION_EVIDENCE": CatalogApplicationSchemaRoute(
             "catalog-application-request-v4",
             "catalog-application-response-v8",
+        ),
+        "PUBLISH_APPROVED_ITEM_ANALYSES": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v11",
+            "catalog-application-response-v11",
+        ),
+        "PUBLISH_MOCK_EXAM_ITEM_REVIEW": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v11",
+            "catalog-application-response-v11",
+        ),
+        "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v11",
+            "catalog-application-response-v11",
         ),
     }
 )

@@ -5,7 +5,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from eom_api_contracts.assessment_assemblies import CreatePlannedMockExamAssemblyRequest
+from eom_api_contracts.assessment_assemblies import (
+    CreatePlannedMockExamAssemblyRequest,
+    PreviewMockExamAssemblyPlanRequest,
+)
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
     AssessmentLearningExamView,
@@ -36,6 +39,7 @@ from eom_api_contracts.workflows import (
     WorkflowKnowledgeProvenanceView,
     WorkflowStartRequest,
 )
+from eom_catalog_contracts import build_mock_exam_assembly_cohort
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
@@ -61,6 +65,9 @@ def test_mock_exam_plan_api_schema_delegates_to_the_canonical_protocol() -> None
     assert canonical_path.read_bytes() == packaged_path.read_bytes()
     schema = json.loads(canonical_path.read_text(encoding="utf-8"))
     assert schema["$ref"] == "eom://schemas/assessment-assembly/mock-exam-assembly-plan/1.0"
+    cohort = build_mock_exam_assembly_cohort(
+        tuple("itemrev_" + f"{index:032x}" for index in range(1, 26))
+    )
     value = CreatePlannedMockExamAssemblyRequest(
         deliverable_id="deliverable_" + "1" * 32,
         deliverable_revision_id="delivrev_" + "2" * 32,
@@ -70,10 +77,21 @@ def test_mock_exam_plan_api_schema_delegates_to_the_canonical_protocol() -> None
         policy_sha256="sha256:" + "4" * 64,
         graph_snapshot_revision_id="graphrev_" + "5" * 32,
         graph_snapshot_sha256="sha256:" + "6" * 64,
+        cohort=cohort,
         expected_plan_sha256="sha256:" + "7" * 64,
         planned_at=datetime(2026, 9, 8, 0, 0, tzinfo=UTC),
     )
     assert value.expected_plan_sha256 == "sha256:" + "7" * 64
+    assert value.cohort == cohort
+    assert value.model_dump(mode="json")["cohort"]["cohort_sha256"] == cohort.cohort_sha256
+    preview = PreviewMockExamAssemblyPlanRequest(
+        policy_revision_id=value.policy_revision_id,
+        policy_sha256=value.policy_sha256,
+        graph_snapshot_revision_id=value.graph_snapshot_revision_id,
+        graph_snapshot_sha256=value.graph_snapshot_sha256,
+        cohort=cohort,
+    )
+    assert preview.cohort == cohort
 
 
 def test_assessment_item_occurrence_schema_matches_typed_projection_and_excludes_march() -> None:

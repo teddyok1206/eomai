@@ -17,17 +17,27 @@ from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
     AssessmentItemContentV2,
     CurriculumUnitBindingV2,
+    MockExamAssemblyCohortV1,
     MockExamAssemblyPolicyV1,
     MockExamContentPointerV1,
-    MockExamMaterialProfile,
     MockExamPlanningCandidateV1,
     MockExamRatingPolicyV1,
     MockExamReviewPointerV1,
     MockExamUsageSnapshotV1,
     validate_contract,
 )
+from eom_catalog_contracts.item_review import (
+    MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
+    MockExamItemReviewDecisionV1,
+)
+from eom_catalog_contracts.mock_exam_production_plan import (
+    classify_content_team_mock_exam_material_profile,
+)
 from eom_identifiers import content_sha256, sha256_bytes
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy import and_, literal, select
 from sqlalchemy.orm import Session
 
@@ -102,8 +112,9 @@ class MockExamCandidateRepository:
     """Resolve Graph candidates through bulk key lookups and bounded member reads.
 
     The dominant operations are snapshot-local key lookup, membership and immutable-history
-    aggregation. SQL queries are bounded to 5,000 revisions; maps and sets keep all in-memory
-    joins O(n). Artifact bytes are materialized only at the validation boundary.
+    aggregation. General SQL queries are bounded to 5,000 revisions; an exact cohort adds an
+    indexed 25-ID ``IN`` filter and a 26-row ambiguity bound. Maps and sets keep all in-memory joins
+    O(n). Artifact bytes are materialized only at the validation boundary.
     """
 
     def __init__(self, settings: CatalogSettings | None = None) -> None:
@@ -117,26 +128,63 @@ class MockExamCandidateRepository:
         policy: MockExamAssemblyPolicyV1,
         rating_policy: MockExamRatingPolicyV1,
         planned_at: datetime,
+        cohort: MockExamAssemblyCohortV1 | None = None,
     ) -> MockExamPlanningInputs:
         if planned_at.tzinfo is None or planned_at.utcoffset() is None:
             self._fail("ASSEMBLY_PLANNING_TIME_INVALID", "planning time must be timezone-aware")
+        cohort_revision_ids = (
+            tuple(member.item_revision_id for member in cohort.members)
+            if cohort is not None
+            else None
+        )
         structural = self._structural_candidates(
             session,
             graph_snapshot_revision_id=graph_snapshot_revision_id,
             policy=policy,
+            cohort_revision_ids=cohort_revision_ids,
         )
+        structural_by_revision = {row.revision.item_revision_id: row for row in structural}
+        if cohort_revision_ids is not None and set(structural_by_revision) != set(
+            cohort_revision_ids
+        ):
+            self._fail(
+                "ASSEMBLY_COHORT_MEMBER_NOT_FOUND",
+                "every cohort Item revision must resolve in the pinned published Graph",
+            )
+        # Exact cohorts intentionally resolve immutable revisions. ItemRecord.current_revision_id
+        # may advance after Graph publication; lifecycle, revision state, Graph, artifacts, and
+        # the pinned rating are still validated below before the revision can be assembled.
         latest_reviews = self._latest_reviews(
             session,
             revision_ids=tuple(row.revision.item_revision_id for row in structural),
         )
-        rated_rows = tuple(
-            (row, review)
-            for row in structural
-            if (review := latest_reviews.get(row.revision.item_revision_id)) is not None
-            and review.decision == rating_policy.review_decision
-            and review.severity_summary.get(rating_policy.rating_field)
-            in rating_policy.eligible_ratings
-        )
+        if cohort_revision_ids is None:
+            rated_rows = tuple(
+                (row, review)
+                for row in structural
+                if (review := latest_reviews.get(row.revision.item_revision_id)) is not None
+                and review.decision == rating_policy.review_decision
+                and review.severity_summary.get(rating_policy.rating_field)
+                in rating_policy.eligible_ratings
+            )
+        else:
+            rated_by_revision = {
+                revision_id: review
+                for revision_id in cohort_revision_ids
+                if (review := latest_reviews.get(revision_id)) is not None
+                and review.decision == rating_policy.review_decision
+                and review.severity_summary.get(rating_policy.rating_field)
+                in rating_policy.eligible_ratings
+            }
+            if set(rated_by_revision) != set(cohort_revision_ids):
+                self._fail(
+                    "ASSEMBLY_COHORT_MEMBER_NOT_RATED",
+                    "every cohort Item revision must resolve under the pinned rating policy",
+                )
+            rated_rows = tuple(
+                (structural_by_revision[revision_id], rated_by_revision[revision_id])
+                for revision_id in cohort_revision_ids
+            )
         artifacts, revisions = self._validate_artifact_pointers(session, rated_rows)
         usage_by_revision, usage_snapshot = self._usage_snapshot(
             session,
@@ -171,7 +219,9 @@ class MockExamCandidateRepository:
                     item_type_key=row.revision.item_type_key,
                     difficulty_band=row.revision.difficulty_band,
                     is_inquiry=content.value.inquiry is not None,
-                    material_profile=self._material_profile(content.value),
+                    material_profile=classify_content_team_mock_exam_material_profile(
+                        content.value
+                    ),
                     source_score_display=content.value.score_display,
                     content=content.pointer,
                     review=MockExamReviewPointerV1(
@@ -189,7 +239,11 @@ class MockExamCandidateRepository:
             )
         return MockExamPlanningInputs(
             resolved_candidate_count=len(structural),
-            candidates=tuple(sorted(candidates, key=lambda row: row.item_revision_id)),
+            candidates=(
+                tuple(candidates)
+                if cohort_revision_ids is not None
+                else tuple(sorted(candidates, key=lambda row: row.item_revision_id))
+            ),
             usage_snapshot=usage_snapshot,
         )
 
@@ -199,6 +253,7 @@ class MockExamCandidateRepository:
         *,
         graph_snapshot_revision_id: str,
         policy: MockExamAssemblyPolicyV1,
+        cohort_revision_ids: tuple[str, ...] | None = None,
     ) -> tuple[_StructuralCandidate, ...]:
         source_pointer_exists = (
             select(literal(1))
@@ -213,6 +268,23 @@ class MockExamCandidateRepository:
                 == KnowledgeSnapshotAnalysisRecord.source_revision_id,
             )
             .exists()
+        )
+        conditions = [
+            KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id
+            == graph_snapshot_revision_id,
+            KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM_REVISION",
+            source_pointer_exists,
+            ItemRecord.lifecycle_state == "ACTIVE",
+            ItemRevisionRecord.revision_state.in_(policy.eligible_item_revision_states),
+            ItemComponentRecord.media_type == ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+            ItemComponentRecord.schema_ref.in_(_CONTENT_TEAM_SCHEMA_REFS),
+        ]
+        if cohort_revision_ids is not None:
+            conditions.append(ItemRevisionRecord.item_revision_id.in_(cohort_revision_ids))
+        candidate_limit = (
+            len(cohort_revision_ids) + 1
+            if cohort_revision_ids is not None
+            else MAX_PLANNING_CANDIDATES + 1
         )
         rows = tuple(
             session.execute(
@@ -247,34 +319,25 @@ class MockExamCandidateRepository:
                         ItemComponentRecord.ordinal == 0,
                     ),
                 )
-                .where(
-                    KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id
-                    == graph_snapshot_revision_id,
-                    KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM_REVISION",
-                    source_pointer_exists,
-                    ItemRecord.lifecycle_state == "ACTIVE",
-                    ItemRevisionRecord.revision_state.in_(policy.eligible_item_revision_states),
-                    ItemComponentRecord.media_type == ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
-                    ItemComponentRecord.schema_ref.in_(_CONTENT_TEAM_SCHEMA_REFS),
-                )
+                .where(*conditions)
                 .order_by(
                     ItemRevisionRecord.item_revision_id,
                     KnowledgeSnapshotAnalysisRecord.analysis_run_id,
                     KnowledgeNodeRecord.node_id,
                 )
-                .limit(MAX_PLANNING_CANDIDATES + 1)
+                .limit(candidate_limit)
             ).all()
         )
-        if len(rows) > MAX_PLANNING_CANDIDATES:
-            self._fail(
-                "ASSEMBLY_CANDIDATE_LIMIT_EXCEEDED",
-                "planning candidate set exceeds its reviewed bound",
-            )
         revision_ids = [row[2].item_revision_id for row in rows]
         if len(revision_ids) != len(set(revision_ids)):
             self._fail(
                 "ASSEMBLY_GRAPH_ITEM_AMBIGUOUS",
                 "a Graph snapshot has multiple planning rows for one Item revision",
+            )
+        if len(rows) >= candidate_limit:
+            self._fail(
+                "ASSEMBLY_CANDIDATE_LIMIT_EXCEEDED",
+                "planning candidate set exceeds its reviewed bound",
             )
         run_ids = {row[0].analysis_run_id for row in rows}
         node_ids = {row[1].node_id for row in rows}
@@ -582,7 +645,7 @@ class MockExamCandidateRepository:
         value = _json_object(payload, "ASSEMBLY_ITEM_MANIFEST_INVALID")
         try:
             validate_contract("item-revision-manifest", value)
-        except ValueError as exc:
+        except (JsonSchemaValidationError, ValueError) as exc:
             raise MockExamCandidateResolutionError(
                 "ASSEMBLY_ITEM_MANIFEST_INVALID",
                 "Item revision manifest does not satisfy its pinned schema",
@@ -620,23 +683,64 @@ class MockExamCandidateRepository:
     ) -> None:
         artifact = artifacts.get(review.review_artifact_id)
         revision = revisions.get(review.review_artifact_revision_id)
-        if revision is None or not isinstance(revision.manifest.get("primary_file"), str):
+        if (
+            revision is None
+            or revision.manifest.get("primary_file") != MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME
+            or not isinstance(revision.manifest.get("files"), list)
+            or len(revision.manifest["files"]) != 1
+        ):
             self._fail(
                 "ASSEMBLY_REVIEW_POINTER_INVALID",
-                "review artifact does not expose one primary member",
+                "review decision artifact does not expose its one canonical member",
             )
-        assert revision is not None
-        primary_file = cast(str, revision.manifest["primary_file"])
-        self._read_member(
+        payload = self._read_member(
             artifact,
             revision,
             artifact_id=review.review_artifact_id,
             revision_id=review.review_artifact_revision_id,
-            artifact_type=None,
-            member_path=primary_file,
+            artifact_type="mock-exam-item-review-decision",
+            member_path=MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME,
             expected_sha256=review.review_sha256,
             max_bytes=MAX_REVIEW_BYTES,
+            expected_media_type="application/json",
+            expected_schema_ref=MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
         )
+        value = _json_object(payload, "ASSEMBLY_REVIEW_POINTER_INVALID")
+        try:
+            validate_contract(MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA, value)
+            decision = MockExamItemReviewDecisionV1.model_validate(value)
+        except (JsonSchemaValidationError, ValueError) as exc:
+            raise MockExamCandidateResolutionError(
+                "ASSEMBLY_REVIEW_POINTER_INVALID",
+                "review decision artifact does not satisfy its pinned schema",
+            ) from exc
+        summary = review.severity_summary
+        if (
+            decision.item_review_record_id != review.item_review_record_id
+            or decision.item_revision_id != review.item_revision_id
+            or decision.workflow_id != review.workflow_id
+            or decision.decision != review.decision
+            or decision.final_rating != summary.get("final_rating")
+            or decision.rating_policy_revision_id != summary.get("rating_policy_revision_id")
+            or decision.rating_policy_sha256 != summary.get("rating_policy_sha256")
+            or decision.decision_sha256 != summary.get("decision_sha256")
+            or decision.idempotency_key_sha256 != summary.get("idempotency_key_sha256")
+            or decision.source_review.step_run_id != summary.get("review_step_run_id")
+            or decision.source_review.artifact_id != summary.get("source_review_artifact_id")
+            or decision.source_review.artifact_revision_id
+            != summary.get("source_review_artifact_revision_id")
+            or decision.source_review.sha256 != summary.get("source_review_sha256")
+            or decision.source_review.result_schema != summary.get("review_result_schema")
+            or decision.source_review.finding_counts.model_dump(mode="json")
+            != summary.get("finding_counts")
+            or decision.human_approval.approval_request_id
+            != summary.get("human_approval_request_id")
+            or decision.human_approval.reviewer_operator_id != review.reviewer_actor_id
+        ):
+            self._fail(
+                "ASSEMBLY_REVIEW_POINTER_INVALID",
+                "review row and canonical decision artifact have different identities",
+            )
 
     def _load_candidate_content(
         self,
@@ -816,24 +920,6 @@ class MockExamCandidateRepository:
                 os.close(artifact_fd)
             if root_fd >= 0:
                 os.close(root_fd)
-
-    @staticmethod
-    def _material_profile(content: AssessmentItemContentV2) -> MockExamMaterialProfile:
-        if content.inquiry is not None:
-            return "INQUIRY"
-        signals: set[Literal["DATA", "TABLE", "IMAGE"]] = set()
-        if any(block.kind == "DATA" for block in content.labeled_blocks):
-            signals.add("DATA")
-        for visual in content.visuals:
-            if visual.kind == "TABLE":
-                signals.add("TABLE")
-            elif visual.kind == "IMAGE":
-                signals.add("IMAGE")
-        if not signals:
-            return "TEXT"
-        if len(signals) > 1:
-            return "MIXED"
-        return cast(MockExamMaterialProfile, next(iter(signals)))
 
     @staticmethod
     def _usage_snapshot(

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/mock-exam-review-eligibility-v1.schema.json",
+  "title": "Mock Exam Review Eligibility Observation V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "workflow_id",
+    "workflow_resource_version",
+    "approval_request_id",
+    "approval_resource_version",
+    "approval_state",
+    "reviewer_operator_id",
+    "approved_at",
+    "eligibility",
+    "step_run_id",
+    "artifact_id",
+    "artifact_revision_id",
+    "sha256",
+    "result_schema",
+    "worker_decision",
+    "finding_info_count",
+    "finding_warning_count",
+    "finding_blocking_count"
+  ],
+  "properties": {
+    "schema_version": {"const": "mock-exam-review-eligibility/1.0"},
+    "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "workflow_resource_version": {"type": "integer", "minimum": 1},
+    "approval_request_id": {"type": "string", "pattern": "^approval_[0-9a-f]{32}$"},
+    "approval_resource_version": {"type": "integer", "minimum": 1},
+    "approval_state": {"enum": ["PENDING", "APPROVED"]},
+    "reviewer_operator_id": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"}
+      ]
+    },
+    "approved_at": {
+      "oneOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]
+    },
+    "eligibility": {"enum": ["ELIGIBLE", "BLOCKED"]},
+    "step_run_id": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+    "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+    "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "result_schema": {"enum": ["review-result@7.0", "review-result@8.0"]},
+    "worker_decision": {"const": "ready_for_human"},
+    "finding_info_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "finding_warning_count": {"type": "integer", "minimum": 0, "maximum": 20},
+    "finding_blocking_count": {"type": "integer", "minimum": 0, "maximum": 20}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"eligibility": {"const": "ELIGIBLE"}}},
+      "then": {"properties": {"finding_blocking_count": {"const": 0}}},
+      "else": {"properties": {"finding_blocking_count": {"minimum": 1}}}
+    },
+    {
+      "if": {"properties": {"approval_state": {"const": "PENDING"}}},
+      "then": {
+        "properties": {
+          "reviewer_operator_id": {"type": "null"},
+          "approved_at": {"type": "null"}
+        }
+      },
+      "else": {
+        "properties": {
+          "reviewer_operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+          "approved_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  ]
+}

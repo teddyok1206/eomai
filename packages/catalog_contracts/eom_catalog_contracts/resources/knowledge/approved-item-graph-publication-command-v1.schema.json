@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/approved-item-graph-publication-command/1.0",
+  "title": "Publish Approved Item Analyses Command V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation",
+    "schema_version",
+    "corpus_key",
+    "expected_current_graph_snapshot_revision_id",
+    "expected_current_graph_snapshot_sha256",
+    "accepted_analysis_run_ids",
+    "expected_workflow_ids",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "requested_by_operator_id",
+    "authorized_at",
+    "idempotency_key",
+    "submission_sha256"
+  ],
+  "properties": {
+    "operation": {"const": "PUBLISH_APPROVED_ITEM_ANALYSES"},
+    "schema_version": {"const": "approved-item-graph-publication-command/1.0"},
+    "corpus_key": {"const": "integrated-science-textbooks"},
+    "expected_current_graph_snapshot_revision_id": {
+      "type": "string",
+      "pattern": "^graphrev_[0-9a-f]{32}$"
+    },
+    "expected_current_graph_snapshot_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "accepted_analysis_run_ids": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"}
+    },
+    "expected_workflow_ids": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"}
+    },
+    "access_policy_revision_id": {
+      "type": "string",
+      "pattern": "^accessrev_[0-9a-f]{32}$"
+    },
+    "access_policy_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "requested_by_operator_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "authorized_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 96,
+      "pattern": "^[!-~]+$"
+    },
+    "submission_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

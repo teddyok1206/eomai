@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -17,6 +18,9 @@ from eom_catalog_contracts import (
     MediaArtifactPointer,
     validate_contract,
     validate_eom_question_template_content,
+)
+from eom_catalog_contracts.mock_exam_production_plan import (
+    validate_content_team_mock_exam_slot_output,
 )
 from eom_content_pack import ContentPackError, ContentPackErrorCode, render_prompt
 from eom_hwpx_contracts import (
@@ -279,6 +283,7 @@ class WorkflowCatalogService:
         *,
         definition_key: str,
         definition_version: str,
+        session: Session | None = None,
     ) -> dict[str, Any]:
         if (
             request.content_pack is None
@@ -289,21 +294,48 @@ class WorkflowCatalogService:
                 ContentPackErrorCode.CONTENT_PACK_INVALID,
                 "Content Pack workflow requires complete pack, profile, and registry input",
             )
-        with self.sessions() as session:
-            activation = session.scalar(
-                select(ContentPackActivationRecord).where(
-                    ContentPackActivationRecord.pack_key == request.content_pack.pack_key,
-                    ContentPackActivationRecord.environment == request.content_pack.environment,
-                    ContentPackActivationRecord.active.is_(True),
+        session_scope = nullcontext(session) if session is not None else self.sessions()
+        with session_scope as resolved_session:
+            assert resolved_session is not None
+            expected = request.expected_resolution
+            if expected is None:
+                activation = resolved_session.scalar(
+                    select(ContentPackActivationRecord).where(
+                        ContentPackActivationRecord.pack_key == request.content_pack.pack_key,
+                        ContentPackActivationRecord.environment
+                        == request.content_pack.environment,
+                        ContentPackActivationRecord.active.is_(True),
+                    )
                 )
-            )
-            release = (
-                session.get(ContentPackReleaseRecord, activation.content_pack_release_id)
-                if activation is not None
-                else None
-            )
+                release = (
+                    resolved_session.get(
+                        ContentPackReleaseRecord, activation.content_pack_release_id
+                    )
+                    if activation is not None
+                    else None
+                )
+            else:
+                release = resolved_session.get(
+                    ContentPackReleaseRecord, expected.content_pack_release_id
+                )
+                activation = resolved_session.scalar(
+                    select(ContentPackActivationRecord)
+                    .where(
+                        ContentPackActivationRecord.pack_key == expected.content_pack_key,
+                        ContentPackActivationRecord.environment
+                        == request.content_pack.environment,
+                        ContentPackActivationRecord.content_pack_release_id
+                        == expected.content_pack_release_id,
+                        ContentPackActivationRecord.active.is_(True),
+                    )
+                    .order_by(
+                        ContentPackActivationRecord.activated_at.desc(),
+                        ContentPackActivationRecord.activation_id.desc(),
+                    )
+                    .limit(1)
+                )
             pack = (
-                session.get(ContentPackRecord, release.content_pack_id)
+                resolved_session.get(ContentPackRecord, release.content_pack_id)
                 if release is not None
                 else None
             )
@@ -318,14 +350,25 @@ class WorkflowCatalogService:
                     ContentPackErrorCode.CONTENT_PACK_NOT_RELEASED,
                     "active released Content Pack does not resolve",
                 )
+            if expected is not None and (
+                release.content_pack_release_id != expected.content_pack_release_id
+                or pack.pack_key != expected.content_pack_key
+                or release.version != expected.content_pack_version
+                or release.bundle_sha256 != expected.content_pack_bundle_sha256
+                or release.source_tree_sha256 != expected.content_pack_source_tree_sha256
+            ):
+                raise ContentPackError(
+                    ContentPackErrorCode.CONTENT_PACK_INVALID,
+                    "expected Content Pack release pointer is stale or mismatched",
+                )
             self._require_compatibility(release, definition_key, definition_version)
             self._require_item_brief_release(pack.pack_key, release.version, request)
             profile_keys = request.profiles.model_dump(mode="json", exclude_none=True)
-            profiles = self._profile_snapshots(session, release, profile_keys)
+            profiles = self._profile_snapshots(resolved_session, release, profile_keys)
             intake_ids = request.source_intake.batch_ids if request.source_intake else ()
             batches = (
                 list(
-                    session.scalars(
+                    resolved_session.scalars(
                         select(ContentIntakeBatchRecord).where(
                             ContentIntakeBatchRecord.intake_batch_id.in_(intake_ids)
                         )
@@ -347,6 +390,7 @@ class WorkflowCatalogService:
                     "pack_key": pack.pack_key,
                     "version": release.version,
                     "release_sha256": release.bundle_sha256,
+                    "source_tree_sha256": release.source_tree_sha256,
                     "manifest_sha256": release.manifest_sha256,
                     "activation_id": activation.activation_id,
                     "environment": activation.environment,
@@ -1529,6 +1573,13 @@ class WorkflowCatalogService:
         ):
             raise ValueError("content-team authoring result type is invalid")
         content: AssessmentItemContentV2 = parsed.output.draft
+        brief = request.item_brief
+        if isinstance(brief, ContentTeamItemBrief) and brief.mock_exam_slot is not None:
+            validate_content_team_mock_exam_slot_output(
+                slot=brief.mock_exam_slot,
+                content=content,
+                authoring_difficulty=parsed.output.metadata.difficulty,
+            )
         content_data = content.model_dump(mode="json")
         content_data["stem"] = normalize_content_team_stem(content.item_number, content.stem)
         content_data["equation_sources"] = []
@@ -1721,6 +1772,8 @@ class WorkflowCatalogService:
                     ),
                 }
             )
+        if isinstance(brief, ContentTeamItemBrief) and brief.mock_exam_slot is not None:
+            metadata["mock_exam_slot"] = brief.mock_exam_slot.model_dump(mode="json")
         return metadata
 
     @staticmethod
@@ -1776,6 +1829,10 @@ class WorkflowCatalogService:
             or release.version != snapshot.get("version")
             or release.bundle_sha256 != snapshot.get("release_sha256")
             or release.manifest_sha256 != snapshot.get("manifest_sha256")
+            or (
+                "source_tree_sha256" in snapshot
+                and release.source_tree_sha256 != snapshot.get("source_tree_sha256")
+            )
         ):
             raise ContentPackError(
                 ContentPackErrorCode.CONTENT_PACK_INVALID,

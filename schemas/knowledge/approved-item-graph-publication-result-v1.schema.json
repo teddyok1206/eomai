@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/approved-item-graph-publication-result/1.0",
+  "title": "Approved Item Graph Publication Result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "publication_id",
+    "corpus_key",
+    "previous_graph_snapshot_revision_id",
+    "previous_graph_snapshot_sha256",
+    "graph_snapshot",
+    "graph_snapshot_sha256",
+    "revision_number",
+    "accepted_analysis_run_ids",
+    "expected_workflow_ids",
+    "item_revision_ids",
+    "authorized_at",
+    "outcome",
+    "published_at",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "approved-item-graph-publication-result/1.0"},
+    "publication_id": {"type": "string", "pattern": "^graphpub_[0-9a-f]{32}$"},
+    "corpus_key": {"const": "integrated-science-textbooks"},
+    "previous_graph_snapshot_revision_id": {
+      "type": "string",
+      "pattern": "^graphrev_[0-9a-f]{32}$"
+    },
+    "previous_graph_snapshot_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "graph_snapshot": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+    },
+    "graph_snapshot_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "revision_number": {"type": "integer", "minimum": 1},
+    "accepted_analysis_run_ids": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"}
+    },
+    "expected_workflow_ids": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"}
+    },
+    "item_revision_ids": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"}
+    },
+    "authorized_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "outcome": {"enum": ["CREATED", "REPLAYED"]},
+    "published_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "result_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

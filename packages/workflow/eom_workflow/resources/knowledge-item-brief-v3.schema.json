@@ -36,9 +36,105 @@
         {"$ref": "#/$defs/integrated_science_curriculum_scope"}
       ]
     },
+    "mock_exam_slot": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/mock_exam_slot"}
+      ]
+    },
     "original_request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
   },
   "$defs": {
+    "mock_exam_slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "assembly_policy_revision_id",
+        "assembly_policy_sha256",
+        "layout_policy_revision_id",
+        "layout_policy_sha256",
+        "slot_id",
+        "position",
+        "points_milli",
+        "coverage_role",
+        "coverage_requirement_id",
+        "balance_large_unit_key",
+        "curriculum_selected_unit_key",
+        "large_unit_key",
+        "inquiry_required",
+        "preferred_difficulty",
+        "preferred_material_profiles",
+        "slot_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "mock-exam-slot/1.0"},
+        "assembly_policy_revision_id": {
+          "type": "string",
+          "pattern": "^assemblypolicyrev_[0-9a-f]{32}$"
+        },
+        "assembly_policy_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "layout_policy_revision_id": {
+          "type": "string",
+          "pattern": "^layoutpolicyrev_[0-9a-f]{32}$"
+        },
+        "layout_policy_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "slot_id": {"type": "string", "pattern": "^slot-[0-9]{2,3}$"},
+        "position": {"type": "integer", "minimum": 1, "maximum": 200},
+        "points_milli": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "coverage_role": {"enum": ["REQUIRED", "BALANCE"]},
+        "coverage_requirement_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"}
+          ]
+        },
+        "balance_large_unit_key": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^eom\\.is\\.large\\.[1-6]$"}
+          ]
+        },
+        "curriculum_selected_unit_key": {
+          "type": "string",
+          "pattern": "^eom\\.is\\.middle\\.[1-6]-[1-7]$"
+        },
+        "large_unit_key": {"type": "string", "pattern": "^eom\\.is\\.large\\.[1-6]$"},
+        "inquiry_required": {"type": "boolean"},
+        "preferred_difficulty": {"enum": ["LOW", "MEDIUM", "HIGH"]},
+        "preferred_material_profiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {"enum": ["TEXT", "DATA", "TABLE", "IMAGE", "MIXED", "INQUIRY"]}
+        },
+        "slot_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"coverage_role": {"const": "REQUIRED"}}},
+          "then": {
+            "properties": {
+              "coverage_requirement_id": {"type": "string"},
+              "balance_large_unit_key": {"type": "null"}
+            }
+          },
+          "else": {
+            "properties": {
+              "coverage_requirement_id": {"type": "null"},
+              "balance_large_unit_key": {"type": "string"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"inquiry_required": {"const": true}}},
+          "then": {
+            "properties": {"preferred_material_profiles": {"contains": {"const": "INQUIRY"}}}
+          }
+        }
+      ]
+    },
     "integrated_science_curriculum_scope": {
       "type": "object",
       "additionalProperties": false,

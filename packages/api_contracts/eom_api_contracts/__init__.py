@@ -73,6 +73,18 @@ from eom_api_contracts.knowledge_retrieval import (
     EvidenceBundleBudgetView,
     EvidenceBundleView,
 )
+from eom_api_contracts.mock_exam_execution import (
+    MockExamExplicitAnalysisReviewSetV1,
+    MockExamExplicitRatingSetV1,
+    MockExamGenerationBlockResolutionV1,
+    MockExamGraphPublicationInputV1,
+    MockExamProductionExecutionV1,
+    MockExamReviewEligibilityObservationV1,
+    build_mock_exam_explicit_analysis_review_set,
+    build_mock_exam_explicit_rating_set,
+    derive_mock_exam_production_state,
+    mock_exam_production_is_terminal,
+)
 
 __all__ = [
     "ApiModel",
@@ -124,6 +136,12 @@ __all__ = [
     "MockExamAssemblyView",
     "MockExamAssemblyViewContract",
     "MockExamAssemblyViewV2",
+    "MockExamExplicitAnalysisReviewSetV1",
+    "MockExamExplicitRatingSetV1",
+    "MockExamGenerationBlockResolutionV1",
+    "MockExamGraphPublicationInputV1",
+    "MockExamProductionExecutionV1",
+    "MockExamReviewEligibilityObservationV1",
     "PageMeta",
     "PreviewMockExamAssemblyPlanRequest",
     "ProblemDetails",
@@ -133,4 +151,8 @@ __all__ = [
     "ResponseMeta",
     "SingleResponse",
     "ValidationIssue",
+    "build_mock_exam_explicit_analysis_review_set",
+    "build_mock_exam_explicit_rating_set",
+    "derive_mock_exam_production_state",
+    "mock_exam_production_is_terminal",
 ]

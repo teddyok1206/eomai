@@ -13,6 +13,7 @@
     "rating_policy_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
     "graph_snapshot_revision_id": {"pattern": "^graphrev_[0-9a-f]{32}$", "type": "string"},
     "graph_snapshot_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "cohort": {"$ref": "eom://schemas/assessment-assembly/mock-exam-assembly-cohort/1.0"},
     "usage_snapshot": {"$ref": "#/$defs/usageSnapshot"},
     "resolved_candidate_count": {"maximum": 5000, "minimum": 0, "type": "integer"},
     "rated_candidate_count": {"maximum": 5000, "minimum": 0, "type": "integer"},

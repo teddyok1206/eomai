@@ -184,6 +184,7 @@ class KnowledgeGraphPublicationRecord(Base):
     published_by_operator_id: Mapped[str] = mapped_column(
         ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
     )
+    authorized_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

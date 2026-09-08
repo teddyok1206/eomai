@@ -2,21 +2,28 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_ASSEMBLY_POLICY_SHA256,
     INTEGRATED_SCIENCE_LAYOUT_POLICY_SHA256,
     INTEGRATED_SCIENCE_RATING_POLICY_SHA256,
+    CreatePlannedMockExamAssembly,
+    MockExamAssemblyCohortV1,
     MockExamAssemblyManifestV2,
     MockExamAssemblyPlacementV1,
     MockExamAssemblyPlanV1,
     MockExamContentPointerV1,
     MockExamPlanningCandidateV1,
+    MockExamPlanningError,
     MockExamReviewPointerV1,
     MockExamUsageSnapshotV1,
+    PreviewMockExamAssemblyPlan,
+    build_mock_exam_assembly_cohort,
     build_mock_exam_assembly_plan,
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
@@ -24,8 +31,14 @@ from eom_catalog_contracts import (
     validate_contract,
     validate_mock_exam_placements,
 )
+from eom_catalog_service.mock_exam_assembly_service import (
+    MockExamAssemblyError,
+    MockExamAssemblyService,
+)
+from eom_catalog_service.mock_exam_candidate_repository import MockExamPlanningInputs
 from eom_identifiers import content_sha256
 from jsonschema import Draft202012Validator
+from sqlalchemy import create_engine
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -162,6 +175,14 @@ def _placements() -> tuple[MockExamAssemblyPlacementV1, ...]:
     return tuple(values)
 
 
+def _cohort(
+    candidates: tuple[MockExamPlanningCandidateV1, ...],
+) -> MockExamAssemblyCohortV1:
+    return build_mock_exam_assembly_cohort(
+        tuple(candidate.item_revision_id for candidate in candidates)
+    )
+
+
 def test_released_policy_is_schema_valid_and_content_addressed() -> None:
     policy = load_integrated_science_mock_exam_policy()
     assert content_sha256(policy.model_dump(mode="json")) == (
@@ -179,6 +200,7 @@ def test_released_policy_is_schema_valid_and_content_addressed() -> None:
         "mock-exam-rating-policy-v1.schema.json",
         "mock-exam-assembly-plan-v1.schema.json",
         "mock-exam-assembly-manifest-v2.schema.json",
+        "mock-exam-assembly-cohort-v1.schema.json",
     ):
         canonical = ROOT / "schemas" / "assessment-assembly" / name
         packaged = (
@@ -309,6 +331,418 @@ def test_server_planner_reports_rating_shortage_without_partial_output() -> None
     assert plan.placements == ()
     assert plan.validation is None
     assert {row.reason for row in plan.shortages} == {"NO_RATED_CANDIDATES"}
+
+
+def test_exact_cohort_is_self_hashed_schema_valid_and_embedded_in_plan() -> None:
+    candidates = _planning_candidates()
+    cohort = _cohort(candidates)
+    unsigned = cohort.model_dump(mode="json", exclude={"cohort_id", "cohort_sha256"})
+    assert cohort.cohort_sha256 == content_sha256(unsigned)
+    assert cohort.cohort_id == (
+        "assemblycohort_" + cohort.cohort_sha256.removeprefix("sha256:")[:32]
+    )
+    validate_contract("mock-exam-assembly-cohort", cohort.model_dump(mode="json"))
+    planned_at = datetime(2026, 9, 8, 4, 0, tzinfo=UTC)
+    plan = build_mock_exam_assembly_plan(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        rating_policy=load_integrated_science_mock_exam_rating_policy(),
+        graph_snapshot_revision_id=_identifier("graphrev_", 1),
+        graph_snapshot_sha256="sha256:" + "1" * 64,
+        usage_snapshot=_usage_snapshot(
+            captured_at=planned_at, candidate_revision_count=len(candidates)
+        ),
+        resolved_candidate_count=len(candidates),
+        candidates=candidates,
+        planned_at=planned_at,
+        cohort=cohort,
+    )
+    assert plan.status == "READY"
+    assert plan.cohort == cohort
+    assert tuple(row.item_revision_id for row in plan.placements) == tuple(
+        member.item_revision_id for member in cohort.members
+    )
+    validate_contract("mock-exam-assembly-plan", plan.model_dump(mode="json"))
+
+
+@pytest.mark.parametrize("failure", ["duplicate", "hash", "count"])
+def test_exact_cohort_rejects_invalid_identity_or_members(failure: str) -> None:
+    candidates = _planning_candidates()
+    cohort = _cohort(candidates)
+    value = cohort.model_dump(mode="json")
+    if failure == "duplicate":
+        value["members"][1]["item_revision_id"] = value["members"][0]["item_revision_id"]
+        unsigned = {
+            key: raw for key, raw in value.items() if key not in {"cohort_id", "cohort_sha256"}
+        }
+        value["cohort_sha256"] = content_sha256(unsigned)
+        value["cohort_id"] = "assemblycohort_" + value["cohort_sha256"].removeprefix("sha256:")[:32]
+    elif failure == "hash":
+        value["cohort_sha256"] = "sha256:" + "f" * 64
+    else:
+        value["members"] = value["members"][:-1]
+    with pytest.raises(ValueError):
+        MockExamAssemblyCohortV1.model_validate(value)
+
+
+@pytest.mark.parametrize("failure", ["missing", "external"])
+def test_exact_cohort_rejects_non_exact_graph_rating_candidates(failure: str) -> None:
+    candidates = _planning_candidates()
+    cohort = _cohort(candidates)
+    if failure == "missing":
+        supplied = candidates[:-1]
+        resolved_count = 25
+    elif failure == "external":
+        supplied = (
+            *candidates,
+            candidates[-1].model_copy(
+                update={
+                    "item_id": _identifier("item_", 100),
+                    "item_revision_id": _identifier("itemrev_", 100),
+                }
+            ),
+        )
+        resolved_count = 26
+    planned_at = datetime(2026, 9, 8, 4, 0, tzinfo=UTC)
+    with pytest.raises(MockExamPlanningError) as raised:
+        build_mock_exam_assembly_plan(
+            policy=load_integrated_science_mock_exam_policy(),
+            layout_policy=load_integrated_science_mock_exam_layout_policy(),
+            rating_policy=load_integrated_science_mock_exam_rating_policy(),
+            graph_snapshot_revision_id=_identifier("graphrev_", 1),
+            graph_snapshot_sha256="sha256:" + "1" * 64,
+            usage_snapshot=_usage_snapshot(
+                captured_at=planned_at, candidate_revision_count=len(supplied)
+            ),
+            resolved_candidate_count=resolved_count,
+            candidates=supplied,
+            planned_at=planned_at,
+            cohort=cohort,
+        )
+    assert raised.value.code == "ASSEMBLY_COHORT_CANDIDATES_INVALID"
+
+
+def test_exact_cohort_accepts_pinned_revision_after_item_head_advances() -> None:
+    candidates = _planning_candidates()
+    cohort = _cohort(candidates)
+    supplied = (
+        candidates[0].model_copy(update={"item_current_revision": False}),
+        *candidates[1:],
+    )
+    planned_at = datetime(2026, 9, 8, 4, 0, tzinfo=UTC)
+    plan = build_mock_exam_assembly_plan(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        rating_policy=load_integrated_science_mock_exam_rating_policy(),
+        graph_snapshot_revision_id=_identifier("graphrev_", 1),
+        graph_snapshot_sha256="sha256:" + "1" * 64,
+        usage_snapshot=_usage_snapshot(
+            captured_at=planned_at,
+            candidate_revision_count=len(supplied),
+        ),
+        resolved_candidate_count=len(supplied),
+        candidates=supplied,
+        planned_at=planned_at,
+        cohort=cohort,
+    )
+    assert plan.status == "READY"
+    assert plan.placements[0].item_revision_id == candidates[0].item_revision_id
+
+
+def test_exact_cohort_position_binding_prevents_ambiguous_candidate_swap() -> None:
+    candidates = _planning_candidates()
+    pinned_order = (
+        candidates[1].item_revision_id,
+        candidates[0].item_revision_id,
+        *(candidate.item_revision_id for candidate in candidates[2:]),
+    )
+    cohort = build_mock_exam_assembly_cohort(pinned_order)
+    planned_at = datetime(2026, 9, 8, 4, 0, tzinfo=UTC)
+    plan = build_mock_exam_assembly_plan(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        rating_policy=load_integrated_science_mock_exam_rating_policy(),
+        graph_snapshot_revision_id=_identifier("graphrev_", 1),
+        graph_snapshot_sha256="sha256:" + "1" * 64,
+        usage_snapshot=_usage_snapshot(
+            captured_at=planned_at, candidate_revision_count=len(candidates)
+        ),
+        resolved_candidate_count=len(candidates),
+        candidates=tuple(reversed(candidates)),
+        planned_at=planned_at,
+        cohort=cohort,
+    )
+    assert plan.status == "READY"
+    assert tuple(row.item_revision_id for row in plan.placements) == pinned_order
+
+
+def test_create_planned_revalidates_exact_cohort_even_on_idempotent_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidates = _planning_candidates()
+    cohort = _cohort(candidates)
+    planned_at = datetime.now(UTC)
+    usage = _usage_snapshot(captured_at=planned_at, candidate_revision_count=len(candidates))
+    graph_revision_id = _identifier("graphrev_", 1)
+    graph_sha256 = "sha256:" + "1" * 64
+    policy = load_integrated_science_mock_exam_policy()
+    policy_sha256 = content_sha256(policy.model_dump(mode="json"))
+    plan = build_mock_exam_assembly_plan(
+        policy=policy,
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        rating_policy=load_integrated_science_mock_exam_rating_policy(),
+        graph_snapshot_revision_id=graph_revision_id,
+        graph_snapshot_sha256=graph_sha256,
+        usage_snapshot=usage,
+        resolved_candidate_count=len(candidates),
+        candidates=candidates,
+        planned_at=planned_at,
+        cohort=cohort,
+    )
+    command = CreatePlannedMockExamAssembly(
+        deliverable_id=_identifier("deliverable_", 1),
+        deliverable_revision_id=_identifier("delivrev_", 2),
+        form_key="main",
+        display_label="본시험지",
+        policy_revision_id=policy.policy_revision_id,
+        policy_sha256=policy_sha256,
+        graph_snapshot_revision_id=graph_revision_id,
+        graph_snapshot_sha256=graph_sha256,
+        cohort=cohort,
+        expected_plan_sha256=plan.plan_sha256,
+        planned_at=planned_at,
+        actor_id=_identifier("operator_", 3),
+    )
+    manifest_value: dict[str, Any] = {
+        "schema_version": "mock-exam-assembly-manifest/2.0",
+        "assessment_assembly_revision_id": _identifier("assemblyrev_", 4),
+        "assessment_assembly_id": _identifier("assembly_", 5),
+        "assessment_form_id": _identifier("form_", 6),
+        "assessment_form_revision_id": _identifier("formrev_", 7),
+        "deliverable_id": command.deliverable_id,
+        "deliverable_revision_id": command.deliverable_revision_id,
+        "form_key": command.form_key,
+        "display_label": command.display_label,
+        "plan": plan.model_dump(mode="json"),
+        "revision_state": "RELEASED",
+        "created_at": planned_at.isoformat().replace("+00:00", "Z"),
+        "created_by": command.actor_id,
+    }
+    manifest_value["manifest_sha256"] = content_sha256(manifest_value)
+    existing = MockExamAssemblyManifestV2.model_validate(manifest_value)
+
+    class RecordingCandidates:
+        def __init__(self) -> None:
+            self.cohorts: list[MockExamAssemblyCohortV1 | None] = []
+
+        def resolve(self, _session: Any, **kwargs: Any) -> MockExamPlanningInputs:
+            self.cohorts.append(kwargs.get("cohort"))
+            return MockExamPlanningInputs(
+                resolved_candidate_count=len(candidates),
+                candidates=candidates,
+                usage_snapshot=usage,
+            )
+
+    repository = RecordingCandidates()
+    service = MockExamAssemblyService(
+        create_engine("sqlite+pysqlite:///:memory:"),
+        candidates=repository,  # type: ignore[arg-type]
+    )
+    monkeypatch.setattr(
+        service,
+        "_resolve_deliverable",
+        lambda _session, _command: (
+            SimpleNamespace(deliverable_id=command.deliverable_id),
+            SimpleNamespace(),
+        ),
+    )
+    monkeypatch.setattr(service, "_planned_replay", lambda _session, _command: existing)
+    monkeypatch.setattr(
+        service,
+        "_resolve_snapshot",
+        lambda _session, _command: SimpleNamespace(
+            graph_snapshot_revision_id=graph_revision_id,
+            snapshot_sha256=graph_sha256,
+        ),
+    )
+
+    assert service.create_planned(command) == existing
+    assert repository.cohorts == [cohort]
+
+
+def test_exact_cohort_create_remains_resumable_after_generic_preview_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidates = _planning_candidates()
+    cohort = _cohort(candidates)
+    planned_at = datetime.now(UTC) - timedelta(hours=1)
+    usage = _usage_snapshot(captured_at=planned_at, candidate_revision_count=len(candidates))
+    graph_revision_id = _identifier("graphrev_", 1)
+    graph_sha256 = "sha256:" + "1" * 64
+    policy = load_integrated_science_mock_exam_policy()
+    plan = build_mock_exam_assembly_plan(
+        policy=policy,
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        rating_policy=load_integrated_science_mock_exam_rating_policy(),
+        graph_snapshot_revision_id=graph_revision_id,
+        graph_snapshot_sha256=graph_sha256,
+        usage_snapshot=usage,
+        resolved_candidate_count=len(candidates),
+        candidates=candidates,
+        planned_at=planned_at,
+        cohort=cohort,
+    )
+    command = CreatePlannedMockExamAssembly(
+        deliverable_id=_identifier("deliverable_", 11),
+        deliverable_revision_id=_identifier("delivrev_", 12),
+        form_key="resumed-main",
+        display_label="재개 본시험지",
+        policy_revision_id=policy.policy_revision_id,
+        policy_sha256=content_sha256(policy.model_dump(mode="json")),
+        graph_snapshot_revision_id=graph_revision_id,
+        graph_snapshot_sha256=graph_sha256,
+        cohort=cohort,
+        expected_plan_sha256=plan.plan_sha256,
+        planned_at=planned_at,
+        actor_id=_identifier("operator_", 13),
+    )
+
+    class ExactCandidates:
+        def resolve(self, _session: Any, **kwargs: Any) -> MockExamPlanningInputs:
+            assert kwargs["cohort"] == cohort
+            assert kwargs["planned_at"] == planned_at
+            return MockExamPlanningInputs(
+                resolved_candidate_count=len(candidates),
+                candidates=candidates,
+                usage_snapshot=usage,
+            )
+
+    service = MockExamAssemblyService(
+        create_engine("sqlite+pysqlite:///:memory:"),
+        candidates=ExactCandidates(),  # type: ignore[arg-type]
+    )
+    monkeypatch.setattr(
+        service,
+        "_resolve_deliverable",
+        lambda _session, _command: (
+            SimpleNamespace(deliverable_id=command.deliverable_id),
+            SimpleNamespace(),
+        ),
+    )
+    monkeypatch.setattr(service, "_planned_replay", lambda _session, _command: None)
+    monkeypatch.setattr(
+        service,
+        "_resolve_snapshot",
+        lambda _session, _command: SimpleNamespace(
+            graph_snapshot_revision_id=graph_revision_id,
+            snapshot_sha256=graph_sha256,
+        ),
+    )
+    monkeypatch.setattr(service, "_persist_planned", lambda *_args: None)
+
+    manifest = service.create_planned(command)
+    assert manifest.plan.plan_sha256 == plan.plan_sha256
+    assert manifest.plan.cohort == cohort
+
+    generic_command = command.model_copy(
+        update={"cohort": None, "form_key": "expired-generic"}
+    )
+    with pytest.raises(MockExamAssemblyError, match="bounded creation window"):
+        service.create_planned(generic_command)
+
+
+def test_preview_resolves_only_the_exact_cohort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidates = _planning_candidates()
+    cohort = _cohort(candidates)
+    policy = load_integrated_science_mock_exam_policy()
+    graph_revision_id = _identifier("graphrev_", 1)
+    graph_sha256 = "sha256:" + "1" * 64
+    query = PreviewMockExamAssemblyPlan(
+        policy_revision_id=policy.policy_revision_id,
+        policy_sha256=content_sha256(policy.model_dump(mode="json")),
+        graph_snapshot_revision_id=graph_revision_id,
+        graph_snapshot_sha256=graph_sha256,
+        cohort=cohort,
+    )
+
+    class RecordingCandidates:
+        def __init__(self) -> None:
+            self.cohorts: list[MockExamAssemblyCohortV1 | None] = []
+
+        def resolve(self, _session: Any, **kwargs: Any) -> MockExamPlanningInputs:
+            self.cohorts.append(kwargs.get("cohort"))
+            planned_at = kwargs["planned_at"]
+            return MockExamPlanningInputs(
+                resolved_candidate_count=len(candidates),
+                candidates=candidates,
+                usage_snapshot=_usage_snapshot(
+                    captured_at=planned_at,
+                    candidate_revision_count=len(candidates),
+                ),
+            )
+
+    repository = RecordingCandidates()
+    service = MockExamAssemblyService(
+        create_engine("sqlite+pysqlite:///:memory:"),
+        candidates=repository,  # type: ignore[arg-type]
+    )
+    monkeypatch.setattr(
+        service,
+        "_resolve_snapshot",
+        lambda _session, _command: SimpleNamespace(
+            graph_snapshot_revision_id=graph_revision_id,
+            snapshot_sha256=graph_sha256,
+        ),
+    )
+
+    result = service.preview(query)
+    assert result.status == "READY"
+    assert result.cohort == cohort
+    assert repository.cohorts == [cohort]
+
+
+def test_exact_cohort_keeps_its_published_graph_after_corpus_head_advances() -> None:
+    candidates = _planning_candidates()
+    cohort = _cohort(candidates)
+    policy = load_integrated_science_mock_exam_policy()
+    pinned_revision_id = _identifier("graphrev_", 1)
+    pinned_sha256 = "sha256:" + "1" * 64
+    query = PreviewMockExamAssemblyPlan(
+        policy_revision_id=policy.policy_revision_id,
+        policy_sha256=content_sha256(policy.model_dump(mode="json")),
+        graph_snapshot_revision_id=pinned_revision_id,
+        graph_snapshot_sha256=pinned_sha256,
+        cohort=cohort,
+    )
+    corpus = SimpleNamespace(
+        graph_id=_identifier("graph_", 1),
+        current_graph_snapshot_revision_id=_identifier("graphrev_", 2),
+    )
+    snapshot = SimpleNamespace(
+        graph_snapshot_revision_id=pinned_revision_id,
+        graph_id=corpus.graph_id,
+        state="PUBLISHED",
+        ontology_version="education-knowledge-graph/1.1",
+        snapshot_sha256=pinned_sha256,
+    )
+
+    class SnapshotSession:
+        def scalar(self, _statement: Any) -> Any:
+            return corpus
+
+        def get(self, _model: Any, revision_id: str) -> Any:
+            assert revision_id == pinned_revision_id
+            return snapshot
+
+    service = MockExamAssemblyService(create_engine("sqlite+pysqlite:///:memory:"))
+    resolved = service._resolve_snapshot(SnapshotSession(), query)  # type: ignore[arg-type]
+    assert resolved is snapshot
+
+    legacy_query = query.model_copy(update={"cohort": None})
+    with pytest.raises(MockExamAssemblyError, match="eligible published"):
+        service._resolve_snapshot(SnapshotSession(), legacy_query)  # type: ignore[arg-type]
 
 
 def test_team_guidance_policy_accepts_exact_25_item_distribution() -> None:

@@ -29,6 +29,11 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     assert "knowledge_analysis_risk_policy_revisions" not in INSERT_TABLES
     assert "knowledge_analysis_runs" in UPDATE_TABLES
     assert "jobs" in UPDATE_TABLES
+    assert "approval_requests" in READ_TABLES
+    assert "approval_requests" not in INSERT_TABLES
+    assert "item_review_records" in READ_TABLES
+    assert "item_review_records" in INSERT_TABLES
+    assert "item_review_records" not in UPDATE_TABLES
     content_intake_tables = {
         "content_intake_batches",
         "content_intake_events",

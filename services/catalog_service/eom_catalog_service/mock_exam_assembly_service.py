@@ -101,6 +101,7 @@ class MockExamAssemblyService:
                     policy=policy,
                     rating_policy=rating,
                     planned_at=planned_at,
+                    cohort=query.cohort,
                 )
         except MockExamCandidateResolutionError as exc:
             self._fail(exc.code, str(exc))
@@ -114,6 +115,7 @@ class MockExamAssemblyService:
             resolved_candidate_count=inputs.resolved_candidate_count,
             candidates=inputs.candidates,
             planned_at=planned_at,
+            cohort=query.cohort,
         )
 
     def create_planned(self, command: CreatePlannedMockExamAssembly) -> MockExamAssemblyManifestV2:
@@ -125,11 +127,9 @@ class MockExamAssemblyService:
         with transaction(self.sessions) as session:
             deliverable, _deliverable_revision = self._resolve_deliverable(session, command)
             existing = self._planned_replay(session, command)
-            if existing is not None:
-                return existing
             snapshot = self._resolve_snapshot(session, command)
             current_time = datetime.now(UTC)
-            if (
+            if existing is None and command.cohort is None and (
                 not current_time - timedelta(minutes=15)
                 <= command.planned_at
                 <= (current_time + timedelta(seconds=5))
@@ -145,6 +145,7 @@ class MockExamAssemblyService:
                     policy=policy,
                     rating_policy=rating,
                     planned_at=command.planned_at,
+                    cohort=command.cohort,
                 )
             except MockExamCandidateResolutionError as exc:
                 self._fail(exc.code, str(exc))
@@ -158,6 +159,7 @@ class MockExamAssemblyService:
                 resolved_candidate_count=inputs.resolved_candidate_count,
                 candidates=inputs.candidates,
                 planned_at=command.planned_at,
+                cohort=command.cohort,
             )
             if plan.plan_sha256 != command.expected_plan_sha256:
                 self._fail(
@@ -169,6 +171,13 @@ class MockExamAssemblyService:
                     "ASSEMBLY_CANDIDATE_SHORTAGE",
                     "the current Graph and reviewed ratings cannot fill all 25 slots",
                 )
+            if existing is not None:
+                if existing.plan != plan:
+                    self._fail(
+                        "ASSEMBLY_REPLAY_POINTER_INVALID",
+                        "stored Assembly plan differs from re-resolved cohort evidence",
+                    )
+                return existing
             identity = self._planned_identity(command, plan)
             created_at = datetime.now(UTC)
             value: dict[str, Any] = {
@@ -381,7 +390,15 @@ class MockExamAssemblyService:
                 "ASSEMBLY_FORM_CONFLICT",
                 "form key already owns a non-planned Assembly",
             )
-        manifest = MockExamAssemblyManifestV2.model_validate(assembly_revision.canonical_document)
+        try:
+            manifest = MockExamAssemblyManifestV2.model_validate(
+                assembly_revision.canonical_document
+            )
+        except ValueError:
+            self._fail(
+                "ASSEMBLY_REPLAY_POINTER_INVALID",
+                "stored Assembly manifest or exact cohort hash is invalid",
+            )
         if (
             manifest.manifest_sha256 != assembly_revision.manifest_sha256
             or manifest.deliverable_id != command.deliverable_id
@@ -392,6 +409,7 @@ class MockExamAssemblyService:
             or manifest.plan.policy_sha256 != command.policy_sha256
             or manifest.plan.graph_snapshot_revision_id != command.graph_snapshot_revision_id
             or manifest.plan.graph_snapshot_sha256 != command.graph_snapshot_sha256
+            or manifest.plan.cohort != command.cohort
             or manifest.plan.plan_sha256 != command.expected_plan_sha256
             or manifest.plan.planned_at != command.planned_at
         ):
@@ -408,6 +426,10 @@ class MockExamAssemblyService:
             CreateMockExamAssembly | CreatePlannedMockExamAssembly | PreviewMockExamAssemblyPlan
         ),
     ) -> KnowledgeGraphSnapshotRecord:
+        exact_cohort = (
+            isinstance(command, (CreatePlannedMockExamAssembly, PreviewMockExamAssemblyPlan))
+            and command.cohort is not None
+        )
         corpus = session.scalar(
             select(KnowledgeCorpusRecord).where(
                 KnowledgeCorpusRecord.corpus_key == INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
@@ -418,7 +440,14 @@ class MockExamAssemblyService:
         if (
             corpus is None
             or snapshot is None
-            or corpus.current_graph_snapshot_revision_id != command.graph_snapshot_revision_id
+            # An exact cohort pins the immutable Graph revision that admitted those 25 Items.
+            # A later publication may advance the corpus head while preview/create is in flight;
+            # requiring the old revision to remain current would strand a valid pinned cohort.
+            or (
+                not exact_cohort
+                and corpus.current_graph_snapshot_revision_id
+                != command.graph_snapshot_revision_id
+            )
             or snapshot.graph_id != corpus.graph_id
             or snapshot.state != "PUBLISHED"
             or snapshot.ontology_version != "education-knowledge-graph/1.1"
@@ -426,7 +455,7 @@ class MockExamAssemblyService:
         ):
             self._fail(
                 "ASSEMBLY_GRAPH_POINTER_INVALID",
-                "assembly must pin the current published Integrated Science Graph",
+                "assembly must pin an eligible published Integrated Science Graph",
             )
         return snapshot
 

@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/workflow-start/1.0",
+  "title": "Workflow Start Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["definition_key", "definition_version", "image_mode"],
+  "properties": {
+    "definition_key": {"type": "string", "minLength": 1, "maxLength": 64},
+    "definition_version": {"type": "string", "minLength": 1, "maxLength": 32},
+    "request_name": {
+      "enum": [
+        "PLACEHOLDER_REQUEST",
+        "KNOWLEDGE_ITEM_REQUEST",
+        "GENERATED_KNOWLEDGE_ITEM_REQUEST"
+      ],
+      "default": "PLACEHOLDER_REQUEST"
+    },
+    "image_mode": {"enum": ["skip", "required"]},
+    "pack_key": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "maxLength": 64}
+      ],
+      "default": null
+    },
+    "environment": {"enum": ["development", "test"], "default": "development"},
+    "source_intake_batch_ids": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"type": "string", "pattern": "^intake_[0-9a-f]{32}$"},
+      "default": []
+    },
+    "registry_mode": {"enum": ["CREATE_ITEM", "REVISE_ITEM"], "default": "CREATE_ITEM"},
+    "item_id": {
+      "oneOf": [{"type": "null"}, {"type": "string", "maxLength": 128}],
+      "default": null
+    },
+    "base_revision_id": {
+      "oneOf": [{"type": "null"}, {"type": "string", "maxLength": 128}],
+      "default": null
+    },
+    "item_brief": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "eom://schemas/workflow/knowledge-item-brief-v1"},
+        {"$ref": "#/$defs/knowledge_item_brief_request_v2"},
+        {"$ref": "#/$defs/content_team_item_brief_request_v3"}
+      ],
+      "default": null
+    },
+    "stimulus_asset_key": {
+      "oneOf": [
+        {"type": "null"},
+        {"const": "eom-question-template-reference-v1"}
+      ],
+      "default": null
+    },
+    "execution_preset_key": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"}
+      ],
+      "default": null
+    },
+    "educational_retrieval": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "eom://schemas/knowledge/educational-retrieval-requirement/1.0"}
+      ],
+      "default": null
+    },
+    "production_occurrence": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/production_occurrence"}],
+      "default": null
+    },
+    "expected_resolution": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/expected_resolution"}],
+      "default": null
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "production_occurrence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "production_request_id", "workflow_call_id"],
+      "properties": {
+        "schema_version": {"const": "workflow-production-occurrence/1.0"},
+        "production_request_id": {
+          "type": "string",
+          "pattern": "^productionreq_[0-9a-f]{32}$"
+        },
+        "workflow_call_id": {
+          "type": "string",
+          "pattern": "^workflowcall_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "expected_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "workflow_definition_key",
+        "workflow_definition_version",
+        "workflow_definition_sha256",
+        "content_pack_release_id",
+        "content_pack_key",
+        "content_pack_version",
+        "content_pack_bundle_sha256",
+        "content_pack_source_tree_sha256",
+        "execution_preset_id",
+        "execution_preset_revision_id",
+        "execution_preset_key",
+        "execution_preset_content_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "workflow-expected-resolution/1.0"},
+        "workflow_definition_key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "workflow_definition_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "workflow_definition_sha256": {"$ref": "#/$defs/sha256"},
+        "content_pack_release_id": {
+          "type": "string",
+          "pattern": "^packrel_[0-9a-f]{32}$"
+        },
+        "content_pack_key": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+        "content_pack_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "content_pack_bundle_sha256": {"$ref": "#/$defs/sha256"},
+        "content_pack_source_tree_sha256": {"$ref": "#/$defs/sha256"},
+        "execution_preset_id": {
+          "type": "string",
+          "pattern": "^execpreset_[0-9a-f]{32}$"
+        },
+        "execution_preset_revision_id": {
+          "type": "string",
+          "pattern": "^execpresetrev_[0-9a-f]{32}$"
+        },
+        "execution_preset_key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,127}$"
+        },
+        "execution_preset_content_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "knowledge_item_brief_request_v2": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "subject",
+        "topic",
+        "task_type",
+        "difficulty",
+        "choice_count",
+        "equation_required",
+        "image_required",
+        "quality_profile",
+        "original_request_sha256",
+        "authoring_guidance",
+        "authoring_guidance_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "2.0"},
+        "subject": {"type": "string", "minLength": 1, "maxLength": 80},
+        "topic": {"type": "string", "minLength": 1, "maxLength": 160},
+        "task_type": {"enum": ["calculation", "conceptual", "data_interpretation"]},
+        "difficulty": {"enum": ["easy", "medium", "hard"]},
+        "choice_count": {"const": 5},
+        "equation_required": {"const": true},
+        "image_required": {"const": true},
+        "quality_profile": {"enum": ["fast", "balanced", "deep"]},
+        "original_request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "authoring_guidance": {"type": "string", "minLength": 10, "maxLength": 2000},
+        "authoring_guidance_sha256": {"$ref": "#/$defs/sha256"},
+        "curriculum_selected_unit_key": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^eom\\.is\\.(?:large\\.[1-6]|middle\\.[1-6]-[1-7])$"}
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "content_team_item_brief_request_v3": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "subject",
+        "topic",
+        "task_type",
+        "difficulty",
+        "authoring_guidance",
+        "authoring_guidance_sha256",
+        "original_request_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "3.0"},
+        "subject": {"type": "string", "minLength": 1, "maxLength": 80},
+        "topic": {"type": "string", "minLength": 1, "maxLength": 160},
+        "task_type": {"type": "string", "minLength": 1, "maxLength": 80},
+        "difficulty": {"type": "string", "minLength": 1, "maxLength": 80},
+        "authoring_guidance": {"type": "string", "minLength": 10, "maxLength": 2000},
+        "authoring_guidance_sha256": {"$ref": "#/$defs/sha256"},
+        "curriculum_selected_unit_key": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^eom\\.is\\.(?:large\\.[1-6]|middle\\.[1-6]-[1-7])$"}
+          ],
+          "default": null
+        },
+        "mock_exam_slot": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "eom://schemas/assessment-assembly/mock-exam-production-plan/1.0#/$defs/mock_exam_slot"}
+          ],
+          "default": null
+        },
+        "original_request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

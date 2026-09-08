@@ -1,8 +1,7 @@
-"""Automatic, evidence-bound publication of accepted legacy Item analyses into Graph RAG."""
+"""Legacy selection and occurrence provenance for shared Item Graph publication."""
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
 from eom_catalog_contracts import (
@@ -11,7 +10,6 @@ from eom_catalog_contracts import (
     AssessmentOccurrenceItemBinding,
     AutomaticItemCurriculumAlignmentBinding,
     CreateEvidenceBundleCommand,
-    PublishKnowledgeGraphSnapshotCommandV5,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
@@ -19,17 +17,11 @@ from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecor
 from sqlalchemy import Engine, and_, literal, select
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.automatic_curriculum_alignment import (
-    AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET,
-    AUTOMATIC_ITEM_ALIGNMENT_PERMISSION_KEYS,
-    AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
-    AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
-    AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES,
-    automatic_item_alignment_topic_keys,
-    derive_automatic_item_curriculum_unit_ids,
-)
-from eom_catalog_service.curriculum_graph_structure import (
-    extend_integrated_science_structure_manifest_with_automatic_item_alignments,
+from eom_catalog_service.automatic_item_graph_publication_service import (
+    INTEGRATED_SCIENCE_CORPUS_KEY,
+    AutomaticItemGraphCandidate,
+    AutomaticItemGraphPublicationService,
+    build_automatic_item_alignment_retrieval_command,
 )
 from eom_catalog_service.item_origin_models import (
     AssessmentOccurrenceRevisionRecord,
@@ -37,10 +29,7 @@ from eom_catalog_service.item_origin_models import (
     ItemOriginOccurrenceRecord,
     ItemOriginProfileRecord,
 )
-from eom_catalog_service.knowledge_graph_models import (
-    EvidenceBundleEntryRecord,
-    KnowledgeSnapshotAnalysisRecord,
-)
+from eom_catalog_service.knowledge_graph_models import KnowledgeSnapshotAnalysisRecord
 from eom_catalog_service.knowledge_graph_projection import AcceptedAnalysisProposal
 from eom_catalog_service.knowledge_graph_publication_service import (
     CurrentKnowledgeGraphStructure,
@@ -60,9 +49,7 @@ from eom_catalog_service.legacy_item_extraction_batch_models import (
 )
 from eom_catalog_service.models import ItemRevisionRecord
 
-INTEGRATED_SCIENCE_CORPUS_KEY = "integrated-science-textbooks"
 MAX_AUTOMATIC_GRAPH_BATCH_SIZE = 16
-_ACCESS_POLICY_REVISION_ID = re.compile(r"\Aaccessrev_[0-9a-f]{32}\Z", re.ASCII)
 
 
 @dataclass(frozen=True)
@@ -86,13 +73,17 @@ class LegacyItemGraphLearningService:
     ) -> None:
         if not extraction_batch_ids or len(extraction_batch_ids) != len(set(extraction_batch_ids)):
             raise ValueError("automatic Graph batch identities must be non-empty and unique")
-        if _ACCESS_POLICY_REVISION_ID.fullmatch(access_policy_revision_id) is None:
-            raise ValueError("automatic Graph access policy revision identity is invalid")
         self.sessions = build_session_factory(engine)
         self.extraction_batch_ids = extraction_batch_ids
         self.access_policy_revision_id = access_policy_revision_id
         self.publication = publication or KnowledgeGraphPublicationService(engine)
         self.retrieval = retrieval or KnowledgeRetrievalApplicationService(engine)
+        self.automatic_publication = AutomaticItemGraphPublicationService(
+            engine,
+            access_policy_revision_id=access_policy_revision_id,
+            publication=self.publication,
+            retrieval=self.retrieval,
+        )
 
     def pending_candidates(self, *, limit: int) -> tuple[LegacyItemGraphCandidate, ...]:
         if limit < 1 or limit > MAX_AUTOMATIC_GRAPH_BATCH_SIZE:
@@ -198,129 +189,22 @@ class LegacyItemGraphLearningService:
     def publish(self, candidates: tuple[LegacyItemGraphCandidate, ...]) -> str:
         """Publish one fresh snapshot containing the exact ordered candidate set."""
 
-        if not candidates or len(candidates) > MAX_AUTOMATIC_GRAPH_BATCH_SIZE:
-            raise ValueError("automatic Graph publication candidate set is empty or too large")
-        context = self.publication.current_structure_context(INTEGRATED_SCIENCE_CORPUS_KEY)
-        candidate_ids = tuple(candidate.analysis_run_id for candidate in candidates)
-        if len(candidate_ids) != len(set(candidate_ids)) or any(
-            candidate.graph_snapshot_revision_id != context.graph_snapshot_revision_id
-            for candidate in candidates
-        ):
-            raise ValueError("automatic Graph publication candidates are duplicate or stale")
-
-        additions: list[AutomaticItemCurriculumAlignmentBinding] = []
-        with self.publication.sessions() as session:
-            analyses = {
-                candidate.analysis_run_id: self.publication._load_accepted_analysis(
-                    session, candidate.analysis_run_id
+        receipt = self.automatic_publication.publish(
+            tuple(
+                AutomaticItemGraphCandidate(
+                    analysis_run_id=candidate.analysis_run_id,
+                    requested_by_operator_id=candidate.requested_by_operator_id,
+                    graph_snapshot_revision_id=candidate.graph_snapshot_revision_id,
                 )
                 for candidate in candidates
-            }
-        for candidate in candidates:
-            analysis = analyses[candidate.analysis_run_id]
-            if not isinstance(analysis.source, ApprovedItemKnowledgeSourceV2):
-                raise ValueError("automatic Graph publication candidate is not an approved Item")
-            topics = automatic_item_alignment_topic_keys(
-                (str(node.node_type), node.stable_key) for node in analysis.proposal.nodes
-            )
-            evidence = self.retrieval.create(
-                self._retrieval_command(
-                    context=context,
-                    candidate=candidate,
-                    topic_keys=topics,
-                )
-            )
-            with self.sessions() as session:
-                entries = tuple(
-                    session.scalars(
-                        select(EvidenceBundleEntryRecord)
-                        .where(
-                            EvidenceBundleEntryRecord.evidence_bundle_revision_id
-                            == evidence.evidence_bundle_revision_id
-                        )
-                        .order_by(EvidenceBundleEntryRecord.evidence_id)
-                    )
-                )
-                evidence_node_ids = tuple(
-                    sorted({node_id for entry in entries for node_id in entry.graph_node_ids})
-                )
-                curriculum_unit_ids = derive_automatic_item_curriculum_unit_ids(
-                    session,
-                    graph_snapshot_revision_id=context.graph_snapshot_revision_id,
-                    evidence_node_ids=evidence_node_ids,
-                )
-            value = {
-                "alignment_mode": "AUTO_POLICY",
-                "analysis_run_id": candidate.analysis_run_id,
-                "item_id": analysis.source.item_id,
-                "item_revision_id": analysis.source.item_revision_id,
-                "accepted_result": analysis.accepted_result.model_dump(mode="json"),
-                "prior_graph_snapshot_revision_id": context.graph_snapshot_revision_id,
-                "evidence_bundle_id": evidence.evidence_bundle_id,
-                "evidence_bundle_revision_id": evidence.evidence_bundle_revision_id,
-                "retrieval_request_id": evidence.retrieval_request_id,
-                "retrieval_request_sha256": evidence.retrieval_request_sha256,
-                "evidence_manifest": evidence.manifest_artifact.model_dump(mode="json"),
-                "evidence_node_ids": list(evidence_node_ids),
-                "curriculum_unit_ids": list(curriculum_unit_ids),
-                "alignment_policy_version": AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
-                "alignment_policy_sha256": AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
-                "requested_by_operator_id": candidate.requested_by_operator_id,
-                "aligned_at": evidence.published_at.isoformat().replace("+00:00", "Z"),
-                "alignment_sha256": "sha256:" + "0" * 64,
-            }
-            value["alignment_sha256"] = content_sha256(
-                {key: item for key, item in value.items() if key != "alignment_sha256"}
-            )
-            additions.append(AutomaticItemCurriculumAlignmentBinding.model_validate(value))
-
-        requested_at = max(binding.aligned_at for binding in additions)
-        with self.sessions() as session:
-            occurrence_bindings = self._assessment_item_occurrence_bindings(
-                session,
-                tuple(analyses[candidate.analysis_run_id] for candidate in candidates),
-                tuple(additions),
-            )
-        structure = extend_integrated_science_structure_manifest_with_automatic_item_alignments(
-            context.structure,
-            tuple(additions),
-            created_at=requested_at,
-            assessment_item_occurrences=occurrence_bindings,
-        )
-        structure_pointer = self.publication.commit_structure_manifest(structure)
-        all_run_ids = tuple(
-            sorted(
-                {*context.accepted_analysis_run_ids, *(item.analysis_run_id for item in additions)}
-            )
-        )
-        request_value: dict[str, object] = {
-            "schema_version": "knowledge-graph-publication/5.0",
-            "corpus_key": context.corpus_key,
-            "display_name": context.display_name,
-            "accepted_analysis_run_ids": list(all_run_ids),
-            "structure_manifest": structure_pointer.model_dump(mode="json"),
-            "expected_current_snapshot_revision_id": context.graph_snapshot_revision_id,
-            "publisher_version": "1.6.0",
-            "published_by_operator_id": candidates[0].requested_by_operator_id,
-            "idempotency_key": (
-                "legacy-auto-graph:"
-                + content_sha256(
-                    {
-                        "prior": context.graph_snapshot_revision_id,
-                        "analysis_run_ids": list(candidate_ids),
-                    }
-                ).removeprefix("sha256:")
             ),
-            "requested_at": requested_at.isoformat().replace("+00:00", "Z"),
-            "request_sha256": "sha256:" + "0" * 64,
-        }
-        request_value["request_sha256"] = content_sha256(
-            {key: item for key, item in request_value.items() if key != "request_sha256"}
+            required_source_class="PAST_EXAM",
+            retrieval_idempotency_namespace="legacy-auto-alignment",
+            publication_idempotency_namespace="legacy-auto-graph",
+            publisher_version="1.6.0",
+            occurrence_binding_resolver=self._assessment_item_occurrence_bindings,
         )
-        result = self.publication.publish(
-            PublishKnowledgeGraphSnapshotCommandV5.model_validate(request_value)
-        )
-        return result.graph_snapshot.graph_snapshot_revision_id
+        return receipt.graph_publication.graph_snapshot.graph_snapshot_revision_id
 
     @staticmethod
     def _assessment_item_occurrence_bindings(
@@ -510,33 +394,14 @@ class LegacyItemGraphLearningService:
         candidate: LegacyItemGraphCandidate,
         topic_keys: tuple[str, ...],
     ) -> CreateEvidenceBundleCommand:
-        if candidate.graph_snapshot_revision_id != context.graph_snapshot_revision_id:
-            raise ValueError("automatic Graph retrieval candidate is stale")
-        value: dict[str, object] = {
-            "operation": "CREATE_EVIDENCE_BUNDLE",
-            "graph_snapshot_revision_id": context.graph_snapshot_revision_id,
-            "query_kind": "ITEM_PREPARATION",
-            "curriculum_scope": None,
-            "topic_keys": list(topic_keys),
-            "target_item_revision_id": None,
-            "required_item_elements": [],
-            "source_classes": list(AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES),
-            "evidence_budget": AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET,
-            "access_policy_revision_id": self.access_policy_revision_id,
-            "requester_role": "ADMIN",
-            "requester_permission_keys": list(AUTOMATIC_ITEM_ALIGNMENT_PERMISSION_KEYS),
-            "requested_by": candidate.requested_by_operator_id,
-            "idempotency_key": (
-                f"legacy-auto-alignment:{candidate.analysis_run_id}:"
-                f"{context.graph_snapshot_revision_id}"
+        return build_automatic_item_alignment_retrieval_command(
+            context=context,
+            candidate=AutomaticItemGraphCandidate(
+                analysis_run_id=candidate.analysis_run_id,
+                requested_by_operator_id=candidate.requested_by_operator_id,
+                graph_snapshot_revision_id=candidate.graph_snapshot_revision_id,
             ),
-            "submission_sha256": "sha256:" + "0" * 64,
-        }
-        value["submission_sha256"] = content_sha256(
-            {
-                key: item
-                for key, item in value.items()
-                if key not in {"idempotency_key", "submission_sha256"}
-            }
+            topic_keys=topic_keys,
+            access_policy_revision_id=self.access_policy_revision_id,
+            idempotency_namespace="legacy-auto-alignment",
         )
-        return CreateEvidenceBundleCommand.model_validate(value)

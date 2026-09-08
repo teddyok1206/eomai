@@ -30,8 +30,11 @@ from eom_catalog_contracts import (
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
+    InspectMockExamReviewEligibilityQuery,
     ItemContentQuery,
     ItemMediaQuery,
+    PublishApprovedItemAnalysesCommand,
+    PublishMockExamItemReviewCommand,
     ReconcileKnowledgeAnalysisCommand,
     ReviewedItemContentImportCommand,
     ReviewedItemContentImportResult,
@@ -43,6 +46,10 @@ from eom_item_registry import RegistryError
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
+from eom_catalog_service.approved_item_graph_publication_service import (
+    ApprovedItemGraphPublicationError,
+    ApprovedItemGraphPublicationService,
+)
 from eom_catalog_service.errors import CatalogError
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.knowledge_analysis_batch_service import (
@@ -56,6 +63,10 @@ from eom_catalog_service.knowledge_analysis_service import (
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
     KnowledgeRetrievalServiceError,
+)
+from eom_catalog_service.mock_exam_item_review_publication_service import (
+    MockExamItemReviewPublicationError,
+    MockExamItemReviewPublicationService,
 )
 from eom_catalog_service.registry_service import RegistryService
 
@@ -135,6 +146,9 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 "REVIEW_KNOWLEDGE_ANALYSIS",
                 "CREATE_EVIDENCE_BUNDLE",
                 "CREATE_ITEM_PRODUCTION_EVIDENCE",
+                "PUBLISH_APPROVED_ITEM_ANALYSES",
+                "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+                "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
             }:
                 operation = raw_operation
             schemas = catalog_application_schema_route(operation)
@@ -218,6 +232,32 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                         self.server.knowledge_retrieval.create_item_production(request)
                     ),
                 )
+            elif isinstance(request, PublishApprovedItemAnalysesCommand):
+                if self.server.approved_item_graph_publication is None:
+                    raise RuntimeError("approved Item Graph publication is unavailable")
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    graph_publication=self.server.approved_item_graph_publication.publish(request),
+                )
+            elif isinstance(request, PublishMockExamItemReviewCommand):
+                if self.server.mock_exam_item_reviews is None:
+                    raise RuntimeError("mock-exam Item review publication is unavailable")
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    item_review=self.server.mock_exam_item_reviews.publish(request),
+                )
+            elif isinstance(request, InspectMockExamReviewEligibilityQuery):
+                if self.server.mock_exam_item_reviews is None:
+                    raise RuntimeError("mock-exam review eligibility inspection is unavailable")
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    review_eligibility=self.server.mock_exam_item_reviews.inspect_eligibility(
+                        request
+                    ),
+                )
             else:  # pragma: no cover - discriminated contract makes this unreachable
                 raise TypeError("unsupported catalog application request")
         except (
@@ -226,6 +266,8 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             KnowledgeAnalysisServiceError,
             KnowledgeAnalysisBatchServiceError,
             KnowledgeRetrievalServiceError,
+            ApprovedItemGraphPublicationError,
+            MockExamItemReviewPublicationError,
         ) as exc:
             code = getattr(exc.code, "value", str(exc.code))
             self.server.write_error(self.wfile, request.operation, code)
@@ -332,6 +374,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         knowledge_analysis_batches: KnowledgeAnalysisBatchService,
         knowledge_retrieval: KnowledgeRetrievalApplicationService,
         *,
+        approved_item_graph_publication: ApprovedItemGraphPublicationService | None = None,
+        mock_exam_item_reviews: MockExamItemReviewPublicationService | None = None,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
         expected_uid: int | None = None,
@@ -342,6 +386,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.knowledge_analysis = knowledge_analysis
         self.knowledge_analysis_batches = knowledge_analysis_batches
         self.knowledge_retrieval = knowledge_retrieval
+        self.approved_item_graph_publication = approved_item_graph_publication
+        self.mock_exam_item_reviews = mock_exam_item_reviews
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
         self.expected_uid = os.geteuid() if expected_uid is None else expected_uid
@@ -469,6 +515,9 @@ class CatalogApplicationServer(_ThreadingUnixServer):
                         "REVIEW_KNOWLEDGE_ANALYSIS",
                         "CREATE_EVIDENCE_BUNDLE",
                         "CREATE_ITEM_PRODUCTION_EVIDENCE",
+                        "PUBLISH_APPROVED_ITEM_ANALYSES",
+                        "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+                        "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
                     ],
                     operation,
                 ),

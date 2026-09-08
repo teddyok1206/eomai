@@ -30,6 +30,49 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "mock-exam-assembly-cohort": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-assembly-cohort-v1.schema.json",
+            "resources/assessment-assembly/mock-exam-assembly-cohort-v1.schema.json",
+            "1.0",
+            "sha256:4e6e7b74f44dfe42cf392ebefe07d7ffbdcd6d5bbf2d7a29b9ba7aeda225530b",
+        ),
+        "mock-exam-item-review-publication-command": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json",
+            "resources/assessment-assembly/"
+            "mock-exam-item-review-publication-command-v1.schema.json",
+            "1.0",
+            "sha256:272512348fd2a8d199d93e0de1fc067dfd761d1387040b9e7fb6e26ca1a1b893",
+        ),
+        "mock-exam-item-review-publication-result": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-item-review-publication-result-v1.schema.json",
+            "resources/assessment-assembly/mock-exam-item-review-publication-result-v1.schema.json",
+            "1.0",
+            "sha256:7c5925cea23b97b882ed12776c993db611fabac35b5056c41833f727eb989061",
+        ),
+        "mock-exam-item-review-decision": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-item-review-decision-v1.schema.json",
+            "resources/assessment-assembly/mock-exam-item-review-decision-v1.schema.json",
+            "1.0",
+            "sha256:5f0934dfb60d8daf03f32aee080ea0f75b5930553e7bc697a592954552e9fd80",
+        ),
+        "mock-exam-review-eligibility-query": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json",
+            "resources/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json",
+            "1.0",
+            "sha256:92c0a88776f37443c599c298edde768270957e40f0f1135cbd5cc5f519d32715",
+        ),
+        "mock-exam-review-eligibility-result": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json",
+            "resources/assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json",
+            "1.0",
+            "sha256:5d8ce21540dbda8f38cda3f008e3379646e06505c6435e95b16095f1a6e8f7c2",
+        ),
+        "mock-exam-production-plan": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-production-plan-v1.schema.json",
+            "resources/assessment-assembly/mock-exam-production-plan-v1.schema.json",
+            "1.0",
+            "sha256:9f0cd769669d7394c59a8683f467bcc93a0846f6e6620a64d374f17802099f41",
+        ),
         "mock-exam-assembly-manifest": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
             "resources/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
@@ -46,7 +89,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/assessment-assembly/mock-exam-assembly-plan-v1.schema.json",
             "resources/assessment-assembly/mock-exam-assembly-plan-v1.schema.json",
             "1.0",
-            "sha256:73ebb91edf825dc7b8e40c9894d3a065f407e3eabb4bda64d72ca9d73eda460a",
+            "sha256:b962682195f8b5496fbcce89eed9b4f3daf9a3f27ba07c37307f1a78bce1cd56",
         ),
         "mock-exam-layout-policy": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-layout-policy-v1.schema.json",
@@ -510,6 +553,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "10.0",
             "sha256:fc89d31db0aa51d97c991187b5553f82954b497d5cbebc8edc54b908b1484366",
         ),
+        "catalog-application-request-v11": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v11.schema.json",
+            "resources/catalog-application/catalog-application-request-v11.schema.json",
+            "11.0",
+            "sha256:a832103de53ed2a258ea0e016677495d4818ed2c763dcb191153512f6350c5b4",
+        ),
         "catalog-application-response-v7": CatalogSchemaResource(
             "schemas/catalog-application/catalog-application-response-v7.schema.json",
             "resources/catalog-application/catalog-application-response-v7.schema.json",
@@ -533,6 +582,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/catalog-application/catalog-application-response-v10.schema.json",
             "10.0",
             "sha256:d24f2d2ca3fb3fd593f087c3658d17be45d00863df94ff8b6ada867ba0d92308",
+        ),
+        "catalog-application-response-v11": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v11.schema.json",
+            "resources/catalog-application/catalog-application-response-v11.schema.json",
+            "11.0",
+            "sha256:19f0d075aadbe36cb8e32ed6d98216340e944c02dd27c003e4abb13c0478c5e7",
         ),
         "catalog-item-media-request": CatalogSchemaResource(
             "schemas/catalog-application/catalog-item-media-request-v1.schema.json",
@@ -899,6 +954,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/knowledge-graph-publication-v5.schema.json",
             "5.0",
             "sha256:c87350c2f40fc225962bd86e4a2172c03c4c5b726437735ffe0e7d6e4a30f8ab",
+        ),
+        "approved-item-graph-publication-command": CatalogSchemaResource(
+            "schemas/knowledge/approved-item-graph-publication-command-v1.schema.json",
+            "resources/knowledge/approved-item-graph-publication-command-v1.schema.json",
+            "1.0",
+            "sha256:3b33ee6a94e1b805dba01aa6c32eabc6dc5fc283d0aef817a97e4eb4d9d6f165",
+        ),
+        "approved-item-graph-publication-result": CatalogSchemaResource(
+            "schemas/knowledge/approved-item-graph-publication-result-v1.schema.json",
+            "resources/knowledge/approved-item-graph-publication-result-v1.schema.json",
+            "1.0",
+            "sha256:003b79ea82307e9a8515c2f0fe23df81d46dfd588832a09af6933c194d85489e",
         ),
         "knowledge-graph-publication-result": CatalogSchemaResource(
             "schemas/knowledge/knowledge-graph-publication-result-v1.schema.json",

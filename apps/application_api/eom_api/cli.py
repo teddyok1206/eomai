@@ -12,6 +12,7 @@ from eom_api.app import create_app
 from eom_api.health import active_admin_exists, readiness, runtime_database_privileges
 from eom_api.lifespan import AppServices, build_services
 from eom_api.logging import configure_logging
+from eom_api.mock_exam_production_cli import mock_exam_production_app
 from eom_api.openapi import export_openapi
 from eom_api.release_checks import packaged_openapi_valid
 from eom_api.settings import load_settings
@@ -19,6 +20,7 @@ from eom_api.settings import load_settings
 app = typer.Typer(no_args_is_help=True)
 openapi_app = typer.Typer(no_args_is_help=True)
 app.add_typer(openapi_app, name="openapi")
+app.add_typer(mock_exam_production_app, name="mock-exam-production")
 
 
 @app.command("serve")

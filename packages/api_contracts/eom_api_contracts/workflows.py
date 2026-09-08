@@ -10,6 +10,7 @@ from eom_catalog_contracts import (
     normalize_reviewed_authoring_guidance,
     validate_reviewed_authoring_guidance,
 )
+from eom_catalog_contracts.mock_exam_production_plan import ContentTeamMockExamSlotV1
 from pydantic import Field, field_validator, model_validator
 
 from eom_api_contracts.common import ApiModel, OpaqueId, Sha256, UtcDatetime
@@ -63,6 +64,7 @@ class ContentTeamItemBriefRequestV3(ApiModel):
         default=None,
         pattern=r"^eom\.is\.(?:large\.[1-6]|middle\.[1-6]-[1-7])$",
     )
+    mock_exam_slot: ContentTeamMockExamSlotV1 | None = None
     original_request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @field_validator("authoring_guidance")
@@ -75,6 +77,12 @@ class ContentTeamItemBriefRequestV3(ApiModel):
         validate_reviewed_authoring_guidance(
             self.authoring_guidance, self.authoring_guidance_sha256
         )
+        if self.mock_exam_slot is not None and (
+            self.curriculum_selected_unit_key != self.mock_exam_slot.curriculum_selected_unit_key
+            or self.difficulty != self.mock_exam_slot.preferred_difficulty
+            or self.task_type != self.mock_exam_slot.preferred_material_profiles[0]
+        ):
+            raise ValueError("content-team brief differs from its typed mock-exam slot")
         return self
 
 
@@ -107,6 +115,44 @@ class EducationalRetrievalIntentRequest(ApiModel):
         return self
 
 
+class WorkflowProductionOccurrenceV1(ApiModel):
+    """One planned production occurrence; distinct runs must never share this identity."""
+
+    schema_version: Literal["workflow-production-occurrence/1.0"] = (
+        "workflow-production-occurrence/1.0"
+    )
+    production_request_id: str = Field(pattern=r"^productionreq_[0-9a-f]{32}$")
+    workflow_call_id: str = Field(pattern=r"^workflowcall_[0-9a-f]{32}$")
+
+
+class WorkflowExpectedResolutionV1(ApiModel):
+    """Exact immutable dependencies authorized before one Workflow start."""
+
+    schema_version: Literal["workflow-expected-resolution/1.0"] = (
+        "workflow-expected-resolution/1.0"
+    )
+    workflow_definition_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    workflow_definition_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    workflow_definition_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    content_pack_release_id: str = Field(pattern=r"^packrel_[0-9a-f]{32}$")
+    content_pack_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    content_pack_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    content_pack_bundle_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    content_pack_source_tree_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    execution_preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    execution_preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    execution_preset_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
+    execution_preset_content_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class WorkflowAcceptedResolutionView(WorkflowExpectedResolutionV1):
+    """Exact dependencies accepted by the Workflow creation transaction."""
+
+
 class WorkflowStartRequest(ApiModel):
     definition_key: str = Field(min_length=1, max_length=64)
     definition_version: str = Field(min_length=1, max_length=32)
@@ -133,9 +179,26 @@ class WorkflowStartRequest(ApiModel):
     stimulus_asset_key: Literal["eom-question-template-reference-v1"] | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     educational_retrieval: EducationalRetrievalIntentRequest | None = None
+    production_occurrence: WorkflowProductionOccurrenceV1 | None = None
+    expected_resolution: WorkflowExpectedResolutionV1 | None = None
 
     @model_validator(mode="after")
     def validate_content_pack_pointer(self) -> WorkflowStartRequest:
+        if (self.production_occurrence is None) != (self.expected_resolution is None):
+            raise ValueError(
+                "production occurrence and expected resolution must be supplied together"
+            )
+        if self.expected_resolution is not None:
+            expected = self.expected_resolution
+            if (
+                self.request_name != "GENERATED_KNOWLEDGE_ITEM_REQUEST"
+                or self.educational_retrieval is None
+                or expected.workflow_definition_key != self.definition_key
+                or expected.workflow_definition_version != self.definition_version
+                or expected.content_pack_key != self.pack_key
+                or expected.execution_preset_key != self.execution_preset_key
+            ):
+                raise ValueError("expected resolution differs from the workflow selection")
         if self.pack_key is None and self.source_intake_batch_ids:
             raise ValueError("source intake batches require a content pack")
         if self.execution_preset_key is not None and self.pack_key is None:
@@ -256,12 +319,24 @@ class WorkflowView(ApiModel):
     updated_at: UtcDatetime
     completed_at: UtcDatetime | None = None
     failure_code: str | None = None
+    accepted_resolution: WorkflowAcceptedResolutionView | None = None
     knowledge_provenance: WorkflowKnowledgeProvenanceView | None = None
     item_registration: WorkflowItemRegistrationView | None = None
 
 
+class WorkflowApprovalExpectationV1(ApiModel):
+    """Exact approval request observed before an approval or rework command."""
+
+    schema_version: Literal["workflow-approval-expectation/1.0"] = (
+        "workflow-approval-expectation/1.0"
+    )
+    approval_request_id: str = Field(pattern=r"^approval_[0-9a-f]{32}$")
+    approval_resource_version: int = Field(ge=1)
+
+
 class WorkflowActionRequest(ApiModel):
     reason: str | None = Field(default=None, max_length=2000)
+    approval_expectation: WorkflowApprovalExpectationV1 | None = None
 
 
 class WorkflowStepView(ApiModel):

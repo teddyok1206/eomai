@@ -19,6 +19,7 @@ from eom_catalog_contracts import (
     CATALOG_APPLICATION_SOCKET_PATH,
     CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
     CATALOG_ITEM_MEDIA_MAX_BYTES,
+    ApprovedItemGraphPublicationResult,
     AssessmentItemContentContract,
     AssessmentPageImagePointer,
     AssessmentPageListQuery,
@@ -37,10 +38,15 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
     EvidenceBundlePublicationResultV4,
+    InspectMockExamReviewEligibilityQuery,
     ItemContentQuery,
     ItemMediaQuery,
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisBatchApplicationResult,
+    MockExamItemReviewPublicationResult,
+    MockExamReviewEligibilityResult,
+    PublishApprovedItemAnalysesCommand,
+    PublishMockExamItemReviewCommand,
     ReconcileKnowledgeAnalysisCommand,
     ReviewedItemContentImportCommand,
     ReviewedItemContentImportResult,
@@ -329,6 +335,42 @@ class CatalogApplicationClient:
             )
         return response.item_production_evidence
 
+    def publish_approved_item_analyses(
+        self,
+        command: PublishApprovedItemAnalysesCommand,
+    ) -> ApprovedItemGraphPublicationResult:
+        response = self._request(command)
+        if response.operation != command.operation or response.graph_publication is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog approved Item Graph publication response is invalid",
+            )
+        return response.graph_publication
+
+    def publish_mock_exam_item_review(
+        self,
+        command: PublishMockExamItemReviewCommand,
+    ) -> MockExamItemReviewPublicationResult:
+        response = self._request(command)
+        if response.operation != command.operation or response.item_review is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog mock-exam Item review response is invalid",
+            )
+        return response.item_review
+
+    def inspect_mock_exam_review_eligibility(
+        self,
+        query: InspectMockExamReviewEligibilityQuery,
+    ) -> MockExamReviewEligibilityResult:
+        response = self._request(query)
+        if response.operation != query.operation or response.review_eligibility is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog mock-exam review eligibility response is invalid",
+            )
+        return response.review_eligibility
+
     def _analysis_request(
         self,
         command: CreateKnowledgeAnalysisCommand
@@ -352,7 +394,10 @@ class CatalogApplicationClient:
         | ReviewKnowledgeAnalysisCommand
         | CreateKnowledgeAnalysisBatchCommand
         | CreateEvidenceBundleCommand
-        | CreateItemProductionEvidenceCommand,
+        | CreateItemProductionEvidenceCommand
+        | PublishApprovedItemAnalysesCommand
+        | PublishMockExamItemReviewCommand
+        | InspectMockExamReviewEligibilityQuery,
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
         schemas = catalog_application_schema_route(command.operation)
@@ -475,6 +520,21 @@ class CatalogApplicationClient:
                     raise CatalogApplicationClientError(
                         error_code,
                         "Catalog knowledge retrieval operation failed",
+                    ) from None
+                if error_code.startswith("KNOWLEDGE_GRAPH_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog knowledge Graph operation failed",
+                    ) from None
+                if error_code.startswith("APPROVED_ITEM_GRAPH_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog approved Item Graph publication failed",
+                    ) from None
+                if error_code.startswith("ITEM_REVIEW_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog mock-exam Item review publication failed",
                     ) from None
                 raise CatalogApplicationClientError(
                     CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,

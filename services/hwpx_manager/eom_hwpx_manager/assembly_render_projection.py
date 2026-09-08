@@ -8,8 +8,9 @@ from eom_catalog_contracts import (
     MockExamAssemblyManifestContract,
     MockExamAssemblyManifestV1,
     MockExamContentPointerV1,
+    mock_exam_item_set_sha256,
+    mock_exam_planned_placement_id,
 )
-from eom_identifiers import content_sha256
 
 
 @dataclass(frozen=True)
@@ -42,17 +43,17 @@ class AssemblyRenderProjection:
     placements: tuple[AssemblyRenderPlacement, ...]
 
     def item_set_sha256(self) -> str:
-        return content_sha256(
-            [
-                {
-                    "position": row.position,
-                    "placement_id": row.placement_id,
-                    "item_id": row.item_id,
-                    "item_revision_id": row.item_revision_id,
-                    "item_manifest_sha256": row.item_manifest_sha256,
-                }
+        return mock_exam_item_set_sha256(
+            tuple(
+                (
+                    row.position,
+                    row.placement_id,
+                    row.item_id,
+                    row.item_revision_id,
+                    row.item_manifest_sha256,
+                )
                 for row in self.placements
-            ]
+            )
         )
 
     def request_identity(self) -> dict[str, str | None]:
@@ -109,7 +110,7 @@ def project_assembly_for_render(
             position=row.position,
             display_number=row.display_number,
             points_milli=row.points_milli,
-            placement_id=_planned_placement_id(
+            placement_id=mock_exam_planned_placement_id(
                 manifest.assessment_assembly_revision_id,
                 row.slot_id,
                 row.item_revision_id,
@@ -133,16 +134,3 @@ def project_assembly_for_render(
         plan_sha256=plan.plan_sha256,
         placements=placements,
     )
-
-
-def _planned_placement_id(
-    assessment_assembly_revision_id: str,
-    slot_id: str,
-    item_revision_id: str,
-) -> str:
-    value = {
-        "assessment_assembly_revision_id": assessment_assembly_revision_id,
-        "slot_id": slot_id,
-        "item_revision_id": item_revision_id,
-    }
-    return "placement_" + content_sha256(value).removeprefix("sha256:")[:32]

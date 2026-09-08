@@ -70,6 +70,7 @@ from eom_api_contracts.knowledge_retrieval import (
 )
 from eom_api_contracts.usage import UsagePlanView, UsageRecordView
 from eom_api_contracts.workflows import (
+    WorkflowAcceptedResolutionView,
     WorkflowItemRegistrationView,
     WorkflowKnowledgeProvenanceView,
     WorkflowStepView,
@@ -2720,9 +2721,58 @@ class QueryAdapter:
             updated_at=row.updated_at,
             completed_at=row.completed_at,
             failure_code=row.failure_code,
+            accepted_resolution=cls._accepted_resolution(row, plan),
             knowledge_provenance=cls._knowledge_provenance(row, plan),
             item_registration=cls._item_registration(row),
         )
+
+    @staticmethod
+    def _accepted_resolution(
+        workflow: WorkflowInstanceRecord,
+        record: ResolvedExecutionPlanRecord | None,
+    ) -> WorkflowAcceptedResolutionView | None:
+        value = workflow.runtime_context.get("accepted_resolution")
+        if value is None:
+            return None
+        try:
+            resolution = WorkflowAcceptedResolutionView.model_validate(value)
+        except ValueError as exc:
+            raise ApiError(
+                500,
+                "WORKFLOW_ACCEPTED_RESOLUTION_INVALID",
+                "Workflow resolution invalid",
+                "The accepted Workflow resolution failed contract validation.",
+            ) from exc
+        pack = workflow.runtime_context.get("content_pack")
+        plan = record.canonical_document if record is not None else None
+        if (
+            not isinstance(pack, dict)
+            or resolution.workflow_definition_key != workflow.definition_key
+            or resolution.workflow_definition_version != workflow.definition_version
+            or resolution.workflow_definition_sha256 != workflow.definition_hash
+            or resolution.content_pack_release_id != pack.get("release_id")
+            or resolution.content_pack_key != pack.get("pack_key")
+            or resolution.content_pack_version != pack.get("version")
+            or resolution.content_pack_bundle_sha256 != pack.get("release_sha256")
+            or resolution.content_pack_source_tree_sha256 != pack.get("source_tree_sha256")
+            or not isinstance(plan, dict)
+            or resolution.workflow_definition_key != plan.get("workflow_definition_key")
+            or resolution.workflow_definition_version
+            != plan.get("workflow_definition_version")
+            or resolution.workflow_definition_sha256 != plan.get("workflow_definition_sha256")
+            or resolution.content_pack_release_id != plan.get("content_pack_release_id")
+            or resolution.content_pack_bundle_sha256 != plan.get("content_pack_sha256")
+            or resolution.execution_preset_id != plan.get("preset_id")
+            or resolution.execution_preset_revision_id != plan.get("preset_revision_id")
+            or resolution.execution_preset_content_sha256 != plan.get("preset_sha256")
+        ):
+            raise ApiError(
+                500,
+                "WORKFLOW_ACCEPTED_RESOLUTION_INVALID",
+                "Workflow resolution invalid",
+                "The Workflow, Content Pack, execution plan, and accepted resolution disagree.",
+            )
+        return resolution
 
     @staticmethod
     def _item_registration(

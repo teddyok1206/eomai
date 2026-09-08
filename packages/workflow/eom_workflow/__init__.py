@@ -75,6 +75,7 @@ from eom_workflow.models import (
     ArtifactPointer,
     ContentTeamItemBrief,
     DecisionStep,
+    ExpectedWorkflowResolution,
     HumanGateStep,
     ItemBrief,
     ItemBriefV2,
@@ -90,6 +91,7 @@ from eom_workflow.models import (
     TerminalStep,
     WorkerRequest,
     WorkflowDefinition,
+    WorkflowProductionOccurrence,
     WorkflowRequest,
 )
 
@@ -133,6 +135,7 @@ __all__ = [
     "ExecutionPresetEvaluationReport",
     "ExecutionPresetRevision",
     "ExecutionPresetRevisionV2",
+    "ExpectedWorkflowResolution",
     "HumanGateStep",
     "InstructionBundleManifest",
     "ItemBrief",
@@ -167,6 +170,7 @@ __all__ = [
     "WorkflowAdmission",
     "WorkflowDefinition",
     "WorkflowDefinitionError",
+    "WorkflowProductionOccurrence",
     "WorkflowRequest",
     "compile_definition",
     "compile_definition_data",

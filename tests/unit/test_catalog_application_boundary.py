@@ -626,6 +626,13 @@ def test_catalog_socket_rejects_wrong_peer_and_unsafe_socket_metadata(tmp_path: 
     assert raised.value.code == CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value
 
 
+def test_catalog_client_preserves_stable_graph_concurrency_error() -> None:
+    with pytest.raises(CatalogApplicationClientError) as raised:
+        CatalogApplicationClient._raise_remote_error("KNOWLEDGE_GRAPH_STALE_CURRENT")
+
+    assert raised.value.code == "KNOWLEDGE_GRAPH_STALE_CURRENT"
+
+
 def test_catalog_application_systemd_boundary_keeps_api_away_from_nas() -> None:
     unit = Path("infra/systemd/eom-catalog-application-runner.service").read_text(encoding="utf-8")
     assert "User=eom-catalog-manager" in unit

@@ -29,6 +29,47 @@ INTEGRATED_SCIENCE_RATING_POLICY_SHA256 = (
 MockExamMaterialProfile = Literal["TEXT", "DATA", "TABLE", "IMAGE", "MIXED", "INQUIRY"]
 MockExamPreferredDifficulty = Literal["LOW", "MEDIUM", "HIGH"]
 MockExamReviewRating = Literal["A", "B", "C"]
+MockExamItemSetHashMember = tuple[int, str, str, str, str]
+
+
+def mock_exam_planned_placement_id(
+    assessment_assembly_revision_id: str,
+    slot_id: str,
+    item_revision_id: str,
+) -> str:
+    """Derive the immutable placement identity used by Assembly rendering."""
+
+    value = {
+        "assessment_assembly_revision_id": assessment_assembly_revision_id,
+        "slot_id": slot_id,
+        "item_revision_id": item_revision_id,
+    }
+    return "placement_" + content_sha256(value).removeprefix("sha256:")[:32]
+
+
+def mock_exam_item_set_sha256(
+    members: tuple[MockExamItemSetHashMember, ...],
+) -> str:
+    """Hash the minimal ordered Assembly placement pointers consumed by HWPX."""
+
+    return content_sha256(
+        [
+            {
+                "position": position,
+                "placement_id": placement_id,
+                "item_id": item_id,
+                "item_revision_id": item_revision_id,
+                "item_manifest_sha256": item_manifest_sha256,
+            }
+            for (
+                position,
+                placement_id,
+                item_id,
+                item_revision_id,
+                item_manifest_sha256,
+            ) in members
+        ]
+    )
 
 
 class MockExamScoreBucket(FrozenModel):
@@ -258,6 +299,62 @@ class MockExamUsageSnapshotV1(FrozenModel):
         return self
 
 
+class MockExamAssemblyCohortMemberV1(FrozenModel):
+    """One exact position-to-Item-Revision binding in a production cohort."""
+
+    position: int = Field(ge=1, le=25)
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+
+
+class MockExamAssemblyCohortV1(FrozenModel):
+    """Self-hashed ordered set of the 25 newly produced Item revisions."""
+
+    schema_version: Literal["mock-exam-assembly-cohort/1.0"]
+    cohort_id: str = Field(pattern=r"^assemblycohort_[0-9a-f]{32}$")
+    members: tuple[MockExamAssemblyCohortMemberV1, ...] = Field(min_length=25, max_length=25)
+    cohort_sha256: Sha256
+
+    @model_validator(mode="after")
+    def coherent_cohort(self) -> MockExamAssemblyCohortV1:
+        positions = tuple(member.position for member in self.members)
+        if positions != tuple(range(1, 26)):
+            raise ValueError("assembly cohort positions must be contiguous and ordered")
+        revision_ids = tuple(member.item_revision_id for member in self.members)
+        if len(revision_ids) != len(set(revision_ids)):
+            raise ValueError("assembly cohort Item revisions must be unique")
+        value = self.model_dump(mode="json", exclude={"cohort_id", "cohort_sha256"})
+        expected = content_sha256(value)
+        if self.cohort_sha256 != expected or self.cohort_id != (
+            "assemblycohort_" + expected.removeprefix("sha256:")[:32]
+        ):
+            raise ValueError("assembly cohort identity does not match canonical content")
+        return self
+
+
+def build_mock_exam_assembly_cohort(
+    item_revision_ids: tuple[str, ...],
+) -> MockExamAssemblyCohortV1:
+    """Create the canonical exact-25 cohort from layout-ordered Item Revision IDs."""
+
+    unsigned = {
+        "schema_version": "mock-exam-assembly-cohort/1.0",
+        "members": [
+            {"position": position, "item_revision_id": item_revision_id}
+            for position, item_revision_id in enumerate(item_revision_ids, start=1)
+        ],
+    }
+    cohort_sha256 = content_sha256(unsigned)
+    cohort = MockExamAssemblyCohortV1.model_validate(
+        {
+            **unsigned,
+            "cohort_id": "assemblycohort_" + cohort_sha256.removeprefix("sha256:")[:32],
+            "cohort_sha256": cohort_sha256,
+        }
+    )
+    validate_contract("mock-exam-assembly-cohort", cohort.model_dump(mode="json"))
+    return cohort
+
+
 class MockExamPlannedPlacementV1(FrozenModel):
     slot_id: str = Field(pattern=r"^slot-[0-9]{2,3}$")
     position: int = Field(ge=1, le=200)
@@ -341,6 +438,9 @@ class MockExamAssemblyPlanV1(FrozenModel):
     rating_policy_sha256: Sha256
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
     graph_snapshot_sha256: Sha256
+    cohort: MockExamAssemblyCohortV1 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     usage_snapshot: MockExamUsageSnapshotV1
     resolved_candidate_count: int = Field(ge=0, le=5_000)
     rated_candidate_count: int = Field(ge=0, le=5_000)
@@ -363,6 +463,15 @@ class MockExamAssemblyPlanV1(FrozenModel):
             raise ValueError("planned placements must be contiguous and ordered")
         if len({row.item_revision_id for row in self.placements}) != len(self.placements):
             raise ValueError("planned Item revisions must be unique")
+        if self.cohort is not None:
+            if self.resolved_candidate_count > 25 or self.rated_candidate_count > 25:
+                raise ValueError("cohort-scoped candidate counts cannot exceed 25")
+            expected = tuple(
+                (member.position, member.item_revision_id) for member in self.cohort.members
+            )
+            actual = tuple((row.position, row.item_revision_id) for row in self.placements)
+            if self.placements and actual != expected:
+                raise ValueError("planned placements differ from the exact assembly cohort")
         if self.rated_candidate_count > self.resolved_candidate_count:
             raise ValueError("rated candidate count exceeds resolved candidates")
         value = self.model_dump(mode="json", exclude={"plan_sha256"})
@@ -500,6 +609,9 @@ class CreatePlannedMockExamAssembly(FrozenModel):
     policy_sha256: Sha256
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
     graph_snapshot_sha256: Sha256
+    cohort: MockExamAssemblyCohortV1 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     expected_plan_sha256: Sha256
     planned_at: UtcDatetime
     actor_id: ActorId
@@ -510,6 +622,9 @@ class PreviewMockExamAssemblyPlan(FrozenModel):
     policy_sha256: Sha256
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
     graph_snapshot_sha256: Sha256
+    cohort: MockExamAssemblyCohortV1 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class MockExamAssemblyManifestV2(FrozenModel):

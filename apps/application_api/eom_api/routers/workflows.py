@@ -16,6 +16,7 @@ from eom_workflow_runner.repository import CommandType
 from fastapi import APIRouter, Depends, Query, Request, Response
 
 from eom_api.dependencies import Auth, ExpectedVersion, IdempotencyKey, etag, require_permission
+from eom_api.errors import ApiError
 from eom_api.routers.common import many, one, run_command
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
@@ -59,6 +60,14 @@ def start_workflow(
     idempotency_key: IdempotencyKey,
 ) -> SingleResponse[CommandResult]:
     del authentication
+    if body.production_occurrence is not None:
+        raise ApiError(
+            403,
+            "WORKFLOW_PRODUCTION_OCCURRENCE_INTERNAL_ONLY",
+            "Production occurrence is internal-only",
+            "Coordinated production occurrences must be started by the "
+            "mock-exam production service.",
+        )
 
     def execute() -> CommandResult:
         actor = request.state.request_context.actor()

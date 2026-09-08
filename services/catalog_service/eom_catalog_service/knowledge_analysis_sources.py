@@ -10,6 +10,7 @@ from typing import Any, Literal, NoReturn, cast
 from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
     ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+    ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
     ApprovedItemKnowledgeSourceV2,
     ApprovedPastExamItemKnowledgeSourceV3,
     AssessmentArtifactMemberPointer,
@@ -241,7 +242,9 @@ def _resolve_item_source(
         or component.schema_ref
         not in {
             ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+            ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
             "eom://schemas/item-registry/assessment-item-content-v1",
+            "eom://schemas/item-registry/assessment-item-content-v2",
         }
     ):
         raise KnowledgeAnalysisSourceError(

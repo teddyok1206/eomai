@@ -204,6 +204,66 @@ def test_approved_historical_item_revision_resolves_without_implicit_latest_look
     assert source.artifact_member.materialized_path == "source/item-content.json"
 
 
+@pytest.mark.parametrize(
+    "schema_ref",
+    (
+        "eom.assessment.item-content/2.0",
+        "eom://schemas/item-registry/assessment-item-content-v2",
+    ),
+)
+def test_approved_content_team_item_revision_resolves_for_analysis(schema_ref: str) -> None:
+    content_bytes = 768
+    component = SimpleNamespace(
+        required=True,
+        media_type="application/json",
+        schema_ref=schema_ref,
+        artifact_id=ARTIFACT_ID,
+        artifact_revision_id=REVISION_ID,
+        logical_name="assessment-item-content.json",
+        sha256=SOURCE_SHA256,
+    )
+    session = cast(
+        Session,
+        _FakeSession(
+            {
+                (ItemRevisionRecord, ITEM_REVISION_ID): SimpleNamespace(
+                    revision_state="APPROVED",
+                    item_id=ITEM_ID,
+                ),
+                (ArtifactRecord, ARTIFACT_ID): SimpleNamespace(approved=True),
+                (ArtifactRevisionRecord, REVISION_ID): SimpleNamespace(
+                    approved=True,
+                    logical_artifact_id=ARTIFACT_ID,
+                    content_bytes=content_bytes,
+                    manifest={
+                        "files": [
+                            {
+                                "file_name": component.logical_name,
+                                "sha256": SOURCE_SHA256,
+                                "bytes": content_bytes,
+                                "media_type": component.media_type,
+                                "schema_ref": component.schema_ref,
+                            }
+                        ]
+                    },
+                ),
+            },
+            scalar_rows=(component,),
+        ),
+    )
+
+    source = resolve_approved_item_source(
+        session,
+        item_revision_id=ITEM_REVISION_ID,
+        source_class="APPROVED_ITEM",
+    )
+
+    assert source.item_id == ITEM_ID
+    assert source.item_revision_id == ITEM_REVISION_ID
+    assert source.artifact_member.schema_ref == schema_ref
+    assert source.artifact_member.sha256 == SOURCE_SHA256
+
+
 def test_published_analysis_re_resolves_its_exact_superseded_approved_item_revision() -> None:
     content_bytes = 512
     component = SimpleNamespace(

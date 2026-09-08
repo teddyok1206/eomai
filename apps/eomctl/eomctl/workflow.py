@@ -207,6 +207,7 @@ def workflow_start(
                 request,
                 definition_key=stored_definition.definition_key,
                 definition_version=stored_definition.definition_version,
+                session=session,
             )
             if request.content_pack is not None
             else None

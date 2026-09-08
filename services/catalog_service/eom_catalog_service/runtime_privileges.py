@@ -12,6 +12,7 @@ TablePrivilege = Literal["SELECT", "INSERT", "UPDATE"]
 
 READ_TABLES: Final[tuple[str, ...]] = (
     "alembic_version",
+    "approval_requests",
     "assessment_assemblies",
     "assessment_assembly_revisions",
     "assessment_form_revisions",
@@ -59,6 +60,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "item_origin_profiles",
     "item_origin_provenance",
     "item_provenance",
+    "item_review_records",
     "item_relationships",
     "item_revisions",
     "items",
@@ -157,6 +159,7 @@ INSERT_TABLES: Final[tuple[str, ...]] = (
     "item_origin_profiles",
     "item_origin_provenance",
     "item_provenance",
+    "item_review_records",
     "item_relationships",
     "item_revisions",
     "items",

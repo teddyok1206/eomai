@@ -44,6 +44,7 @@ from eom_catalog_contracts import (
     validate_item_reference_contract,
     validate_reviewed_authoring_guidance,
 )
+from eom_catalog_contracts.mock_exam_production_plan import ContentTeamMockExamSlotV1
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -230,6 +231,7 @@ class ContentTeamItemBrief(FrozenModel):
     authoring_guidance: str = Field(min_length=10, max_length=2000)
     authoring_guidance_sha256: Sha256
     curriculum_scope: IntegratedScienceCurriculumScope | None = None
+    mock_exam_slot: ContentTeamMockExamSlotV1 | None = None
     original_request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @field_validator("authoring_guidance")
@@ -244,6 +246,17 @@ class ContentTeamItemBrief(FrozenModel):
         )
         if self.curriculum_scope is not None:
             validate_integrated_science_curriculum_scope(self.curriculum_scope)
+        if self.mock_exam_slot is not None:
+            if self.curriculum_scope is None:
+                raise ValueError("mock-exam slot requires one resolved curriculum scope")
+            if (
+                self.curriculum_scope.selected_unit_key
+                != self.mock_exam_slot.curriculum_selected_unit_key
+                or self.curriculum_scope.large_unit_key != self.mock_exam_slot.large_unit_key
+                or self.difficulty != self.mock_exam_slot.preferred_difficulty
+                or self.task_type != self.mock_exam_slot.preferred_material_profiles[0]
+            ):
+                raise ValueError("content-team brief differs from its typed mock-exam slot")
         return self
 
 
@@ -254,6 +267,40 @@ class StimulusAssetSelection(FrozenModel):
 class ContentPackSelection(FrozenModel):
     pack_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
     environment: Literal["development", "test"]
+
+
+class WorkflowProductionOccurrence(FrozenModel):
+    """One orchestrator-owned occurrence included only in Workflow identity."""
+
+    schema_version: Literal["workflow-production-occurrence/1.0"] = (
+        "workflow-production-occurrence/1.0"
+    )
+    production_request_id: str = Field(pattern=r"^productionreq_[0-9a-f]{32}$")
+    workflow_call_id: str = Field(pattern=r"^workflowcall_[0-9a-f]{32}$")
+
+
+class ExpectedWorkflowResolution(FrozenModel):
+    """Exact immutable catalog and control-plane dependencies required at start."""
+
+    schema_version: Literal["workflow-expected-resolution/1.0"] = (
+        "workflow-expected-resolution/1.0"
+    )
+    workflow_definition_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    workflow_definition_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    workflow_definition_sha256: Sha256
+    content_pack_release_id: str = Field(pattern=r"^packrel_[0-9a-f]{32}$")
+    content_pack_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    content_pack_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    content_pack_bundle_sha256: Sha256
+    content_pack_source_tree_sha256: Sha256
+    execution_preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    execution_preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    execution_preset_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,127}$")
+    execution_preset_content_sha256: Sha256
 
 
 class WorkflowProfiles(FrozenModel):
@@ -302,6 +349,8 @@ class WorkflowRequest(FrozenModel):
     stimulus_asset: StimulusAssetSelection | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     educational_retrieval: EducationalRetrievalRequirement | None = None
+    production_occurrence: WorkflowProductionOccurrence | None = None
+    expected_resolution: ExpectedWorkflowResolution | None = None
     analysis_request: (
         KnowledgeAnalysisRequestV2
         | KnowledgeAnalysisRequestV3
@@ -318,6 +367,20 @@ class WorkflowRequest(FrozenModel):
 
     @model_validator(mode="after")
     def validate_catalog_request(self) -> WorkflowRequest:
+        if (self.production_occurrence is None) != (self.expected_resolution is None):
+            raise ValueError(
+                "production occurrence and expected resolution must be supplied together"
+            )
+        if self.expected_resolution is not None:
+            expected = self.expected_resolution
+            if (
+                self.request_name != "GENERATED_KNOWLEDGE_ITEM_REQUEST"
+                or self.educational_retrieval is None
+                or self.content_pack is None
+                or expected.content_pack_key != self.content_pack.pack_key
+                or expected.execution_preset_key != self.execution_preset_key
+            ):
+                raise ValueError("expected resolution differs from the catalog selection")
         required_catalog_values = (self.content_pack, self.profiles, self.registry_intent)
         if any(value is not None for value in required_catalog_values) and not all(
             value is not None for value in required_catalog_values

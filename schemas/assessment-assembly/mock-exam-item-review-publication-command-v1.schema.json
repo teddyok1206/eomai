@@ -1,0 +1,58 @@
+{
+  "$id": "https://eom.local/schemas/assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "final_rating": {
+      "enum": ["A", "B", "C"],
+      "type": "string"
+    },
+    "idempotency_key": {
+      "maxLength": 128,
+      "minLength": 8,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$",
+      "type": "string"
+    },
+    "item_revision_id": {
+      "pattern": "^itemrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "expected_workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "operation": {
+      "const": "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+      "type": "string"
+    },
+    "rating_policy_revision_id": {
+      "pattern": "^ratingpolicyrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "rating_policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "reviewer_operator_id": {
+      "pattern": "^operator_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "mock-exam-item-review-publication-command/1.0",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "item_revision_id",
+    "expected_workflow_id",
+    "final_rating",
+    "reviewer_operator_id",
+    "rating_policy_revision_id",
+    "rating_policy_sha256",
+    "idempotency_key"
+  ],
+  "title": "PublishMockExamItemReviewCommand",
+  "type": "object"
+}

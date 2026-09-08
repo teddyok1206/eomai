@@ -11,10 +11,14 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV4,
 )
 from eom_identifiers import content_sha256
-from eom_orchestrator.control_models import ExecutionPresetRevisionRecord
+from eom_orchestrator.control_models import (
+    ExecutionPresetRecord,
+    ExecutionPresetRevisionRecord,
+)
 from eom_orchestrator.control_service import ControlPlaneError, ResolvedPlanDependencyEvidence
 from eom_orchestrator.execution_resolver import (
     ExecutionStepRequirement,
+    pinned_knowledge_backed_preset,
     resolve_knowledge_backed_execution_plan,
     validate_educational_retrieval_policy,
 )
@@ -110,6 +114,72 @@ def _preset() -> ExecutionPresetRevisionV2:
         {key: item for key, item in value.items() if key != "content_sha256"}
     )
     return ExecutionPresetRevisionV2.model_validate(value)
+
+
+class _PinnedPresetSession:
+    def __init__(
+        self,
+        preset: ExecutionPresetRevisionV2,
+        *,
+        record_sha256: str | None = None,
+    ) -> None:
+        self.logical = SimpleNamespace(
+            preset_id=preset.preset_id,
+            preset_key="knowledge-grounded-item",
+            current_revision_id="execpresetrev_" + "f" * 32,
+            state="ACTIVE",
+        )
+        self.revision = SimpleNamespace(
+            preset_id=preset.preset_id,
+            state="RELEASED",
+            content_sha256=record_sha256 or preset.content_sha256,
+            compatible_workflow_protocols=list(preset.compatible_workflow_protocols),
+            canonical_document=preset.model_dump(mode="json"),
+        )
+
+    def get(self, model: type[object], _identity: str) -> object:
+        if model is ExecutionPresetRecord:
+            return self.logical
+        if model is ExecutionPresetRevisionRecord:
+            return self.revision
+        raise AssertionError(f"unexpected model: {model}")
+
+
+def test_pinned_preset_uses_exact_revision_even_after_current_pointer_moves() -> None:
+    preset = _preset()
+
+    resolved = pinned_knowledge_backed_preset(
+        _PinnedPresetSession(preset),  # type: ignore[arg-type]
+        preset_id=preset.preset_id,
+        preset_revision_id=preset.preset_revision_id,
+        preset_key="knowledge-grounded-item",
+        preset_content_sha256=preset.content_sha256,
+        workflow_role_schema_version="workflow-role/1.3.0",
+    )
+
+    assert resolved == preset
+
+
+def test_pinned_preset_rejects_exact_hash_or_key_drift() -> None:
+    preset = _preset()
+    with pytest.raises(ControlPlaneError, match="stale"):
+        pinned_knowledge_backed_preset(
+            _PinnedPresetSession(preset, record_sha256="sha256:" + "f" * 64),  # type: ignore[arg-type]
+            preset_id=preset.preset_id,
+            preset_revision_id=preset.preset_revision_id,
+            preset_key="knowledge-grounded-item",
+            preset_content_sha256=preset.content_sha256,
+            workflow_role_schema_version="workflow-role/1.3.0",
+        )
+    with pytest.raises(ControlPlaneError, match="stale"):
+        pinned_knowledge_backed_preset(
+            _PinnedPresetSession(preset),  # type: ignore[arg-type]
+            preset_id=preset.preset_id,
+            preset_revision_id=preset.preset_revision_id,
+            preset_key="another-preset",
+            preset_content_sha256=preset.content_sha256,
+            workflow_role_schema_version="workflow-role/1.3.0",
+        )
 
 
 def _evidence(

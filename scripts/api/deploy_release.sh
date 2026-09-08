@@ -18,6 +18,8 @@ METADATA_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_deployment_metad
 METADATA_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-deployment-metadata"
 RUNTIME_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_runtime_isolation.sh"
 RUNTIME_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-runtime-isolation"
+MOCK_EXAM_DEPLOYMENT_ADMISSION_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_mock_exam_deployment_admission.py"
+MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET="/usr/local/libexec/eom-api/verify-mock-exam-deployment-admission"
 ACTION="verify"
 STAGING_ROOT=""
 
@@ -41,6 +43,25 @@ fi
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
   exit 1
+}
+
+verify_mock_exam_deployment_admission() {
+  id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
+  # Establish a root-owned code boundary, then drop privileges before the helper
+  # reads eom-api-owned checkpoints. Mutable repository Python is never run as root.
+  sudo -n install -d -o root -g root -m 0755 /usr/local/libexec/eom-api
+  sudo -n install -o root -g root -m 0755 \
+    "${MOCK_EXAM_DEPLOYMENT_ADMISSION_SOURCE}" \
+    "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}"
+  cmp --silent \
+    "${MOCK_EXAM_DEPLOYMENT_ADMISSION_SOURCE}" \
+    "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}" || \
+    fail "installed mock-exam deployment admission source drift"
+  sudo -n -u eom-api /usr/bin/env -i \
+    HOME=/var/lib/eom-api \
+    PATH=/usr/bin:/bin \
+    PYTHONSAFEPATH=1 \
+    "${API_PYTHON}" -I "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}"
 }
 
 prepare_runtime_dependencies() {
@@ -174,6 +195,7 @@ inspect_release() {
     "${API_PYTHON}" - <<'PY'
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -198,6 +220,7 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/build_info.py",
         "eom_api/build-info.json",
         "eom_api/cli.py",
+        "eom_api/mock_exam_production_cli.py",
         "eom_api/runtime_isolation_pidfd.py",
         "eom_api/runtime_isolation_verifier.py",
         "eom_api/routers/control_plane.py",
@@ -206,6 +229,13 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/services/command_adapter.py",
         "eom_api/services/query_adapter.py",
         "eom_api/services/catalog_application_client.py",
+        "eom_api/services/mock_exam_generation_block_resolver.py",
+        "eom_api/services/mock_exam_production_application.py",
+        "eom_api/services/mock_exam_production_checkpoint_store.py",
+        "eom_api/services/mock_exam_production_composition.py",
+        "eom_api/services/mock_exam_production_coordinator.py",
+        "eom_api/services/mock_exam_production_release_resolver.py",
+        "eom_api/services/mock_exam_production_runner.py",
         "eom_api/services/control_plane_adapter.py",
         "eom_api/openapi/eom-api-v1.openapi.json",
         "eom_api/openapi/eom-api-v1.sha256",
@@ -226,40 +256,80 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         raise SystemExit("Application API wheel source commit mismatch")
     if build["package_version"] != os.environ["EXPECTED_VERSION"]:
         raise SystemExit("Application API wheel version mismatch")
+    canonical_openapi = (
+        Path(os.environ["REPOSITORY_ROOT"]) / "api/openapi/eom-api-v1.openapi.json"
+    ).read_bytes()
+    canonical_openapi_checksum = (
+        Path(os.environ["REPOSITORY_ROOT"]) / "api/openapi/eom-api-v1.sha256"
+    ).read_bytes()
+    packaged_openapi = archive.read("eom_api/openapi/eom-api-v1.openapi.json")
+    packaged_checksum = archive.read("eom_api/openapi/eom-api-v1.sha256")
+    if packaged_openapi != canonical_openapi or packaged_checksum != canonical_openapi_checksum:
+        raise SystemExit("Application API packaged OpenAPI differs from canonical release artifacts")
+    if packaged_checksum.decode("ascii").split()[0] != hashlib.sha256(packaged_openapi).hexdigest():
+        raise SystemExit("Application API packaged OpenAPI checksum mismatch")
+    record_name = next(name for name in names if name.endswith(".dist-info/RECORD"))
+    record = archive.read(record_name).decode("utf-8")
+    for member in sorted(required):
+        if member not in record:
+            raise SystemExit(f"Application API runtime missing from RECORD: {member}")
 
 with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
-    schemas = [
+    names = set(archive.namelist())
+    schemas = {
         name
-        for name in archive.namelist()
+        for name in names
         if name.startswith("eom_api_contracts/schemas/") and name.endswith(".schema.json")
-    ]
-    if (
-        len(schemas) != 16
-        or "eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"
-        not in schemas
-        or "eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"
-        not in schemas
-        or "eom_api_contracts/schemas/item-bank-entry-v1.schema.json" not in schemas
-        or "eom_api_contracts/schemas/production-item-candidate-v1.schema.json"
-        not in schemas
-        or "eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json"
-        not in schemas
-        or "eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"
-        not in schemas
-        or "eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json"
-        not in schemas
-        or "eom_api_contracts/schemas/assessment-learning-page-v1.schema.json"
-        not in schemas
-        or "eom_api_contracts/schemas/hwpx.schema.json" not in schemas
-        or "eom_api_contracts/schemas/items.schema.json" not in schemas
-        or "eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"
-        not in schemas
-    ):
+    }
+    expected_api_schemas = {
+        "eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json",
+        "eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json",
+        "eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json",
+        "eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json",
+        "eom_api_contracts/schemas/assessment-learning-page-v1.schema.json",
+        "eom_api_contracts/schemas/auth.schema.json",
+        "eom_api_contracts/schemas/common.schema.json",
+        "eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json",
+        "eom_api_contracts/schemas/errors.schema.json",
+        "eom_api_contracts/schemas/hwpx.schema.json",
+        "eom_api_contracts/schemas/item-bank-entry-v1.schema.json",
+        "eom_api_contracts/schemas/items.schema.json",
+        "eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json",
+        "eom_api_contracts/schemas/mock-exam-explicit-analysis-review-set-v1.schema.json",
+        "eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json",
+        "eom_api_contracts/schemas/mock-exam-review-eligibility-v1.schema.json",
+        "eom_api_contracts/schemas/operators.schema.json",
+        "eom_api_contracts/schemas/production-item-candidate-v1.schema.json",
+        "eom_api_contracts/schemas/resources.schema.json",
+        "eom_api_contracts/schemas/workflow-start-v1.schema.json",
+    }
+    if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected 16 packaged API schemas including HWPX, Items, production candidates, mock-exam plans, curriculum "
-            "capability, assessment occurrence, and assessment learning, "
-            f"found {schemas}"
+            "expected exactly 20 packaged API schemas including Workflow-start and mock-exam "
+            "production execution/review contracts, "
+            f"missing={sorted(expected_api_schemas - schemas)} "
+            f"unexpected={sorted(schemas - expected_api_schemas)}"
         )
+    required_contract_runtime = {
+        "eom_api_contracts/__init__.py",
+        "eom_api_contracts/assessment_assemblies.py",
+        "eom_api_contracts/mock_exam_execution.py",
+        "eom_api_contracts/workflows.py",
+    }
+    if missing := required_contract_runtime - names:
+        raise SystemExit(f"mock-exam API contract runtime missing from wheel: {sorted(missing)}")
+    canonical_api_root = Path(os.environ["REPOSITORY_ROOT"]) / "schemas/api/v1"
+    record_name = next(name for name in names if name.endswith(".dist-info/RECORD"))
+    record = archive.read(record_name).decode("utf-8")
+    for member in sorted(expected_api_schemas):
+        canonical = canonical_api_root / Path(member).name
+        if archive.read(member) != canonical.read_bytes():
+            raise SystemExit(f"API schema resource drift: {canonical.name}")
+        if member not in record:
+            raise SystemExit(f"API schema resource missing from RECORD: {canonical.name}")
+    for member in sorted(required_contract_runtime):
+        if member not in record:
+            raise SystemExit(f"API contract runtime missing from RECORD: {member}")
 
 workflow_prefix = "eom_workflow/resources/"
 canonical_workflow_root = Path(os.environ["REPOSITORY_ROOT"]) / "schemas/workflow"
@@ -302,6 +372,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_orchestrator/control_service.py",
         "eom_orchestrator/execution_materializer.py",
         "eom_orchestrator/execution_resolver.py",
+        "eom_orchestrator/migration.py",
         "eom_orchestrator/legacy_item_extraction_artifact.py",
         "eom_orchestrator/legacy_item_extraction_bootstrap.py",
         "eom_orchestrator/legacy_item_editorial_compatibility_artifact.py",
@@ -309,6 +380,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_orchestrator/preset_lifecycle.py",
         "eom_workflow/control_plane.py",
         "eom_workflow/control_schemas.py",
+        "eom_workflow/models.py",
         "eom_workflow_runner/composition.py",
         "eom_workflow_runner/engine.py",
         "eom_workflow_runner/models.py",
@@ -329,7 +401,9 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_contracts/schemas/hwpx-content-team-exam-build-result-v2.schema.json",
         "eom_catalog_contracts/assessment_item.py",
         "eom_catalog_contracts/assessment_assembly.py",
+        "eom_catalog_contracts/approved_item_graph_publication.py",
         "eom_catalog_contracts/application.py",
+        "eom_catalog_contracts/item_review.py",
         "eom_catalog_contracts/knowledge.py",
         "eom_catalog_contracts/knowledge_analysis_batch.py",
         "eom_catalog_contracts/item_origin.py",
@@ -340,8 +414,12 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_contracts/legacy_usage.py",
         "eom_catalog_contracts/validation.py",
         "eom_catalog_contracts/mock_exam_planner.py",
+        "eom_catalog_contracts/mock_exam_production_plan.py",
+        "eom_catalog_service/approved_item_graph_publication_service.py",
         "eom_catalog_service/application_runner.py",
         "eom_catalog_service/application_server.py",
+        "eom_catalog_service/automatic_item_graph_publication_service.py",
+        "eom_catalog_service/curriculum_graph_structure.py",
         "eom_catalog_service/generated_stimulus.py",
         "eom_catalog_service/item_content_import.py",
         "eom_catalog_service/item_origin_models.py",
@@ -351,10 +429,14 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/knowledge_analysis_batch_service.py",
         "eom_catalog_service/knowledge_analysis_service.py",
         "eom_catalog_service/knowledge_analysis_sources.py",
+        "eom_catalog_service/knowledge_graph_models.py",
+        "eom_catalog_service/knowledge_graph_publication_service.py",
         "eom_catalog_service/knowledge_stimulus.py",
+        "eom_catalog_service/knowledge_retrieval_service.py",
         "eom_catalog_service/local_image_adapter.py",
         "eom_catalog_service/mock_exam_assembly_service.py",
         "eom_catalog_service/mock_exam_candidate_repository.py",
+        "eom_catalog_service/mock_exam_item_review_publication_service.py",
         "eom_catalog_service/legacy_usage_models.py",
         "eom_catalog_service/legacy_usage_service.py",
         "eom_catalog_service/legacy_xlsx.py",
@@ -433,6 +515,14 @@ with zipfile.ZipFile(platform_wheel) as archive:
     ):
         if required not in workflow_settings_source:
             raise SystemExit("workflow settings operator path contract is missing")
+    legacy_graph_source = archive.read(
+        "eom_catalog_service/legacy_item_graph_learning_service.py"
+    )
+    if (
+        b"\nMAX_AUTOMATIC_GRAPH_BATCH_SIZE = 16\n" not in legacy_graph_source
+        or b"    MAX_AUTOMATIC_GRAPH_BATCH_SIZE,\n" in legacy_graph_source
+    ):
+        raise SystemExit("legacy Graph automation must preserve its local 1..16 batch contract")
     packaged = {
         name.removeprefix(workflow_prefix)
         for name in names
@@ -490,12 +580,19 @@ with zipfile.ZipFile(platform_wheel) as archive:
 
 catalog_prefix = "eom_catalog_contracts/resources/"
 catalog_resources = {
+    "assessment-assembly/mock-exam-assembly-cohort-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-cohort-v1.schema.json",
     "assessment-assembly/mock-exam-assembly-manifest-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
     "assessment-assembly/mock-exam-assembly-manifest-v2.schema.json": "schemas/assessment-assembly/mock-exam-assembly-manifest-v2.schema.json",
     "assessment-assembly/mock-exam-assembly-plan-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-plan-v1.schema.json",
     "assessment-assembly/mock-exam-assembly-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-policy-v1.schema.json",
     "assessment-assembly/mock-exam-layout-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-layout-policy-v1.schema.json",
     "assessment-assembly/mock-exam-rating-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-rating-policy-v1.schema.json",
+    "assessment-assembly/mock-exam-item-review-decision-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-decision-v1.schema.json",
+    "assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json",
+    "assessment-assembly/mock-exam-item-review-publication-result-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-result-v1.schema.json",
+    "assessment-assembly/mock-exam-production-plan-v1.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v1.schema.json",
+    "assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json",
+    "assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json",
     "catalog-application/catalog-application-request-v1.schema.json": "schemas/catalog-application/catalog-application-request-v1.schema.json",
     "catalog-application/catalog-application-response-v1.schema.json": "schemas/catalog-application/catalog-application-response-v1.schema.json",
     "catalog-application/catalog-application-request-v2.schema.json": "schemas/catalog-application/catalog-application-request-v2.schema.json",
@@ -516,6 +613,8 @@ catalog_resources = {
     "catalog-application/catalog-application-response-v8.schema.json": "schemas/catalog-application/catalog-application-response-v8.schema.json",
     "catalog-application/catalog-application-response-v9.schema.json": "schemas/catalog-application/catalog-application-response-v9.schema.json",
     "catalog-application/catalog-application-response-v10.schema.json": "schemas/catalog-application/catalog-application-response-v10.schema.json",
+    "catalog-application/catalog-application-request-v11.schema.json": "schemas/catalog-application/catalog-application-request-v11.schema.json",
+    "catalog-application/catalog-application-response-v11.schema.json": "schemas/catalog-application/catalog-application-response-v11.schema.json",
     "catalog-application/catalog-item-media-request-v1.schema.json": "schemas/catalog-application/catalog-item-media-request-v1.schema.json",
     "catalog-application/catalog-item-media-response-v1.schema.json": "schemas/catalog-application/catalog-item-media-response-v1.schema.json",
     "catalog-application/catalog-assessment-page-list-request-v1.schema.json": "schemas/catalog-application/catalog-assessment-page-list-request-v1.schema.json",
@@ -526,6 +625,8 @@ catalog_resources = {
     "knowledge/knowledge-analysis-batch-request-v2.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v2.schema.json",
     "knowledge/knowledge-analysis-batch-request-v3.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v3.schema.json",
     "knowledge/knowledge-analysis-batch-request-v4.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v4.schema.json",
+    "knowledge/approved-item-graph-publication-command-v1.schema.json": "schemas/knowledge/approved-item-graph-publication-command-v1.schema.json",
+    "knowledge/approved-item-graph-publication-result-v1.schema.json": "schemas/knowledge/approved-item-graph-publication-result-v1.schema.json",
     "content-intake/intake-manifest-v1.schema.json": "schemas/content-intake/intake-manifest-v1.schema.json",
     "content-intake/mapping-proposal-v1.schema.json": "schemas/content-intake/mapping-proposal-v1.schema.json",
     "content-intake/uncertainties-v1.schema.json": "schemas/content-intake/uncertainties-v1.schema.json",
@@ -793,6 +894,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
                 "--target",
                 str(installed_root),
                 str(platform_wheel),
+                str(by_prefix["eom_api_contracts"]),
             ],
             check=True,
             stdout=subprocess.DEVNULL,
@@ -821,6 +923,14 @@ os.environ["EOM_STAGING_ROOT"] = staging
 os.environ["EOM_WORKSPACE_ROOT"] = workspace_root
 os.environ["EOM_CODEX_BINARY"] = codex_binary
 from eom_workflow import AgentStep, WORKFLOW_ADMISSION_BY_IDENTITY
+from eom_api_contracts import (
+    MockExamExplicitAnalysisReviewSetV1,
+    MockExamExplicitRatingSetV1,
+    MockExamGenerationBlockResolutionV1,
+    MockExamGraphPublicationInputV1,
+    MockExamProductionExecutionV1,
+    mock_exam_production_is_terminal,
+)
 from eom_workflow.compiler import compile_definition
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
@@ -836,6 +946,7 @@ import eom_workflow_runner.actor_authorization
 import eom_workflow_runner.actor_authorization_adapters
 from eom_orchestrator.doctor import runtime_configuration_check
 from eom_orchestrator.live_preflight import run_live_worker_preflight
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import DEFAULT_WORKER_CONFIG, Settings, WorkerConfigSource
 from eom_orchestrator.worker_systemd import WorkerSystemdReadiness
@@ -856,6 +967,29 @@ if (
     or repository in orchestrator_spec.origin
 ):
     raise SystemExit("Orchestrator package was not imported from the release wheel")
+api_contract_spec = importlib.util.find_spec("eom_api_contracts")
+if (
+    api_contract_spec is None
+    or api_contract_spec.origin is None
+    or not Path(api_contract_spec.origin).resolve().is_relative_to(installed_root)
+    or repository in api_contract_spec.origin
+):
+    raise SystemExit("Application API contracts were not imported from the release wheel")
+if any(
+    model.__module__ != "eom_api_contracts.mock_exam_execution"
+    for model in (
+        MockExamExplicitAnalysisReviewSetV1,
+        MockExamExplicitRatingSetV1,
+        MockExamGenerationBlockResolutionV1,
+        MockExamGraphPublicationInputV1,
+        MockExamProductionExecutionV1,
+    )
+):
+    raise SystemExit("mock-exam contract package exports are incomplete")
+if mock_exam_production_is_terminal.__module__ != "eom_api_contracts.mock_exam_execution":
+    raise SystemExit("mock-exam terminal-state contract export is incomplete")
+if CURRENT_MIGRATION_REVISION != "20260908_0032":
+    raise SystemExit("installed runtime migration admission head mismatch")
 settings = Settings.from_environment()
 if settings.worker_config != Path(worker_config).resolve():
     raise SystemExit("explicit worker configuration was not selected")
@@ -1281,6 +1415,10 @@ verify_service() {
     fail "installed metadata verifier source drift"
   cmp --silent "${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}" || \
     fail "installed runtime verifier source drift"
+  cmp --silent \
+    "${MOCK_EXAM_DEPLOYMENT_ADMISSION_SOURCE}" \
+    "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}" || \
+    fail "installed mock-exam deployment admission source drift"
   for consumer in "${PLATFORM_CONSUMER_SERVICES[@]}"; do
     systemctl is-active --quiet "${consumer}" || fail "${consumer} is not active"
     systemctl is-enabled --quiet "${consumer}" || fail "${consumer} is not enabled"
@@ -1296,8 +1434,12 @@ case "${ACTION}" in
     ;;
   install)
     sudo -n true || fail "noninteractive privileged access is required before installation"
+    require_clean_tree
+    verify_mock_exam_deployment_admission
     prepare_runtime_dependencies
     build_release
+    # Close the build-window race before replacing any installed runtime package.
+    verify_mock_exam_deployment_admission
     install_wheels
     reconcile_installed_catalog_runtime_privileges
     reconcile_installed_hwpx_manager_runtime_privileges

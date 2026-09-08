@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 from dataclasses import dataclass
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -708,8 +708,23 @@ class KnowledgeGraphPublicationService:
             member_path="evidence/graph-structure-manifest.json",
         )
 
-    def publish(self, command: KnowledgeGraphPublicationCommand) -> KnowledgeGraphPublicationResult:
-        existing = self._existing_publication(command)
+    def publish(
+        self,
+        command: KnowledgeGraphPublicationCommand,
+        *,
+        authorized_at: datetime | None = None,
+    ) -> KnowledgeGraphPublicationResult:
+        effective_authorized_at = authorized_at or command.requested_at
+        if effective_authorized_at.tzinfo is None or effective_authorized_at.utcoffset() is None:
+            raise KnowledgeGraphPublicationError(
+                "KNOWLEDGE_GRAPH_AUTHORIZATION_TIME_INVALID",
+                "graph publication authorization timestamp must be timezone-aware",
+            )
+        effective_authorized_at = effective_authorized_at.astimezone(UTC)
+        existing = self._existing_publication(
+            command,
+            authorized_at=effective_authorized_at,
+        )
         if existing is not None:
             return existing
 
@@ -897,10 +912,14 @@ class KnowledgeGraphPublicationService:
             manifest=manifest,
             manifest_artifact=manifest_artifact,
             structure=structure,
+            authorized_at=effective_authorized_at,
         )
 
     def _existing_publication(
-        self, command: KnowledgeGraphPublicationCommand
+        self,
+        command: KnowledgeGraphPublicationCommand,
+        *,
+        authorized_at: datetime,
     ) -> KnowledgeGraphPublicationResult | None:
         with self.sessions() as session:
             publication = session.scalar(
@@ -910,7 +929,10 @@ class KnowledgeGraphPublicationService:
             )
             if publication is None:
                 return None
-            if publication.request_sha256 != command.request_sha256:
+            if (
+                publication.request_sha256 != command.request_sha256
+                or publication.authorized_at != authorized_at
+            ):
                 raise KnowledgeGraphPublicationError(
                     "KNOWLEDGE_GRAPH_IDEMPOTENCY_CONFLICT",
                     "graph publication idempotency key has different input",
@@ -2528,6 +2550,7 @@ class KnowledgeGraphPublicationService:
         manifest: KnowledgeGraphSnapshotContract,
         manifest_artifact: CatalogArtifact,
         structure: KnowledgeGraphStructureContract | None,
+        authorized_at: datetime,
     ) -> KnowledgeGraphPublicationResult:
         with transaction(self.sessions) as session:
             session.execute(
@@ -2540,7 +2563,10 @@ class KnowledgeGraphPublicationService:
                 )
             )
             if existing is not None:
-                if existing.request_sha256 != command.request_sha256:
+                if (
+                    existing.request_sha256 != command.request_sha256
+                    or existing.authorized_at != authorized_at
+                ):
                     raise KnowledgeGraphPublicationError(
                         "KNOWLEDGE_GRAPH_IDEMPOTENCY_CONFLICT",
                         "graph publication idempotency key has different input",
@@ -2841,6 +2867,7 @@ class KnowledgeGraphPublicationService:
                 idempotency_key=command.idempotency_key,
                 request_sha256=command.request_sha256,
                 published_by_operator_id=command.published_by_operator_id,
+                authorized_at=authorized_at,
                 requested_at=command.requested_at,
                 published_at=command.requested_at,
             )

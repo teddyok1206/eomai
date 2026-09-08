@@ -1,0 +1,22 @@
+{
+  "$id": "https://eom.local/schemas/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "operation": {
+      "const": "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "mock-exam-review-eligibility-query/1.0",
+      "type": "string"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    }
+  },
+  "required": ["schema_version", "operation", "workflow_id"],
+  "title": "InspectMockExamReviewEligibilityQuery",
+  "type": "object"
+}

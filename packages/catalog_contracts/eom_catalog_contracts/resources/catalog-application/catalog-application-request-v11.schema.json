@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-request-v11",
+  "title": "EOM Catalog Application Publication Request V11",
+  "oneOf": [
+    {
+      "$ref": "eom://schemas/knowledge/approved-item-graph-publication-command/1.0"
+    },
+    {
+      "$ref": "https://eom.local/schemas/assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json"
+    },
+    {
+      "$ref": "https://eom.local/schemas/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json"
+    }
+  ]
+}

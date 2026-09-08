@@ -88,11 +88,43 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert 'scripts/catalog/bootstrap_runtime_role.py"' in source
     assert 'scripts/hwpx/bootstrap_manager_runtime_role.py"' in source
     assert (
+        'MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET="/usr/local/libexec/eom-api/'
+        'verify-mock-exam-deployment-admission"'
+    ) in source
+    assert "sudo -n -u eom-api /usr/bin/env -i" in source
+    assert '"${API_PYTHON}" -I "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}"' in source
+    assert source.index("verify_mock_exam_deployment_admission\n") < source.index(
+        "prepare_runtime_dependencies\n"
+    )
+    assert source.count("    verify_mock_exam_deployment_admission\n") == 2
+    assert source.rindex("    verify_mock_exam_deployment_admission\n") < source.index(
+        "    install_wheels\n"
+    )
+    assert source.index("require_clean_tree\n") < source.index(
+        "verify_mock_exam_deployment_admission\n"
+    )
+    assert (
         source.index("install_wheels\n")
         < source.index("reconcile_installed_catalog_runtime_privileges\n")
         < source.index("reconcile_installed_hwpx_manager_runtime_privileges\n")
         < source.index("install_service\n")
     )
+
+
+def test_mock_exam_deployment_admission_uses_installed_unprivileged_contract_boundary() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+    guard = _source("scripts/api/verify_mock_exam_deployment_admission.py")
+
+    install = "sudo -n install -o root -g root -m 0755 \\\n"
+    execute = "sudo -n -u eom-api /usr/bin/env -i"
+    assert deployment.index(install) < deployment.index(execute)
+    assert '"${API_PYTHON}" -I "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}"' in deployment
+    assert "from eom_api_contracts.mock_exam_execution import (" in guard
+    assert "MockExamProductionExecutionV1," in guard
+    assert "mock_exam_production_is_terminal," in guard
+    assert 'CHECKPOINT_ROOT = Path("/var/lib/eom-api/mock-exam-production")' in guard
+    assert "sys.path" not in guard
+    assert "/home/eom/EOM" not in guard
 
 
 def test_all_release_builders_accept_reviewed_main_commits() -> None:
@@ -465,6 +497,7 @@ def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> 
     deployment = _source("scripts/api/deploy_release.sh")
 
     for resource in (
+        "mock-exam-assembly-cohort-v1.schema.json",
         "mock-exam-assembly-manifest-v1.schema.json",
         "mock-exam-assembly-manifest-v2.schema.json",
         "mock-exam-assembly-plan-v1.schema.json",
@@ -479,18 +512,60 @@ def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> 
     assert "integrated-science-item-rating-v1.json" in deployment
     assert '"content/assembly-policies" / policy_name' in deployment
     for runtime in (
+        "eom_catalog_contracts/approved_item_graph_publication.py",
+        "eom_catalog_contracts/item_review.py",
         "eom_catalog_contracts/mock_exam_planner.py",
+        "eom_catalog_contracts/mock_exam_production_plan.py",
+        "eom_catalog_service/approved_item_graph_publication_service.py",
+        "eom_catalog_service/automatic_item_graph_publication_service.py",
         "eom_catalog_service/mock_exam_candidate_repository.py",
+        "eom_catalog_service/mock_exam_item_review_publication_service.py",
         "eom_catalog_service/mock_exam_assembly_service.py",
         "eom_api/routers/assessment_assemblies.py",
+        "eom_api/mock_exam_production_cli.py",
+        "eom_api/services/mock_exam_generation_block_resolver.py",
+        "eom_api/services/mock_exam_production_application.py",
+        "eom_api/services/mock_exam_production_checkpoint_store.py",
+        "eom_api/services/mock_exam_production_composition.py",
+        "eom_api/services/mock_exam_production_coordinator.py",
+        "eom_api/services/mock_exam_production_release_resolver.py",
+        "eom_api/services/mock_exam_production_runner.py",
     ):
         assert f'"{runtime}"' in deployment
+
+
+def test_release_verifies_mock_exam_production_protocol_resources() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+
+    for resource in (
+        "mock-exam-item-review-decision-v1.schema.json",
+        "mock-exam-item-review-publication-command-v1.schema.json",
+        "mock-exam-item-review-publication-result-v1.schema.json",
+        "mock-exam-production-plan-v1.schema.json",
+        "mock-exam-review-eligibility-query-v1.schema.json",
+        "mock-exam-review-eligibility-result-v1.schema.json",
+    ):
+        assert f'"assessment-assembly/{resource}": ' in deployment
+        assert f'"schemas/assessment-assembly/{resource}"' in deployment
+    for resource in (
+        "approved-item-graph-publication-command-v1.schema.json",
+        "approved-item-graph-publication-result-v1.schema.json",
+    ):
+        assert f'"knowledge/{resource}": ' in deployment
+        assert f'"schemas/knowledge/{resource}"' in deployment
+    for resource in (
+        "catalog-application-request-v11.schema.json",
+        "catalog-application-response-v11.schema.json",
+    ):
+        assert f'"catalog-application/{resource}": ' in deployment
+        assert f'"schemas/catalog-application/{resource}"' in deployment
 
 
 def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
-    assert "len(schemas) != 16" in deployment
+    assert "schemas != expected_api_schemas" in deployment
+    assert "expected exactly 20 packaged API schemas" in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json"' in deployment
@@ -500,6 +575,19 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-page-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/mock-exam-review-eligibility-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/workflow-start-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/mock_exam_execution.py"' in deployment
+    assert '"eom_api_contracts/workflows.py"' in deployment
+    assert "API schema resource drift" in deployment
+    assert "API schema resource missing from RECORD" in deployment
+    assert "packaged OpenAPI differs from canonical release artifacts" in deployment
+    assert "packaged OpenAPI checksum mismatch" in deployment
+    assert "mock-exam contract package exports are incomplete" in deployment
+    assert "mock-exam terminal-state contract export is incomplete" in deployment
+    assert "legacy Graph automation must preserve its local 1..16 batch contract" in deployment
+    assert 'CURRENT_MIGRATION_REVISION != "20260908_0032"' in deployment
 
 
 def test_release_verifies_assessment_occurrence_graph_schema_resources() -> None:
