@@ -123,11 +123,22 @@ def test_mock_exam_deployment_admission_uses_installed_unprivileged_contract_bou
     assert boundary.index(install) < boundary.index(execute)
     assert '"${API_PYTHON}" -I "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}"' in boundary
     assert "from eom_api_contracts.mock_exam_execution import (" in guard
-    assert "MockExamProductionExecutionV1," in guard
+    assert "MockExamProductionExecution," in guard
+    assert "checkpoint: MockExamProductionExecution = TypeAdapter(" in guard
+    assert ").validate_json(payload)" in guard
     assert "mock_exam_production_is_terminal," in guard
     assert 'CHECKPOINT_ROOT = Path("/var/lib/eom-api/mock-exam-production")' in guard
     assert "sys.path" not in guard
     assert "/home/eom/EOM" not in guard
+
+
+def test_release_verifies_exact_slot_control_policy_successor_inventory() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+
+    assert "from eom_workflow.control_schemas import control_schema_inventory" in deployment
+    assert '"standard-control-bootstrap-v9"' in deployment
+    assert '"knowledge-item-control-bootstrap-v6"' in deployment
+    assert "load_control_schema(schema_name)" in deployment
 
 
 def test_all_release_builders_accept_reviewed_main_commits() -> None:

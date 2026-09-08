@@ -9,6 +9,7 @@ from eom_api.services.mock_exam_generation_block_resolver import (
     DatabaseGenerationBlockResolver,
     MockExamGenerationBlockResolutionError,
 )
+from eom_api_contracts.mock_exam_execution import MockExamGenerationBlockResolutionV2
 from eom_catalog_contracts import (
     load_integrated_science_editorial_outline,
     load_integrated_science_mock_exam_layout_policy,
@@ -16,7 +17,9 @@ from eom_catalog_contracts import (
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
+    MockExamOneItemGenerationBlockV2,
     build_integrated_science_mock_exam_production_plan,
+    build_integrated_science_mock_exam_production_plan_v2,
 )
 from eom_workflow import AgentStep, compile_definition
 from eom_workflow.schemas import result_schema_protocol
@@ -60,15 +63,33 @@ def _block() -> MockExamOneItemGenerationBlockV1:
     return plan.one_item_generation_block
 
 
-def _row(*, source_tree_sha256: str | None = None) -> tuple[object, ...]:
-    block = _block()
+def _block_v2() -> MockExamOneItemGenerationBlockV2:
+    plan = build_integrated_science_mock_exam_production_plan_v2(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    return plan.one_item_generation_block
+
+
+def _row(
+    *,
+    source_tree_sha256: str | None = None,
+    block: MockExamOneItemGenerationBlockV1 | MockExamOneItemGenerationBlockV2 | None = None,
+) -> tuple[object, ...]:
+    selected_block = block or _block()
     compiled = compile_definition(
-        ROOT / "config/workflows/generic-item-development.v1.8.yaml",
+        ROOT
+        / (
+            "config/workflows/generic-item-development.v1.9.yaml"
+            if selected_block.workflow_definition_version == "1.9.0"
+            else "config/workflows/generic-item-development.v1.8.yaml"
+        ),
         {"authoring", "image", "review", "item_management"},
     )
     definition = SimpleNamespace(
-        definition_key=block.workflow_definition_key,
-        definition_version=block.workflow_definition_version,
+        definition_key=selected_block.workflow_definition_key,
+        definition_version=selected_block.workflow_definition_version,
         definition_hash=compiled.sha256,
         canonical_definition=compiled.as_dict(),
         source_path=compiled.source_path,
@@ -77,22 +98,22 @@ def _row(*, source_tree_sha256: str | None = None) -> tuple[object, ...]:
     release = SimpleNamespace(
         content_pack_release_id="packrel_" + "2" * 32,
         content_pack_id="pack_" + "3" * 32,
-        version=block.content_pack_version,
-        source_tree_sha256=source_tree_sha256 or block.content_pack_source_tree_sha256,
+        version=selected_block.content_pack_version,
+        source_tree_sha256=source_tree_sha256 or selected_block.content_pack_source_tree_sha256,
         bundle_sha256="sha256:" + "4" * 64,
         compatibility_json={
             "workflow_definitions": [
                 {
-                    "key": block.workflow_definition_key,
-                    "versions": [block.workflow_definition_version],
+                    "key": selected_block.workflow_definition_key,
+                    "versions": [selected_block.workflow_definition_version],
                 }
             ]
         },
     )
-    pack = SimpleNamespace(pack_key=block.content_pack_key)
+    pack = SimpleNamespace(pack_key=selected_block.content_pack_key)
     logical = SimpleNamespace(
         preset_id="execpreset_" + "5" * 32,
-        preset_key=block.execution_preset_key,
+        preset_key=selected_block.execution_preset_key,
     )
     revision = SimpleNamespace(
         preset_id=logical.preset_id,
@@ -158,3 +179,31 @@ def test_generation_block_resolver_rejects_missing_or_source_tree_drift() -> Non
             _block()
         )
     assert drift.value.code == "PRODUCTION_CONTENT_PACK_DRIFT"
+
+
+def test_generation_block_v2_pins_a_new_current_compatible_preset_without_plan_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    block = _block_v2()
+    row = _row(block=block)
+    revision = row[-1]
+    revision.preset_revision_id = "execpresetrev_" + "9" * 32
+    protocol = "workflow-role/1.19.0"
+    preset = SimpleNamespace(
+        preset_id=revision.preset_id,
+        preset_revision_id=revision.preset_revision_id,
+        content_sha256=revision.content_sha256,
+        compatible_workflow_protocols=(protocol,),
+    )
+    monkeypatch.setattr(
+        "eom_api.services.mock_exam_generation_block_resolver.ExecutionPresetRevisionV2.model_validate",
+        staticmethod(lambda _value: preset),
+    )
+
+    result = _resolver(_Session(row)).resolve_generation_block(block)
+
+    assert isinstance(result, MockExamGenerationBlockResolutionV2)
+    assert result.generation_block_revision == "2.0"
+    assert result.workflow_definition_version == "1.9.0"
+    assert result.content_pack_version == "1.14.0"
+    assert result.execution_preset_revision_id == "execpresetrev_" + "9" * 32

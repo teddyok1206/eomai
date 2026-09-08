@@ -17,6 +17,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_STANDARD_V6_REFERENCE_KEYS,
     EXPECTED_STANDARD_V7_REFERENCE_KEYS,
     EXPECTED_STANDARD_V8_REFERENCE_KEYS,
+    EXPECTED_STANDARD_V9_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
@@ -40,6 +41,7 @@ CONFIG_V5 = ROOT / "config/control-plane/standard-item-v5"
 CONFIG_V6 = ROOT / "config/control-plane/standard-item-v6"
 CONFIG_V7 = ROOT / "config/control-plane/standard-item-v7"
 CONFIG_V8 = ROOT / "config/control-plane/standard-item-v8"
+CONFIG_V9 = ROOT / "config/control-plane/standard-item-v9"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -443,6 +445,7 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/6.0": 6,
         "standard-control-bootstrap/7.0": 7,
         "standard-control-bootstrap/8.0": 8,
+        "standard-control-bootstrap/9.0": 9,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
@@ -479,6 +482,7 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
         "standard-control-bootstrap/6.0": 3,
         "standard-control-bootstrap/7.0": 4,
         "standard-control-bootstrap/8.0": 4,
+        "standard-control-bootstrap/9.0": 4,
     }
 
 
@@ -493,6 +497,45 @@ def test_standard_bootstrap_v8_pins_v3_protocol_without_copying_authority_files(
     assert {role.role: role.reference_keys for role in manifest.roles} == dict(
         EXPECTED_STANDARD_V8_REFERENCE_KEYS
     )
+
+
+def test_standard_bootstrap_v9_pins_exact_mock_exam_slot_instruction() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V9)
+
+    assert manifest.schema_version == "standard-control-bootstrap/9.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.19.0",)
+    assert manifest.created_at.isoformat() == "2026-09-08T18:55:00+00:00"
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 9
+    assert STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version] == 4
+    assert not (CONFIG_V9 / "references").exists()
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V9_REFERENCE_KEYS
+    )
+
+    authoring_path = CONFIG_V9 / "instructions/authoring.md"
+    authoring = authoring_path.read_text(encoding="utf-8")
+    for required in (
+        "`LOW`=`easy`, `MEDIUM`=`medium`,",
+        "`preferred_material_profiles[0]`",
+        "non-null `inquiry` is `INQUIRY`",
+        "multiple distinct signal kinds are `MIXED`",
+        "Repeated signals of one kind remain",
+        "`inquiry_required` is true",
+        "1500=`1.5`, 2000=`2`, 2500=`2.5`, 3000=`3`",
+        "Preserve the reviewed request's `knowledge_source_mode` exactly",
+        "fail explicitly instead of substituting another profile",
+    ):
+        assert required in authoring
+    assert hashlib.sha256(authoring_path.read_bytes()).hexdigest() == (
+        "82d74b31fa697f55016fcd11a62c940fa8a8840d3175b91e0fdb52d1f8271e4c"
+    )
+    assert hashlib.sha256((CONFIG_V9 / "bootstrap.yaml").read_bytes()).hexdigest() == (
+        "d17e1ec5c52b20e362a01d05144bb99d263f8f1117622fc265e4e66b9c385fc8"
+    )
+    for unchanged in ("platform.md", "image.md", "item-management.md"):
+        assert (CONFIG_V9 / "instructions" / unchanged).read_bytes() == (
+            CONFIG_V8 / "instructions" / unchanged
+        ).read_bytes()
 
 
 def test_standard_bootstrap_v6_pins_source_prompt_and_handoff_profile() -> None:

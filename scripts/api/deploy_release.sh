@@ -1342,6 +1342,7 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
+from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
 repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
@@ -1351,11 +1352,13 @@ os.environ["EOM_STAGING_ROOT"] = staging
 os.environ["EOM_WORKSPACE_ROOT"] = workspace_root
 os.environ["EOM_CODEX_BINARY"] = codex_binary
 from eom_workflow import AgentStep, WORKFLOW_ADMISSION_BY_IDENTITY
+from eom_workflow.control_schemas import control_schema_inventory, load_control_schema
 from eom_api_contracts import (
     MockExamExplicitAnalysisReviewSetV1,
     MockExamExplicitRatingSetV1,
     MockExamGenerationBlockResolutionV1,
     MockExamGraphPublicationInputV1,
+    MockExamProductionExecution,
     MockExamProductionExecutionV1,
     MockExamProductionRetirementCommandV1,
     MockExamProductionRetirementReceiptV1,
@@ -1441,6 +1444,14 @@ if any(
     raise SystemExit("mock-exam contract package exports are incomplete")
 if mock_exam_production_is_terminal.__module__ != "eom_api_contracts.mock_exam_execution":
     raise SystemExit("mock-exam terminal-state contract export is incomplete")
+execution_discriminator = TypeAdapter(MockExamProductionExecution).json_schema().get(
+    "discriminator", {}
+)
+if set(execution_discriminator.get("mapping", {})) != {
+    "mock-exam-production-execution/1.0",
+    "mock-exam-production-execution/2.0",
+}:
+    raise SystemExit("mock-exam execution successor dispatch export is incomplete")
 if any(
     model.__module__ != "eom_api_contracts.mock_exam_retirement"
     for model in (
@@ -1506,6 +1517,14 @@ load_role_input_schema("item_management", "workflow-role/1.19.0")
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
     load_codex_result_schema(schema_id)
+control_schema_names = {name for name, _ in control_schema_inventory()}
+if not {
+    "standard-control-bootstrap-v9",
+    "knowledge-item-control-bootstrap-v6",
+}.issubset(control_schema_names):
+    raise SystemExit("control-policy successor schema inventory is incomplete")
+for schema_name in control_schema_names:
+    load_control_schema(schema_name)
 compiled_versions = {
     compile_definition(
         Path(definition_path), {"authoring", "image", "review", "item_management"}

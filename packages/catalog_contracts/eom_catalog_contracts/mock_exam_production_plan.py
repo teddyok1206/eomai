@@ -516,6 +516,11 @@ def validate_content_team_mock_exam_slot_output_v2(
         content=content,
         authoring_difficulty=authoring_difficulty,
     )
+    if material_profile != slot.preferred_material_profiles[0]:
+        _fail(
+            "PRODUCTION_AUTHORING_MATERIAL_PROFILE_MISMATCH",
+            "authored material profile differs from the exact primary mock-exam slot profile",
+        )
     expected_score = {
         1500: "1.5",
         2000: "2",

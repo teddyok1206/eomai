@@ -2,19 +2,35 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from eom_api.services.mock_exam_production_coordinator import (
+    MockExamProductionCoordinator,
+    _advance_checkpoint,
+)
 from eom_api_contracts.mock_exam_execution import (
+    MockExamGenerationBlockResolutionV2,
     MockExamProductionExecutionV1,
+    MockExamProductionExecutionV2,
     MockExamProductionFailureV1,
     mock_exam_production_is_terminal,
+)
+from eom_catalog_contracts import (
+    build_integrated_science_mock_exam_production_plan_v2,
+    load_integrated_science_editorial_outline,
+    load_integrated_science_mock_exam_layout_policy,
+    load_integrated_science_mock_exam_policy,
 )
 
 from scripts.api.verify_mock_exam_deployment_admission import (
     DeploymentAdmissionError,
+    _installed_contract_validator,
     inspect_checkpoint_root,
 )
+
+NOW = datetime(2026, 9, 8, 19, 0, tzinfo=UTC)
 
 
 def _validator(payload: bytes) -> tuple[str, bool]:
@@ -110,6 +126,94 @@ def test_contract_terminal_rule_distinguishes_retryable_blocked_execution() -> N
     assert mock_exam_production_is_terminal(completed)
     assert not mock_exam_production_is_terminal(retryable)
     assert mock_exam_production_is_terminal(final_failure)
+
+
+def _initial_execution_v2() -> MockExamProductionExecutionV2:
+    plan = build_integrated_science_mock_exam_production_plan_v2(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    initial = MockExamProductionCoordinator.initialize(
+        plan,
+        production_request_id="productionreq_" + "b" * 32,
+        operator_id="operator_" + "a" * 32,
+        at=NOW,
+    )
+    assert isinstance(initial, MockExamProductionExecutionV2)
+    return initial
+
+
+def _generation_resolution_v2() -> MockExamGenerationBlockResolutionV2:
+    block = build_integrated_science_mock_exam_production_plan_v2(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    ).one_item_generation_block
+    return MockExamGenerationBlockResolutionV2(
+        generation_block_key=block.block_key,
+        generation_block_revision=block.block_revision,
+        generation_block_sha256=block.block_sha256,
+        workflow_definition_key=block.workflow_definition_key,
+        workflow_definition_version=block.workflow_definition_version,
+        workflow_definition_sha256="sha256:" + "1" * 64,
+        content_pack_release_id="packrel_" + "2" * 32,
+        content_pack_key=block.content_pack_key,
+        content_pack_version=block.content_pack_version,
+        content_pack_release_sha256="sha256:" + "3" * 64,
+        content_pack_source_tree_sha256=block.content_pack_source_tree_sha256,
+        execution_preset_id="execpreset_" + "4" * 32,
+        execution_preset_revision_id="execpresetrev_" + "5" * 32,
+        execution_preset_key=block.execution_preset_key,
+        execution_preset_sha256="sha256:" + "6" * 64,
+        resolved_at=NOW,
+    )
+
+
+def test_installed_contract_validator_dispatches_nonterminal_execution_v2() -> None:
+    checkpoint = _initial_execution_v2()
+
+    execution_id, terminal = _installed_contract_validator(
+        checkpoint.model_dump_json().encode("utf-8")
+    )
+
+    assert execution_id == checkpoint.execution_id
+    assert checkpoint.schema_version == "mock-exam-production-execution/2.0"
+    assert terminal is False
+
+
+def test_installed_contract_validator_dispatches_terminal_execution_v2() -> None:
+    initial = _initial_execution_v2()
+    failure = MockExamProductionFailureV1(
+        stage="WORKFLOW_EXECUTION",
+        category="WORKFLOW_EXECUTION_FAILED",
+        code="WORKER_RESULT_INVALID",
+        retryable=False,
+        observed_at=NOW + timedelta(seconds=1),
+    )
+    failed = initial.item_runs[4].model_copy(
+        update={
+            "state": "FAILED",
+            "start_command_id": "wfcmd_" + "1" * 32,
+            "workflow_id": "workflow_" + "2" * 32,
+            "workflow_resource_version": 1,
+            "failure": failure,
+        }
+    )
+    checkpoint = _advance_checkpoint(
+        initial,
+        at=NOW + timedelta(seconds=1),
+        generation_block_resolution=_generation_resolution_v2(),
+        item_runs=(*initial.item_runs[:4], failed, *initial.item_runs[5:]),
+    )
+
+    execution_id, terminal = _installed_contract_validator(
+        checkpoint.model_dump_json().encode("utf-8")
+    )
+
+    assert execution_id == checkpoint.execution_id
+    assert checkpoint.schema_version == "mock-exam-production-execution/2.0"
+    assert terminal is True
 
 
 def test_invalid_current_checkpoint_fails_closed(tmp_path: Path) -> None:

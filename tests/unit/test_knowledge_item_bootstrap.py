@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from eom_orchestrator.control_bootstrap import load_standard_bootstrap_manifest
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.knowledge_item_bootstrap import (
     KnowledgeItemBootstrapManifest,
@@ -20,6 +21,8 @@ CONFIG_V2 = ROOT / "config/control-plane/knowledge-grounded-item-v2"
 CONFIG_V3 = ROOT / "config/control-plane/knowledge-grounded-item-v3"
 CONFIG_V4 = ROOT / "config/control-plane/knowledge-grounded-item-v4"
 CONFIG_V5 = ROOT / "config/control-plane/knowledge-grounded-item-v5"
+CONFIG_V6 = ROOT / "config/control-plane/knowledge-grounded-item-v6"
+STANDARD_CONFIG_V9 = ROOT / "config/control-plane/standard-item-v9"
 
 
 def test_knowledge_item_bootstrap_is_schema_first_and_exact() -> None:
@@ -106,6 +109,32 @@ def test_knowledge_item_v5_bootstrap_pins_content_team_v3_protocol() -> None:
         "APPROVED_ITEM",
         "PAST_EXAM",
         "TEXTBOOK",
+    )
+
+
+def test_knowledge_item_v6_bootstrap_projects_exact_slot_standard_successor() -> None:
+    standard = load_standard_bootstrap_manifest(STANDARD_CONFIG_V9)
+    manifest = load_knowledge_item_bootstrap_manifest(CONFIG_V6)
+    value = manifest.model_dump(mode="json")
+
+    validate_control_contract("knowledge-item-control-bootstrap-v6", value)
+    assert manifest.schema_version == "knowledge-item-control-bootstrap/6.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.19.0",)
+    assert manifest.created_at.isoformat() == "2026-09-08T18:58:00+00:00"
+    assert standard.created_at < manifest.created_at
+    assert manifest.evidence_access_by_role == {
+        "authoring": "EVIDENCE_CONTEXT",
+        "image": "EVIDENCE_CONTEXT",
+        "review": "EVIDENCE_CONTEXT",
+        "item_management": "NONE",
+    }
+    assert manifest.retrieval_policy.allowed_source_classes == (
+        "APPROVED_ITEM",
+        "PAST_EXAM",
+        "TEXTBOOK",
+    )
+    assert hashlib.sha256((CONFIG_V6 / "bootstrap.yaml").read_bytes()).hexdigest() == (
+        "1e123bf26bf1527f75c26f32853ca98aa2b7630a23d48e9c65bd7f1fd1c0937a"
     )
 
 

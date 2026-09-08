@@ -189,11 +189,14 @@ def _installed_contract_validator(payload: bytes) -> tuple[str, bool]:
     # Isolated Python resolves this import only from the installed wheel. If an older
     # installation lacks the contract, a non-empty checkpoint root fails closed.
     from eom_api_contracts.mock_exam_execution import (
-        MockExamProductionExecutionV1,
+        MockExamProductionExecution,
         mock_exam_production_is_terminal,
     )
+    from pydantic import TypeAdapter
 
-    checkpoint = MockExamProductionExecutionV1.model_validate_json(payload)
+    checkpoint: MockExamProductionExecution = TypeAdapter(
+        MockExamProductionExecution
+    ).validate_json(payload)
     return checkpoint.execution_id, mock_exam_production_is_terminal(checkpoint)
 
 

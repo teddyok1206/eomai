@@ -14,6 +14,7 @@ from eom_api.services.mock_exam_production_coordinator import (
 from eom_api_contracts import MockExamAssemblyViewV2, MockExamAssemblyViewV3
 from eom_catalog_contracts import (
     AssessmentItemContentV3,
+    MockExamMaterialProfile,
     MockExamProductionPlanV2,
     build_integrated_science_mock_exam_production_plan,
     build_integrated_science_mock_exam_production_plan_v2,
@@ -21,6 +22,7 @@ from eom_catalog_contracts import (
     load_integrated_science_editorial_outline,
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
+    validate_content_team_mock_exam_slot_output,
     validate_content_team_mock_exam_slot_output_v2,
 )
 from eom_catalog_contracts import (
@@ -101,7 +103,11 @@ def _content_v3(
     )
 
 
-def _slot(points_milli: int) -> ContentTeamMockExamSlotV1:
+def _slot(
+    points_milli: int,
+    *,
+    preferred_material_profiles: tuple[MockExamMaterialProfile, ...] = ("TEXT",),
+) -> ContentTeamMockExamSlotV1:
     value = {
         "schema_version": "mock-exam-slot/1.0",
         "assembly_policy_revision_id": "assemblypolicyrev_" + "1" * 32,
@@ -118,7 +124,7 @@ def _slot(points_milli: int) -> ContentTeamMockExamSlotV1:
         "large_unit_key": "eom.is.large.1",
         "inquiry_required": False,
         "preferred_difficulty": "MEDIUM",
-        "preferred_material_profiles": ["TEXT"],
+        "preferred_material_profiles": list(preferred_material_profiles),
     }
     return ContentTeamMockExamSlotV1.model_validate({**value, "slot_sha256": content_sha256(value)})
 
@@ -264,6 +270,31 @@ def test_v3_slot_validator_binds_exact_source_and_final_score(
         validate_content_team_mock_exam_slot_output_v2(
             slot=slot,
             content=_content_v3(wrong),
+            authoring_difficulty="medium",
+        )
+
+
+def test_v3_slot_validator_rejects_an_allowed_nonprimary_material_substitution() -> None:
+    table = ContentTeamTable(
+        headers=("구분", "값"),
+        rows=(("A", "1"),),
+        alignments=("default", "right"),
+    )
+    content = _content_v3(visuals=(table,), visual_layout="TABLE_ONLY")
+    slot = _slot(1500, preferred_material_profiles=("TEXT", "TABLE"))
+
+    assert (
+        validate_content_team_mock_exam_slot_output(
+            slot=slot,
+            content=content,
+            authoring_difficulty="medium",
+        )
+        == "TABLE"
+    )
+    with pytest.raises(ValueError, match="exact primary"):
+        validate_content_team_mock_exam_slot_output_v2(
+            slot=slot,
+            content=content,
             authoring_difficulty="medium",
         )
 

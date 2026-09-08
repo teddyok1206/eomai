@@ -85,6 +85,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
         "knowledge-item-control-bootstrap/3.0",
         "knowledge-item-control-bootstrap/4.0",
         "knowledge-item-control-bootstrap/5.0",
+        "knowledge-item-control-bootstrap/6.0",
     ]
     preset_key: Literal["knowledge-grounded-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -115,6 +116,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
             "knowledge-item-control-bootstrap/3.0": "workflow-role/1.17.0",
             "knowledge-item-control-bootstrap/4.0": "workflow-role/1.17.0",
             "knowledge-item-control-bootstrap/5.0": "workflow-role/1.19.0",
+            "knowledge-item-control-bootstrap/6.0": "workflow-role/1.19.0",
         }[self.schema_version]
         if self.compatible_workflow_protocols != (expected_protocol,):
             raise ValueError("knowledge item workflow protocol differs")
@@ -162,6 +164,7 @@ def load_knowledge_item_bootstrap_manifest(
             "knowledge-item-control-bootstrap/3.0": "knowledge-item-control-bootstrap-v3",
             "knowledge-item-control-bootstrap/4.0": "knowledge-item-control-bootstrap-v4",
             "knowledge-item-control-bootstrap/5.0": "knowledge-item-control-bootstrap-v5",
+            "knowledge-item-control-bootstrap/6.0": "knowledge-item-control-bootstrap-v6",
         }.get(schema_version)
         if schema_name is None:
             raise ValueError("knowledge item bootstrap schema version is unsupported")
