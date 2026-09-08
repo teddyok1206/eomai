@@ -1,0 +1,111 @@
+{
+  "$id": "eom://schemas/assessment-assembly/mock-exam-layout-policy/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "mock-exam-layout-policy/1.0"},
+    "layout_policy_key": {
+      "pattern": "^[a-z][a-z0-9-]{2,127}$",
+      "type": "string"
+    },
+    "layout_policy_revision_id": {
+      "pattern": "^layoutpolicyrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "revision_number": {"minimum": 1, "type": "integer"},
+    "state": {"const": "RELEASED"},
+    "subject_key": {
+      "pattern": "^[a-z0-9][a-z0-9._:-]{0,159}$",
+      "type": "string"
+    },
+    "assembly_policy_revision_id": {
+      "pattern": "^assemblypolicyrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "assembly_policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "guidance_revision": {"minimum": 1, "type": "integer"},
+    "guidance_reviewed_document_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "slots": {
+      "items": {"$ref": "#/$defs/slot"},
+      "maxItems": 200,
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "layout_policy_key",
+    "layout_policy_revision_id",
+    "revision_number",
+    "state",
+    "subject_key",
+    "assembly_policy_revision_id",
+    "assembly_policy_sha256",
+    "guidance_revision",
+    "guidance_reviewed_document_sha256",
+    "slots"
+  ],
+  "$defs": {
+    "slot": {
+      "additionalProperties": false,
+      "properties": {
+        "slot_id": {
+          "pattern": "^slot-[0-9]{2,3}$",
+          "type": "string"
+        },
+        "position": {"maximum": 200, "minimum": 1, "type": "integer"},
+        "points_milli": {"maximum": 1000000, "minimum": 1, "type": "integer"},
+        "coverage_role": {"enum": ["REQUIRED", "BALANCE"]},
+        "coverage_requirement_id": {
+          "oneOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {"type": "null"}
+          ]
+        },
+        "balance_large_unit_key": {
+          "oneOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$",
+              "type": "string"
+            },
+            {"type": "null"}
+          ]
+        },
+        "inquiry_required": {"type": "boolean"},
+        "preferred_difficulty": {"enum": ["LOW", "MEDIUM", "HIGH"]},
+        "preferred_material_profiles": {
+          "items": {
+            "enum": ["TEXT", "DATA", "TABLE", "IMAGE", "MIXED", "INQUIRY"]
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "slot_id",
+        "position",
+        "points_milli",
+        "coverage_role",
+        "coverage_requirement_id",
+        "balance_large_unit_key",
+        "inquiry_required",
+        "preferred_difficulty",
+        "preferred_material_profiles"
+      ],
+      "type": "object"
+    }
+  },
+  "title": "Mock Exam Layout Policy V1",
+  "type": "object"
+}

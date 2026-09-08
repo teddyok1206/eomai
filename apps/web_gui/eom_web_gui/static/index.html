@@ -184,7 +184,7 @@
               <div class="form-actions"><button id="item-bank-more" class="button secondary" type="button" hidden>다음 문항 더 보기</button></div>
             </section>
             <section class="panel mock-exam-assembly-panel">
-              <div class="panel-heading"><div><p class="eyebrow">팀장 배치 기준 · Graph 고정 버전</p><h2>모의고사 Blueprint 조립</h2><p>문항은행에서 25개를 담으면 공개된 배치 정책이 필수 단원 21개와 균형 슬롯 4개를 검증합니다.</p></div><span id="mock-exam-count" class="status-badge tone-neutral"><span class="status-icon">■</span> 0 / 25</span></div>
+              <div class="panel-heading"><div><p class="eyebrow">팀장 배치 기준 · Graph 고정 버전</p><h2>모의고사 서버 배치</h2><p>서버가 승인 문항의 Graph 단원·최종 검토 등급·사용 이력을 함께 검증해 25개 슬롯을 자동 계획합니다.</p></div><span id="mock-exam-count" class="status-badge tone-neutral"><span class="status-icon">■</span> 계획 대기</span></div>
               <section id="mock-exam-policy-summary" class="knowledge-boundary" aria-label="모의고사 배치 정책"><strong>배치 정책 불러오는 중</strong><span>검증 대기</span><p>점수·필수 영역·탐구 문항 수는 정책 리비전에 고정됩니다.</p></section>
               <div class="mock-exam-form-grid">
                 <label>시험지 키<input id="mock-exam-key" maxlength="128" placeholder="2026-integrated-science-mock-01"></label>
@@ -193,11 +193,11 @@
                 <label>폼 키<input id="mock-exam-form-key" maxlength="128" value="main"></label>
                 <label>표시 이름<input id="mock-exam-display-label" maxlength="128" value="본시험지"></label>
               </div>
-              <p id="mock-exam-message" class="form-message" aria-live="polite">문항 카드에서 ‘Blueprint에 담기’를 눌러 25문항을 구성하세요.</p>
-              <div id="mock-exam-selections" class="mock-exam-selections"><p class="empty-state">선택된 문항이 없습니다.</p></div>
-              <div class="form-actions"><button id="mock-exam-clear" class="button quiet" type="button">선택 비우기</button><button id="mock-exam-submit" class="button primary" type="button" disabled>정책 검증 후 조립 확정</button></div>
+              <p id="mock-exam-message" class="form-message" aria-live="polite">현재 고정 Graph에서 완전한 서버 계획을 계산합니다.</p>
+              <div id="mock-exam-selections" class="mock-exam-selections"><p class="empty-state">서버 계획을 불러오는 중입니다.</p></div>
+              <div class="form-actions"><button id="mock-exam-clear" class="button quiet" type="button">서버 계획 새로고침</button><button id="mock-exam-submit" class="button primary" type="button" disabled>서버 계획으로 조립 확정</button></div>
               <section class="knowledge-boundary" aria-label="시험지 HWPX 제작">
-                <strong>전체 시험지 HWPX</strong><span id="mock-exam-hwpx-state">Blueprint 확정 대기</span>
+                <strong>전체 시험지 HWPX</strong><span id="mock-exam-hwpx-state">서버 계획 확정 대기</span>
                 <p>팀장 한글화 프로그램으로 각 문항·정답·해설을 순서대로 렌더링하고 한 파일로 결합합니다. 표·이미지·수식 수는 문항 내용에 따라 달라집니다.</p>
                 <label>고정 배치 리비전<input id="mock-exam-assembly-revision" readonly placeholder="assemblyrev_..."></label>
                 <div class="form-actions"><button id="mock-exam-hwpx-submit" class="button primary" type="button" disabled>전체 시험지 HWPX 만들기</button><a id="mock-exam-hwpx-download" class="button secondary" href="#" hidden>전체 시험지 다운로드</a></div>

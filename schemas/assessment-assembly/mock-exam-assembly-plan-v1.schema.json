@@ -1,0 +1,168 @@
+{
+  "$id": "eom://schemas/assessment-assembly/mock-exam-assembly-plan/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "mock-exam-assembly-plan/1.0"},
+    "status": {"enum": ["READY", "SHORTAGE"]},
+    "policy_revision_id": {"pattern": "^assemblypolicyrev_[0-9a-f]{32}$", "type": "string"},
+    "policy_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "layout_policy_revision_id": {"pattern": "^layoutpolicyrev_[0-9a-f]{32}$", "type": "string"},
+    "layout_policy_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "rating_policy_revision_id": {"pattern": "^ratingpolicyrev_[0-9a-f]{32}$", "type": "string"},
+    "rating_policy_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "graph_snapshot_revision_id": {"pattern": "^graphrev_[0-9a-f]{32}$", "type": "string"},
+    "graph_snapshot_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "usage_snapshot": {"$ref": "#/$defs/usageSnapshot"},
+    "resolved_candidate_count": {"maximum": 5000, "minimum": 0, "type": "integer"},
+    "rated_candidate_count": {"maximum": 5000, "minimum": 0, "type": "integer"},
+    "placements": {
+      "items": {"$ref": "#/$defs/placement"},
+      "maxItems": 200,
+      "type": "array"
+    },
+    "shortages": {
+      "items": {"$ref": "#/$defs/shortage"},
+      "maxItems": 200,
+      "type": "array"
+    },
+    "validation": {
+      "oneOf": [{"$ref": "#/$defs/validation"}, {"type": "null"}]
+    },
+    "search_visited_nodes": {"maximum": 100000, "minimum": 0, "type": "integer"},
+    "planned_at": {"format": "date-time", "type": "string"},
+    "plan_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "policy_revision_id",
+    "policy_sha256",
+    "layout_policy_revision_id",
+    "layout_policy_sha256",
+    "rating_policy_revision_id",
+    "rating_policy_sha256",
+    "graph_snapshot_revision_id",
+    "graph_snapshot_sha256",
+    "usage_snapshot",
+    "resolved_candidate_count",
+    "rated_candidate_count",
+    "placements",
+    "shortages",
+    "validation",
+    "search_visited_nodes",
+    "planned_at",
+    "plan_sha256"
+  ],
+  "$defs": {
+    "contentPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "item_component_id": {"pattern": "^itemcomponent_[0-9a-f]{32}$", "type": "string"},
+        "artifact_id": {"pattern": "^artifact_[0-9a-f]{32}$", "type": "string"},
+        "artifact_revision_id": {"pattern": "^rev_[0-9a-f]{32}$", "type": "string"},
+        "member_path": {"const": "assessment-item-content.json"},
+        "schema_ref": {"const": "eom.assessment.item-content/2.0"},
+        "media_type": {"const": "application/json"},
+        "sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        "editorial_markdown_member": {"const": "content-team-item.md"},
+        "editorial_markdown_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["item_component_id", "artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256", "editorial_markdown_member", "editorial_markdown_sha256"],
+      "type": "object"
+    },
+    "reviewPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "item_review_record_id": {"pattern": "^itemreview_[0-9a-f]{32}$", "type": "string"},
+        "review_artifact_id": {"pattern": "^artifact_[0-9a-f]{32}$", "type": "string"},
+        "review_artifact_revision_id": {"pattern": "^rev_[0-9a-f]{32}$", "type": "string"},
+        "review_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        "decision": {"const": "APPROVE"},
+        "final_rating": {"enum": ["A", "B", "C"]}
+      },
+      "required": ["item_review_record_id", "review_artifact_id", "review_artifact_revision_id", "review_sha256", "decision", "final_rating"],
+      "type": "object"
+    },
+    "usageSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {"const": "mock-exam-usage-snapshot/1.0"},
+        "usage_snapshot_id": {"pattern": "^usagesnapshot_[0-9a-f]{32}$", "type": "string"},
+        "captured_at": {"format": "date-time", "type": "string"},
+        "candidate_revision_count": {"maximum": 5000, "minimum": 0, "type": "integer"},
+        "usage_record_count": {"minimum": 0, "type": "integer"},
+        "usage_records_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        "snapshot_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["schema_version", "usage_snapshot_id", "captured_at", "candidate_revision_count", "usage_record_count", "usage_records_sha256", "snapshot_sha256"],
+      "type": "object"
+    },
+    "placement": {
+      "additionalProperties": false,
+      "properties": {
+        "slot_id": {"pattern": "^slot-[0-9]{2,3}$", "type": "string"},
+        "position": {"maximum": 200, "minimum": 1, "type": "integer"},
+        "display_number": {"maxLength": 32, "minLength": 1, "type": "string"},
+        "item_id": {"pattern": "^item_[0-9a-f]{32}$", "type": "string"},
+        "item_revision_id": {"pattern": "^itemrev_[0-9a-f]{32}$", "type": "string"},
+        "item_manifest_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        "graph_item_node_id": {"pattern": "^knode_[0-9a-f]{32}$", "type": "string"},
+        "graph_analysis_run_id": {"pattern": "^analysisrun_[0-9a-f]{32}$", "type": "string"},
+        "graph_source_class": {"enum": ["APPROVED_ITEM", "PAST_EXAM"]},
+        "graph_occurrence_placement_node_id": {"oneOf": [{"pattern": "^knode_[0-9a-f]{32}$", "type": "string"}, {"type": "null"}]},
+        "curriculum_unit_keys": {"items": {"pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$", "type": "string"}, "maxItems": 16, "minItems": 1, "type": "array", "uniqueItems": true},
+        "large_unit_key": {"pattern": "^eom\\.is\\.large\\.[1-6]$", "type": "string"},
+        "points_milli": {"maximum": 1000000, "minimum": 1, "type": "integer"},
+        "coverage_role": {"enum": ["REQUIRED", "BALANCE"]},
+        "coverage_requirement_id": {"oneOf": [{"pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$", "type": "string"}, {"type": "null"}]},
+        "coverage_unit_key": {"oneOf": [{"pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$", "type": "string"}, {"type": "null"}]},
+        "is_inquiry": {"type": "boolean"},
+        "item_type_key": {"maxLength": 128, "minLength": 1, "type": "string"},
+        "difficulty_band": {"oneOf": [{"maxLength": 64, "minLength": 1, "type": "string"}, {"type": "null"}]},
+        "material_profile": {"enum": ["TEXT", "DATA", "TABLE", "IMAGE", "MIXED", "INQUIRY"]},
+        "source_score_display": {"enum": ["2", "2.5", "3"]},
+        "content": {"$ref": "#/$defs/contentPointer"},
+        "review": {"$ref": "#/$defs/reviewPointer"},
+        "usage_count": {"minimum": 0, "type": "integer"},
+        "latest_usage_at": {"oneOf": [{"format": "date-time", "type": "string"}, {"type": "null"}]},
+        "usage_fingerprint_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        "selection_reason_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}
+      },
+      "required": ["slot_id", "position", "display_number", "item_id", "item_revision_id", "item_manifest_sha256", "graph_item_node_id", "graph_analysis_run_id", "graph_source_class", "graph_occurrence_placement_node_id", "curriculum_unit_keys", "large_unit_key", "points_milli", "coverage_role", "coverage_requirement_id", "coverage_unit_key", "is_inquiry", "item_type_key", "difficulty_band", "material_profile", "source_score_display", "content", "review", "usage_count", "latest_usage_at", "usage_fingerprint_sha256", "selection_reason_sha256"],
+      "type": "object"
+    },
+    "shortage": {
+      "additionalProperties": false,
+      "properties": {
+        "slot_id": {"pattern": "^slot-[0-9]{2,3}$", "type": "string"},
+        "position": {"maximum": 200, "minimum": 1, "type": "integer"},
+        "coverage_role": {"enum": ["REQUIRED", "BALANCE"]},
+        "coverage_requirement_id": {"oneOf": [{"pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$", "type": "string"}, {"type": "null"}]},
+        "balance_large_unit_key": {"oneOf": [{"pattern": "^eom\\.is\\.large\\.[1-6]$", "type": "string"}, {"type": "null"}]},
+        "inquiry_required": {"type": "boolean"},
+        "available_candidate_count": {"maximum": 5000, "minimum": 0, "type": "integer"},
+        "reason": {"enum": ["NO_STRUCTURAL_CANDIDATES", "NO_RATED_CANDIDATES", "SLOT_CANDIDATE_MISSING", "CONSTRAINT_SEARCH_EXHAUSTED"]}
+      },
+      "required": ["slot_id", "position", "coverage_role", "coverage_requirement_id", "balance_large_unit_key", "inquiry_required", "available_candidate_count", "reason"],
+      "type": "object"
+    },
+    "validation": {
+      "additionalProperties": false,
+      "properties": {
+        "item_count": {"maximum": 200, "minimum": 1, "type": "integer"},
+        "total_points_milli": {"maximum": 1000000, "minimum": 1, "type": "integer"},
+        "score_distribution": {"additionalProperties": {"minimum": 0, "type": "integer"}, "type": "object"},
+        "required_slot_count": {"maximum": 200, "minimum": 0, "type": "integer"},
+        "balance_slot_count": {"maximum": 200, "minimum": 0, "type": "integer"},
+        "inquiry_count": {"maximum": 200, "minimum": 0, "type": "integer"},
+        "coverage_requirement_ids": {"items": {"type": "string"}, "type": "array", "uniqueItems": true},
+        "major_unit_counts": {"additionalProperties": {"minimum": 0, "type": "integer"}, "type": "object"}
+      },
+      "required": ["item_count", "total_points_milli", "score_distribution", "required_slot_count", "balance_slot_count", "inquiry_count", "coverage_requirement_ids", "major_unit_counts"],
+      "type": "object"
+    }
+  },
+  "title": "Mock Exam Assembly Plan V1",
+  "type": "object"
+}

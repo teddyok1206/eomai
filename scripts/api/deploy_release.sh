@@ -202,6 +202,9 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/runtime_isolation_verifier.py",
         "eom_api/routers/control_plane.py",
         "eom_api/routers/knowledge_analysis.py",
+        "eom_api/routers/assessment_assemblies.py",
+        "eom_api/services/command_adapter.py",
+        "eom_api/services/query_adapter.py",
         "eom_api/services/catalog_application_client.py",
         "eom_api/services/control_plane_adapter.py",
         "eom_api/openapi/eom-api-v1.openapi.json",
@@ -231,13 +234,15 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         if name.startswith("eom_api_contracts/schemas/") and name.endswith(".schema.json")
     ]
     if (
-        len(schemas) != 15
+        len(schemas) != 16
         or "eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"
         not in schemas
         or "eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"
         not in schemas
         or "eom_api_contracts/schemas/item-bank-entry-v1.schema.json" not in schemas
         or "eom_api_contracts/schemas/production-item-candidate-v1.schema.json"
+        not in schemas
+        or "eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json"
         not in schemas
         or "eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"
         not in schemas
@@ -251,7 +256,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         not in schemas
     ):
         raise SystemExit(
-            "expected 15 packaged API schemas including HWPX, Items, production candidates, curriculum "
+            "expected 16 packaged API schemas including HWPX, Items, production candidates, mock-exam plans, curriculum "
             "capability, assessment occurrence, and assessment learning, "
             f"found {schemas}"
         )
@@ -321,6 +326,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_contracts/content_team_markdown.py",
         "eom_hwpx_contracts/validation.py",
         "eom_catalog_contracts/assessment_item.py",
+        "eom_catalog_contracts/assessment_assembly.py",
         "eom_catalog_contracts/application.py",
         "eom_catalog_contracts/knowledge.py",
         "eom_catalog_contracts/knowledge_analysis_batch.py",
@@ -331,6 +337,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_contracts/legacy_knowledge.py",
         "eom_catalog_contracts/legacy_usage.py",
         "eom_catalog_contracts/validation.py",
+        "eom_catalog_contracts/mock_exam_planner.py",
         "eom_catalog_service/application_runner.py",
         "eom_catalog_service/application_server.py",
         "eom_catalog_service/generated_stimulus.py",
@@ -344,6 +351,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/knowledge_analysis_sources.py",
         "eom_catalog_service/knowledge_stimulus.py",
         "eom_catalog_service/local_image_adapter.py",
+        "eom_catalog_service/mock_exam_assembly_service.py",
+        "eom_catalog_service/mock_exam_candidate_repository.py",
         "eom_catalog_service/legacy_usage_models.py",
         "eom_catalog_service/legacy_usage_service.py",
         "eom_catalog_service/legacy_xlsx.py",
@@ -378,6 +387,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_manager/content_team_compatibility_evidence.py",
         "eom_hwpx_manager/download_server.py",
         "eom_hwpx_manager/markdown_structure.py",
+        "eom_hwpx_manager/exam_application_service.py",
         "eom_hwpx_manager/question_template.py",
         "eom_hwpx_manager/question_template_service.py",
         "eom_hwpx_manager/runner.py",
@@ -473,7 +483,11 @@ with zipfile.ZipFile(platform_wheel) as archive:
 catalog_prefix = "eom_catalog_contracts/resources/"
 catalog_resources = {
     "assessment-assembly/mock-exam-assembly-manifest-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
+    "assessment-assembly/mock-exam-assembly-manifest-v2.schema.json": "schemas/assessment-assembly/mock-exam-assembly-manifest-v2.schema.json",
+    "assessment-assembly/mock-exam-assembly-plan-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-plan-v1.schema.json",
     "assessment-assembly/mock-exam-assembly-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-policy-v1.schema.json",
+    "assessment-assembly/mock-exam-layout-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-layout-policy-v1.schema.json",
+    "assessment-assembly/mock-exam-rating-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-rating-policy-v1.schema.json",
     "catalog-application/catalog-application-request-v1.schema.json": "schemas/catalog-application/catalog-application-request-v1.schema.json",
     "catalog-application/catalog-application-response-v1.schema.json": "schemas/catalog-application/catalog-application-response-v1.schema.json",
     "catalog-application/catalog-application-request-v2.schema.json": "schemas/catalog-application/catalog-application-request-v2.schema.json",
@@ -665,16 +679,18 @@ with zipfile.ZipFile(platform_wheel) as archive:
             raise SystemExit(f"Catalog Contract schema resource drift: {resource_name}")
         if member not in record:
             raise SystemExit(f"Catalog Contract resource missing from RECORD: {resource_name}")
-    policy_member = (
-        catalog_prefix
-        + "assessment-assembly/integrated-science-mock-exam-assembly-v1.json"
-    )
-    policy_source = (
-        repository_root
-        / "content/assembly-policies/integrated-science-mock-exam-assembly-v1.json"
-    )
-    if archive.read(policy_member) != policy_source.read_bytes() or policy_member not in record:
-        raise SystemExit("Catalog Contract assembly policy resource drift")
+    for policy_name in (
+        "integrated-science-mock-exam-assembly-v1.json",
+        "integrated-science-mock-exam-layout-v1.json",
+        "integrated-science-item-rating-v1.json",
+    ):
+        policy_member = catalog_prefix + "assessment-assembly/" + policy_name
+        policy_source = repository_root / "content/assembly-policies" / policy_name
+        if (
+            archive.read(policy_member) != policy_source.read_bytes()
+            or policy_member not in record
+        ):
+            raise SystemExit(f"Catalog Contract assembly policy resource drift: {policy_name}")
 
 image_prefix = "eom_image_contracts/schemas/"
 image_resources = {

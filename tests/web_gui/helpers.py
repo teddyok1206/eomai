@@ -157,6 +157,7 @@ class FakeGateway:
         self.graph_grounding_available = graph_grounding_available
         self.hwpx_build_calls = 0
         self.mock_exam_hwpx_build_calls = 0
+        self.planned_mock_exam_calls = 0
         self.structured_import_calls = 0
         self.control_command_calls = 0
         self.auth_enrollment_calls = 0
@@ -883,11 +884,47 @@ class FakeGateway:
             "guidance_revision": 1,
         }
 
+    async def mock_exam_assembly_plan(self, session: WebSession) -> dict[str, Any]:
+        del session
+        return {
+            "schema_version": "mock-exam-assembly-plan/1.0",
+            "status": "SHORTAGE",
+            "policy_revision_id": "assemblypolicyrev_" + "1" * 32,
+            "policy_sha256": "sha256:" + "2" * 64,
+            "layout_policy_revision_id": "layoutpolicyrev_" + "3" * 32,
+            "layout_policy_sha256": "sha256:" + "4" * 64,
+            "rating_policy_revision_id": "ratingpolicyrev_" + "5" * 32,
+            "rating_policy_sha256": "sha256:" + "6" * 64,
+            "graph_snapshot_revision_id": "graphrev_" + "7" * 32,
+            "graph_snapshot_sha256": "sha256:" + "8" * 64,
+            "usage_snapshot": {},
+            "resolved_candidate_count": 0,
+            "rated_candidate_count": 0,
+            "placements": [],
+            "shortages": [],
+            "validation": None,
+            "search_visited_nodes": 0,
+            "planned_at": NOW.isoformat(),
+            "plan_sha256": "sha256:" + "9" * 64,
+        }
+
     async def create_mock_exam_assembly(self, session: WebSession, value: Any) -> dict[str, Any]:
         del session, value
         return {
             "resource_type": "assessment_assembly_revision",
             "resource_id": "assemblyrev_" + "3" * 32,
+            "status": "COMPLETED",
+            "resource_version": 1,
+        }
+
+    async def create_planned_mock_exam_assembly(
+        self, session: WebSession, value: Any
+    ) -> dict[str, Any]:
+        del session, value
+        self.planned_mock_exam_calls += 1
+        return {
+            "resource_type": "assessment_assembly_revision",
+            "resource_id": "assemblyrev_" + "4" * 32,
             "status": "COMPLETED",
             "resource_version": 1,
         }

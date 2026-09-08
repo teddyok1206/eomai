@@ -35,7 +35,7 @@ const state = {
   itemBankCursor: null,
   itemBankQuery: "",
   mockExamPolicy: null,
-  mockExamSelections: [],
+  mockExamPlan: null,
   mockExamAssemblyRevisionId: null,
   mockExamHwpxBuildId: null,
   mockExamHwpxPollTimer: null,
@@ -853,11 +853,7 @@ function installItemBank() {
     loadItemBank(true);
   });
   $("#item-bank-more").addEventListener("click", () => loadItemBank(false));
-  $("#mock-exam-clear").addEventListener("click", () => {
-    state.mockExamSelections = [];
-    renderMockExamSelections();
-    renderItemBank();
-  });
+  $("#mock-exam-clear").addEventListener("click", loadMockExamPlan);
   $("#mock-exam-submit").addEventListener("click", submitMockExamAssembly);
   $("#mock-exam-hwpx-submit").addEventListener("click", createMockExamHwpxBuild);
   loadMockExamPolicy();
@@ -871,82 +867,79 @@ async function loadMockExamPolicy() {
     root.querySelector("strong").textContent = `${policy.item_count}문항 · ${(policy.total_points_milli / 1000).toFixed(0)}점`;
     root.querySelector("span").textContent = `필수 ${policy.required_slot_count} · 균형 ${policy.balance_slot_count}`;
     root.querySelector("p").textContent = `배점 ${policy.score_distribution.map((row) => `${(row.points_milli / 1000).toFixed(1)}점×${row.count}`).join(" · ")} · 탐구/실험 ${policy.inquiry_min_count}~${policy.inquiry_max_count}문항 · 팀장 검토 지침 ${policy.guidance_revision}판`;
-    renderMockExamSelections();
+    await loadMockExamPlan();
   } catch (failure) {
     showMessage($("#mock-exam-message"), `배치 정책 조회 실패: ${failure.message}`, "error");
   }
 }
 
-function mockExamDefaultPoints(position) {
-  let boundary = 0;
-  for (const bucket of state.mockExamPolicy?.score_distribution || []) {
-    boundary += bucket.count;
-    if (position <= boundary) return bucket.points_milli;
+async function loadMockExamPlan() {
+  const message = $("#mock-exam-message");
+  state.mockExamPlan = null;
+  $("#mock-exam-submit").disabled = true;
+  setStatus($("#mock-exam-count"), "neutral", "■", "계획 중");
+  showMessage(message, "현재 Graph·검토 등급·사용 이력으로 서버 배치 계획을 계산하고 있습니다.", "neutral");
+  try {
+    state.mockExamPlan = await api("/mock-exam-assemblies/plan");
+    renderMockExamSelections();
+  } catch (failure) {
+    state.mockExamPlan = null;
+    renderMockExamSelections();
+    showMessage(message, `서버 배치 계획 조회 실패: ${failure.message}`, "error");
   }
-  return 0;
-}
-
-function toggleMockExamSelection(entry) {
-  const index = state.mockExamSelections.findIndex((row) => row.entry.item_revision_id === entry.item_revision_id);
-  if (index >= 0) {
-    state.mockExamSelections.splice(index, 1);
-  } else if (state.mockExamSelections.length < (state.mockExamPolicy?.item_count || 25)) {
-    const position = state.mockExamSelections.length + 1;
-    state.mockExamSelections.push({entry, points_milli: mockExamDefaultPoints(position), coverage_requirement_id: null, is_inquiry: false, material_type: "text"});
-  }
-  state.mockExamSelections.forEach((row, position) => {
-    row.points_milli ||= mockExamDefaultPoints(position + 1);
-  });
-  renderMockExamSelections();
-  renderItemBank();
 }
 
 function renderMockExamSelections() {
   const root = $("#mock-exam-selections");
   root.replaceChildren();
-  const selected = state.mockExamSelections;
+  const plan = state.mockExamPlan;
   const expected = state.mockExamPolicy?.item_count || 25;
-  setStatus($("#mock-exam-count"), selected.length === expected ? "success" : "neutral", selected.length === expected ? "✓" : "■", `${selected.length} / ${expected}`);
-  $("#mock-exam-submit").disabled = selected.length !== expected || !state.mockExamPolicy;
-  if (!selected.length) {
-    root.append(Object.assign(document.createElement("p"), {className: "empty-state", textContent: "선택된 문항이 없습니다."}));
+  const ready = plan?.status === "READY" && plan.placements?.length === expected;
+  setStatus($("#mock-exam-count"), ready ? "success" : "warning", ready ? "✓" : "◆", ready ? `${expected}문항 계획 완료` : "후보 부족");
+  $("#mock-exam-submit").disabled = !ready;
+  if (!plan) {
+    root.append(Object.assign(document.createElement("p"), {className: "empty-state", textContent: "서버 배치 계획을 불러오지 못했습니다."}));
     return;
   }
-  selected.forEach((selection, index) => {
+  if (!ready) {
+    const summary = Object.assign(document.createElement("p"), {
+      className: "empty-state",
+      textContent: `구조 후보 ${plan.resolved_candidate_count}개 · 검토 등급 통과 ${plan.rated_candidate_count}개라 완전한 ${expected}문항 계획을 만들 수 없습니다. 부분 시험지는 저장하지 않습니다.`,
+    });
+    root.append(summary);
+    for (const shortage of plan.shortages || []) {
+      const row = document.createElement("div");
+      row.className = "mock-exam-selection";
+      row.append(
+        Object.assign(document.createElement("strong"), {textContent: String(shortage.position)}),
+        Object.assign(document.createElement("span"), {textContent: shortage.coverage_requirement_id || shortage.balance_large_unit_key || shortage.slot_id}),
+        Object.assign(document.createElement("small"), {textContent: `${shortage.reason} · 후보 ${shortage.available_candidate_count}개`}),
+      );
+      root.append(row);
+    }
+    showMessage($("#mock-exam-message"), "승인된 V2 문항과 A/B/C 검토 등급이 충분해질 때 서버가 자동으로 완전한 배치를 만듭니다.", "warning");
+    return;
+  }
+  for (const placement of plan.placements) {
     const row = document.createElement("div");
     row.className = "mock-exam-selection";
-    const number = Object.assign(document.createElement("strong"), {textContent: String(index + 1)});
-    const label = Object.assign(document.createElement("span"), {textContent: `${selection.entry.occurrence_display_label} · ${selection.entry.item_number}번`});
-    const units = Object.assign(document.createElement("small"), {textContent: selection.entry.curriculum_units.map((unit) => unit.unit_code).join(", ")});
-    const points = document.createElement("select");
-    for (const bucket of state.mockExamPolicy?.score_distribution || []) {
-      points.append(new Option(`${(bucket.points_milli / 1000).toFixed(1)}점`, String(bucket.points_milli)));
-    }
-    points.value = String(selection.points_milli);
-    points.addEventListener("change", () => { selection.points_milli = Number(points.value); });
-    const requirement = document.createElement("select");
-    requirement.append(new Option("균형 슬롯", ""));
-    for (const rule of state.mockExamPolicy?.coverage_requirements || []) {
-      requirement.append(new Option(rule.requirement_id, rule.requirement_id));
-    }
-    requirement.value = selection.coverage_requirement_id || "";
-    requirement.addEventListener("change", () => { selection.coverage_requirement_id = requirement.value || null; });
-    const inquiryLabel = document.createElement("label");
-    const inquiry = Object.assign(document.createElement("input"), {type: "checkbox", checked: selection.is_inquiry});
-    inquiry.addEventListener("change", () => { selection.is_inquiry = inquiry.checked; });
-    inquiryLabel.append(inquiry, "탐구/실험");
-    const remove = actionButton("빼기", () => toggleMockExamSelection(selection.entry), true);
-    row.append(number, label, units, requirement, points, inquiryLabel, remove);
+    const role = placement.coverage_role === "REQUIRED"
+      ? `필수 · ${placement.coverage_unit_key}`
+      : `균형 · ${placement.large_unit_key}`;
+    row.append(
+      Object.assign(document.createElement("strong"), {textContent: placement.display_number}),
+      Object.assign(document.createElement("span"), {textContent: `${role} · ${(placement.points_milli / 1000).toFixed(1)}점`}),
+      Object.assign(document.createElement("small"), {textContent: `${placement.review.final_rating}등급 · ${placement.material_profile}${placement.is_inquiry ? " · 탐구/실험" : ""} · 사용 ${placement.usage_count}회`}),
+    );
     root.append(row);
-  });
+  }
+  showMessage($("#mock-exam-message"), `서버가 ${plan.search_visited_nodes}개 탐색 노드를 검증해 완전한 ${expected}문항 계획을 고정했습니다.`, "success");
 }
 
 async function submitMockExamAssembly() {
   const message = $("#mock-exam-message");
   try {
-    const snapshots = new Set(state.mockExamSelections.map((row) => `${row.entry.graph_snapshot_revision_id}:${row.entry.snapshot_sha256}`));
-    if (snapshots.size !== 1) throw new StudioApiError("선택 문항의 Graph snapshot이 서로 다릅니다.");
-    const first = state.mockExamSelections[0].entry;
+    if (state.mockExamPlan?.status !== "READY") throw new StudioApiError("ASSEMBLY_CANDIDATE_SHORTAGE");
     const payload = {
       idempotency_key: `mockexam-${crypto.randomUUID().replaceAll("-", "")}`,
       deliverable_key: $("#mock-exam-key").value.trim(),
@@ -954,25 +947,16 @@ async function submitMockExamAssembly() {
       edition: $("#mock-exam-edition").value.trim(),
       form_key: $("#mock-exam-form-key").value.trim(),
       display_label: $("#mock-exam-display-label").value.trim(),
-      graph_snapshot_revision_id: first.graph_snapshot_revision_id,
-      graph_snapshot_sha256: first.snapshot_sha256,
-      placements: state.mockExamSelections.map((selection, index) => ({
-        position: index + 1,
-        item_id: selection.entry.item_id,
-        item_revision_id: selection.entry.item_revision_id,
-        item_manifest_sha256: selection.entry.item_manifest_sha256,
-        graph_placement_node_id: selection.entry.graph_placement_node_id,
-        curriculum_unit_keys: selection.entry.curriculum_units.map((unit) => unit.unit_key).sort(),
-        points_milli: selection.points_milli,
-        coverage_role: selection.coverage_requirement_id ? "REQUIRED" : "BALANCE",
-        coverage_requirement_id: selection.coverage_requirement_id,
-        is_inquiry: selection.is_inquiry,
-        material_type: selection.material_type,
-      })),
+      policy_revision_id: state.mockExamPlan.policy_revision_id,
+      policy_sha256: state.mockExamPlan.policy_sha256,
+      graph_snapshot_revision_id: state.mockExamPlan.graph_snapshot_revision_id,
+      graph_snapshot_sha256: state.mockExamPlan.graph_snapshot_sha256,
+      expected_plan_sha256: state.mockExamPlan.plan_sha256,
+      planned_at: state.mockExamPlan.planned_at,
     };
     if (!payload.deliverable_key || !payload.title || !payload.edition || !payload.form_key || !payload.display_label) throw new StudioApiError("시험지 기본 정보를 모두 입력하세요.");
     $("#mock-exam-submit").disabled = true;
-    const result = await api("/mock-exam-assemblies", {method: "POST", mutation: true, body: payload});
+    const result = await api("/mock-exam-assemblies/planned", {method: "POST", mutation: true, body: payload});
     state.mockExamAssemblyRevisionId = result.resource_id;
     $("#mock-exam-assembly-revision").value = result.resource_id;
     $("#mock-exam-hwpx-submit").disabled = false;
@@ -981,13 +965,13 @@ async function submitMockExamAssembly() {
   } catch (failure) {
     showMessage(message, `모의고사 조립 실패: ${failure.message}`, "error");
   } finally {
-    $("#mock-exam-submit").disabled = state.mockExamSelections.length !== (state.mockExamPolicy?.item_count || 25);
+    $("#mock-exam-submit").disabled = state.mockExamPlan?.status !== "READY";
   }
 }
 
 async function createMockExamHwpxBuild() {
   const revision = state.mockExamAssemblyRevisionId || $("#mock-exam-assembly-revision").value.trim();
-  if (!revision.startsWith("assemblyrev_")) return toast("먼저 모의고사 Blueprint를 확정하세요.");
+  if (!revision.startsWith("assemblyrev_")) return toast("먼저 모의고사 서버 계획을 확정하세요.");
   const button = $("#mock-exam-hwpx-submit");
   button.disabled = true;
   try {
@@ -1132,7 +1116,6 @@ function renderItemBank() {
     }
     const actions = document.createElement("div");
     actions.className = "form-actions";
-    const selectedForExam = state.mockExamSelections.some((row) => row.entry.item_revision_id === entry.item_revision_id);
     actions.append(
       actionButton("완성 문항 보기", async () => {
         $("#item-id").value = entry.item_id;
@@ -1147,7 +1130,6 @@ function renderItemBank() {
         $("#item-bank-number").value = "";
         await loadItemBank(true);
       }, true),
-      actionButton(selectedForExam ? "Blueprint에서 빼기" : "Blueprint에 담기", () => toggleMockExamSelection(entry), selectedForExam),
     );
     card.append(heading, units, pointers, actions);
     root.append(card);

@@ -12,10 +12,14 @@ from datetime import datetime
 from typing import Any, Literal, Never, cast
 
 from eom_api_contracts.assessment_assemblies import (
+    MockExamAssemblyPlanView,
     MockExamAssemblyPolicyView,
     MockExamAssemblyView,
+    MockExamAssemblyViewContract,
+    MockExamAssemblyViewV2,
     MockExamCoverageRequirementView,
     MockExamScoreBucketView,
+    PreviewMockExamAssemblyPlanRequest,
 )
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
@@ -74,6 +78,7 @@ from eom_api_contracts.workflows import (
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
+    PreviewMockExamAssemblyPlan,
     load_integrated_science_mock_exam_policy,
 )
 from eom_catalog_service.curriculum_graph_structure import (
@@ -107,7 +112,10 @@ from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchRecord,
     LegacyItemExtractionBatchWorkUnitRecord,
 )
-from eom_catalog_service.mock_exam_assembly_service import MockExamAssemblyService
+from eom_catalog_service.mock_exam_assembly_service import (
+    MockExamAssemblyError,
+    MockExamAssemblyService,
+)
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
     ContentIntakeEventRecord,
@@ -268,6 +276,7 @@ class QueryAdapter:
     def __init__(self, engine: Engine, cursor_key: bytes) -> None:
         self.sessions = build_session_factory(engine)
         self.cursors = CursorCodec(cursor_key)
+        self.mock_exam_assemblies = MockExamAssemblyService(engine)
 
     def integrated_science_graph_capability(self) -> CurriculumGraphCapabilityView:
         """Verify the current Graph contains the exact reviewed curriculum hierarchy."""
@@ -455,12 +464,29 @@ class QueryAdapter:
             guidance_original_sha256=policy.guidance_pointer.original_sha256,
         )
 
-    def mock_exam_assembly(self, assembly_revision_id: str) -> MockExamAssemblyView:
+    def mock_exam_assembly(self, assembly_revision_id: str) -> MockExamAssemblyViewContract:
         with self.sessions() as session:
             manifest = MockExamAssemblyService.inspect(session, assembly_revision_id)
             if manifest is None:
                 self._not_found("ASSEMBLY_REVISION_NOT_FOUND")
-            return MockExamAssemblyView.model_validate(manifest.model_dump(mode="json"))
+            if manifest.schema_version == "mock-exam-assembly-manifest/1.0":
+                return MockExamAssemblyView.model_validate(manifest.model_dump(mode="json"))
+            return MockExamAssemblyViewV2.model_validate(manifest.model_dump(mode="json"))
+
+    def mock_exam_assembly_plan(
+        self, request: PreviewMockExamAssemblyPlanRequest
+    ) -> MockExamAssemblyPlanView:
+        try:
+            return self.mock_exam_assemblies.preview(
+                PreviewMockExamAssemblyPlan(**request.model_dump(mode="json"))
+            )
+        except MockExamAssemblyError as exc:
+            raise ApiError(
+                409,
+                exc.code,
+                "Mock exam planning failed",
+                "The current pinned Graph cannot be resolved into a planning snapshot.",
+            ) from exc
 
     def assessment_items_by_exam(
         self,

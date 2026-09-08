@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Never
 
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
     CreateMockExamAssembly,
+    CreatePlannedMockExamAssembly,
+    MockExamAssemblyManifestContract,
     MockExamAssemblyManifestV1,
+    MockExamAssemblyManifestV2,
     MockExamAssemblyPlacementV1,
+    MockExamAssemblyPlanV1,
     MockExamAssemblyPolicyV1,
+    PreviewMockExamAssemblyPlan,
+    build_mock_exam_assembly_plan,
+    load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
+    load_integrated_science_mock_exam_rating_policy,
     validate_contract,
     validate_mock_exam_placements,
+    validate_mock_exam_planned_placements,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory, transaction
@@ -36,6 +45,10 @@ from eom_catalog_service.legacy_usage_models import (
     AssessmentFormRecord,
     AssessmentFormRevisionRecord,
     AssessmentItemPlacementRecord,
+)
+from eom_catalog_service.mock_exam_candidate_repository import (
+    MockExamCandidateRepository,
+    MockExamCandidateResolutionError,
 )
 from eom_catalog_service.models import (
     DeliverableRecord,
@@ -64,35 +77,122 @@ class MockExamAssemblyService:
     unique ``(deliverable_id, form_key)`` aggregate before publishing current pointers.
     """
 
-    def __init__(self, engine: Engine) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        candidates: MockExamCandidateRepository | None = None,
+    ) -> None:
         self.sessions = build_session_factory(engine)
+        self.candidates = candidates or MockExamCandidateRepository()
 
-    def create(self, command: CreateMockExamAssembly) -> MockExamAssemblyManifestV1:
-        policy = load_integrated_science_mock_exam_policy()
-        if (
-            command.policy_revision_id != policy.policy_revision_id
-            or command.policy_sha256 != content_sha256(policy.model_dump(mode="json"))
-        ):
-            self._fail("ASSEMBLY_POLICY_POINTER_INVALID", "policy pointer is not current")
+    def preview(self, query: PreviewMockExamAssemblyPlan) -> MockExamAssemblyPlanV1:
+        """Resolve one immutable plan without creating a Form or Assembly row."""
+
+        policy = self._validate_policy_pointer(query)
+        layout = load_integrated_science_mock_exam_layout_policy()
+        rating = load_integrated_science_mock_exam_rating_policy()
+        planned_at = datetime.now(UTC)
+        try:
+            with self.sessions() as session:
+                snapshot = self._resolve_snapshot(session, query)
+                inputs = self.candidates.resolve(
+                    session,
+                    graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+                    policy=policy,
+                    rating_policy=rating,
+                    planned_at=planned_at,
+                )
+        except MockExamCandidateResolutionError as exc:
+            self._fail(exc.code, str(exc))
+        return build_mock_exam_assembly_plan(
+            policy=policy,
+            layout_policy=layout,
+            rating_policy=rating,
+            graph_snapshot_revision_id=query.graph_snapshot_revision_id,
+            graph_snapshot_sha256=query.graph_snapshot_sha256,
+            usage_snapshot=inputs.usage_snapshot,
+            resolved_candidate_count=inputs.resolved_candidate_count,
+            candidates=inputs.candidates,
+            planned_at=planned_at,
+        )
+
+    def create_planned(self, command: CreatePlannedMockExamAssembly) -> MockExamAssemblyManifestV2:
+        """Create one released assembly from server-resolved planning evidence."""
+
+        policy = self._validate_policy_pointer(command)
+        layout = load_integrated_science_mock_exam_layout_policy()
+        rating = load_integrated_science_mock_exam_rating_policy()
         with transaction(self.sessions) as session:
-            deliverable = session.scalar(
-                select(DeliverableRecord)
-                .where(DeliverableRecord.deliverable_id == command.deliverable_id)
-                .with_for_update()
-            )
-            deliverable_revision = session.get(
-                DeliverableRevisionRecord, command.deliverable_revision_id
-            )
+            deliverable, _deliverable_revision = self._resolve_deliverable(session, command)
+            existing = self._planned_replay(session, command)
+            if existing is not None:
+                return existing
+            snapshot = self._resolve_snapshot(session, command)
+            current_time = datetime.now(UTC)
             if (
-                deliverable is None
-                or deliverable.deliverable_type != "MOCK_EXAM"
-                or deliverable_revision is None
-                or deliverable_revision.deliverable_id != deliverable.deliverable_id
+                not current_time - timedelta(minutes=15)
+                <= command.planned_at
+                <= (current_time + timedelta(seconds=5))
             ):
                 self._fail(
-                    "ASSEMBLY_DELIVERABLE_POINTER_INVALID",
-                    "deliverable pointer is not an immutable mock-exam revision",
+                    "ASSEMBLY_PLAN_EXPIRED",
+                    "the preview plan is outside its bounded creation window",
                 )
+            try:
+                inputs = self.candidates.resolve(
+                    session,
+                    graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+                    policy=policy,
+                    rating_policy=rating,
+                    planned_at=command.planned_at,
+                )
+            except MockExamCandidateResolutionError as exc:
+                self._fail(exc.code, str(exc))
+            plan = build_mock_exam_assembly_plan(
+                policy=policy,
+                layout_policy=layout,
+                rating_policy=rating,
+                graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+                graph_snapshot_sha256=snapshot.snapshot_sha256,
+                usage_snapshot=inputs.usage_snapshot,
+                resolved_candidate_count=inputs.resolved_candidate_count,
+                candidates=inputs.candidates,
+                planned_at=command.planned_at,
+            )
+            if plan.plan_sha256 != command.expected_plan_sha256:
+                self._fail(
+                    "ASSEMBLY_PLAN_CHANGED",
+                    "the current pinned candidates differ from the previewed plan",
+                )
+            if plan.status != "READY" or plan.validation is None:
+                self._fail(
+                    "ASSEMBLY_CANDIDATE_SHORTAGE",
+                    "the current Graph and reviewed ratings cannot fill all 25 slots",
+                )
+            identity = self._planned_identity(command, plan)
+            created_at = datetime.now(UTC)
+            value: dict[str, Any] = {
+                "schema_version": "mock-exam-assembly-manifest/2.0",
+                **identity,
+                "deliverable_id": deliverable.deliverable_id,
+                "deliverable_revision_id": command.deliverable_revision_id,
+                "form_key": command.form_key,
+                "display_label": command.display_label,
+                "plan": plan.model_dump(mode="json"),
+                "revision_state": "RELEASED",
+                "created_at": created_at.isoformat().replace("+00:00", "Z"),
+                "created_by": command.actor_id,
+            }
+            value["manifest_sha256"] = content_sha256(value)
+            manifest = MockExamAssemblyManifestV2.model_validate(value)
+            validate_contract("mock-exam-assembly-manifest-v2", manifest.model_dump(mode="json"))
+            self._persist_planned(session, command, manifest, created_at)
+            return manifest
+
+    def create(self, command: CreateMockExamAssembly) -> MockExamAssemblyManifestV1:
+        policy = self._validate_policy_pointer(command)
+        with transaction(self.sessions) as session:
+            self._resolve_deliverable(session, command)
             snapshot = self._resolve_snapshot(session, command)
             resolved = self._resolve_placements(session, command, policy)
             identity = self._identity(command, resolved)
@@ -136,30 +236,177 @@ class MockExamAssemblyService:
             return manifest
 
     @staticmethod
-    def inspect(session: Session, assembly_revision_id: str) -> MockExamAssemblyManifestV1 | None:
+    def inspect(
+        session: Session, assembly_revision_id: str
+    ) -> MockExamAssemblyManifestContract | None:
         row = session.get(AssessmentAssemblyRevisionRecord, assembly_revision_id)
         if row is None:
             return None
-        manifest = MockExamAssemblyManifestV1.model_validate(row.canonical_document)
+        schema_version = row.canonical_document.get("schema_version")
+        if schema_version == "mock-exam-assembly-manifest/1.0":
+            manifest: MockExamAssemblyManifestContract = MockExamAssemblyManifestV1.model_validate(
+                row.canonical_document
+            )
+        elif schema_version == "mock-exam-assembly-manifest/2.0":
+            manifest = MockExamAssemblyManifestV2.model_validate(row.canonical_document)
+        else:
+            raise MockExamAssemblyError(
+                "ASSEMBLY_MANIFEST_SCHEMA_UNSUPPORTED",
+                "stored assembly uses an unsupported manifest schema",
+            )
         if row.manifest_sha256 != manifest.manifest_sha256:
             raise MockExamAssemblyError(
                 "ASSEMBLY_MANIFEST_POINTER_INVALID",
                 "stored assembly hash does not match its canonical document",
             )
         policy = load_integrated_science_mock_exam_policy()
-        if (
-            manifest.policy_revision_id != policy.policy_revision_id
-            or manifest.policy_sha256 != content_sha256(policy.model_dump(mode="json"))
-            or validate_mock_exam_placements(manifest.placements, policy) != manifest.validation
-        ):
+        policy_sha256 = content_sha256(policy.model_dump(mode="json"))
+        if isinstance(manifest, MockExamAssemblyManifestV1):
+            valid_projection = (
+                manifest.policy_revision_id == policy.policy_revision_id
+                and manifest.policy_sha256 == policy_sha256
+                and validate_mock_exam_placements(manifest.placements, policy)
+                == manifest.validation
+            )
+        else:
+            layout = load_integrated_science_mock_exam_layout_policy()
+            rating = load_integrated_science_mock_exam_rating_policy()
+            plan = manifest.plan
+            valid_projection = (
+                plan.policy_revision_id == policy.policy_revision_id
+                and plan.policy_sha256 == policy_sha256
+                and plan.layout_policy_revision_id == layout.layout_policy_revision_id
+                and plan.layout_policy_sha256 == content_sha256(layout.model_dump(mode="json"))
+                and plan.rating_policy_revision_id == rating.rating_policy_revision_id
+                and plan.rating_policy_sha256 == content_sha256(rating.model_dump(mode="json"))
+                and plan.validation is not None
+                and validate_mock_exam_planned_placements(plan.placements, policy)
+                == plan.validation
+            )
+        if not valid_projection:
             raise MockExamAssemblyError(
                 "ASSEMBLY_POLICY_PROJECTION_INVALID",
                 "stored assembly no longer matches its pinned policy",
             )
         return manifest
 
+    @staticmethod
+    def _validate_policy_pointer(
+        command: (
+            CreateMockExamAssembly | CreatePlannedMockExamAssembly | PreviewMockExamAssemblyPlan
+        ),
+    ) -> MockExamAssemblyPolicyV1:
+        policy = load_integrated_science_mock_exam_policy()
+        if (
+            command.policy_revision_id != policy.policy_revision_id
+            or command.policy_sha256 != content_sha256(policy.model_dump(mode="json"))
+        ):
+            raise MockExamAssemblyError(
+                "ASSEMBLY_POLICY_POINTER_INVALID", "policy pointer is not current"
+            )
+        return policy
+
+    def _resolve_deliverable(
+        self,
+        session: Session,
+        command: CreateMockExamAssembly | CreatePlannedMockExamAssembly,
+    ) -> tuple[DeliverableRecord, DeliverableRevisionRecord]:
+        deliverable = session.scalar(
+            select(DeliverableRecord)
+            .where(DeliverableRecord.deliverable_id == command.deliverable_id)
+            .with_for_update()
+        )
+        deliverable_revision = session.get(
+            DeliverableRevisionRecord, command.deliverable_revision_id
+        )
+        if (
+            deliverable is None
+            or deliverable.deliverable_type != "MOCK_EXAM"
+            or deliverable_revision is None
+            or deliverable_revision.deliverable_id != deliverable.deliverable_id
+        ):
+            self._fail(
+                "ASSEMBLY_DELIVERABLE_POINTER_INVALID",
+                "deliverable pointer is not an immutable mock-exam revision",
+            )
+        return deliverable, deliverable_revision
+
+    def _planned_replay(
+        self,
+        session: Session,
+        command: CreatePlannedMockExamAssembly,
+    ) -> MockExamAssemblyManifestV2 | None:
+        form = session.scalar(
+            select(AssessmentFormRecord)
+            .where(
+                AssessmentFormRecord.deliverable_id == command.deliverable_id,
+                AssessmentFormRecord.form_key == command.form_key,
+            )
+            .with_for_update()
+        )
+        if form is None:
+            return None
+        expected_form_id = _stable_id(
+            "form_",
+            {
+                "deliverable_id": command.deliverable_id,
+                "form_key": command.form_key,
+            },
+        )
+        if form.assessment_form_id != expected_form_id:
+            self._fail(
+                "ASSEMBLY_FORM_CONFLICT",
+                "form key resolves to an unexpected logical Form",
+            )
+        if form.current_revision_id is None:
+            return None
+        form_revision = session.get(AssessmentFormRevisionRecord, form.current_revision_id)
+        assembly_revision = (
+            session.get(
+                AssessmentAssemblyRevisionRecord,
+                form_revision.assessment_assembly_revision_id,
+            )
+            if form_revision is not None
+            else None
+        )
+        if form_revision is None or assembly_revision is None:
+            self._fail(
+                "ASSEMBLY_REPLAY_POINTER_INVALID",
+                "current Form revision does not resolve to its Assembly revision",
+            )
+        if assembly_revision.canonical_document.get("schema_version") != (
+            "mock-exam-assembly-manifest/2.0"
+        ):
+            self._fail(
+                "ASSEMBLY_FORM_CONFLICT",
+                "form key already owns a non-planned Assembly",
+            )
+        manifest = MockExamAssemblyManifestV2.model_validate(assembly_revision.canonical_document)
+        if (
+            manifest.manifest_sha256 != assembly_revision.manifest_sha256
+            or manifest.deliverable_id != command.deliverable_id
+            or manifest.deliverable_revision_id != command.deliverable_revision_id
+            or manifest.form_key != command.form_key
+            or manifest.display_label != command.display_label
+            or manifest.plan.policy_revision_id != command.policy_revision_id
+            or manifest.plan.policy_sha256 != command.policy_sha256
+            or manifest.plan.graph_snapshot_revision_id != command.graph_snapshot_revision_id
+            or manifest.plan.graph_snapshot_sha256 != command.graph_snapshot_sha256
+            or manifest.plan.plan_sha256 != command.expected_plan_sha256
+            or manifest.plan.planned_at != command.planned_at
+        ):
+            self._fail(
+                "ASSEMBLY_FORM_CONFLICT",
+                "form key already owns an Assembly with different pinned inputs",
+            )
+        return manifest
+
     def _resolve_snapshot(
-        self, session: Session, command: CreateMockExamAssembly
+        self,
+        session: Session,
+        command: (
+            CreateMockExamAssembly | CreatePlannedMockExamAssembly | PreviewMockExamAssemblyPlan
+        ),
     ) -> KnowledgeGraphSnapshotRecord:
         corpus = session.scalar(
             select(KnowledgeCorpusRecord).where(
@@ -328,7 +575,9 @@ class MockExamAssemblyService:
     @staticmethod
     def _major_unit_key(unit: Any, unit_by_id: dict[str, Any]) -> str:
         current = unit
-        while current.parent_unit_id is not None:
+        while current.unit_level != "MIDDLE":
+            if current.parent_unit_id is None:
+                raise KeyError(current.curriculum_unit_id)
             current = unit_by_id[current.parent_unit_id]
         return str(current.unit_key)
 
@@ -373,6 +622,43 @@ class MockExamAssemblyService:
             "assessment_assembly_id": manifest.assessment_assembly_id,
             "assessment_form_id": manifest.assessment_form_id,
             "assessment_form_revision_id": manifest.assessment_form_revision_id,
+        }
+
+    @staticmethod
+    def _planned_identity(
+        command: CreatePlannedMockExamAssembly,
+        plan: MockExamAssemblyPlanV1,
+    ) -> dict[str, str]:
+        form_id = _stable_id(
+            "form_",
+            {
+                "deliverable_id": command.deliverable_id,
+                "form_key": command.form_key,
+            },
+        )
+        assembly_id = _stable_id("assembly_", {"assessment_form_id": form_id})
+        assembly_revision_id = _stable_id(
+            "assemblyrev_",
+            {
+                "assessment_assembly_id": assembly_id,
+                "deliverable_revision_id": command.deliverable_revision_id,
+                "form_key": command.form_key,
+                "plan_sha256": plan.plan_sha256,
+            },
+        )
+        form_revision_id = _stable_id(
+            "formrev_",
+            {
+                "assessment_form_id": form_id,
+                "assessment_assembly_revision_id": assembly_revision_id,
+                "deliverable_revision_id": command.deliverable_revision_id,
+            },
+        )
+        return {
+            "assessment_assembly_revision_id": assembly_revision_id,
+            "assessment_assembly_id": assembly_id,
+            "assessment_form_id": form_id,
+            "assessment_form_revision_id": form_revision_id,
         }
 
     def _persist(
@@ -465,6 +751,133 @@ class MockExamAssemblyService:
                 source_usage_plan_id=None,
             )
             for row in manifest.placements
+        )
+        form_revision = AssessmentFormRevisionRecord(
+            assessment_form_revision_id=manifest.assessment_form_revision_id,
+            assessment_form_id=manifest.assessment_form_id,
+            revision_number=1,
+            previous_revision_id=None,
+            deliverable_revision_id=command.deliverable_revision_id,
+            ordinal=1,
+            display_label=command.display_label,
+            assessment_assembly_revision_id=manifest.assessment_assembly_revision_id,
+            revision_state="RELEASED",
+            revision_sha256=manifest.manifest_sha256,
+            created_at=created_at,
+            created_by=command.actor_id,
+            released_at=created_at,
+        )
+        session.add(form_revision)
+        session.flush()
+        form.current_revision_id = manifest.assessment_form_revision_id
+        assembly.current_revision_id = manifest.assessment_assembly_revision_id
+        session.flush()
+
+    def _persist_planned(
+        self,
+        session: Session,
+        command: CreatePlannedMockExamAssembly,
+        manifest: MockExamAssemblyManifestV2,
+        created_at: datetime,
+    ) -> None:
+        if manifest.plan.validation is None:
+            self._fail(
+                "ASSEMBLY_PLAN_INVALID",
+                "released planned Assembly has no validation projection",
+            )
+        form = session.scalar(
+            select(AssessmentFormRecord)
+            .where(
+                AssessmentFormRecord.deliverable_id == command.deliverable_id,
+                AssessmentFormRecord.form_key == command.form_key,
+            )
+            .with_for_update()
+        )
+        if form is None:
+            form = AssessmentFormRecord(
+                assessment_form_id=manifest.assessment_form_id,
+                deliverable_id=command.deliverable_id,
+                form_key=command.form_key,
+                current_revision_id=None,
+                lifecycle_state="ACTIVE",
+                created_at=created_at,
+                created_by=command.actor_id,
+            )
+            session.add(form)
+            session.flush()
+        elif (
+            form.assessment_form_id != manifest.assessment_form_id
+            or form.current_revision_id is not None
+        ):
+            self._fail(
+                "ASSEMBLY_FORM_CONFLICT",
+                "form key already resolves to another immutable Assembly",
+            )
+        assembly = session.scalar(
+            select(AssessmentAssemblyRecord)
+            .where(AssessmentAssemblyRecord.assessment_form_id == form.assessment_form_id)
+            .with_for_update()
+        )
+        if assembly is None:
+            assembly = AssessmentAssemblyRecord(
+                assessment_assembly_id=manifest.assessment_assembly_id,
+                assessment_form_id=form.assessment_form_id,
+                current_revision_id=None,
+                created_at=created_at,
+                created_by=command.actor_id,
+            )
+            session.add(assembly)
+            session.flush()
+        elif (
+            assembly.assessment_assembly_id != manifest.assessment_assembly_id
+            or assembly.current_revision_id is not None
+        ):
+            self._fail(
+                "ASSEMBLY_AGGREGATE_CONFLICT",
+                "Form already owns another immutable Assembly revision",
+            )
+        validation = manifest.plan.validation
+        assembly_revision = AssessmentAssemblyRevisionRecord(
+            assessment_assembly_revision_id=manifest.assessment_assembly_revision_id,
+            assessment_assembly_id=manifest.assessment_assembly_id,
+            assessment_form_id=manifest.assessment_form_id,
+            revision_number=1,
+            previous_revision_id=None,
+            revision_state="RELEASED",
+            total_points_milli=validation.total_points_milli,
+            manifest_sha256=manifest.manifest_sha256,
+            canonical_document=manifest.model_dump(mode="json"),
+            created_at=created_at,
+            created_by=command.actor_id,
+            released_at=created_at,
+        )
+        session.add(assembly_revision)
+        session.flush()
+        session.add_all(
+            AssessmentItemPlacementRecord(
+                placement_id=_stable_id(
+                    "placement_",
+                    {
+                        "assessment_assembly_revision_id": (
+                            manifest.assessment_assembly_revision_id
+                        ),
+                        "slot_id": row.slot_id,
+                        "item_revision_id": row.item_revision_id,
+                    },
+                ),
+                assessment_assembly_revision_id=(manifest.assessment_assembly_revision_id),
+                section_key="main",
+                section_ordinal=1,
+                position=row.position,
+                display_number=row.display_number,
+                item_id=row.item_id,
+                item_revision_id=row.item_revision_id,
+                item_manifest_sha256=row.item_manifest_sha256,
+                points_milli=row.points_milli,
+                usage_role="PRIMARY",
+                source_usage_plan_id=None,
+            )
+            for row in manifest.plan.placements
         )
         form_revision = AssessmentFormRevisionRecord(
             assessment_form_revision_id=manifest.assessment_form_revision_id,

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 import httpx
@@ -35,6 +36,7 @@ from eom_web_gui.contracts import (
     MockExamAssemblySubmission,
     MockExamHwpxBuildRequest,
     MockExamHwpxBuildView,
+    PlannedMockExamAssemblySubmission,
     PreviewChoice,
     PreviewEquationBlock,
     PreviewImageBlock,
@@ -79,6 +81,105 @@ def _verified_curriculum_graph_corpus_key(capability: dict[str, Any]) -> str | N
     ):
         return INTEGRATED_SCIENCE_CORPUS_KEY
     return None
+
+
+def _verified_mock_exam_plan(
+    value: dict[str, Any],
+    *,
+    policy_revision_id: str,
+    policy_sha256: str,
+    graph_snapshot_revision_id: str,
+    graph_snapshot_sha256: str,
+    item_count: int,
+) -> dict[str, Any] | None:
+    """Validate the presentation projection without importing a domain/runtime package."""
+
+    status = value.get("status")
+    placements = value.get("placements")
+    shortages = value.get("shortages")
+    resolved_count = value.get("resolved_candidate_count")
+    rated_count = value.get("rated_candidate_count")
+    visited_nodes = value.get("search_visited_nodes")
+    if (
+        value.get("schema_version") != "mock-exam-assembly-plan/1.0"
+        or status not in {"READY", "SHORTAGE"}
+        or value.get("policy_revision_id") != policy_revision_id
+        or value.get("policy_sha256") != policy_sha256
+        or value.get("graph_snapshot_revision_id") != graph_snapshot_revision_id
+        or value.get("graph_snapshot_sha256") != graph_snapshot_sha256
+        or not isinstance(resolved_count, int)
+        or isinstance(resolved_count, bool)
+        or not isinstance(rated_count, int)
+        or isinstance(rated_count, bool)
+        or not 0 <= rated_count <= resolved_count <= 5_000
+        or not isinstance(placements, list)
+        or not isinstance(shortages, list)
+        or not isinstance(value.get("usage_snapshot"), dict)
+        or not isinstance(visited_nodes, int)
+        or isinstance(visited_nodes, bool)
+        or not 0 <= visited_nodes <= 100_000
+        or not isinstance(value.get("plan_sha256"), str)
+        or SHA256_PATTERN.fullmatch(value["plan_sha256"]) is None
+        or not isinstance(value.get("planned_at"), str)
+    ):
+        return None
+    try:
+        planned_at = datetime.fromisoformat(value["planned_at"].replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if planned_at.utcoffset() is None:
+        return None
+    hash_value = dict(value)
+    claimed_hash = hash_value.pop("plan_sha256")
+    try:
+        canonical = json.dumps(
+            hash_value,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    except (TypeError, ValueError):
+        return None
+    if "sha256:" + hashlib.sha256(canonical).hexdigest() != claimed_hash:
+        return None
+    if status == "SHORTAGE":
+        if placements or not shortages or value.get("validation") is not None:
+            return None
+        return value
+    if shortages or value.get("validation") is None or len(placements) != item_count:
+        return None
+    positions: list[int] = []
+    revision_ids: list[str] = []
+    for placement in placements:
+        if not isinstance(placement, dict):
+            return None
+        position = placement.get("position")
+        revision_id = placement.get("item_revision_id")
+        review = placement.get("review")
+        if (
+            not isinstance(position, int)
+            or isinstance(position, bool)
+            or placement.get("display_number") != str(position)
+            or not isinstance(revision_id, str)
+            or re.fullmatch(r"itemrev_[0-9a-f]{32}", revision_id) is None
+            or placement.get("coverage_role") not in {"REQUIRED", "BALANCE"}
+            or not isinstance(placement.get("points_milli"), int)
+            or isinstance(placement.get("points_milli"), bool)
+            or not isinstance(placement.get("is_inquiry"), bool)
+            or placement.get("material_profile")
+            not in {"TEXT", "DATA", "TABLE", "IMAGE", "MIXED", "INQUIRY"}
+            or not isinstance(placement.get("usage_count"), int)
+            or isinstance(placement.get("usage_count"), bool)
+            or not isinstance(review, dict)
+            or review.get("final_rating") not in {"A", "B", "C"}
+        ):
+            return None
+        positions.append(position)
+        revision_ids.append(revision_id)
+    if positions != list(range(1, item_count + 1)) or len(revision_ids) != len(set(revision_ids)):
+        return None
+    return value
 
 
 def _ordered_preview_blocks(
@@ -243,8 +344,14 @@ class ApplicationGateway(Protocol):
 
     async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]: ...
 
+    async def mock_exam_assembly_plan(self, session: WebSession) -> dict[str, Any]: ...
+
     async def create_mock_exam_assembly(
         self, session: WebSession, value: MockExamAssemblySubmission
+    ) -> dict[str, Any]: ...
+
+    async def create_planned_mock_exam_assembly(
+        self, session: WebSession, value: PlannedMockExamAssemblySubmission
     ) -> dict[str, Any]: ...
 
     async def create_mock_exam_hwpx_build(
@@ -1270,6 +1377,50 @@ class HttpApplicationGateway:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
         return sanitize_mapping(policy)
 
+    async def _mock_exam_planning_context(
+        self, session: WebSession
+    ) -> tuple[dict[str, Any], str, str]:
+        policy = await self.mock_exam_assembly_policy(session)
+        capability = self._data(
+            await self._authorized(
+                session,
+                "GET",
+                "/api/v1/curriculum/integrated-science-graph-capability",
+            )
+        )
+        if _verified_curriculum_graph_corpus_key(capability) is None:
+            raise GatewayError(status=409, code="CURRICULUM_GRAPH_UNAVAILABLE")
+        return (
+            policy,
+            capability["graph_snapshot_revision_id"],
+            capability["snapshot_sha256"],
+        )
+
+    async def mock_exam_assembly_plan(self, session: WebSession) -> dict[str, Any]:
+        policy, graph_revision_id, graph_sha256 = await self._mock_exam_planning_context(session)
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/assessment-assemblies/plan",
+            params={
+                "policy_revision_id": policy["policy_revision_id"],
+                "policy_sha256": policy["policy_sha256"],
+                "graph_snapshot_revision_id": graph_revision_id,
+                "graph_snapshot_sha256": graph_sha256,
+            },
+        )
+        plan = _verified_mock_exam_plan(
+            self._data(response),
+            policy_revision_id=policy["policy_revision_id"],
+            policy_sha256=policy["policy_sha256"],
+            graph_snapshot_revision_id=graph_revision_id,
+            graph_snapshot_sha256=graph_sha256,
+            item_count=policy["item_count"],
+        )
+        if plan is None:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return sanitize_mapping(plan)
+
     async def create_mock_exam_assembly(
         self, session: WebSession, value: MockExamAssemblySubmission
     ) -> dict[str, Any]:
@@ -1316,6 +1467,67 @@ class HttpApplicationGateway:
                 "placements": [row.model_dump(mode="json") for row in value.placements],
             },
             headers={"Idempotency-Key": f"mockexam-assembly-{digest}"},
+        )
+        return sanitize_mapping(self._data(assembly_response))
+
+    async def create_planned_mock_exam_assembly(
+        self, session: WebSession, value: PlannedMockExamAssemblySubmission
+    ) -> dict[str, Any]:
+        policy, graph_revision_id, graph_sha256 = await self._mock_exam_planning_context(session)
+        current_time = datetime.now(UTC)
+        if (
+            value.policy_revision_id != policy["policy_revision_id"]
+            or value.policy_sha256 != policy["policy_sha256"]
+            or value.graph_snapshot_revision_id != graph_revision_id
+            or value.graph_snapshot_sha256 != graph_sha256
+            or not current_time - timedelta(minutes=15)
+            <= value.planned_at
+            <= current_time + timedelta(seconds=5)
+        ):
+            raise GatewayError(status=409, code="ASSEMBLY_PLAN_CHANGED")
+        digest = hashlib.sha256(value.idempotency_key.encode("utf-8")).hexdigest()
+        deliverable_response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/deliverables",
+            json={
+                "deliverable_key": value.deliverable_key,
+                "deliverable_type": "MOCK_EXAM",
+                "title": value.title,
+                "edition": value.edition,
+            },
+            headers={"Idempotency-Key": f"mockexam-deliverable-{digest}"},
+        )
+        deliverable_id = self._data(deliverable_response).get("resource_id")
+        if not isinstance(deliverable_id, str) or not re.fullmatch(
+            r"deliverable_[0-9a-f]{32}", deliverable_id
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        detail = self._data(
+            await self._authorized(session, "GET", f"/api/v1/deliverables/{deliverable_id}")
+        )
+        deliverable_revision_id = detail.get("deliverable_revision_id")
+        if not isinstance(deliverable_revision_id, str) or not re.fullmatch(
+            r"delivrev_[0-9a-f]{32}", deliverable_revision_id
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        assembly_response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/assessment-assemblies/planned",
+            json={
+                "deliverable_id": deliverable_id,
+                "deliverable_revision_id": deliverable_revision_id,
+                "form_key": value.form_key,
+                "display_label": value.display_label,
+                "policy_revision_id": value.policy_revision_id,
+                "policy_sha256": value.policy_sha256,
+                "graph_snapshot_revision_id": value.graph_snapshot_revision_id,
+                "graph_snapshot_sha256": value.graph_snapshot_sha256,
+                "expected_plan_sha256": value.expected_plan_sha256,
+                "planned_at": value.model_dump(mode="json")["planned_at"],
+            },
+            headers={"Idempotency-Key": f"mockexam-planned-assembly-{digest}"},
         )
         return sanitize_mapping(self._data(assembly_response))
 

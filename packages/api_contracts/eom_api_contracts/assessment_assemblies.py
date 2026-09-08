@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
+from eom_catalog_contracts import MockExamAssemblyPlanV1
 from pydantic import Field, model_validator
 
 from eom_api_contracts.common import ApiModel, Sha256, UtcDatetime
@@ -80,6 +81,26 @@ class CreateMockExamAssemblyRequest(ApiModel):
         return self
 
 
+class PreviewMockExamAssemblyPlanRequest(ApiModel):
+    policy_revision_id: str = Field(pattern=r"^assemblypolicyrev_[0-9a-f]{32}$")
+    policy_sha256: Sha256
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    graph_snapshot_sha256: Sha256
+
+
+class CreatePlannedMockExamAssemblyRequest(ApiModel):
+    deliverable_id: str = Field(pattern=r"^deliverable_[0-9a-f]{32}$")
+    deliverable_revision_id: str = Field(pattern=r"^delivrev_[0-9a-f]{32}$")
+    form_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$")
+    display_label: str = Field(min_length=1, max_length=128)
+    policy_revision_id: str = Field(pattern=r"^assemblypolicyrev_[0-9a-f]{32}$")
+    policy_sha256: Sha256
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    graph_snapshot_sha256: Sha256
+    expected_plan_sha256: Sha256
+    planned_at: UtcDatetime
+
+
 class MockExamAssemblyPlacementView(MockExamAssemblySelectionInput):
     placement_id: str = Field(pattern=r"^placement_[0-9a-f]{32}$")
     display_number: str
@@ -121,3 +142,24 @@ class MockExamAssemblyView(ApiModel):
     manifest_sha256: Sha256
     created_at: UtcDatetime
     created_by: str
+
+
+class MockExamAssemblyViewV2(ApiModel):
+    schema_version: Literal["mock-exam-assembly-manifest/2.0"]
+    assessment_assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
+    assessment_assembly_id: str = Field(pattern=r"^assembly_[0-9a-f]{32}$")
+    assessment_form_id: str = Field(pattern=r"^form_[0-9a-f]{32}$")
+    assessment_form_revision_id: str = Field(pattern=r"^formrev_[0-9a-f]{32}$")
+    deliverable_id: str = Field(pattern=r"^deliverable_[0-9a-f]{32}$")
+    deliverable_revision_id: str = Field(pattern=r"^delivrev_[0-9a-f]{32}$")
+    form_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$")
+    display_label: str = Field(min_length=1, max_length=128)
+    plan: MockExamAssemblyPlanV1
+    revision_state: Literal["RELEASED"]
+    manifest_sha256: Sha256
+    created_at: UtcDatetime
+    created_by: str
+
+
+MockExamAssemblyPlanView = MockExamAssemblyPlanV1
+MockExamAssemblyViewContract = MockExamAssemblyView | MockExamAssemblyViewV2

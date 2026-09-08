@@ -36,6 +36,30 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:979d81c600eb8a1242c96bc3c5ade26792f6ac9c89ec22851fe1b10419808ab2",
         ),
+        "mock-exam-assembly-manifest-v2": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-assembly-manifest-v2.schema.json",
+            "resources/assessment-assembly/mock-exam-assembly-manifest-v2.schema.json",
+            "2.0",
+            "sha256:4c6e6788af06d6d11e146bc740c81c89659a250207d23257f4f346512752418a",
+        ),
+        "mock-exam-assembly-plan": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-assembly-plan-v1.schema.json",
+            "resources/assessment-assembly/mock-exam-assembly-plan-v1.schema.json",
+            "1.0",
+            "sha256:73ebb91edf825dc7b8e40c9894d3a065f407e3eabb4bda64d72ca9d73eda460a",
+        ),
+        "mock-exam-layout-policy": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-layout-policy-v1.schema.json",
+            "resources/assessment-assembly/mock-exam-layout-policy-v1.schema.json",
+            "1.0",
+            "sha256:5841b8770b3baab7440c27e39303a1e27fd06513cfcc1093f6fbf73dbcd0428c",
+        ),
+        "mock-exam-rating-policy": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-rating-policy-v1.schema.json",
+            "resources/assessment-assembly/mock-exam-rating-policy-v1.schema.json",
+            "1.0",
+            "sha256:e5b0bd19c72c85c93a3de83641e255dd61b3ab20b1af49244bdcb206e859be9c",
+        ),
         "mock-exam-assembly-policy": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-assembly-policy-v1.schema.json",
             "resources/assessment-assembly/mock-exam-assembly-policy-v1.schema.json",

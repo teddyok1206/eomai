@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from eom_api_contracts.assessment_assemblies import CreatePlannedMockExamAssemblyRequest
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
     AssessmentLearningExamView,
@@ -48,6 +49,31 @@ def test_api_json_schemas_are_draft_2020_12() -> None:
         document = json.loads(path.read_text(encoding="utf-8"))
         assert document["$schema"] == "https://json-schema.org/draft/2020-12/schema"
         Draft202012Validator.check_schema(document)
+
+
+def test_mock_exam_plan_api_schema_delegates_to_the_canonical_protocol() -> None:
+    canonical_path = SCHEMA_ROOT / "mock-exam-assembly-plan-v1.schema.json"
+    packaged_path = (
+        Path(__file__).resolve().parents[2]
+        / "packages/api_contracts/eom_api_contracts/schemas"
+        / canonical_path.name
+    )
+    assert canonical_path.read_bytes() == packaged_path.read_bytes()
+    schema = json.loads(canonical_path.read_text(encoding="utf-8"))
+    assert schema["$ref"] == "eom://schemas/assessment-assembly/mock-exam-assembly-plan/1.0"
+    value = CreatePlannedMockExamAssemblyRequest(
+        deliverable_id="deliverable_" + "1" * 32,
+        deliverable_revision_id="delivrev_" + "2" * 32,
+        form_key="main",
+        display_label="본시험지",
+        policy_revision_id="assemblypolicyrev_" + "3" * 32,
+        policy_sha256="sha256:" + "4" * 64,
+        graph_snapshot_revision_id="graphrev_" + "5" * 32,
+        graph_snapshot_sha256="sha256:" + "6" * 64,
+        expected_plan_sha256="sha256:" + "7" * 64,
+        planned_at=datetime(2026, 9, 8, 0, 0, tzinfo=UTC),
+    )
+    assert value.expected_plan_sha256 == "sha256:" + "7" * 64
 
 
 def test_assessment_item_occurrence_schema_matches_typed_projection_and_excludes_march() -> None:

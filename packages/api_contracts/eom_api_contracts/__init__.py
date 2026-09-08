@@ -2,9 +2,14 @@
 
 from eom_api_contracts.assessment_assemblies import (
     CreateMockExamAssemblyRequest,
+    CreatePlannedMockExamAssemblyRequest,
+    MockExamAssemblyPlanView,
     MockExamAssemblyPolicyView,
     MockExamAssemblySelectionInput,
     MockExamAssemblyView,
+    MockExamAssemblyViewContract,
+    MockExamAssemblyViewV2,
+    PreviewMockExamAssemblyPlanRequest,
 )
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
@@ -89,6 +94,7 @@ __all__ = [
     "CreateKnowledgeAnalysisBatchRequest",
     "CreateKnowledgeAnalysisRequest",
     "CreateMockExamAssemblyRequest",
+    "CreatePlannedMockExamAssemblyRequest",
     "CurriculumGraphCapabilityView",
     "CurriculumRetrievalScopeInput",
     "EducationalDocumentAnalysisSourceInput",
@@ -112,10 +118,14 @@ __all__ = [
     "KnowledgeAnalysisRunView",
     "KnowledgeAnalysisSourceInput",
     "ListResponse",
+    "MockExamAssemblyPlanView",
     "MockExamAssemblyPolicyView",
     "MockExamAssemblySelectionInput",
     "MockExamAssemblyView",
+    "MockExamAssemblyViewContract",
+    "MockExamAssemblyViewV2",
     "PageMeta",
+    "PreviewMockExamAssemblyPlanRequest",
     "ProblemDetails",
     "ProductionItemCandidateView",
     "ProductionItemContentComponentView",

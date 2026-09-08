@@ -316,6 +316,42 @@ def test_mock_exam_assembly_policy_is_authenticated() -> None:
         assert policy["balance_slot_count"] == 4
 
 
+def test_server_planned_mock_exam_routes_are_authenticated_and_csrf_protected() -> None:
+    client, gateway = make_client()
+    with client:
+        assert client.get("/studio/api/v1/mock-exam-assemblies/plan").status_code == 401
+        session = login(client)
+        plan = client.get("/studio/api/v1/mock-exam-assemblies/plan")
+        assert plan.status_code == 200
+        assert plan.json()["status"] == "SHORTAGE"
+        payload = {
+            "idempotency_key": "mockexam:test-planned-0001",
+            "deliverable_key": "2026-integrated-science-mock-01",
+            "title": "2026 통합과학 모의고사 1회",
+            "edition": "1회",
+            "form_key": "main",
+            "display_label": "본시험지",
+            "policy_revision_id": plan.json()["policy_revision_id"],
+            "policy_sha256": plan.json()["policy_sha256"],
+            "graph_snapshot_revision_id": plan.json()["graph_snapshot_revision_id"],
+            "graph_snapshot_sha256": plan.json()["graph_snapshot_sha256"],
+            "expected_plan_sha256": plan.json()["plan_sha256"],
+            "planned_at": plan.json()["planned_at"],
+        }
+        assert (
+            client.post("/studio/api/v1/mock-exam-assemblies/planned", json=payload).status_code
+            == 403
+        )
+        response = client.post(
+            "/studio/api/v1/mock-exam-assemblies/planned",
+            json=payload,
+            headers={"X-CSRF-Token": session["csrf_token"]},
+        )
+        assert response.status_code == 201
+        assert response.json()["resource_id"].startswith("assemblyrev_")
+        assert gateway.planned_mock_exam_calls == 1
+
+
 def test_workflow_timeline_approval_etag_and_item_preview() -> None:
     client, gateway = make_client()
     with client:

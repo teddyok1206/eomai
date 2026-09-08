@@ -460,20 +460,34 @@ def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> 
 
     for resource in (
         "mock-exam-assembly-manifest-v1.schema.json",
+        "mock-exam-assembly-manifest-v2.schema.json",
+        "mock-exam-assembly-plan-v1.schema.json",
         "mock-exam-assembly-policy-v1.schema.json",
+        "mock-exam-layout-policy-v1.schema.json",
+        "mock-exam-rating-policy-v1.schema.json",
     ):
         assert f'"assessment-assembly/{resource}": ' in deployment
         assert f'"schemas/assessment-assembly/{resource}"' in deployment
     assert "integrated-science-mock-exam-assembly-v1.json" in deployment
-    assert "content/assembly-policies/integrated-science-mock-exam-assembly-v1.json" in deployment
+    assert "integrated-science-mock-exam-layout-v1.json" in deployment
+    assert "integrated-science-item-rating-v1.json" in deployment
+    assert '"content/assembly-policies" / policy_name' in deployment
+    for runtime in (
+        "eom_catalog_contracts/mock_exam_planner.py",
+        "eom_catalog_service/mock_exam_candidate_repository.py",
+        "eom_catalog_service/mock_exam_assembly_service.py",
+        "eom_api/routers/assessment_assemblies.py",
+    ):
+        assert f'"{runtime}"' in deployment
 
 
 def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
-    assert "len(schemas) != 15" in deployment
+    assert "len(schemas) != 16" in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"' in deployment

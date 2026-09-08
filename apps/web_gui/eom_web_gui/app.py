@@ -28,6 +28,7 @@ from eom_web_gui.contracts import (
     HwpxBuildRequest,
     MockExamAssemblySubmission,
     MockExamHwpxBuildRequest,
+    PlannedMockExamAssemblySubmission,
     RequestDraftInput,
     RequestDraftUpdate,
     StructuredItemImportRequest,
@@ -255,12 +256,25 @@ def create_app(
     ) -> dict[str, Any]:
         return await actual.mock_exam_assembly_policy(session)
 
+    @app.get(f"{API_PREFIX}/mock-exam-assemblies/plan")
+    async def mock_exam_assembly_plan(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return await actual.mock_exam_assembly_plan(session)
+
     @app.post(f"{API_PREFIX}/mock-exam-assemblies", status_code=201)
     async def create_mock_exam_assembly(
         value: MockExamAssemblySubmission,
         session: Annotated[WebSession, Depends(require_csrf)],
     ) -> dict[str, Any]:
         return await actual.create_mock_exam_assembly(session, value)
+
+    @app.post(f"{API_PREFIX}/mock-exam-assemblies/planned", status_code=201)
+    async def create_planned_mock_exam_assembly(
+        value: PlannedMockExamAssemblySubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.create_planned_mock_exam_assembly(session, value)
 
     @app.post(f"{API_PREFIX}/mock-exam-hwpx/builds", status_code=202)
     async def create_mock_exam_hwpx_build(

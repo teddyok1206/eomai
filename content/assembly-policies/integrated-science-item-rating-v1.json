@@ -1,0 +1,12 @@
+{
+  "schema_version": "mock-exam-rating-policy/1.0",
+  "rating_policy_key": "integrated-science-item-rating",
+  "rating_policy_revision_id": "ratingpolicyrev_f7c4f066429eeb65041c9a12ae7a807d",
+  "revision_number": 1,
+  "state": "RELEASED",
+  "review_decision": "APPROVE",
+  "rating_field": "final_rating",
+  "eligible_ratings": ["A", "B", "C"],
+  "guidance_revision": 1,
+  "guidance_original_sha256": "sha256:f7c4f066429eeb65041c9a12ae7a807df4932a5dde3799eec6f97dabc9e2b610"
+}

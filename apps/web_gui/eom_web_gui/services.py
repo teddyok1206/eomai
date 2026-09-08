@@ -34,6 +34,7 @@ from eom_web_gui.contracts import (
     MockExamAssemblySubmission,
     MockExamHwpxBuildRequest,
     MockExamHwpxBuildView,
+    PlannedMockExamAssemblySubmission,
     RequestDraft,
     RequestDraftInput,
     RequestDraftUpdate,
@@ -106,10 +107,18 @@ class WebServices:
     async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]:
         return await self.gateway.mock_exam_assembly_policy(session)
 
+    async def mock_exam_assembly_plan(self, session: WebSession) -> dict[str, Any]:
+        return await self.gateway.mock_exam_assembly_plan(session)
+
     async def create_mock_exam_assembly(
         self, session: WebSession, value: MockExamAssemblySubmission
     ) -> dict[str, Any]:
         return await self.gateway.create_mock_exam_assembly(session, value)
+
+    async def create_planned_mock_exam_assembly(
+        self, session: WebSession, value: PlannedMockExamAssemblySubmission
+    ) -> dict[str, Any]:
+        return await self.gateway.create_planned_mock_exam_assembly(session, value)
 
     async def create_mock_exam_hwpx_build(
         self, session: WebSession, value: MockExamHwpxBuildRequest

@@ -1,0 +1,46 @@
+{
+  "$id": "eom://schemas/assessment-assembly/mock-exam-rating-policy/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "mock-exam-rating-policy/1.0"},
+    "rating_policy_key": {
+      "pattern": "^[a-z][a-z0-9-]{2,127}$",
+      "type": "string"
+    },
+    "rating_policy_revision_id": {
+      "pattern": "^ratingpolicyrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "revision_number": {"minimum": 1, "type": "integer"},
+    "state": {"const": "RELEASED"},
+    "review_decision": {"const": "APPROVE"},
+    "rating_field": {"const": "final_rating"},
+    "eligible_ratings": {
+      "items": {"enum": ["A", "B", "C"]},
+      "maxItems": 3,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "guidance_revision": {"minimum": 1, "type": "integer"},
+    "guidance_original_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "rating_policy_key",
+    "rating_policy_revision_id",
+    "revision_number",
+    "state",
+    "review_decision",
+    "rating_field",
+    "eligible_ratings",
+    "guidance_revision",
+    "guidance_original_sha256"
+  ],
+  "title": "Mock Exam Rating Policy V1",
+  "type": "object"
+}

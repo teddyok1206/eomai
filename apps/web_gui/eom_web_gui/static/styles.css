@@ -341,7 +341,7 @@ html[data-ui-mode="human"] .panel-heading .eyebrow { display: none; }
 .mock-exam-form-grid label { display: grid; gap: 6px; color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
 .mock-exam-form-grid input, .mock-exam-selection select { min-height: 38px; padding: 7px 9px; border: 1px solid var(--eom-border); border-radius: 6px; background: #fff; color: var(--eom-graphite); }
 .mock-exam-selections { display: grid; gap: 7px; max-height: 520px; margin: 12px 0; overflow: auto; }
-.mock-exam-selection { display: grid; grid-template-columns: 42px minmax(210px, 1.4fr) minmax(130px, .8fr) minmax(160px, 1fr) 110px 100px auto; gap: 9px; align-items: center; padding: 9px; border: 1px solid var(--eom-border); border-radius: 7px; background: #fff; }
+.mock-exam-selection { display: grid; grid-template-columns: 42px minmax(260px, 1.25fr) minmax(220px, 1fr); gap: 9px; align-items: center; padding: 9px; border: 1px solid var(--eom-border); border-radius: 7px; background: #fff; }
 .mock-exam-selection strong { color: var(--eom-info-cobalt); text-align: center; }
 .mock-exam-selection span, .mock-exam-selection small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mock-exam-selection label { display: flex; align-items: center; gap: 5px; color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
@@ -492,7 +492,7 @@ html[data-ui-mode="human"] .panel-heading .eyebrow { display: none; }
   .learning-grid { grid-template-columns: 1fr; }
   .item-bank-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mock-exam-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mock-exam-selection { grid-template-columns: 36px minmax(180px, 1fr) 110px 90px auto; }
+  .mock-exam-selection { grid-template-columns: 36px minmax(220px, 1fr) minmax(180px, .8fr); }
   .mock-exam-selection small { display: none; }
 }
 

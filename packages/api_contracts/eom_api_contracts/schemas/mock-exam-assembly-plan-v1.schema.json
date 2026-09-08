@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/mock-exam-assembly-plan/1.0",
+  "title": "Mock Exam Assembly Plan API View V1",
+  "description": "Read-only API projection of the canonical server-derived assembly plan.",
+  "$ref": "eom://schemas/assessment-assembly/mock-exam-assembly-plan/1.0"
+}

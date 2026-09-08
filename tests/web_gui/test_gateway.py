@@ -7,15 +7,28 @@ from pathlib import Path
 
 import httpx
 import pytest
+from eom_catalog_contracts import (
+    build_mock_exam_assembly_plan,
+    load_integrated_science_mock_exam_layout_policy,
+    load_integrated_science_mock_exam_policy,
+    load_integrated_science_mock_exam_rating_policy,
+)
+from eom_identifiers import content_sha256
 from eom_web_gui.contracts import (
     ExplorerEntity,
     ExplorerQuery,
     HwpxBuildRequest,
     MockExamHwpxBuildRequest,
+    PlannedMockExamAssemblySubmission,
 )
-from eom_web_gui.gateways import GatewayError, HttpApplicationGateway
+from eom_web_gui.gateways import (
+    GatewayError,
+    HttpApplicationGateway,
+    _verified_mock_exam_plan,
+)
 from eom_web_gui.sessions import ApiTokens, WebSession
 
+from tests.unit.test_mock_exam_assembly_contracts import _planning_candidates, _usage_snapshot
 from tests.web_gui.helpers import structured_item_content
 
 NOW = datetime(2026, 8, 21, 9, 0, tzinfo=UTC)
@@ -719,6 +732,209 @@ async def test_gateway_uses_pinned_assembly_for_whole_exam_hwpx() -> None:
     assert value.visual_count == 11
     assert calls == 2
     await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_gateway_creates_only_the_exact_previewed_server_plan() -> None:
+    policy = load_integrated_science_mock_exam_policy()
+    layout = load_integrated_science_mock_exam_layout_policy()
+    rating = load_integrated_science_mock_exam_rating_policy()
+    candidates = _planning_candidates()
+    graph_revision_id = "graphrev_" + "a" * 32
+    graph_sha256 = "sha256:" + "b" * 64
+    planned_at = datetime.now(UTC)
+    plan = build_mock_exam_assembly_plan(
+        policy=policy,
+        layout_policy=layout,
+        rating_policy=rating,
+        graph_snapshot_revision_id=graph_revision_id,
+        graph_snapshot_sha256=graph_sha256,
+        usage_snapshot=_usage_snapshot(
+            captured_at=planned_at,
+            candidate_revision_count=len(candidates),
+        ),
+        resolved_candidate_count=len(candidates),
+        candidates=candidates,
+        planned_at=planned_at,
+    )
+    policy_data = {
+        "schema_version": policy.schema_version,
+        "policy_key": policy.policy_key,
+        "policy_revision_id": policy.policy_revision_id,
+        "policy_sha256": content_sha256(policy.model_dump(mode="json")),
+        "subject_key": policy.subject_key,
+        "item_count": policy.item_count,
+        "total_points_milli": policy.total_points_milli,
+        "score_distribution": [row.model_dump(mode="json") for row in policy.score_distribution],
+        "required_slot_count": policy.required_slot_count,
+        "balance_slot_count": policy.balance_slot_count,
+        "inquiry_min_count": policy.inquiry_min_count,
+        "inquiry_max_count": policy.inquiry_max_count,
+        "coverage_requirements": [
+            row.model_dump(mode="json") for row in policy.coverage_requirements
+        ],
+        "eligible_item_revision_states": list(policy.eligible_item_revision_states),
+        "outline_key": policy.outline_key,
+        "outline_revision": policy.outline_revision,
+        "outline_sha256": policy.outline_sha256,
+        "guidance_revision": policy.guidance_pointer.revision,
+        "guidance_reviewed_document_sha256": (policy.guidance_pointer.reviewed_document_sha256),
+        "guidance_original_sha256": policy.guidance_pointer.original_sha256,
+    }
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/api/v1/assessment-assemblies/policy":
+            return httpx.Response(200, json=_single(policy_data))
+        if request.url.path == "/api/v1/curriculum/integrated-science-graph-capability":
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "schema_version": "curriculum-graph-capability/1.0",
+                        "capability_state": "READY",
+                        "graph_grounding_available": True,
+                        "reason": "READY",
+                        "corpus_key": "integrated-science-textbooks",
+                        "outline_key": "eom-integrated-science-editorial-outline",
+                        "outline_revision": "1.0",
+                        "outline_sha256": (
+                            "sha256:f11389c8ab26c2bd5b93acf66fe92d30"
+                            "fea9c1d0bc7e6b91a6b6751fdccb5108"
+                        ),
+                        "graph_snapshot_revision_id": graph_revision_id,
+                        "snapshot_sha256": graph_sha256,
+                        "framework_revision_id": "curriculumrev_" + "c" * 32,
+                        "unit_count": 43,
+                        "closure_count": 119,
+                    }
+                ),
+            )
+        if request.url.path == "/api/v1/assessment-assemblies/plan":
+            assert dict(request.url.params) == {
+                "policy_revision_id": policy.policy_revision_id,
+                "policy_sha256": policy_data["policy_sha256"],
+                "graph_snapshot_revision_id": graph_revision_id,
+                "graph_snapshot_sha256": graph_sha256,
+            }
+            return httpx.Response(200, json=_single(plan.model_dump(mode="json")))
+        if request.url.path == "/api/v1/deliverables" and request.method == "POST":
+            return httpx.Response(
+                201,
+                json=_single(
+                    {
+                        "resource_id": "deliverable_" + "d" * 32,
+                        "resource_type": "deliverable",
+                        "status": "COMPLETED",
+                        "resource_version": 1,
+                    }
+                ),
+            )
+        if request.url.path == "/api/v1/deliverables/" + "deliverable_" + "d" * 32:
+            return httpx.Response(
+                200,
+                json=_single({"deliverable_revision_id": "delivrev_" + "e" * 32}),
+            )
+        assert request.url.path == "/api/v1/assessment-assemblies/planned"
+        body = json.loads(request.read())
+        assert body["expected_plan_sha256"] == plan.plan_sha256
+        assert body["planned_at"] == plan.model_dump(mode="json")["planned_at"]
+        assert "placements" not in body
+        return httpx.Response(
+            201,
+            json=_single(
+                {
+                    "resource_id": "assemblyrev_" + "f" * 32,
+                    "resource_type": "assessment_assembly_revision",
+                    "status": "COMPLETED",
+                    "resource_version": 1,
+                }
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    preview = await gateway.mock_exam_assembly_plan(_session())
+    submission = PlannedMockExamAssemblySubmission(
+        idempotency_key="mockexam:test-planned-0001",
+        deliverable_key="2026-integrated-science-mock-01",
+        title="2026 통합과학 모의고사 1회",
+        edition="1회",
+        form_key="main",
+        display_label="본시험지",
+        policy_revision_id=preview["policy_revision_id"],
+        policy_sha256=preview["policy_sha256"],
+        graph_snapshot_revision_id=preview["graph_snapshot_revision_id"],
+        graph_snapshot_sha256=preview["graph_snapshot_sha256"],
+        expected_plan_sha256=preview["plan_sha256"],
+        planned_at=preview["planned_at"],
+    )
+    result = await gateway.create_planned_mock_exam_assembly(
+        _session(),
+        submission,
+    )
+    assert result["resource_id"] == "assemblyrev_" + "f" * 32
+    assert len(requests) == 8
+    with pytest.raises(GatewayError, match="ASSEMBLY_PLAN_CHANGED"):
+        await gateway.create_planned_mock_exam_assembly(
+            _session(),
+            submission.model_copy(update={"graph_snapshot_revision_id": "graphrev_" + "9" * 32}),
+        )
+    assert (
+        sum(
+            request.url.path == "/api/v1/deliverables" and request.method == "POST"
+            for request in requests
+        )
+        == 1
+    )
+    await gateway.close()
+
+
+def test_web_plan_projection_rejects_tampered_or_duplicate_revisions() -> None:
+    policy = load_integrated_science_mock_exam_policy()
+    candidates = _planning_candidates()
+    graph_revision_id = "graphrev_" + "a" * 32
+    graph_sha256 = "sha256:" + "b" * 64
+    plan = build_mock_exam_assembly_plan(
+        policy=policy,
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        rating_policy=load_integrated_science_mock_exam_rating_policy(),
+        graph_snapshot_revision_id=graph_revision_id,
+        graph_snapshot_sha256=graph_sha256,
+        usage_snapshot=_usage_snapshot(
+            captured_at=NOW,
+            candidate_revision_count=len(candidates),
+        ),
+        resolved_candidate_count=len(candidates),
+        candidates=candidates,
+        planned_at=NOW,
+    )
+    value = plan.model_dump(mode="json")
+    arguments = {
+        "policy_revision_id": policy.policy_revision_id,
+        "policy_sha256": value["policy_sha256"],
+        "graph_snapshot_revision_id": graph_revision_id,
+        "graph_snapshot_sha256": graph_sha256,
+        "item_count": policy.item_count,
+    }
+    assert _verified_mock_exam_plan(value, **arguments) == value
+
+    hash_tampered = json.loads(json.dumps(value))
+    hash_tampered["placements"][0]["usage_count"] += 1
+    assert _verified_mock_exam_plan(hash_tampered, **arguments) is None
+
+    duplicate = json.loads(json.dumps(value))
+    duplicate["placements"][1]["item_revision_id"] = duplicate["placements"][0]["item_revision_id"]
+    duplicate["plan_sha256"] = content_sha256(
+        {key: item for key, item in duplicate.items() if key != "plan_sha256"}
+    )
+    assert _verified_mock_exam_plan(duplicate, **arguments) is None
 
 
 @pytest.mark.anyio

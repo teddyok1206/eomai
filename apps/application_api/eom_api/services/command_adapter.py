@@ -5,7 +5,10 @@ from __future__ import annotations
 import secrets
 from typing import Any, Literal
 
-from eom_api_contracts.assessment_assemblies import CreateMockExamAssemblyRequest
+from eom_api_contracts.assessment_assemblies import (
+    CreateMockExamAssemblyRequest,
+    CreatePlannedMockExamAssemblyRequest,
+)
 from eom_api_contracts.content_packs import ActivateContentPackRequest
 from eom_api_contracts.deliverables import CreateDeliverableRequest
 from eom_api_contracts.items import ItemRetirementRequest, StructuredItemContentImportRequest
@@ -20,6 +23,7 @@ from eom_catalog_contracts import (
     CreateDeliverable,
     CreateItemProductionEvidenceCommand,
     CreateMockExamAssembly,
+    CreatePlannedMockExamAssembly,
     CreateUsagePlan,
     EducationalRetrievalRequirement,
     FulfillUsagePlan,
@@ -619,6 +623,25 @@ class CommandAdapter:
             manifest.assessment_assembly_revision_id,
             1,
         )
+
+    def create_planned_mock_exam_assembly(
+        self, request: CreatePlannedMockExamAssemblyRequest, actor: ActorContext
+    ) -> tuple[str, str, int]:
+        try:
+            manifest = self.mock_exam_assemblies.create_planned(
+                CreatePlannedMockExamAssembly(
+                    **request.model_dump(mode="json"),
+                    actor_id=actor.actor_id,
+                )
+            )
+        except MockExamAssemblyError as exc:
+            raise ApiError(
+                409,
+                exc.code,
+                "Mock exam planning failed",
+                "The current reviewed candidates cannot fill the released layout policy.",
+            ) from exc
+        return new_api_command_id(), manifest.assessment_assembly_revision_id, 1
 
     def create_usage_plan(
         self, request: CreateUsagePlanRequest, actor: ActorContext

@@ -226,10 +226,13 @@ class ExamHwpxApplicationService:
     def _manifest(self, revision_id: str) -> MockExamAssemblyManifestV1:
         with self.sessions() as session:
             manifest = MockExamAssemblyService.inspect(session, revision_id)
-        if manifest is None or manifest.revision_state != "RELEASED":
+        if (
+            not isinstance(manifest, MockExamAssemblyManifestV1)
+            or manifest.revision_state != "RELEASED"
+        ):
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_APPLICATION_REVISION_INELIGIBLE,
-                "released Assessment Assembly revision does not exist",
+                "released V1 Assessment Assembly revision is not HWPX-eligible",
             )
         return manifest
 

@@ -123,6 +123,47 @@ API layer depends on typed contracts, while SQL/Graph resolution stays in its in
 adapter.  No new persistent cache, table, dependency, or index is introduced because the existing
 snapshot adjacency and component indexes already serve the bounded access paths.
 
+## Server-driven assembly planning
+
+The Catalog application service owns mock-exam planning.  The browser supplies Deliverable/Form
+presentation values and returns the opaque plan hash, timestamp, policy pointer, and Graph Snapshot
+pointer issued by preview; the Web gateway never accepts browser-authored scoring, curriculum
+coverage, inquiry classification, material classification, review rating, or position.
+The canonical sources are the released assembly and layout policies, the reviewed rating policy,
+the current published Graph Snapshot, immutable Item/Item Revision/component and Artifact Revision
+pointers, the latest pinned Item review record, and the append-only usage ledgers as observed by the
+planning transaction.  Content bytes are materialized only at this validation boundary through a
+bounded, no-follow Artifact member read and are never copied into PostgreSQL.
+
+The team lead's reviewed 25-row default layout is a separate immutable layout-policy revision.  It
+maps positions to official score, coverage role, coverage requirement or balance large-unit,
+required inquiry status, and preferred difficulty/material profile.  This keeps examples from
+becoming Item content while preserving the reviewed assessment-level arrangement exactly.  A
+separate rating-policy revision maps only a review record with decision `APPROVE` and
+`final_rating` A/B/C to production eligibility; missing or unrecognised ratings are not guessed.
+
+Candidate resolution is one bounded Graph/Item query followed by bulk review, Artifact, curriculum,
+and usage queries.  Maps keyed by immutable revision ID provide O(1) lookup; curriculum and source
+membership use sets; usage history is a sorted append-only projection whose hash is captured in a
+small immutable snapshot value.  The expected scale is at most 5,000 Graph candidates and tens of
+thousands of usage rows.  Resolution is O(candidates + edges + reviews + usage) time and space.
+The fixed 25-slot constraint search indexes candidates by requirement and large unit, orders slots
+by option count, uses a selected-revision set, and is bounded by an explicit visited-node limit.
+A general solver is intentionally not introduced because the reviewed layout is fixed-size and no
+measured need justifies another dependency.
+
+Preview is read-only.  Its hash and timestamp form a 15-minute optimistic creation token.  Planned
+creation repeats historical-cutoff resolution inside the existing Deliverable-locked transaction,
+requires the exact preview hash, validates every immutable pointer and hash, then appends the Form,
+Assembly Revision, and placements atomically.  The released manifest pins the layout/rating policy revisions, the
+Graph Snapshot, the usage snapshot hash, each review and content Artifact Revision, and the
+server-generated plan hash.  Concurrent creation for one Deliverable/Form serializes on the
+Deliverable row; exact replay returns the existing immutable revision, while a conflicting Form or
+pointer fails.  Candidate shortage, search-bound exhaustion, pointer drift, or any validation error
+rolls back without a partial Assembly Revision.  The simpler client-authored placement array was
+rejected because it lets presentation code invent domain facts and cannot reproduce review or usage
+provenance.
+
 ## Acceptance checks
 
 - JSON Schema 2020-12 precedes new DTO and behavior.

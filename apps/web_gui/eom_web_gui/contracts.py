@@ -354,6 +354,23 @@ class MockExamAssemblySubmission(WebModel):
         return self
 
 
+class PlannedMockExamAssemblySubmission(WebModel):
+    """Presentation values plus an opaque server-issued plan token; no authored placements."""
+
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$")
+    deliverable_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$")
+    title: str = Field(min_length=1, max_length=256)
+    edition: str = Field(min_length=1, max_length=64)
+    form_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$")
+    display_label: str = Field(min_length=1, max_length=128)
+    policy_revision_id: str = Field(pattern=r"^assemblypolicyrev_[0-9a-f]{32}$")
+    policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    graph_snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    expected_plan_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    planned_at: UtcDatetime
+
+
 class MockExamHwpxBuildRequest(WebModel):
     assessment_assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
     idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$")

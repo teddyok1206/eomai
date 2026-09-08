@@ -32,6 +32,8 @@ EXAM_ITEMS_PATH = "/api/v1/curriculum/assessment-occurrences/items"
 UNIT_ITEMS_PATH = "/api/v1/curriculum/integrated-science-units/{curriculum_unit_id}/past-exam-items"
 ITEM_BANK_PATH = "/api/v1/item-bank/entries"
 PRODUCTION_CANDIDATES_PATH = "/api/v1/item-bank/production-candidates"
+MOCK_EXAM_PLAN_PATH = "/api/v1/assessment-assemblies/plan"
+MOCK_EXAM_PLANNED_CREATE_PATH = "/api/v1/assessment-assemblies/planned"
 
 
 def test_curriculum_outline_endpoint_is_authenticated_and_author_permissioned() -> None:
@@ -56,6 +58,12 @@ def test_curriculum_outline_endpoint_is_authenticated_and_author_permissioned() 
         production_operation = app.openapi()["paths"][PRODUCTION_CANDIDATES_PATH]["get"]
         assert production_operation["operationId"] == "production_item_candidate_list"
         assert production_operation["x-eom-permission"] == "item:read"
+        plan_operation = app.openapi()["paths"][MOCK_EXAM_PLAN_PATH]["get"]
+        assert plan_operation["operationId"] == "mock_exam_assembly_plan_preview"
+        assert plan_operation["x-eom-permission"] == "deliverable:read"
+        create_operation = app.openapi()["paths"][MOCK_EXAM_PLANNED_CREATE_PATH]["post"]
+        assert create_operation["operationId"] == "planned_mock_exam_assembly_create"
+        assert create_operation["x-eom-permission"] == "deliverable:create"
         with TestClient(app, base_url="http://localhost") as client:
             response = client.get(PATH)
         assert response.status_code == 401
