@@ -25,9 +25,10 @@ pin. It must not resolve the mutable current preset at the point of promotion.
    idempotent transactions.
 9. **Dependencies.** The runner constructs the typed pin, the automation service holds the guard,
    and the coordinator resolves persistence. Domain contracts do not import infrastructure.
-10. **Failure and replay.** Missing or drifted pins fail before an automatic side effect. A terminal
-    leaf analysis also fails before another reconciliation, Graph publication, retry, or promotion.
-    Existing promotion and analysis keys remain replay-stable.
+10. **Failure and replay.** Missing or drifted pins fail before an automatic side effect. Any
+    unallowlisted terminal leaf fails before another reconciliation, Graph publication, retry, or
+    promotion. An exact ordered allowlisted terminal leaf instead creates its one idempotent
+    successor before other work. Existing promotion and analysis keys remain replay-stable.
 11. **Rejected simpler alternative.** Merely observing the current preset from an operations loop
     leaves a check/use race and lets the coordinator resolve a later revision. Passing and locking
     exact pins closes that gap without a new framework or schema migration.
