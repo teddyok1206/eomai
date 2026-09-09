@@ -11,6 +11,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV9,
     KnowledgeAnalysisWorkerProposalV7,
     KnowledgeArtifactMemberPointer,
+    validate_assessment_page_observation_anchors,
     validate_contract,
 )
 from eom_catalog_service.knowledge_graph_projection import (
@@ -501,6 +502,25 @@ def test_v9_request_and_proposal_require_exact_ordered_page_observations() -> No
     invalid["page_image_observations"].reverse()
     with pytest.raises(ValidationError):
         KnowledgeAnalysisWorkerProposalV7.model_validate(invalid)
+
+
+def test_assessment_page_observations_bind_anchors_to_the_exact_png_member() -> None:
+    source = _source()
+    proposal = _proposal(source)
+
+    validate_assessment_page_observation_anchors(source, proposal)
+    first, second = proposal.page_image_observations
+    swapped = proposal.model_copy(
+        update={
+            "page_image_observations": (
+                first.model_copy(update={"anchor_ids": second.anchor_ids}),
+                second.model_copy(update={"anchor_ids": first.anchor_ids}),
+            )
+        }
+    )
+
+    with pytest.raises(ValueError, match="another source"):
+        validate_assessment_page_observation_anchors(source, swapped)
 
 
 def test_visual_analysis_workflow_requires_image_materialization_mode() -> None:

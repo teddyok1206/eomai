@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/legacy-item-corpus-completion-command/1.0",
+  "title": "Legacy Item Corpus Completion Command V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "inventory_id",
+    "inventory_sha256",
+    "original_batch",
+    "successor_batch",
+    "recovery_sha256",
+    "recovery_artifact",
+    "requested_by",
+    "command_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-item-corpus-completion-command/1.0"},
+    "inventory_id": {
+      "type": "string",
+      "pattern": "^legacyinventory_[0-9a-f]{32}$"
+    },
+    "inventory_sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    },
+    "original_batch": {"$ref": "#/$defs/batchManifestIdentity"},
+    "successor_batch": {"$ref": "#/$defs/batchManifestIdentity"},
+    "recovery_sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    },
+    "recovery_artifact": {"$ref": "#/$defs/recoveryArtifact"},
+    "requested_by": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/actorId"
+    },
+    "command_sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "recoveryArtifact": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/artifactMemberPointer"
+        },
+        {
+          "properties": {
+            "member_path": {"const": "validation-recovery.json"},
+            "schema_ref": {
+              "const": "eom://schemas/legacy-assessment/legacy-item-extraction-validation-recovery/1.0"
+            },
+            "media_type": {"const": "application/json"}
+          }
+        }
+      ]
+    },
+    "batchManifestIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extraction_batch_id", "manifest_sha256"],
+      "properties": {
+        "extraction_batch_id": {
+          "type": "string",
+          "pattern": "^legacybatch_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

@@ -328,6 +328,30 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:9cdbbc056f0919bc84e73040986d913c5ecbf664760c7ecc2f7a7398138a77f0",
         ),
+        "legacy-item-corpus-completion-command": CatalogSchemaResource(
+            "schemas/legacy-assessment/legacy-item-corpus-completion-command-v1.schema.json",
+            "resources/legacy-assessment/legacy-item-corpus-completion-command-v1.schema.json",
+            "1.0",
+            "sha256:44aa4e6b1c7a77d932de1806e34f783e014e427755aac99318fed7d1726c8169",
+        ),
+        "legacy-item-corpus-completion-receipt": CatalogSchemaResource(
+            "schemas/legacy-assessment/legacy-item-corpus-completion-receipt-v1.schema.json",
+            "resources/legacy-assessment/legacy-item-corpus-completion-receipt-v1.schema.json",
+            "1.0",
+            "sha256:9851152632eccb1b3176616e24284e6c066df752f1ede84c67ba31778b22e84a",
+        ),
+        "pdf-learning-completion": CatalogSchemaResource(
+            "schemas/legacy-assessment/pdf-learning-completion-v1.schema.json",
+            "resources/legacy-assessment/pdf-learning-completion-v1.schema.json",
+            "1.0",
+            "sha256:1652de61ff752ea8e21f79c819b16b214a8896b90bcde2a4d44cc0f5060e10a4",
+        ),
+        "pdf-learning-item-completion-shard": CatalogSchemaResource(
+            "schemas/legacy-assessment/pdf-learning-item-completion-shard-v1.schema.json",
+            "resources/legacy-assessment/pdf-learning-item-completion-shard-v1.schema.json",
+            "1.0",
+            "sha256:ad4b16e687343513ae47e38f85c5386ca58e786f3186c37bbb253381b1f25874",
+        ),
         "legacy-item-extraction-receipt": CatalogSchemaResource(
             "schemas/legacy-assessment/legacy-item-extraction-receipt-v1.schema.json",
             "resources/legacy-assessment/legacy-item-extraction-receipt-v1.schema.json",

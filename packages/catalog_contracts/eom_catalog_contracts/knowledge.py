@@ -1633,6 +1633,31 @@ class KnowledgeAnalysisWorkerProposalV7(KnowledgeAnalysisWorkerProposalV3):
         return self
 
 
+def validate_assessment_page_observation_anchors(
+    source: ApprovedPastExamItemKnowledgeSourceV3,
+    proposal: KnowledgeAnalysisWorkerProposalV7,
+) -> None:
+    """Bind each page observation only to anchors on that page's pinned PNG member."""
+
+    anchors_by_id = {anchor.anchor_id: anchor for anchor in proposal.anchors}
+    page_members = {
+        page.page_input_id: (page.image.artifact_revision_id, page.image.member_path)
+        for page in source.page_inputs
+    }
+    for observation in proposal.page_image_observations:
+        expected_member = page_members.get(observation.page_input_id)
+        if expected_member is None or any(
+            anchor_id not in anchors_by_id
+            or (
+                anchors_by_id[anchor_id].artifact_revision_id,
+                anchors_by_id[anchor_id].member_path,
+            )
+            != expected_member
+            for anchor_id in observation.anchor_ids
+        ):
+            raise ValueError("assessment page observation cites an anchor from another source")
+
+
 def validate_knowledge_analysis_proposal_ontology(
     proposal: (
         KnowledgeAnalysisWorkerProposal

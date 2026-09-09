@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/pdf-learning-item-completion-shard/1.0",
+  "title": "PDF Learning Item Completion Shard V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "shard_index",
+    "first_key",
+    "last_key",
+    "item_count",
+    "items",
+    "shard_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "eom-pdf-learning-item-completion-shard/1.0"},
+    "shard_index": {"type": "integer", "minimum": 0, "maximum": 31},
+    "first_key": {"$ref": "#/$defs/completionItemKey"},
+    "last_key": {"$ref": "#/$defs/completionItemKey"},
+    "item_count": {"type": "integer", "minimum": 1, "maximum": 64},
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "eom://schemas/legacy-assessment/pdf-learning-completion/1.0#/$defs/itemCompletion"
+      }
+    },
+    "shard_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "completionItemKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle_revision_id", "item_number"],
+      "properties": {
+        "bundle_revision_id": {
+          "type": "string",
+          "pattern": "^assessbundlerev_[0-9a-f]{32}$"
+        },
+        "item_number": {"type": "integer", "minimum": 1, "maximum": 10000}
+      }
+    }
+  }
+}

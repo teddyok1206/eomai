@@ -142,6 +142,9 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     assert "api_tokens" not in READ_TABLES
     assert "operator_credentials" not in READ_TABLES
     assert "content_pack_activations" not in UPDATE_TABLES
+    assert "pdf_learning_completion_observations" in READ_TABLES
+    assert "pdf_learning_completion_observations" in INSERT_TABLES
+    assert "pdf_learning_completion_observations" not in UPDATE_TABLES
     educational_document_tables = {
         "educational_documents",
         "educational_document_revisions",

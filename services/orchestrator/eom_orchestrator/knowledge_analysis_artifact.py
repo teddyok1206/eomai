@@ -36,6 +36,7 @@ from eom_catalog_contracts import (
     KnowledgeProposalMembers,
     KnowledgeProposalMembersV2,
     ProposedKnowledgeEdgeV2,
+    validate_assessment_page_observation_anchors,
     validate_knowledge_edge_endpoint_types,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -332,25 +333,13 @@ def stage_knowledge_analysis_proposal(
                 ErrorCode.WORKER_RESULT_INVALID,
                 "assessment page observations do not match the exact attached PNG inputs",
             )
-        anchors_by_id = {anchor.anchor_id: anchor for anchor in proposal.anchors}
-        page_members = {
-            page.page_input_id: (page.image.artifact_revision_id, page.image.member_path)
-            for page in request.source.page_inputs
-        }
-        for observation in assessment_observed:
-            expected_member = page_members[observation.page_input_id]
-            if any(
-                (
-                    anchors_by_id[anchor_id].artifact_revision_id,
-                    anchors_by_id[anchor_id].member_path,
-                )
-                != expected_member
-                for anchor_id in observation.anchor_ids
-            ):
-                raise PlatformError(
-                    ErrorCode.WORKER_RESULT_INVALID,
-                    "assessment page observation cites an anchor from another source",
-                )
+        try:
+            validate_assessment_page_observation_anchors(request.source, proposal)
+        except ValueError as exc:
+            raise PlatformError(
+                ErrorCode.WORKER_RESULT_INVALID,
+                "assessment page observation cites an anchor from another source",
+            ) from exc
     source_directory = staging / "knowledge-proposal-source"
     artifact_stage = staging / "knowledge-proposal-artifact"
     if source_directory.exists() or artifact_stage.exists():

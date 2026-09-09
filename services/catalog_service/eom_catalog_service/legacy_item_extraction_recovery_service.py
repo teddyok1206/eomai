@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from eom_catalog_contracts import (
+    AssessmentArtifactMemberPointer,
     LegacyItemExtractionBatchManifestV2,
     LegacyItemExtractionValidationRecovery,
     derive_legacy_item_extraction_recovery_successor,
     validate_contract,
 )
+from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator.control_models import ExecutionBundleRevisionRecord
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.models import JobRecord
@@ -45,6 +47,14 @@ class LegacyItemExtractionRecoveryError(RuntimeError):
         self.code = code
 
 
+class RecoveryAuthorizationArtifactBoundary(Protocol):
+    """Port implemented by the Orchestrator-owned validated Artifact publisher."""
+
+    def commit_recovery_authorization(
+        self, recovery: LegacyItemExtractionValidationRecovery
+    ) -> AssessmentArtifactMemberPointer: ...
+
+
 @dataclass(frozen=True)
 class CreateLegacyItemExtractionRecoveryCommand:
     recovery: LegacyItemExtractionValidationRecovery
@@ -60,6 +70,7 @@ class CreateLegacyItemExtractionRecoveryCommand:
 @dataclass(frozen=True)
 class LegacyItemExtractionRecoveryResult:
     recovery_sha256: str
+    recovery_artifact: AssessmentArtifactMemberPointer
     successor_manifest_sha256: str
     batch: LegacyItemExtractionBatchView
 
@@ -71,9 +82,11 @@ class LegacyItemExtractionRecoveryService:
         self,
         engine: Engine,
         *,
+        authorizations: RecoveryAuthorizationArtifactBoundary,
         batches: LegacyItemExtractionBatchService | None = None,
     ) -> None:
         self.sessions = build_session_factory(engine)
+        self.authorizations = authorizations
         self.batches = batches or LegacyItemExtractionBatchService(engine)
 
     def create(
@@ -131,6 +144,14 @@ class LegacyItemExtractionRecoveryService:
                 "legacy extraction recovery successor manifest is invalid",
             ) from exc
         try:
+            recovery_artifact = self.authorizations.commit_recovery_authorization(recovery)
+        except Exception as exc:
+            raise LegacyItemExtractionRecoveryError(
+                "LEGACY_EXTRACTION_RECOVERY_ARTIFACT_FAILED",
+                "legacy extraction recovery authorization could not be committed",
+            ) from exc
+        self._require_exact_recovery_artifact(recovery, recovery_artifact)
+        try:
             batch = self.batches.create(
                 CreateLegacyItemExtractionBatchCommand(
                     manifest=successor_manifest,
@@ -142,9 +163,28 @@ class LegacyItemExtractionRecoveryService:
             raise LegacyItemExtractionRecoveryError(exc.code, str(exc)) from exc
         return LegacyItemExtractionRecoveryResult(
             recovery_sha256=recovery.recovery_sha256,
+            recovery_artifact=recovery_artifact,
             successor_manifest_sha256=successor_manifest.manifest_sha256,
             batch=batch,
         )
+
+    @staticmethod
+    def _require_exact_recovery_artifact(
+        recovery: LegacyItemExtractionValidationRecovery,
+        recovery_artifact: AssessmentArtifactMemberPointer,
+    ) -> None:
+        if (
+            recovery_artifact.member_path != "validation-recovery.json"
+            or recovery_artifact.schema_ref
+            != "eom://schemas/legacy-assessment/legacy-item-extraction-validation-recovery/1.0"
+            or recovery_artifact.media_type != "application/json"
+            or recovery_artifact.sha256
+            != sha256_bytes(canonical_json_bytes(recovery.model_dump(mode="json")) + b"\n")
+        ):
+            raise LegacyItemExtractionRecoveryError(
+                "LEGACY_EXTRACTION_RECOVERY_ARTIFACT_INVALID",
+                "legacy extraction recovery authorization pointer differs",
+            )
 
     @staticmethod
     def _require_exact_predecessor_distribution(
@@ -378,4 +418,5 @@ __all__ = [
     "LegacyItemExtractionRecoveryError",
     "LegacyItemExtractionRecoveryResult",
     "LegacyItemExtractionRecoveryService",
+    "RecoveryAuthorizationArtifactBoundary",
 ]

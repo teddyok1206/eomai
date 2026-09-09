@@ -14,6 +14,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20260903_0026_legacy_item_editorial_compatibility",
     "migrations.versions.20260903_0027_legacy_item_extraction_batches",
     "migrations.versions.20260904_0028_extraction_acceptance_provenance",
+    "migrations.versions.20260909_0033_pdf_learning_completion",
 )
 
 

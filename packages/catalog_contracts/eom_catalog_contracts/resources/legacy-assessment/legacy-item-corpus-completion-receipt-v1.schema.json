@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/legacy-item-corpus-completion-receipt/1.0",
+  "title": "Legacy Item Corpus Completion Receipt V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "requested_by",
+    "command_sha256",
+    "inventory_id",
+    "inventory_sha256",
+    "inventory_artifact",
+    "original_batch",
+    "successor_batch",
+    "recovery_sha256",
+    "recovery_artifact",
+    "coverage_id",
+    "coverage_sha256",
+    "coverage_artifact",
+    "original_work_unit_count",
+    "effective_work_unit_count",
+    "recovered_work_unit_count",
+    "expected_item_count",
+    "accepted_item_count",
+    "missing_item_count",
+    "conflict_item_count",
+    "expected_item_keys_sha256",
+    "accepted_item_map_sha256",
+    "created_at",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-item-corpus-completion-receipt/1.0"},
+    "status": {"const": "COMPLETE"},
+    "requested_by": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "command_sha256": {"$ref": "#/$defs/sha256"},
+    "inventory_id": {
+      "type": "string",
+      "pattern": "^legacyinventory_[0-9a-f]{32}$"
+    },
+    "inventory_sha256": {"$ref": "#/$defs/sha256"},
+    "inventory_artifact": {"$ref": "#/$defs/inventoryArtifact"},
+    "original_batch": {"$ref": "#/$defs/batchEvidence"},
+    "successor_batch": {"$ref": "#/$defs/batchEvidence"},
+    "recovery_sha256": {"$ref": "#/$defs/sha256"},
+    "recovery_artifact": {"$ref": "#/$defs/recoveryArtifact"},
+    "coverage_id": {
+      "type": "string",
+      "pattern": "^itemcoverage_[0-9a-f]{32}$"
+    },
+    "coverage_sha256": {"$ref": "#/$defs/sha256"},
+    "coverage_artifact": {"$ref": "#/$defs/coverageArtifact"},
+    "original_work_unit_count": {"type": "integer", "minimum": 1},
+    "effective_work_unit_count": {"type": "integer", "minimum": 1},
+    "recovered_work_unit_count": {"const": 3},
+    "expected_item_count": {"type": "integer", "minimum": 1},
+    "accepted_item_count": {"type": "integer", "minimum": 1},
+    "missing_item_count": {"const": 0},
+    "conflict_item_count": {"const": 0},
+    "expected_item_keys_sha256": {"$ref": "#/$defs/sha256"},
+    "accepted_item_map_sha256": {"$ref": "#/$defs/sha256"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "receipt_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    },
+    "artifactMemberPointer": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/artifactMemberPointer"
+    },
+    "inventoryArtifact": {
+      "allOf": [
+        {"$ref": "#/$defs/artifactMemberPointer"},
+        {
+          "properties": {
+            "member_path": {"const": "legacy-source-inventory.json"},
+            "schema_ref": {
+              "const": "eom://schemas/legacy-knowledge/legacy-source-inventory/2.0"
+            },
+            "media_type": {"const": "application/json"}
+          }
+        }
+      ]
+    },
+    "coverageArtifact": {
+      "allOf": [
+        {"$ref": "#/$defs/artifactMemberPointer"},
+        {
+          "properties": {
+            "member_path": {"const": "coverage.json"},
+            "schema_ref": {
+              "const": "eom://schemas/legacy-assessment/legacy-item-corpus-coverage/1.0"
+            },
+            "media_type": {"const": "application/json"}
+          }
+        }
+      ]
+    },
+    "recoveryArtifact": {
+      "allOf": [
+        {"$ref": "#/$defs/artifactMemberPointer"},
+        {
+          "properties": {
+            "member_path": {"const": "validation-recovery.json"},
+            "schema_ref": {
+              "const": "eom://schemas/legacy-assessment/legacy-item-extraction-validation-recovery/1.0"
+            },
+            "media_type": {"const": "application/json"}
+          }
+        }
+      ]
+    },
+    "batchEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "extraction_batch_id",
+        "manifest_sha256",
+        "manifest_artifact",
+        "state",
+        "total_work_unit_count",
+        "accepted_work_unit_count",
+        "failed_work_unit_count",
+        "other_work_unit_count"
+      ],
+      "properties": {
+        "extraction_batch_id": {
+          "type": "string",
+          "pattern": "^legacybatch_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_artifact": {"$ref": "#/$defs/batchManifestArtifact"},
+        "state": {"enum": ["COMPLETED_WITH_GAPS", "SUCCEEDED"]},
+        "total_work_unit_count": {"type": "integer", "minimum": 0},
+        "accepted_work_unit_count": {"type": "integer", "minimum": 0},
+        "failed_work_unit_count": {"type": "integer", "minimum": 0},
+        "other_work_unit_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "batchManifestArtifact": {
+      "allOf": [
+        {"$ref": "#/$defs/artifactMemberPointer"},
+        {
+          "properties": {
+            "member_path": {"const": "legacy-item-extraction-batch.json"},
+            "schema_ref": {
+              "const": "eom://schemas/legacy-assessment/legacy-item-extraction-batch/1.1"
+            },
+            "media_type": {"const": "application/json"}
+          }
+        }
+      ]
+    }
+  }
+}

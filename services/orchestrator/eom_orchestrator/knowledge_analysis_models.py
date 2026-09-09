@@ -130,6 +130,23 @@ class KnowledgeAnalysisRunRecord(Base):
             text("created_at DESC"),
         ),
         Index(
+            "ix_knowledge_analysis_source_artifact_scope",
+            "source_artifact_id",
+            "source_artifact_revision_id",
+            "source_sha256",
+            "created_at",
+            "analysis_run_id",
+        ),
+        Index(
+            "ix_knowledge_analysis_result_artifact_scope",
+            "accepted_result_artifact_id",
+            "accepted_result_artifact_revision_id",
+            "accepted_result_sha256",
+            "created_at",
+            "analysis_run_id",
+            postgresql_where=text("accepted_result_artifact_revision_id IS NOT NULL"),
+        ),
+        Index(
             "ix_knowledge_analysis_intake_file",
             "source_file_id",
             "created_at",

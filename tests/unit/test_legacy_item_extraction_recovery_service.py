@@ -6,6 +6,7 @@ from typing import Any, cast
 
 import pytest
 from eom_catalog_contracts import (
+    AssessmentArtifactMemberPointer,
     LegacyCorpusSourceBinding,
     LegacyExtractionBatchWorkUnitV2,
     LegacyItemExtractionBatchManifestV2,
@@ -18,7 +19,7 @@ from eom_catalog_service.legacy_item_extraction_recovery_service import (
     LegacyItemExtractionRecoveryError,
     LegacyItemExtractionRecoveryService,
 )
-from eom_identifiers import content_sha256
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from test_legacy_extraction_recovery_contracts import recovery_document
 from test_legacy_item_extraction_service import _request
 
@@ -179,6 +180,29 @@ def test_recovery_builder_does_not_mutate_predecessor_manifest() -> None:
     derive_legacy_item_extraction_recovery_successor(recovery, predecessor)
 
     assert predecessor.model_dump(mode="json") == before
+
+
+def test_recovery_service_rejects_drifted_authorization_artifact_pointer() -> None:
+    _predecessor, recovery = _predecessor_and_recovery()
+    pointer = AssessmentArtifactMemberPointer(
+        artifact_id="artifact_" + "a" * 32,
+        artifact_revision_id="rev_" + "b" * 32,
+        member_path="validation-recovery.json",
+        schema_ref=(
+            "eom://schemas/legacy-assessment/legacy-item-extraction-validation-recovery/1.0"
+        ),
+        media_type="application/json",
+        sha256=sha256_bytes(canonical_json_bytes(recovery.model_dump(mode="json")) + b"\n"),
+    )
+    LegacyItemExtractionRecoveryService._require_exact_recovery_artifact(recovery, pointer)
+
+    with pytest.raises(LegacyItemExtractionRecoveryError) as captured:
+        LegacyItemExtractionRecoveryService._require_exact_recovery_artifact(
+            recovery,
+            pointer.model_copy(update={"sha256": "sha256:" + "f" * 64}),
+        )
+
+    assert captured.value.code == "LEGACY_EXTRACTION_RECOVERY_ARTIFACT_INVALID"
 
 
 def test_recovery_derivation_preserves_every_unauthorized_request_field() -> None:

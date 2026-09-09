@@ -333,6 +333,9 @@ class LegacyAssessmentRegistry:
         if persisted != coverage:
             self._fail("LEGACY_ASSESSMENT_POINTER_MISMATCH", "coverage Artifact content differs")
         with transaction(self.sessions) as session:
+            # Coverage identity is content-derived.  Serializing on it makes concurrent semantic
+            # replay converge before the primary-key insert without weakening conflict checks.
+            self._lock(session, f"legacy-item-corpus-coverage:{coverage.coverage_id}")
             existing = session.get(LegacyItemCorpusCoverageRecord, coverage.coverage_id)
             if existing is not None:
                 if (
@@ -347,8 +350,71 @@ class LegacyAssessmentRegistry:
                     revision_id=coverage_artifact.artifact_revision_id,
                     created=False,
                 )
+            bundle_ids = {
+                value.bundle.assessment_source_bundle_id for value in coverage.bundle_coverages
+            }
+            bundle_revision_ids = {
+                value.bundle.assessment_source_bundle_revision_id
+                for value in coverage.bundle_coverages
+            }
+            logical_bundles = {
+                value.assessment_source_bundle_id: value
+                for value in session.scalars(
+                    select(AssessmentSourceBundleRecord).where(
+                        AssessmentSourceBundleRecord.assessment_source_bundle_id.in_(bundle_ids)
+                    )
+                ).all()
+            }
+            bundle_revisions = {
+                value.assessment_source_bundle_revision_id: value
+                for value in session.scalars(
+                    select(AssessmentSourceBundleRevisionRecord).where(
+                        AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id.in_(
+                            bundle_revision_ids
+                        )
+                    )
+                ).all()
+            }
+            accepted_keys = {
+                (accepted.acceptance_id, accepted.item_number)
+                for bundle in coverage.bundle_coverages
+                for accepted in bundle.accepted_items
+            }
+            acceptance_ids = {acceptance_id for acceptance_id, _ in accepted_keys}
+            acceptances = {
+                value.acceptance_id: value
+                for value in session.scalars(
+                    select(LegacyItemExtractionAcceptanceRecord).where(
+                        LegacyItemExtractionAcceptanceRecord.acceptance_id.in_(acceptance_ids)
+                    )
+                ).all()
+            }
+            decisions: dict[tuple[str, int], LegacyItemExtractionDecisionRecord] = {}
+            for value in session.scalars(
+                select(LegacyItemExtractionDecisionRecord).where(
+                    LegacyItemExtractionDecisionRecord.acceptance_id.in_(acceptance_ids)
+                )
+            ).all():
+                key = (value.acceptance_id, value.item_number)
+                if key in decisions:
+                    self._fail(
+                        "LEGACY_ASSESSMENT_POINTER_STALE",
+                        "coverage accepted item decision is ambiguous",
+                    )
+                decisions[key] = value
+
             for bundle in coverage.bundle_coverages:
-                revision = self._require_bundle_pointer(session, bundle.bundle)
+                logical = logical_bundles.get(bundle.bundle.assessment_source_bundle_id)
+                revision = bundle_revisions.get(bundle.bundle.assessment_source_bundle_revision_id)
+                if (
+                    logical is None
+                    or revision is None
+                    or logical.lifecycle_state not in {"ACTIVE", "RETIRED"}
+                    or revision.assessment_source_bundle_id != logical.assessment_source_bundle_id
+                    or revision.state not in {"REVIEWED", "SUPERSEDED"}
+                    or revision.bundle_manifest_sha256 != bundle.bundle.bundle_manifest_sha256
+                ):
+                    self._fail("LEGACY_ASSESSMENT_POINTER_STALE", "bundle pointer is stale")
                 if (
                     revision.inventory_id != coverage.inventory_id
                     or revision.inventory_sha256 != coverage.inventory_sha256
@@ -358,21 +424,11 @@ class LegacyAssessmentRegistry:
                         "coverage bundles do not share the pinned inventory",
                     )
                 for accepted in bundle.accepted_items:
-                    decision = session.scalar(
-                        select(LegacyItemExtractionDecisionRecord).where(
-                            LegacyItemExtractionDecisionRecord.acceptance_id
-                            == accepted.acceptance_id,
-                            LegacyItemExtractionDecisionRecord.item_number == accepted.item_number,
-                            LegacyItemExtractionDecisionRecord.decision.in_(
-                                ("ACCEPT", "CORRECT_AND_ACCEPT")
-                            ),
-                        )
-                    )
-                    acceptance = session.get(
-                        LegacyItemExtractionAcceptanceRecord, accepted.acceptance_id
-                    )
+                    decision = decisions.get((accepted.acceptance_id, accepted.item_number))
+                    acceptance = acceptances.get(accepted.acceptance_id)
                     if (
                         decision is None
+                        or decision.decision not in {"ACCEPT", "CORRECT_AND_ACCEPT"}
                         or acceptance is None
                         or acceptance.acceptance_sha256 != accepted.acceptance_sha256
                     ):
