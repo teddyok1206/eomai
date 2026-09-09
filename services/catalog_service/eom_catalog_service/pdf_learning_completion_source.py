@@ -47,6 +47,7 @@ from eom_catalog_contracts import (
     KnowledgeGraphSnapshotManifestV8,
     KnowledgeGraphStructureManifestV5,
     KnowledgeProposalArtifactMember,
+    LegacyExtractionResultIdentityCollisions,
     LegacyItemCorpusCompletionCommand,
     LegacyItemCorpusCoverage,
     LegacyItemExtractionBatchManifestV2,
@@ -214,6 +215,7 @@ class _ResolvedExtraction:
     original_batch: BatchProof
     successor_batch: BatchProof
     recovery_authorization: RecoveryAuthorization
+    historical_result_identity_collisions: LegacyExtractionResultIdentityCollisions | None
     corpus_coverage: CorpusCoverage
     pdf_sources: tuple[PdfSource, ...]
     pdf_observations: tuple[ResolvedPinnedLegacyPdfSource, ...]
@@ -387,6 +389,9 @@ class PostgresPdfLearningCompletionSource:
                     original_batch=extraction.original_batch,
                     successor_batch=extraction.successor_batch,
                     recovery_authorization=extraction.recovery_authorization,
+                    historical_result_identity_collisions=(
+                        extraction.historical_result_identity_collisions
+                    ),
                     corpus_coverage=extraction.corpus_coverage,
                     pdf_sources=extraction.pdf_sources,
                     effective_work_units=extraction.effective_work_units,
@@ -717,6 +722,9 @@ class PostgresPdfLearningCompletionSource:
             recovery_authorization=RecoveryAuthorization(
                 recovery_sha256=generic.recovery.recovery_sha256,
                 artifact=self._artifact_member(completion.recovery_artifact),
+            ),
+            historical_result_identity_collisions=(
+                completion.historical_result_identity_collisions
             ),
             corpus_coverage=CorpusCoverage(
                 coverage_id=coverage.coverage_id,
@@ -2632,25 +2640,33 @@ class PostgresPdfLearningCompletionSource:
         request: PdfLearningCompletionRequest,
     ) -> LegacyItemCorpusCompletionCommand:
         receipt = request.corpus_completion
-        return LegacyItemCorpusCompletionCommand.model_validate(
-            {
-                "schema_version": "legacy-item-corpus-completion-command/1.0",
-                "inventory_id": receipt.inventory_id,
-                "inventory_sha256": receipt.inventory_sha256,
-                "original_batch": {
-                    "extraction_batch_id": receipt.original_batch.extraction_batch_id,
-                    "manifest_sha256": receipt.original_batch.manifest_sha256,
-                },
-                "successor_batch": {
-                    "extraction_batch_id": receipt.successor_batch.extraction_batch_id,
-                    "manifest_sha256": receipt.successor_batch.manifest_sha256,
-                },
-                "recovery_sha256": receipt.recovery_sha256,
-                "recovery_artifact": receipt.recovery_artifact.model_dump(mode="json"),
-                "requested_by": receipt.requested_by,
-                "command_sha256": receipt.command_sha256,
-            }
-        )
+        collision_version = receipt.historical_result_identity_collisions is not None
+        command_document: dict[str, object] = {
+            "schema_version": (
+                "legacy-item-corpus-completion-command/1.1"
+                if collision_version
+                else "legacy-item-corpus-completion-command/1.0"
+            ),
+            "inventory_id": receipt.inventory_id,
+            "inventory_sha256": receipt.inventory_sha256,
+            "original_batch": {
+                "extraction_batch_id": receipt.original_batch.extraction_batch_id,
+                "manifest_sha256": receipt.original_batch.manifest_sha256,
+            },
+            "successor_batch": {
+                "extraction_batch_id": receipt.successor_batch.extraction_batch_id,
+                "manifest_sha256": receipt.successor_batch.manifest_sha256,
+            },
+            "recovery_sha256": receipt.recovery_sha256,
+            "recovery_artifact": receipt.recovery_artifact.model_dump(mode="json"),
+            "requested_by": receipt.requested_by,
+            "command_sha256": receipt.command_sha256,
+        }
+        if receipt.historical_result_identity_collisions is not None:
+            command_document["historical_result_identity_collisions"] = (
+                receipt.historical_result_identity_collisions.model_dump(mode="json")
+            )
+        return LegacyItemCorpusCompletionCommand.model_validate(command_document)
 
     @staticmethod
     def _fail(code: str, message: str, cause: Exception | None = None) -> NoReturn:

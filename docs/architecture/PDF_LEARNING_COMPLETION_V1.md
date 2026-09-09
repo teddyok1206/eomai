@@ -135,6 +135,37 @@ item bodies, PDF bytes, model prompts, or model results.
 Its source-release identity is supplied by installed, hash-pinned build metadata through a release
 admission interface. Neither verifier imports from a repository checkout nor invokes Git at runtime.
 
+### Bounded historical result-identity collision evidence
+
+The frozen 108-member extraction history contains a legacy defect in which an
+`extraction_result_id` was reused by otherwise independent request/result/receipt/acceptance
+chains. Re-extracting only those memberships would create new acceptance identities and therefore
+new promotion, analysis, and Graph lineages; there is no supported boundary for rebinding a new
+acceptance to an existing promoted Item Revision. Mutating terminal batch rows or silently treating
+the logical ID as a composite is forbidden.
+
+The deployed 1.0 command and receipts remain byte-for-byte versioned contracts with strict result-ID
+uniqueness. Their 1.1 successors require one small
+`legacy-extraction-result-identity-collisions/1.0` value. It is derived solely from the immutable
+effective chains and is repeated in both 1.1 completion receipts. Each group carries the reused
+logical ID and the exact work-unit, request, Artifact Revision, receipt, and acceptance pointers for
+every membership. The service sorts and hashes this evidence deterministically, requires exact
+equality with the command, and continues to require a 108/108 bijection for every non-result
+identity axis. An absent, extra, stale, differently grouped, or non-result collision fails closed.
+This is an explicit attestation of immutable historical damage, not a claim that the reused logical
+IDs became unique and not authority for future ID reuse. The release-specific 1.1 receipt requires
+exactly the observed bounded cardinality: 3 reused IDs, 10 memberships, and 7 noncanonical
+memberships. Completion shards intentionally retain their reference to the immutable 1.0
+`itemCompletion` definition because that component shape did not change; only the receipt header
+gained the attestation.
+
+The canonical sources remain the two pinned batch manifests, recovery authorization, and resolved
+terminal rows. Lookup is by typed ID in maps, duplicate detection is by sets, and grouping is by a
+hash map followed by canonical sorting: O(n log n) time and O(n) space at n=108. No database schema,
+transaction boundary, worker behavior, or NAS ownership changes. The simpler alternative—dropping
+the uniqueness check—cannot identify or pin the affected chains; the operational alternative—new
+extractions—would fork the already completed 520 promotion/analysis/Graph lineage.
+
 ## Construction algorithm
 
 1. Resolve command pointers and validate exact identity, contract, media type, hashes, and approval.

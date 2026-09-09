@@ -31,6 +31,7 @@ from eom_catalog_contracts import (
     ItemCompletion,
     KnowledgeGraphSnapshotManifestV8,
     KnowledgeGraphStructureManifestV5,
+    LegacyExtractionResultIdentityCollisions,
     LegacyItemCorpusCompletionReceipt,
     LegacyItemCorpusCoverage,
     LegacyItemExtractionBatchManifestV2,
@@ -94,6 +95,7 @@ class PdfLearningCompletionEvidence:
     graph_snapshot: GraphSnapshot
     analysis_recoveries: tuple[AnalysisRecoveryLineage, ...]
     quiescence: Quiescence
+    historical_result_identity_collisions: LegacyExtractionResultIdentityCollisions | None = None
 
 
 @dataclass(frozen=True)
@@ -436,6 +438,8 @@ class PdfLearningCompletionService:
             or evidence.recovery_authorization.recovery_sha256 != completion.recovery_sha256
             or evidence.recovery_authorization.artifact.model_dump(mode="json")
             != completion.recovery_artifact.model_dump(mode="json")
+            or evidence.historical_result_identity_collisions
+            != completion.historical_result_identity_collisions
             or evidence.corpus_coverage.coverage_id != completion.coverage_id
             or evidence.corpus_coverage.coverage_sha256 != completion.coverage_sha256
             or evidence.corpus_coverage.artifact.model_dump(mode="json")
@@ -457,6 +461,7 @@ class PdfLearningCompletionService:
         item_shards: tuple[PdfLearningItemCompletionShardPointer, ...],
     ) -> PdfLearningCompletionReceipt:
         evidence = snapshot.evidence
+        collision_version = evidence.historical_result_identity_collisions is not None
         expected_keys = tuple(
             sorted(
                 (unit.bundle_revision_id, item_number)
@@ -465,7 +470,11 @@ class PdfLearningCompletionService:
             )
         )
         receipt_document: dict[str, object] = {
-            "schema_version": "eom-pdf-learning-completion/1.0",
+            "schema_version": (
+                "eom-pdf-learning-completion/1.1"
+                if collision_version
+                else "eom-pdf-learning-completion/1.0"
+            ),
             "status": "COMPLETE",
             "source_release": self.source_release.model_dump(mode="json"),
             "inventory": evidence.inventory.model_dump(mode="json"),
@@ -513,6 +522,10 @@ class PdfLearningCompletionService:
             "observed_at_utc": snapshot.observed_at_utc.isoformat().replace("+00:00", "Z"),
             "receipt_sha256": "sha256:" + "0" * 64,
         }
+        if evidence.historical_result_identity_collisions is not None:
+            receipt_document["historical_result_identity_collisions"] = (
+                evidence.historical_result_identity_collisions.model_dump(mode="json")
+            )
         receipt_document["receipt_sha256"] = content_sha256(
             {key: value for key, value in receipt_document.items() if key != "receipt_sha256"}
         )
@@ -609,9 +622,14 @@ class PdfLearningCompletionService:
         receipt: PdfLearningCompletionReceipt,
         artifact: ArtifactMember,
     ) -> None:
+        expected_schema_ref = (
+            "eom://schemas/legacy-assessment/pdf-learning-completion/1.1"
+            if receipt.schema_version == "eom-pdf-learning-completion/1.1"
+            else "eom://schemas/legacy-assessment/pdf-learning-completion/1.0"
+        )
         if (
             artifact.member_path != "completion-receipt.json"
-            or artifact.schema_ref != "eom://schemas/legacy-assessment/pdf-learning-completion/1.0"
+            or artifact.schema_ref != expected_schema_ref
             or artifact.media_type != "application/json"
             or artifact.sha256
             != sha256_bytes(canonical_json_bytes(receipt.model_dump(mode="json")))

@@ -362,7 +362,14 @@ def extraction_batch_complete_corpus(
 
     try:
         raw = load_strict_json(command_file)
-        validate_contract("legacy-item-corpus-completion-command", raw)
+        validate_contract(
+            (
+                "legacy-item-corpus-completion-command-v2"
+                if raw.get("schema_version") == "legacy-item-corpus-completion-command/1.1"
+                else "legacy-item-corpus-completion-command"
+            ),
+            raw,
+        )
         command = LegacyItemCorpusCompletionCommand.model_validate(raw)
     except (
         JsonSchemaValidationError,
@@ -622,7 +629,14 @@ def learning_complete_pdf(
 
     try:
         raw = load_strict_json(corpus_completion_receipt_file)
-        validate_contract("legacy-item-corpus-completion-receipt", raw)
+        validate_contract(
+            (
+                "legacy-item-corpus-completion-receipt-v2"
+                if raw.get("schema_version") == "legacy-item-corpus-completion-receipt/1.1"
+                else "legacy-item-corpus-completion-receipt"
+            ),
+            raw,
+        )
         corpus_completion = LegacyItemCorpusCompletionReceipt.model_validate(raw)
         pdf_roots = load_root_configuration(root_config_file)
         request = PdfLearningCompletionRequest(

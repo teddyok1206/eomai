@@ -36,6 +36,7 @@ COMPLETION_SHARD_SCHEMA_REF = (
     "eom://schemas/legacy-assessment/pdf-learning-item-completion-shard/1.0"
 )
 COMPLETION_RECEIPT_SCHEMA_REF = "eom://schemas/legacy-assessment/pdf-learning-completion/1.0"
+COMPLETION_RECEIPT_SCHEMA_REF_V2 = "eom://schemas/legacy-assessment/pdf-learning-completion/1.1"
 
 
 class LegacyAssessmentControlArtifactPublisher:
@@ -159,14 +160,21 @@ class LegacyAssessmentControlArtifactPublisher:
             raise ValueError("completion receipt source release differs from installed admission")
         if completion_identity != completion_identity_sha256(receipt):
             raise ValueError("completion receipt semantic identity differs")
+        collision_version = receipt.schema_version == "eom-pdf-learning-completion/1.1"
+        schema_route = (
+            "pdf-learning-completion-v2" if collision_version else "pdf-learning-completion"
+        )
+        schema_ref = (
+            COMPLETION_RECEIPT_SCHEMA_REF_V2 if collision_version else COMPLETION_RECEIPT_SCHEMA_REF
+        )
         member = "completion-receipt.json"
         document = receipt.model_dump(mode="json")
-        validate_contract("pdf-learning-completion", document)
+        validate_contract(schema_route, document)
         payload = canonical_json_bytes(document)
         published = self.publisher.publish_bytes(
             payload=payload,
             logical_name=member,
-            schema_ref=COMPLETION_RECEIPT_SCHEMA_REF,
+            schema_ref=schema_ref,
             media_type="application/json",
             artifact_type=COMPLETION_RECEIPT_ARTIFACT_TYPE,
             idempotency_key=(
@@ -179,7 +187,7 @@ class LegacyAssessmentControlArtifactPublisher:
             self._assessment_pointer(
                 published.pointer,
                 member=member,
-                schema_ref=COMPLETION_RECEIPT_SCHEMA_REF,
+                schema_ref=schema_ref,
                 expected_sha256=sha256_bytes(payload),
             ).model_dump(mode="json")
         )
@@ -213,6 +221,7 @@ class LegacyAssessmentControlArtifactPublisher:
 __all__ = [
     "COMPLETION_RECEIPT_ARTIFACT_TYPE",
     "COMPLETION_RECEIPT_SCHEMA_REF",
+    "COMPLETION_RECEIPT_SCHEMA_REF_V2",
     "COMPLETION_SHARD_ARTIFACT_TYPE",
     "COMPLETION_SHARD_SCHEMA_REF",
     "COVERAGE_ARTIFACT_TYPE",

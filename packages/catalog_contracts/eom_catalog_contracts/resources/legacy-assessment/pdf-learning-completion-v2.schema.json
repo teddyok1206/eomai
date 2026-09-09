@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "eom://schemas/legacy-assessment/pdf-learning-completion/1.0",
-  "title": "EOM PDF Learning Completion Receipt V1",
+  "$id": "eom://schemas/legacy-assessment/pdf-learning-completion/1.1",
+  "title": "EOM PDF Learning Completion Receipt V2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,6 +12,7 @@
     "original_batch",
     "successor_batch",
     "recovery_authorization",
+    "historical_result_identity_collisions",
     "corpus_coverage",
     "pdf_sources",
     "effective_work_units",
@@ -29,13 +30,21 @@
     "receipt_sha256"
   ],
   "properties": {
-    "schema_version": {"const": "eom-pdf-learning-completion/1.0"},
+    "schema_version": {"const": "eom-pdf-learning-completion/1.1"},
     "status": {"const": "COMPLETE"},
     "source_release": {"$ref": "#/$defs/sourceRelease"},
     "inventory": {"$ref": "#/$defs/inventoryPointer"},
     "original_batch": {"$ref": "#/$defs/originalBatch"},
     "successor_batch": {"$ref": "#/$defs/successorBatch"},
     "recovery_authorization": {"$ref": "#/$defs/recoveryAuthorization"},
+    "historical_result_identity_collisions": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-extraction-result-identity-collisions/1.0",
+      "properties": {
+        "collision_group_count": {"const": 3},
+        "collision_membership_count": {"const": 10},
+        "noncanonical_membership_count": {"const": 7}
+      }
+    },
     "corpus_coverage": {"$ref": "#/$defs/corpusCoverage"},
     "pdf_sources": {
       "type": "array",

@@ -26,6 +26,7 @@ from eom_catalog_contracts.knowledge import (
     validate_assessment_page_observation_anchors,
 )
 from eom_catalog_contracts.legacy_assessment import (
+    AssessmentArtifactMemberPointer,
     AssessmentSourceBundleRevision,
     LegacyAssessmentItemProposal,
     LegacyItemCorpusCoverage,
@@ -42,6 +43,11 @@ from eom_catalog_contracts.legacy_extraction_batch import (
 from eom_catalog_contracts.legacy_extraction_recovery import (
     LegacyItemExtractionValidationRecovery,
     derive_legacy_item_extraction_recovery_successor,
+)
+from eom_catalog_contracts.legacy_item_corpus_completion import (
+    LegacyExtractionResultIdentityCollisionMember,
+    LegacyExtractionResultIdentityCollisions,
+    derive_legacy_extraction_result_identity_collisions,
 )
 from eom_catalog_contracts.legacy_knowledge import LegacySourceInventoryV2
 from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
@@ -777,13 +783,19 @@ class PdfLearningItemCompletionShardPointer(FrozenModel):
 
 
 class PdfLearningCompletionReceipt(FrozenModel):
-    schema_version: Literal["eom-pdf-learning-completion/1.0"]
+    schema_version: Literal[
+        "eom-pdf-learning-completion/1.0",
+        "eom-pdf-learning-completion/1.1",
+    ]
     status: Literal["COMPLETE"]
     source_release: SourceRelease
     inventory: InventoryPointer
     original_batch: BatchProof
     successor_batch: BatchProof
     recovery_authorization: RecoveryAuthorization
+    historical_result_identity_collisions: LegacyExtractionResultIdentityCollisions | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     corpus_coverage: CorpusCoverage
     pdf_sources: tuple[PdfSource, ...] = Field(min_length=50, max_length=50)
     effective_work_units: tuple[EffectiveWorkUnit, ...] = Field(min_length=108, max_length=108)
@@ -834,18 +846,43 @@ class PdfLearningCompletionReceipt(FrozenModel):
         )
         if len(set(original_unit_ids)) != 108 or len(set(effective_unit_ids)) != 108:
             raise ValueError("work-unit identities must be unique")
-        work_unit_identity_groups = (
-            tuple(unit.extraction_request_id for unit in self.effective_work_units),
-            tuple(unit.extraction_result_id for unit in self.effective_work_units),
-            tuple(unit.result_artifact.artifact_revision_id for unit in self.effective_work_units),
-            tuple(unit.extraction_receipt_sha256 for unit in self.effective_work_units),
-            tuple(unit.acceptance_id for unit in self.effective_work_units),
-            tuple(
-                unit.acceptance_artifact.artifact_revision_id for unit in self.effective_work_units
-            ),
-        )
-        if any(len(values) != len(set(values)) for values in work_unit_identity_groups):
+        try:
+            identity_collisions = derive_legacy_extraction_result_identity_collisions(
+                LegacyExtractionResultIdentityCollisionMember(
+                    effective_batch_id=unit.effective_batch_id,
+                    effective_work_unit_id=unit.effective_work_unit_id,
+                    effective_ordinal=unit.effective_ordinal,
+                    extraction_request_id=unit.extraction_request_id,
+                    request_sha256=unit.request_sha256,
+                    extraction_result_id=unit.extraction_result_id,
+                    result_artifact=AssessmentArtifactMemberPointer.model_validate(
+                        unit.result_artifact.model_dump(mode="json")
+                    ),
+                    result_sha256=unit.result_sha256,
+                    extraction_receipt_sha256=unit.extraction_receipt_sha256,
+                    acceptance_id=unit.acceptance_id,
+                    acceptance_sha256=unit.acceptance_sha256,
+                    acceptance_artifact=AssessmentArtifactMemberPointer.model_validate(
+                        unit.acceptance_artifact.model_dump(mode="json")
+                    ),
+                )
+                for unit in self.effective_work_units
+            )
+        except ValueError as exc:
+            raise ValueError("effective non-result evidence pointers must be unique") from exc
+        collision_version = self.schema_version == "eom-pdf-learning-completion/1.1"
+        if collision_version != (self.historical_result_identity_collisions is not None):
+            raise ValueError("completion receipt version and collision evidence differ")
+        if not collision_version and identity_collisions is not None:
             raise ValueError("effective work-unit evidence pointers must be unique")
+        if identity_collisions is not None and (
+            identity_collisions.collision_group_count,
+            identity_collisions.collision_membership_count,
+            identity_collisions.noncanonical_membership_count,
+        ) != (3, 10, 7):
+            raise ValueError("historical result identity collision cardinality differs")
+        if identity_collisions != self.historical_result_identity_collisions:
+            raise ValueError("effective result identity collisions differ from their attestation")
         recovered = tuple(unit for unit in self.effective_work_units if unit.recovered)
         if len(recovered) != 3:
             raise ValueError("exactly three original work units must be recovered")
@@ -952,26 +989,34 @@ def expected_receipt_sha256(receipt: PdfLearningCompletionReceipt) -> str:
 def completion_identity_sha256(receipt: PdfLearningCompletionReceipt) -> str:
     """Return the semantic release identity, excluding mutable observation/publication details."""
 
-    return content_sha256(
-        {
-            "source_release": receipt.source_release.model_dump(mode="json"),
-            "inventory": receipt.inventory.model_dump(mode="json"),
-            "original_batch": receipt.original_batch.model_dump(mode="json"),
-            "successor_batch": receipt.successor_batch.model_dump(mode="json"),
-            "recovery_authorization": receipt.recovery_authorization.model_dump(mode="json"),
-            "corpus_coverage": receipt.corpus_coverage.model_dump(mode="json"),
-            "pdf_sources_sha256": receipt.pdf_sources_sha256,
-            "expected_item_keys_sha256": receipt.expected_item_keys_sha256,
-            "coverage_accepted_map_sha256": receipt.coverage_accepted_map_sha256,
-            "analysis_recovery_set_sha256": receipt.analysis_recovery_set_sha256,
-            "completion_map_sha256": receipt.completion_map_sha256,
-            "graph_snapshot": receipt.graph_snapshot.model_dump(mode="json"),
-        }
-    )
+    identity: dict[str, object] = {
+        "source_release": receipt.source_release.model_dump(mode="json"),
+        "inventory": receipt.inventory.model_dump(mode="json"),
+        "original_batch": receipt.original_batch.model_dump(mode="json"),
+        "successor_batch": receipt.successor_batch.model_dump(mode="json"),
+        "recovery_authorization": receipt.recovery_authorization.model_dump(mode="json"),
+        "corpus_coverage": receipt.corpus_coverage.model_dump(mode="json"),
+        "pdf_sources_sha256": receipt.pdf_sources_sha256,
+        "expected_item_keys_sha256": receipt.expected_item_keys_sha256,
+        "coverage_accepted_map_sha256": receipt.coverage_accepted_map_sha256,
+        "analysis_recovery_set_sha256": receipt.analysis_recovery_set_sha256,
+        "completion_map_sha256": receipt.completion_map_sha256,
+        "graph_snapshot": receipt.graph_snapshot.model_dump(mode="json"),
+    }
+    if receipt.historical_result_identity_collisions is not None:
+        identity["historical_result_identity_collisions_sha256"] = (
+            receipt.historical_result_identity_collisions.evidence_sha256
+        )
+    return content_sha256(identity)
 
 
 def validate_payload(payload: dict[str, object]) -> PdfLearningCompletionReceipt:
-    validate_contract("pdf-learning-completion", payload)
+    route = (
+        "pdf-learning-completion-v2"
+        if payload.get("schema_version") == "eom-pdf-learning-completion/1.1"
+        else "pdf-learning-completion"
+    )
+    validate_contract(route, payload)
     return PdfLearningCompletionReceipt.model_validate(payload)
 
 
@@ -1349,7 +1394,6 @@ def verify_protocol_documents(
         completion_items_by_work_unit.setdefault(completion_item.effective_work_unit_id, []).append(
             completion_item
         )
-    result_ids: set[str] = set()
     result_revisions: set[str] = set()
     receipt_hashes: set[str] = set()
     acceptance_ids: set[str] = set()
@@ -1429,7 +1473,6 @@ def verify_protocol_documents(
                 or completion.acceptance_sha256 != acceptance.acceptance_sha256
             ):
                 raise ValueError("promotion does not bind the exact accepted proposal")
-        result_ids.add(result.extraction_result_id)
         result_revisions.add(observed.result_artifact.artifact_revision_id)
         receipt_hashes.add(extraction_receipt.receipt_sha256)
         acceptance_ids.add(acceptance.acceptance_id)
@@ -1437,7 +1480,6 @@ def verify_protocol_documents(
     if any(
         len(identity_set) != 108
         for identity_set in (
-            result_ids,
             result_revisions,
             receipt_hashes,
             acceptance_ids,

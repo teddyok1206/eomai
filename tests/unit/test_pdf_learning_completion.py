@@ -19,8 +19,10 @@ from eom_catalog_contracts import (
     KnowledgeGraphProjections,
     KnowledgeGraphSnapshotManifestV8,
     KnowledgeGraphStructureManifestV5,
+    LegacyExtractionResultIdentityCollisionMember,
     PdfLearningCompletionReceipt,
     PdfLearningItemCompletionShard,
+    derive_legacy_extraction_result_identity_collisions,
     verify_completion_shards,
     verify_graph_documents,
 )
@@ -1039,6 +1041,107 @@ def test_valid_exact_520_bijection_passes_schema_pydantic_and_self_hash() -> Non
     assert len(receipt.pdf_sources) == 50
     assert len(receipt.effective_work_units) == 108
     assert receipt.item_count == 520
+
+
+def test_exact_historical_result_identity_collision_attestation_is_preserved() -> None:
+    payload = _receipt()
+    work_units = payload["effective_work_units"]
+    assert isinstance(work_units, list)
+    collision_ranges = ((0, 5), (5, 8), (8, 10))
+    for first_index, stop_index in collision_ranges:
+        first = work_units[first_index]
+        assert isinstance(first, dict)
+        for index in range(first_index + 1, stop_index):
+            member = work_units[index]
+            assert isinstance(member, dict)
+            member["extraction_result_id"] = first["extraction_result_id"]
+    evidence = derive_legacy_extraction_result_identity_collisions(
+        LegacyExtractionResultIdentityCollisionMember(
+            effective_batch_id=unit["effective_batch_id"],
+            effective_work_unit_id=unit["effective_work_unit_id"],
+            effective_ordinal=unit["effective_ordinal"],
+            extraction_request_id=unit["extraction_request_id"],
+            request_sha256=unit["request_sha256"],
+            extraction_result_id=unit["extraction_result_id"],
+            result_artifact=unit["result_artifact"],
+            result_sha256=unit["result_sha256"],
+            extraction_receipt_sha256=unit["extraction_receipt_sha256"],
+            acceptance_id=unit["acceptance_id"],
+            acceptance_sha256=unit["acceptance_sha256"],
+            acceptance_artifact=unit["acceptance_artifact"],
+        )
+        for unit in work_units
+        if isinstance(unit, dict)
+    )
+    assert evidence is not None
+    assert (
+        evidence.collision_group_count,
+        evidence.collision_membership_count,
+        evidence.noncanonical_membership_count,
+    ) == (3, 10, 7)
+    payload["schema_version"] = "eom-pdf-learning-completion/1.1"
+    payload["historical_result_identity_collisions"] = evidence.model_dump(mode="json")
+    _rehash_shards(payload)
+
+    receipt = validate_payload(payload)
+
+    assert receipt.historical_result_identity_collisions == evidence
+
+    del payload["historical_result_identity_collisions"]
+    _rehash_shards(payload)
+    with pytest.raises(PydanticValidationError, match="version and collision evidence differ"):
+        PdfLearningCompletionReceipt.model_validate(payload)
+
+
+def test_v1_receipt_retains_strict_result_identity_uniqueness() -> None:
+    payload = _receipt()
+    work_units = payload["effective_work_units"]
+    assert isinstance(work_units, list)
+    first = work_units[0]
+    second = work_units[1]
+    assert isinstance(first, dict)
+    assert isinstance(second, dict)
+    second["extraction_result_id"] = first["extraction_result_id"]
+    _rehash_shards(payload)
+
+    with pytest.raises(PydanticValidationError, match="evidence pointers must be unique"):
+        PdfLearningCompletionReceipt.model_validate(payload)
+
+
+def test_unbounded_historical_result_identity_collision_attestation_fails() -> None:
+    payload = _receipt()
+    work_units = payload["effective_work_units"]
+    assert isinstance(work_units, list)
+    first = work_units[0]
+    second = work_units[1]
+    assert isinstance(first, dict)
+    assert isinstance(second, dict)
+    second["extraction_result_id"] = first["extraction_result_id"]
+    evidence = derive_legacy_extraction_result_identity_collisions(
+        LegacyExtractionResultIdentityCollisionMember(
+            effective_batch_id=unit["effective_batch_id"],
+            effective_work_unit_id=unit["effective_work_unit_id"],
+            effective_ordinal=unit["effective_ordinal"],
+            extraction_request_id=unit["extraction_request_id"],
+            request_sha256=unit["request_sha256"],
+            extraction_result_id=unit["extraction_result_id"],
+            result_artifact=unit["result_artifact"],
+            result_sha256=unit["result_sha256"],
+            extraction_receipt_sha256=unit["extraction_receipt_sha256"],
+            acceptance_id=unit["acceptance_id"],
+            acceptance_sha256=unit["acceptance_sha256"],
+            acceptance_artifact=unit["acceptance_artifact"],
+        )
+        for unit in work_units
+        if isinstance(unit, dict)
+    )
+    assert evidence is not None
+    payload["schema_version"] = "eom-pdf-learning-completion/1.1"
+    payload["historical_result_identity_collisions"] = evidence.model_dump(mode="json")
+    _rehash_shards(payload)
+
+    with pytest.raises(PydanticValidationError, match="collision cardinality differs"):
+        PdfLearningCompletionReceipt.model_validate(payload)
 
 
 def test_missing_item_fails_closed() -> None:

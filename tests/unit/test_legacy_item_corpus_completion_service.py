@@ -9,6 +9,7 @@ from eom_catalog_contracts import (
     AssessmentArtifactMemberPointer,
     LegacyCorpusSourceBinding,
     LegacyExtractionBatchWorkUnitV2,
+    LegacyExtractionResultIdentityCollisionMember,
     LegacyItemCorpusCompletionCommand,
     LegacyItemExtractionAcceptance,
     LegacyItemExtractionBatchManifestV2,
@@ -17,7 +18,9 @@ from eom_catalog_contracts import (
     LegacyItemExtractionResult,
     LegacyItemExtractionValidationRecovery,
     LegacySourceInventoryV2,
+    derive_legacy_extraction_result_identity_collisions,
     derive_legacy_item_extraction_recovery_successor,
+    validate_contract,
 )
 from eom_catalog_service.legacy_item_corpus_completion_service import (
     AcceptedTerminalWorkUnit,
@@ -431,6 +434,8 @@ def _accepted(
     batch_id: str,
     unit: LegacyExtractionBatchWorkUnitV2,
     serial: int,
+    *,
+    extraction_result_id: str | None = None,
 ) -> AcceptedTerminalWorkUnit:
     request = unit.request
     items = [
@@ -439,7 +444,7 @@ def _accepted(
     ]
     result_document: dict[str, object] = {
         "schema_version": "legacy-item-extraction-result/1.0",
-        "extraction_result_id": _id("itemextractresult", serial),
+        "extraction_result_id": extraction_result_id or _id("itemextractresult", serial),
         "extraction_request_id": request.extraction_request_id,
         "request_sha256": request.request_sha256,
         "observed_page_input_ids": [value.page_input_id for value in request.page_inputs],
@@ -706,6 +711,70 @@ def _service(
     )
 
 
+def _historical_result_collision_fixture() -> tuple[
+    LegacyItemCorpusCompletionCommand,
+    LegacyItemCorpusCompletionCommand,
+    ResolvedCorpusCompletionSnapshot,
+]:
+    unpinned_command, snapshot = _fixture()
+    accepted_positions = [
+        index
+        for index, terminal in enumerate(snapshot.original_batch.work_units)
+        if isinstance(terminal, AcceptedTerminalWorkUnit)
+    ]
+    first_position, second_position = accepted_positions[:2]
+    first = snapshot.original_batch.work_units[first_position]
+    assert isinstance(first, AcceptedTerminalWorkUnit)
+    second_unit = snapshot.original_batch.manifest.work_units[second_position]
+    colliding = _accepted(
+        snapshot.original_batch.manifest.extraction_batch_id,
+        second_unit,
+        second_position + 1,
+        extraction_result_id=first.extraction_result_id,
+    )
+    original_terminals = list(snapshot.original_batch.work_units)
+    original_terminals[second_position] = colliding
+    snapshot = replace(
+        snapshot,
+        original_batch=replace(snapshot.original_batch, work_units=tuple(original_terminals)),
+    )
+    effective_terminals = tuple(
+        terminal
+        for terminal in (
+            *snapshot.original_batch.work_units,
+            *snapshot.successor_batch.work_units,
+        )
+        if isinstance(terminal, AcceptedTerminalWorkUnit)
+    )
+    evidence = derive_legacy_extraction_result_identity_collisions(
+        LegacyExtractionResultIdentityCollisionMember(
+            effective_batch_id=terminal.extraction_batch_id,
+            effective_work_unit_id=terminal.work_unit_id,
+            effective_ordinal=terminal.ordinal,
+            extraction_request_id=terminal.extraction_request_id,
+            request_sha256=terminal.request_sha256,
+            extraction_result_id=terminal.extraction_result_id,
+            result_artifact=terminal.result_artifact,
+            result_sha256=terminal.result_sha256,
+            extraction_receipt_sha256=terminal.extraction_receipt_sha256,
+            acceptance_id=terminal.acceptance_id,
+            acceptance_sha256=terminal.acceptance_sha256,
+            acceptance_artifact=terminal.acceptance_artifact,
+        )
+        for terminal in effective_terminals
+    )
+    assert evidence is not None
+    command_document = unpinned_command.model_dump(mode="json")
+    command_document["schema_version"] = "legacy-item-corpus-completion-command/1.1"
+    command_document["historical_result_identity_collisions"] = evidence.model_dump(mode="json")
+    command_document["command_sha256"] = content_sha256(
+        {key: value for key, value in command_document.items() if key != "command_sha256"}
+    )
+    validate_contract("legacy-item-corpus-completion-command-v2", command_document)
+    pinned_command = LegacyItemCorpusCompletionCommand.model_validate(command_document)
+    return unpinned_command, pinned_command, snapshot
+
+
 def test_completion_derives_exact_scope_and_semantically_replays() -> None:
     command, snapshot = _fixture()
     service, artifacts, registry = _service(snapshot)
@@ -726,6 +795,54 @@ def test_completion_derives_exact_scope_and_semantically_replays() -> None:
     assert first.coverage_id == replay.coverage_id
     assert first.coverage_sha256 == replay.coverage_sha256
     assert len(artifacts.by_key) == len(registry.by_id) == 1
+
+
+def test_completion_requires_exact_pinned_historical_result_identity_collisions() -> None:
+    unpinned_command, pinned_command, snapshot = _historical_result_collision_fixture()
+    service, artifacts, _ = _service(snapshot)
+
+    with pytest.raises(LegacyItemCorpusCompletionError) as raised:
+        service.complete(unpinned_command)
+
+    assert raised.value.code == (
+        "LEGACY_ITEM_CORPUS_COMPLETION_RESULT_IDENTITY_COLLISIONS_UNATTESTED"
+    )
+    assert artifacts.by_key == {}
+
+    receipt = service.complete(pinned_command)
+    assert receipt.schema_version == "legacy-item-corpus-completion-receipt/1.1"
+
+    evidence = receipt.historical_result_identity_collisions
+    assert evidence is not None
+    assert evidence.collision_group_count == 1
+    assert evidence.collision_membership_count == 2
+    assert evidence.noncanonical_membership_count == 1
+
+
+def test_completion_never_attests_duplicate_non_result_evidence() -> None:
+    command, snapshot = _fixture()
+    accepted = tuple(
+        terminal
+        for terminal in snapshot.original_batch.work_units
+        if isinstance(terminal, AcceptedTerminalWorkUnit)
+    )
+    first, second = accepted[:2]
+    changed = replace(second, extraction_receipt_sha256=first.extraction_receipt_sha256)
+    work_units = tuple(
+        changed if terminal is second else terminal
+        for terminal in snapshot.original_batch.work_units
+    )
+    snapshot = replace(
+        snapshot,
+        original_batch=replace(snapshot.original_batch, work_units=work_units),
+    )
+    service, artifacts, _ = _service(snapshot)
+
+    with pytest.raises(LegacyItemCorpusCompletionError) as raised:
+        service.complete(command)
+
+    assert raised.value.code == "LEGACY_ITEM_CORPUS_COMPLETION_EFFECTIVE_EVIDENCE_DUPLICATE"
+    assert artifacts.by_key == {}
 
 
 def test_completion_rejects_wrong_page_before_publication() -> None:

@@ -17,6 +17,7 @@ from eom_catalog_contracts import (
     AssessmentBundleCoverage,
     AssessmentSourceBundlePointer,
     LegacyExtractionBatchWorkUnitV2,
+    LegacyExtractionResultIdentityCollisionMember,
     LegacyItemCorpusCoverage,
     LegacyItemExtractionAcceptance,
     LegacyItemExtractionBatchManifestV2,
@@ -24,6 +25,7 @@ from eom_catalog_contracts import (
     LegacyItemExtractionResult,
     LegacyItemExtractionValidationRecovery,
     LegacySourceInventoryV2,
+    derive_legacy_extraction_result_identity_collisions,
     derive_legacy_item_extraction_recovery_successor,
     validate_contract,
     validate_legacy_item_extraction_result_for_request,
@@ -356,19 +358,34 @@ class LegacyItemCorpusCompletionService:
                 )
             effective.append((original_unit, successor_unit, successor_terminal))
 
-        accepted_terminals = tuple(value[2] for value in effective)
-        evidence_identity_groups = (
-            tuple(value.extraction_request_id for value in accepted_terminals),
-            tuple(value.extraction_result_id for value in accepted_terminals),
-            tuple(value.result_artifact.artifact_revision_id for value in accepted_terminals),
-            tuple(value.extraction_receipt_sha256 for value in accepted_terminals),
-            tuple(value.acceptance_id for value in accepted_terminals),
-            tuple(value.acceptance_artifact.artifact_revision_id for value in accepted_terminals),
-        )
-        if any(len(values) != len(set(values)) for values in evidence_identity_groups):
+        try:
+            identity_collisions = derive_legacy_extraction_result_identity_collisions(
+                LegacyExtractionResultIdentityCollisionMember(
+                    effective_batch_id=terminal.extraction_batch_id,
+                    effective_work_unit_id=terminal.work_unit_id,
+                    effective_ordinal=terminal.ordinal,
+                    extraction_request_id=terminal.extraction_request_id,
+                    request_sha256=terminal.request_sha256,
+                    extraction_result_id=terminal.extraction_result_id,
+                    result_artifact=terminal.result_artifact,
+                    result_sha256=terminal.result_sha256,
+                    extraction_receipt_sha256=terminal.extraction_receipt_sha256,
+                    acceptance_id=terminal.acceptance_id,
+                    acceptance_sha256=terminal.acceptance_sha256,
+                    acceptance_artifact=terminal.acceptance_artifact,
+                )
+                for _original_unit, _effective_unit, terminal in effective
+            )
+        except ValueError as exc:
             self._fail(
                 "LEGACY_ITEM_CORPUS_COMPLETION_EFFECTIVE_EVIDENCE_DUPLICATE",
-                "completion effective work-unit evidence is not one-to-one",
+                "completion non-result evidence is not one-to-one",
+                exc,
+            )
+        if identity_collisions != command.historical_result_identity_collisions:
+            self._fail(
+                "LEGACY_ITEM_CORPUS_COMPLETION_RESULT_IDENTITY_COLLISIONS_UNATTESTED",
+                "completion result identity collisions differ from pinned evidence",
             )
 
         expected_keys: set[tuple[str, int]] = set()
@@ -421,19 +438,21 @@ class LegacyItemCorpusCompletionService:
         ]
         expected_sha256 = content_sha256(expected_key_documents)
         accepted_sha256 = content_sha256(accepted_map_documents)
+        coverage_identity: dict[str, object] = {
+            "inventory_id": command.inventory_id,
+            "inventory_sha256": command.inventory_sha256,
+            "original_manifest_sha256": original.manifest.manifest_sha256,
+            "successor_manifest_sha256": successor.manifest.manifest_sha256,
+            "recovery_sha256": recovery.recovery_sha256,
+            "expected_item_keys_sha256": expected_sha256,
+            "accepted_item_map_sha256": accepted_sha256,
+        }
+        if identity_collisions is not None:
+            coverage_identity["historical_result_identity_collisions_sha256"] = (
+                identity_collisions.evidence_sha256
+            )
         coverage_id = (
-            "itemcoverage_"
-            + content_sha256(
-                {
-                    "inventory_id": command.inventory_id,
-                    "inventory_sha256": command.inventory_sha256,
-                    "original_manifest_sha256": original.manifest.manifest_sha256,
-                    "successor_manifest_sha256": successor.manifest.manifest_sha256,
-                    "recovery_sha256": recovery.recovery_sha256,
-                    "expected_item_keys_sha256": expected_sha256,
-                    "accepted_item_map_sha256": accepted_sha256,
-                }
-            ).removeprefix("sha256:")[:32]
+            "itemcoverage_" + content_sha256(coverage_identity).removeprefix("sha256:")[:32]
         )
         coverage = self._coverage(
             coverage_id=coverage_id,
@@ -483,8 +502,13 @@ class LegacyItemCorpusCompletionService:
 
         original_evidence = self._batch_evidence(original)
         successor_evidence = self._batch_evidence(successor)
+        collision_version = command.schema_version.endswith("/1.1")
         receipt_document: dict[str, object] = {
-            "schema_version": "legacy-item-corpus-completion-receipt/1.0",
+            "schema_version": (
+                "legacy-item-corpus-completion-receipt/1.1"
+                if collision_version
+                else "legacy-item-corpus-completion-receipt/1.0"
+            ),
             "status": "COMPLETE",
             "requested_by": command.requested_by,
             "command_sha256": command.command_sha256,
@@ -511,8 +535,20 @@ class LegacyItemCorpusCompletionService:
             "created_at": coverage.created_at.isoformat().replace("+00:00", "Z"),
             "receipt_sha256": "sha256:" + "0" * 64,
         }
+        if identity_collisions is not None:
+            receipt_document["historical_result_identity_collisions"] = (
+                identity_collisions.model_dump(mode="json")
+            )
         receipt_document["receipt_sha256"] = content_sha256(
             {key: value for key, value in receipt_document.items() if key != "receipt_sha256"}
+        )
+        validate_contract(
+            (
+                "legacy-item-corpus-completion-receipt-v2"
+                if collision_version
+                else "legacy-item-corpus-completion-receipt"
+            ),
+            receipt_document,
         )
         receipt = LegacyItemCorpusCompletionReceipt.model_validate(receipt_document)
         verify_corpus_completion_receipt_command(receipt, command)

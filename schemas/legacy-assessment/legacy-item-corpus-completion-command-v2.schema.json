@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "eom://schemas/legacy-assessment/legacy-item-corpus-completion-command/1.0",
-  "title": "Legacy Item Corpus Completion Command V1",
+  "$id": "eom://schemas/legacy-assessment/legacy-item-corpus-completion-command/1.1",
+  "title": "Legacy Item Corpus Completion Command V2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,11 +12,12 @@
     "successor_batch",
     "recovery_sha256",
     "recovery_artifact",
+    "historical_result_identity_collisions",
     "requested_by",
     "command_sha256"
   ],
   "properties": {
-    "schema_version": {"const": "legacy-item-corpus-completion-command/1.0"},
+    "schema_version": {"const": "legacy-item-corpus-completion-command/1.1"},
     "inventory_id": {
       "type": "string",
       "pattern": "^legacyinventory_[0-9a-f]{32}$"
@@ -30,6 +31,9 @@
       "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
     },
     "recovery_artifact": {"$ref": "#/$defs/recoveryArtifact"},
+    "historical_result_identity_collisions": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-extraction-result-identity-collisions/1.0"
+    },
     "requested_by": {
       "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/actorId"
     },
