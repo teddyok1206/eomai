@@ -18,6 +18,7 @@ from eom_catalog_service.legacy_item_automation_service import (
 )
 from eom_catalog_service.legacy_item_graph_learning_service import LegacyItemGraphCandidate
 from eom_catalog_service.legacy_item_learning_service import LegacyItemLearningPresetPin
+from sqlalchemy import Engine, create_engine, text
 
 
 def _candidate() -> _LearningCandidate:
@@ -54,6 +55,136 @@ def _guard(service: LegacyItemAutomaticLearningService) -> None:
     service.preset_pin = _pin()
     service.learning.preset_pin_guard.return_value = nullcontext()
     service._terminal_analysis = cast(Any, lambda: None)
+
+
+def _query_backed_service(
+    retry_analysis_run_ids: tuple[str, ...],
+) -> tuple[Engine, LegacyItemAutomaticLearningService]:
+    """Use real terminal/retry selectors over the smallest relational fixture they need."""
+
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE knowledge_analysis_runs (
+                analysis_run_id TEXT PRIMARY KEY,
+                predecessor_analysis_run_id TEXT,
+                source_revision_id TEXT NOT NULL,
+                source_kind TEXT NOT NULL,
+                state TEXT NOT NULL,
+                created_by_operator_id TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE item_revisions (
+                item_revision_id TEXT PRIMARY KEY,
+                registration_key TEXT NOT NULL
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE legacy_item_extraction_decisions (
+                acceptance_id TEXT NOT NULL,
+                item_proposal_id TEXT NOT NULL
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE legacy_item_extraction_batch_work_units (
+                acceptance_id TEXT NOT NULL,
+                extraction_batch_id TEXT NOT NULL
+            )
+            """
+        )
+    learning = Mock()
+    learning.preset_pin_guard.return_value = nullcontext()
+    service = LegacyItemAutomaticLearningService(
+        engine,
+        extraction_batch_ids=("legacybatch_" + "1" * 32,),
+        retry_analysis_run_ids=retry_analysis_run_ids,
+        content_pack_release_id="packrel_" + "2" * 32,
+        risk_policy_revision_id="analysisriskrev_" + "3" * 32,
+        preset_pin=_pin(),
+        graph=None,
+        learning=learning,
+        analyses=Mock(),
+    )
+    # These branches are outside the selector-order invariant under test.  Terminal and retry
+    # selection remain the real service implementations backed by the relational fixture.
+    service._active_analysis = cast(Any, lambda: None)
+    service._candidate = Mock()
+    return engine, service
+
+
+def _insert_terminal(
+    engine: Engine,
+    *,
+    ordinal: int,
+    analysis_run_id: str,
+    state: str = "FAILED",
+) -> None:
+    acceptance_id = f"acceptance-{ordinal}"
+    item_proposal_id = f"proposal-{ordinal}"
+    item_revision_id = f"item-revision-{ordinal}"
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO item_revisions (item_revision_id, registration_key)
+                VALUES (:item_revision_id, :registration_key)
+                """
+            ),
+            {
+                "item_revision_id": item_revision_id,
+                "registration_key": (f"legacy-item-promotion:{acceptance_id}:{item_proposal_id}"),
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO legacy_item_extraction_decisions
+                    (acceptance_id, item_proposal_id)
+                VALUES (:acceptance_id, :item_proposal_id)
+                """
+            ),
+            {"acceptance_id": acceptance_id, "item_proposal_id": item_proposal_id},
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO legacy_item_extraction_batch_work_units
+                    (acceptance_id, extraction_batch_id)
+                VALUES (:acceptance_id, :batch_id)
+                """
+            ),
+            {"acceptance_id": acceptance_id, "batch_id": "legacybatch_" + "1" * 32},
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO knowledge_analysis_runs (
+                    analysis_run_id, predecessor_analysis_run_id, source_revision_id,
+                    source_kind, state, created_by_operator_id, created_at
+                ) VALUES (
+                    :analysis_run_id, NULL, :source_revision_id,
+                    'APPROVED_ITEM_REVISION', :state, :operator_id, :created_at
+                )
+                """
+            ),
+            {
+                "analysis_run_id": analysis_run_id,
+                "source_revision_id": item_revision_id,
+                "state": state,
+                "operator_id": f"operator-{ordinal}",
+                # Reverse chronological order proves the explicit allowlist CASE wins.
+                "created_at": f"2026-09-{30 - ordinal:02d}T00:00:00+00:00",
+            },
+        )
 
 
 def test_automatic_learning_reconciles_existing_run_before_scheduling_another() -> None:
@@ -168,6 +299,60 @@ def test_automatic_learning_creates_one_fresh_successor_before_new_items() -> No
         requested_by="operator_owner",
     )
     service._candidate.assert_not_called()
+
+
+def test_allowlisted_terminal_reaches_real_retry_selector_in_explicit_order() -> None:
+    first = "analysisrun_" + "1" * 32
+    second = "analysisrun_" + "2" * 32
+    engine, service = _query_backed_service((second, first))
+    try:
+        _insert_terminal(engine, ordinal=1, analysis_run_id=first)
+        _insert_terminal(engine, ordinal=2, analysis_run_id=second)
+
+        assert service.advance_once() is True
+
+        service.learning.retry_failed_analysis.assert_called_once_with(
+            predecessor_analysis_run_id=second,
+            requested_by="operator-2",
+        )
+        service._candidate.assert_not_called()
+    finally:
+        engine.dispose()
+
+
+def test_unallowlisted_terminal_real_selector_fail_stops_without_side_effect() -> None:
+    allowed = "analysisrun_" + "1" * 32
+    unexpected = "analysisrun_" + "9" * 32
+    engine, service = _query_backed_service((allowed,))
+    try:
+        _insert_terminal(engine, ordinal=9, analysis_run_id=unexpected, state="REJECTED")
+
+        with pytest.raises(RuntimeError, match="terminal leaf analysis"):
+            service.advance_once()
+
+        service.learning.retry_failed_analysis.assert_not_called()
+        service.learning.promote_and_schedule.assert_not_called()
+        service.analyses.reconcile.assert_not_called()
+        service.analyses.accept_validated_without_review.assert_not_called()
+        service._candidate.assert_not_called()
+    finally:
+        engine.dispose()
+
+
+def test_service_rejects_duplicate_retry_allowlist_before_query_or_side_effect() -> None:
+    duplicate = "analysisrun_" + "1" * 32
+    with pytest.raises(ValueError, match="retry identities must be unique"):
+        LegacyItemAutomaticLearningService(
+            Mock(),
+            extraction_batch_ids=("legacybatch_" + "1" * 32,),
+            retry_analysis_run_ids=(duplicate, duplicate),
+            content_pack_release_id="packrel_" + "2" * 32,
+            risk_policy_revision_id="analysisriskrev_" + "3" * 32,
+            preset_pin=_pin(),
+            graph=None,
+            learning=Mock(),
+            analyses=Mock(),
+        )
 
 
 def test_automatic_learning_is_idle_without_active_or_unlearned_work() -> None:

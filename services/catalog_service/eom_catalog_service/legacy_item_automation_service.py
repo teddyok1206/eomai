@@ -161,6 +161,20 @@ class LegacyItemAutomaticLearningService:
             + literal(":")
             + LegacyItemExtractionDecisionRecord.item_proposal_id
         )
+        terminal_filters = [
+            LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
+                self.extraction_batch_ids
+            ),
+            KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
+            KnowledgeAnalysisRunRecord.state.in_(("FAILED", "REJECTED", "CANCELLED")),
+            successor.analysis_run_id.is_(None),
+        ]
+        if self.retry_analysis_run_ids:
+            # Exact retry predecessors are intentionally terminal until their one allowed
+            # successor is created.  Every other terminal leaf remains an immediate fail-stop.
+            terminal_filters.append(
+                KnowledgeAnalysisRunRecord.analysis_run_id.not_in(self.retry_analysis_run_ids)
+            )
         with self.sessions() as session:
             row = session.execute(
                 select(
@@ -186,14 +200,7 @@ class LegacyItemAutomaticLearningService:
                     successor.predecessor_analysis_run_id
                     == KnowledgeAnalysisRunRecord.analysis_run_id,
                 )
-                .where(
-                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
-                        self.extraction_batch_ids
-                    ),
-                    KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
-                    KnowledgeAnalysisRunRecord.state.in_(("FAILED", "REJECTED", "CANCELLED")),
-                    successor.analysis_run_id.is_(None),
-                )
+                .where(*terminal_filters)
                 .order_by(
                     KnowledgeAnalysisRunRecord.created_at,
                     KnowledgeAnalysisRunRecord.analysis_run_id,
@@ -284,8 +291,11 @@ class LegacyItemAutomaticLearningService:
             else_=len(self.retry_analysis_run_ids),
         )
         with self.sessions() as session:
-            run = session.scalar(
-                select(KnowledgeAnalysisRunRecord)
+            row = session.execute(
+                select(
+                    KnowledgeAnalysisRunRecord.analysis_run_id,
+                    KnowledgeAnalysisRunRecord.created_by_operator_id,
+                )
                 .join(
                     ItemRevisionRecord,
                     ItemRevisionRecord.item_revision_id
@@ -316,10 +326,10 @@ class LegacyItemAutomaticLearningService:
                 )
                 .order_by(retry_order, KnowledgeAnalysisRunRecord.analysis_run_id)
                 .limit(1)
-            )
-            if run is None:
+            ).one_or_none()
+            if row is None:
                 return None
-            return run.analysis_run_id, run.created_by_operator_id
+            return str(row.analysis_run_id), str(row.created_by_operator_id)
 
     def _candidate(self) -> _LearningCandidate | None:
         registration_key = (
