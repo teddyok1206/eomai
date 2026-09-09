@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from eom_catalog_contracts import (
-    PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
     ApprovedPastExamItemKnowledgeSourceV3,
     AssessmentOccurrenceItemBinding,
     AutomaticItemCurriculumAlignmentBinding,
@@ -15,7 +14,7 @@ from eom_catalog_contracts import (
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
-from sqlalchemy import Engine, and_, select
+from sqlalchemy import Engine, and_, or_, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.automatic_item_graph_publication_service import (
@@ -33,10 +32,12 @@ from eom_catalog_service.knowledge_graph_publication_service import (
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
 )
+from eom_catalog_service.legacy_assessment_models import LegacyItemExtractionDecisionRecord
 from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchRecord,
     LegacyItemExtractionBatchWorkUnitRecord,
 )
+from eom_catalog_service.models import ItemRevisionRecord
 from eom_catalog_service.past_exam_origin_resolution import (
     PastExamOriginInput as _PastExamOriginInput,
 )
@@ -95,6 +96,7 @@ class _PendingPastExamCandidate:
     analysis_order: int
     analysis_run_id: str
     requested_by_operator_id: str
+    source_kind: str
     source_revision_id: str
     item_id: str | None
     item_revision_id: str | None
@@ -197,15 +199,37 @@ class LegacyItemGraphLearningService:
                 return ()
             allowed_acceptance_ids = tuple(sorted(memberships_by_acceptance))
 
+            # The JSON acceptance pointer is the direct scope anchor.  Independently resolve the
+            # immutable promotion registration lineage so corruption of that JSON pointer cannot
+            # silently remove an otherwise allowlisted Item from preflight.
+            registration_keys = tuple(
+                sorted(
+                    {
+                        f"legacy-item-promotion:{acceptance_id}:{item_proposal_id}"
+                        for acceptance_id, item_proposal_id in session.execute(
+                            select(
+                                LegacyItemExtractionDecisionRecord.acceptance_id,
+                                LegacyItemExtractionDecisionRecord.item_proposal_id,
+                            ).where(
+                                LegacyItemExtractionDecisionRecord.acceptance_id.in_(
+                                    allowed_acceptance_ids
+                                )
+                            )
+                        )
+                    }
+                )
+            )
+
             # The configured legacy corpus has 520 Items.  Fetch its unique pending analysis base
-            # once, scope by the untrusted JSON acceptance string, then fully parse only exact
-            # allowlisted memberships.  This lets malformed in-scope requests fail closed without
-            # letting an unrelated batch's malformed request block this coordinator.
+            # once, scope by either independent acceptance or promotion-lineage anchor, then fully
+            # parse only exact allowlisted memberships.  This lets malformed in-scope requests fail
+            # closed without letting an unrelated batch's malformed request block this coordinator.
             analysis_rows = tuple(
                 session.execute(
                     select(
                         KnowledgeAnalysisRunRecord.analysis_run_id,
                         KnowledgeAnalysisRunRecord.created_by_operator_id,
+                        KnowledgeAnalysisRunRecord.source_kind,
                         KnowledgeAnalysisRunRecord.source_revision_id,
                         KnowledgeAnalysisRunRecord.item_id,
                         KnowledgeAnalysisRunRecord.item_revision_id,
@@ -220,17 +244,18 @@ class LegacyItemGraphLearningService:
                             == KnowledgeAnalysisRunRecord.analysis_run_id,
                         ),
                     )
+                    .outerjoin(
+                        ItemRevisionRecord,
+                        ItemRevisionRecord.item_revision_id
+                        == KnowledgeAnalysisRunRecord.item_revision_id,
+                    )
                     .where(
-                        KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
-                        KnowledgeAnalysisRunRecord.canonical_request["source"][
-                            "source_class"
-                        ].astext
-                        == "PAST_EXAM",
-                        KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
-                        == PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
-                        KnowledgeAnalysisRunRecord.canonical_request["source"][
-                            "extraction_acceptance_id"
-                        ].astext.in_(allowed_acceptance_ids),
+                        or_(
+                            KnowledgeAnalysisRunRecord.canonical_request["source"][
+                                "extraction_acceptance_id"
+                            ].astext.in_(allowed_acceptance_ids),
+                            ItemRevisionRecord.registration_key.in_(registration_keys),
+                        ),
                         KnowledgeAnalysisRunRecord.state == "ACCEPTED",
                         KnowledgeSnapshotAnalysisRecord.analysis_run_id.is_(None),
                     )
@@ -245,6 +270,7 @@ class LegacyItemGraphLearningService:
                 (
                     analysis_run_id,
                     requested_by_operator_id,
+                    source_kind,
                     source_revision_id,
                     item_id,
                     item_revision_id,
@@ -262,12 +288,17 @@ class LegacyItemGraphLearningService:
                     memberships_by_acceptance.get(source.extraction_acceptance_id, ())
                 )
                 if not memberships:
-                    continue
+                    raise LegacyItemGraphLearningError(
+                        analysis_run_id=analysis_run_id,
+                        item_revision_id=source.item_revision_id,
+                        reason="batch_membership_or_decision_invalid",
+                    )
                 pending.append(
                     _PendingPastExamCandidate(
                         analysis_order=analysis_order,
                         analysis_run_id=analysis_run_id,
                         requested_by_operator_id=requested_by_operator_id,
+                        source_kind=source_kind,
                         source_revision_id=source_revision_id,
                         item_id=item_id,
                         item_revision_id=item_revision_id,
@@ -310,7 +341,8 @@ class LegacyItemGraphLearningService:
             source = candidate.source
             resolution = resolution_by_analysis[candidate.analysis_run_id]
             invalid_membership = (
-                candidate.source_revision_id != source.item_revision_id
+                candidate.source_kind != "APPROVED_ITEM_REVISION"
+                or candidate.source_revision_id != source.item_revision_id
                 or candidate.item_id != source.item_id
                 or candidate.item_revision_id != source.item_revision_id
             )

@@ -43,10 +43,16 @@ hash, evidence entry, graph node, and curriculum unit, then recomputes the polic
 
 - Candidate lookup first reads allowlisted work units in stable
   `(batch.created_at, batch ID, work-unit ordinal, work-unit ID)` order and groups them by exact
-  acceptance ID. It then reads accepted, not-yet-graphed V9 PAST_EXAM analyses whose untrusted JSON
-  acceptance string belongs to that small allowlist. The JSON predicate is only a residual scope
-  filter; every selected request is fully parsed before use. An out-of-scope malformed request
-  cannot block the configured batches, while an in-scope malformed request is an explicit error.
+  acceptance ID. A single indexed decision read derives the allowlisted immutable promotion
+  registration keys. Accepted, not-yet-graphed analyses enter scope when either their untrusted JSON
+  acceptance string is allowlisted or their one-to-one Item Revision has an allowlisted promotion
+  key. Neither anchor prefilters the request schema, JSON source discriminator, or persisted source
+  kind, and every in-scope request must fully parse as exact V9 PAST_EXAM before use. The independent
+  anchors expose either JSON-acceptance drift or persisted source/Item-pointer drift; an unrelated
+  malformed request cannot block the configured batches, while an in-scope discriminator or payload
+  defect is an explicit error.
+  If both anchors are destroyed, the row can no longer be attributed to this batch locally; final
+  corpus coverage detects that missing leaf rather than silently certifying completion.
   The state/history and current-snapshot indexes bound the analysis scan; a new JSON expression
   index is not justified for this one-time 520-Item corpus.
 - One authoritative resolver serves candidate preflight, pre-retrieval publication validation,

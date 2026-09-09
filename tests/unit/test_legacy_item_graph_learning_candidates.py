@@ -6,7 +6,11 @@ from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
-from eom_catalog_contracts import ApprovedPastExamItemKnowledgeSourceV3, KnowledgeAnalysisRequestV9
+from eom_catalog_contracts import (
+    PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
+    ApprovedPastExamItemKnowledgeSourceV3,
+    KnowledgeAnalysisRequestV9,
+)
 from eom_catalog_service.knowledge_graph_publication_service import (
     CurrentKnowledgeGraphStructure,
 )
@@ -37,7 +41,12 @@ def _hash(seed: int) -> str:
 
 def _source_from_json(value: dict[str, Any]) -> ApprovedPastExamItemKnowledgeSourceV3:
     source = value["source"]
-    if value.get("invalid"):
+    if (
+        value.get("invalid")
+        or value.get("schema_version") != PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION
+        or source.get("source_class") != "PAST_EXAM"
+        or not source.get("extraction_acceptance_id")
+    ):
         raise ValueError("synthetic invalid in-scope request")
     pointer = SimpleNamespace(
         artifact_id="artifact",
@@ -147,6 +156,19 @@ def _query_backed_service(
             )
             """,
             """
+            CREATE TABLE legacy_item_extraction_decisions (
+                acceptance_id TEXT NOT NULL,
+                item_proposal_id TEXT NOT NULL,
+                UNIQUE (acceptance_id, item_proposal_id)
+            )
+            """,
+            """
+            CREATE TABLE item_revisions (
+                item_revision_id TEXT PRIMARY KEY,
+                registration_key TEXT NOT NULL UNIQUE
+            )
+            """,
+            """
             CREATE TABLE knowledge_snapshot_analyses (
                 graph_snapshot_revision_id TEXT NOT NULL,
                 analysis_run_id TEXT NOT NULL,
@@ -214,6 +236,34 @@ def _insert_membership(
         connection.execute(
             text(
                 """
+                INSERT OR IGNORE INTO legacy_item_extraction_decisions (
+                    acceptance_id, item_proposal_id
+                ) VALUES (:acceptance_id, :item_proposal_id)
+                """
+            ),
+            {
+                "acceptance_id": source["extraction_acceptance_id"],
+                "item_proposal_id": source["item_proposal_id"],
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT OR IGNORE INTO item_revisions (item_revision_id, registration_key)
+                VALUES (:item_revision_id, :registration_key)
+                """
+            ),
+            {
+                "item_revision_id": source["item_revision_id"],
+                "registration_key": (
+                    "legacy-item-promotion:"
+                    f"{source['extraction_acceptance_id']}:{source['item_proposal_id']}"
+                ),
+            },
+        )
+        connection.execute(
+            text(
+                """
                 INSERT INTO legacy_item_extraction_batch_work_units (
                     work_unit_id, acceptance_id, acceptance_sha256, extraction_result_id,
                     result_sha256, extraction_batch_id, ordinal,
@@ -249,11 +299,15 @@ def _insert_analysis(
     source: dict[str, Any],
     invalid_request: bool = False,
     source_revision_id: str | None = None,
+    schema_version: str = PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
+    source_class: str = "PAST_EXAM",
 ) -> str:
     analysis_run_id = f"analysisrun_{ordinal}"
+    request_source = dict(source)
+    request_source["source_class"] = source_class
     request = {
-        "schema_version": "knowledge-analysis-request/9.0",
-        "source": source,
+        "schema_version": schema_version,
+        "source": request_source,
         "invalid": invalid_request,
     }
     with engine.begin() as connection:
@@ -347,7 +401,14 @@ def test_acceptance_reused_by_allowed_batches_is_validated_once_and_not_duplicat
 
 @pytest.mark.parametrize(
     "mutation",
-    ("state", "acceptance-hash", "source-revision", "item-id", "item-revision"),
+    (
+        "state",
+        "acceptance-hash",
+        "source-kind",
+        "source-revision",
+        "item-id",
+        "item-revision",
+    ),
 )
 def test_in_scope_membership_or_source_pointer_drift_is_an_explicit_error(mutation: str) -> None:
     engine, service = _query_backed_service()
@@ -364,6 +425,7 @@ def test_in_scope_membership_or_source_pointer_drift_is_an_explicit_error(mutati
             )
         else:
             field = {
+                "source-kind": "source_kind",
                 "source-revision": "source_revision_id",
                 "item-id": "item_id",
                 "item-revision": "item_revision_id",
@@ -397,6 +459,82 @@ def test_in_scope_malformed_request_errors_but_out_of_scope_malformed_request_is
         service.pending_candidates(limit=2)
 
     assert caught.value.reason == "canonical_request_invalid"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("schema_version", "knowledge-analysis-request/8.0"),
+        ("source_class", "EDUCATIONAL_DOCUMENT"),
+    ),
+)
+def test_in_scope_request_discriminator_drift_is_an_explicit_error(field: str, value: str) -> None:
+    engine, service = _query_backed_service()
+    source = _source_value(0)
+    _insert_membership(engine, ordinal=0, source=source)
+    analysis_run_id = _insert_analysis(
+        engine,
+        ordinal=0,
+        source=source,
+        schema_version=(
+            value if field == "schema_version" else PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION
+        ),
+        source_class=value if field == "source_class" else "PAST_EXAM",
+    )
+
+    with pytest.raises(LegacyItemGraphLearningError) as caught:
+        service.pending_candidates(limit=1)
+
+    assert caught.value.reason == "canonical_request_invalid"
+    assert caught.value.analysis_run_id == analysis_run_id
+    assert caught.value.item_revision_id == "unknown"
+    service._resolve_past_exam_origins.assert_not_called()
+    service.retrieval.create.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_reason"),
+    (
+        ("drift", "batch_membership_or_decision_invalid"),
+        ("missing", "canonical_request_invalid"),
+    ),
+)
+def test_relational_promotion_scope_catches_acceptance_id_drift_or_absence(
+    mutation: str, expected_reason: str
+) -> None:
+    engine, service = _query_backed_service()
+    analysis_run_id, source = _insert_candidate(engine, ordinal=0)
+    with engine.begin() as connection:
+        request = connection.execute(
+            text(
+                "SELECT canonical_request FROM knowledge_analysis_runs "
+                "WHERE analysis_run_id=:analysis_run_id"
+            ),
+            {"analysis_run_id": analysis_run_id},
+        ).scalar_one()
+        value = json.loads(request)
+        if mutation == "drift":
+            value["source"]["extraction_acceptance_id"] = "itemacceptance_" + "f" * 32
+        else:
+            value["source"].pop("extraction_acceptance_id")
+        connection.execute(
+            text(
+                "UPDATE knowledge_analysis_runs SET canonical_request=:request "
+                "WHERE analysis_run_id=:analysis_run_id"
+            ),
+            {"analysis_run_id": analysis_run_id, "request": json.dumps(value)},
+        )
+
+    with pytest.raises(LegacyItemGraphLearningError) as caught:
+        service.pending_candidates(limit=1)
+
+    assert caught.value.reason == expected_reason
+    assert caught.value.analysis_run_id == analysis_run_id
+    assert caught.value.item_revision_id == (
+        "unknown" if mutation == "missing" else source["item_revision_id"]
+    )
+    service._resolve_past_exam_origins.assert_not_called()
+    service.retrieval.create.assert_not_called()
 
 
 def test_no_allowlisted_membership_is_a_legitimate_out_of_scope_analysis() -> None:
