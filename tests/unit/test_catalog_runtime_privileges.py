@@ -145,6 +145,14 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     assert "pdf_learning_completion_observations" in READ_TABLES
     assert "pdf_learning_completion_observations" in INSERT_TABLES
     assert "pdf_learning_completion_observations" not in UPDATE_TABLES
+    completion_authority_tables = {
+        "permissions",
+        "role_permissions",
+        "operator_role_assignments",
+    }
+    assert completion_authority_tables <= set(READ_TABLES)
+    assert completion_authority_tables.isdisjoint(INSERT_TABLES)
+    assert completion_authority_tables.isdisjoint(UPDATE_TABLES)
     educational_document_tables = {
         "educational_documents",
         "educational_document_revisions",

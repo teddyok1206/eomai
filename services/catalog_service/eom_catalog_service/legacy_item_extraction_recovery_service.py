@@ -178,8 +178,7 @@ class LegacyItemExtractionRecoveryService:
             or recovery_artifact.schema_ref
             != "eom://schemas/legacy-assessment/legacy-item-extraction-validation-recovery/1.0"
             or recovery_artifact.media_type != "application/json"
-            or recovery_artifact.sha256
-            != sha256_bytes(canonical_json_bytes(recovery.model_dump(mode="json")) + b"\n")
+            or recovery_artifact.sha256 != sha256_bytes(canonical_json_bytes(recovery) + b"\n")
         ):
             raise LegacyItemExtractionRecoveryError(
                 "LEGACY_EXTRACTION_RECOVERY_ARTIFACT_INVALID",

@@ -192,7 +192,7 @@ def test_recovery_service_rejects_drifted_authorization_artifact_pointer() -> No
             "eom://schemas/legacy-assessment/legacy-item-extraction-validation-recovery/1.0"
         ),
         media_type="application/json",
-        sha256=sha256_bytes(canonical_json_bytes(recovery.model_dump(mode="json")) + b"\n"),
+        sha256=sha256_bytes(canonical_json_bytes(recovery) + b"\n"),
     )
     LegacyItemExtractionRecoveryService._require_exact_recovery_artifact(recovery, pointer)
 
