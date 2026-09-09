@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     LegacyItemExtractionResult,
     LegacyItemPromotionRequest,
     validate_contract,
+    validate_legacy_item_extraction_result_for_request,
 )
 from eom_catalog_service.legacy_item_promotion_service import (
     LegacyItemPromotionError,
@@ -603,6 +604,45 @@ def test_extraction_staging_accepts_pinned_page_images_and_materialized_source(
     assert receipt.observed_page_input_ids == tuple(
         page.page_input_id for page in request.page_inputs
     )
+
+
+def test_shared_extraction_scope_validator_accepts_exact_closed_result() -> None:
+    request = _staging_request()
+    result = _staging_result(request)
+
+    validate_legacy_item_extraction_result_for_request(result, request)
+
+
+def test_shared_extraction_scope_validator_rejects_page_coverage_drift() -> None:
+    request = _staging_request()
+    document = _staging_result(request).model_dump(mode="json")
+    document["observed_page_input_ids"] = ["assessmentpage_" + "f" * 32]
+    document["result_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "result_sha256"}
+    )
+
+    with pytest.raises(ValueError, match="exactly cover the pinned page inputs"):
+        validate_legacy_item_extraction_result_for_request(
+            LegacyItemExtractionResult.model_validate(document),
+            request,
+        )
+
+
+def test_shared_extraction_scope_validator_rejects_foreign_materialized_anchor() -> None:
+    request = _staging_request()
+    document = _staging_result(request).model_dump(mode="json")
+    document["items"][0]["source_anchors"][2]["source"] = _artifact(
+        "f", "foreign.json", "application/json"
+    )
+    document["result_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "result_sha256"}
+    )
+
+    with pytest.raises(ValueError, match="outside the pinned materializations"):
+        validate_legacy_item_extraction_result_for_request(
+            LegacyItemExtractionResult.model_validate(document),
+            request,
+        )
 
 
 def test_extraction_staging_rejects_pdf_source_as_page_anchor(tmp_path: Path) -> None:

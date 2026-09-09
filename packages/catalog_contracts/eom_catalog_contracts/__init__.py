@@ -381,6 +381,7 @@ from eom_catalog_contracts.legacy_assessment import (
     LegacyItemExtractionRequest,
     LegacyItemExtractionResult,
     NormalizedBoundingBox,
+    validate_legacy_item_extraction_result_for_request,
 )
 from eom_catalog_contracts.legacy_extraction_batch import (
     LegacyCorpusSourceBinding,
@@ -395,6 +396,7 @@ from eom_catalog_contracts.legacy_extraction_recovery import (
     LegacyExtractionPresetPointer,
     LegacyExtractionValidationReplacement,
     LegacyItemExtractionValidationRecovery,
+    derive_legacy_item_extraction_recovery_successor,
 )
 from eom_catalog_contracts.legacy_item_learning import (
     EditorialAuthorityKind,
@@ -1009,6 +1011,7 @@ __all__ = [
     "catalog_application_schema_route",
     "catalog_schema_inventory",
     "classify_content_team_mock_exam_material_profile",
+    "derive_legacy_item_extraction_recovery_successor",
     "integrated_science_curriculum_resolver",
     "knowledge_node_id_prefix",
     "load_integrated_science_editorial_outline",
@@ -1030,6 +1033,7 @@ __all__ = [
     "validate_item_reference_contract",
     "validate_knowledge_analysis_proposal_ontology",
     "validate_knowledge_edge_endpoint_types",
+    "validate_legacy_item_extraction_result_for_request",
     "validate_mock_exam_placements",
     "validate_mock_exam_planned_placements",
     "validate_reviewed_authoring_guidance",

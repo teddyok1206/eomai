@@ -45,6 +45,19 @@ def _unique[HashableValue: Hashable](values: tuple[HashableValue, ...], message:
         raise ValueError(message)
 
 
+def _artifact_member_identity(pointer: AssessmentArtifactMemberPointer) -> tuple[str, ...]:
+    """Return the complete immutable identity of one Artifact member pointer."""
+
+    return (
+        pointer.artifact_id,
+        pointer.artifact_revision_id,
+        pointer.member_path,
+        pointer.schema_ref,
+        pointer.media_type,
+        pointer.sha256,
+    )
+
+
 class AssessmentArtifactMemberPointer(OriginArtifactMemberPointer):
     """Compatibility name for the shared origin Artifact member pointer."""
 
@@ -715,6 +728,58 @@ class LegacyItemExtractionResult(FrozenModel):
             raise ValueError("extracted items must use ascending item-number order")
         _require_self_hash(self, "result_sha256")
         return self
+
+
+def validate_legacy_item_extraction_result_for_request(
+    result: LegacyItemExtractionResult,
+    request: LegacyItemExtractionRequest,
+) -> None:
+    """Require a result to cover only and all inputs of its immutable request.
+
+    Page and materialization identities are indexed once, then every source anchor is checked by
+    set membership.  The validation is therefore O(p + m + a) time and O(p + m) space for pages,
+    materializations, and result anchors.  Keeping this rule in the contract package lets both the
+    orchestrator's commit boundary and read-only completion verification use one authoritative
+    implementation without importing infrastructure.
+    """
+
+    if (
+        result.extraction_request_id != request.extraction_request_id
+        or result.request_sha256 != request.request_sha256
+    ):
+        raise ValueError("legacy extraction result request identity does not match worker input")
+
+    expected_pages = tuple(page.page_input_id for page in request.page_inputs)
+    if result.observed_page_input_ids != expected_pages:
+        raise ValueError("legacy extraction result does not exactly cover the pinned page inputs")
+
+    item_numbers = tuple(item.item_number for item in result.items)
+    if item_numbers != request.expected_item_numbers:
+        raise ValueError("legacy extraction result does not exactly cover the expected items")
+
+    page_sources = {
+        (_artifact_member_identity(page.image), page.source_role, page.physical_page)
+        for page in request.page_inputs
+    }
+    materialized_sources = {
+        (_artifact_member_identity(materialization.source), materialization.source_role)
+        for materialization in request.source_materializations
+    }
+    for item in result.items:
+        for anchor in item.source_anchors:
+            identity = _artifact_member_identity(anchor.source)
+            if anchor.source_role in {"PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"}:
+                if (
+                    anchor.physical_page is None
+                    or (identity, anchor.source_role, anchor.physical_page) not in page_sources
+                ):
+                    raise ValueError(
+                        "legacy extraction page anchor is outside the pinned page inputs"
+                    )
+            elif (identity, anchor.source_role) not in materialized_sources:
+                raise ValueError(
+                    "legacy extraction source anchor is outside the pinned materializations"
+                )
 
 
 class LegacyItemExtractionReceipt(FrozenModel):

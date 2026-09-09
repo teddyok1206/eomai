@@ -11,6 +11,7 @@ from eom_catalog_contracts import (
     LegacyItemExtractionBatchManifestV2,
     LegacyItemExtractionRequest,
     LegacyItemExtractionValidationRecovery,
+    derive_legacy_item_extraction_recovery_successor,
     validate_contract,
 )
 from eom_catalog_service.legacy_item_extraction_recovery_service import (
@@ -142,11 +143,11 @@ def _predecessor_and_recovery() -> tuple[
 def test_recovery_builder_is_deterministic_pointer_only_and_executes_exact_three() -> None:
     predecessor, recovery = _predecessor_and_recovery()
 
-    first = LegacyItemExtractionRecoveryService._build_successor_manifest(
+    first = derive_legacy_item_extraction_recovery_successor(
         recovery,
         predecessor,
     )
-    replay = LegacyItemExtractionRecoveryService._build_successor_manifest(
+    replay = derive_legacy_item_extraction_recovery_successor(
         recovery,
         predecessor,
     )
@@ -175,9 +176,97 @@ def test_recovery_builder_does_not_mutate_predecessor_manifest() -> None:
     predecessor, recovery = _predecessor_and_recovery()
     before = deepcopy(predecessor.model_dump(mode="json"))
 
-    LegacyItemExtractionRecoveryService._build_successor_manifest(recovery, predecessor)
+    derive_legacy_item_extraction_recovery_successor(recovery, predecessor)
 
     assert predecessor.model_dump(mode="json") == before
+
+
+def test_recovery_derivation_preserves_every_unauthorized_request_field() -> None:
+    predecessor, recovery = _predecessor_and_recovery()
+    successor = derive_legacy_item_extraction_recovery_successor(recovery, predecessor)
+    predecessor_by_id = {unit.work_unit_id: unit for unit in predecessor.work_units}
+
+    mutable_request_fields = {
+        "extraction_request_id",
+        "work_unit_ordinal",
+        "execution_preset_id",
+        "execution_preset_revision_id",
+        "execution_preset_sha256",
+        "created_at",
+        "request_sha256",
+    }
+    for replacement, successor_unit in zip(
+        recovery.replacements,
+        successor.work_units,
+        strict=True,
+    ):
+        prior = predecessor_by_id[replacement.predecessor_work_unit_id]
+        assert prior.request.model_dump(
+            mode="json", exclude=mutable_request_fields
+        ) == successor_unit.request.model_dump(mode="json", exclude=mutable_request_fields)
+        assert successor_unit.corpus_source_bindings == prior.corpus_source_bindings
+
+    assert successor.inventory_id == predecessor.inventory_id
+    assert successor.inventory_sha256 == predecessor.inventory_sha256
+    assert successor.inventory_artifact == predecessor.inventory_artifact
+    assert successor.failure_policy == predecessor.failure_policy
+
+
+def test_recovery_derivation_rejects_predecessor_work_unit_pointer_drift() -> None:
+    predecessor, recovery = _predecessor_and_recovery()
+    document = recovery.model_dump(mode="json")
+    replacements = document["replacements"]
+    assert isinstance(replacements, list)
+    first = replacements[0]
+    assert isinstance(first, dict)
+    first["predecessor_request_sha256"] = "sha256:" + "f" * 64
+    document["recovery_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "recovery_sha256"}
+    )
+    drifted = LegacyItemExtractionValidationRecovery.model_validate(document)
+
+    with pytest.raises(ValueError, match="predecessor work-unit pointer differs"):
+        derive_legacy_item_extraction_recovery_successor(drifted, predecessor)
+
+
+@pytest.mark.parametrize(
+    ("replacement_field", "predecessor_value", "error"),
+    [
+        (
+            "successor_work_unit_id",
+            lambda unit: unit.work_unit_id,
+            "successor work-unit identity is not globally fresh",
+        ),
+        (
+            "successor_extraction_request_id",
+            lambda unit: unit.request.extraction_request_id,
+            "successor request identity is not globally fresh",
+        ),
+    ],
+)
+def test_recovery_derivation_rejects_successor_collision_with_unreplaced_predecessor(
+    replacement_field: str,
+    predecessor_value: Any,
+    error: str,
+) -> None:
+    predecessor, recovery = _predecessor_and_recovery()
+    document = recovery.model_dump(mode="json")
+    replacements = document["replacements"]
+    assert isinstance(replacements, list)
+    first = replacements[0]
+    assert isinstance(first, dict)
+    unreplaced = predecessor.work_units[0]
+    assert unreplaced.work_unit_id not in {
+        replacement.predecessor_work_unit_id for replacement in recovery.replacements
+    }
+    first[replacement_field] = predecessor_value(unreplaced)
+    document["recovery_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "recovery_sha256"}
+    )
+    drifted = LegacyItemExtractionValidationRecovery.model_validate(document)
+
+    with pytest.raises(ValueError, match=error):
+        derive_legacy_item_extraction_recovery_successor(drifted, predecessor)
 
 
 def test_recovery_requires_exact_105_accepted_plus_three_failed_distribution() -> None:

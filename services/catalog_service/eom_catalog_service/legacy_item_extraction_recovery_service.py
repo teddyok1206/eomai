@@ -7,13 +7,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from eom_catalog_contracts import (
-    LegacyExtractionBatchWorkUnitV2,
     LegacyItemExtractionBatchManifestV2,
-    LegacyItemExtractionRequest,
     LegacyItemExtractionValidationRecovery,
+    derive_legacy_item_extraction_recovery_successor,
     validate_contract,
 )
-from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ExecutionBundleRevisionRecord
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.models import JobRecord
@@ -118,10 +116,20 @@ class LegacyItemExtractionRecoveryService:
                 predecessor_manifest=predecessor_manifest,
                 require_successor_current=existing is None,
             )
-        successor_manifest = self._build_successor_manifest(
-            recovery,
-            predecessor_manifest,
-        )
+        try:
+            successor_manifest = derive_legacy_item_extraction_recovery_successor(
+                recovery,
+                predecessor_manifest,
+            )
+            validate_contract(
+                "legacy-item-extraction-batch-v2",
+                successor_manifest.model_dump(mode="json"),
+            )
+        except (JsonSchemaValidationError, ValueError) as exc:
+            raise LegacyItemExtractionRecoveryError(
+                "LEGACY_EXTRACTION_RECOVERY_SUCCESSOR_INVALID",
+                "legacy extraction recovery successor manifest is invalid",
+            ) from exc
         try:
             batch = self.batches.create(
                 CreateLegacyItemExtractionBatchCommand(
@@ -349,61 +357,6 @@ class LegacyItemExtractionRecoveryService:
                 "LEGACY_EXTRACTION_RECOVERY_SUCCESSOR_INVALID",
                 "extraction recovery changed a non-instruction policy field",
             )
-
-    @staticmethod
-    def _build_successor_manifest(
-        recovery: LegacyItemExtractionValidationRecovery,
-        predecessor: LegacyItemExtractionBatchManifestV2,
-    ) -> LegacyItemExtractionBatchManifestV2:
-        predecessor_units = {unit.work_unit_id: unit for unit in predecessor.work_units}
-        successor_units: list[LegacyExtractionBatchWorkUnitV2] = []
-        for replacement in recovery.replacements:
-            prior = predecessor_units[replacement.predecessor_work_unit_id]
-            request_document = prior.request.model_dump(mode="json")
-            request_document.update(
-                {
-                    "extraction_request_id": replacement.successor_extraction_request_id,
-                    "work_unit_ordinal": replacement.successor_ordinal,
-                    "execution_preset_id": recovery.successor_preset.preset_id,
-                    "execution_preset_revision_id": (recovery.successor_preset.preset_revision_id),
-                    "execution_preset_sha256": recovery.successor_preset.preset_sha256,
-                    "created_at": recovery.created_at.isoformat().replace("+00:00", "Z"),
-                    "request_sha256": "sha256:" + "0" * 64,
-                }
-            )
-            request_document["request_sha256"] = content_sha256(
-                {key: value for key, value in request_document.items() if key != "request_sha256"}
-            )
-            request = LegacyItemExtractionRequest.model_validate(request_document)
-            successor_units.append(
-                LegacyExtractionBatchWorkUnitV2(
-                    work_unit_id=replacement.successor_work_unit_id,
-                    ordinal=replacement.successor_ordinal,
-                    request=request,
-                    expected_item_numbers_sha256=replacement.expected_item_numbers_sha256,
-                    execution_mode="EXECUTE",
-                    reuse_accepted=None,
-                    corpus_source_bindings=prior.corpus_source_bindings,
-                )
-            )
-        manifest_document: dict[str, Any] = {
-            "schema_version": "legacy-item-extraction-batch/1.1",
-            "extraction_batch_id": recovery.successor_batch_id,
-            "idempotency_key": recovery.successor_idempotency_key,
-            "inventory_id": predecessor.inventory_id,
-            "inventory_sha256": predecessor.inventory_sha256,
-            "inventory_artifact": predecessor.inventory_artifact.model_dump(mode="json"),
-            "failure_policy": "CONTINUE_AND_COLLECT",
-            "work_units": [unit.model_dump(mode="json") for unit in successor_units],
-            "created_at": recovery.created_at.isoformat().replace("+00:00", "Z"),
-            "manifest_sha256": "sha256:" + "0" * 64,
-        }
-        manifest_document["manifest_sha256"] = content_sha256(
-            {key: value for key, value in manifest_document.items() if key != "manifest_sha256"}
-        )
-        manifest = LegacyItemExtractionBatchManifestV2.model_validate(manifest_document)
-        validate_contract("legacy-item-extraction-batch-v2", manifest.model_dump(mode="json"))
-        return manifest
 
     @staticmethod
     def _fail(code: str, message: str) -> None:

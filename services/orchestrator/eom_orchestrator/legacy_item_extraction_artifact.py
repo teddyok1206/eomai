@@ -6,63 +6,17 @@ from datetime import datetime
 from pathlib import Path
 
 from eom_catalog_contracts import (
-    AssessmentArtifactMemberPointer,
     LegacyItemExtractionReceipt,
     LegacyItemExtractionRequest,
     LegacyItemExtractionResult,
     validate_contract,
+    validate_legacy_item_extraction_result_for_request,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol import ErrorCode
 
 from eom_orchestrator.artifacts import StagedFileSet, stage_file_set_artifact
 from eom_orchestrator.errors import PlatformError
-
-
-def _pointer_identity(pointer: AssessmentArtifactMemberPointer) -> tuple[str, ...]:
-    return (
-        pointer.artifact_id,
-        pointer.artifact_revision_id,
-        pointer.member_path,
-        pointer.schema_ref,
-        pointer.media_type,
-        pointer.sha256,
-    )
-
-
-def _validate_closed_source_anchors(
-    *, result: LegacyItemExtractionResult, request: LegacyItemExtractionRequest
-) -> None:
-    page_sources = {
-        (_pointer_identity(page.image), page.source_role, page.physical_page)
-        for page in request.page_inputs
-    }
-    materialized_sources = {
-        (_pointer_identity(materialization.source), materialization.source_role)
-        for materialization in request.source_materializations
-    }
-    for item in result.items:
-        for anchor in item.source_anchors:
-            identity = _pointer_identity(anchor.source)
-            if anchor.source_role in {"PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"}:
-                if (
-                    anchor.physical_page is None
-                    or (
-                        identity,
-                        anchor.source_role,
-                        anchor.physical_page,
-                    )
-                    not in page_sources
-                ):
-                    raise PlatformError(
-                        ErrorCode.WORKER_RESULT_INVALID,
-                        "legacy extraction page anchor is outside the pinned page inputs",
-                    )
-            elif (identity, anchor.source_role) not in materialized_sources:
-                raise PlatformError(
-                    ErrorCode.WORKER_RESULT_INVALID,
-                    "legacy extraction source anchor is outside the pinned materializations",
-                )
 
 
 def stage_legacy_item_extraction_result(
@@ -77,27 +31,14 @@ def stage_legacy_item_extraction_result(
 ) -> tuple[StagedFileSet, LegacyItemExtractionReceipt]:
     """Validate closed request coverage and stage only the inner canonical result value."""
 
-    if (
-        result.extraction_request_id != request.extraction_request_id
-        or result.request_sha256 != request.request_sha256
-    ):
+    try:
+        validate_legacy_item_extraction_result_for_request(result, request)
+    except ValueError as exc:
         raise PlatformError(
             ErrorCode.WORKER_RESULT_INVALID,
-            "legacy extraction result request identity does not match worker input",
-        )
-    expected_pages = tuple(page.page_input_id for page in request.page_inputs)
-    if result.observed_page_input_ids != expected_pages:
-        raise PlatformError(
-            ErrorCode.WORKER_RESULT_INVALID,
-            "legacy extraction result does not exactly cover the pinned page inputs",
-        )
+            str(exc),
+        ) from exc
     item_numbers = tuple(item.item_number for item in result.items)
-    if item_numbers != request.expected_item_numbers:
-        raise PlatformError(
-            ErrorCode.WORKER_RESULT_INVALID,
-            "legacy extraction result does not exactly cover the expected items",
-        )
-    _validate_closed_source_anchors(result=result, request=request)
 
     source_directory = staging / "legacy-item-extraction-source"
     artifact_stage = staging / "legacy-item-extraction-artifact"
