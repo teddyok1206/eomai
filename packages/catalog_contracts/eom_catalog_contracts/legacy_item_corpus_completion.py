@@ -374,8 +374,7 @@ def verify_corpus_completion_receipt_command(
     """Cross-bind a receipt to the exact command and raw recovery Artifact member."""
 
     if (
-        (receipt.schema_version.endswith("/1.1"))
-        != (command.schema_version.endswith("/1.1"))
+        (receipt.schema_version.endswith("/1.1")) != (command.schema_version.endswith("/1.1"))
         or receipt.command_sha256 != command.command_sha256
         or receipt.requested_by != command.requested_by
         or receipt.inventory_id != command.inventory_id
