@@ -257,6 +257,7 @@ class LegacyItemAutomaticLearningService:
                         KnowledgeAnalysisRunRecord.analysis_run_id,
                         KnowledgeAnalysisRunRecord.created_by_operator_id,
                         KnowledgeAnalysisRunRecord.state,
+                        KnowledgeAnalysisRunRecord.created_at,
                     )
                     .distinct()
                     .join(
