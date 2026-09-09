@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/knowledge-item-control-bootstrap/8.0",
+  "title": "Knowledge-backed item control bootstrap manifest V8",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "preset_key", "display_name", "description", "created_at",
+    "base_preset_key", "base_preset_schema_version", "base_instruction_bundle_ids",
+    "base_instruction_bundle_revision_ids", "base_instruction_member_sha256s", "general_knowledge_policy",
+    "compatible_workflow_protocols", "evidence_access_by_role", "retrieval_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "knowledge-item-control-bootstrap/8.0"},
+    "preset_key": {"const": "knowledge-grounded-item"},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "description": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "created_at": {"type": "string", "format": "date-time"},
+    "base_preset_key": {"const": "standard-item"},
+    "base_preset_schema_version": {"const": "execution-preset-revision/1.0"},
+    "base_instruction_bundle_ids": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authoring", "image", "review", "item_management"],
+      "properties": {
+        "authoring": {"const": "instrbundle_7bcd83d35c6ac27021fb5fcd8d9065a4"},
+        "image": {"const": "instrbundle_f536a34f517207e39abd32d469a4e834"},
+        "review": {"const": "instrbundle_713c412dfd049dfdaa8b2bbe961eeda8"},
+        "item_management": {"const": "instrbundle_bea9c5397ee3b8069d3ee9ef74418a37"}
+      }
+    },
+    "base_instruction_bundle_revision_ids": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authoring", "image", "review", "item_management"],
+      "properties": {
+        "authoring": {"const": "instrrev_7e9b2a26f7ef365568f42d464dd19288"},
+        "image": {"const": "instrrev_bf74d32e4fd504ceffac0a55b9c7612d"},
+        "review": {"const": "instrrev_84c074615116dc103e98d8c05f57ae89"},
+        "item_management": {"const": "instrrev_d9d4df3d43f4e5678eec0ce04b215ab8"}
+      }
+    },
+    "base_instruction_member_sha256s": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "authoring", "image", "review", "item_management"],
+      "properties": {
+        "platform": {"const": "sha256:5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b"},
+        "authoring": {"const": "sha256:30defef4703364a81ba8ae50101216238bef8e9f691d056b6efd29ee75c141cd"},
+        "image": {"const": "sha256:7f9f1c9eb5dee44ef76981b04121f1a689a849e8388051f266c4d0ea80cd74ca"},
+        "review": {"const": "sha256:c6afe8fe84c2a0776765d316ef089dd216eeb15c968b78155a3a9c771e77e1c3"},
+        "item_management": {"const": "sha256:c5af5ca1137f1ef2c2e724e3a3692178d6d48eeee7eac8f293d7014e67ec156a"}
+      }
+    },
+    "general_knowledge_policy": {"const": "ALLOW_WITH_PROVENANCE"},
+    "compatible_workflow_protocols": {
+      "type": "array",
+      "prefixItems": [{"const": "workflow-role/1.19.0"}],
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true
+    },
+    "evidence_access_by_role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authoring", "image", "review", "item_management"],
+      "properties": {
+        "authoring": {"const": "EVIDENCE_CONTEXT"},
+        "image": {"const": "EVIDENCE_CONTEXT"},
+        "review": {"const": "EVIDENCE_CONTEXT"},
+        "item_management": {"const": "NONE"}
+      }
+    },
+    "retrieval_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "access_policy_revision_id", "access_policy_sha256", "allowed_corpus_keys",
+        "allowed_query_kinds", "allowed_source_classes", "maximum_budget"
+      ],
+      "properties": {
+        "access_policy_revision_id": {
+          "const": "accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9"
+        },
+        "access_policy_sha256": {
+          "const": "sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0"
+        },
+        "allowed_corpus_keys": {
+          "type": "array",
+          "prefixItems": [{"const": "integrated-science-textbooks"}],
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_query_kinds": {
+          "type": "array",
+          "prefixItems": [{"const": "ITEM_PREPARATION"}],
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_source_classes": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "APPROVED_ITEM"}, {"const": "PAST_EXAM"}, {"const": "TEXTBOOK"}
+          ],
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "maximum_budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_documents", "max_item_revisions", "max_graph_nodes", "max_claims",
+            "max_context_tokens"
+          ],
+          "properties": {
+            "max_documents": {"const": 16},
+            "max_item_revisions": {"const": 32},
+            "max_graph_nodes": {"const": 128},
+            "max_claims": {"const": 64},
+            "max_context_tokens": {"const": 16000}
+          }
+        }
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from types import SimpleNamespace
 
+import eom_orchestrator.control_bootstrap as control_bootstrap
 import eom_orchestrator.knowledge_item_bootstrap as knowledge_item_bootstrap
 import pytest
 from eom_orchestrator.control_bootstrap import load_standard_bootstrap_manifest
@@ -12,6 +13,9 @@ from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.knowledge_item_bootstrap import (
     EXPECTED_V7_BASE_INSTRUCTION_BUNDLE_REVISION_IDS,
     EXPECTED_V7_BASE_INSTRUCTION_MEMBER_SHA256S,
+    EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_IDS,
+    EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_REVISION_IDS,
+    EXPECTED_V8_BASE_INSTRUCTION_MEMBER_SHA256S,
     KnowledgeItemBootstrapManifest,
     load_knowledge_item_bootstrap_manifest,
 )
@@ -27,8 +31,10 @@ CONFIG_V4 = ROOT / "config/control-plane/knowledge-grounded-item-v4"
 CONFIG_V5 = ROOT / "config/control-plane/knowledge-grounded-item-v5"
 CONFIG_V6 = ROOT / "config/control-plane/knowledge-grounded-item-v6"
 CONFIG_V7 = ROOT / "config/control-plane/knowledge-grounded-item-v7"
+CONFIG_V8 = ROOT / "config/control-plane/knowledge-grounded-item-v8"
 STANDARD_CONFIG_V9 = ROOT / "config/control-plane/standard-item-v9"
 STANDARD_CONFIG_V10 = ROOT / "config/control-plane/standard-item-v10"
+STANDARD_CONFIG_V11 = ROOT / "config/control-plane/standard-item-v11"
 
 
 def test_knowledge_item_bootstrap_is_schema_first_and_exact() -> None:
@@ -265,6 +271,151 @@ def test_knowledge_item_v7_instruction_component_hash_pin_fails_closed() -> None
             forged_session, manifest=manifest, base=base
         )
     assert captured.value.code == "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID"
+
+
+def test_knowledge_item_v8_projects_exact_occurrence_authority_successor() -> None:
+    standard = load_standard_bootstrap_manifest(STANDARD_CONFIG_V11)
+    manifest = load_knowledge_item_bootstrap_manifest(CONFIG_V8)
+    value = manifest.model_dump(mode="json")
+
+    validate_control_contract("knowledge-item-control-bootstrap-v8", value)
+    assert manifest.schema_version == "knowledge-item-control-bootstrap/8.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.19.0",)
+    assert manifest.created_at.isoformat() == "2026-09-09T00:28:00+00:00"
+    assert standard.created_at < manifest.created_at
+    assert manifest.evidence_access_by_role == {
+        "authoring": "EVIDENCE_CONTEXT",
+        "image": "EVIDENCE_CONTEXT",
+        "review": "EVIDENCE_CONTEXT",
+        "item_management": "NONE",
+    }
+    assert manifest.retrieval_policy.allowed_source_classes == (
+        "APPROVED_ITEM",
+        "PAST_EXAM",
+        "TEXTBOOK",
+    )
+    assert manifest.base_instruction_bundle_ids == dict(EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_IDS)
+    assert manifest.base_instruction_bundle_ids == {
+        role: control_bootstrap._stable_id("instrbundle_", f"standard-item:{role}")
+        for role in ("authoring", "image", "review", "item_management")
+    }
+    assert manifest.base_instruction_bundle_revision_ids == dict(
+        EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_REVISION_IDS
+    )
+    assert manifest.base_instruction_bundle_revision_ids == {
+        role: control_bootstrap._stable_id("instrrev_", f"standard-item:{role}:v11")
+        for role in ("authoring", "image", "review", "item_management")
+    }
+    assert manifest.base_instruction_member_sha256s == dict(
+        EXPECTED_V8_BASE_INSTRUCTION_MEMBER_SHA256S
+    )
+    assert hashlib.sha256((CONFIG_V8 / "bootstrap.yaml").read_bytes()).hexdigest() == (
+        "a3fc521d48bd9004c40be01735b0943230d9e502801f85b3219b824582d569c4"
+    )
+    assert hashlib.sha256((CONFIG_V7 / "bootstrap.yaml").read_bytes()).hexdigest() == (
+        "fea4c9e084bc048eea8796cd6e842d32c3651d783686c70f0f29ccbb65bbe572"
+    )
+
+
+def test_knowledge_item_v8_rejects_v10_current_and_wrong_bundle_identity() -> None:
+    manifest = load_knowledge_item_bootstrap_manifest(CONFIG_V8)
+
+    with pytest.raises(ControlPlaneError) as revision_error:
+        knowledge_item_bootstrap._require_base_instruction_revisions(
+            manifest, dict(EXPECTED_V7_BASE_INSTRUCTION_BUNDLE_REVISION_IDS)
+        )
+    assert revision_error.value.code == "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID"
+    knowledge_item_bootstrap._require_base_instruction_revisions(
+        manifest, dict(EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_REVISION_IDS)
+    )
+
+    wrong_identities = dict(EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_IDS)
+    wrong_identities["review"] = "instrbundle_" + "0" * 32
+    with pytest.raises(ControlPlaneError) as identity_error:
+        knowledge_item_bootstrap._require_base_instruction_bundle_identities(
+            manifest, wrong_identities
+        )
+    assert identity_error.value.code == "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID"
+    knowledge_item_bootstrap._require_base_instruction_bundle_identities(
+        manifest, dict(EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_IDS)
+    )
+
+
+def test_knowledge_item_v8_instruction_pointer_and_hash_pins_fail_closed() -> None:
+    manifest = load_knowledge_item_bootstrap_manifest(CONFIG_V8)
+    expected = dict(EXPECTED_V8_BASE_INSTRUCTION_MEMBER_SHA256S)
+    pointer = SimpleNamespace(
+        bundle_id=EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_IDS["authoring"],
+        bundle_revision_id=EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_REVISION_IDS["authoring"],
+        manifest_artifact=SimpleNamespace(
+            artifact_id="artifact_" + "2" * 32,
+            artifact_revision_id="rev_" + "3" * 32,
+            sha256="sha256:" + "4" * 64,
+        ),
+        manifest_sha256="sha256:" + "4" * 64,
+    )
+    document: dict[str, object] = {
+        "bundle_id": pointer.bundle_id,
+        "bundle_revision_id": pointer.bundle_revision_id,
+        "revision_number": 11,
+        "components": [
+            {"layer": "PLATFORM", "artifact": {"sha256": expected["platform"]}},
+            {"layer": "ROLE", "artifact": {"sha256": expected["authoring"]}},
+        ],
+        "content_sha256": "sha256:" + "0" * 64,
+    }
+    document["content_sha256"] = knowledge_item_bootstrap.compute_control_document_hash(
+        document, "content_sha256"
+    )
+
+    def record(value: dict[str, object], *, bundle_id: str = pointer.bundle_id) -> SimpleNamespace:
+        return SimpleNamespace(
+            bundle_id=bundle_id,
+            bundle_revision_id=pointer.bundle_revision_id,
+            bundle_kind="INSTRUCTION",
+            revision_number=11,
+            schema_version="instruction-bundle-manifest/1.0",
+            state="RELEASED",
+            manifest_artifact_id=pointer.manifest_artifact.artifact_id,
+            manifest_artifact_revision_id=pointer.manifest_artifact.artifact_revision_id,
+            manifest_sha256=pointer.manifest_sha256,
+            content_sha256=value["content_sha256"],
+            canonical_document=value,
+        )
+
+    base = SimpleNamespace(
+        role_policies=(SimpleNamespace(role="authoring", instruction_bundle=pointer),)
+    )
+    accepted_session = SimpleNamespace(get=lambda *_args: record(document))
+    knowledge_item_bootstrap._require_base_instruction_member_hashes(
+        accepted_session, manifest=manifest, base=base
+    )
+
+    wrong_identity_session = SimpleNamespace(
+        get=lambda *_args: record(document, bundle_id="instrbundle_" + "0" * 32)
+    )
+    with pytest.raises(ControlPlaneError) as identity_error:
+        knowledge_item_bootstrap._require_base_instruction_member_hashes(
+            wrong_identity_session, manifest=manifest, base=base
+        )
+    assert identity_error.value.code == "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID"
+
+    forged = {
+        **document,
+        "components": [
+            {"layer": "PLATFORM", "artifact": {"sha256": expected["platform"]}},
+            {"layer": "ROLE", "artifact": {"sha256": "sha256:" + "0" * 64}},
+        ],
+    }
+    forged["content_sha256"] = knowledge_item_bootstrap.compute_control_document_hash(
+        forged, "content_sha256"
+    )
+    forged_session = SimpleNamespace(get=lambda *_args: record(forged))
+    with pytest.raises(ControlPlaneError) as hash_error:
+        knowledge_item_bootstrap._require_base_instruction_member_hashes(
+            forged_session, manifest=manifest, base=base
+        )
+    assert hash_error.value.code == "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID"
 
 
 @pytest.mark.parametrize(

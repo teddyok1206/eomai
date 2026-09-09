@@ -21,6 +21,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Never
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -40,14 +41,16 @@ _PRODUCTION_REQUEST_ID = re.compile(r"^productionreq_[0-9a-f]{32}$")
 _PRODUCTION_PLAN_ID = re.compile(r"^productionplan_[0-9a-f]{32}$")
 _OPERATOR_ID = re.compile(r"^operator_[0-9a-f]{32}$")
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
-_CANCELLABLE_WORKFLOW_STATES = frozenset(
+_RETIREMENT_DISPOSITION_BY_WORKFLOW_STATE = MappingProxyType(
     {
-        "REQUESTED",
-        "RUNNING",
-        "AWAITING_HUMAN_APPROVAL",
-        "REWORK_REQUESTED",
-        "APPROVED",
-        "REGISTERING",
+        "REQUESTED": "CANCEL_QUEUED",
+        "RUNNING": "CANCEL_QUEUED",
+        "AWAITING_HUMAN_APPROVAL": "CANCEL_QUEUED",
+        "REWORK_REQUESTED": "CANCEL_QUEUED",
+        "APPROVED": "CANCEL_QUEUED",
+        "REGISTERING": "CANCEL_QUEUED",
+        "FAILED": "UNSUCCESSFUL_TERMINAL_PRESERVED",
+        "CANCELLED": "UNSUCCESSFUL_TERMINAL_PRESERVED",
     }
 )
 
@@ -387,28 +390,30 @@ def _require_exact_outcomes(
     receipt: MockExamProductionRetirementReceiptV1,
     checkpoint: Any,
 ) -> None:
+    expected_dispositions: Counter[str] = Counter()
+    for outcome in receipt.outcomes:
+        try:
+            expected_disposition = _RETIREMENT_DISPOSITION_BY_WORKFLOW_STATE[
+                outcome.prior_workflow_state
+            ]
+        except KeyError:
+            _fail("retirement receipt contains an ineligible Workflow state")
+        expected_dispositions[expected_disposition] += 1
+        if outcome.disposition != expected_disposition:
+            _fail("retirement receipt disposition does not match its Workflow state")
     dispositions = Counter(outcome.disposition for outcome in receipt.outcomes)
-    if dispositions != Counter({"CANCEL_QUEUED": 24, "UNSUCCESSFUL_TERMINAL_PRESERVED": 1}):
+    if dispositions != expected_dispositions or dispositions.total() != 25:
         _fail("retirement receipt disposition aggregate is invalid")
-    preserved = tuple(
-        outcome
-        for outcome in receipt.outcomes
-        if outcome.disposition == "UNSUCCESSFUL_TERMINAL_PRESERVED"
-    )
-    if len(preserved) != 1 or preserved[0].prior_workflow_state != "FAILED":
-        _fail("retirement receipt must preserve exactly one failed Workflow")
-    if any(
-        outcome.prior_workflow_state not in _CANCELLABLE_WORKFLOW_STATES
-        for outcome in receipt.outcomes
-        if outcome.disposition == "CANCEL_QUEUED"
-    ):
-        _fail("only active Workflow states may have queued retirement cancellation")
     cancel_ids = tuple(
         outcome.cancel_command_id
         for outcome in receipt.outcomes
         if outcome.disposition == "CANCEL_QUEUED"
     )
-    if None in cancel_ids or len(set(cancel_ids)) != 24:
+    if (
+        None in cancel_ids
+        or len(cancel_ids) != expected_dispositions["CANCEL_QUEUED"]
+        or len(set(cancel_ids)) != len(cancel_ids)
+    ):
         _fail("retirement cancellation command pointers must be unique")
     expected_cohort = tuple(
         (row.position, row.workflow_call_id, row.workflow_id) for row in checkpoint.item_runs

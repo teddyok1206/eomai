@@ -1012,11 +1012,11 @@ def test_hold_release_boundary_rechecks_source_and_protected_paths_around_instal
     source = DEPLOY_SCRIPT.read_text(encoding="utf-8")
     assert (
         'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="sha256:'
-        '39f1621c128abb2b2b4bfa0c71b6f3466e911c6b59f4e6c098405833fb5685c9"' in source
+        '2eef5744d9d33d1ddb6edc766737d930d50eaa5a44c44dbd3431e2228e0b1f89"' in source
     )
     assert (
         'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:'
-        '76de2684ac013f53d7766ec5d445a3110962eadae1765ac71d5552031fe556a4"' in source
+        '39f1621c128abb2b2b4bfa0c71b6f3466e911c6b59f4e6c098405833fb5685c9"' in source
     )
 
 

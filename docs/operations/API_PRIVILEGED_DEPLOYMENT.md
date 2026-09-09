@@ -136,7 +136,12 @@ scripts/api/deploy_release.sh --release-workflow-runner-hold \
 
 Release first runs the installed root-owned verifier as unprivileged `eom-api`. It safely reads the
 fixed receipt and current plus immutable checkpoint, validates installed JSON Schema and Pydantic
-contracts, all explicit pins, hashes, and the exact 24-cancel/one-failed-preserved cohort. Only then
+contracts, all explicit pins and hashes, and the exact ordered 25-member cohort. It derives every
+allowed disposition from the command-hashed prior Workflow state: active states must queue
+cancellation, while `FAILED` or `CANCELLED` states must be preserved. It accepts the derived
+25-cancel/all-active or 24-cancel/one-preserved aggregates (and any other exact service-valid mix),
+never a caller-provided count; completed, unknown, cross-mapped, or duplicate-cancellation evidence
+fails closed. Only then
 does it derive a retry-stable journal cursor from the immutable receipt retirement time, disable the
 runner without reload under the still-loaded hold, atomically move the verified drop-in to a
 non-`.conf` recovery name, reload systemd, and prove the base unit matches its canonical pinned hash.

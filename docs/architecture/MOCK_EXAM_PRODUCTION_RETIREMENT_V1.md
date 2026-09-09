@@ -154,8 +154,9 @@ Run the sequence without a runnable gap:
    service identity, using its fresh owning operator token and canonical checkpoint root; atomically
    publish the successful stdout envelope to the fixed eom-api-owned mode-0600 receipt path;
 4. independently review the immutable execution/revision/checkpoint/request/plan/operator pins and
-   verify the receipt contains exactly 24 `CANCEL_QUEUED` outcomes plus the one known failed
-   Workflow as `UNSUCCESSFUL_TERMINAL_PRESERVED`;
+   verify all 25 outcomes use the disposition derived from their command-hashed prior Workflow
+   states: active states are `CANCEL_QUEUED`, while `FAILED` or `CANCELLED` states are
+   `UNSUCCESSFUL_TERMINAL_PRESERVED`; do not supply or assume a fixed aggregate;
 5. run the fully pinned `scripts/api/deploy_release.sh --release-workflow-runner-hold RECEIPT_FILE
    EXECUTION_ID EXECUTION_REVISION_ID CHECKPOINT_SHA256 PRODUCTION_REQUEST_ID PRODUCTION_PLAN_ID
    PRODUCTION_PLAN_SHA256 OPERATOR_ID RECEIPT_SHA256` action documented in the privileged deployment

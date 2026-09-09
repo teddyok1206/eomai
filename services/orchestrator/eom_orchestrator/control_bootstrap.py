@@ -150,6 +150,7 @@ EXPECTED_STANDARD_V7_REFERENCE_KEYS = MappingProxyType(
 EXPECTED_STANDARD_V8_REFERENCE_KEYS = EXPECTED_STANDARD_V7_REFERENCE_KEYS
 EXPECTED_STANDARD_V9_REFERENCE_KEYS = EXPECTED_STANDARD_V8_REFERENCE_KEYS
 EXPECTED_STANDARD_V10_REFERENCE_KEYS = EXPECTED_STANDARD_V9_REFERENCE_KEYS
+EXPECTED_STANDARD_V11_REFERENCE_KEYS = EXPECTED_STANDARD_V10_REFERENCE_KEYS
 STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS = MappingProxyType(
     {
         "standard-control-bootstrap/1.0": 1,
@@ -162,6 +163,7 @@ STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS = MappingProxyType(
         "standard-control-bootstrap/8.0": 8,
         "standard-control-bootstrap/9.0": 9,
         "standard-control-bootstrap/10.0": 10,
+        "standard-control-bootstrap/11.0": 11,
     }
 )
 STANDARD_BOOTSTRAP_REFERENCE_REVISIONS = MappingProxyType(
@@ -176,6 +178,7 @@ STANDARD_BOOTSTRAP_REFERENCE_REVISIONS = MappingProxyType(
         "standard-control-bootstrap/8.0": 4,
         "standard-control-bootstrap/9.0": 4,
         "standard-control-bootstrap/10.0": 4,
+        "standard-control-bootstrap/11.0": 4,
     }
 )
 STANDARD_COMPATIBLE_CURRENT_CAPACITY_REVISIONS = MappingProxyType(
@@ -278,6 +281,7 @@ class StandardBootstrapManifest(BaseModel):
         "standard-control-bootstrap/8.0",
         "standard-control-bootstrap/9.0",
         "standard-control-bootstrap/10.0",
+        "standard-control-bootstrap/11.0",
     ]
     preset_key: Literal["standard-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -310,7 +314,9 @@ class StandardBootstrapManifest(BaseModel):
                 raise ValueError("standard bootstrap V1 reference contract differs")
             return self
         expected_reference_keys = (
-            EXPECTED_STANDARD_V10_REFERENCE_KEYS
+            EXPECTED_STANDARD_V11_REFERENCE_KEYS
+            if self.schema_version == "standard-control-bootstrap/11.0"
+            else EXPECTED_STANDARD_V10_REFERENCE_KEYS
             if self.schema_version == "standard-control-bootstrap/10.0"
             else EXPECTED_STANDARD_V9_REFERENCE_KEYS
             if self.schema_version == "standard-control-bootstrap/9.0"
@@ -366,6 +372,10 @@ class StandardBootstrapManifest(BaseModel):
             self.compatible_workflow_protocols != ("workflow-role/1.19.0",)
         ):
             raise ValueError("standard bootstrap V10 protocol differs")
+        if self.schema_version == "standard-control-bootstrap/11.0" and (
+            self.compatible_workflow_protocols != ("workflow-role/1.19.0",)
+        ):
+            raise ValueError("standard bootstrap V11 protocol differs")
         return self
 
 
@@ -552,6 +562,7 @@ def bootstrap_standard_control_plane(
             "standard-control-bootstrap/8.0",
             "standard-control-bootstrap/9.0",
             "standard-control-bootstrap/10.0",
+            "standard-control-bootstrap/11.0",
         }
         else config_root
     )
@@ -1150,6 +1161,7 @@ def load_standard_bootstrap_manifest(config_directory: Path) -> StandardBootstra
                 "standard-control-bootstrap/8.0": "standard-control-bootstrap-v8",
                 "standard-control-bootstrap/9.0": "standard-control-bootstrap-v9",
                 "standard-control-bootstrap/10.0": "standard-control-bootstrap-v10",
+                "standard-control-bootstrap/11.0": "standard-control-bootstrap-v11",
             }.get(schema_version if isinstance(schema_version, str) else "")
             if contract_name is not None:
                 validate_control_contract(contract_name, value)

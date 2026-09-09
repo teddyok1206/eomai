@@ -3,6 +3,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -21,6 +22,7 @@ from eom_api_contracts.mock_exam_retirement import (
     MockExamProductionRetirementCommandV1,
     MockExamProductionRetirementOutcomeV1,
     MockExamProductionRetirementReceiptV1,
+    WorkflowRetirementSourceState,
 )
 from eom_catalog_contracts import (
     build_integrated_science_mock_exam_production_plan,
@@ -89,16 +91,19 @@ def _checkpoint() -> MockExamProductionExecutionV2:
 
 def _receipt(
     checkpoint: MockExamProductionExecutionV2,
+    *,
+    prior_states: Mapping[int, WorkflowRetirementSourceState] | None = None,
 ) -> MockExamProductionRetirementReceiptV1:
     retired_at = NOW + timedelta(minutes=1)
-    bindings = [
+    prior_states = {25: "FAILED"} if prior_states is None else prior_states
+    bindings: list[dict[str, Any]] = [
         {
             "position": row.position,
             "workflow_call_id": row.workflow_call_id,
             "workflow_id": row.workflow_id,
             "start_command_id": row.start_command_id,
             "expected_workflow_resource_version": row.position,
-            "observed_workflow_state": "FAILED" if row.position == 25 else "REQUESTED",
+            "observed_workflow_state": prior_states.get(row.position, "REQUESTED"),
         }
         for row in checkpoint.item_runs
     ]
@@ -141,11 +146,13 @@ def _receipt(
             retirement_event_sequence=binding["position"] + 1,
             prior_workflow_state=binding["observed_workflow_state"],
             disposition=(
-                "UNSUCCESSFUL_TERMINAL_PRESERVED" if binding["position"] == 25 else "CANCEL_QUEUED"
+                "UNSUCCESSFUL_TERMINAL_PRESERVED"
+                if binding["observed_workflow_state"] in {"FAILED", "CANCELLED"}
+                else "CANCEL_QUEUED"
             ),
             cancel_command_id=(
                 None
-                if binding["position"] == 25
+                if binding["observed_workflow_state"] in {"FAILED", "CANCELLED"}
                 else "wfcmd_cancel_" + f"{binding['position']:032x}"
             ),
         )
@@ -215,6 +222,42 @@ def _expected(
     )
 
 
+def _rehash_receipt_document(
+    checkpoint: MockExamProductionExecutionV2,
+    document: dict[str, Any],
+) -> str:
+    data = document["data"]
+    bindings = [
+        {
+            "position": outcome["position"],
+            "workflow_call_id": outcome["workflow_call_id"],
+            "workflow_id": outcome["workflow_id"],
+            "start_command_id": checkpoint.item_runs[outcome["position"] - 1].start_command_id,
+            "expected_workflow_resource_version": outcome["expected_workflow_resource_version"],
+            "observed_workflow_state": outcome["prior_workflow_state"],
+        }
+        for outcome in data["outcomes"]
+    ]
+    command_body = {
+        "schema_version": "mock-exam-production-retirement-command/1.0",
+        "retirement_id": data["retirement_id"],
+        "execution_id": checkpoint.execution_id,
+        "execution_revision_id": checkpoint.execution_revision_id,
+        "checkpoint_sha256": checkpoint.checkpoint_sha256,
+        "production_request_id": checkpoint.production_request_id,
+        "production_plan_id": checkpoint.production_plan_id,
+        "production_plan_sha256": checkpoint.production_plan_sha256,
+        "operator_id": checkpoint.operator_id,
+        "reason_code": "SUPERSEDED_BY_CORRECTED_PROTOCOL",
+        "authorized_at": data["retired_at"],
+        "bindings": bindings,
+    }
+    data["command_sha256"] = content_sha256(command_body)
+    receipt_body = {key: value for key, value in data.items() if key != "receipt_sha256"}
+    data["receipt_sha256"] = content_sha256(receipt_body)
+    return data["receipt_sha256"]
+
+
 def _validate(
     monkeypatch: pytest.MonkeyPatch,
     checkpoint_root: Path,
@@ -253,6 +296,68 @@ def test_release_verifier_accepts_exact_envelope_checkpoint_and_24_to_1_fence(
     )
 
     assert verified == receipt
+
+
+def test_release_verifier_accepts_exact_all_active_fence_on_replay(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = _checkpoint()
+    receipt = _receipt(
+        checkpoint,
+        prior_states={1: "AWAITING_HUMAN_APPROVAL"},
+    )
+    checkpoint_root, receipt_path = _materialize(
+        tmp_path,
+        checkpoint,
+        {"status": "SUCCEEDED", "data": receipt.model_dump(mode="json")},
+    )
+    expected = _expected(checkpoint, receipt)
+
+    first = _validate(monkeypatch, checkpoint_root, receipt_path, expected)
+    replay = _validate(monkeypatch, checkpoint_root, receipt_path, expected)
+
+    assert first == replay == receipt
+    assert all(outcome.disposition == "CANCEL_QUEUED" for outcome in replay.outcomes)
+    assert len({outcome.cancel_command_id for outcome in replay.outcomes}) == 25
+
+
+@pytest.mark.parametrize(
+    ("prior_state", "expected_disposition"),
+    (
+        ("REQUESTED", "CANCEL_QUEUED"),
+        ("RUNNING", "CANCEL_QUEUED"),
+        ("AWAITING_HUMAN_APPROVAL", "CANCEL_QUEUED"),
+        ("REWORK_REQUESTED", "CANCEL_QUEUED"),
+        ("APPROVED", "CANCEL_QUEUED"),
+        ("REGISTERING", "CANCEL_QUEUED"),
+        ("FAILED", "UNSUCCESSFUL_TERMINAL_PRESERVED"),
+        ("CANCELLED", "UNSUCCESSFUL_TERMINAL_PRESERVED"),
+    ),
+)
+def test_release_verifier_accepts_every_source_state_disposition_mapping(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    prior_state: WorkflowRetirementSourceState,
+    expected_disposition: str,
+) -> None:
+    checkpoint = _checkpoint()
+    receipt = _receipt(checkpoint, prior_states={1: prior_state})
+    checkpoint_root, receipt_path = _materialize(
+        tmp_path,
+        checkpoint,
+        {"status": "SUCCEEDED", "data": receipt.model_dump(mode="json")},
+    )
+
+    verified = _validate(
+        monkeypatch,
+        checkpoint_root,
+        receipt_path,
+        _expected(checkpoint, receipt),
+    )
+
+    assert verified.outcomes[0].prior_workflow_state == prior_state
+    assert verified.outcomes[0].disposition == expected_disposition
 
 
 def test_release_journal_lower_bound_is_exact_and_rejects_future_retirement() -> None:
@@ -320,6 +425,76 @@ def test_release_verifier_rejects_cancel_queued_from_terminal_workflow(
     checkpoint_root, receipt_path = _materialize(tmp_path, checkpoint, document)
 
     with pytest.raises(verifier.HoldReleaseReceiptError):
+        _validate(monkeypatch, checkpoint_root, receipt_path, expected)
+
+
+def test_release_verifier_rejects_self_hashed_terminal_to_cancel_aggregate_tamper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = _checkpoint()
+    receipt = _receipt(checkpoint)
+    document = {"status": "SUCCEEDED", "data": receipt.model_dump(mode="json")}
+    outcome = document["data"]["outcomes"][24]
+    outcome["disposition"] = "CANCEL_QUEUED"
+    outcome["cancel_command_id"] = "wfcmd_cancel_" + "f" * 32
+    body = {key: value for key, value in document["data"].items() if key != "receipt_sha256"}
+    document["data"]["receipt_sha256"] = content_sha256(body)
+    expected = replace(
+        _expected(checkpoint, receipt),
+        receipt_sha256=document["data"]["receipt_sha256"],
+    )
+    checkpoint_root, receipt_path = _materialize(tmp_path, checkpoint, document)
+
+    with pytest.raises(
+        verifier.HoldReleaseReceiptError,
+        match="disposition does not match",
+    ):
+        _validate(monkeypatch, checkpoint_root, receipt_path, expected)
+
+
+def test_release_verifier_rejects_duplicate_cancel_command_pointer_after_rehash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = _checkpoint()
+    receipt = _receipt(checkpoint, prior_states={})
+    document = {"status": "SUCCEEDED", "data": receipt.model_dump(mode="json")}
+    outcomes = document["data"]["outcomes"]
+    outcomes[1]["cancel_command_id"] = outcomes[0]["cancel_command_id"]
+    receipt_sha256 = _rehash_receipt_document(checkpoint, document)
+    expected = replace(
+        _expected(checkpoint, receipt),
+        receipt_sha256=receipt_sha256,
+    )
+    checkpoint_root, receipt_path = _materialize(tmp_path, checkpoint, document)
+
+    with pytest.raises(
+        verifier.HoldReleaseReceiptError,
+        match="cancellation command pointers must be unique",
+    ):
+        _validate(monkeypatch, checkpoint_root, receipt_path, expected)
+
+
+@pytest.mark.parametrize("prior_state", ("COMPLETED", "UNKNOWN"))
+def test_release_verifier_rejects_success_or_unknown_source_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    prior_state: str,
+) -> None:
+    checkpoint = _checkpoint()
+    receipt = _receipt(checkpoint)
+    document = {"status": "SUCCEEDED", "data": receipt.model_dump(mode="json")}
+    document["data"]["outcomes"][0]["prior_workflow_state"] = prior_state
+    body = {key: value for key, value in document["data"].items() if key != "receipt_sha256"}
+    document["data"]["receipt_sha256"] = content_sha256(body)
+    expected = replace(
+        _expected(checkpoint, receipt),
+        receipt_sha256=document["data"]["receipt_sha256"],
+    )
+    checkpoint_root, receipt_path = _materialize(tmp_path, checkpoint, document)
+
+    with pytest.raises(verifier.HoldReleaseReceiptError, match="Schema validation failed"):
         _validate(monkeypatch, checkpoint_root, receipt_path, expected)
 
 
@@ -527,6 +702,40 @@ def test_release_verifier_rejects_concurrent_checkpoint_writer(
     finally:
         fcntl.flock(descriptor, fcntl.LOCK_UN)
         os.close(descriptor)
+
+
+def test_release_verifier_rejects_current_checkpoint_reread_toctou(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = _checkpoint()
+    receipt = _receipt(checkpoint)
+    checkpoint_root, receipt_path = _materialize(
+        tmp_path,
+        checkpoint,
+        {"status": "SUCCEEDED", "data": receipt.model_dump(mode="json")},
+    )
+    real_read = verifier._read_directory_file
+    current_reads = 0
+
+    def changed_current_on_reread(*args: Any, **kwargs: Any) -> bytes:
+        nonlocal current_reads
+        payload = real_read(*args, **kwargs)
+        if args[1] == "current.json":
+            current_reads += 1
+            if current_reads == 2:
+                return payload + b" "
+        return payload
+
+    monkeypatch.setattr(verifier, "_read_directory_file", changed_current_on_reread)
+
+    with pytest.raises(verifier.HoldReleaseReceiptError, match="changed during"):
+        _validate(
+            monkeypatch,
+            checkpoint_root,
+            receipt_path,
+            _expected(checkpoint, receipt),
+        )
 
 
 def test_release_verifier_holds_exclusive_checkpoint_lock_through_release_handshake(

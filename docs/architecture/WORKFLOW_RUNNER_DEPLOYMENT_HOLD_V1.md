@@ -51,8 +51,9 @@ not merely retain the same hash across release.
    constant-size keyed lookup of one unit and one file.  Evidence is a frozen value object; no
    large payload, scan, queue, or cache is involved.
 6. **Structures and indexes.** An exact property map detects missing and duplicate `systemctl show`
-   keys in O(1).  The singleton drop-in tuple preserves systemd's loaded identity.  Persistent DB
-   structures and indexes are unchanged.
+   keys in O(1). The singleton drop-in tuple preserves systemd's loaded identity. A two-key counter
+   derives the receipt aggregate in one ordered 25-outcome pass instead of encoding one historical
+   cohort's counts. Persistent DB structures and indexes are unchanged.
 7. **Scale and complexity.** Time and space are O(1).  The drop-in is below one KiB and the bounded
    service-manager output is capped at 4096 bytes.
 8. **Transaction and concurrency.** No wheel, migration, DB, worker, or model action begins until
@@ -74,10 +75,13 @@ not merely retain the same hash across release.
    journal cursor at or before that bound, proves the returned cursor value remains byte-exact around
    each query, then requires zero subsequent entries for the exact runner unit after reload and again
    before backup cleanup. Missing permission, malformed output, cursor rotation, or any unit activity
-   fails closed. It admits only an ordered unique
-   25-outcome receipt with exactly 24 `CANCEL_QUEUED` and one
-   `UNSUCCESSFUL_TERMINAL_PRESERVED`; every queued cancellation must originate from an active
-   Workflow state. The verifier retains the exclusive flock through an explicit completion
+   fails closed. It admits only an ordered unique 25-outcome receipt and derives the one valid
+   disposition for every outcome from its command-hashed prior Workflow state: active states require
+   `CANCEL_QUEUED`, while `FAILED` or `CANCELLED` requires
+   `UNSUCCESSFUL_TERMINAL_PRESERVED`. The derived aggregate must cover all 25 outcomes, so both the
+   earlier 24-cancel/one-preserved cohort and an all-active 25-cancel cohort are valid without
+   accepting a caller-supplied count. Completed, unknown, cross-mapped, or duplicate-cancellation
+   evidence fails closed. The verifier retains the exclusive flock through an explicit completion
    handshake with the privileged release process. Release leaves the runner stopped and disabled;
    a later action must explicitly enable and start it. The recovery window also forbids unrelated
    mock-exam CLI commands from retirement through hold release.

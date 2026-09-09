@@ -21,6 +21,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_STANDARD_V8_REFERENCE_KEYS,
     EXPECTED_STANDARD_V9_REFERENCE_KEYS,
     EXPECTED_STANDARD_V10_REFERENCE_KEYS,
+    EXPECTED_STANDARD_V11_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
@@ -46,6 +47,7 @@ CONFIG_V7 = ROOT / "config/control-plane/standard-item-v7"
 CONFIG_V8 = ROOT / "config/control-plane/standard-item-v8"
 CONFIG_V9 = ROOT / "config/control-plane/standard-item-v9"
 CONFIG_V10 = ROOT / "config/control-plane/standard-item-v10"
+CONFIG_V11 = ROOT / "config/control-plane/standard-item-v11"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -451,6 +453,7 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/8.0": 8,
         "standard-control-bootstrap/9.0": 9,
         "standard-control-bootstrap/10.0": 10,
+        "standard-control-bootstrap/11.0": 11,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
@@ -489,6 +492,7 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
         "standard-control-bootstrap/8.0": 4,
         "standard-control-bootstrap/9.0": 4,
         "standard-control-bootstrap/10.0": 4,
+        "standard-control-bootstrap/11.0": 4,
     }
 
 
@@ -583,6 +587,93 @@ def test_standard_bootstrap_v10_prevents_unrenderable_equation_commands() -> Non
         assert (CONFIG_V10 / "instructions" / unchanged).read_bytes() == (
             CONFIG_V9 / "instructions" / unchanged
         ).read_bytes()
+
+
+def test_standard_bootstrap_v11_defines_occurrence_and_materialization_authority() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V11)
+
+    assert manifest.schema_version == "standard-control-bootstrap/11.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.19.0",)
+    assert manifest.created_at.isoformat() == "2026-09-09T00:27:00+00:00"
+    assert load_standard_bootstrap_manifest(CONFIG_V10).created_at < manifest.created_at
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 11
+    assert STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version] == 4
+    assert not (CONFIG_V11 / "references").exists()
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V11_REFERENCE_KEYS
+    )
+
+    authoring_path = CONFIG_V11 / "instructions/authoring.md"
+    authoring = authoring_path.read_text(encoding="utf-8")
+    review_path = CONFIG_V11 / "instructions/review.md"
+    review = review_path.read_text(encoding="utf-8")
+    for instruction in (authoring, review):
+        normalized = " ".join(instruction.split())
+        for reference_path in (
+            "references/guidance/content-team-integrated-science-authoring-v05.md",
+            "references/guidance/content-team-hwp-question-editor-handoff-v1.md",
+        ):
+            assert f"`{reference_path}`" in instruction
+        assert "occurrence-specific production authority" in normalized
+        assert "overrides broader, generic, or default reference prose" in normalized
+        assert "all items should have very high difficulty" in normalized
+        assert "`난도 매우 높게`" in normalized
+        assert "validated target and pinned revision existence" in normalized
+        assert "schema/version, media type, lifecycle state, access permission, and SHA-256" in (
+            normalized
+        )
+        assert "authoritative worker inputs" in normalized
+        assert "authoritative source-availability proof" in normalized
+        assert "absent or unreadable, fail the role invocation before returning" in (normalized)
+    assert "fields that its schema\ndoes not define" in authoring
+    assert "never emit `REFERENCE_SOURCE_UNAVAILABLE`" in review
+    assert "must not receive a finding" in " ".join(review.split())
+    assert set(re.findall(r"`\\([A-Za-z]+)`", authoring)) == set(SUPPORTED_COMMANDS)
+
+    expected_sha256 = {
+        "bootstrap.yaml": "e808a50df5be03113b963477620a8b934d4851c727a794d3e72f38ed5cbccf32",
+        "instructions/authoring.md": (
+            "30defef4703364a81ba8ae50101216238bef8e9f691d056b6efd29ee75c141cd"
+        ),
+        "instructions/image.md": (
+            "7f9f1c9eb5dee44ef76981b04121f1a689a849e8388051f266c4d0ea80cd74ca"
+        ),
+        "instructions/item-management.md": (
+            "c5af5ca1137f1ef2c2e724e3a3692178d6d48eeee7eac8f293d7014e67ec156a"
+        ),
+        "instructions/platform.md": (
+            "5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b"
+        ),
+        "instructions/review.md": (
+            "c6afe8fe84c2a0776765d316ef089dd216eeb15c968b78155a3a9c771e77e1c3"
+        ),
+    }
+    for relative_path, expected in expected_sha256.items():
+        assert hashlib.sha256((CONFIG_V11 / relative_path).read_bytes()).hexdigest() == expected
+    for unchanged in ("platform.md", "image.md", "item-management.md"):
+        assert (CONFIG_V11 / "instructions" / unchanged).read_bytes() == (
+            CONFIG_V10 / "instructions" / unchanged
+        ).read_bytes()
+    predecessor_sha256 = {
+        "bootstrap.yaml": "5ffdb0f5727b681c89ff10188f3d6da9cdf42da857c49e78e2d1d0b30348402b",
+        "instructions/authoring.md": (
+            "2ecc15cfa8309843c9dd6b8528471602f7fc506a99c0f982726e8c8aa4c3d2ce"
+        ),
+        "instructions/image.md": (
+            "7f9f1c9eb5dee44ef76981b04121f1a689a849e8388051f266c4d0ea80cd74ca"
+        ),
+        "instructions/item-management.md": (
+            "c5af5ca1137f1ef2c2e724e3a3692178d6d48eeee7eac8f293d7014e67ec156a"
+        ),
+        "instructions/platform.md": (
+            "5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b"
+        ),
+        "instructions/review.md": (
+            "5613e757e33555695ee3b3536e24744d33b940c6fb14bc489ee62992d9c06cdb"
+        ),
+    }
+    for relative_path, expected in predecessor_sha256.items():
+        assert hashlib.sha256((CONFIG_V10 / relative_path).read_bytes()).hexdigest() == expected
 
 
 def test_standard_bootstrap_v6_pins_source_prompt_and_handoff_profile() -> None:

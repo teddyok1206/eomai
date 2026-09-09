@@ -136,8 +136,8 @@ def test_release_verifies_exact_slot_control_policy_successor_inventory() -> Non
     deployment = _source("scripts/api/deploy_release.sh")
 
     assert "from eom_workflow.control_schemas import control_schema_inventory" in deployment
-    assert '"standard-control-bootstrap-v10"' in deployment
-    assert '"knowledge-item-control-bootstrap-v7"' in deployment
+    assert '"standard-control-bootstrap-v11"' in deployment
+    assert '"knowledge-item-control-bootstrap-v8"' in deployment
     assert "load_control_schema(schema_name)" in deployment
 
 

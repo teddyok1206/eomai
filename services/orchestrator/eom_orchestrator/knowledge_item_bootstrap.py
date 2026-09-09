@@ -57,6 +57,39 @@ EXPECTED_V7_BASE_INSTRUCTION_MEMBER_SHA256S = MappingProxyType(
         ),
     }
 )
+EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_REVISION_IDS = MappingProxyType(
+    {
+        "authoring": "instrrev_7e9b2a26f7ef365568f42d464dd19288",
+        "image": "instrrev_bf74d32e4fd504ceffac0a55b9c7612d",
+        "review": "instrrev_84c074615116dc103e98d8c05f57ae89",
+        "item_management": "instrrev_d9d4df3d43f4e5678eec0ce04b215ab8",
+    }
+)
+EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_IDS = MappingProxyType(
+    {
+        "authoring": "instrbundle_7bcd83d35c6ac27021fb5fcd8d9065a4",
+        "image": "instrbundle_f536a34f517207e39abd32d469a4e834",
+        "review": "instrbundle_713c412dfd049dfdaa8b2bbe961eeda8",
+        "item_management": "instrbundle_bea9c5397ee3b8069d3ee9ef74418a37",
+    }
+)
+EXPECTED_V8_BASE_INSTRUCTION_MEMBER_SHA256S = MappingProxyType(
+    {
+        "platform": "sha256:5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b",
+        "authoring": "sha256:30defef4703364a81ba8ae50101216238bef8e9f691d056b6efd29ee75c141cd",
+        "image": "sha256:7f9f1c9eb5dee44ef76981b04121f1a689a849e8388051f266c4d0ea80cd74ca",
+        "review": "sha256:c6afe8fe84c2a0776765d316ef089dd216eeb15c968b78155a3a9c771e77e1c3",
+        "item_management": (
+            "sha256:c5af5ca1137f1ef2c2e724e3a3692178d6d48eeee7eac8f293d7014e67ec156a"
+        ),
+    }
+)
+PINNED_STANDARD_INSTRUCTION_REVISION_BY_KNOWLEDGE_SCHEMA = MappingProxyType(
+    {
+        "knowledge-item-control-bootstrap/7.0": 10,
+        "knowledge-item-control-bootstrap/8.0": 11,
+    }
+)
 
 
 class KnowledgeItemRetrievalBootstrapPolicy(BaseModel):
@@ -108,6 +141,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
         "knowledge-item-control-bootstrap/5.0",
         "knowledge-item-control-bootstrap/6.0",
         "knowledge-item-control-bootstrap/7.0",
+        "knowledge-item-control-bootstrap/8.0",
     ]
     preset_key: Literal["knowledge-grounded-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -115,6 +149,9 @@ class KnowledgeItemBootstrapManifest(BaseModel):
     created_at: datetime
     base_preset_key: Literal["standard-item"]
     base_preset_schema_version: Literal["execution-preset-revision/1.0"]
+    base_instruction_bundle_ids: dict[str, str] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     base_instruction_bundle_revision_ids: dict[str, str] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -139,6 +176,8 @@ class KnowledgeItemBootstrapManifest(BaseModel):
         if self.created_at.tzinfo is None or self.created_at.utcoffset() != timedelta(0):
             raise ValueError("knowledge item bootstrap timestamp must use UTC")
         if self.schema_version == "knowledge-item-control-bootstrap/7.0":
+            if self.base_instruction_bundle_ids is not None:
+                raise ValueError("knowledge item V7 cannot pin V8 bundle identities")
             if self.base_instruction_bundle_revision_ids != dict(
                 EXPECTED_V7_BASE_INSTRUCTION_BUNDLE_REVISION_IDS
             ):
@@ -147,11 +186,23 @@ class KnowledgeItemBootstrapManifest(BaseModel):
                 EXPECTED_V7_BASE_INSTRUCTION_MEMBER_SHA256S
             ):
                 raise ValueError("knowledge item V7 base instruction hashes differ")
+        elif self.schema_version == "knowledge-item-control-bootstrap/8.0":
+            if self.base_instruction_bundle_ids != dict(EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_IDS):
+                raise ValueError("knowledge item V8 base instruction bundle identities differ")
+            if self.base_instruction_bundle_revision_ids != dict(
+                EXPECTED_V8_BASE_INSTRUCTION_BUNDLE_REVISION_IDS
+            ):
+                raise ValueError("knowledge item V8 base instruction revisions differ")
+            if self.base_instruction_member_sha256s != dict(
+                EXPECTED_V8_BASE_INSTRUCTION_MEMBER_SHA256S
+            ):
+                raise ValueError("knowledge item V8 base instruction hashes differ")
         elif (
-            self.base_instruction_bundle_revision_ids is not None
+            self.base_instruction_bundle_ids is not None
+            or self.base_instruction_bundle_revision_ids is not None
             or self.base_instruction_member_sha256s is not None
         ):
-            raise ValueError("legacy knowledge item bootstrap cannot pin V7 instructions")
+            raise ValueError("legacy knowledge item bootstrap cannot pin successor instructions")
         expected_protocol = {
             "knowledge-item-control-bootstrap/1.0": "workflow-role/1.12.0",
             "knowledge-item-control-bootstrap/2.0": "workflow-role/1.15.0",
@@ -160,6 +211,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
             "knowledge-item-control-bootstrap/5.0": "workflow-role/1.19.0",
             "knowledge-item-control-bootstrap/6.0": "workflow-role/1.19.0",
             "knowledge-item-control-bootstrap/7.0": "workflow-role/1.19.0",
+            "knowledge-item-control-bootstrap/8.0": "workflow-role/1.19.0",
         }[self.schema_version]
         if self.compatible_workflow_protocols != (expected_protocol,):
             raise ValueError("knowledge item workflow protocol differs")
@@ -209,6 +261,7 @@ def load_knowledge_item_bootstrap_manifest(
             "knowledge-item-control-bootstrap/5.0": "knowledge-item-control-bootstrap-v5",
             "knowledge-item-control-bootstrap/6.0": "knowledge-item-control-bootstrap-v6",
             "knowledge-item-control-bootstrap/7.0": "knowledge-item-control-bootstrap-v7",
+            "knowledge-item-control-bootstrap/8.0": "knowledge-item-control-bootstrap-v8",
         }.get(schema_version)
         if schema_name is None:
             raise ValueError("knowledge item bootstrap schema version is unsupported")
@@ -370,6 +423,13 @@ def _find_or_create_draft(
             for policy in base_model.role_policies
         },
     )
+    _require_base_instruction_bundle_identities(
+        manifest,
+        {
+            str(policy.role): policy.instruction_bundle.bundle_id
+            for policy in base_model.role_policies
+        },
+    )
     _require_base_instruction_member_hashes(session, manifest=manifest, base=base_model)
     role_policies = []
     for policy in base_model.role_policies:
@@ -492,15 +552,34 @@ def _require_base_instruction_revisions(
     manifest: KnowledgeItemBootstrapManifest,
     actual: dict[str, str],
 ) -> None:
-    """Reject a V7 bootstrap unless current Standard is the exact V10 instruction successor."""
+    """Reject a pinned bootstrap unless Standard has its exact instruction successor."""
 
-    if manifest.schema_version != "knowledge-item-control-bootstrap/7.0":
+    standard_revision = PINNED_STANDARD_INSTRUCTION_REVISION_BY_KNOWLEDGE_SCHEMA.get(
+        manifest.schema_version
+    )
+    if standard_revision is None:
         return
     expected = manifest.base_instruction_bundle_revision_ids
     if expected is None or actual != expected:
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID",
-            "standard-item base does not pin the exact V10 instruction revisions",
+            f"standard-item base does not pin the exact V{standard_revision} instruction revisions",
+        )
+
+
+def _require_base_instruction_bundle_identities(
+    manifest: KnowledgeItemBootstrapManifest,
+    actual: dict[str, str],
+) -> None:
+    """Reject V8 unless Standard role pointers have the exact stable bundle identities."""
+
+    if manifest.schema_version != "knowledge-item-control-bootstrap/8.0":
+        return
+    expected = manifest.base_instruction_bundle_ids
+    if expected is None or actual != expected:
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID",
+            "standard-item base does not pin the exact V11 instruction bundle identities",
         )
 
 
@@ -510,15 +589,18 @@ def _require_base_instruction_member_hashes(
     manifest: KnowledgeItemBootstrapManifest,
     base: ExecutionPresetRevision,
 ) -> None:
-    """Resolve V10 bundles and verify their exact platform/role member content hashes."""
+    """Resolve pinned Standard bundles and verify exact member content hashes."""
 
-    if manifest.schema_version != "knowledge-item-control-bootstrap/7.0":
+    standard_revision = PINNED_STANDARD_INSTRUCTION_REVISION_BY_KNOWLEDGE_SCHEMA.get(
+        manifest.schema_version
+    )
+    if standard_revision is None:
         return
     expected = manifest.base_instruction_member_sha256s
     if expected is None:
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID",
-            "standard-item V10 instruction member hashes are missing",
+            f"standard-item V{standard_revision} instruction member hashes are missing",
         )
     for policy in base.role_policies:
         role = str(policy.role)
@@ -532,7 +614,7 @@ def _require_base_instruction_member_hashes(
             or bundle.bundle_id != pointer.bundle_id
             or bundle.bundle_revision_id != pointer.bundle_revision_id
             or bundle.bundle_kind != "INSTRUCTION"
-            or bundle.revision_number != 10
+            or bundle.revision_number != standard_revision
             or bundle.schema_version != "instruction-bundle-manifest/1.0"
             or bundle.state != "RELEASED"
             or bundle.manifest_artifact_id != pointer.manifest_artifact.artifact_id
@@ -544,7 +626,7 @@ def _require_base_instruction_member_hashes(
             != compute_control_document_hash(bundle.canonical_document, "content_sha256")
             or bundle.canonical_document.get("bundle_id") != pointer.bundle_id
             or bundle.canonical_document.get("bundle_revision_id") != pointer.bundle_revision_id
-            or bundle.canonical_document.get("revision_number") != 10
+            or bundle.canonical_document.get("revision_number") != standard_revision
             or component_hashes
             != {
                 "PLATFORM": expected["platform"],
@@ -553,7 +635,7 @@ def _require_base_instruction_member_hashes(
         ):
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_BASE_PRESET_INVALID",
-                "standard-item V10 instruction member pointer or hash differs",
+                f"standard-item V{standard_revision} instruction member pointer or hash differs",
             )
 
 

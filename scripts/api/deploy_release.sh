@@ -28,10 +28,10 @@ WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT="/usr/local/libexec/eom-api"
 WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-workflow-runner-hold-release"
 WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED="/usr/local/libexec/eom-api/.verify-workflow-runner-hold-release.staged"
 # The current and immediately preceding reviewed verifier bytes are immutable migration states.
-WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="sha256:39f1621c128abb2b2b4bfa0c71b6f3466e911c6b59f4e6c098405833fb5685c9"
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="sha256:2eef5744d9d33d1ddb6edc766737d930d50eaa5a44c44dbd3431e2228e0b1f89"
 # Exact verifier installed by the immediately preceding reviewed release. Replacing any other
 # root-owned bytes is not an upgrade; it is unexplained privileged-state drift.
-WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:76de2684ac013f53d7766ec5d445a3110962eadae1765ac71d5552031fe556a4"
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:39f1621c128abb2b2b4bfa0c71b6f3466e911c6b59f4e6c098405833fb5685c9"
 WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT="/var/lib/eom-api/mock-exam-retirement-receipts"
 ACTION="verify"
 PRESERVE_WORKFLOW_RUNNER_INACTIVE=false
@@ -1806,6 +1806,8 @@ control_schema_names = {name for name, _ in control_schema_inventory()}
 if not {
     "standard-control-bootstrap-v10",
     "knowledge-item-control-bootstrap-v7",
+    "standard-control-bootstrap-v11",
+    "knowledge-item-control-bootstrap-v8",
 }.issubset(control_schema_names):
     raise SystemExit("control-policy successor schema inventory is incomplete")
 for schema_name in control_schema_names:
