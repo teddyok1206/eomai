@@ -14,7 +14,7 @@ from eom_catalog_contracts import (
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
-from sqlalchemy import Engine, and_, literal, select
+from sqlalchemy import Engine, and_, case, exists, func, literal, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.automatic_item_graph_publication_service import (
@@ -95,6 +95,112 @@ class LegacyItemGraphLearningService:
             + literal(":")
             + LegacyItemExtractionDecisionRecord.item_proposal_id
         )
+        # One accepted extraction may be reused by more than one configured batch.  Rank those
+        # provenance rows before joining them into the unique analysis candidate relation.
+        ranked_batch_memberships = (
+            select(
+                LegacyItemExtractionBatchWorkUnitRecord.acceptance_id.label("acceptance_id"),
+                LegacyItemExtractionBatchRecord.created_at.label("batch_created_at"),
+                LegacyItemExtractionBatchRecord.extraction_batch_id.label("extraction_batch_id"),
+                LegacyItemExtractionBatchWorkUnitRecord.ordinal.label("work_unit_ordinal"),
+                LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_id.label(
+                    "assessment_source_bundle_id"
+                ),
+                LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_revision_id.label(
+                    "assessment_source_bundle_revision_id"
+                ),
+                LegacyItemExtractionBatchWorkUnitRecord.bundle_manifest_sha256.label(
+                    "bundle_manifest_sha256"
+                ),
+                func.row_number()
+                .over(
+                    partition_by=LegacyItemExtractionBatchWorkUnitRecord.acceptance_id,
+                    order_by=(
+                        LegacyItemExtractionBatchRecord.created_at,
+                        LegacyItemExtractionBatchRecord.extraction_batch_id,
+                        LegacyItemExtractionBatchWorkUnitRecord.ordinal,
+                    ),
+                )
+                .label("membership_rank"),
+            )
+            .join(
+                LegacyItemExtractionBatchRecord,
+                LegacyItemExtractionBatchRecord.extraction_batch_id
+                == LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+            )
+            .where(
+                LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
+                    self.extraction_batch_ids
+                ),
+                LegacyItemExtractionBatchWorkUnitRecord.state == "ACCEPTED",
+            )
+            .subquery()
+        )
+        origin_is_publishable = and_(
+            AssessmentOccurrenceRevisionRecord.schema_version
+            == "assessment-occurrence-revision/2.0",
+            ~and_(
+                AssessmentOccurrenceRevisionRecord.target_school_level == "HIGH_SCHOOL",
+                AssessmentOccurrenceRevisionRecord.target_grade == 1,
+                AssessmentOccurrenceRevisionRecord.administration_month == 3,
+            ),
+            ItemOriginOccurrenceRecord.occurrence_revision_sha256
+            == AssessmentOccurrenceRevisionRecord.revision_sha256,
+            AssessmentSourceBundleRevisionRecord.assessment_occurrence_id
+            == AssessmentOccurrenceRevisionRecord.assessment_occurrence_id,
+            AssessmentSourceBundleRevisionRecord.assessment_occurrence_revision_id
+            == AssessmentOccurrenceRevisionRecord.assessment_occurrence_revision_id,
+            AssessmentSourceBundleRevisionRecord.occurrence_revision_sha256
+            == AssessmentOccurrenceRevisionRecord.revision_sha256,
+            ItemOriginDerivationRecord.logical_id
+            == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_id,
+            ItemOriginDerivationRecord.revision_id
+            == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id,
+            ItemOriginDerivationRecord.manifest_sha256
+            == AssessmentSourceBundleRevisionRecord.bundle_manifest_sha256,
+            ranked_batch_memberships.c.assessment_source_bundle_id
+            == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_id,
+            ranked_batch_memberships.c.assessment_source_bundle_revision_id
+            == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id,
+            ranked_batch_memberships.c.bundle_manifest_sha256
+            == AssessmentSourceBundleRevisionRecord.bundle_manifest_sha256,
+        )
+        has_unique_publishable_origin = exists(
+            select(1)
+            .select_from(ItemOriginProfileRecord)
+            .join(
+                ItemOriginOccurrenceRecord,
+                ItemOriginOccurrenceRecord.item_origin_profile_id
+                == ItemOriginProfileRecord.item_origin_profile_id,
+            )
+            .join(
+                AssessmentOccurrenceRevisionRecord,
+                AssessmentOccurrenceRevisionRecord.assessment_occurrence_revision_id
+                == ItemOriginOccurrenceRecord.assessment_occurrence_revision_id,
+            )
+            .join(
+                ItemOriginDerivationRecord,
+                and_(
+                    ItemOriginDerivationRecord.item_origin_profile_id
+                    == ItemOriginProfileRecord.item_origin_profile_id,
+                    ItemOriginDerivationRecord.source_kind == "ASSESSMENT_SOURCE_BUNDLE_REVISION",
+                ),
+            )
+            .outerjoin(
+                AssessmentSourceBundleRevisionRecord,
+                AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id
+                == ItemOriginDerivationRecord.revision_id,
+            )
+            .where(ItemOriginProfileRecord.item_revision_id == ItemRevisionRecord.item_revision_id)
+            .group_by(ItemOriginProfileRecord.item_origin_profile_id)
+            .having(
+                func.count(func.distinct(ItemOriginOccurrenceRecord.item_origin_occurrence_id))
+                == 1,
+                func.count(func.distinct(ItemOriginDerivationRecord.item_origin_derivation_id))
+                == 1,
+                func.min(case((origin_is_publishable, 1), else_=0)) == 1,
+            )
+        ).correlate(ItemRevisionRecord, ranked_batch_memberships)
         with self.sessions() as session:
             rows = tuple(
                 session.execute(
@@ -108,33 +214,16 @@ class LegacyItemGraphLearningService:
                         == KnowledgeAnalysisRunRecord.source_revision_id,
                     )
                     .join(
-                        ItemOriginProfileRecord,
-                        ItemOriginProfileRecord.item_revision_id
-                        == ItemRevisionRecord.item_revision_id,
-                    )
-                    .join(
-                        ItemOriginOccurrenceRecord,
-                        ItemOriginOccurrenceRecord.item_origin_profile_id
-                        == ItemOriginProfileRecord.item_origin_profile_id,
-                    )
-                    .join(
-                        AssessmentOccurrenceRevisionRecord,
-                        AssessmentOccurrenceRevisionRecord.assessment_occurrence_revision_id
-                        == ItemOriginOccurrenceRecord.assessment_occurrence_revision_id,
-                    )
-                    .join(
                         LegacyItemExtractionDecisionRecord,
                         ItemRevisionRecord.registration_key == registration_key,
                     )
                     .join(
-                        LegacyItemExtractionBatchWorkUnitRecord,
-                        LegacyItemExtractionBatchWorkUnitRecord.acceptance_id
-                        == LegacyItemExtractionDecisionRecord.acceptance_id,
-                    )
-                    .join(
-                        LegacyItemExtractionBatchRecord,
-                        LegacyItemExtractionBatchRecord.extraction_batch_id
-                        == LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+                        ranked_batch_memberships,
+                        and_(
+                            ranked_batch_memberships.c.acceptance_id
+                            == LegacyItemExtractionDecisionRecord.acceptance_id,
+                            ranked_batch_memberships.c.membership_rank == 1,
+                        ),
                     )
                     .outerjoin(
                         KnowledgeSnapshotAnalysisRecord,
@@ -146,8 +235,8 @@ class LegacyItemGraphLearningService:
                         ),
                     )
                     .where(
-                        LegacyItemExtractionBatchRecord.extraction_batch_id.in_(
-                            self.extraction_batch_ids
+                        LegacyItemExtractionDecisionRecord.decision.in_(
+                            ("ACCEPT", "CORRECT_AND_ACCEPT")
                         ),
                         KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
                         KnowledgeAnalysisRunRecord.canonical_request["source"][
@@ -157,19 +246,13 @@ class LegacyItemGraphLearningService:
                         KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
                         == PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
                         KnowledgeAnalysisRunRecord.state == "ACCEPTED",
-                        AssessmentOccurrenceRevisionRecord.schema_version
-                        == "assessment-occurrence-revision/2.0",
-                        ~and_(
-                            AssessmentOccurrenceRevisionRecord.target_school_level == "HIGH_SCHOOL",
-                            AssessmentOccurrenceRevisionRecord.target_grade == 1,
-                            AssessmentOccurrenceRevisionRecord.administration_month == 3,
-                        ),
+                        has_unique_publishable_origin,
                         KnowledgeSnapshotAnalysisRecord.analysis_run_id.is_(None),
                     )
                     .order_by(
-                        LegacyItemExtractionBatchRecord.created_at,
-                        LegacyItemExtractionBatchRecord.extraction_batch_id,
-                        LegacyItemExtractionBatchWorkUnitRecord.ordinal,
+                        ranked_batch_memberships.c.batch_created_at,
+                        ranked_batch_memberships.c.extraction_batch_id,
+                        ranked_batch_memberships.c.work_unit_ordinal,
                         LegacyItemExtractionDecisionRecord.item_number,
                         KnowledgeAnalysisRunRecord.created_at,
                         KnowledgeAnalysisRunRecord.analysis_run_id,

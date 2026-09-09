@@ -37,7 +37,18 @@ hash, evidence entry, graph node, and curriculum unit, then recomputes the polic
 ## Access patterns, structures, and indexes
 
 - Candidate lookup is an ordered indexed join from configured extraction batches to accepted
-  analyses and the current snapshot membership.
+  analyses and the current snapshot membership. Publishability is a correlated exact-cardinality
+  check rather than a one-to-many join, so one accepted analysis occupies exactly one position
+  before ordering and `LIMIT`. It requires one eligible occurrence and one bundle derivation, with
+  exact occurrence, bundle, derivation, and selected-work-unit pointer hashes. The lookup follows
+  the unique `item_origin_profiles.item_revision_id` key, the leading profile columns of
+  `uq_item_origin_occurrence` and `uq_item_origin_derivation`, and the occurrence- and
+  bundle-revision primary keys. It is O(log n + k) over the bounded matching origin relations and
+  requires no extra materialized collection. If an acceptance is reused in multiple configured
+  batches, a window rank chooses its earliest stable
+  `(batch.created_at, batch_id, work-unit ordinal)` provenance before the candidate join. The
+  `(extraction_batch_id, ordinal)` unique index bounds that selection and prevents the reuse from
+  occupying multiple batch positions.
 - Conceptual proposal-node keys are deduplicated with a set and sorted once. If an older accepted
   analysis contains no conceptual node, the policy falls back only to its semantic Item-element and
   assessment-pattern keys. A legacy analysis containing only its semantic Item-revision key uses
