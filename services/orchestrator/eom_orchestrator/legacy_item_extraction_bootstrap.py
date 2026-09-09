@@ -404,6 +404,11 @@ def _require_successor_preflight(
         or policies[0].instruction_bundle.bundle_revision_id
         != predecessor.instruction_bundle_revision_id
         or policies[0].instruction_bundle.manifest_sha256 != predecessor.instruction_manifest_sha256
+        or policies[0].instruction_bundle.manifest_artifact.sha256
+        != policies[0].instruction_bundle.manifest_sha256
+        or policies[0].instruction_bundle.manifest_artifact.sha256 != prior_bundle.manifest_sha256
+        or policies[0].instruction_bundle.manifest_artifact.sha256
+        != predecessor.instruction_manifest_sha256
         or preset_document.capacity_policy_revision_id != predecessor.capacity_policy_revision_id
         or tuple(preset_document.compatible_workflow_protocols)
         != manifest.compatible_workflow_protocols

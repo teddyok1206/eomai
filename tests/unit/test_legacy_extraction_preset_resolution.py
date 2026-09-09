@@ -524,6 +524,41 @@ def test_exact_preset_dependency_graph_rejects_row_document_hash_split(
     assert captured.value.code == "LEGACY_EXTRACTION_PRESET_HASH_MISMATCH"
 
 
+def _split_nested_instruction_manifest_artifact_hash(
+    pointer: LegacyExtractionPresetPointer,
+    rows: dict[tuple[object, str], SimpleNamespace],
+) -> LegacyExtractionPresetPointer:
+    preset_row = rows[(ExecutionPresetRevisionRecord, pointer.preset_revision_id)]
+    preset_document = preset_row.canonical_document
+    preset_document["role_policies"][0]["instruction_bundle"]["manifest_artifact"]["sha256"] = (
+        "sha256:" + "e" * 64
+    )
+    preset_document["content_sha256"] = compute_control_document_hash(
+        preset_document,
+        "content_sha256",
+    )
+    preset_row.content_sha256 = preset_document["content_sha256"]
+    return pointer.model_copy(
+        update={
+            "preset_sha256": preset_row.content_sha256,
+            "preset_policy_sha256": execution_preset_policy_sha256(preset_document),
+        }
+    )
+
+
+def test_exact_preset_dependency_graph_rejects_nested_manifest_artifact_hash_split(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pointer, rows = _fixture()
+    _allow_artifacts(monkeypatch)
+    pointer = _split_nested_instruction_manifest_artifact_hash(pointer, rows)
+
+    with pytest.raises(LegacyExtractionPresetResolutionError) as captured:
+        _resolve(pointer, rows)
+
+    assert captured.value.code == "LEGACY_EXTRACTION_PRESET_POLICY_MISMATCH"
+
+
 @pytest.mark.parametrize("target", ("PRESET", "INSTRUCTION", "CAPACITY", "WORKFLOW"))
 def test_exact_preset_dependency_graph_rejects_canonical_identity_split(
     monkeypatch: pytest.MonkeyPatch,
@@ -635,6 +670,31 @@ def test_successor_bootstrap_rejects_row_document_hash_split(
             (WorkflowDefinitionRecord, pointer.workflow_definition_id)
         ].canonical_definition
         document["limits"]["max_step_attempts"] = 2
+
+    with pytest.raises(ControlPlaneError) as captured:
+        _require_successor_preflight(
+            cast(Session, _PreflightSession(rows, preset_id=pointer.preset_id)),
+            manifest=manifest,
+            platform_sha256=predecessor.platform_instruction_sha256,
+            role_sha256="sha256:" + "b" * 64,
+        )
+
+    assert captured.value.code == "CONTROL_BOOTSTRAP_PREDECESSOR_STALE"
+
+
+def test_successor_bootstrap_rejects_nested_manifest_artifact_hash_split(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pointer, rows = _fixture()
+    pointer = _split_nested_instruction_manifest_artifact_hash(pointer, rows)
+    manifest = _successor_manifest(pointer, rows)
+    predecessor = manifest.predecessor
+    assert predecessor is not None
+    monkeypatch.setattr(
+        bootstrap_module,
+        "resolve_control_artifact_pointer",
+        lambda *_args, **_kwargs: SimpleNamespace(),
+    )
 
     with pytest.raises(ControlPlaneError) as captured:
         _require_successor_preflight(

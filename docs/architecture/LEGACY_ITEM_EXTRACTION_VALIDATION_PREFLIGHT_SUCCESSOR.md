@@ -124,8 +124,10 @@ result contract are unchanged.
   by immutable IDs and hashes. Both bootstrap predecessor preflight and Catalog resolution
   cross-bind each preset, Instruction Bundle, capacity policy, and workflow canonical document to
   its persisted row and authorization pin; a valid self-hash cannot mask a different row hash or
-  identity. Catalog creates a new three-unit `EXECUTE` batch through the existing batch service; it
-  never converts a failed row to pending and never selects a latest revision.
+  identity. The nested manifest Artifact SHA must also equal the bundle manifest SHA in the
+  canonical preset, persisted bundle revision, and external authorization pin. Catalog creates a
+  new three-unit `EXECUTE` batch through the existing batch service; it never converts a failed row
+  to pending and never selects a latest revision.
 - The existing Catalog runner already accepts an ordered, duplicate-free comma-separated
   `EOM_LEGACY_ITEM_AUTOMATION_BATCH_IDS` allowlist. No new scheduler, queue, retry loop, or worker
   communication path was added.

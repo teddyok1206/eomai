@@ -37,6 +37,8 @@ The exact reviewed predecessor is:
   `sha256:59e787825fca530944e2b36202c82734e4a8013a3337afc55649a9925a3ab4b3`,
   content SHA
   `sha256:c2f0ea68700fdc66d24e3ef49ee8c51ee42775d2ccb19e4be487f2c7416d6633`;
+- the manifest Artifact pointer SHA, the canonical preset manifest SHA, the persisted bundle
+  revision manifest SHA, and the recovery authorization manifest SHA must be byte-identical;
 - capacity revision `capacityrev_d8ce74ff203d225081fe8e9686457dd9`, SHA
   `sha256:0d57aca8671aebd1f487bb1d39ef1bbfb75b07f618bd26a38e863d69920f1660`;
 - workflow definition `wfdef_67802c80675649d9945201cf440a2a71`, version `1.0.0`, SHA

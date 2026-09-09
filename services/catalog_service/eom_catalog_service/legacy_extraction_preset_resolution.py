@@ -216,6 +216,12 @@ def resolve_legacy_extraction_preset_pointer(
         or policies[0].instruction_bundle.bundle_revision_id
         != pointer.instruction_bundle_revision_id
         or policies[0].instruction_bundle.manifest_sha256 != pointer.instruction_manifest_sha256
+        or policies[0].instruction_bundle.manifest_artifact.sha256
+        != policies[0].instruction_bundle.manifest_sha256
+        or policies[0].instruction_bundle.manifest_artifact.sha256
+        != bundle_revision.manifest_sha256
+        or policies[0].instruction_bundle.manifest_artifact.sha256
+        != pointer.instruction_manifest_sha256
         or policies[0].instruction_bundle.manifest_artifact.artifact_id
         != bundle_revision.manifest_artifact_id
         or policies[0].instruction_bundle.manifest_artifact.artifact_revision_id
