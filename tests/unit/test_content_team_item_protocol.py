@@ -403,10 +403,25 @@ def test_content_team_statement_marker_normalizes_only_exact_trailing_source_for
     )
 
 
-def test_content_team_statement_marker_preserves_surrounding_text_and_order() -> None:
+def test_content_team_statement_marker_does_not_repair_nonterminal_placement() -> None:
     assert (
         normalize_content_team_statement_marker("앞 문장\n<보기>\n뒤 문장", has_statements=True)
-        == "앞 문장\n뒤 문장"
+        == "앞 문장\n<보기>\n뒤 문장"
+    )
+    assert normalize_content_team_statement_marker("<보기>\n뒤 문장", has_statements=True) == (
+        "<보기>\n뒤 문장"
+    )
+
+
+def test_content_team_statement_marker_removes_only_its_adjacent_terminal_separator() -> None:
+    assert normalize_content_team_statement_marker("\n앞 문장\n<보기>", has_statements=True) == (
+        "\n앞 문장"
+    )
+    assert normalize_content_team_statement_marker("앞 문장\n\n<보기>\n", has_statements=True) == (
+        "앞 문장"
+    )
+    assert normalize_content_team_statement_marker("앞 문장\n\n\n<보기>", has_statements=True) == (
+        "앞 문장\n\n\n<보기>"
     )
 
 
@@ -488,11 +503,16 @@ def test_authoring_v7_v8_v9_remove_one_projected_statement_marker_and_round_trip
 
 
 @pytest.mark.parametrize(
-    "marker_text",
-    ("<보기>\n<보기>", "< 보 기 >"),
+    "marker_stem",
+    (
+        "제시된 정보를 해석하시오.\n<보기>\n<보기>",
+        "제시된 정보를 해석하시오.\n< 보 기 >",
+        "<보기>\n제시된 정보를 해석하시오.",
+        "앞 문장\n<보기>\n뒤 문장",
+    ),
 )
 def test_authoring_statement_marker_ambiguity_still_fails_materialization(
-    marker_text: str,
+    marker_stem: str,
 ) -> None:
     result = ContentTeamAuthoringRoleResultV7(
         job_id="job_" + "1" * 32,
@@ -505,7 +525,7 @@ def test_authoring_statement_marker_ambiguity_still_fails_materialization(
         ),
         completed_at=datetime(2026, 9, 3, tzinfo=UTC),
         output={
-            "draft": _content(stem=f"제시된 정보를 해석하시오.\n{marker_text}"),
+            "draft": _content(stem=marker_stem),
             "metadata": {
                 "subject": "통합과학",
                 "topic": "요청으로 정해지는 주제",

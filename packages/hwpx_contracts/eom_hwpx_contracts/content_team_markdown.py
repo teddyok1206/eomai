@@ -121,9 +121,9 @@ def normalize_content_team_statement_marker(stem: str, *, has_statements: bool) 
     """Remove one exact source-format line represented by typed statements.
 
     Inline references such as ``<보기>에서`` are ordinary authored text. A standalone marker is
-    redundant only when the typed statement tuple is nonempty and the stem contains that exact line
-    once. Every other spelling, cardinality, and field placement remains for the authoritative
-    serializer to reject.
+    redundant only when the typed statement tuple is nonempty and the stem ends with that exact line
+    once, separated by one source-format line break (or its single blank-line variant). Every other
+    spelling, cardinality, and field placement remains for the authoritative serializer to reject.
     """
 
     lines = stem.splitlines(keepends=True)
@@ -131,7 +131,14 @@ def normalize_content_team_statement_marker(stem: str, *, has_statements: bool) 
     if not has_statements or len(marker_indexes) != 1:
         return stem
     marker_index = marker_indexes[0]
-    return "".join((*lines[:marker_index], *lines[marker_index + 1 :])).strip("\r\n")
+    if marker_index != len(lines) - 1:
+        return stem
+    prefix = "".join(lines[:marker_index])
+    content = prefix.rstrip("\r\n")
+    separator = prefix[len(content) :]
+    if not content or separator not in {"\n", "\n\n", "\r", "\r\r", "\r\n", "\r\n\r\n"}:
+        return stem
+    return content
 
 
 def normalize_content_team_inline_math(value: str) -> str:
@@ -698,6 +705,10 @@ def _table_markdown(table: ContentTeamTable) -> tuple[str, ...]:
 def serialize_content_team_markdown(draft: ContentTeamEditorialDraftContract) -> bytes:
     """Materialize the one canonical Markdown spelling and prove its lossless round trip."""
 
+    if any(line.rstrip("\r\n") == "<보기>" for line in draft.stem.splitlines(keepends=True)):
+        raise ContentTeamMarkdownError(
+            "content-team stem must not retain a standalone <보기> marker"
+        )
     if normalize_content_team_bottom_stem(draft.score_display, draft.bottom_stem) != (
         draft.bottom_stem
     ):
