@@ -173,9 +173,7 @@ def test_policy_replay_preserves_v1_and_current_selects_only_maximum_support() -
     assert AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION == "integrated-science-auto-alignment/1.2"
     current_policy = automatic_item_alignment_policy(AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION)
     assert (
-        current_policy.maximum_associations
-        == AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS
-        == 131072
+        current_policy.maximum_associations == AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS == 131072
     )
     assert (
         current_policy.sha256
@@ -187,9 +185,7 @@ def test_v12_expands_the_bounded_walk_without_changing_v11_replay() -> None:
     seed = "knode_" + "1" * 32
     unit_id = "currunit_" + "a" * 32
     unit = SimpleNamespace(curriculum_unit_id=unit_id, node_id=seed)
-    edges = tuple(
-        (seed, "knode_" + f"{ordinal:032x}") for ordinal in range(32768)
-    )
+    edges = tuple((seed, "knode_" + f"{ordinal:032x}") for ordinal in range(32768))
 
     def session() -> Mock:
         value = Mock()
