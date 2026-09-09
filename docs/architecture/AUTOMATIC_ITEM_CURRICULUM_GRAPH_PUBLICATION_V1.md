@@ -72,7 +72,11 @@ hash, evidence entry, graph node, and curriculum unit, then recomputes the polic
   mutable cache or keyset checkpoint that could skip an invalid row. The unique profile Item
   Revision key, leading profile columns of `uq_item_origin_occurrence` and
   `uq_item_origin_derivation`, revision primary keys, and `(extraction_batch_id, ordinal)` work-unit
-  constraint are the dominant lookup paths.
+  constraint are the dominant origin lookup paths. The dual candidate-scope lookup uses the leading
+  `acceptance_id` column of `uq_legacy_item_acceptance_item_proposal`, the `item_revisions` primary
+  key for its one-to-one analysis join, and `uq_item_registration_key` for immutable promotion-key
+  membership. Those released B-tree paths cover the new equality/set probes, so no schema migration
+  or additional index is required.
 - Conceptual proposal-node keys are deduplicated with a set and sorted once. If an older accepted
   analysis contains no conceptual node, the policy falls back only to its semantic Item-element and
   assessment-pattern keys. A legacy analysis containing only its semantic Item-revision key uses
