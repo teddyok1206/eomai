@@ -21,6 +21,10 @@ from eom_orchestrator.control_models import (
     WorkerCapacityPolicyRecord,
     WorkerCapacityPolicyRevisionRecord,
 )
+from eom_orchestrator.control_service import (
+    ControlPlaneError,
+    compute_control_document_hash,
+)
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_workflow.control_plane import (
@@ -240,20 +244,27 @@ class LegacyItemLearningCoordinator:
             if (
                 preset is None
                 or revision is None
+                or preset.preset_key != pin.preset_key
+                or preset.preset_id != pin.preset_id
                 or preset.state != "ACTIVE"
                 or preset.current_revision_id != pin.preset_revision_id
+                or revision.preset_revision_id != pin.preset_revision_id
                 or revision.state != "RELEASED"
-                or revision.preset_id != preset.preset_id
+                or revision.preset_id != pin.preset_id
                 or revision.content_sha256 != pin.preset_content_sha256
                 or revision.capacity_policy_revision_id != pin.capacity_policy_revision_id
                 or capacity is None
+                or capacity.capacity_policy_revision_id != pin.capacity_policy_revision_id
                 or capacity.state != "RELEASED"
                 or capacity.capacity_policy_id != pin.capacity_policy_id
                 or capacity.content_sha256 != pin.capacity_policy_content_sha256
                 or capacity_logical is None
+                or capacity_logical.policy_key != "fixed-host"
+                or capacity_logical.capacity_policy_id != pin.capacity_policy_id
                 or capacity_logical.state != "ACTIVE"
                 or capacity_logical.current_revision_id != pin.capacity_current_revision_id
                 or capacity_current is None
+                or capacity_current.capacity_policy_revision_id != pin.capacity_current_revision_id
                 or capacity_current.state != "RELEASED"
                 or capacity_current.capacity_policy_id != pin.capacity_policy_id
                 or capacity_current.content_sha256 != pin.capacity_current_content_sha256
@@ -262,22 +273,83 @@ class LegacyItemLearningCoordinator:
                     "LEGACY_ITEM_LEARNING_PRESET_PIN_DRIFT",
                     "automatic learning preset or capacity pointer differs",
                 )
-            preset_model = ExecutionPresetRevision.model_validate(revision.canonical_document)
-            capacity_model = WorkerCapacityPolicyV2.model_validate(capacity.canonical_document)
-            current_capacity_model = WorkerCapacityPolicyV3.model_validate(
-                capacity_current.canonical_document
-            )
+            try:
+                preset_model = ExecutionPresetRevision.model_validate(revision.canonical_document)
+                capacity_model = WorkerCapacityPolicyV2.model_validate(capacity.canonical_document)
+                current_capacity_model = WorkerCapacityPolicyV3.model_validate(
+                    capacity_current.canonical_document
+                )
+                preset_document = preset_model.model_dump(mode="json")
+                capacity_document = capacity_model.model_dump(mode="json")
+                current_capacity_document = current_capacity_model.model_dump(mode="json")
+                preset_content_sha256 = compute_control_document_hash(
+                    preset_document, "content_sha256"
+                )
+                capacity_content_sha256 = compute_control_document_hash(
+                    capacity_document, "content_sha256"
+                )
+                current_capacity_content_sha256 = compute_control_document_hash(
+                    current_capacity_document, "content_sha256"
+                )
+            except (ControlPlaneError, TypeError, ValueError) as exc:
+                raise LegacyItemLearningError(
+                    "LEGACY_ITEM_LEARNING_PRESET_PIN_DRIFT",
+                    "automatic learning canonical preset or capacity content is invalid",
+                ) from exc
             if (
-                preset_model.content_sha256 != pin.preset_content_sha256
+                revision.canonical_document != preset_document
+                or revision.schema_version != preset_model.schema_version
+                or revision.revision_number != preset_model.revision_number
+                or revision.display_name != preset_model.display_name
+                or revision.description != preset_model.description
+                or revision.general_knowledge_policy != preset_model.general_knowledge_policy
+                or tuple(revision.compatible_workflow_protocols)
+                != preset_model.compatible_workflow_protocols
+                or not (
+                    preset_content_sha256
+                    == preset_model.content_sha256
+                    == revision.content_sha256
+                    == pin.preset_content_sha256
+                )
                 or preset_model.state != "RELEASED"
                 or preset_model.preset_id != pin.preset_id
                 or preset_model.preset_revision_id != pin.preset_revision_id
                 or preset_model.capacity_policy_revision_id != pin.capacity_policy_revision_id
-                or capacity_model.content_sha256 != pin.capacity_policy_content_sha256
+                or capacity.canonical_document != capacity_document
+                or capacity.schema_version != capacity_model.schema_version
+                or capacity.revision_number != capacity_model.revision_number
+                or capacity.max_configured_slots != capacity_model.max_configured_slots
+                or capacity.max_active_codex != capacity_model.max_active_codex
+                or capacity.max_active_per_slot != capacity_model.max_active_per_slot
+                or capacity.max_active_gpu != capacity_model.max_active_gpu
+                or capacity.max_active_knowledge_analysis
+                != capacity_model.max_active_knowledge_analysis
+                or not (
+                    capacity_content_sha256
+                    == capacity_model.content_sha256
+                    == capacity.content_sha256
+                    == pin.capacity_policy_content_sha256
+                )
                 or capacity_model.state != "RELEASED"
                 or capacity_model.capacity_policy_id != pin.capacity_policy_id
                 or capacity_model.capacity_policy_revision_id != pin.capacity_policy_revision_id
-                or current_capacity_model.content_sha256 != pin.capacity_current_content_sha256
+                or capacity_current.canonical_document != current_capacity_document
+                or capacity_current.schema_version != current_capacity_model.schema_version
+                or capacity_current.revision_number != current_capacity_model.revision_number
+                or capacity_current.max_configured_slots
+                != current_capacity_model.max_configured_slots
+                or capacity_current.max_active_codex != current_capacity_model.max_active_codex
+                or capacity_current.max_active_per_slot
+                != current_capacity_model.max_active_per_slot
+                or capacity_current.max_active_gpu != current_capacity_model.max_active_gpu
+                or capacity_current.max_active_knowledge_analysis
+                != current_capacity_model.max_active_knowledge_analysis
+                or not (
+                    current_capacity_content_sha256
+                    == current_capacity_model.content_sha256
+                    == capacity_current.content_sha256
+                    == pin.capacity_current_content_sha256
+                )
                 or current_capacity_model.state != "RELEASED"
                 or current_capacity_model.capacity_policy_id != pin.capacity_policy_id
                 or current_capacity_model.capacity_policy_revision_id
