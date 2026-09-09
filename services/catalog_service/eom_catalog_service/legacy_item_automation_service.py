@@ -28,7 +28,11 @@ from eom_catalog_service.legacy_item_graph_learning_service import (
     MAX_AUTOMATIC_GRAPH_BATCH_SIZE,
     LegacyItemGraphLearningService,
 )
-from eom_catalog_service.legacy_item_learning_service import LegacyItemLearningCoordinator
+from eom_catalog_service.legacy_item_learning_service import (
+    LegacyItemLearningCoordinator,
+    LegacyItemLearningError,
+    LegacyItemLearningPresetPin,
+)
 from eom_catalog_service.models import ItemRevisionRecord
 
 ACTIVE_ANALYSIS_STATES = (
@@ -61,6 +65,7 @@ class LegacyItemAutomaticLearningService:
         retry_analysis_run_ids: tuple[str, ...] = (),
         content_pack_release_id: str,
         risk_policy_revision_id: str,
+        preset_pin: LegacyItemLearningPresetPin,
         graph: LegacyItemGraphLearningService | None = None,
         graph_batch_size: int = 16,
         learning: LegacyItemLearningCoordinator,
@@ -77,6 +82,7 @@ class LegacyItemAutomaticLearningService:
         self.retry_analysis_run_ids = retry_analysis_run_ids
         self.content_pack_release_id = content_pack_release_id
         self.risk_policy_revision_id = risk_policy_revision_id
+        self.preset_pin = preset_pin
         self.graph = graph
         self.graph_batch_size = graph_batch_size
         self.learning = learning
@@ -84,6 +90,19 @@ class LegacyItemAutomaticLearningService:
 
     def advance_once(self) -> bool:
         """Reconcile first; otherwise promote and schedule one not-yet-learned proposal."""
+
+        # One shared-lock guard covers the complete step.  Mutable preset/capacity pointers
+        # cannot move after validation and before a Graph, retry, or promotion side effect.
+        with self.learning.preset_pin_guard(self.preset_pin):
+            return self._advance_pinned_once()
+
+    def _advance_pinned_once(self) -> bool:
+        terminal = self._terminal_analysis()
+        if terminal is not None:
+            raise LegacyItemLearningError(
+                "LEGACY_ITEM_AUTOMATION_TERMINAL_ANALYSIS",
+                "automatic learning stopped at a terminal leaf analysis",
+            )
 
         active = self._active_analysis()
         if active is not None:
@@ -130,8 +149,60 @@ class LegacyItemAutomaticLearningService:
         self.learning.promote_and_schedule(
             command,
             risk_policy_revision_id=self.risk_policy_revision_id,
+            preset_pin=self.preset_pin,
         )
         return True
+
+    def _terminal_analysis(self) -> tuple[str, str] | None:
+        successor = aliased(KnowledgeAnalysisRunRecord)
+        registration_key = (
+            literal("legacy-item-promotion:")
+            + LegacyItemExtractionDecisionRecord.acceptance_id
+            + literal(":")
+            + LegacyItemExtractionDecisionRecord.item_proposal_id
+        )
+        with self.sessions() as session:
+            row = session.execute(
+                select(
+                    KnowledgeAnalysisRunRecord.analysis_run_id,
+                    KnowledgeAnalysisRunRecord.state,
+                )
+                .join(
+                    ItemRevisionRecord,
+                    ItemRevisionRecord.item_revision_id
+                    == KnowledgeAnalysisRunRecord.source_revision_id,
+                )
+                .join(
+                    LegacyItemExtractionDecisionRecord,
+                    ItemRevisionRecord.registration_key == registration_key,
+                )
+                .join(
+                    LegacyItemExtractionBatchWorkUnitRecord,
+                    LegacyItemExtractionBatchWorkUnitRecord.acceptance_id
+                    == LegacyItemExtractionDecisionRecord.acceptance_id,
+                )
+                .outerjoin(
+                    successor,
+                    successor.predecessor_analysis_run_id
+                    == KnowledgeAnalysisRunRecord.analysis_run_id,
+                )
+                .where(
+                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
+                        self.extraction_batch_ids
+                    ),
+                    KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
+                    KnowledgeAnalysisRunRecord.state.in_(("FAILED", "REJECTED", "CANCELLED")),
+                    successor.analysis_run_id.is_(None),
+                )
+                .order_by(
+                    KnowledgeAnalysisRunRecord.created_at,
+                    KnowledgeAnalysisRunRecord.analysis_run_id,
+                )
+                .limit(1)
+            ).one_or_none()
+        if row is None:
+            return None
+        return str(row.analysis_run_id), str(row.state)
 
     def _source_work_remaining(self) -> bool:
         with self.sessions() as session:

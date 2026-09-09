@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import Literal
 
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeAnalysisSelection,
@@ -15,9 +18,17 @@ from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import (
     ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
+    WorkerCapacityPolicyRecord,
+    WorkerCapacityPolicyRevisionRecord,
 )
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
+from eom_workflow.control_plane import (
+    ExecutionPresetRevision,
+    WorkerCapacityPolicyV2,
+    WorkerCapacityPolicyV3,
+)
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Engine, select
 
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
@@ -31,6 +42,22 @@ class LegacyItemLearningError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+class LegacyItemLearningPresetPin(BaseModel):
+    """Exact mutable-current and immutable capacity pointers for automatic learning."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    preset_key: Literal["knowledge-analysis"] = "knowledge-analysis"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_content_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    capacity_policy_id: str = Field(pattern=r"^capacity_[0-9a-f]{32}$")
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    capacity_policy_content_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    capacity_current_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    capacity_current_content_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
 @dataclass(frozen=True)
@@ -60,8 +87,45 @@ class LegacyItemLearningCoordinator:
         command: LegacyItemPromotionRequest,
         *,
         risk_policy_revision_id: str,
+        preset_pin: LegacyItemLearningPresetPin,
+    ) -> LegacyItemLearningStart:
+        if self.promotion is None:
+            raise LegacyItemLearningError(
+                "LEGACY_ITEM_LEARNING_PROMOTION_UNAVAILABLE",
+                "legacy item promotion dependency is unavailable",
+            )
+        # Keep shared locks on both mutable logical pointers across promotion and analysis
+        # creation.  A publisher cannot move either pointer between validation and use.
+        with self.preset_pin_guard(preset_pin):
+            promoted = self.promotion.promote(command)
+            analysis_command = self._analysis_command(
+                promoted,
+                risk_policy_revision_id=risk_policy_revision_id,
+                preset_key=preset_pin.preset_key,
+                preset_revision_id=preset_pin.preset_revision_id,
+                requested_by=command.requested_by,
+            )
+            analysis = self.analyses.create_with_pinned_preset(
+                analysis_command,
+                preset_id=preset_pin.preset_id,
+                preset_revision_id=preset_pin.preset_revision_id,
+            )
+        return LegacyItemLearningStart(
+            source=promoted.source,
+            analysis=analysis,
+            item_created=promoted.item_created,
+            origin_created=promoted.origin_created,
+        )
+
+    def promote_and_schedule_current(
+        self,
+        command: LegacyItemPromotionRequest,
+        *,
+        risk_policy_revision_id: str,
         preset_key: str = "knowledge-analysis",
     ) -> LegacyItemLearningStart:
+        """Manual compatibility boundary; automatic callers must use exact pins."""
+
         if self.promotion is None:
             raise LegacyItemLearningError(
                 "LEGACY_ITEM_LEARNING_PROMOTION_UNAVAILABLE",
@@ -133,6 +197,101 @@ class LegacyItemLearningCoordinator:
             preset_id=preset_id,
             preset_revision_id=preset_revision_id,
         )
+
+    @contextmanager
+    def preset_pin_guard(self, pin: LegacyItemLearningPresetPin) -> Iterator[None]:
+        """Validate exact pointers and prevent current-pointer movement during one step."""
+
+        with self.sessions.begin() as session:
+            preset = session.scalar(
+                select(ExecutionPresetRecord)
+                .where(
+                    ExecutionPresetRecord.preset_key == pin.preset_key,
+                    ExecutionPresetRecord.preset_id == pin.preset_id,
+                )
+                .with_for_update(read=True)
+            )
+            revision = session.scalar(
+                select(ExecutionPresetRevisionRecord)
+                .where(ExecutionPresetRevisionRecord.preset_revision_id == pin.preset_revision_id)
+                .with_for_update(read=True)
+            )
+            capacity = session.scalar(
+                select(WorkerCapacityPolicyRevisionRecord)
+                .where(
+                    WorkerCapacityPolicyRevisionRecord.capacity_policy_revision_id
+                    == pin.capacity_policy_revision_id
+                )
+                .with_for_update(read=True)
+            )
+            capacity_logical = session.scalar(
+                select(WorkerCapacityPolicyRecord)
+                .where(WorkerCapacityPolicyRecord.capacity_policy_id == pin.capacity_policy_id)
+                .with_for_update(read=True)
+            )
+            capacity_current = session.scalar(
+                select(WorkerCapacityPolicyRevisionRecord)
+                .where(
+                    WorkerCapacityPolicyRevisionRecord.capacity_policy_revision_id
+                    == pin.capacity_current_revision_id
+                )
+                .with_for_update(read=True)
+            )
+            if (
+                preset is None
+                or revision is None
+                or preset.state != "ACTIVE"
+                or preset.current_revision_id != pin.preset_revision_id
+                or revision.state != "RELEASED"
+                or revision.preset_id != preset.preset_id
+                or revision.content_sha256 != pin.preset_content_sha256
+                or revision.capacity_policy_revision_id != pin.capacity_policy_revision_id
+                or capacity is None
+                or capacity.state != "RELEASED"
+                or capacity.capacity_policy_id != pin.capacity_policy_id
+                or capacity.content_sha256 != pin.capacity_policy_content_sha256
+                or capacity_logical is None
+                or capacity_logical.state != "ACTIVE"
+                or capacity_logical.current_revision_id != pin.capacity_current_revision_id
+                or capacity_current is None
+                or capacity_current.state != "RELEASED"
+                or capacity_current.capacity_policy_id != pin.capacity_policy_id
+                or capacity_current.content_sha256 != pin.capacity_current_content_sha256
+            ):
+                raise LegacyItemLearningError(
+                    "LEGACY_ITEM_LEARNING_PRESET_PIN_DRIFT",
+                    "automatic learning preset or capacity pointer differs",
+                )
+            preset_model = ExecutionPresetRevision.model_validate(revision.canonical_document)
+            capacity_model = WorkerCapacityPolicyV2.model_validate(capacity.canonical_document)
+            current_capacity_model = WorkerCapacityPolicyV3.model_validate(
+                capacity_current.canonical_document
+            )
+            if (
+                preset_model.content_sha256 != pin.preset_content_sha256
+                or preset_model.state != "RELEASED"
+                or preset_model.preset_id != pin.preset_id
+                or preset_model.preset_revision_id != pin.preset_revision_id
+                or preset_model.capacity_policy_revision_id != pin.capacity_policy_revision_id
+                or capacity_model.content_sha256 != pin.capacity_policy_content_sha256
+                or capacity_model.state != "RELEASED"
+                or capacity_model.capacity_policy_id != pin.capacity_policy_id
+                or capacity_model.capacity_policy_revision_id != pin.capacity_policy_revision_id
+                or current_capacity_model.content_sha256 != pin.capacity_current_content_sha256
+                or current_capacity_model.state != "RELEASED"
+                or current_capacity_model.capacity_policy_id != pin.capacity_policy_id
+                or current_capacity_model.capacity_policy_revision_id
+                != pin.capacity_current_revision_id
+            ):
+                raise LegacyItemLearningError(
+                    "LEGACY_ITEM_LEARNING_PRESET_PIN_DRIFT",
+                    "automatic learning canonical preset or capacity content differs",
+                )
+            yield
+
+    def require_preset_pin(self, pin: LegacyItemLearningPresetPin) -> None:
+        with self.preset_pin_guard(pin):
+            return
 
     def _released_preset(self, preset_key: str) -> tuple[str, str]:
         with self.sessions() as session:

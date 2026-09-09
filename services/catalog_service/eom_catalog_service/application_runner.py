@@ -10,6 +10,7 @@ import threading
 
 from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_engine
+from pydantic import ValidationError
 
 from eom_catalog_service.application_server import CatalogApplicationServer
 from eom_catalog_service.approved_item_graph_publication_service import (
@@ -45,7 +46,10 @@ from eom_catalog_service.legacy_item_graph_learning_service import (
     MAX_AUTOMATIC_GRAPH_BATCH_SIZE,
     LegacyItemGraphLearningService,
 )
-from eom_catalog_service.legacy_item_learning_service import LegacyItemLearningCoordinator
+from eom_catalog_service.legacy_item_learning_service import (
+    LegacyItemLearningCoordinator,
+    LegacyItemLearningPresetPin,
+)
 from eom_catalog_service.legacy_item_promotion_service import LegacyItemPromotionService
 from eom_catalog_service.legacy_usage_models import LegacyUsageImportRecord
 from eom_catalog_service.mock_exam_item_review_publication_service import (
@@ -102,6 +106,33 @@ def _legacy_automation_graph_batch_size() -> int | None:
     return value if 1 <= value <= MAX_AUTOMATIC_GRAPH_BATCH_SIZE else None
 
 
+def _legacy_automation_preset_pin() -> LegacyItemLearningPresetPin | None:
+    values = {
+        "preset_id": os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_PRESET_ID"),
+        "preset_revision_id": os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_PRESET_REVISION_ID"),
+        "preset_content_sha256": os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_PRESET_SHA256"),
+        "capacity_policy_id": os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_CAPACITY_POLICY_ID"),
+        "capacity_policy_revision_id": os.environ.get(
+            "EOM_LEGACY_ITEM_AUTOMATION_CAPACITY_POLICY_REVISION_ID"
+        ),
+        "capacity_policy_content_sha256": os.environ.get(
+            "EOM_LEGACY_ITEM_AUTOMATION_CAPACITY_POLICY_SHA256"
+        ),
+        "capacity_current_revision_id": os.environ.get(
+            "EOM_LEGACY_ITEM_AUTOMATION_CAPACITY_CURRENT_REVISION_ID"
+        ),
+        "capacity_current_content_sha256": os.environ.get(
+            "EOM_LEGACY_ITEM_AUTOMATION_CAPACITY_CURRENT_SHA256"
+        ),
+    }
+    if any(value is None for value in values.values()):
+        return None
+    try:
+        return LegacyItemLearningPresetPin.model_validate(values)
+    except ValidationError:
+        return None
+
+
 def serve() -> int:
     engine = build_engine()
     server: CatalogApplicationServer | None = None
@@ -140,12 +171,14 @@ def serve() -> int:
                 "EOM_LEGACY_ITEM_AUTOMATION_GRAPH_ACCESS_POLICY_REVISION_ID"
             )
             graph_batch_size = _legacy_automation_graph_batch_size()
+            preset_pin = _legacy_automation_preset_pin()
             if (
                 not extraction_batch_ids
                 or not content_pack_release_id
                 or not risk_policy_revision_id
                 or not graph_access_policy_revision_id
                 or graph_batch_size is None
+                or preset_pin is None
             ):
                 print("LEGACY_ITEM_AUTOMATION_CONFIGURATION_INCOMPLETE", flush=True)
                 return 1
@@ -171,6 +204,7 @@ def serve() -> int:
                 promotion=promotion,
                 analyses=knowledge_analysis,
             )
+            learning.require_preset_pin(preset_pin)
             graph_learning = LegacyItemGraphLearningService(
                 engine,
                 extraction_batch_ids=extraction_batch_ids,
@@ -182,6 +216,7 @@ def serve() -> int:
                 retry_analysis_run_ids=retry_analysis_run_ids,
                 content_pack_release_id=content_pack_release_id,
                 risk_policy_revision_id=risk_policy_revision_id,
+                preset_pin=preset_pin,
                 graph=graph_learning,
                 graph_batch_size=graph_batch_size,
                 learning=learning,

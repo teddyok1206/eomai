@@ -401,7 +401,7 @@ def learning_start(
             result = LegacyItemLearningCoordinator(
                 engine,
                 promotion=promotion,
-            ).promote_and_schedule(
+            ).promote_and_schedule_current(
                 command,
                 risk_policy_revision_id=risk_policy_revision_id,
             )
