@@ -2252,6 +2252,7 @@ class AutomaticItemCurriculumAlignmentBinding(FrozenModel):
     alignment_policy_version: Literal[
         "integrated-science-auto-alignment/1.0",
         "integrated-science-auto-alignment/1.1",
+        "integrated-science-auto-alignment/1.2",
     ]
     alignment_policy_sha256: Sha256
     requested_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")

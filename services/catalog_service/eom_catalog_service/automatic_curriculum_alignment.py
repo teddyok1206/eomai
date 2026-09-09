@@ -18,7 +18,8 @@ from eom_catalog_service.knowledge_graph_models import (
 
 AUTOMATIC_ITEM_ALIGNMENT_MAX_DEPTH = 3
 AUTOMATIC_ITEM_ALIGNMENT_MAX_UNITS = 3
-AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS = 32768
+_AUTOMATIC_ITEM_ALIGNMENT_LEGACY_MAX_ASSOCIATIONS = 32768
+AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS = 131072
 AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES = ("CURRICULUM", "TEXTBOOK")
 AUTOMATIC_ITEM_ALIGNMENT_PERMISSION_KEYS = (
     "knowledge_graph:read",
@@ -37,6 +38,7 @@ AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET = {
 class AutomaticCurriculumAlignmentPolicy:
     version: str
     maximum_units: int
+    maximum_associations: int
     maximum_support_only: bool
     document: dict[str, object]
     sha256: str
@@ -46,6 +48,7 @@ def _alignment_policy(
     version: str,
     *,
     maximum_units: int,
+    maximum_associations: int,
     maximum_support_only: bool,
 ) -> AutomaticCurriculumAlignmentPolicy:
     document: dict[str, object] = {
@@ -55,7 +58,7 @@ def _alignment_policy(
         "target_unit_level": "MINOR",
         "ranking": ["DESCENDING_EVIDENCE_SUPPORT", "ASCENDING_DISTANCE_SUM", "UNIT_ID"],
         "maximum_units": maximum_units,
-        "maximum_node_seed_associations": AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS,
+        "maximum_node_seed_associations": maximum_associations,
         "retrieval": {
             "query_kind": "ITEM_PREPARATION",
             "topic_selection": (
@@ -73,6 +76,7 @@ def _alignment_policy(
     return AutomaticCurriculumAlignmentPolicy(
         version=version,
         maximum_units=maximum_units,
+        maximum_associations=maximum_associations,
         maximum_support_only=maximum_support_only,
         document=document,
         sha256=content_sha256(document),
@@ -85,16 +89,24 @@ _AUTOMATIC_ITEM_ALIGNMENT_POLICIES = {
         _alignment_policy(
             "integrated-science-auto-alignment/1.0",
             maximum_units=8,
+            maximum_associations=_AUTOMATIC_ITEM_ALIGNMENT_LEGACY_MAX_ASSOCIATIONS,
             maximum_support_only=False,
         ),
         _alignment_policy(
             "integrated-science-auto-alignment/1.1",
             maximum_units=AUTOMATIC_ITEM_ALIGNMENT_MAX_UNITS,
+            maximum_associations=_AUTOMATIC_ITEM_ALIGNMENT_LEGACY_MAX_ASSOCIATIONS,
+            maximum_support_only=True,
+        ),
+        _alignment_policy(
+            "integrated-science-auto-alignment/1.2",
+            maximum_units=AUTOMATIC_ITEM_ALIGNMENT_MAX_UNITS,
+            maximum_associations=AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS,
             maximum_support_only=True,
         ),
     )
 }
-AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION = "integrated-science-auto-alignment/1.1"
+AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION = "integrated-science-auto-alignment/1.2"
 AUTOMATIC_ITEM_ALIGNMENT_POLICY = _AUTOMATIC_ITEM_ALIGNMENT_POLICIES[
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
 ].document
@@ -222,10 +234,10 @@ def derive_automatic_item_curriculum_unit_ids(
                     ),
                 )
                 .order_by(KnowledgeEdgeRecord.edge_id)
-                .limit(AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS + 1)
+                .limit(policy.maximum_associations + 1)
             )
         )
-        if len(rows) > AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS:
+        if len(rows) > policy.maximum_associations:
             raise AutomaticCurriculumAlignmentError(
                 "AUTOMATIC_ALIGNMENT_NEIGHBORHOOD_TOO_LARGE",
                 "automatic alignment graph neighborhood exceeds the policy bound",
@@ -245,7 +257,7 @@ def derive_automatic_item_curriculum_unit_ids(
         for node_id, source_seeds in next_frontier.items():
             reached_by.setdefault(node_id, set()).update(source_seeds)
             association_count += len(source_seeds)
-        if association_count > AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS:
+        if association_count > policy.maximum_associations:
             raise AutomaticCurriculumAlignmentError(
                 "AUTOMATIC_ALIGNMENT_NEIGHBORHOOD_TOO_LARGE",
                 "automatic alignment node-to-evidence associations exceed the policy bound",

@@ -8,6 +8,7 @@ import pytest
 from eom_catalog_contracts import KnowledgeGraphStructureManifestV4
 from eom_catalog_service.automatic_curriculum_alignment import (
     AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET,
+    AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS,
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
     AutomaticCurriculumAlignmentError,
@@ -106,7 +107,7 @@ def test_alignment_walk_rejects_dangling_evidence_nodes() -> None:
         )
 
 
-def test_policy_replay_preserves_v1_and_v11_selects_only_maximum_support() -> None:
+def test_policy_replay_preserves_v1_and_current_selects_only_maximum_support() -> None:
     first_seed = "knode_" + "1" * 32
     second_seed = "knode_" + "2" * 32
     shared = "knode_" + "3" * 32
@@ -145,20 +146,72 @@ def test_policy_replay_preserves_v1_and_v11_selects_only_maximum_support() -> No
         evidence_node_ids=(first_seed, second_seed),
         alignment_policy_version="integrated-science-auto-alignment/1.0",
     )
-    current = derive_automatic_item_curriculum_unit_ids(
+    previous = derive_automatic_item_curriculum_unit_ids(
         session(),
         graph_snapshot_revision_id="graphrev_" + "9" * 32,
         evidence_node_ids=(first_seed, second_seed),
         alignment_policy_version="integrated-science-auto-alignment/1.1",
     )
+    current = derive_automatic_item_curriculum_unit_ids(
+        session(),
+        graph_snapshot_revision_id="graphrev_" + "9" * 32,
+        evidence_node_ids=(first_seed, second_seed),
+        alignment_policy_version="integrated-science-auto-alignment/1.2",
+    )
 
     assert legacy == (lower_support_unit, maximum_support_unit)
+    assert previous == (maximum_support_unit,)
     assert current == (maximum_support_unit,)
     assert (
         automatic_item_alignment_policy("integrated-science-auto-alignment/1.0").sha256
         == "sha256:1558fd16414dbc5fcd290b72fa1bad22d53979902416c8fad0b9ec9919c92a2f"
     )
-    assert AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION == "integrated-science-auto-alignment/1.1"
+    assert (
+        automatic_item_alignment_policy("integrated-science-auto-alignment/1.1").sha256
+        == "sha256:a5abfa6049fc19ed5e82b3f424278d2f054377afe22711b3fe633fe3949079c3"
+    )
+    assert AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION == "integrated-science-auto-alignment/1.2"
+    current_policy = automatic_item_alignment_policy(AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION)
+    assert (
+        current_policy.maximum_associations
+        == AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS
+        == 131072
+    )
+    assert (
+        current_policy.sha256
+        == "sha256:64710dd475b958cf0357f8926d1b96c323f23d7bb72582ee840713ef8bb02ac8"
+    )
+
+
+def test_v12_expands_the_bounded_walk_without_changing_v11_replay() -> None:
+    seed = "knode_" + "1" * 32
+    unit_id = "currunit_" + "a" * 32
+    unit = SimpleNamespace(curriculum_unit_id=unit_id, node_id=seed)
+    edges = tuple(
+        (seed, "knode_" + f"{ordinal:032x}") for ordinal in range(32768)
+    )
+
+    def session() -> Mock:
+        value = Mock()
+        value.scalars.side_effect = [(seed,), (unit,), ()]
+        value.execute.side_effect = [edges, ()]
+        return value
+
+    with pytest.raises(AutomaticCurriculumAlignmentError) as caught:
+        derive_automatic_item_curriculum_unit_ids(
+            session(),
+            graph_snapshot_revision_id="graphrev_" + "9" * 32,
+            evidence_node_ids=(seed,),
+            alignment_policy_version="integrated-science-auto-alignment/1.1",
+        )
+
+    assert caught.value.code == "AUTOMATIC_ALIGNMENT_NEIGHBORHOOD_TOO_LARGE"
+    assert derive_automatic_item_curriculum_unit_ids(
+        session(),
+        graph_snapshot_revision_id="graphrev_" + "9" * 32,
+        evidence_node_ids=(seed,),
+        alignment_policy_version="integrated-science-auto-alignment/1.2",
+    ) == (unit_id,)
 
 
 def test_legacy_graph_retrieval_command_pins_policy_snapshot_and_budget() -> None:

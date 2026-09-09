@@ -86,11 +86,16 @@ hash, evidence entry, graph node, and curriculum unit, then recomputes the polic
   and outbound graph-edge lookups. It performs at most three adjacency queries, `O(V+E)` over the
   bounded neighborhood, with a hard association limit. Policy 1.1 retains only units with maximum
   evidence-seed support and then applies distance/ID ordering, capped at three units.
+- Policy 1.2 preserves that selection rule and raises the association bound to 131,072: the current
+  240-Item Graph measured at most 44,872 associations, and the new bound leaves conservative
+  headroom for growth to the final 520-Item Graph. Policies 1.0 and 1.1 retain their original 32,768
+  bound and hashes for immutable replay.
 - Snapshot source membership uses existing unique constraints and indexed foreign keys.
 
 Expected scale is fewer than 10,000 accepted sources per snapshot, at most 64 evidence seeds per
-alignment, at most three traversal hops, and at most three selected MINOR units for policy 1.1.
-Published policy 1.0 bindings remain replayable with their historical eight-unit cap. Publications
+alignment, at most three traversal hops, and at most three selected MINOR units for policies 1.1
+and 1.2.
+Published policy 1.0 and 1.1 bindings remain replayable with their historical bounds. Publications
 group up to 16 pending Item analyses to avoid one full Graph materialization per Item.
 
 ## Transaction, concurrency, failure, retry, and idempotency
