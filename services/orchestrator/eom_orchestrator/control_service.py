@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import PurePosixPath
 from typing import Any, Literal, cast
 
-from eom_identifiers import canonical_json_bytes, content_sha256, new_worker_lease_id
+from eom_identifiers import canonical_json_bytes, content_sha256, new_worker_lease_id, sha256_bytes
 from eom_workflow import (
     CodexAuthHealthView,
     CodexCapabilitySnapshot,
@@ -107,6 +107,12 @@ def compute_control_document_hash(document: dict[str, Any], hash_field: str) -> 
         raise ControlPlaneError("CONTROL_DOCUMENT_INVALID", "control document hash field is absent")
     body = {key: value for key, value in document.items() if key != hash_field}
     return content_sha256(body)
+
+
+def compute_control_document_artifact_hash(document: dict[str, Any]) -> str:
+    """Hash the canonical newline-terminated bytes committed for a control document."""
+
+    return sha256_bytes(canonical_json_bytes(document) + b"\n")
 
 
 def _validated_document(

@@ -124,7 +124,8 @@ result contract are unchanged.
   by immutable IDs and hashes. Both bootstrap predecessor preflight and Catalog resolution
   cross-bind each preset, Instruction Bundle, capacity policy, and workflow canonical document to
   its persisted row and authorization pin; a valid self-hash cannot mask a different row hash or
-  identity. The nested manifest Artifact SHA must also equal the bundle manifest SHA in the
+  identity. The nested manifest Artifact SHA must also equal the SHA-256 of the exact canonical,
+  newline-terminated Instruction Bundle document bytes and the bundle manifest SHA in the
   canonical preset, persisted bundle revision, and external authorization pin. Catalog creates a
   new three-unit `EXECUTE` batch through the existing batch service; it never converts a failed row
   to pending and never selects a latest revision.

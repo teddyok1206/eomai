@@ -12,6 +12,7 @@ from eom_orchestrator.control_models import (
 )
 from eom_orchestrator.control_service import (
     ControlPlaneError,
+    compute_control_document_artifact_hash,
     compute_control_document_hash,
     resolve_control_artifact_pointer,
 )
@@ -127,6 +128,10 @@ def resolve_legacy_extraction_preset_pointer(
             "LEGACY_EXTRACTION_PRESET_DOCUMENT_INVALID",
             "legacy extraction preset dependency document is invalid",
         ) from exc
+    instruction_document = instruction.model_dump(mode="json")
+    instruction_manifest_artifact_sha256 = compute_control_document_artifact_hash(
+        instruction_document
+    )
     if (
         preset.content_sha256
         != compute_control_document_hash(preset.model_dump(mode="json"), "content_sha256")
@@ -135,9 +140,11 @@ def resolve_legacy_extraction_preset_pointer(
         or execution_preset_policy_sha256(preset.model_dump(mode="json"))
         != pointer.preset_policy_sha256
         or instruction.content_sha256
-        != compute_control_document_hash(instruction.model_dump(mode="json"), "content_sha256")
+        != compute_control_document_hash(instruction_document, "content_sha256")
         or instruction.content_sha256 != bundle_revision.content_sha256
         or instruction.content_sha256 != pointer.instruction_content_sha256
+        or instruction_manifest_artifact_sha256 != bundle_revision.manifest_sha256
+        or instruction_manifest_artifact_sha256 != pointer.instruction_manifest_sha256
         or capacity_document.content_sha256
         != compute_control_document_hash(
             capacity_document.model_dump(mode="json"),
@@ -222,6 +229,8 @@ def resolve_legacy_extraction_preset_pointer(
         != bundle_revision.manifest_sha256
         or policies[0].instruction_bundle.manifest_artifact.sha256
         != pointer.instruction_manifest_sha256
+        or policies[0].instruction_bundle.manifest_artifact.sha256
+        != instruction_manifest_artifact_sha256
         or policies[0].instruction_bundle.manifest_artifact.artifact_id
         != bundle_revision.manifest_artifact_id
         or policies[0].instruction_bundle.manifest_artifact.artifact_revision_id

@@ -19,7 +19,11 @@ from eom_orchestrator.control_models import (
     ExecutionPresetRevisionRecord,
     WorkerCapacityPolicyRevisionRecord,
 )
-from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
+from eom_orchestrator.control_service import (
+    ControlPlaneError,
+    compute_control_document_artifact_hash,
+    compute_control_document_hash,
+)
 from eom_orchestrator.legacy_item_extraction_bootstrap import (
     LegacyItemExtractionBootstrapManifest,
     LegacyItemExtractionBootstrapPredecessor,
@@ -124,6 +128,7 @@ def _fixture() -> tuple[
         schema_ref="eom://schemas/workflow/instruction-bundle-manifest/1.0",
         media_type="application/json",
     )
+    manifest_artifact["sha256"] = compute_control_document_artifact_hash(instruction)
 
     capacity: dict[str, Any] = {
         "schema_version": "worker-capacity-policy/1.2",
@@ -559,6 +564,34 @@ def test_exact_preset_dependency_graph_rejects_nested_manifest_artifact_hash_spl
     assert captured.value.code == "LEGACY_EXTRACTION_PRESET_POLICY_MISMATCH"
 
 
+def _split_canonical_instruction_from_manifest_artifact_bytes(
+    pointer: LegacyExtractionPresetPointer,
+    rows: dict[tuple[object, str], SimpleNamespace],
+) -> LegacyExtractionPresetPointer:
+    instruction_row = rows[(ExecutionBundleRevisionRecord, pointer.instruction_bundle_revision_id)]
+    instruction_document = instruction_row.canonical_document
+    instruction_document["created_at"] = "2026-09-09T05:30:01Z"
+    instruction_document["content_sha256"] = compute_control_document_hash(
+        instruction_document,
+        "content_sha256",
+    )
+    instruction_row.content_sha256 = instruction_document["content_sha256"]
+    return pointer.model_copy(update={"instruction_content_sha256": instruction_row.content_sha256})
+
+
+def test_exact_preset_dependency_graph_rejects_canonical_manifest_artifact_byte_split(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pointer, rows = _fixture()
+    _allow_artifacts(monkeypatch)
+    pointer = _split_canonical_instruction_from_manifest_artifact_bytes(pointer, rows)
+
+    with pytest.raises(LegacyExtractionPresetResolutionError) as captured:
+        _resolve(pointer, rows)
+
+    assert captured.value.code == "LEGACY_EXTRACTION_PRESET_HASH_MISMATCH"
+
+
 @pytest.mark.parametrize("target", ("PRESET", "INSTRUCTION", "CAPACITY", "WORKFLOW"))
 def test_exact_preset_dependency_graph_rejects_canonical_identity_split(
     monkeypatch: pytest.MonkeyPatch,
@@ -583,7 +616,28 @@ def test_exact_preset_dependency_graph_rejects_canonical_identity_split(
             "content_sha256",
         )
         row.content_sha256 = row.canonical_document["content_sha256"]
-        pointer = pointer.model_copy(update={"instruction_content_sha256": row.content_sha256})
+        row.manifest_sha256 = compute_control_document_artifact_hash(row.canonical_document)
+        preset_row = rows[(ExecutionPresetRevisionRecord, pointer.preset_revision_id)]
+        instruction_pointer = preset_row.canonical_document["role_policies"][0][
+            "instruction_bundle"
+        ]
+        instruction_pointer["manifest_sha256"] = row.manifest_sha256
+        instruction_pointer["manifest_artifact"]["sha256"] = row.manifest_sha256
+        preset_row.canonical_document["content_sha256"] = compute_control_document_hash(
+            preset_row.canonical_document,
+            "content_sha256",
+        )
+        preset_row.content_sha256 = preset_row.canonical_document["content_sha256"]
+        pointer = pointer.model_copy(
+            update={
+                "instruction_content_sha256": row.content_sha256,
+                "instruction_manifest_sha256": row.manifest_sha256,
+                "preset_sha256": preset_row.content_sha256,
+                "preset_policy_sha256": execution_preset_policy_sha256(
+                    preset_row.canonical_document
+                ),
+            }
+        )
     elif target == "CAPACITY":
         row = rows[(WorkerCapacityPolicyRevisionRecord, pointer.capacity_policy_revision_id)]
         row.canonical_document["capacity_policy_revision_id"] = "capacityrev_" + "e" * 32
@@ -687,6 +741,31 @@ def test_successor_bootstrap_rejects_nested_manifest_artifact_hash_split(
 ) -> None:
     pointer, rows = _fixture()
     pointer = _split_nested_instruction_manifest_artifact_hash(pointer, rows)
+    manifest = _successor_manifest(pointer, rows)
+    predecessor = manifest.predecessor
+    assert predecessor is not None
+    monkeypatch.setattr(
+        bootstrap_module,
+        "resolve_control_artifact_pointer",
+        lambda *_args, **_kwargs: SimpleNamespace(),
+    )
+
+    with pytest.raises(ControlPlaneError) as captured:
+        _require_successor_preflight(
+            cast(Session, _PreflightSession(rows, preset_id=pointer.preset_id)),
+            manifest=manifest,
+            platform_sha256=predecessor.platform_instruction_sha256,
+            role_sha256="sha256:" + "b" * 64,
+        )
+
+    assert captured.value.code == "CONTROL_BOOTSTRAP_PREDECESSOR_STALE"
+
+
+def test_successor_bootstrap_rejects_canonical_manifest_artifact_byte_split(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pointer, rows = _fixture()
+    pointer = _split_canonical_instruction_from_manifest_artifact_bytes(pointer, rows)
     manifest = _successor_manifest(pointer, rows)
     predecessor = manifest.predecessor
     assert predecessor is not None

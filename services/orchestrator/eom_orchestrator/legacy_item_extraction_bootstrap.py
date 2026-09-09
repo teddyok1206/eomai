@@ -56,6 +56,7 @@ from eom_orchestrator.control_models import (
 from eom_orchestrator.control_service import (
     BundleRevisionCAS,
     ControlPlaneError,
+    compute_control_document_artifact_hash,
     compute_control_document_hash,
     publish_capacity_policy_revision,
     record_capacity_policy_revision,
@@ -318,6 +319,8 @@ def _require_successor_preflight(
     platform = components.get("PLATFORM")
     role = components.get("ROLE")
     policies = tuple(preset_document.role_policies)
+    bundle_document_value = bundle_document.model_dump(mode="json")
+    bundle_manifest_artifact_sha256 = compute_control_document_artifact_hash(bundle_document_value)
     if (
         preset_document.content_sha256
         != compute_control_document_hash(
@@ -330,11 +333,13 @@ def _require_successor_preflight(
         != predecessor.preset_policy_sha256
         or bundle_document.content_sha256
         != compute_control_document_hash(
-            bundle_document.model_dump(mode="json"),
+            bundle_document_value,
             "content_sha256",
         )
         or bundle_document.content_sha256 != prior_bundle.content_sha256
         or bundle_document.content_sha256 != predecessor.instruction_content_sha256
+        or bundle_manifest_artifact_sha256 != prior_bundle.manifest_sha256
+        or bundle_manifest_artifact_sha256 != predecessor.instruction_manifest_sha256
         or capacity_document.content_sha256
         != compute_control_document_hash(
             capacity_document.model_dump(mode="json"),
@@ -409,6 +414,8 @@ def _require_successor_preflight(
         or policies[0].instruction_bundle.manifest_artifact.sha256 != prior_bundle.manifest_sha256
         or policies[0].instruction_bundle.manifest_artifact.sha256
         != predecessor.instruction_manifest_sha256
+        or policies[0].instruction_bundle.manifest_artifact.sha256
+        != bundle_manifest_artifact_sha256
         or preset_document.capacity_policy_revision_id != predecessor.capacity_policy_revision_id
         or tuple(preset_document.compatible_workflow_protocols)
         != manifest.compatible_workflow_protocols
