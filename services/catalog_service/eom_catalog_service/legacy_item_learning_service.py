@@ -22,6 +22,7 @@ from eom_orchestrator.control_models import (
     WorkerCapacityPolicyRevisionRecord,
 )
 from eom_orchestrator.control_service import (
+    LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID,
     ControlPlaneError,
     compute_control_document_hash,
 )
@@ -33,7 +34,7 @@ from eom_workflow.control_plane import (
     WorkerCapacityPolicyV3,
 )
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, func, select
 
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.legacy_item_promotion_service import (
@@ -207,39 +208,36 @@ class LegacyItemLearningCoordinator:
         """Validate exact pointers and prevent current-pointer movement during one step."""
 
         with self.sessions.begin() as session:
+            session.execute(
+                select(func.pg_advisory_xact_lock_shared(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID))
+            )
             preset = session.scalar(
-                select(ExecutionPresetRecord)
-                .where(
+                select(ExecutionPresetRecord).where(
                     ExecutionPresetRecord.preset_key == pin.preset_key,
                     ExecutionPresetRecord.preset_id == pin.preset_id,
                 )
-                .with_for_update(read=True)
             )
             revision = session.scalar(
-                select(ExecutionPresetRevisionRecord)
-                .where(ExecutionPresetRevisionRecord.preset_revision_id == pin.preset_revision_id)
-                .with_for_update(read=True)
+                select(ExecutionPresetRevisionRecord).where(
+                    ExecutionPresetRevisionRecord.preset_revision_id == pin.preset_revision_id
+                )
             )
             capacity = session.scalar(
-                select(WorkerCapacityPolicyRevisionRecord)
-                .where(
+                select(WorkerCapacityPolicyRevisionRecord).where(
                     WorkerCapacityPolicyRevisionRecord.capacity_policy_revision_id
                     == pin.capacity_policy_revision_id
                 )
-                .with_for_update(read=True)
             )
             capacity_logical = session.scalar(
-                select(WorkerCapacityPolicyRecord)
-                .where(WorkerCapacityPolicyRecord.capacity_policy_id == pin.capacity_policy_id)
-                .with_for_update(read=True)
+                select(WorkerCapacityPolicyRecord).where(
+                    WorkerCapacityPolicyRecord.capacity_policy_id == pin.capacity_policy_id
+                )
             )
             capacity_current = session.scalar(
-                select(WorkerCapacityPolicyRevisionRecord)
-                .where(
+                select(WorkerCapacityPolicyRevisionRecord).where(
                     WorkerCapacityPolicyRevisionRecord.capacity_policy_revision_id
                     == pin.capacity_current_revision_id
                 )
-                .with_for_update(read=True)
             )
             if (
                 preset is None

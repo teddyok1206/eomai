@@ -66,6 +66,10 @@ HELD_LEASE_STATES = ("ACTIVE", "RECONCILING")
 # One transaction-scoped host lock serializes capacity checks even while immutable policy
 # revisions coexist. The hexadecimal payload reads ``EOMCAP`` and is stable across processes.
 WORKER_HOST_CAPACITY_LOCK_ID = 0x454F4D4341500001
+# Shared automatic-learning guards and the two authoritative current-pointer publishers use this
+# transaction lock.  It preserves the pin-vs-publication boundary without granting the Catalog
+# runtime UPDATE privilege on control-plane identity tables.
+LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID = 0x454F4D4C4541524E
 
 
 class ControlPlaneError(RuntimeError):
@@ -593,6 +597,7 @@ def record_capacity_policy_revision(
 def publish_capacity_policy_revision(
     session: Session, *, capacity_policy_id: str, capacity_policy_revision_id: str
 ) -> WorkerCapacityPolicyRevisionRecord:
+    session.execute(select(func.pg_advisory_xact_lock(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID)))
     logical = session.execute(
         select(WorkerCapacityPolicyRecord)
         .where(WorkerCapacityPolicyRecord.capacity_policy_id == capacity_policy_id)
@@ -790,6 +795,7 @@ def record_execution_preset_revision(
 def publish_execution_preset_revision(
     session: Session, *, preset_id: str, preset_revision_id: str
 ) -> ExecutionPresetRevisionRecord:
+    session.execute(select(func.pg_advisory_xact_lock(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID)))
     logical = session.execute(
         select(ExecutionPresetRecord)
         .where(ExecutionPresetRecord.preset_id == preset_id)

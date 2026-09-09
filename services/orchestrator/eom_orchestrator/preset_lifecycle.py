@@ -29,6 +29,7 @@ from eom_orchestrator.control_models import (
     ExecutionPresetRevisionRecord,
 )
 from eom_orchestrator.control_service import (
+    LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID,
     ControlPlaneError,
     compute_control_document_hash,
     record_execution_preset_revision,
@@ -266,6 +267,7 @@ def release_execution_preset(
     draft = session.get(ExecutionPresetRevisionRecord, draft_revision_id)
     if draft is None or draft.state != "DRAFT":
         raise ControlPlaneError("CONTROL_PRESET_DRAFT_REQUIRED", "preset draft is missing")
+    session.execute(select(func.pg_advisory_xact_lock(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID)))
     logical = session.execute(
         select(ExecutionPresetRecord)
         .where(ExecutionPresetRecord.preset_id == draft.preset_id)
@@ -340,6 +342,7 @@ def deprecate_execution_preset(
 ) -> ExecutionPresetRevisionRecord:
     """Append deprecation evidence and retire the logical preset without rewriting history."""
 
+    session.execute(select(func.pg_advisory_xact_lock(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID)))
     logical = session.execute(
         select(ExecutionPresetRecord)
         .where(ExecutionPresetRecord.preset_id == preset_id)

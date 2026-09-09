@@ -23,18 +23,26 @@ from eom_orchestrator.control_service import compute_control_document_hash
 class _PinSession:
     def __init__(self, rows: Sequence[SimpleNamespace | None]) -> None:
         self._rows = iter(rows)
+        self.executed: list[object] = []
+        self.scalar_statements: list[object] = []
 
-    def scalar(self, _statement: object) -> SimpleNamespace | None:
+    def execute(self, statement: object) -> None:
+        self.executed.append(statement)
+
+    def scalar(self, statement: object) -> SimpleNamespace | None:
+        self.scalar_statements.append(statement)
         return next(self._rows)
 
 
 class _PinSessions:
     def __init__(self, rows: Sequence[SimpleNamespace | None]) -> None:
         self._rows = rows
+        self.session: _PinSession | None = None
 
     @contextmanager
     def begin(self) -> Iterator[_PinSession]:
-        yield _PinSession(self._rows)
+        self.session = _PinSession(self._rows)
+        yield self.session
 
 
 def _promotion() -> LegacyItemPromotion:
@@ -469,10 +477,20 @@ def test_preset_pin_drift_fails_before_item_promotion() -> None:
 def test_preset_pin_guard_accepts_all_exact_pointers_and_canonical_hashes() -> None:
     pin, rows, _ = _exact_pin_fixture()
     coordinator = object.__new__(LegacyItemLearningCoordinator)
-    coordinator.sessions = cast(Any, _PinSessions(rows))
+    sessions = _PinSessions(rows)
+    coordinator.sessions = cast(Any, sessions)
 
     with coordinator.preset_pin_guard(pin):
         pass
+
+    assert sessions.session is not None
+    assert len(sessions.session.executed) == 1
+    assert "pg_advisory_xact_lock_shared" in str(sessions.session.executed[0])
+    assert len(sessions.session.scalar_statements) == 5
+    assert all(
+        "FOR SHARE" not in str(statement) and "FOR UPDATE" not in str(statement)
+        for statement in sessions.session.scalar_statements
+    )
 
 
 @pytest.mark.parametrize(
