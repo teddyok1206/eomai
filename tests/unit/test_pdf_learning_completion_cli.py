@@ -331,6 +331,7 @@ def test_complete_pdf_passes_protected_roots_and_same_installed_release(
 @dataclass(frozen=True)
 class _RecoveryResult:
     created: bool
+    recovery_artifact: _Document
 
 
 def test_recovery_injects_the_same_installed_authorization_publisher(
@@ -353,7 +354,16 @@ def test_recovery_injects_the_same_installed_authorization_publisher(
 
         def create(self, command: object) -> _RecoveryResult:
             calls["recovery_command"] = command
-            return _RecoveryResult(created=True)
+            return _RecoveryResult(
+                created=True,
+                recovery_artifact=_Document(
+                    {
+                        "artifact_id": "artifact_" + "1" * 32,
+                        "artifact_revision_id": "rev_" + "2" * 32,
+                        "sha256": "sha256:" + "3" * 64,
+                    }
+                ),
+            )
 
     monkeypatch.setattr(cli, "LegacyItemExtractionRecoveryService", Service)
     result = CliRunner().invoke(
@@ -370,7 +380,15 @@ def test_recovery_injects_the_same_installed_authorization_publisher(
     )
 
     assert result.exit_code == 0, result.output
-    assert json.loads(result.stdout) == {"status": "SUCCEEDED", "created": True}
+    assert json.loads(result.stdout) == {
+        "status": "SUCCEEDED",
+        "created": True,
+        "recovery_artifact": {
+            "artifact_id": "artifact_" + "1" * 32,
+            "artifact_revision_id": "rev_" + "2" * 32,
+            "sha256": "sha256:" + "3" * 64,
+        },
+    }
     assert calls["recovery_service"] == (engine, "assessment-publisher")
     command = calls["recovery_command"]
     assert command.recovery is recovery

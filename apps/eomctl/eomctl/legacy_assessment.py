@@ -344,7 +344,9 @@ def extraction_batch_recover_validation_failures(
             ValueError,
         ) as exc:
             _operation_failure(exc)
-        _emit({"status": "SUCCEEDED", **asdict(result)})
+        rendered = asdict(result)
+        rendered["recovery_artifact"] = result.recovery_artifact.model_dump(mode="json")
+        _emit({"status": "SUCCEEDED", **rendered})
     finally:
         engine.dispose()
 
