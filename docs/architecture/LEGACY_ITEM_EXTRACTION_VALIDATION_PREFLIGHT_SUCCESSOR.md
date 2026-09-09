@@ -121,8 +121,11 @@ result contract are unchanged.
 - The Catalog application service resolves the predecessor manifest by batch ID plus SHA-256,
   proves that the batch is exactly `COMPLETED_WITH_GAPS` with exactly the authorized three failed
   rows, re-resolves failure/workflow/job/step evidence, and resolves both preset dependency graphs
-  by immutable IDs and hashes. It creates a new three-unit `EXECUTE` batch through the existing
-  batch service; it never converts a failed row to pending and never selects a latest revision.
+  by immutable IDs and hashes. Both bootstrap predecessor preflight and Catalog resolution
+  cross-bind each preset, Instruction Bundle, capacity policy, and workflow canonical document to
+  its persisted row and authorization pin; a valid self-hash cannot mask a different row hash or
+  identity. Catalog creates a new three-unit `EXECUTE` batch through the existing batch service; it
+  never converts a failed row to pending and never selects a latest revision.
 - The existing Catalog runner already accepts an ordered, duplicate-free comma-separated
   `EOM_LEGACY_ITEM_AUTOMATION_BATCH_IDS` allowlist. No new scheduler, queue, retry loop, or worker
   communication path was added.

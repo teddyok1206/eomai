@@ -95,13 +95,14 @@ PYTHON_FILES=(
   tests/unit/test_control_bundle_successor_cas.py
   tests/unit/test_execution_control_contracts.py
   tests/unit/test_legacy_extraction_batch_service.py
+  tests/unit/test_legacy_extraction_preset_resolution.py
   tests/unit/test_legacy_extraction_recovery_contracts.py
   tests/unit/test_legacy_item_extraction_bootstrap.py
   tests/unit/test_legacy_item_extraction_recovery_service.py
 )
 PYTHONPATH="${PYTHONPATH}" "${PYTHON}" -m ruff format --check "${PYTHON_FILES[@]}"
 PYTHONPATH="${PYTHONPATH}" "${PYTHON}" -m ruff check "${PYTHON_FILES[@]}"
-PYTHONPATH="${PYTHONPATH}" "${PYTHON}" -m mypy \
+PYTHONPATH="${PYTHONPATH}" "${PYTHON}" -m mypy --strict \
   packages/catalog_contracts/eom_catalog_contracts/legacy_extraction_recovery.py \
   packages/catalog_contracts/eom_catalog_contracts/validation.py \
   packages/workflow/eom_workflow/control_schemas.py \
@@ -117,6 +118,7 @@ PYTHONPATH="${PYTHONPATH}" "${PYTHON}" -m pytest -q \
   tests/unit/test_control_bundle_successor_cas.py \
   tests/unit/test_execution_control_contracts.py \
   tests/unit/test_legacy_item_extraction_bootstrap.py \
+  tests/unit/test_legacy_extraction_preset_resolution.py \
   tests/unit/test_legacy_extraction_recovery_contracts.py \
   tests/unit/test_legacy_item_extraction_recovery_service.py \
   tests/unit/test_legacy_extraction_batch_contracts.py \

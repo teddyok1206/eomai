@@ -15,6 +15,7 @@ from eom_workflow import (
     ExecutionPresetRevision,
     InstructionBundleManifest,
     WorkerCapacityPolicyV3,
+    compile_definition_data,
 )
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.schemas import role_schema_bundle_hash
@@ -259,27 +260,31 @@ def _require_successor_preflight(
         or logical.state != "ACTIVE"
         or logical.preset_id != predecessor.preset_id
         or prior_preset is None
+        or prior_preset.preset_revision_id != predecessor.preset_revision_id
         or prior_preset.preset_id != predecessor.preset_id
         or prior_preset.state != "RELEASED"
         or prior_preset.revision_number != predecessor.preset_revision_number
         or prior_preset.content_sha256 != predecessor.preset_content_sha256
-        or execution_preset_policy_sha256(prior_preset.canonical_document)
-        != predecessor.preset_policy_sha256
         or capacity is None
+        or capacity.capacity_policy_revision_id != predecessor.capacity_policy_revision_id
         or capacity.state != "RELEASED"
         or capacity.content_sha256 != predecessor.capacity_policy_sha256
         or protocol is None
+        or protocol.version != predecessor.role_schema_version
         or protocol.schema_sha256 != predecessor.role_schema_sha256
         or workflow is None
+        or workflow.definition_id != predecessor.workflow_definition_id
         or not workflow.active
         or workflow.definition_key != manifest.preset_key
         or workflow.definition_version != predecessor.workflow_definition_version
         or workflow.definition_hash != predecessor.workflow_definition_sha256
         or bundle is None
+        or bundle.bundle_id != predecessor.instruction_bundle_id
         or bundle.bundle_kind != "INSTRUCTION"
         or bundle.bundle_key != "legacy-item-extraction-support"
         or bundle.state != "ACTIVE"
         or prior_bundle is None
+        or prior_bundle.bundle_revision_id != predecessor.instruction_bundle_revision_id
         or prior_bundle.bundle_id != predecessor.instruction_bundle_id
         or prior_bundle.bundle_kind != "INSTRUCTION"
         or prior_bundle.state != "RELEASED"
@@ -293,10 +298,18 @@ def _require_successor_preflight(
         )
 
     try:
+        validate_control_contract("execution-preset-revision", prior_preset.canonical_document)
+        validate_control_contract("instruction-bundle-manifest", prior_bundle.canonical_document)
+        validate_control_contract("worker-capacity-policy-v3", capacity.canonical_document)
         preset_document = ExecutionPresetRevision.model_validate(prior_preset.canonical_document)
         bundle_document = InstructionBundleManifest.model_validate(prior_bundle.canonical_document)
         capacity_document = WorkerCapacityPolicyV3.model_validate(capacity.canonical_document)
-    except ValueError as exc:
+        compiled_workflow = compile_definition_data(
+            workflow.canonical_definition,
+            workflow.source_path,
+            {"support"},
+        )
+    except (JsonSchemaValidationError, ValueError) as exc:
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_PREDECESSOR_STALE",
             "legacy extraction predecessor document is invalid",
@@ -311,16 +324,69 @@ def _require_successor_preflight(
             preset_document.model_dump(mode="json"),
             "content_sha256",
         )
+        or preset_document.content_sha256 != prior_preset.content_sha256
+        or preset_document.content_sha256 != predecessor.preset_content_sha256
+        or execution_preset_policy_sha256(preset_document.model_dump(mode="json"))
+        != predecessor.preset_policy_sha256
         or bundle_document.content_sha256
         != compute_control_document_hash(
             bundle_document.model_dump(mode="json"),
             "content_sha256",
         )
+        or bundle_document.content_sha256 != prior_bundle.content_sha256
+        or bundle_document.content_sha256 != predecessor.instruction_content_sha256
         or capacity_document.content_sha256
         != compute_control_document_hash(
             capacity_document.model_dump(mode="json"),
             "content_sha256",
         )
+        or capacity_document.content_sha256 != capacity.content_sha256
+        or capacity_document.content_sha256 != predecessor.capacity_policy_sha256
+        or compiled_workflow.sha256 != workflow.definition_hash
+        or compiled_workflow.sha256 != predecessor.workflow_definition_sha256
+        or preset_document.schema_version != prior_preset.schema_version
+        or preset_document.preset_id != prior_preset.preset_id
+        or preset_document.preset_id != predecessor.preset_id
+        or preset_document.preset_revision_id != prior_preset.preset_revision_id
+        or preset_document.preset_revision_id != predecessor.preset_revision_id
+        or preset_document.revision_number != prior_preset.revision_number
+        or preset_document.revision_number != predecessor.preset_revision_number
+        or preset_document.state != prior_preset.state
+        or preset_document.state != "RELEASED"
+        or preset_document.display_name != prior_preset.display_name
+        or preset_document.description != prior_preset.description
+        or preset_document.capacity_policy_revision_id != prior_preset.capacity_policy_revision_id
+        or preset_document.capacity_policy_revision_id != predecessor.capacity_policy_revision_id
+        or preset_document.general_knowledge_policy != prior_preset.general_knowledge_policy
+        or list(preset_document.compatible_workflow_protocols)
+        != prior_preset.compatible_workflow_protocols
+        or bundle_document.schema_version != prior_bundle.schema_version
+        or bundle_document.bundle_id != prior_bundle.bundle_id
+        or bundle_document.bundle_id != predecessor.instruction_bundle_id
+        or bundle_document.bundle_revision_id != prior_bundle.bundle_revision_id
+        or bundle_document.bundle_revision_id != predecessor.instruction_bundle_revision_id
+        or bundle_document.revision_number != prior_bundle.revision_number
+        or bundle_document.revision_number != predecessor.instruction_revision_number
+        or bundle_document.state != prior_bundle.state
+        or bundle_document.state != "RELEASED"
+        or capacity_document.schema_version != capacity.schema_version
+        or capacity_document.capacity_policy_id != capacity.capacity_policy_id
+        or capacity_document.capacity_policy_revision_id != capacity.capacity_policy_revision_id
+        or capacity_document.capacity_policy_revision_id != predecessor.capacity_policy_revision_id
+        or capacity_document.revision_number != capacity.revision_number
+        or capacity_document.state != capacity.state
+        or capacity_document.state != "RELEASED"
+        or capacity_document.max_configured_slots != capacity.max_configured_slots
+        or capacity_document.max_active_codex != capacity.max_active_codex
+        or capacity_document.max_active_per_slot != capacity.max_active_per_slot
+        or capacity_document.max_active_gpu != capacity.max_active_gpu
+        or capacity_document.max_active_knowledge_analysis != capacity.max_active_knowledge_analysis
+        or compiled_workflow.definition.schema_version != workflow.schema_version
+        or compiled_workflow.definition.definition_key != workflow.definition_key
+        or compiled_workflow.definition.definition_key != manifest.preset_key
+        or compiled_workflow.definition.definition_version != workflow.definition_version
+        or compiled_workflow.definition.definition_version
+        != predecessor.workflow_definition_version
         or len(components) != 2
         or platform is None
         or role is None

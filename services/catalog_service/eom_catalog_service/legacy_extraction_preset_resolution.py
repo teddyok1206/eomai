@@ -17,9 +17,16 @@ from eom_orchestrator.control_service import (
 )
 from eom_orchestrator.models import ProtocolVersionRecord
 from eom_orchestrator.preset_lifecycle import execution_preset_policy_sha256
-from eom_workflow import ExecutionPresetRevision, InstructionBundleManifest
+from eom_workflow import (
+    ExecutionPresetRevision,
+    InstructionBundleManifest,
+    WorkerCapacityPolicyV3,
+    compile_definition_data,
+    validate_control_contract,
+)
 from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.models import WorkflowDefinitionRecord
+from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
 
@@ -55,6 +62,7 @@ def resolve_legacy_extraction_preset_pointer(
     workflow = session.get(WorkflowDefinitionRecord, pointer.workflow_definition_id)
     if (
         logical is None
+        or logical.preset_id != pointer.preset_id
         or logical.state != "ACTIVE"
         or logical.preset_key != "legacy-item-extraction"
         or revision is None
@@ -62,9 +70,8 @@ def resolve_legacy_extraction_preset_pointer(
         or revision.state != "RELEASED"
         or revision.revision_number != pointer.preset_revision_number
         or revision.content_sha256 != pointer.preset_sha256
-        or execution_preset_policy_sha256(revision.canonical_document)
-        != pointer.preset_policy_sha256
         or bundle is None
+        or bundle.bundle_id != pointer.instruction_bundle_id
         or bundle.bundle_kind != "INSTRUCTION"
         or bundle.bundle_key != "legacy-item-extraction-support"
         or bundle.state != "ACTIVE"
@@ -76,12 +83,15 @@ def resolve_legacy_extraction_preset_pointer(
         or bundle_revision.manifest_sha256 != pointer.instruction_manifest_sha256
         or bundle_revision.content_sha256 != pointer.instruction_content_sha256
         or capacity is None
+        or capacity.capacity_policy_revision_id != pointer.capacity_policy_revision_id
         or capacity.state != "RELEASED"
         or capacity.content_sha256 != pointer.capacity_policy_sha256
         or protocol is None
+        or protocol.version != pointer.role_schema_version
         or protocol.schema_sha256 != pointer.role_schema_sha256
         or role_schema_bundle_hash(pointer.role_schema_version) != pointer.role_schema_sha256
         or workflow is None
+        or workflow.definition_id != pointer.workflow_definition_id
         or not workflow.active
         or workflow.definition_key != "legacy-item-extraction"
         or workflow.definition_version != pointer.workflow_definition_version
@@ -101,21 +111,94 @@ def resolve_legacy_extraction_preset_pointer(
         )
 
     try:
+        validate_control_contract("execution-preset-revision", revision.canonical_document)
+        validate_control_contract("instruction-bundle-manifest", bundle_revision.canonical_document)
+        validate_control_contract("worker-capacity-policy-v3", capacity.canonical_document)
         preset = ExecutionPresetRevision.model_validate(revision.canonical_document)
         instruction = InstructionBundleManifest.model_validate(bundle_revision.canonical_document)
-    except PydanticValidationError as exc:
+        capacity_document = WorkerCapacityPolicyV3.model_validate(capacity.canonical_document)
+        compiled_workflow = compile_definition_data(
+            workflow.canonical_definition,
+            workflow.source_path,
+            {"support"},
+        )
+    except (JsonSchemaValidationError, PydanticValidationError, ValueError) as exc:
         raise LegacyExtractionPresetResolutionError(
             "LEGACY_EXTRACTION_PRESET_DOCUMENT_INVALID",
             "legacy extraction preset dependency document is invalid",
         ) from exc
-    if preset.content_sha256 != compute_control_document_hash(
-        preset.model_dump(mode="json"), "content_sha256"
-    ) or instruction.content_sha256 != compute_control_document_hash(
-        instruction.model_dump(mode="json"), "content_sha256"
+    if (
+        preset.content_sha256
+        != compute_control_document_hash(preset.model_dump(mode="json"), "content_sha256")
+        or preset.content_sha256 != revision.content_sha256
+        or preset.content_sha256 != pointer.preset_sha256
+        or execution_preset_policy_sha256(preset.model_dump(mode="json"))
+        != pointer.preset_policy_sha256
+        or instruction.content_sha256
+        != compute_control_document_hash(instruction.model_dump(mode="json"), "content_sha256")
+        or instruction.content_sha256 != bundle_revision.content_sha256
+        or instruction.content_sha256 != pointer.instruction_content_sha256
+        or capacity_document.content_sha256
+        != compute_control_document_hash(
+            capacity_document.model_dump(mode="json"),
+            "content_sha256",
+        )
+        or capacity_document.content_sha256 != capacity.content_sha256
+        or capacity_document.content_sha256 != pointer.capacity_policy_sha256
+        or compiled_workflow.sha256 != workflow.definition_hash
+        or compiled_workflow.sha256 != pointer.workflow_definition_sha256
     ):
         raise LegacyExtractionPresetResolutionError(
             "LEGACY_EXTRACTION_PRESET_HASH_MISMATCH",
-            "legacy extraction preset dependency self-hash differs",
+            "legacy extraction canonical dependency hash differs from its row or pin",
+        )
+    workflow_document = compiled_workflow.definition
+    if (
+        preset.schema_version != revision.schema_version
+        or preset.preset_id != revision.preset_id
+        or preset.preset_id != pointer.preset_id
+        or preset.preset_revision_id != revision.preset_revision_id
+        or preset.preset_revision_id != pointer.preset_revision_id
+        or preset.revision_number != revision.revision_number
+        or preset.revision_number != pointer.preset_revision_number
+        or preset.state != revision.state
+        or preset.state != "RELEASED"
+        or preset.display_name != revision.display_name
+        or preset.description != revision.description
+        or preset.capacity_policy_revision_id != revision.capacity_policy_revision_id
+        or preset.general_knowledge_policy != revision.general_knowledge_policy
+        or list(preset.compatible_workflow_protocols) != revision.compatible_workflow_protocols
+        or instruction.schema_version != bundle_revision.schema_version
+        or instruction.bundle_id != bundle_revision.bundle_id
+        or instruction.bundle_id != pointer.instruction_bundle_id
+        or instruction.bundle_revision_id != bundle_revision.bundle_revision_id
+        or instruction.bundle_revision_id != pointer.instruction_bundle_revision_id
+        or instruction.revision_number != bundle_revision.revision_number
+        or instruction.revision_number != pointer.instruction_revision_number
+        or instruction.state != bundle_revision.state
+        or instruction.state != "RELEASED"
+        or capacity_document.schema_version != capacity.schema_version
+        or capacity_document.capacity_policy_id != capacity.capacity_policy_id
+        or capacity_document.capacity_policy_revision_id != capacity.capacity_policy_revision_id
+        or capacity_document.capacity_policy_revision_id != pointer.capacity_policy_revision_id
+        or capacity_document.revision_number != capacity.revision_number
+        or capacity_document.state != capacity.state
+        or capacity_document.state != "RELEASED"
+        or capacity_document.max_configured_slots != capacity.max_configured_slots
+        or capacity_document.max_active_codex != capacity.max_active_codex
+        or capacity_document.max_active_per_slot != capacity.max_active_per_slot
+        or capacity_document.max_active_gpu != capacity.max_active_gpu
+        or capacity_document.max_active_knowledge_analysis != capacity.max_active_knowledge_analysis
+        or workflow_document.schema_version != workflow.schema_version
+        or workflow_document.definition_key != workflow.definition_key
+        or workflow_document.definition_key != "legacy-item-extraction"
+        or workflow_document.definition_version != workflow.definition_version
+        or workflow_document.definition_version != pointer.workflow_definition_version
+        or not workflow.active
+    ):
+        raise LegacyExtractionPresetResolutionError(
+            "LEGACY_EXTRACTION_PRESET_POINTER_STALE",
+            "legacy extraction canonical dependency identity differs",
         )
     policies = tuple(preset.role_policies)
     components = {component.layer: component for component in instruction.components}
