@@ -1,0 +1,36 @@
+schema_version: legacy-item-extraction-control-bootstrap/2.0
+preset_key: legacy-item-extraction
+display_name: 레거시 문항 추출
+description: 검토된 평가 자료 포인터와 exact page PNG만 slot06에서 읽어 문항 구조·시각 자료·발문·선택지·정답·해설의 근거 앵커를 반환하는 source-only one-shot extraction 정책입니다.
+created_at: 2026-09-09T05:30:00Z
+model: gpt-5.6-terra
+reasoning_effort: xhigh
+general_knowledge_policy: DENY
+compatible_workflow_protocols:
+  - workflow-role/1.14.0
+platform_instruction_path: instructions/platform.md
+role_instruction_path: instructions/legacy-item-extraction.md
+slot_key: slot06
+worker_pool_key: legacy-extraction
+timeout_seconds: 7200
+instruction_revision_number: 2
+predecessor:
+  preset_id: execpreset_fbd4c93912ae421689ab340c60eac00d
+  preset_revision_id: execpresetrev_4249f0c07653430aab1b9eff3626d694
+  preset_revision_number: 2
+  preset_content_sha256: sha256:ab85a0df6ba31be10a370ac969d007537f6cfa9819c7192c827588fcc2ea482b
+  preset_policy_sha256: sha256:3f692e048f134c290645893eaf0297eb2b0f2bbeb4e547b68d611ec4f39e11a4
+  capacity_policy_revision_id: capacityrev_d8ce74ff203d225081fe8e9686457dd9
+  capacity_policy_sha256: sha256:0d57aca8671aebd1f487bb1d39ef1bbfb75b07f618bd26a38e863d69920f1660
+  instruction_bundle_id: instrbundle_25335ef258798df97289805812c68432
+  instruction_bundle_revision_id: instrrev_8b104f84bf1288a7cab59c2bd0de2ba9
+  instruction_revision_number: 1
+  instruction_manifest_sha256: sha256:59e787825fca530944e2b36202c82734e4a8013a3337afc55649a9925a3ab4b3
+  instruction_content_sha256: sha256:c2f0ea68700fdc66d24e3ef49ee8c51ee42775d2ccb19e4be487f2c7416d6633
+  platform_instruction_sha256: sha256:82bb9a60c210a7e918f5ebcf9c609e9bd4774af75688b0a628ce421ec9d3f61b
+  role_instruction_sha256: sha256:60f0c55701b79dfcff738a4c5a2b9c84e6b94be7cfe59c00eac5bef2e759143f
+  workflow_definition_id: wfdef_67802c80675649d9945201cf440a2a71
+  workflow_definition_version: 1.0.0
+  workflow_definition_sha256: sha256:03b240e6f880f7699a6a2f9184a422caac781c3d24c7b175795dc73e91cc059b
+  role_schema_version: workflow-role/1.14.0
+  role_schema_sha256: sha256:204a5070a9c465dde25677688980463c1df8feba64673001e2477a11d9f69e54

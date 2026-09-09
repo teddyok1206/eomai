@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/legacy-item-extraction-validation-recovery/1.0",
+  "title": "Legacy Item Extraction Validation Recovery V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "predecessor_batch_id",
+    "predecessor_manifest_sha256",
+    "predecessor_preset",
+    "successor_batch_id",
+    "successor_idempotency_key",
+    "successor_preset",
+    "replacements",
+    "created_at",
+    "recovery_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-item-extraction-validation-recovery/1.0"},
+    "predecessor_batch_id": {
+      "type": "string",
+      "pattern": "^legacybatch_[0-9a-f]{32}$"
+    },
+    "predecessor_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "predecessor_preset": {"$ref": "#/$defs/extractionPresetPointer"},
+    "successor_batch_id": {
+      "type": "string",
+      "pattern": "^legacybatch_[0-9a-f]{32}$"
+    },
+    "successor_idempotency_key": {"type": "string", "minLength": 1, "maxLength": 128},
+    "successor_preset": {"$ref": "#/$defs/extractionPresetPointer"},
+    "replacements": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/replacement"}
+    },
+    "created_at": {"$ref": "#/$defs/utcTimestamp"},
+    "recovery_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "extractionPresetPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset_id",
+        "preset_revision_id",
+        "preset_revision_number",
+        "preset_sha256",
+        "preset_policy_sha256",
+        "capacity_policy_revision_id",
+        "capacity_policy_sha256",
+        "instruction_bundle_id",
+        "instruction_bundle_revision_id",
+        "instruction_revision_number",
+        "instruction_manifest_sha256",
+        "instruction_content_sha256",
+        "workflow_definition_id",
+        "workflow_definition_version",
+        "workflow_definition_sha256",
+        "role_schema_version",
+        "role_schema_sha256"
+      ],
+      "properties": {
+        "preset_id": {"type": "string", "pattern": "^execpreset_[0-9a-f]{32}$"},
+        "preset_revision_id": {
+          "type": "string",
+          "pattern": "^execpresetrev_[0-9a-f]{32}$"
+        },
+        "preset_revision_number": {"type": "integer", "minimum": 1},
+        "preset_sha256": {"$ref": "#/$defs/sha256"},
+        "preset_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "capacity_policy_revision_id": {
+          "type": "string",
+          "pattern": "^capacityrev_[0-9a-f]{32}$"
+        },
+        "capacity_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "instruction_bundle_id": {
+          "type": "string",
+          "pattern": "^instrbundle_[0-9a-f]{32}$"
+        },
+        "instruction_bundle_revision_id": {
+          "type": "string",
+          "pattern": "^instrrev_[0-9a-f]{32}$"
+        },
+        "instruction_revision_number": {"type": "integer", "minimum": 1},
+        "instruction_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "instruction_content_sha256": {"$ref": "#/$defs/sha256"},
+        "workflow_definition_id": {"type": "string", "pattern": "^wfdef_[0-9a-f]{32}$"},
+        "workflow_definition_version": {"const": "1.0.0"},
+        "workflow_definition_sha256": {"$ref": "#/$defs/sha256"},
+        "role_schema_version": {"const": "workflow-role/1.14.0"},
+        "role_schema_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "replacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "predecessor_work_unit_id",
+        "predecessor_ordinal",
+        "predecessor_extraction_request_id",
+        "predecessor_request_sha256",
+        "predecessor_bundle_revision_id",
+        "predecessor_workflow_id",
+        "predecessor_platform_job_id",
+        "failure_code",
+        "workflow_failure_code",
+        "job_error_code",
+        "failure_message_sha256",
+        "diagnosis_code",
+        "expected_item_numbers",
+        "expected_item_numbers_sha256",
+        "successor_work_unit_id",
+        "successor_ordinal",
+        "successor_extraction_request_id"
+      ],
+      "properties": {
+        "predecessor_work_unit_id": {
+          "type": "string",
+          "pattern": "^legacyworkunit_[0-9a-f]{32}$"
+        },
+        "predecessor_ordinal": {"type": "integer", "minimum": 0, "maximum": 999999},
+        "predecessor_extraction_request_id": {
+          "type": "string",
+          "pattern": "^itemextractreq_[0-9a-f]{32}$"
+        },
+        "predecessor_request_sha256": {"$ref": "#/$defs/sha256"},
+        "predecessor_bundle_revision_id": {
+          "type": "string",
+          "pattern": "^assessbundlerev_[0-9a-f]{32}$"
+        },
+        "predecessor_workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "predecessor_platform_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "failure_code": {"const": "LEGACY_ITEM_EXTRACTION_WORKFLOW_FAILED"},
+        "workflow_failure_code": {"const": "WORKER_RESULT_INVALID"},
+        "job_error_code": {"const": "WORKER_RESULT_INVALID"},
+        "failure_message_sha256": {"$ref": "#/$defs/sha256"},
+        "diagnosis_code": {
+          "enum": [
+            "DUPLICATE_STATEMENT_EXPLANATION_ID",
+            "BODY_BLOCK_DISCRIMINATOR_MISMATCH",
+            "NONE_VISUAL_RENDERING_CONFLICT"
+          ]
+        },
+        "expected_item_numbers": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 1, "maximum": 10000}
+        },
+        "expected_item_numbers_sha256": {"$ref": "#/$defs/sha256"},
+        "successor_work_unit_id": {
+          "type": "string",
+          "pattern": "^legacyworkunit_[0-9a-f]{32}$"
+        },
+        "successor_ordinal": {"type": "integer", "minimum": 0, "maximum": 2},
+        "successor_extraction_request_id": {
+          "type": "string",
+          "pattern": "^itemextractreq_[0-9a-f]{32}$"
+        }
+      }
+    }
+  }
+}

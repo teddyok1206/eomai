@@ -36,15 +36,18 @@ from eom_orchestrator.control_models import (
     WorkerCapacityPolicyRevisionRecord,
 )
 from eom_orchestrator.control_service import (
+    BundleRevisionCAS,
     ControlPlaneError,
     compute_control_document_hash,
     publish_bundle_revision,
+    publish_bundle_revision_successor,
     publish_capacity_policy_revision,
     record_auth_health,
     record_bundle_revision,
     record_capacity_policy_revision,
 )
 from eom_orchestrator.database import build_session_factory, transaction
+from eom_orchestrator.models import ArtifactRevisionRecord
 from eom_orchestrator.preset_lifecycle import (
     create_execution_preset_draft,
     execution_preset_policy_sha256,
@@ -1210,6 +1213,28 @@ def _publish_markdown(
     ).pointer
 
 
+def _require_artifact_source_commit(
+    sessions: sessionmaker[Session],
+    *,
+    pointer: ControlArtifactPointer,
+    source_commit: str,
+) -> None:
+    """Bind a successor-only Artifact replay to its reviewed source commit."""
+
+    with sessions() as session:
+        revision = session.get(ArtifactRevisionRecord, pointer.artifact_revision_id)
+        if (
+            revision is None
+            or revision.logical_artifact_id != pointer.artifact_id
+            or revision.content_hash != pointer.sha256
+            or revision.result.get("source_commit") != source_commit
+        ):
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_SOURCE_COMMIT_MISMATCH",
+                "successor Artifact source commit differs",
+            )
+
+
 def _publish_instruction_bundle(
     publisher: ControlArtifactPublisher,
     sessions: sessionmaker[Session],
@@ -1224,6 +1249,7 @@ def _publish_instruction_bundle(
     actor_id: str,
     created_at: datetime,
     revision_number: int = 1,
+    predecessor: BundleRevisionCAS | None = None,
 ) -> BundleRevisionPointer:
     bundle_id = _stable_id("instrbundle_", identity_key)
     revision_id = _stable_id("instrrev_", f"{identity_key}:v{revision_number}")
@@ -1260,6 +1286,12 @@ def _publish_instruction_bundle(
         created_at=created_at,
         source_commit=source_commit,
     ).pointer
+    if predecessor is not None:
+        _require_artifact_source_commit(
+            sessions,
+            pointer=manifest,
+            source_commit=source_commit,
+        )
     with transaction(sessions) as session:
         revision = record_bundle_revision(
             session,
@@ -1268,11 +1300,19 @@ def _publish_instruction_bundle(
             document=document,
             created_by=actor_id,
         )
-        publish_bundle_revision(
-            session,
-            bundle_id=revision.bundle_id,
-            bundle_revision_id=revision.bundle_revision_id,
-        )
+        if predecessor is None:
+            publish_bundle_revision(
+                session,
+                bundle_id=revision.bundle_id,
+                bundle_revision_id=revision.bundle_revision_id,
+            )
+        else:
+            publish_bundle_revision_successor(
+                session,
+                bundle_id=revision.bundle_id,
+                bundle_revision_id=revision.bundle_revision_id,
+                predecessor=predecessor,
+            )
     return BundleRevisionPointer(
         bundle_id=bundle_id,
         bundle_revision_id=revision_id,

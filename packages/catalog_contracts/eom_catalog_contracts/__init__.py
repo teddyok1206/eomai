@@ -390,6 +390,12 @@ from eom_catalog_contracts.legacy_extraction_batch import (
     LegacyItemExtractionBatchManifest,
     LegacyItemExtractionBatchManifestV2,
 )
+from eom_catalog_contracts.legacy_extraction_recovery import (
+    ExtractionValidationDiagnosis,
+    LegacyExtractionPresetPointer,
+    LegacyExtractionValidationReplacement,
+    LegacyItemExtractionValidationRecovery,
+)
 from eom_catalog_contracts.legacy_item_learning import (
     EditorialAuthorityKind,
     EditorialAuthorityPointer,
@@ -705,6 +711,7 @@ __all__ = [
     "EvidenceEntryV3",
     "EvidenceEntryV4",
     "ExecuteKnowledgeAnalysisRange",
+    "ExtractionValidationDiagnosis",
     "FulfillUsagePlan",
     "GeneratePackSource",
     "GuidanceDocumentControl",
@@ -823,7 +830,9 @@ __all__ = [
     "LegacyExtractionAcceptancePointer",
     "LegacyExtractionBatchWorkUnit",
     "LegacyExtractionBatchWorkUnitV2",
+    "LegacyExtractionPresetPointer",
     "LegacyExtractionResultPointer",
+    "LegacyExtractionValidationReplacement",
     "LegacyFileObservation",
     "LegacyInventoryClassificationRule",
     "LegacyInventoryEntryPointer",
@@ -841,6 +850,7 @@ __all__ = [
     "LegacyItemExtractionReceipt",
     "LegacyItemExtractionRequest",
     "LegacyItemExtractionResult",
+    "LegacyItemExtractionValidationRecovery",
     "LegacyItemPromotionRequest",
     "LegacyKnowledgeContractErrorCode",
     "LegacyLearnedItemPointer",

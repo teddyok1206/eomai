@@ -20,11 +20,14 @@ from eom_orchestrator.legacy_item_extraction_bootstrap import (
     LegacyItemExtractionBootstrapManifest,
     _build_non_live_evaluation_report,
     _find_or_create_draft,
+    _require_artifact_source_commit,
     _require_exact_six_slot_registry,
+    _require_existing_registry_and_binding,
+    _require_successor_preflight,
     load_legacy_item_extraction_bootstrap_manifest,
 )
 from eom_orchestrator.worker_registry import WorkerSlot
-from eom_workflow import ExecutionPresetEvaluationReport
+from eom_workflow import ControlArtifactPointer, ExecutionPresetEvaluationReport
 from eom_workflow.control_schemas import validate_control_contract
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
@@ -32,6 +35,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "config/control-plane/legacy-item-extraction-v1"
+CONFIG_V2 = ROOT / "config/control-plane/legacy-item-extraction-v2"
 
 
 def _instruction_bundle() -> dict[str, object]:
@@ -185,6 +189,112 @@ def test_legacy_item_extraction_bootstrap_is_schema_first_and_exact() -> None:
     assert hashlib.sha256((CONFIG / "bootstrap.yaml").read_bytes()).hexdigest() == (
         "4d63661cc051c3eec1a8f56a7deaefa8350d993922e571f38db37d090826d4b6"
     )
+
+
+def test_legacy_item_extraction_v2_is_exact_cas_successor() -> None:
+    manifest = load_legacy_item_extraction_bootstrap_manifest(CONFIG_V2)
+    document = manifest.model_dump(mode="json")
+
+    validate_control_contract("legacy-item-extraction-control-bootstrap-v2", document)
+    predecessor = manifest.predecessor
+    assert predecessor is not None
+    assert manifest.instruction_revision_number == predecessor.instruction_revision_number + 1
+    assert predecessor.preset_revision_id == ("execpresetrev_4249f0c07653430aab1b9eff3626d694")
+    assert predecessor.preset_content_sha256 == (
+        "sha256:ab85a0df6ba31be10a370ac969d007537f6cfa9819c7192c827588fcc2ea482b"
+    )
+    assert predecessor.instruction_bundle_revision_id == (
+        "instrrev_8b104f84bf1288a7cab59c2bd0de2ba9"
+    )
+    assert hashlib.sha256((CONFIG_V2 / "bootstrap.yaml").read_bytes()).hexdigest() == (
+        "ca41967a8cef9bce33b4cce49280a12832900c9ed0a29bfdd8aa6bcfd7f6e93d"
+    )
+
+
+def test_legacy_item_extraction_v2_instruction_adds_only_explicit_preflight_checks() -> None:
+    platform = (CONFIG_V2 / "instructions/platform.md").read_bytes()
+    role = (CONFIG_V2 / "instructions/legacy-item-extraction.md").read_text(encoding="utf-8")
+    manifest = load_legacy_item_extraction_bootstrap_manifest(CONFIG_V2)
+    predecessor = manifest.predecessor
+    assert predecessor is not None
+
+    assert "sha256:" + hashlib.sha256(platform).hexdigest() == (
+        predecessor.platform_instruction_sha256
+    )
+    assert "sha256:" + hashlib.sha256(role.encode()).hexdigest() != (
+        predecessor.role_instruction_sha256
+    )
+    assert "explanation-ID list has no duplicates" in role
+    assert "validates exactly one of `paragraph`, `equation`, `table`, `image`, or" in role
+    assert "`rendering_mode=TEXT_ONLY`, `panel_layout=NONE`, and `features=[]`" in role
+    assert "instead of deleting or weakening evidence" in role
+
+
+def test_legacy_item_extraction_v2_rejects_platform_hash_drift_before_resolution() -> None:
+    manifest = load_legacy_item_extraction_bootstrap_manifest(CONFIG_V2)
+
+    with pytest.raises(ControlPlaneError) as captured:
+        _require_successor_preflight(
+            cast(Session, object()),
+            manifest=manifest,
+            platform_sha256="sha256:" + "0" * 64,
+            role_sha256="sha256:" + "1" * 64,
+        )
+
+    assert captured.value.code == "CONTROL_BOOTSTRAP_PREDECESSOR_STALE"
+
+
+def test_legacy_item_extraction_v2_artifact_replay_pins_source_commit() -> None:
+    pointer = ControlArtifactPointer(
+        artifact_id="artifact_" + "1" * 32,
+        artifact_revision_id="rev_" + "2" * 32,
+        sha256="sha256:" + "3" * 64,
+        schema_ref="eom://schemas/workflow/instruction-member/1.0",
+        media_type="text/markdown",
+        logical_name="legacy-item-extraction.md",
+    )
+    revision = SimpleNamespace(
+        logical_artifact_id=pointer.artifact_id,
+        content_hash=pointer.sha256,
+        result={"source_commit": "a" * 40},
+    )
+
+    @contextmanager
+    def fake_sessions() -> Iterator[Session]:
+        yield cast(Session, SimpleNamespace(get=lambda _model, _identity: revision))
+
+    sessions = cast(sessionmaker[Session], fake_sessions)
+    _require_artifact_source_commit(sessions, pointer=pointer, source_commit="a" * 40)
+
+    with pytest.raises(ControlPlaneError) as captured:
+        _require_artifact_source_commit(sessions, pointer=pointer, source_commit="b" * 40)
+
+    assert captured.value.code == "CONTROL_BOOTSTRAP_SOURCE_COMMIT_MISMATCH"
+
+
+def test_legacy_item_extraction_v2_rejects_missing_predecessor_pointer() -> None:
+    class MissingSession:
+        @staticmethod
+        def scalar(_statement: object) -> None:
+            return None
+
+        @staticmethod
+        def get(_model: object, _identity: str) -> None:
+            return None
+
+    manifest = load_legacy_item_extraction_bootstrap_manifest(CONFIG_V2)
+    platform = (CONFIG_V2 / "instructions/platform.md").read_bytes()
+    role = (CONFIG_V2 / "instructions/legacy-item-extraction.md").read_bytes()
+
+    with pytest.raises(ControlPlaneError) as captured:
+        _require_successor_preflight(
+            cast(Session, MissingSession()),
+            manifest=manifest,
+            platform_sha256="sha256:" + hashlib.sha256(platform).hexdigest(),
+            role_sha256="sha256:" + hashlib.sha256(role).hexdigest(),
+        )
+
+    assert captured.value.code == "CONTROL_BOOTSTRAP_PREDECESSOR_STALE"
 
 
 def test_legacy_item_extraction_evaluation_uses_existing_v1_contract_code() -> None:
@@ -394,6 +504,46 @@ def test_legacy_item_extraction_requires_slot06_without_broadening_slot05() -> N
     drifted = (*slots[:5], slots[5].model_copy(update={"enabled": False}))
     with pytest.raises(ControlPlaneError) as captured:
         _require_exact_six_slot_registry(drifted)
+    assert captured.value.code == "CONTROL_BOOTSTRAP_SLOT_MISMATCH"
+
+
+def test_legacy_item_extraction_v2_reuses_registry_and_auth_without_upsert() -> None:
+    slots = tuple(
+        WorkerSlot(
+            slot_id=f"{ordinal:02d}",
+            linux_user=f"eom-cdx-{ordinal:02d}",
+            role=role,
+            enabled=True,
+            gpu=role == "image",
+        )
+        for ordinal, role in (
+            (1, "authoring"),
+            (2, "review"),
+            (3, "image"),
+            (4, "item_management"),
+            (5, "support"),
+            (6, "support"),
+        )
+    )
+    records = {
+        slot.slot_id: SimpleNamespace(
+            linux_user=slot.linux_user,
+            role=slot.role,
+            enabled=slot.enabled,
+            gpu=slot.gpu,
+        )
+        for slot in slots
+    }
+    binding_id = legacy_bootstrap._stable_id("authbinding_", "slot06")
+    records[binding_id] = SimpleNamespace(worker_slot_id="06")
+    session = SimpleNamespace(get=lambda _model, identity: records.get(identity))
+
+    assert _require_existing_registry_and_binding(cast(Session, session), slots=slots) == binding_id
+    records["06"].enabled = False
+
+    with pytest.raises(ControlPlaneError) as captured:
+        _require_existing_registry_and_binding(cast(Session, session), slots=slots)
+
     assert captured.value.code == "CONTROL_BOOTSTRAP_SLOT_MISMATCH"
 
 

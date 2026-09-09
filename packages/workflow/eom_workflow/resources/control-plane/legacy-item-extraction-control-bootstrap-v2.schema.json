@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/legacy-item-extraction-control-bootstrap/2.0",
+  "title": "Legacy item extraction control bootstrap manifest V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "preset_key",
+    "display_name",
+    "description",
+    "created_at",
+    "model",
+    "reasoning_effort",
+    "general_knowledge_policy",
+    "compatible_workflow_protocols",
+    "platform_instruction_path",
+    "role_instruction_path",
+    "slot_key",
+    "worker_pool_key",
+    "timeout_seconds",
+    "instruction_revision_number",
+    "predecessor"
+  ],
+  "properties": {
+    "schema_version": {"const": "legacy-item-extraction-control-bootstrap/2.0"},
+    "preset_key": {"const": "legacy-item-extraction"},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "description": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "created_at": {"type": "string", "format": "date-time"},
+    "model": {"const": "gpt-5.6-terra"},
+    "reasoning_effort": {"const": "xhigh"},
+    "general_knowledge_policy": {"const": "DENY"},
+    "compatible_workflow_protocols": {
+      "type": "array",
+      "prefixItems": [{"const": "workflow-role/1.14.0"}],
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true
+    },
+    "platform_instruction_path": {"const": "instructions/platform.md"},
+    "role_instruction_path": {"const": "instructions/legacy-item-extraction.md"},
+    "slot_key": {"const": "slot06"},
+    "worker_pool_key": {"const": "legacy-extraction"},
+    "timeout_seconds": {"const": 7200},
+    "instruction_revision_number": {"const": 2},
+    "predecessor": {"$ref": "#/$defs/predecessor"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset_id",
+        "preset_revision_id",
+        "preset_revision_number",
+        "preset_content_sha256",
+        "preset_policy_sha256",
+        "capacity_policy_revision_id",
+        "capacity_policy_sha256",
+        "instruction_bundle_id",
+        "instruction_bundle_revision_id",
+        "instruction_revision_number",
+        "instruction_manifest_sha256",
+        "instruction_content_sha256",
+        "platform_instruction_sha256",
+        "role_instruction_sha256",
+        "workflow_definition_id",
+        "workflow_definition_version",
+        "workflow_definition_sha256",
+        "role_schema_version",
+        "role_schema_sha256"
+      ],
+      "properties": {
+        "preset_id": {"type": "string", "pattern": "^execpreset_[0-9a-f]{32}$"},
+        "preset_revision_id": {
+          "type": "string",
+          "pattern": "^execpresetrev_[0-9a-f]{32}$"
+        },
+        "preset_revision_number": {"type": "integer", "minimum": 1},
+        "preset_content_sha256": {"$ref": "#/$defs/sha256"},
+        "preset_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "capacity_policy_revision_id": {
+          "type": "string",
+          "pattern": "^capacityrev_[0-9a-f]{32}$"
+        },
+        "capacity_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "instruction_bundle_id": {
+          "type": "string",
+          "pattern": "^instrbundle_[0-9a-f]{32}$"
+        },
+        "instruction_bundle_revision_id": {
+          "type": "string",
+          "pattern": "^instrrev_[0-9a-f]{32}$"
+        },
+        "instruction_revision_number": {"type": "integer", "minimum": 1},
+        "instruction_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "instruction_content_sha256": {"$ref": "#/$defs/sha256"},
+        "platform_instruction_sha256": {"$ref": "#/$defs/sha256"},
+        "role_instruction_sha256": {"$ref": "#/$defs/sha256"},
+        "workflow_definition_id": {"type": "string", "pattern": "^wfdef_[0-9a-f]{32}$"},
+        "workflow_definition_version": {"const": "1.0.0"},
+        "workflow_definition_sha256": {"$ref": "#/$defs/sha256"},
+        "role_schema_version": {"const": "workflow-role/1.14.0"},
+        "role_schema_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

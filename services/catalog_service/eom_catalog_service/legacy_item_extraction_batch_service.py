@@ -12,6 +12,7 @@ from typing import Any, NoReturn, Protocol
 from eom_catalog_contracts import (
     AssessmentArtifactMemberPointer,
     LegacyExtractionBatchWorkUnitV2,
+    LegacyExtractionPresetPointer,
     LegacyExtractionResultPointer,
     LegacyItemExtractionBatchManifestV2,
     LegacyItemExtractionResult,
@@ -32,6 +33,10 @@ from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactServic
 from eom_catalog_service.legacy_assessment_models import (
     AssessmentSourceBundleMemberRecord,
     LegacyItemExtractionAcceptanceRecord,
+)
+from eom_catalog_service.legacy_extraction_preset_resolution import (
+    LegacyExtractionPresetResolutionError,
+    resolve_legacy_extraction_preset_pointer,
 )
 from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchEventRecord,
@@ -96,6 +101,7 @@ class AutomaticAcceptanceBoundary(Protocol):
 class CreateLegacyItemExtractionBatchCommand:
     manifest: LegacyItemExtractionBatchManifestV2
     requested_by: str
+    required_current_preset: LegacyExtractionPresetPointer | None = None
 
     def __post_init__(self) -> None:
         if not 1 <= len(self.requested_by) <= 128:
@@ -331,6 +337,22 @@ class LegacyItemExtractionBatchService:
                     "legacy extraction batch does not exist",
                 )
             return self._batch_view(session, batch)
+
+    def resolve_manifest(
+        self,
+        extraction_batch_id: str,
+        *,
+        expected_manifest_sha256: str,
+    ) -> LegacyItemExtractionBatchManifestV2:
+        """Resolve one immutable manifest by both logical batch ID and exact hash."""
+
+        manifest = self._load_manifest(extraction_batch_id)
+        if manifest.manifest_sha256 != expected_manifest_sha256:
+            self._fail(
+                "LEGACY_EXTRACTION_BATCH_MANIFEST_STALE",
+                "batch manifest hash differs from the pinned recovery request",
+            )
+        return manifest
 
     def work_units(
         self, extraction_batch_id: str
@@ -859,6 +881,15 @@ class LegacyItemExtractionBatchService:
                 "LEGACY_EXTRACTION_BATCH_OPERATOR_INVALID",
                 "batch requires an active operator",
             )
+        if command.required_current_preset is not None:
+            try:
+                resolve_legacy_extraction_preset_pointer(
+                    session,
+                    command.required_current_preset,
+                    require_current=True,
+                )
+            except LegacyExtractionPresetResolutionError as exc:
+                raise LegacyItemExtractionBatchServiceError(exc.code, str(exc)) from exc
         accepted: dict[str, LegacyItemExtractionAcceptanceRecord] = {}
         for unit in command.manifest.work_units:
             self.extraction.validate_reviewed_request(session, unit.request)

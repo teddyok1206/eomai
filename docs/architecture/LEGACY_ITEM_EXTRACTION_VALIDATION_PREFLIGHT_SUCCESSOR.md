@@ -1,6 +1,6 @@
 # Legacy item extraction validation-preflight successor
 
-Status: recovery design, 2026-09-09 UTC
+Status: implemented and source-validated; not deployed or executed, 2026-09-09 UTC
 
 ## Decision
 
@@ -56,9 +56,10 @@ three missing five-item ranges. Historical failed work units and their pinned pr
    filesystem, Artifact, and systemd behavior remain infrastructure adapters. The instruction does
    not move validation rules into the worker.
 10. **Failure, retry, and idempotency.** Exact publication replay returns the same successor; wrong
-    predecessor, changed bytes, failed evaluation, or policy drift fails closed. A continuation
-    failure stops on first new systematic error. No failed unit is retried more than once without a
-    new diagnosis, and no accepted range is re-executed.
+    predecessor, changed bytes, failed evaluation, or policy drift fails closed. The continuation
+    is a closed three-unit collect batch: each failed unit remains terminal, is never retried by the
+    runner, and any new systematic category blocks a further successor authorization. No accepted
+    predecessor range is re-executed.
 11. **Simpler alternative and why insufficient.** Reusing the released predecessor repeats all
     three observed failures. Mutating its instruction violates immutable history. Server-side
     normalization risks deleting or inventing assessment meaning. A new extraction result schema is
@@ -90,8 +91,51 @@ schema/config/code remain byte-stable.
   the reviewed content-free snapshot; verify no active slot-06 lease/job/workflow and no retirement
   hold conflict.
 - Before execution: validate the new `legacy-item-extraction-batch/1.1` manifest by JSON Schema and
-  Pydantic; assert its exact owner set is the three failed work-unit ranges, 15 unique item numbers,
-  fresh identities, successor preset pin, and no reuse/accept action.
+  Pydantic; assert its exact owner set is the three failed work-unit ranges, 15 unique
+  `(assessment source bundle revision, item number)` occurrences, fresh identities, successor
+  preset pin, and no reuse/accept action. Item numbers alone are not globally unique because two
+  different assessments legitimately include overlapping local item numbers.
 - After execution: require all three new work units terminal-success, 15/15 extraction results with
   canonical receipts and zero ordinal/item gaps before enabling automatic acceptance or promotion.
   Any new validation category disables automation immediately and preserves the failure.
+
+## Implemented protocol and ownership boundaries
+
+The implementation is additive. Historical V1 schema/config/instruction bytes and the extraction
+result contract are unchanged.
+
+- `legacy-item-extraction-control-bootstrap/2.0` carries the exact predecessor preset, capacity,
+  instruction-bundle, workflow-definition, and role-schema revisions and hashes. V2 requires
+  instruction revision 2; V1 serializes without V2 fields and retains its original schema.
+- `legacy-item-extraction-validation-recovery/1.0` is the frozen authorization contract. It pins
+  both complete preset dependency graphs, the predecessor batch manifest hash, all three failed
+  work-unit/request/workflow/job identities, the hashed failure messages, diagnoses, source bundle
+  revisions, five-item ranges, fresh successor identities, UTC creation time, and its own canonical
+  hash.
+- The Orchestrator publishes the instruction bundle with a row-locked adjacent-revision CAS. It
+  accepts only the exact predecessor or an exact already-current replay. Preset release repeats the
+  predecessor/current check under the preset row lock immediately before release. V2 resolves the
+  installed six-slot registry, slot-06 auth identity, protocol, and capacity revision without
+  upserting or republishing them, and binds new role/manifest Artifact replay to the reviewed source
+  commit.
+- The Catalog application service resolves the predecessor manifest by batch ID plus SHA-256,
+  proves that the batch is exactly `COMPLETED_WITH_GAPS` with exactly the authorized three failed
+  rows, re-resolves failure/workflow/job/step evidence, and resolves both preset dependency graphs
+  by immutable IDs and hashes. It creates a new three-unit `EXECUTE` batch through the existing
+  batch service; it never converts a failed row to pending and never selects a latest revision.
+- The existing Catalog runner already accepts an ordered, duplicate-free comma-separated
+  `EOM_LEGACY_ITEM_AUTOMATION_BATCH_IDS` allowlist. No new scheduler, queue, retry loop, or worker
+  communication path was added.
+
+The exact predecessor owner set is closed:
+
+| Ordinal | Failed work unit | Source bundle revision | Local items | Diagnosis |
+| ---: | --- | --- | --- | --- |
+| 23 | `legacyworkunit_effa66b21814add8cac3d8cde5c5881b` | `assessbundlerev_b6be31d55220e4c095d11433d394e641` | 16–20 | duplicate statement explanation ID |
+| 65 | `legacyworkunit_076f5ffc97766f3831592af2d0f1fdda` | `assessbundlerev_2690a6a1e07e4789c17f9dd2e9e4cf4e` | 6–10 | body-block discriminator mismatch |
+| 85 | `legacyworkunit_cd81cbb341454ec4f7d7ae5a92767729` | `assessbundlerev_4b1423ea0ceef51eb05cba9555b846ed` | 5–9 | `NONE` visual/rendering conflict |
+
+The implementation and operator sequence are intentionally separate. Source validation does not
+authorize a live worker call. Deployment, V2 bootstrap, recovery authorization construction,
+continuation creation, allowlist activation, stop conditions, and postconditions are defined in
+[`LEGACY_ITEM_EXTRACTION_VALIDATION_RECOVERY.md`](../operations/LEGACY_ITEM_EXTRACTION_VALIDATION_RECOVERY.md).

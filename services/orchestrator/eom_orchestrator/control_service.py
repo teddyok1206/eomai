@@ -91,6 +91,15 @@ class ResolvedPlanDependencyEvidence:
     evidence_bundle_revision_id: str | None = None
 
 
+@dataclass(frozen=True)
+class BundleRevisionCAS:
+    """Exact immutable predecessor required to advance one bundle current pointer."""
+
+    bundle_revision_id: str
+    manifest_sha256: str
+    content_sha256: str
+
+
 def compute_control_document_hash(document: dict[str, Any], hash_field: str) -> str:
     """Hash a canonical control document without its self-referential digest field."""
 
@@ -377,6 +386,66 @@ def publish_bundle_revision(
     logical.current_revision_id = bundle_revision_id
     session.flush()
     return revision
+
+
+def publish_bundle_revision_successor(
+    session: Session,
+    *,
+    bundle_id: str,
+    bundle_revision_id: str,
+    predecessor: BundleRevisionCAS,
+) -> ExecutionBundleRevisionRecord:
+    """Publish one adjacent successor only when the exact predecessor is current.
+
+    Exact replay is allowed when the requested successor is already current. Any
+    unrelated current revision, dangling pointer, hash drift, or skipped revision
+    fails without moving the logical pointer.
+    """
+
+    logical = session.execute(
+        select(ExecutionBundleRecord)
+        .where(ExecutionBundleRecord.bundle_id == bundle_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    target = session.get(ExecutionBundleRevisionRecord, bundle_revision_id)
+    prior = session.get(
+        ExecutionBundleRevisionRecord,
+        predecessor.bundle_revision_id,
+    )
+    if logical is None or logical.state != "ACTIVE":
+        raise ControlPlaneError("CONTROL_POINTER_MISSING", "bundle is unavailable")
+    if (
+        target is None
+        or target.bundle_id != bundle_id
+        or target.state != "RELEASED"
+        or prior is None
+        or prior.bundle_id != bundle_id
+        or prior.state != "RELEASED"
+    ):
+        raise ControlPlaneError("CONTROL_POINTER_MISSING", "bundle revision is missing")
+    if (
+        prior.manifest_sha256 != predecessor.manifest_sha256
+        or prior.content_sha256 != predecessor.content_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_HASH_MISMATCH",
+            "bundle predecessor hash differs",
+        )
+    if target.revision_number != prior.revision_number + 1:
+        raise ControlPlaneError(
+            "CONTROL_CURRENT_REVISION_STALE",
+            "bundle successor is not adjacent to its predecessor",
+        )
+    if logical.current_revision_id == target.bundle_revision_id:
+        return target
+    if logical.current_revision_id != prior.bundle_revision_id:
+        raise ControlPlaneError(
+            "CONTROL_CURRENT_REVISION_STALE",
+            "bundle current revision differs from the pinned predecessor",
+        )
+    logical.current_revision_id = target.bundle_revision_id
+    session.flush()
+    return target
 
 
 def record_capacity_policy_revision(

@@ -15,6 +15,7 @@ from eom_catalog_contracts import (
     LegacyItemExtractionAcceptance,
     LegacyItemExtractionBatchManifestV2,
     LegacyItemExtractionRequest,
+    LegacyItemExtractionValidationRecovery,
     LegacyItemPromotionRequest,
     LegacyRightsReviewPointerV2,
     ReconcileKnowledgeAnalysisCommand,
@@ -43,6 +44,11 @@ from eom_catalog_service.legacy_item_extraction_batch_service import (
     CreateLegacyItemExtractionBatchCommand,
     LegacyItemExtractionBatchService,
     LegacyItemExtractionBatchServiceError,
+)
+from eom_catalog_service.legacy_item_extraction_recovery_service import (
+    CreateLegacyItemExtractionRecoveryCommand,
+    LegacyItemExtractionRecoveryError,
+    LegacyItemExtractionRecoveryService,
 )
 from eom_catalog_service.legacy_item_extraction_service import (
     CreateLegacyItemExtractionCommand,
@@ -230,6 +236,42 @@ def extraction_batch_inspect(
         try:
             result = LegacyItemExtractionBatchService(engine).inspect(extraction_batch_id)
         except LegacyItemExtractionBatchServiceError as exc:
+            _operation_failure(exc)
+        _emit({"status": "SUCCEEDED", **asdict(result)})
+    finally:
+        engine.dispose()
+
+
+@extraction_batch_app.command("recover-validation-failures")
+def extraction_batch_recover_validation_failures(
+    recovery_file: Annotated[
+        Path,
+        typer.Option("--recovery-file", exists=True, dir_okay=False, resolve_path=True),
+    ],
+    actor_id: Annotated[str, typer.Option("--actor-id")],
+) -> None:
+    """Create the exact reviewed three-range continuation with fresh identities."""
+
+    try:
+        raw = load_strict_json(recovery_file)
+        validate_contract("legacy-item-extraction-validation-recovery", raw)
+        recovery = LegacyItemExtractionValidationRecovery.model_validate(raw)
+        command = CreateLegacyItemExtractionRecoveryCommand(
+            recovery=recovery,
+            requested_by=actor_id,
+        )
+    except (
+        JsonSchemaValidationError,
+        PydanticValidationError,
+        UnicodeError,
+        ValueError,
+    ) as exc:
+        raise typer.BadParameter("legacy extraction recovery request is invalid") from exc
+    engine = build_engine()
+    try:
+        try:
+            result = LegacyItemExtractionRecoveryService(engine).create(command)
+        except LegacyItemExtractionRecoveryError as exc:
             _operation_failure(exc)
         _emit({"status": "SUCCEEDED", **asdict(result)})
     finally:

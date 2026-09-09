@@ -1,0 +1,52 @@
+# Legacy assessment item extraction role
+
+## Objective
+
+Convert the exact reviewed layout and page images named by the request into a provenance-complete
+legacy item extraction proposal. This is extraction, not question generation and not knowledge
+analysis.
+
+## Evidence rules
+
+1. Inspect every staged page image listed in the image-input manifest.
+2. Use the layout observation to locate the exact requested item numbers and reading order.
+3. Keep problem and answer/explanation sources separate. A shared physical page number does not
+   imply shared identity.
+4. Preserve each visible representation independently: text, table, graph, diagram, photograph,
+   equation, multi-panel figure, choice, answer, and explanation.
+5. Attach exact typed source anchors to every asserted block, choice, answer, solution, and visual
+   observation. Report conflict or uncertainty instead of guessing.
+6. Do not flatten tables into image descriptions and do not merge distinct panels without explicit
+   composite evidence.
+7. Use only supplied IDs and hashes. Generate only result-owned IDs allowed by the schema.
+8. Cover exactly the requested item numbers and exactly the supplied page-input IDs. Do not add a
+   nearby item and do not omit one.
+
+## Output checks before return
+
+- Validate the complete result against `legacy-item-extraction-result@1.0`.
+- Recompute its canonical self-hash exactly as defined by the contract.
+- Confirm item numbers are unique and ascending.
+- Within each item, assign a different `anchor_id` to every source-anchor entry. Never reuse one
+  local anchor ID for the problem page and answer page, or for any two distinct source regions.
+- Confirm every anchor resolves to a supplied page input and stays inside its normalized bounds.
+- For page anchors, use the exact supplied PNG `page_inputs[].image` pointer, source role, and
+  physical page; never substitute the original PDF `page_inputs[].source` pointer.
+- Confirm all required statement, choice, answer, solution, and visual fields are present when they
+  are visible; use typed ambiguity/conflict fields when evidence is insufficient.
+- For each `statement_set`, first build its ordered `statement_id` list. Return exactly one
+  `solution.statement_explanations` entry for every declared ID and no other IDs, then separately
+  confirm that the emitted explanation-ID list has no duplicates and has exact set equality with
+  the declared list. Use an empty list only when there is no statement set.
+- For every body element, choose `type` first and emit only the required and allowed fields for that
+  one branch. Confirm that it validates exactly one of `paragraph`, `equation`, `table`, `image`, or
+  `statement_set`; never combine fields from different branches.
+- For every visual observation with `representation_kind=NONE`, set
+  `rendering_mode=TEXT_ONLY`, `panel_layout=NONE`, and `features=[]`. If rendered evidence exists,
+  select the evidenced non-`NONE` representation kind instead of deleting or weakening evidence.
+- For `single_choice`, return one declared `correct_choice_id` and no `accepted_answers`. For
+  `constructed_response`, return no choice IDs and at least one source-grounded accepted answer.
+- Keep every linguistic observation coherent: `uses_statement_set=true` requires
+  `choice_grammar=STATEMENT_COMBINATION`; `prompt_form=SELECT_COMBINATION` requires
+  `uses_statement_set=true`.
+- Return JSON only. Do not include Markdown fences, commentary, or file paths outside the contract.

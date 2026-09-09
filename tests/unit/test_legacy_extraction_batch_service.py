@@ -6,8 +6,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import eom_catalog_service.legacy_item_extraction_batch_service as batch_service_module
 import pytest
-from eom_catalog_contracts import LegacySourcePreliminaryClass
+from eom_catalog_contracts import (
+    LegacyItemExtractionValidationRecovery,
+    LegacySourcePreliminaryClass,
+)
 from eom_catalog_service import legacy_item_extraction_batch_models
 from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchEventRecord,
@@ -24,6 +28,7 @@ from eom_orchestrator.models import Base
 from eomctl.cli import app
 from sqlalchemy import LargeBinary
 from test_legacy_extraction_batch_contracts import _manifest_v2
+from test_legacy_extraction_recovery_contracts import recovery_document
 from typer.testing import CliRunner
 
 
@@ -131,6 +136,51 @@ def test_invalid_admission_never_crosses_manifest_artifact_commit(
     with pytest.raises(LegacyItemExtractionBatchServiceError) as captured:
         service.create(command)
     assert captured.value.code == "LEGACY_EXTRACTION_BATCH_OPERATOR_INVALID"
+
+
+def test_recovery_admission_requires_exact_successor_to_remain_current(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service_without_init()
+    service.extraction = cast(
+        Any,
+        SimpleNamespace(
+            validate_reviewed_request=lambda *_args: pytest.fail(
+                "preset current-pointer drift must fail before request admission"
+            )
+        ),
+    )
+    recovery = LegacyItemExtractionValidationRecovery.model_validate(recovery_document())
+    command = CreateLegacyItemExtractionBatchCommand(
+        _manifest_v2(),
+        "operator-test",
+        required_current_preset=recovery.successor_preset,
+    )
+
+    class ActiveActorSession:
+        @staticmethod
+        def get(_model: object, _identity: str) -> object:
+            return SimpleNamespace(status="ACTIVE")
+
+    def reject_current(*_args: object, **_kwargs: object) -> None:
+        raise batch_service_module.LegacyExtractionPresetResolutionError(
+            "LEGACY_EXTRACTION_PRESET_CURRENT_MISMATCH",
+            "current pointer differs",
+        )
+
+    monkeypatch.setattr(
+        batch_service_module,
+        "resolve_legacy_extraction_preset_pointer",
+        reject_current,
+    )
+    with pytest.raises(LegacyItemExtractionBatchServiceError) as captured:
+        service._validate_admission(
+            cast(Any, ActiveActorSession()),
+            command,
+            cast(Any, SimpleNamespace()),
+        )
+
+    assert captured.value.code == "LEGACY_EXTRACTION_PRESET_CURRENT_MISMATCH"
 
 
 def test_runner_claims_pending_work_before_due_review_reconciliation_when_idle(
@@ -292,5 +342,13 @@ def test_catalog_runner_owns_automatic_batch_progression() -> None:
 def test_cli_exposes_pointer_only_batch_operations() -> None:
     result = CliRunner().invoke(app, ["legacy-assessment", "extraction-batch", "--help"])
     assert result.exit_code == 0
-    for command in ("create", "inspect", "work-units", "claim", "submit", "reconcile"):
+    for command in (
+        "create",
+        "inspect",
+        "recover-validation-failures",
+        "work-units",
+        "claim",
+        "submit",
+        "reconcile",
+    ):
         assert command in result.stdout
