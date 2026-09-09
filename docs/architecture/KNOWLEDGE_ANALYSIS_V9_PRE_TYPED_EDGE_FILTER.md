@@ -13,8 +13,8 @@ authoritative post-Pydantic check.
 The filter removes an edge when it is self-referential, names a missing endpoint, declares endpoint
 types different from the referenced nodes, or violates the current worker-edge ontology. It never
 changes an edge, node, anchor, claim, observation, ambiguity, pointer, ID, or hash. Duplicate node
-IDs remain an explicit typed-validation failure because selecting one duplicate would invent
-meaning.
+or edge IDs remain an explicit typed-validation failure because retaining or dropping one duplicate
+would invent meaning for an ambiguous immutable identity.
 
 No JSON Schema, protocol version, database record, wire metadata, execution preset, or historical
 Artifact is changed. The current V9 instruction already states all four edge requirements; this is
@@ -39,9 +39,9 @@ the validation-order correction required for the filtering behavior already adop
    revision or repairs a pointer.
 5. **Primary access patterns.** Validation needs one keyed node-ID lookup followed by ordered edge
    iteration. Edge order is stable, and retained edge objects preserve their exact values.
-6. **Data structures and indexes.** A dictionary maps node ID to declared node type and one list
-   collects compatible edges. Duplicate detection uses dictionary membership. No persistent data
-   structure or database index changes.
+6. **Data structures and indexes.** A dictionary maps node ID to declared node type, a set rejects
+   duplicate edge IDs, and one list collects compatible edges. Duplicate detection uses keyed
+   membership. No persistent data structure or database index changes.
 7. **Complexity and scale.** For at most 512 nodes and 1,024 edges, time is `O(n + e)` and auxiliary
    memory is `O(n + e)`. Only `output.proposal.edges` is deep-copied; the small enclosing mappings
    are shallow copies and all other payload branches are untouched.
@@ -66,8 +66,8 @@ the validation-order correction required for the filtering behavior already adop
 
 - Focused tests prove schema-valid self, dangling, and declared-type-mismatched edges are removed;
   compatible edge order and every non-edge proposal value are preserved; input objects are not
-  mutated; replay is deterministic; malformed shape fails before filtering; duplicate node IDs are
-  not repaired; and current worker-ontology rejection is filtered.
+  mutated; replay is deterministic; malformed shape fails before filtering; duplicate node or edge
+  IDs are not repaired; and current worker-ontology rejection is filtered.
 - Existing staging and Catalog ontology tests remain defense in depth and continue to own Artifact
   counts, hashes, and graph acceptance.
 - Format, lint, strict type checking, and focused unit tests must pass from an explicit Conda

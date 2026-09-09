@@ -534,9 +534,16 @@ def _filter_invalid_knowledge_analysis_v9_edges(value: object) -> object:
         node_types[node_id] = node_type
 
     compatible_edges: list[object] = []
+    edge_ids: set[str] = set()
     for edge in copy.deepcopy(edges):
         if not isinstance(edge, dict):
             return value
+        edge_id = edge.get("edge_id")
+        if not isinstance(edge_id, str) or edge_id in edge_ids:
+            # Filtering must not select one meaning for an ambiguous immutable identity.
+            # Return the original value so the existing typed validator rejects it.
+            return value
+        edge_ids.add(edge_id)
         relationship = edge.get("relationship")
         from_node_id = edge.get("from_node_id")
         to_node_id = edge.get("to_node_id")

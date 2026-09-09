@@ -443,6 +443,52 @@ def test_v9_role_validation_does_not_repair_duplicate_node_identities() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "duplicate_edges",
+    (
+        (
+            _edge(edge_id="kedge_duplicate_identity"),
+            _edge(
+                edge_id="kedge_duplicate_identity",
+                to_node_id="knode_concept_visual_evidence",
+            ),
+        ),
+        (
+            _edge(
+                edge_id="kedge_duplicate_identity",
+                to_node_id="knode_concept_visual_evidence",
+            ),
+            _edge(
+                edge_id="kedge_duplicate_identity",
+                from_node_id="knode_concept_secondary",
+                to_node_id="knode_concept_secondary",
+            ),
+        ),
+    ),
+    ids=("valid-and-filtered", "both-filtered"),
+)
+def test_v9_role_validation_does_not_repair_duplicate_edge_identities(
+    duplicate_edges: tuple[dict[str, object], dict[str, object]],
+) -> None:
+    proposal = _raw_proposal_with_two_nodes()
+    edges = proposal["edges"]
+    assert isinstance(edges, list)
+    edges.extend(duplicate_edges)
+
+    result = _proposal_role_result(proposal)
+    validate_schema_message(
+        load_role_result_schema("knowledge-analysis-proposal-result@9.0"),
+        result,
+        "pre-normalization",
+    )
+    with pytest.raises(WorkflowSchemaError, match="edge identities must be unique"):
+        validate_role_result(
+            result,
+            "support",
+            "knowledge-analysis-proposal-result@9.0",
+        )
+
+
 def test_v9_request_and_proposal_require_exact_ordered_page_observations() -> None:
     source = _source()
     request = _request(source)
