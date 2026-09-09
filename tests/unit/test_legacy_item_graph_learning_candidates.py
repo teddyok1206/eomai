@@ -9,6 +9,7 @@ import pytest
 from eom_catalog_contracts import (
     PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
     ApprovedPastExamItemKnowledgeSourceV3,
+    KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV9,
 )
 from eom_catalog_service.knowledge_graph_publication_service import (
@@ -27,6 +28,7 @@ from eom_catalog_service.past_exam_origin_resolution import (
     PastExamOriginResolutionError,
     PastExamOriginStatus,
 )
+from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from sqlalchemy import Engine, Table, UniqueConstraint, create_engine, text
 
@@ -301,11 +303,12 @@ def _insert_analysis(
     source_revision_id: str | None = None,
     schema_version: str = PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
     source_class: str = "PAST_EXAM",
+    canonical_request: dict[str, Any] | None = None,
 ) -> str:
     analysis_run_id = f"analysisrun_{ordinal}"
     request_source = dict(source)
     request_source["source_class"] = source_class
-    request = {
+    request = canonical_request or {
         "schema_version": schema_version,
         "source": request_source,
         "invalid": invalid_request,
@@ -336,6 +339,57 @@ def _insert_analysis(
             },
         )
     return analysis_run_id
+
+
+def _historical_v2_request(source: dict[str, Any]) -> dict[str, Any]:
+    request: dict[str, Any] = {
+        "schema_version": "knowledge-analysis-request/2.0",
+        "predecessor_analysis_run_id": None,
+        "analysis_request_id": "knowledgeanalysis_" + "1" * 32,
+        "source": {
+            "source_kind": "APPROVED_ITEM_REVISION",
+            "source_class": "PAST_EXAM",
+            "item_id": source["item_id"],
+            "item_revision_id": source["item_revision_id"],
+            "lifecycle_state": "APPROVED",
+            "artifact_member": {
+                "artifact_id": "artifact_" + "2" * 32,
+                "artifact_revision_id": "rev_" + "3" * 32,
+                "member_path": "item-content.json",
+                "materialized_path": "source/item-content.json",
+                "sha256": _hash(4),
+                "bytes": 1,
+                "schema_ref": "eom://schemas/catalog/item-content/2.0",
+                "media_type": "application/json",
+                "logical_name": "item-content.json",
+            },
+        },
+        "execution_preset_id": "execpreset_" + "5" * 32,
+        "execution_preset_revision_id": "execpresetrev_" + "6" * 32,
+        "execution_preset_sha256": _hash(7),
+        "worker_proposal_schema_ref": (
+            "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0"
+        ),
+        "accepted_result_schema_ref": "eom://schemas/knowledge/knowledge-analysis-result/2.0",
+        "prior_graph_snapshot": None,
+        "requested_outputs": [
+            "NORMALIZED_MARKDOWN",
+            "SOURCE_ANCHORS",
+            "NODES",
+            "EDGES",
+            "CLAIMS",
+            "COMPONENT_OBSERVATIONS",
+            "UNRESOLVED_AMBIGUITIES",
+        ],
+        "general_knowledge_mode": "DISABLED",
+        "risk_policy_revision_id": "analysisriskrev_" + "8" * 32,
+        "created_at": "2026-09-09T00:00:00Z",
+        "request_sha256": _hash(0),
+    }
+    request["request_sha256"] = content_sha256(
+        {key: value for key, value in request.items() if key != "request_sha256"}
+    )
+    return KnowledgeAnalysisRequestV2.model_validate(request).model_dump(mode="json")
 
 
 def _insert_candidate(
@@ -459,6 +513,28 @@ def test_in_scope_malformed_request_errors_but_out_of_scope_malformed_request_is
         service.pending_candidates(limit=2)
 
     assert caught.value.reason == "canonical_request_invalid"
+
+
+def test_valid_historical_request_for_same_item_is_skipped_for_current_v9_candidate() -> None:
+    engine, service = _query_backed_service()
+    source = _source_value(0)
+    source["item_id"] = "item_" + "a" * 32
+    source["item_revision_id"] = "itemrev_" + "b" * 32
+    _insert_membership(engine, ordinal=0, source=source)
+    historical_id = _insert_analysis(
+        engine,
+        ordinal=100,
+        source=source,
+        canonical_request=_historical_v2_request(source),
+    )
+    current_id = _insert_analysis(engine, ordinal=101, source=source)
+
+    candidates = service.pending_candidates(limit=2)
+
+    assert historical_id != current_id
+    assert tuple(candidate.analysis_run_id for candidate in candidates) == (current_id,)
+    resolver_inputs = cast(Mock, service._resolve_past_exam_origins).call_args.args[1]
+    assert tuple(origin.analysis_run_id for origin in resolver_inputs) == (current_id,)
 
 
 @pytest.mark.parametrize(

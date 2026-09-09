@@ -9,11 +9,19 @@ from eom_catalog_contracts import (
     AssessmentOccurrenceItemBinding,
     AutomaticItemCurriculumAlignmentBinding,
     CreateEvidenceBundleCommand,
+    KnowledgeAnalysisRequestV2,
+    KnowledgeAnalysisRequestV3,
+    KnowledgeAnalysisRequestV4,
+    KnowledgeAnalysisRequestV5,
+    KnowledgeAnalysisRequestV6,
+    KnowledgeAnalysisRequestV7,
+    KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisRequestV9,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
+from pydantic import BaseModel
 from sqlalchemy import Engine, and_, or_, select
 from sqlalchemy.orm import Session
 
@@ -54,6 +62,29 @@ from eom_catalog_service.past_exam_origin_resolution import (
 )
 
 MAX_AUTOMATIC_GRAPH_BATCH_SIZE = 16
+
+_HISTORICAL_REQUEST_MODELS: dict[str, type[BaseModel]] = {
+    "knowledge-analysis-request/2.0": KnowledgeAnalysisRequestV2,
+    "knowledge-analysis-request/3.0": KnowledgeAnalysisRequestV3,
+    "knowledge-analysis-request/4.0": KnowledgeAnalysisRequestV4,
+    "knowledge-analysis-request/5.0": KnowledgeAnalysisRequestV5,
+    "knowledge-analysis-request/6.0": KnowledgeAnalysisRequestV6,
+    "knowledge-analysis-request/7.0": KnowledgeAnalysisRequestV7,
+    "knowledge-analysis-request/8.0": KnowledgeAnalysisRequestV8,
+}
+
+
+def _validate_historical_request(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    schema_version = value.get("schema_version")
+    if not isinstance(schema_version, str):
+        return False
+    model = _HISTORICAL_REQUEST_MODELS.get(schema_version)
+    if model is None:
+        return False
+    model.model_validate(value)
+    return True
 
 
 @dataclass(frozen=True)
@@ -222,7 +253,9 @@ class LegacyItemGraphLearningService:
 
             # The configured legacy corpus has 520 Items.  Fetch its unique pending analysis base
             # once, scope by either independent acceptance or promotion-lineage anchor, then fully
-            # parse only exact allowlisted memberships.  This lets malformed in-scope requests fail
+            # parse only exact allowlisted memberships.  Historical request revisions can share the
+            # promoted Item lineage, but only the current V9 visual analysis is publishable here.
+            # Validate and skip valid immutable history; malformed in-scope history still fails
             # closed without letting an unrelated batch's malformed request block this coordinator.
             analysis_rows = tuple(
                 session.execute(
@@ -277,6 +310,8 @@ class LegacyItemGraphLearningService:
                     canonical_request,
                 ) = row
                 try:
+                    if _validate_historical_request(canonical_request):
+                        continue
                     source = KnowledgeAnalysisRequestV9.model_validate(canonical_request).source
                 except ValueError as exc:
                     raise LegacyItemGraphLearningError(
