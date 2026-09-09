@@ -116,7 +116,7 @@ def _query_backed_service(
     )
     # These branches are outside the selector-order invariant under test.  Terminal and retry
     # selection remain the real service implementations backed by the relational fixture.
-    service._active_analysis = cast(Any, lambda: None)
+    service._active_analyses = cast(Any, tuple)
     service._candidate = Mock()
     return engine, service
 
@@ -187,33 +187,66 @@ def _insert_terminal(
         )
 
 
-def test_automatic_learning_reconciles_existing_run_before_scheduling_another() -> None:
+def test_automatic_learning_reconciles_two_active_runs_before_refilling() -> None:
     service = object.__new__(LegacyItemAutomaticLearningService)
     service.analyses = Mock()
     service.learning = Mock()
-    service._active_analysis = cast(
+    service._active_analyses = cast(
         Any,
-        lambda: ("analysisrun_" + "4" * 32, "operator_owner", "RUNNING"),
+        lambda: (
+            ("analysisrun_" + "4" * 32, "operator_owner", "RUNNING"),
+            ("analysisrun_" + "5" * 32, "operator_sibling", "QUEUED"),
+        ),
     )
     service._candidate = cast(Any, lambda: None)
     _guard(service)
 
     assert service.advance_once() is True
 
+    commands = tuple(call.args[0] for call in service.analyses.reconcile.call_args_list)
+    assert tuple(command.analysis_run_id for command in commands) == (
+        "analysisrun_" + "4" * 32,
+        "analysisrun_" + "5" * 32,
+    )
+    assert tuple(command.requested_by for command in commands) == (
+        "operator_owner",
+        "operator_sibling",
+    )
+    service.learning.promote_and_schedule.assert_not_called()
+
+
+def test_automatic_learning_refills_second_position_while_first_is_running() -> None:
+    service = object.__new__(LegacyItemAutomaticLearningService)
+    service.analyses = Mock()
+    service.learning = Mock()
+    service.content_pack_release_id = "packrel_" + "5" * 32
+    service.risk_policy_revision_id = "analysisriskrev_" + "6" * 32
+    _without_graph(service)
+    service._active_analyses = cast(
+        Any,
+        lambda: (("analysisrun_" + "4" * 32, "operator_owner", "RUNNING"),),
+    )
+    service._retryable_analysis = cast(Any, lambda: None)
+    service._candidate = cast(Any, _candidate)
+    _guard(service)
+
+    assert service.advance_once() is True
+
     command = service.analyses.reconcile.call_args.args[0]
     assert command.analysis_run_id == "analysisrun_" + "4" * 32
-    assert command.requested_by == "operator_owner"
-    service.learning.promote_and_schedule.assert_not_called()
+    service.learning.promote_and_schedule.assert_called_once()
 
 
 def test_automatic_learning_accepts_validated_review_state_without_human_record() -> None:
     service = object.__new__(LegacyItemAutomaticLearningService)
     service.analyses = Mock()
     service.learning = Mock()
-    service._active_analysis = cast(
+    _without_graph(service)
+    service._active_analyses = cast(
         Any,
-        lambda: ("analysisrun_" + "4" * 32, "operator_owner", "NEEDS_REVIEW"),
+        lambda: (("analysisrun_" + "4" * 32, "operator_owner", "NEEDS_REVIEW"),),
     )
+    service._retryable_analysis = cast(Any, lambda: None)
     service._candidate = cast(Any, lambda: None)
     _guard(service)
 
@@ -254,7 +287,7 @@ def test_automatic_learning_builds_replay_stable_promotion_and_pins_policy() -> 
     service.content_pack_release_id = "packrel_" + "5" * 32
     service.risk_policy_revision_id = "analysisriskrev_" + "6" * 32
     _without_graph(service)
-    service._active_analysis = cast(Any, lambda: None)
+    service._active_analyses = cast(Any, tuple)
     service._retryable_analysis = cast(Any, lambda: None)
     service._candidate = cast(Any, _candidate)
     _guard(service)
@@ -284,7 +317,7 @@ def test_automatic_learning_creates_one_fresh_successor_before_new_items() -> No
     service.analyses = Mock()
     service.learning = Mock()
     _without_graph(service)
-    service._active_analysis = cast(Any, lambda: None)
+    service._active_analyses = cast(Any, tuple)
     service._retryable_analysis = cast(
         Any,
         lambda: ("analysisrun_" + "4" * 32, "operator_owner"),
@@ -358,7 +391,7 @@ def test_service_rejects_duplicate_retry_allowlist_before_query_or_side_effect()
 def test_automatic_learning_is_idle_without_active_or_unlearned_work() -> None:
     service = object.__new__(LegacyItemAutomaticLearningService)
     _without_graph(service)
-    service._active_analysis = cast(Any, lambda: None)
+    service._active_analyses = cast(Any, tuple)
     service._retryable_analysis = cast(Any, lambda: None)
     service._candidate = cast(Any, lambda: None)
     _guard(service)
@@ -381,7 +414,7 @@ def test_automatic_learning_publishes_one_full_graph_batch_before_more_source_wo
     )
     service.graph = Mock()
     service.graph.pending_candidates.return_value = candidates
-    service._active_analysis = cast(Any, lambda: None)
+    service._active_analyses = cast(Any, tuple)
     service._retryable_analysis = Mock()
     service._candidate = Mock()
     _guard(service)
@@ -406,7 +439,7 @@ def test_automatic_learning_flushes_partial_graph_batch_only_after_source_comple
     )
     service.graph = Mock()
     service.graph.pending_candidates.return_value = candidates
-    service._active_analysis = cast(Any, lambda: None)
+    service._active_analyses = cast(Any, tuple)
     service._retryable_analysis = cast(Any, lambda: None)
     service._candidate = cast(Any, lambda: None)
     service._source_work_remaining = cast(Any, lambda: False)
@@ -503,7 +536,7 @@ def test_terminal_leaf_stops_before_reconcile_graph_retry_or_promotion() -> None
     service.analyses = Mock()
     service.graph = Mock()
     service._terminal_analysis = cast(Any, lambda: ("analysisrun_" + "9" * 32, "FAILED"))
-    service._active_analysis = Mock()
+    service._active_analyses = Mock()
     service._retryable_analysis = Mock()
     service._candidate = Mock()
     service.preset_pin = _pin()
@@ -512,7 +545,7 @@ def test_terminal_leaf_stops_before_reconcile_graph_retry_or_promotion() -> None
     with pytest.raises(RuntimeError, match="terminal leaf analysis"):
         service.advance_once()
 
-    service._active_analysis.assert_not_called()
+    service._active_analyses.assert_not_called()
     service.graph.pending_candidates.assert_not_called()
     service._retryable_analysis.assert_not_called()
     service._candidate.assert_not_called()

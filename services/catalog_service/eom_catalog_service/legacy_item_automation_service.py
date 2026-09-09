@@ -44,6 +44,11 @@ ACTIVE_ANALYSIS_STATES = (
     "NEEDS_REVIEW",
 )
 
+# The exact pinned worker-capacity-policy/1.1 contract admits two knowledge-analysis
+# leases on support slots 05 and 06.  The capacity controller remains authoritative
+# for the global-three, pool-two, and per-slot-one lease limits.
+MAX_AUTOMATIC_ACTIVE_ANALYSES = 2
+
 
 @dataclass(frozen=True)
 class _LearningCandidate:
@@ -55,7 +60,7 @@ class _LearningCandidate:
 
 
 class LegacyItemAutomaticLearningService:
-    """Advance one accepted proposal or one active Graph-learning run per poll."""
+    """Advance active runs and refill the exact pinned two-analysis capacity."""
 
     def __init__(
         self,
@@ -104,8 +109,9 @@ class LegacyItemAutomaticLearningService:
                 "automatic learning stopped at a terminal leaf analysis",
             )
 
-        active = self._active_analysis()
-        if active is not None:
+        active_analyses = self._active_analyses()
+        progressed = False
+        for active in active_analyses:
             analysis_run_id, requested_by, state = active
             if state == "NEEDS_REVIEW":
                 self.analyses.accept_validated_without_review(
@@ -119,7 +125,15 @@ class LegacyItemAutomaticLearningService:
                         requested_by=requested_by,
                     )
                 )
-            return True
+            progressed = True
+            terminal = self._terminal_analysis()
+            if terminal is not None:
+                raise LegacyItemLearningError(
+                    "LEGACY_ITEM_AUTOMATION_TERMINAL_ANALYSIS",
+                    "automatic learning stopped at a terminal leaf analysis",
+                )
+        if len(active_analyses) == MAX_AUTOMATIC_ACTIVE_ANALYSES:
+            return progressed
         graph_candidates = (
             self.graph.pending_candidates(limit=self.graph_batch_size)
             if self.graph is not None
@@ -141,7 +155,7 @@ class LegacyItemAutomaticLearningService:
             if self.graph is not None and graph_candidates and not self._source_work_remaining():
                 self.graph.publish(graph_candidates)
                 return True
-            return False
+            return progressed
         command = self._promotion_request(
             candidate,
             content_pack_release_id=self.content_pack_release_id,
@@ -229,7 +243,7 @@ class LegacyItemAutomaticLearningService:
                 is not None
             )
 
-    def _active_analysis(self) -> tuple[str, str, str] | None:
+    def _active_analyses(self) -> tuple[tuple[str, str, str], ...]:
         registration_key = (
             literal("legacy-item-promotion:")
             + LegacyItemExtractionDecisionRecord.acceptance_id
@@ -237,38 +251,40 @@ class LegacyItemAutomaticLearningService:
             + LegacyItemExtractionDecisionRecord.item_proposal_id
         )
         with self.sessions() as session:
-            run = session.scalar(
-                select(KnowledgeAnalysisRunRecord)
-                .join(
-                    ItemRevisionRecord,
-                    ItemRevisionRecord.item_revision_id
-                    == KnowledgeAnalysisRunRecord.source_revision_id,
+            runs = tuple(
+                session.scalars(
+                    select(KnowledgeAnalysisRunRecord)
+                    .join(
+                        ItemRevisionRecord,
+                        ItemRevisionRecord.item_revision_id
+                        == KnowledgeAnalysisRunRecord.source_revision_id,
+                    )
+                    .join(
+                        LegacyItemExtractionDecisionRecord,
+                        ItemRevisionRecord.registration_key == registration_key,
+                    )
+                    .join(
+                        LegacyItemExtractionBatchWorkUnitRecord,
+                        LegacyItemExtractionBatchWorkUnitRecord.acceptance_id
+                        == LegacyItemExtractionDecisionRecord.acceptance_id,
+                    )
+                    .where(
+                        LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
+                            self.extraction_batch_ids
+                        ),
+                        KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
+                        KnowledgeAnalysisRunRecord.state.in_(ACTIVE_ANALYSIS_STATES),
+                    )
+                    .order_by(
+                        KnowledgeAnalysisRunRecord.created_at,
+                        KnowledgeAnalysisRunRecord.analysis_run_id,
+                    )
+                    .limit(MAX_AUTOMATIC_ACTIVE_ANALYSES)
                 )
-                .join(
-                    LegacyItemExtractionDecisionRecord,
-                    ItemRevisionRecord.registration_key == registration_key,
-                )
-                .join(
-                    LegacyItemExtractionBatchWorkUnitRecord,
-                    LegacyItemExtractionBatchWorkUnitRecord.acceptance_id
-                    == LegacyItemExtractionDecisionRecord.acceptance_id,
-                )
-                .where(
-                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
-                        self.extraction_batch_ids
-                    ),
-                    KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
-                    KnowledgeAnalysisRunRecord.state.in_(ACTIVE_ANALYSIS_STATES),
-                )
-                .order_by(
-                    KnowledgeAnalysisRunRecord.created_at,
-                    KnowledgeAnalysisRunRecord.analysis_run_id,
-                )
-                .limit(1)
             )
-            if run is None:
-                return None
-            return run.analysis_run_id, run.created_by_operator_id, run.state
+            return tuple(
+                (run.analysis_run_id, run.created_by_operator_id, run.state) for run in runs
+            )
 
     def _retryable_analysis(self) -> tuple[str, str] | None:
         """Select one explicitly allowlisted terminal run that has no successor."""
