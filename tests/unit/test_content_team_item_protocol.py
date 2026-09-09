@@ -28,10 +28,12 @@ from eom_hwpx_contracts import (
     normalize_content_team_bottom_stem,
     normalize_content_team_inline_math,
     normalize_content_team_labeled_block_content,
+    normalize_content_team_statement_marker,
     normalize_content_team_stem,
 )
 from eom_hwpx_contracts.content_team_markdown import (
     parse_content_team_markdown,
+    parse_content_team_markdown_v2,
     serialize_content_team_markdown,
 )
 from eom_workflow.compiler import compile_definition, compile_definition_data
@@ -383,6 +385,140 @@ def test_content_team_bottom_stem_separates_matching_source_score_markers() -> N
     )
     with pytest.raises(ValueError, match="differs from score_display"):
         normalize_content_team_bottom_stem("2.5", "옳은 것을 고른 것은? [3점]")
+
+
+def test_content_team_statement_marker_normalizes_only_exact_trailing_source_format() -> None:
+    stem = "제시된 자료를 해석하시오.\n\n<보기>"
+
+    normalized = normalize_content_team_statement_marker(stem, has_statements=True)
+    assert normalized == "제시된 자료를 해석하시오."
+    assert normalize_content_team_statement_marker(normalized, has_statements=True) == normalized
+    assert (
+        normalize_content_team_statement_marker("다음 <보기>에서 고르시오.", has_statements=True)
+        == "다음 <보기>에서 고르시오."
+    )
+    assert (
+        normalize_content_team_statement_marker("표시가 없는 발문", has_statements=True)
+        == "표시가 없는 발문"
+    )
+
+
+def test_content_team_statement_marker_preserves_surrounding_text_and_order() -> None:
+    assert (
+        normalize_content_team_statement_marker("앞 문장\n<보기>\n뒤 문장", has_statements=True)
+        == "앞 문장\n뒤 문장"
+    )
+
+
+@pytest.mark.parametrize(
+    ("stem", "has_statements"),
+    (
+        ("제시된 자료를 해석하시오.\n< 보 기 >", True),
+        ("제시된 자료를 해석하시오.\n<보기> ", True),
+        ("제시된 자료를 해석하시오.\n<보기>\n<보기>", True),
+        ("제시된 자료를 해석하시오.\n<보기>", False),
+    ),
+)
+def test_content_team_statement_marker_leaves_ambiguous_cases_for_serializer(
+    stem: str,
+    has_statements: bool,
+) -> None:
+    assert normalize_content_team_statement_marker(stem, has_statements=has_statements) == stem
+
+
+@pytest.mark.parametrize(
+    ("schema_id", "protocol_version", "draft_schema_version"),
+    (
+        ("authoring-result@7.0", "workflow-role/1.15.0", "2.0"),
+        ("authoring-result@8.0", "workflow-role/1.17.0", "2.0"),
+        ("authoring-result@9.0", "workflow-role/1.19.0", "3.0"),
+    ),
+)
+def test_authoring_v7_v8_v9_remove_one_projected_statement_marker_and_round_trip(
+    schema_id: str,
+    protocol_version: str,
+    draft_schema_version: str,
+) -> None:
+    result = ContentTeamAuthoringRoleResultV7(
+        job_id="job_" + "1" * 32,
+        workflow_id="workflow_" + "2" * 32,
+        step_run_id="steprun_" + "3" * 32,
+        role="authoring",
+        artifact=ArtifactSpec(
+            logical_artifact_id="artifact_" + "4" * 32,
+            revision_id="rev_" + "5" * 32,
+        ),
+        completed_at=datetime(2026, 9, 3, tzinfo=UTC),
+        output={
+            "draft": _content(),
+            "metadata": {
+                "subject": "통합과학",
+                "topic": "요청으로 정해지는 주제",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+    ).model_dump(mode="json")
+    result["protocol_version"] = protocol_version
+    output = result["output"]
+    assert isinstance(output, dict)
+    draft = output["draft"]
+    assert isinstance(draft, dict)
+    draft["schema_version"] = draft_schema_version
+    draft.pop("visual_layout")
+    original_stem = draft["stem"]
+    assert isinstance(original_stem, str)
+    draft["stem"] = original_stem + "\n\n<보기>"
+    unchanged = json.loads(json.dumps(result, ensure_ascii=False))
+
+    Draft202012Validator(load_codex_result_schema(schema_id)).validate(result)
+    parsed = validate_role_result(result, "authoring", schema_id)
+
+    assert result == unchanged
+    assert parsed.output.draft.stem == original_stem  # type: ignore[union-attr]
+    rendered = serialize_content_team_markdown(parsed.output.draft)  # type: ignore[union-attr]
+    assert rendered.decode("utf-8").splitlines().count("<보기>") == 1
+    reparsed = (
+        parse_content_team_markdown_v2(rendered)
+        if draft_schema_version == "3.0"
+        else parse_content_team_markdown(rendered)
+    )
+    assert reparsed.stem == original_stem
+    assert validate_role_result(result, "authoring", schema_id) == parsed
+
+
+@pytest.mark.parametrize(
+    "marker_text",
+    ("<보기>\n<보기>", "< 보 기 >"),
+)
+def test_authoring_statement_marker_ambiguity_still_fails_materialization(
+    marker_text: str,
+) -> None:
+    result = ContentTeamAuthoringRoleResultV7(
+        job_id="job_" + "1" * 32,
+        workflow_id="workflow_" + "2" * 32,
+        step_run_id="steprun_" + "3" * 32,
+        role="authoring",
+        artifact=ArtifactSpec(
+            logical_artifact_id="artifact_" + "4" * 32,
+            revision_id="rev_" + "5" * 32,
+        ),
+        completed_at=datetime(2026, 9, 3, tzinfo=UTC),
+        output={
+            "draft": _content(stem=f"제시된 정보를 해석하시오.\n{marker_text}"),
+            "metadata": {
+                "subject": "통합과학",
+                "topic": "요청으로 정해지는 주제",
+                "difficulty": "medium",
+                "knowledge_source_mode": "general_model_knowledge",
+            },
+        },
+    ).model_dump(mode="json")
+    draft = result["output"]["draft"]
+    del draft["visual_layout"]
+
+    with pytest.raises(ValueError, match="cannot be materialized"):
+        validate_role_result(result, "authoring", "authoring-result@7.0")
 
 
 def test_content_team_inline_math_normalizes_handoff_unsupported_boundaries() -> None:

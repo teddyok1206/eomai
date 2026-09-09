@@ -20,6 +20,12 @@ from eom_catalog_service.knowledge_graph_projection import (
 from eom_catalog_service.knowledge_graph_publication_service import _snapshot_source_revision
 from eom_identifiers import content_sha256
 from eom_workflow import WorkflowRequest
+from eom_workflow.schemas import (
+    WorkflowSchemaError,
+    load_role_result_schema,
+    validate_role_result,
+    validate_schema_message,
+)
 from pydantic import ValidationError
 
 NOW = datetime(2026, 9, 6, 3, tzinfo=UTC)
@@ -245,6 +251,196 @@ def _proposal(source: ApprovedPastExamItemKnowledgeSourceV3) -> KnowledgeAnalysi
             "completed_at": NOW,
         }
     )
+
+
+def _proposal_role_result(proposal: dict[str, object]) -> dict[str, object]:
+    return {
+        "schema_version": "1.0",
+        "protocol_version": "workflow-role/1.18.0",
+        "job_id": "job_" + "1" * 32,
+        "workflow_id": "workflow_" + "2" * 32,
+        "step_run_id": "steprun_" + "3" * 32,
+        "status": "ok",
+        "artifact": {
+            "logical_artifact_id": "artifact_" + "4" * 32,
+            "revision_id": "rev_" + "5" * 32,
+            "file_name": "result.json",
+            "media_type": "application/json",
+        },
+        "completed_at": NOW.isoformat().replace("+00:00", "Z"),
+        "role": "support",
+        "output": {"proposal": proposal},
+    }
+
+
+def _raw_proposal_with_two_nodes() -> dict[str, object]:
+    proposal = _proposal(_source()).model_dump(mode="json")
+    nodes = proposal["nodes"]
+    assert isinstance(nodes, list)
+    nodes.append(
+        {
+            "node_id": "knode_concept_secondary",
+            "node_type": "CONCEPT",
+            "stable_key": "concept:secondary",
+            "label": "보조 개념",
+            "anchor_ids": ["anchor_problem_page"],
+        }
+    )
+    return proposal
+
+
+def _edge(
+    *,
+    edge_id: str,
+    from_node_id: str = "knode_concept_visual_evidence",
+    to_node_id: str = "knode_concept_secondary",
+    edge_type: str = "IS_A",
+    from_node_type: str = "CONCEPT",
+    to_node_type: str = "CONCEPT",
+) -> dict[str, object]:
+    return {
+        "edge_id": edge_id,
+        "relationship": {
+            "edge_type": edge_type,
+            "from_node_type": from_node_type,
+            "to_node_type": to_node_type,
+        },
+        "from_node_id": from_node_id,
+        "to_node_id": to_node_id,
+        "confidence_milli": 900,
+        "anchor_ids": ["anchor_problem_page"],
+    }
+
+
+@pytest.mark.parametrize(
+    "invalid_edge",
+    [
+        _edge(
+            edge_id="kedge_self",
+            to_node_id="knode_concept_visual_evidence",
+        ),
+        _edge(
+            edge_id="kedge_dangling",
+            to_node_id="knode_concept_missing",
+        ),
+        _edge(
+            edge_id="kedge_declared_type_mismatch",
+            to_node_type="PROCESS",
+        ),
+    ],
+    ids=("self", "dangling", "declared-endpoint-type-mismatch"),
+)
+def test_v9_role_validation_filters_only_invalid_edges_after_json_schema(
+    invalid_edge: dict[str, object],
+) -> None:
+    proposal = _raw_proposal_with_two_nodes()
+    edges = proposal["edges"]
+    assert isinstance(edges, list)
+    edges.extend((_edge(edge_id="kedge_valid"), invalid_edge))
+    result = _proposal_role_result(proposal)
+    unchanged = deepcopy(result)
+
+    validate_schema_message(
+        load_role_result_schema("knowledge-analysis-proposal-result@9.0"),
+        result,
+        "pre-normalization",
+    )
+    parsed = validate_role_result(
+        result,
+        "support",
+        "knowledge-analysis-proposal-result@9.0",
+    )
+
+    assert [edge.edge_id for edge in parsed.output.proposal.edges] == ["kedge_valid"]
+    assert result == unchanged
+    assert (
+        parsed.output.proposal.nodes
+        == KnowledgeAnalysisWorkerProposalV7.model_validate(
+            {**proposal, "edges": [_edge(edge_id="kedge_valid")]}
+        ).nodes
+    )
+    assert (
+        validate_role_result(
+            result,
+            "support",
+            "knowledge-analysis-proposal-result@9.0",
+        )
+        == parsed
+    )
+
+
+def test_v9_role_validation_filters_edges_rejected_by_current_worker_ontology(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proposal = _raw_proposal_with_two_nodes()
+    edges = proposal["edges"]
+    assert isinstance(edges, list)
+    edges.append(_edge(edge_id="kedge_now_incompatible"))
+    result = _proposal_role_result(proposal)
+
+    validate_schema_message(
+        load_role_result_schema("knowledge-analysis-proposal-result@9.0"),
+        result,
+        "pre-normalization",
+    )
+
+    def reject_current_ontology(*_args: object) -> None:
+        raise ValueError("simulated current worker-ontology rejection")
+
+    monkeypatch.setattr(
+        "eom_workflow.schemas.validate_worker_knowledge_edge_endpoint_types",
+        reject_current_ontology,
+    )
+
+    parsed = validate_role_result(
+        result,
+        "support",
+        "knowledge-analysis-proposal-result@9.0",
+    )
+
+    assert parsed.output.proposal.edges == ()
+
+
+def test_v9_role_validation_rejects_malformed_edges_before_filtering() -> None:
+    proposal = _raw_proposal_with_two_nodes()
+    malformed = _edge(edge_id="kedge_malformed")
+    malformed.pop("relationship")
+    edges = proposal["edges"]
+    assert isinstance(edges, list)
+    edges.append(malformed)
+
+    with pytest.raises(
+        WorkflowSchemaError,
+        match=r"knowledge-analysis-proposal-result@9\.0 at output\.proposal\.edges\.0",
+    ):
+        validate_role_result(
+            _proposal_role_result(proposal),
+            "support",
+            "knowledge-analysis-proposal-result@9.0",
+        )
+
+
+def test_v9_role_validation_does_not_repair_duplicate_node_identities() -> None:
+    proposal = _raw_proposal_with_two_nodes()
+    nodes = proposal["nodes"]
+    assert isinstance(nodes, list)
+    duplicate = deepcopy(nodes[1])
+    assert isinstance(duplicate, dict)
+    duplicate["label"] = "중복 보조 개념"
+    nodes.append(duplicate)
+
+    result = _proposal_role_result(proposal)
+    validate_schema_message(
+        load_role_result_schema("knowledge-analysis-proposal-result@9.0"),
+        result,
+        "pre-normalization",
+    )
+    with pytest.raises(WorkflowSchemaError, match="node identities must be unique"):
+        validate_role_result(
+            result,
+            "support",
+            "knowledge-analysis-proposal-result@9.0",
+        )
 
 
 def test_v9_request_and_proposal_require_exact_ordered_page_observations() -> None:

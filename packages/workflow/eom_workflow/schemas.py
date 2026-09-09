@@ -17,6 +17,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisRequestV9,
+    validate_worker_knowledge_edge_endpoint_types,
 )
 from eom_hwpx_contracts import (
     ContentTeamMarkdownError,
@@ -24,6 +25,7 @@ from eom_hwpx_contracts import (
     normalize_content_team_bottom_stem,
     normalize_content_team_inline_math,
     normalize_content_team_labeled_block_content,
+    normalize_content_team_statement_marker,
     normalize_content_team_stem,
     serialize_content_team_markdown,
 )
@@ -497,6 +499,90 @@ def validate_role_input(
     return parsed
 
 
+def _filter_invalid_knowledge_analysis_v9_edges(value: object) -> object:
+    """Apply ADR 0047 edge filtering before the V9 proposal model is constructed.
+
+    The canonical JSON Schema has already validated the complete message before this function is
+    called.  Only the untrusted edge array is copied and filtered; every other proposal value is
+    passed to the existing typed and staging validators without reinterpretation.
+    """
+
+    if not isinstance(value, dict):
+        return value
+    output = value.get("output")
+    if not isinstance(output, dict):
+        return value
+    proposal = output.get("proposal")
+    if not isinstance(proposal, dict):
+        return value
+    nodes = proposal.get("nodes")
+    edges = proposal.get("edges")
+    if not isinstance(nodes, list) or not isinstance(edges, list):
+        return value
+
+    node_types: dict[str, str] = {}
+    for node in nodes:
+        if not isinstance(node, dict):
+            return value
+        node_id = node.get("node_id")
+        node_type = node.get("node_type")
+        if not isinstance(node_id, str) or not isinstance(node_type, str):
+            return value
+        if node_id in node_types:
+            # Duplicate identities are ambiguous and remain an error for the typed validator.
+            return value
+        node_types[node_id] = node_type
+
+    compatible_edges: list[object] = []
+    for edge in copy.deepcopy(edges):
+        if not isinstance(edge, dict):
+            return value
+        relationship = edge.get("relationship")
+        from_node_id = edge.get("from_node_id")
+        to_node_id = edge.get("to_node_id")
+        if (
+            not isinstance(relationship, dict)
+            or not isinstance(from_node_id, str)
+            or not isinstance(to_node_id, str)
+        ):
+            return value
+        edge_type = relationship.get("edge_type")
+        declared_from_type = relationship.get("from_node_type")
+        declared_to_type = relationship.get("to_node_type")
+        if (
+            not isinstance(edge_type, str)
+            or not isinstance(declared_from_type, str)
+            or not isinstance(declared_to_type, str)
+        ):
+            return value
+
+        if from_node_id == to_node_id:
+            continue
+        actual_from_type = node_types.get(from_node_id)
+        actual_to_type = node_types.get(to_node_id)
+        if actual_from_type is None or actual_to_type is None:
+            continue
+        if actual_from_type != declared_from_type or actual_to_type != declared_to_type:
+            continue
+        try:
+            validate_worker_knowledge_edge_endpoint_types(
+                edge_type,
+                declared_from_type,
+                declared_to_type,
+            )
+        except ValueError:
+            continue
+        compatible_edges.append(edge)
+
+    canonical = value.copy()
+    canonical_output = output.copy()
+    canonical_proposal = proposal.copy()
+    canonical_proposal["edges"] = compatible_edges
+    canonical_output["proposal"] = canonical_proposal
+    canonical["output"] = canonical_output
+    return canonical
+
+
 def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult:
     canonical_value = value
     if (
@@ -514,6 +600,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
     elif schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_editorial_compatibility_result(value)
     validate_schema_message(load_role_result_schema(schema_id), canonical_value, schema_id)
+    if schema_id == "knowledge-analysis-proposal-result@9.0" and role == "support":
+        canonical_value = _filter_invalid_knowledge_analysis_v9_edges(canonical_value)
     try:
         if schema_id == "authoring-result@4.0" and role == "authoring":
             return GeneratedAuthoringRoleResultV4.model_validate(value)
@@ -578,7 +666,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         if schema_id == "knowledge-analysis-proposal-result@8.0" and role == "support":
             return KnowledgeAnalysisProposalRoleResultV8.model_validate(value)
         if schema_id == "knowledge-analysis-proposal-result@9.0" and role == "support":
-            return KnowledgeAnalysisProposalRoleResultV9.model_validate(value)
+            return KnowledgeAnalysisProposalRoleResultV9.model_validate(canonical_value)
         if schema_id == "legacy-item-extraction-result@1.0" and role == "support":
             return LegacyItemExtractionRoleResult.model_validate(canonical_value)
         if schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
@@ -693,7 +781,14 @@ def _canonicalize_content_team_authoring_result(
     item_number = canonical_draft.get("item_number")
     stem = canonical_draft.get("stem")
     if isinstance(item_number, int) and isinstance(stem, str):
-        canonical_draft["stem"] = normalize_content_team_stem(item_number, stem)
+        normalized_stem = normalize_content_team_stem(item_number, stem)
+        statements = canonical_draft.get("statements")
+        if isinstance(statements, list):
+            normalized_stem = normalize_content_team_statement_marker(
+                normalized_stem,
+                has_statements=bool(statements),
+            )
+        canonical_draft["stem"] = normalized_stem
     score_display = canonical_draft.get("score_display")
     bottom_stem = canonical_draft.get("bottom_stem")
     if isinstance(score_display, str) and isinstance(bottom_stem, str):

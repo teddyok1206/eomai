@@ -329,6 +329,7 @@ from eom_catalog_contracts.knowledge import (
     knowledge_node_id_prefix,
     validate_knowledge_analysis_proposal_ontology,
     validate_knowledge_edge_endpoint_types,
+    validate_worker_knowledge_edge_endpoint_types,
 )
 from eom_catalog_contracts.knowledge_analysis_batch import (
     CreateKnowledgeAnalysisBatchCommand,
@@ -1022,4 +1023,5 @@ __all__ = [
     "validate_mock_exam_placements",
     "validate_mock_exam_planned_placements",
     "validate_reviewed_authoring_guidance",
+    "validate_worker_knowledge_edge_endpoint_types",
 ]

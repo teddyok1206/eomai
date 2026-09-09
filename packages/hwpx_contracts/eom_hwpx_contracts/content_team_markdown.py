@@ -117,6 +117,23 @@ def normalize_content_team_bottom_stem(score_display: str, bottom_stem: str) -> 
     return normalized
 
 
+def normalize_content_team_statement_marker(stem: str, *, has_statements: bool) -> str:
+    """Remove one exact source-format line represented by typed statements.
+
+    Inline references such as ``<보기>에서`` are ordinary authored text. A standalone marker is
+    redundant only when the typed statement tuple is nonempty and the stem contains that exact line
+    once. Every other spelling, cardinality, and field placement remains for the authoritative
+    serializer to reject.
+    """
+
+    lines = stem.splitlines(keepends=True)
+    marker_indexes = [index for index, line in enumerate(lines) if line.rstrip("\r\n") == "<보기>"]
+    if not has_statements or len(marker_indexes) != 1:
+        return stem
+    marker_index = marker_indexes[0]
+    return "".join((*lines[:marker_index], *lines[marker_index + 1 :])).strip("\r\n")
+
+
 def normalize_content_team_inline_math(value: str) -> str:
     """Repair only source-format boundaries that the handoff parser cannot represent.
 
