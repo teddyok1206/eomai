@@ -6,10 +6,13 @@ import json
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Never
+from typing import Annotated, Never, cast
 
 import typer
+from eom_api.build_info import BuildInfoError, get_build_info
 from eom_catalog_contracts import (
+    LegacyItemCorpusCompletionCommand,
+    LegacyItemCorpusCompletionReceipt,
     LegacyItemEditorialCompatibilityPolicy,
     LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionAcceptance,
@@ -19,6 +22,7 @@ from eom_catalog_contracts import (
     LegacyItemPromotionRequest,
     LegacyRightsReviewPointerV2,
     ReconcileKnowledgeAnalysisCommand,
+    SourceRelease,
     validate_contract,
 )
 from eom_catalog_service.artifacts import CatalogArtifactService
@@ -27,12 +31,24 @@ from eom_catalog_service.knowledge_analysis_service import (
     KnowledgeAnalysisApplicationService,
     KnowledgeAnalysisServiceError,
 )
-from eom_catalog_service.legacy_assessment_registry import LegacyAssessmentRegistryError
+from eom_catalog_service.legacy_assessment_registry import (
+    LegacyAssessmentRegistry,
+    LegacyAssessmentRegistryError,
+)
 from eom_catalog_service.legacy_assessment_rights import (
     LegacyAssessmentRightsError,
     LegacyAssessmentRightsPolicyAdapter,
+    RegisteredAssessmentRightsPolicyResolver,
 )
 from eom_catalog_service.legacy_item_acceptance_service import LegacyItemAcceptanceService
+from eom_catalog_service.legacy_item_corpus_completion_service import (
+    CoverageRegistryBoundary,
+    LegacyItemCorpusCompletionError,
+    LegacyItemCorpusCompletionService,
+)
+from eom_catalog_service.legacy_item_corpus_completion_source import (
+    PostgresLegacyItemCorpusCompletionSource,
+)
 from eom_catalog_service.legacy_item_editorial_compatibility_service import (
     LegacyItemEditorialCompatibilityError,
     LegacyItemEditorialCompatibilityService,
@@ -63,13 +79,32 @@ from eom_catalog_service.legacy_item_promotion_service import (
     LegacyItemPromotionError,
     LegacyItemPromotionService,
 )
+from eom_catalog_service.legacy_source_inventory import (
+    LegacySourceInventoryError,
+    load_root_configuration,
+)
 from eom_catalog_service.legacy_source_selection_adapters import (
     CatalogLegacyRightsReviewResolver,
 )
+from eom_catalog_service.pdf_learning_completion_service import (
+    PdfLearningCompletionError,
+    PdfLearningCompletionRequest,
+    PdfLearningCompletionService,
+)
+from eom_catalog_service.pdf_learning_completion_source import (
+    PostgresPdfLearningCompletionSource,
+)
+from eom_catalog_service.settings import CatalogSettings
 from eom_hwpx_manager.content_team_compatibility_evidence import (
     ExistingContentTeamBuildEvidenceResolver,
 )
+from eom_orchestrator.control_artifacts import ControlArtifactPublisher
+from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_engine
+from eom_orchestrator.legacy_assessment_control_artifacts import (
+    LegacyAssessmentControlArtifactPublisher,
+)
+from eom_orchestrator.settings import Settings, SettingsError
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import Engine
@@ -100,6 +135,27 @@ def _operation_failure(exc: Exception) -> Never:
     code = getattr(exc, "code", "LEGACY_ITEM_OPERATION_FAILED")
     _emit({"status": "FAILED", "error_code": str(code)})
     raise typer.Exit(1)
+
+
+def _installed_source_release() -> SourceRelease:
+    build = get_build_info()
+    return SourceRelease(
+        git_commit=build.source_commit,
+        git_tree=build.source_tree,
+        git_archive_sha256=build.source_archive_sha256,
+    )
+
+
+def _control_artifacts(
+    engine: Engine,
+    *,
+    source_release: SourceRelease,
+    settings: Settings,
+) -> LegacyAssessmentControlArtifactPublisher:
+    return LegacyAssessmentControlArtifactPublisher(
+        ControlArtifactPublisher(engine, settings),
+        source_release=source_release,
+    )
 
 
 def _rights_adapter(
@@ -270,10 +326,81 @@ def extraction_batch_recover_validation_failures(
     engine = build_engine()
     try:
         try:
-            result = LegacyItemExtractionRecoveryService(engine).create(command)
-        except LegacyItemExtractionRecoveryError as exc:
+            source_release = _installed_source_release()
+            authorizations = _control_artifacts(
+                engine,
+                source_release=source_release,
+                settings=Settings.from_environment(),
+            )
+            result = LegacyItemExtractionRecoveryService(
+                engine,
+                authorizations=authorizations,
+            ).create(command)
+        except (
+            BuildInfoError,
+            ControlPlaneError,
+            LegacyItemExtractionRecoveryError,
+            SettingsError,
+            ValueError,
+        ) as exc:
             _operation_failure(exc)
         _emit({"status": "SUCCEEDED", **asdict(result)})
+    finally:
+        engine.dispose()
+
+
+@extraction_batch_app.command("complete-corpus")
+def extraction_batch_complete_corpus(
+    command_file: Annotated[
+        Path,
+        typer.Option("--command-file", exists=True, dir_okay=False, resolve_path=True),
+    ],
+) -> None:
+    """Commit exact recovered corpus coverage from one pinned command."""
+
+    try:
+        raw = load_strict_json(command_file)
+        validate_contract("legacy-item-corpus-completion-command", raw)
+        command = LegacyItemCorpusCompletionCommand.model_validate(raw)
+    except (
+        JsonSchemaValidationError,
+        PydanticValidationError,
+        UnicodeError,
+        ValueError,
+    ) as exc:
+        raise typer.BadParameter("legacy corpus completion command is invalid") from exc
+    engine = build_engine()
+    try:
+        try:
+            source_release = _installed_source_release()
+            catalog_settings = CatalogSettings.from_environment()
+            artifacts = _control_artifacts(
+                engine,
+                source_release=source_release,
+                settings=Settings.from_environment(),
+            )
+            receipt = LegacyItemCorpusCompletionService(
+                source=PostgresLegacyItemCorpusCompletionSource(engine, catalog_settings),
+                artifacts=artifacts,
+                registry=cast(
+                    CoverageRegistryBoundary,
+                    LegacyAssessmentRegistry(
+                        engine,
+                        rights=RegisteredAssessmentRightsPolicyResolver(engine),
+                        settings=catalog_settings,
+                    ),
+                ),
+            ).complete(command)
+        except (
+            BuildInfoError,
+            ControlPlaneError,
+            LegacyAssessmentRegistryError,
+            LegacyItemCorpusCompletionError,
+            SettingsError,
+            ValueError,
+        ) as exc:
+            _operation_failure(exc)
+        _emit(receipt.model_dump(mode="json"))
     finally:
         engine.dispose()
 
@@ -462,6 +589,86 @@ def learning_start(
                 "analysis": result.analysis.model_dump(mode="json"),
                 "item_created": result.item_created,
                 "origin_created": result.origin_created,
+            }
+        )
+    finally:
+        engine.dispose()
+
+
+@learning_app.command("complete-pdf")
+def learning_complete_pdf(
+    corpus_completion_receipt_file: Annotated[
+        Path,
+        typer.Option(
+            "--corpus-completion-receipt-file",
+            exists=True,
+            dir_okay=False,
+            resolve_path=True,
+        ),
+    ],
+    root_config_file: Annotated[
+        Path,
+        typer.Option("--root-config-file", exists=True, dir_okay=False, resolve_path=True),
+    ],
+    graph_snapshot_revision_id: Annotated[
+        str,
+        typer.Option("--graph-snapshot-revision-id"),
+    ],
+    graph_snapshot_sha256: Annotated[str, typer.Option("--graph-snapshot-sha256")],
+) -> None:
+    """Publish the exact end-to-end PDF learning completion proof."""
+
+    try:
+        raw = load_strict_json(corpus_completion_receipt_file)
+        validate_contract("legacy-item-corpus-completion-receipt", raw)
+        corpus_completion = LegacyItemCorpusCompletionReceipt.model_validate(raw)
+        pdf_roots = load_root_configuration(root_config_file)
+        request = PdfLearningCompletionRequest(
+            corpus_completion=corpus_completion,
+            graph_snapshot_revision_id=graph_snapshot_revision_id,
+            graph_snapshot_sha256=graph_snapshot_sha256,
+        )
+    except (
+        JsonSchemaValidationError,
+        LegacySourceInventoryError,
+        PydanticValidationError,
+        UnicodeError,
+        ValueError,
+    ) as exc:
+        raise typer.BadParameter("PDF learning completion request is invalid") from exc
+    engine = build_engine()
+    try:
+        try:
+            source_release = _installed_source_release()
+            catalog_settings = CatalogSettings.from_environment()
+            artifacts = _control_artifacts(
+                engine,
+                source_release=source_release,
+                settings=Settings.from_environment(),
+            )
+            publication = PdfLearningCompletionService(
+                source=PostgresPdfLearningCompletionSource(
+                    engine,
+                    pdf_roots=pdf_roots,
+                    settings=catalog_settings,
+                ),
+                artifacts=artifacts,
+                source_release=source_release,
+            ).complete(request)
+        except (
+            BuildInfoError,
+            ControlPlaneError,
+            PdfLearningCompletionError,
+            SettingsError,
+            ValueError,
+        ) as exc:
+            _operation_failure(exc)
+        _emit(
+            {
+                "status": "SUCCEEDED",
+                "completion_identity_sha256": publication.completion_identity_sha256,
+                "receipt_artifact": publication.receipt_artifact.model_dump(mode="json"),
+                "receipt": publication.receipt.model_dump(mode="json"),
             }
         )
     finally:
