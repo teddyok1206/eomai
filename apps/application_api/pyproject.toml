@@ -11,6 +11,8 @@ dependencies = [
   "eom-api-contracts==0.1.0",
   "eom-platform==0.1.0",
   "fastapi==0.141.1",
+  # The packaged release identity is validated against its Draft 2020-12 schema at runtime.
+  "jsonschema==4.26.0",
   "pydantic==2.13.4",
   "PyYAML==6.0.3",
   "SQLAlchemy==2.0.52",

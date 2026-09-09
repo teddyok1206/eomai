@@ -1,0 +1,35 @@
+{
+  "$id": "https://eom.local/schemas/api/api-release-build-info-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "build_timestamp_utc": {
+      "format": "date-time",
+      "pattern": "(?:Z|\\+00:00)$",
+      "type": "string"
+    },
+    "package_version": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[0-9A-Za-z][0-9A-Za-z._+!-]{0,63}$",
+      "type": "string"
+    },
+    "schema_version": {"const": "api-release-build-info/1.0"},
+    "source_archive_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "source_commit": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+    "source_tree": {"pattern": "^[0-9a-f]{40}$", "type": "string"}
+  },
+  "required": [
+    "schema_version",
+    "package_version",
+    "source_commit",
+    "source_tree",
+    "source_archive_sha256",
+    "build_timestamp_utc"
+  ],
+  "title": "EOM Application API Release Build Information V1",
+  "type": "object"
+}

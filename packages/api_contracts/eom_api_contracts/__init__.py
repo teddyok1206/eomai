@@ -103,9 +103,11 @@ from eom_api_contracts.mock_exam_retirement import (
     MockExamProductionRetirementOutcomeV1,
     MockExamProductionRetirementReceiptV1,
 )
+from eom_api_contracts.system import ApiReleaseBuildInfo
 
 __all__ = [
     "ApiModel",
+    "ApiReleaseBuildInfo",
     "ApprovedItemAnalysisSourceInput",
     "ArtifactPointer",
     "AssessmentHwpxBuildView",

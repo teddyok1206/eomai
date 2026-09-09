@@ -5,6 +5,9 @@ REPOSITORY_ROOT="/home/eom/EOM"
 EXPECTED_BRANCHES=("main" "feat/application-api-v0" "feat/hwpx-application-api-v0")
 API_PYTHON="/srv/eom/conda/envs/eom-api/bin/python"
 API_PIP="${API_PYTHON} -m pip"
+GIT="/usr/bin/git"
+SHA256SUM="/usr/bin/sha256sum"
+TAR="/usr/bin/tar"
 SERVICE="eom-api.service"
 WORKFLOW_RUNNER_SERVICE="eom-workflow-runner.service"
 PLATFORM_CONSUMER_SERVICES=(
@@ -36,6 +39,11 @@ WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT="/var/lib/eom-api/mock-exam-retirement-r
 ACTION="verify"
 PRESERVE_WORKFLOW_RUNNER_INACTIVE=false
 STAGING_ROOT=""
+SOURCE_ARCHIVE_PATH=""
+SOURCE_ARCHIVE_SHA256=""
+SOURCE_ROOT=""
+SOURCE_TREE=""
+VERSION=""
 RELEASE_RECEIPT_FILE=""
 RELEASE_EXECUTION_ID=""
 RELEASE_EXECUTION_REVISION_ID=""
@@ -45,6 +53,7 @@ RELEASE_PRODUCTION_PLAN_ID=""
 RELEASE_PRODUCTION_PLAN_SHA256=""
 RELEASE_OPERATOR_ID=""
 RELEASE_RECEIPT_SHA256=""
+RELEASE_WHEEL_INSPECTION_IDENTITY=""
 
 usage() {
   printf '%s\n' "usage: $0 [--build-only|--install|--install-preserve-workflow-runner-inactive|--verify]" \
@@ -768,9 +777,9 @@ cleanup() {
 trap cleanup EXIT
 
 [[ "$(id -un)" == "eom" ]] || fail "release builds must run as eom"
-[[ "$(git -C "${REPOSITORY_ROOT}" rev-parse --show-toplevel)" == "${REPOSITORY_ROOT}" ]] || \
+[[ "$("${GIT}" -C "${REPOSITORY_ROOT}" rev-parse --show-toplevel)" == "${REPOSITORY_ROOT}" ]] || \
   fail "repository root mismatch"
-CURRENT_BRANCH="$(git -C "${REPOSITORY_ROOT}" branch --show-current)"
+CURRENT_BRANCH="$("${GIT}" -C "${REPOSITORY_ROOT}" branch --show-current)"
 branch_allowed=false
 for candidate in "${EXPECTED_BRANCHES[@]}"; do
   if [[ "${CURRENT_BRANCH}" == "${candidate}" ]]; then
@@ -781,17 +790,81 @@ done
 [[ "${branch_allowed}" == true ]] || fail "branch mismatch"
 [[ -x "${API_PYTHON}" ]] || fail "isolated eom-api Python is unavailable"
 
-COMMIT="$(git -C "${REPOSITORY_ROOT}" rev-parse HEAD)"
-VERSION="$(PYPROJECT="${REPOSITORY_ROOT}/apps/application_api/pyproject.toml" \
-  "${API_PYTHON}" -c \
-  'import os,pathlib,tomllib; print(tomllib.loads(pathlib.Path(os.environ["PYPROJECT"]).read_text())["project"]["version"])')"
+COMMIT="$("${GIT}" -C "${REPOSITORY_ROOT}" rev-parse HEAD)"
 BUILD_PARENT="/tmp/eom-api-build"
 BUILD_ROOT=""
 DIST_DIR=""
 
 require_clean_tree() {
-  [[ -z "$(git -C "${REPOSITORY_ROOT}" status --porcelain)" ]] || \
+  [[ "$("${GIT}" -C "${REPOSITORY_ROOT}" rev-parse HEAD)" == "${COMMIT}" ]] || \
+    fail "repository HEAD changed after release identity was selected"
+  [[ -z "$("${GIT}" -C "${REPOSITORY_ROOT}" status --porcelain)" ]] || \
     fail "working tree must be clean before a release build"
+}
+
+materialize_release_source() {
+  local archive_digest
+  SOURCE_TREE="$("${GIT}" -C "${REPOSITORY_ROOT}" rev-parse "${COMMIT}^{tree}")"
+  [[ "${COMMIT}" =~ ^[0-9a-f]{40}$ && "${SOURCE_TREE}" =~ ^[0-9a-f]{40}$ ]] || \
+    fail "release commit and tree must use canonical lowercase SHA-1 identities"
+  if "${GIT}" -C "${REPOSITORY_ROOT}" ls-tree -r "${COMMIT}" | \
+    /usr/bin/awk '$1 == "120000" || $1 == "160000" { found = 1 } END { exit !found }'; then
+    fail "release source cannot contain symlinks or unmaterialized Git submodules"
+  fi
+  SOURCE_ARCHIVE_PATH="${BUILD_ROOT}/source.tar"
+  SOURCE_ROOT="${BUILD_ROOT}/source"
+  mkdir -p "${SOURCE_ROOT}"
+  "${GIT}" -C "${REPOSITORY_ROOT}" archive \
+    --format=tar --output="${SOURCE_ARCHIVE_PATH}" "${COMMIT}"
+  /usr/bin/chmod 0600 "${SOURCE_ARCHIVE_PATH}"
+  read -r archive_digest _ < <("${SHA256SUM}" "${SOURCE_ARCHIVE_PATH}")
+  [[ "${archive_digest}" =~ ^[0-9a-f]{64}$ ]] || \
+    fail "release source archive hash is not canonical SHA-256"
+  SOURCE_ARCHIVE_SHA256="sha256:${archive_digest}"
+  "${TAR}" --extract --file="${SOURCE_ARCHIVE_PATH}" --directory="${SOURCE_ROOT}" \
+    --no-same-owner --no-same-permissions
+  VERSION="$(PYPROJECT="${SOURCE_ROOT}/apps/application_api/pyproject.toml" \
+    "${API_PYTHON}" -c \
+    'import os,pathlib,tomllib; print(tomllib.loads(pathlib.Path(os.environ["PYPROJECT"]).read_text())["project"]["version"])')"
+}
+
+verify_release_wheel_records() {
+  local -a release_wheels
+  if (($#)); then
+    release_wheels=("$@")
+  else
+    release_wheels=("${DIST_DIR}"/*.whl)
+  fi
+  ((${#release_wheels[@]} == 3)) || fail "release wheels are unavailable for RECORD verification"
+  /usr/bin/chmod 0600 "${release_wheels[@]}"
+  "${API_PYTHON}" -I "${SOURCE_ROOT}/scripts/api/verify_release_wheel_records.py" \
+    "${release_wheels[@]}"
+}
+
+capture_release_wheel_inspection_identity() {
+  local -a release_wheels=("${DIST_DIR}"/*.whl)
+  ((${#release_wheels[@]} == 3)) || fail "release wheels are unavailable for identity capture"
+  /usr/bin/chmod 0600 "${release_wheels[@]}"
+  RELEASE_WHEEL_INSPECTION_IDENTITY="$(
+    "${API_PYTHON}" -I "${SOURCE_ROOT}/scripts/api/verify_release_wheel_records.py" \
+      --emit-identity "${release_wheels[@]}"
+  )"
+  [[ "${RELEASE_WHEEL_INSPECTION_IDENTITY}" == \
+    release_wheel_inspection_identity=\{* ]] || \
+    fail "release wheel inspection identity output is invalid"
+}
+
+verify_captured_release_wheel_inspection_identity() {
+  local observed
+  (($# == 3)) || fail "release wheel identity verification requires exactly three wheels"
+  [[ -n "${RELEASE_WHEEL_INSPECTION_IDENTITY}" ]] || \
+    fail "release wheel inspection identity was not captured"
+  observed="$(
+    "${API_PYTHON}" -I "${SOURCE_ROOT}/scripts/api/verify_release_wheel_records.py" \
+      --emit-identity "$@"
+  )"
+  [[ "${observed}" == "${RELEASE_WHEEL_INSPECTION_IDENTITY}" ]] || \
+    fail "release wheel bytes changed after inspection"
 }
 
 build_release() {
@@ -801,37 +874,40 @@ build_release() {
   DIST_DIR="${BUILD_ROOT}/dist"
   mkdir -p "${DIST_DIR}"
   STAGING_ROOT="$(mktemp -d "${BUILD_ROOT}/staging.XXXXXX")"
+  materialize_release_source
 
   "${API_PYTHON}" -m pip wheel \
     --no-deps --no-build-isolation --wheel-dir "${DIST_DIR}" \
-    "${REPOSITORY_ROOT}" >/dev/null
+    "${SOURCE_ROOT}" >/dev/null
 
   mkdir -p "${STAGING_ROOT}/contracts/eom_api_contracts/schemas"
-  cp "${REPOSITORY_ROOT}/packages/api_contracts/pyproject.toml" \
+  cp "${SOURCE_ROOT}/packages/api_contracts/pyproject.toml" \
     "${STAGING_ROOT}/contracts/pyproject.toml"
-  cp -a "${REPOSITORY_ROOT}/packages/api_contracts/eom_api_contracts/." \
+  cp -a "${SOURCE_ROOT}/packages/api_contracts/eom_api_contracts/." \
     "${STAGING_ROOT}/contracts/eom_api_contracts/"
   find "${STAGING_ROOT}/contracts/eom_api_contracts" -type d -name __pycache__ \
     -prune -exec rm -rf {} +
-  cp "${REPOSITORY_ROOT}"/schemas/api/v1/*.schema.json \
+  cp "${SOURCE_ROOT}"/schemas/api/v1/*.schema.json \
     "${STAGING_ROOT}/contracts/eom_api_contracts/schemas/"
   "${API_PYTHON}" -m pip wheel \
     --no-deps --no-build-isolation --wheel-dir "${DIST_DIR}" \
     "${STAGING_ROOT}/contracts" >/dev/null
 
   mkdir -p "${STAGING_ROOT}/application/eom_api"
-  cp "${REPOSITORY_ROOT}/apps/application_api/pyproject.toml" \
+  cp "${SOURCE_ROOT}/apps/application_api/pyproject.toml" \
     "${STAGING_ROOT}/application/pyproject.toml"
-  cp -a "${REPOSITORY_ROOT}/apps/application_api/eom_api/." \
+  cp -a "${SOURCE_ROOT}/apps/application_api/eom_api/." \
     "${STAGING_ROOT}/application/eom_api/"
   find "${STAGING_ROOT}/application/eom_api" -type d -name __pycache__ \
     -prune -exec rm -rf {} +
   mkdir -p "${STAGING_ROOT}/application/eom_api/openapi"
-  cp "${REPOSITORY_ROOT}/api/openapi/eom-api-v1.openapi.json" \
-    "${REPOSITORY_ROOT}/api/openapi/eom-api-v1.sha256" \
+  cp "${SOURCE_ROOT}/api/openapi/eom-api-v1.openapi.json" \
+    "${SOURCE_ROOT}/api/openapi/eom-api-v1.sha256" \
     "${STAGING_ROOT}/application/eom_api/openapi/"
-  BUILD_TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-    COMMIT="${COMMIT}" VERSION="${VERSION}" STAGING_ROOT="${STAGING_ROOT}" \
+  BUILD_TIMESTAMP="$(/usr/bin/date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+    COMMIT="${COMMIT}" SOURCE_TREE="${SOURCE_TREE}" \
+    SOURCE_ARCHIVE_SHA256="${SOURCE_ARCHIVE_SHA256}" \
+    VERSION="${VERSION}" STAGING_ROOT="${STAGING_ROOT}" \
     "${API_PYTHON}" - <<'PY'
 import json
 import os
@@ -843,7 +919,10 @@ target.write_text(
         {
             "build_timestamp_utc": os.environ["BUILD_TIMESTAMP"],
             "package_version": os.environ["VERSION"],
+            "schema_version": "api-release-build-info/1.0",
+            "source_archive_sha256": os.environ["SOURCE_ARCHIVE_SHA256"],
             "source_commit": os.environ["COMMIT"],
+            "source_tree": os.environ["SOURCE_TREE"],
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -856,24 +935,32 @@ PY
     --no-deps --no-build-isolation --wheel-dir "${DIST_DIR}" \
     "${STAGING_ROOT}/application" >/dev/null
 
+  verify_release_wheel_records
   inspect_release
+  capture_release_wheel_inspection_identity
   printf 'Built and inspected EOM Application API %s from %s.\n' "${VERSION}" "${COMMIT}"
   printf 'application_api_release_wheel_dir=%s\n' "${DIST_DIR}"
 }
 
 inspect_release() {
   DIST_DIR="${DIST_DIR}" EXPECTED_COMMIT="${COMMIT}" EXPECTED_VERSION="${VERSION}" \
-    REPOSITORY_ROOT="${REPOSITORY_ROOT}" API_PYTHON="${API_PYTHON}" \
+    EXPECTED_SOURCE_TREE="${SOURCE_TREE}" \
+    EXPECTED_SOURCE_ARCHIVE_SHA256="${SOURCE_ARCHIVE_SHA256}" \
+    SOURCE_ARCHIVE_PATH="${SOURCE_ARCHIVE_PATH}" \
+    REPOSITORY_ROOT="${SOURCE_ROOT}" API_PYTHON="${API_PYTHON}" \
     "${API_PYTHON}" - <<'PY'
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import tempfile
 import zipfile
 from pathlib import Path
+
+from jsonschema import Draft202012Validator, FormatChecker
 
 dist = Path(os.environ["DIST_DIR"])
 wheels = sorted(dist.glob("*.whl"))
@@ -924,9 +1011,70 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         not in entry_point_source
     ):
         raise SystemExit("runtime isolation console entry point missing")
-    build = json.loads(archive.read("eom_api/build-info.json"))
+    build_bytes = archive.read("eom_api/build-info.json")
+    build = json.loads(build_bytes)
+    canonical_build = (json.dumps(build, sort_keys=True, separators=(",", ":")) + "\n").encode(
+        "ascii"
+    )
+    if build_bytes != canonical_build:
+        raise SystemExit("Application API wheel build information is not canonical JSON")
+    build_schema_path = (
+        Path(os.environ["REPOSITORY_ROOT"])
+        / "schemas/api/v1/api-release-build-info-v1.schema.json"
+    )
+    build_schema = json.loads(build_schema_path.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(build_schema)
+    build_errors = tuple(
+        Draft202012Validator(build_schema, format_checker=FormatChecker()).iter_errors(build)
+    )
+    if build_errors:
+        raise SystemExit("Application API wheel build information violates its schema")
     if build["source_commit"] != os.environ["EXPECTED_COMMIT"]:
         raise SystemExit("Application API wheel source commit mismatch")
+    if build["source_tree"] != os.environ["EXPECTED_SOURCE_TREE"]:
+        raise SystemExit("Application API wheel source tree mismatch")
+    if build["source_archive_sha256"] != os.environ["EXPECTED_SOURCE_ARCHIVE_SHA256"]:
+        raise SystemExit("Application API wheel source archive mismatch")
+    source_archive_path = Path(os.environ["SOURCE_ARCHIVE_PATH"])
+    descriptor = os.open(source_archive_path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != os.getuid()
+            or stat.S_IMODE(before.st_mode) != 0o600
+            or before.st_nlink != 1
+        ):
+            raise SystemExit("Application API release source archive metadata mismatch")
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+        if (
+            before.st_dev,
+            before.st_ino,
+            before.st_mode,
+            before.st_uid,
+            before.st_gid,
+            before.st_nlink,
+            before.st_size,
+            before.st_mtime_ns,
+        ) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_mode,
+            after.st_uid,
+            after.st_gid,
+            after.st_nlink,
+            after.st_size,
+            after.st_mtime_ns,
+        ):
+            raise SystemExit("Application API release source archive changed during inspection")
+    finally:
+        os.close(descriptor)
+    source_archive_sha256 = "sha256:" + digest.hexdigest()
+    if build["source_archive_sha256"] != source_archive_sha256:
+        raise SystemExit("Application API wheel source archive bytes mismatch")
     if build["package_version"] != os.environ["EXPECTED_VERSION"]:
         raise SystemExit("Application API wheel version mismatch")
     canonical_openapi = (
@@ -955,6 +1103,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         if name.startswith("eom_api_contracts/schemas/") and name.endswith(".schema.json")
     }
     expected_api_schemas = {
+        "eom_api_contracts/schemas/api-release-build-info-v1.schema.json",
         "eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json",
         "eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json",
         "eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json",
@@ -984,7 +1133,8 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 26 packaged API schemas including Workflow-start and mock-exam "
+            "expected exactly 27 packaged API schemas including release identity, Workflow-start, "
+            "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "
             f"unexpected={sorted(schemas - expected_api_schemas)}"
@@ -995,6 +1145,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/item_bank.py",
         "eom_api_contracts/mock_exam_execution.py",
         "eom_api_contracts/mock_exam_retirement.py",
+        "eom_api_contracts/system.py",
         "eom_api_contracts/workflows.py",
     }
     if missing := required_contract_runtime - names:
@@ -1373,6 +1524,7 @@ catalog_resources = {
     "legacy-assessment/legacy-item-extraction-request-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-request-v1.schema.json",
     "legacy-assessment/legacy-item-extraction-receipt-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-receipt-v1.schema.json",
     "legacy-assessment/legacy-item-extraction-result-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-result-v1.schema.json",
+    "legacy-assessment/legacy-item-extraction-validation-recovery-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-validation-recovery-v1.schema.json",
     "legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json",
     "legacy-assessment/legacy-item-extraction-batch-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-batch-v1.schema.json",
     "legacy-assessment/legacy-item-extraction-batch-v2.schema.json": "schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json",
@@ -1608,6 +1760,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
                 str(installed_root),
                 str(platform_wheel),
                 str(by_prefix["eom_api_contracts"]),
+                str(by_prefix["eom_application_api"]),
             ],
             check=True,
             stdout=subprocess.DEVNULL,
@@ -1630,7 +1783,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -1639,6 +1792,7 @@ os.environ["EOM_CODEX_BINARY"] = codex_binary
 from eom_workflow import AgentStep, WORKFLOW_ADMISSION_BY_IDENTITY
 from eom_workflow.control_schemas import control_schema_inventory, load_control_schema
 from eom_api_contracts import (
+    ApiReleaseBuildInfo,
     MockExamExplicitAnalysisReviewSetV1,
     MockExamExplicitRatingSetV1,
     MockExamGenerationBlockResolutionV1,
@@ -1649,6 +1803,7 @@ from eom_api_contracts import (
     MockExamProductionRetirementReceiptV1,
     mock_exam_production_is_terminal,
 )
+from eom_api.build_info import get_build_info
 from eom_workflow.compiler import compile_definition
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
@@ -1727,6 +1882,15 @@ if any(
     )
 ):
     raise SystemExit("mock-exam contract package exports are incomplete")
+if ApiReleaseBuildInfo.__module__ != "eom_api_contracts.system":
+    raise SystemExit("API release build information contract export is incomplete")
+build_info = get_build_info()
+if (
+    build_info.source_commit != expected_commit
+    or build_info.source_tree != expected_tree
+    or build_info.source_archive_sha256 != expected_archive_sha256
+):
+    raise SystemExit("installed-wheel API release source identity mismatch")
 if mock_exam_production_is_terminal.__module__ != "eom_api_contracts.mock_exam_execution":
     raise SystemExit("mock-exam terminal-state contract export is incomplete")
 execution_discriminator = TypeAdapter(MockExamProductionExecution).json_schema().get(
@@ -1907,6 +2071,9 @@ validate_contract(
             str(staging),
             str(workspace_root),
             str(codex_binary),
+            os.environ["EXPECTED_COMMIT"],
+            os.environ["EXPECTED_SOURCE_TREE"],
+            os.environ["EXPECTED_SOURCE_ARCHIVE_SHA256"],
         ],
         cwd=root,
         check=True,
@@ -2004,16 +2171,27 @@ PY
 install_wheels() {
   mapfile -t wheels < <(find "${DIST_DIR}" -maxdepth 1 -type f -name '*.whl' | sort)
   ((${#wheels[@]} == 3)) || fail "release wheels are unavailable"
+  # Re-open and verify the exact install arguments after every admission gate.
+  verify_captured_release_wheel_inspection_identity "${wheels[@]}"
   (
     umask 022
     ${API_PIP} install --no-deps --force-reinstall "${wheels[@]}" >/dev/null
   )
+  verify_captured_release_wheel_inspection_identity "${wheels[@]}"
   ${API_PIP} check
-  verify_install_mode
+  verify_install_mode exact-source
 }
 
 verify_install_mode() {
-  REPOSITORY_ROOT="${REPOSITORY_ROOT}" "${API_PYTHON}" - <<'PY'
+  local source_identity_mode="${1:-}"
+  [[ "${source_identity_mode}" == "exact-source" || \
+    "${source_identity_mode}" == "validated-resource-only" ]] || \
+    fail "installed release source identity verification mode is invalid"
+  REPOSITORY_ROOT="${REPOSITORY_ROOT}" \
+    SOURCE_IDENTITY_MODE="${source_identity_mode}" EXPECTED_COMMIT="${COMMIT}" \
+    EXPECTED_SOURCE_TREE="${SOURCE_TREE}" \
+    EXPECTED_SOURCE_ARCHIVE_SHA256="${SOURCE_ARCHIVE_SHA256}" \
+    "${API_PYTHON}" -I - <<'PY'
 from __future__ import annotations
 
 import importlib
@@ -2118,9 +2296,19 @@ for root in site_roots:
         raise SystemExit(f"editable metadata detected: {path.name}")
 
 from eom_catalog_contracts import catalog_schema_inventory, load_schema
+from eom_api.build_info import get_build_info
 
 for name, _ in catalog_schema_inventory():
     load_schema(name)
+build_info = get_build_info()
+if os.environ["SOURCE_IDENTITY_MODE"] == "exact-source" and (
+    not os.environ["EXPECTED_SOURCE_TREE"]
+    or not os.environ["EXPECTED_SOURCE_ARCHIVE_SHA256"]
+    or build_info.source_commit != os.environ["EXPECTED_COMMIT"]
+    or build_info.source_tree != os.environ["EXPECTED_SOURCE_TREE"]
+    or build_info.source_archive_sha256 != os.environ["EXPECTED_SOURCE_ARCHIVE_SHA256"]
+):
+    raise SystemExit("installed API release source identity mismatch")
 PY
   "${API_PYTHON}" -I -m eom_api.runtime_isolation_verifier --capabilities
 }
@@ -2231,7 +2419,9 @@ install_service() {
 
 verify_service() {
   local consumer
-  verify_install_mode
+  # Standalone verification validates the embedded typed resource without
+  # claiming that the checkout still denotes the installed release.
+  verify_install_mode validated-resource-only
   cmp --silent "${METADATA_VERIFIER_SOURCE}" "${METADATA_VERIFIER_TARGET}" || \
     fail "installed metadata verifier source drift"
   cmp --silent "${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}" || \
