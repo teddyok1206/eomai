@@ -49,6 +49,9 @@
     "successor_batch": {"$ref": "#/$defs/batchEvidence"},
     "recovery_sha256": {"$ref": "#/$defs/sha256"},
     "recovery_artifact": {"$ref": "#/$defs/recoveryArtifact"},
+    "historical_result_identity_collisions": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-extraction-result-identity-collisions/1.0"
+    },
     "coverage_id": {
       "type": "string",
       "pattern": "^itemcoverage_[0-9a-f]{32}$"

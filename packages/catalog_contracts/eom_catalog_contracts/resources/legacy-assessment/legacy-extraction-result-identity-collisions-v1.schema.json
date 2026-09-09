@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/legacy-extraction-result-identity-collisions/1.0",
+  "title": "Legacy Extraction Result Identity Collisions V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "disposition",
+    "collision_group_count",
+    "collision_membership_count",
+    "noncanonical_membership_count",
+    "groups",
+    "evidence_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "legacy-extraction-result-identity-collisions/1.0"
+    },
+    "disposition": {"const": "HISTORICAL_COLLISION_ATTESTED"},
+    "collision_group_count": {"type": "integer", "minimum": 1, "maximum": 108},
+    "collision_membership_count": {"type": "integer", "minimum": 2, "maximum": 108},
+    "noncanonical_membership_count": {"type": "integer", "minimum": 1, "maximum": 107},
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 108,
+      "items": {"$ref": "#/$defs/collisionGroup"}
+    },
+    "evidence_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
+    },
+    "artifactMemberPointer": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/artifactMemberPointer"
+    },
+    "collisionGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extraction_result_id", "members"],
+      "properties": {
+        "extraction_result_id": {
+          "type": "string",
+          "pattern": "^itemextractresult_[0-9a-f]{32}$"
+        },
+        "members": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 108,
+          "items": {"$ref": "#/$defs/collisionMember"}
+        }
+      }
+    },
+    "collisionMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "effective_batch_id",
+        "effective_work_unit_id",
+        "effective_ordinal",
+        "extraction_request_id",
+        "request_sha256",
+        "extraction_result_id",
+        "result_artifact",
+        "result_sha256",
+        "extraction_receipt_sha256",
+        "acceptance_id",
+        "acceptance_sha256",
+        "acceptance_artifact"
+      ],
+      "properties": {
+        "effective_batch_id": {
+          "type": "string",
+          "pattern": "^legacybatch_[0-9a-f]{32}$"
+        },
+        "effective_work_unit_id": {
+          "type": "string",
+          "pattern": "^legacyworkunit_[0-9a-f]{32}$"
+        },
+        "effective_ordinal": {"type": "integer", "minimum": 0, "maximum": 999999},
+        "extraction_request_id": {
+          "type": "string",
+          "pattern": "^itemextractreq_[0-9a-f]{32}$"
+        },
+        "request_sha256": {"$ref": "#/$defs/sha256"},
+        "extraction_result_id": {
+          "type": "string",
+          "pattern": "^itemextractresult_[0-9a-f]{32}$"
+        },
+        "result_artifact": {"$ref": "#/$defs/resultArtifact"},
+        "result_sha256": {"$ref": "#/$defs/sha256"},
+        "extraction_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "acceptance_id": {
+          "type": "string",
+          "pattern": "^itemacceptance_[0-9a-f]{32}$"
+        },
+        "acceptance_sha256": {"$ref": "#/$defs/sha256"},
+        "acceptance_artifact": {"$ref": "#/$defs/acceptanceArtifact"}
+      }
+    },
+    "resultArtifact": {
+      "allOf": [
+        {"$ref": "#/$defs/artifactMemberPointer"},
+        {
+          "properties": {
+            "member_path": {"const": "result.json"},
+            "schema_ref": {
+              "const": "eom://schemas/legacy-assessment/legacy-item-extraction-result/1.0"
+            },
+            "media_type": {"const": "application/json"}
+          }
+        }
+      ]
+    },
+    "acceptanceArtifact": {
+      "allOf": [
+        {"$ref": "#/$defs/artifactMemberPointer"},
+        {
+          "properties": {
+            "member_path": {"const": "acceptance.json"},
+            "schema_ref": {
+              "const": "eom://schemas/legacy-assessment/legacy-item-extraction-acceptance/1.0"
+            },
+            "media_type": {"const": "application/json"}
+          }
+        }
+      ]
+    }
+  }
+}

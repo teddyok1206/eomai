@@ -30,6 +30,9 @@
       "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/sha256"
     },
     "recovery_artifact": {"$ref": "#/$defs/recoveryArtifact"},
+    "historical_result_identity_collisions": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-extraction-result-identity-collisions/1.0"
+    },
     "requested_by": {
       "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/actorId"
     },

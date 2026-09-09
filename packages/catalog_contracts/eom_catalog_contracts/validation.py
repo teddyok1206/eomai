@@ -328,23 +328,35 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:9cdbbc056f0919bc84e73040986d913c5ecbf664760c7ecc2f7a7398138a77f0",
         ),
+        "legacy-extraction-result-identity-collisions": CatalogSchemaResource(
+            (
+                "schemas/legacy-assessment/"
+                "legacy-extraction-result-identity-collisions-v1.schema.json"
+            ),
+            (
+                "resources/legacy-assessment/"
+                "legacy-extraction-result-identity-collisions-v1.schema.json"
+            ),
+            "1.0",
+            "sha256:aa5434934b2c14e0517f7cf3bda65b58a691d28a5f672dcaab1778c798a2119b",
+        ),
         "legacy-item-corpus-completion-command": CatalogSchemaResource(
             "schemas/legacy-assessment/legacy-item-corpus-completion-command-v1.schema.json",
             "resources/legacy-assessment/legacy-item-corpus-completion-command-v1.schema.json",
             "1.0",
-            "sha256:44aa4e6b1c7a77d932de1806e34f783e014e427755aac99318fed7d1726c8169",
+            "sha256:583bcc66ffbcc22f10f7a707e1699cf9a4a99c515c6d4b298532229afa0b53ae",
         ),
         "legacy-item-corpus-completion-receipt": CatalogSchemaResource(
             "schemas/legacy-assessment/legacy-item-corpus-completion-receipt-v1.schema.json",
             "resources/legacy-assessment/legacy-item-corpus-completion-receipt-v1.schema.json",
             "1.0",
-            "sha256:9851152632eccb1b3176616e24284e6c066df752f1ede84c67ba31778b22e84a",
+            "sha256:884b78d6997895b3d9379e4e3a66d30b0b614b6625c403a3e212e50b29af9c0a",
         ),
         "pdf-learning-completion": CatalogSchemaResource(
             "schemas/legacy-assessment/pdf-learning-completion-v1.schema.json",
             "resources/legacy-assessment/pdf-learning-completion-v1.schema.json",
             "1.0",
-            "sha256:1652de61ff752ea8e21f79c819b16b214a8896b90bcde2a4d44cc0f5060e10a4",
+            "sha256:6f915b7e18bb58f7fb8b546f2096dd67c3610b638742706a835ab531b8916ed1",
         ),
         "pdf-learning-item-completion-shard": CatalogSchemaResource(
             "schemas/legacy-assessment/pdf-learning-item-completion-shard-v1.schema.json",
