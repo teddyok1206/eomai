@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from eom_api.services.command_adapter import _workflow_request_from_api
@@ -23,6 +23,8 @@ from eom_catalog_contracts.assessment_assembly import (
 from eom_catalog_contracts.curriculum import load_integrated_science_editorial_outline
 from eom_catalog_contracts.knowledge import (
     ApprovedItemKnowledgeSourceV2,
+    ApprovedPastExamItemKnowledgeSourceV3,
+    KnowledgeAnalysisRequestV9,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphCounts,
     KnowledgeGraphPublicationResult,
@@ -453,6 +455,110 @@ def test_shared_publisher_forbids_occurrence_builder_for_generated_items() -> No
         )
 
     publication.commit_structure_manifest.assert_not_called()
+
+
+def test_shared_analysis_validator_fails_before_retrieval_create() -> None:
+    analysis = _accepted_analysis()
+    publication = Mock()
+    publication.current_structure_context.return_value = CurrentKnowledgeGraphStructure(
+        corpus_key="integrated-science-textbooks",
+        display_name="통합과학 지식 그래프",
+        graph_snapshot_revision_id=GRAPH_REVISION_ID,
+        accepted_analysis_run_ids=(),
+        structure=cast(Any, object()),
+    )
+    load_context = MagicMock()
+    load_context.__enter__.return_value = Mock(spec=Session)
+    publication.sessions.return_value = load_context
+    publication._load_accepted_analysis.return_value = analysis
+    validation_context = MagicMock()
+    validation_context.__enter__.return_value = Mock(spec=Session)
+    service = object.__new__(AutomaticItemGraphPublicationService)
+    service.publication = publication
+    service.sessions = Mock(return_value=validation_context)
+    service.retrieval = Mock()
+
+    def reject_origin(_session: Session, _analyses: tuple[AcceptedAnalysisProposal, ...]) -> None:
+        raise ValueError("invalid origin")
+
+    with pytest.raises(ValueError, match="invalid origin"):
+        service.publish(
+            (
+                AutomaticItemGraphCandidate(
+                    analysis_run_id=ANALYSIS_RUN_ID,
+                    requested_by_operator_id=OPERATOR_ID,
+                    graph_snapshot_revision_id=GRAPH_REVISION_ID,
+                ),
+            ),
+            required_source_class="APPROVED_ITEM",
+            retrieval_idempotency_namespace="approved-item-auto-alignment",
+            publication_idempotency_namespace="approved-item-auto-graph",
+            publisher_version="1.7.0",
+            analysis_validator=reject_origin,
+        )
+
+    service.retrieval.create.assert_not_called()
+    publication.commit_structure_manifest.assert_not_called()
+    publication.publish.assert_not_called()
+
+
+@pytest.mark.parametrize("field", ("source_revision_id", "item_id", "item_revision_id"))
+def test_load_accepted_analysis_rejects_persisted_item_source_identity_drift(
+    field: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact_member = SimpleNamespace(
+        artifact_id="artifact_" + "1" * 32,
+        artifact_revision_id="rev_" + "2" * 32,
+        sha256="sha256:" + "3" * 64,
+    )
+    source = ApprovedPastExamItemKnowledgeSourceV3.model_construct(
+        item_id=ITEM_ID,
+        item_revision_id=ITEM_REVISION_ID,
+        artifact_member=artifact_member,
+    )
+    request = SimpleNamespace(
+        source=source,
+        request_sha256="sha256:" + "4" * 64,
+    )
+    monkeypatch.setattr(
+        KnowledgeAnalysisRequestV9,
+        "model_validate",
+        classmethod(lambda _cls, _value: request),
+    )
+    run = SimpleNamespace(
+        state="ACCEPTED",
+        accepted_result_artifact_id="artifact_" + "5" * 32,
+        accepted_result_artifact_revision_id="rev_" + "6" * 32,
+        accepted_result_sha256="sha256:" + "7" * 64,
+        proposal_artifact_id="artifact_" + "8" * 32,
+        proposal_artifact_revision_id="rev_" + "9" * 32,
+        proposal_content_set_sha256="sha256:" + "a" * 64,
+        canonical_request={"schema_version": "knowledge-analysis-request/9.0"},
+        request_sha256=request.request_sha256,
+        source_kind="APPROVED_ITEM_REVISION",
+        source_revision_id=ITEM_REVISION_ID,
+        source_file_id=None,
+        item_id=ITEM_ID,
+        item_revision_id=ITEM_REVISION_ID,
+        educational_document_id=None,
+        educational_document_revision_id=None,
+        source_artifact_id=artifact_member.artifact_id,
+        source_artifact_revision_id=artifact_member.artifact_revision_id,
+        source_sha256=artifact_member.sha256,
+    )
+    setattr(run, field, "wrong")
+    session = Mock(spec=Session)
+    session.get.return_value = run
+    service = object.__new__(KnowledgeGraphPublicationService)
+    service._resolve_source_again = Mock(return_value=source)  # type: ignore[method-assign]
+    service._exact_artifact_revision = Mock()  # type: ignore[method-assign]
+
+    with pytest.raises(KnowledgeGraphPublicationError) as caught:
+        service._load_accepted_analysis(session, ANALYSIS_RUN_ID)
+
+    assert caught.value.code == "KNOWLEDGE_GRAPH_SOURCE_POINTER_INVALID"
+    service._exact_artifact_revision.assert_not_called()
 
 
 def test_current_v2_validator_rejects_a_stale_current_revision() -> None:

@@ -1,15 +1,27 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts import ApprovedPastExamItemKnowledgeSourceV3, KnowledgeAnalysisRequestV9
 from eom_catalog_service.knowledge_graph_publication_service import (
     CurrentKnowledgeGraphStructure,
 )
+from eom_catalog_service.legacy_item_extraction_batch_models import (
+    LegacyItemExtractionBatchWorkUnitRecord,
+)
 from eom_catalog_service.legacy_item_graph_learning_service import (
+    LegacyItemGraphLearningError,
     LegacyItemGraphLearningService,
+)
+from eom_catalog_service.past_exam_origin_resolution import (
+    PastExamOriginInput,
+    PastExamOriginResolution,
+    PastExamOriginResolutionError,
+    PastExamOriginStatus,
 )
 from eom_orchestrator.database import build_session_factory
 from sqlalchemy import Engine, Table, UniqueConstraint, create_engine, text
@@ -19,11 +31,84 @@ _REUSE_BATCH_ID = "legacybatch_" + "3" * 32
 _GRAPH_REVISION_ID = "graphrev_" + "2" * 32
 
 
+def _hash(seed: int) -> str:
+    return "sha256:" + f"{seed:064x}"
+
+
+def _source_from_json(value: dict[str, Any]) -> ApprovedPastExamItemKnowledgeSourceV3:
+    source = value["source"]
+    if value.get("invalid"):
+        raise ValueError("synthetic invalid in-scope request")
+    pointer = SimpleNamespace(
+        artifact_id="artifact",
+        artifact_revision_id="revision",
+        member_path="member.json",
+        schema_ref="schema/1.0",
+        media_type="application/json",
+        sha256=source["artifact_sha256"],
+    )
+    return ApprovedPastExamItemKnowledgeSourceV3.model_construct(
+        item_id=source["item_id"],
+        item_revision_id=source["item_revision_id"],
+        extraction_acceptance_id=source["extraction_acceptance_id"],
+        extraction_acceptance_sha256=source["extraction_acceptance_sha256"],
+        extraction_acceptance_artifact=pointer,
+        extraction_result_id=source["extraction_result_id"],
+        extraction_result_sha256=source["extraction_result_sha256"],
+        extraction_result_artifact=pointer,
+        item_proposal_id=source["item_proposal_id"],
+        item_number=source["item_number"],
+        bundle=SimpleNamespace(
+            assessment_source_bundle_id=source["assessment_source_bundle_id"],
+            assessment_source_bundle_revision_id=source["assessment_source_bundle_revision_id"],
+            bundle_manifest_sha256=source["bundle_manifest_sha256"],
+        ),
+    )
+
+
+@pytest.fixture(autouse=True)
+def _parse_synthetic_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        KnowledgeAnalysisRequestV9,
+        "model_validate",
+        classmethod(lambda _cls, value: SimpleNamespace(source=_source_from_json(value))),
+    )
+
+
+def _resolution(
+    origin: PastExamOriginInput,
+    *,
+    status: PastExamOriginStatus = PastExamOriginStatus.ELIGIBLE,
+) -> PastExamOriginResolution:
+    source = origin.source
+    return PastExamOriginResolution(
+        analysis_run_id=origin.analysis_run_id,
+        item_id=source.item_id,
+        item_revision_id=source.item_revision_id,
+        item_origin_profile_id="profile-" + source.item_revision_id,
+        item_origin_profile_sha256=_hash(900_001),
+        extraction_acceptance_id=source.extraction_acceptance_id,
+        extraction_acceptance_sha256=source.extraction_acceptance_sha256,
+        assessment_source_bundle_id=source.bundle.assessment_source_bundle_id,
+        assessment_source_bundle_revision_id=source.bundle.assessment_source_bundle_revision_id,
+        assessment_source_bundle_sha256=source.bundle.bundle_manifest_sha256,
+        assessment_occurrence_id="occurrence",
+        assessment_occurrence_revision_id="occurrence-revision",
+        assessment_occurrence_revision_sha256=_hash(900_002),
+        occurrence_display_label="Synthetic occurrence",
+        administration_year=2025,
+        administration_month=6,
+        target_school_level="HIGH_SCHOOL",
+        target_grade=2,
+        subject_key="integrated-science",
+        item_number=source.item_number,
+        status=status,
+    )
+
+
 def _query_backed_service(
     *, extraction_batch_ids: tuple[str, ...] = (_BATCH_ID,)
 ) -> tuple[Engine, LegacyItemGraphLearningService]:
-    """Build the smallest real relation needed by the candidate selector."""
-
     engine = create_engine("sqlite+pysqlite:///:memory:")
     with engine.begin() as connection:
         for statement in (
@@ -32,6 +117,8 @@ def _query_backed_service(
                 analysis_run_id TEXT PRIMARY KEY,
                 source_revision_id TEXT NOT NULL,
                 source_kind TEXT NOT NULL,
+                item_id TEXT,
+                item_revision_id TEXT,
                 canonical_request JSON NOT NULL,
                 state TEXT NOT NULL,
                 created_by_operator_id TEXT NOT NULL,
@@ -39,69 +126,12 @@ def _query_backed_service(
             )
             """,
             """
-            CREATE TABLE item_revisions (
-                item_revision_id TEXT PRIMARY KEY,
-                registration_key TEXT NOT NULL
-            )
-            """,
-            """
-            CREATE TABLE item_origin_profiles (
-                item_origin_profile_id TEXT PRIMARY KEY,
-                item_revision_id TEXT NOT NULL UNIQUE
-            )
-            """,
-            """
-            CREATE TABLE item_origin_occurrences (
-                item_origin_occurrence_id INTEGER PRIMARY KEY,
-                item_origin_profile_id TEXT NOT NULL,
-                assessment_occurrence_id TEXT NOT NULL,
-                assessment_occurrence_revision_id TEXT NOT NULL,
-                occurrence_revision_sha256 TEXT NOT NULL,
-                UNIQUE (item_origin_profile_id, assessment_occurrence_revision_id)
-            )
-            """,
-            """
-            CREATE TABLE item_origin_derivations (
-                item_origin_derivation_id INTEGER PRIMARY KEY,
-                item_origin_profile_id TEXT NOT NULL,
-                source_kind TEXT NOT NULL,
-                logical_id TEXT NOT NULL,
-                revision_id TEXT NOT NULL,
-                manifest_sha256 TEXT NOT NULL
-            )
-            """,
-            """
-            CREATE TABLE assessment_occurrence_revisions (
-                assessment_occurrence_revision_id TEXT PRIMARY KEY,
-                assessment_occurrence_id TEXT NOT NULL,
-                revision_sha256 TEXT NOT NULL,
-                schema_version TEXT NOT NULL,
-                target_school_level TEXT NOT NULL,
-                target_grade INTEGER NOT NULL,
-                administration_month INTEGER NOT NULL
-            )
-            """,
-            """
-            CREATE TABLE assessment_source_bundle_revisions (
-                assessment_source_bundle_revision_id TEXT PRIMARY KEY,
-                assessment_source_bundle_id TEXT NOT NULL,
-                assessment_occurrence_id TEXT NOT NULL,
-                assessment_occurrence_revision_id TEXT NOT NULL,
-                occurrence_revision_sha256 TEXT NOT NULL,
-                bundle_manifest_sha256 TEXT NOT NULL
-            )
-            """,
-            """
-            CREATE TABLE legacy_item_extraction_decisions (
-                acceptance_id TEXT NOT NULL,
-                item_proposal_id TEXT NOT NULL,
-                item_number INTEGER NOT NULL,
-                decision TEXT NOT NULL
-            )
-            """,
-            """
             CREATE TABLE legacy_item_extraction_batch_work_units (
-                acceptance_id TEXT NOT NULL,
+                work_unit_id TEXT PRIMARY KEY,
+                acceptance_id TEXT,
+                acceptance_sha256 TEXT,
+                extraction_result_id TEXT,
+                result_sha256 TEXT,
                 extraction_batch_id TEXT NOT NULL,
                 ordinal INTEGER NOT NULL,
                 assessment_source_bundle_id TEXT NOT NULL,
@@ -147,247 +177,155 @@ def _query_backed_service(
     service.sessions = build_session_factory(engine)
     service.extraction_batch_ids = extraction_batch_ids
     service.publication = publication
+    service.retrieval = Mock()
+    service._resolve_past_exam_origins = Mock(  # type: ignore[method-assign]
+        side_effect=lambda _session, inputs: tuple(_resolution(origin) for origin in inputs)
+    )
     return engine, service
 
 
-def _insert_candidate(
+def _source_value(ordinal: int) -> dict[str, Any]:
+    return {
+        "source_class": "PAST_EXAM",
+        "item_id": f"item_{ordinal}",
+        "item_revision_id": f"itemrev_{ordinal}",
+        "extraction_acceptance_id": f"itemacceptance_{ordinal}",
+        "extraction_acceptance_sha256": _hash(ordinal + 100),
+        "extraction_result_id": f"itemextractresult_{ordinal}",
+        "extraction_result_sha256": _hash(ordinal + 200),
+        "item_proposal_id": f"itemproposal_{ordinal}",
+        "item_number": ordinal + 1,
+        "assessment_source_bundle_id": f"assessbundle_{ordinal}",
+        "assessment_source_bundle_revision_id": f"assessbundlerev_{ordinal}",
+        "bundle_manifest_sha256": _hash(ordinal + 300),
+        "artifact_sha256": _hash(ordinal + 400),
+    }
+
+
+def _insert_membership(
     engine: Engine,
     *,
     ordinal: int,
-    occurrences: tuple[tuple[str, int, int], ...],
-) -> str:
-    analysis_run_id = f"analysisrun_{ordinal:032x}"
-    item_revision_id = f"itemrev_{ordinal:032x}"
-    acceptance_id = f"itemacceptance_{ordinal:032x}"
-    proposal_id = f"itemproposal_{ordinal:032x}"
-    profile_id = f"originprofile_{ordinal:032x}"
-    bundle_id = f"assessbundle_{ordinal:032x}"
-    bundle_revision_id = f"assessbundlerev_{ordinal:032x}"
-    bundle_sha256 = "sha256:" + f"{ordinal + 100:064x}"
-    primary_occurrence_id = f"occurrence_{ordinal:032x}"
-    primary_occurrence_revision_id = f"occurrev_{ordinal:032x}"
-    primary_occurrence_sha256 = "sha256:" + f"{ordinal + 200:064x}"
-    request = json.dumps(
-        {
-            "schema_version": "knowledge-analysis-request/9.0",
-            "source": {"source_class": "PAST_EXAM"},
-        }
-    )
+    source: dict[str, Any],
+    batch_id: str = _BATCH_ID,
+    state: str = "ACCEPTED",
+) -> None:
     with engine.begin() as connection:
         connection.execute(
             text(
                 """
-                INSERT INTO item_revisions (item_revision_id, registration_key)
-                VALUES (:item_revision_id, :registration_key)
+                INSERT INTO legacy_item_extraction_batch_work_units (
+                    work_unit_id, acceptance_id, acceptance_sha256, extraction_result_id,
+                    result_sha256, extraction_batch_id, ordinal,
+                    assessment_source_bundle_id, assessment_source_bundle_revision_id,
+                    bundle_manifest_sha256, state
+                ) VALUES (
+                    :work_unit_id, :acceptance_id, :acceptance_sha256, :extraction_result_id,
+                    :result_sha256, :batch_id, :ordinal, :bundle_id, :bundle_revision_id,
+                    :bundle_sha256, :state
+                )
                 """
             ),
             {
-                "item_revision_id": item_revision_id,
-                "registration_key": (f"legacy-item-promotion:{acceptance_id}:{proposal_id}"),
+                "work_unit_id": f"workunit-{batch_id}-{ordinal}",
+                "acceptance_id": source["extraction_acceptance_id"],
+                "acceptance_sha256": source["extraction_acceptance_sha256"],
+                "extraction_result_id": source["extraction_result_id"],
+                "result_sha256": source["extraction_result_sha256"],
+                "batch_id": batch_id,
+                "ordinal": ordinal,
+                "bundle_id": source["assessment_source_bundle_id"],
+                "bundle_revision_id": source["assessment_source_bundle_revision_id"],
+                "bundle_sha256": source["bundle_manifest_sha256"],
+                "state": state,
             },
         )
+
+
+def _insert_analysis(
+    engine: Engine,
+    *,
+    ordinal: int,
+    source: dict[str, Any],
+    invalid_request: bool = False,
+    source_revision_id: str | None = None,
+) -> str:
+    analysis_run_id = f"analysisrun_{ordinal}"
+    request = {
+        "schema_version": "knowledge-analysis-request/9.0",
+        "source": source,
+        "invalid": invalid_request,
+    }
+    with engine.begin() as connection:
         connection.execute(
             text(
                 """
                 INSERT INTO knowledge_analysis_runs (
-                    analysis_run_id, source_revision_id, source_kind, canonical_request,
+                    analysis_run_id, source_revision_id, source_kind, item_id, item_revision_id,
+                    canonical_request,
                     state, created_by_operator_id, created_at
                 ) VALUES (
-                    :analysis_run_id, :item_revision_id, 'APPROVED_ITEM_REVISION', :request,
+                    :analysis_run_id, :source_revision_id, 'APPROVED_ITEM_REVISION', :item_id,
+                    :item_revision_id, :request,
                     'ACCEPTED', :operator_id, :created_at
                 )
                 """
             ),
             {
                 "analysis_run_id": analysis_run_id,
-                "item_revision_id": item_revision_id,
-                "request": request,
+                "source_revision_id": source_revision_id or source["item_revision_id"],
+                "item_id": source["item_id"],
+                "item_revision_id": source["item_revision_id"],
+                "request": json.dumps(request),
                 "operator_id": f"operator-{ordinal}",
-                "created_at": f"2026-09-09T00:00:{ordinal:02d}+00:00",
+                "created_at": f"2026-09-09T00:{ordinal // 60:02d}:{ordinal % 60:02d}+00:00",
             },
         )
-        connection.execute(
-            text(
-                """
-                INSERT INTO legacy_item_extraction_decisions (
-                    acceptance_id, item_proposal_id, item_number, decision
-                ) VALUES (:acceptance_id, :proposal_id, :item_number, 'ACCEPT')
-                """
-            ),
-            {
-                "acceptance_id": acceptance_id,
-                "proposal_id": proposal_id,
-                "item_number": ordinal + 1,
-            },
-        )
-        connection.execute(
-            text(
-                """
-                INSERT INTO legacy_item_extraction_batch_work_units (
-                    acceptance_id, extraction_batch_id, ordinal,
-                    assessment_source_bundle_id, assessment_source_bundle_revision_id,
-                    bundle_manifest_sha256, state
-                ) VALUES (
-                    :acceptance_id, :batch_id, :ordinal,
-                    :bundle_id, :bundle_revision_id, :bundle_sha256, 'ACCEPTED'
-                )
-                """
-            ),
-            {
-                "acceptance_id": acceptance_id,
-                "batch_id": _BATCH_ID,
-                "ordinal": ordinal,
-                "bundle_id": bundle_id,
-                "bundle_revision_id": bundle_revision_id,
-                "bundle_sha256": bundle_sha256,
-            },
-        )
-        connection.execute(
-            text(
-                """
-                INSERT INTO item_origin_profiles (item_origin_profile_id, item_revision_id)
-                VALUES (:profile_id, :item_revision_id)
-                """
-            ),
-            {"profile_id": profile_id, "item_revision_id": item_revision_id},
-        )
-        connection.execute(
-            text(
-                """
-                INSERT INTO item_origin_derivations (
-                    item_origin_profile_id, source_kind, logical_id, revision_id,
-                    manifest_sha256
-                ) VALUES (
-                    :profile_id, 'ASSESSMENT_SOURCE_BUNDLE_REVISION', :bundle_id,
-                    :bundle_revision_id, :bundle_sha256
-                )
-                """
-            ),
-            {
-                "profile_id": profile_id,
-                "bundle_id": bundle_id,
-                "bundle_revision_id": bundle_revision_id,
-                "bundle_sha256": bundle_sha256,
-            },
-        )
-        connection.execute(
-            text(
-                """
-                INSERT INTO assessment_source_bundle_revisions (
-                    assessment_source_bundle_revision_id, assessment_source_bundle_id,
-                    assessment_occurrence_id, assessment_occurrence_revision_id,
-                    occurrence_revision_sha256, bundle_manifest_sha256
-                ) VALUES (
-                    :bundle_revision_id, :bundle_id, :occurrence_id, :occurrence_revision_id,
-                    :occurrence_sha256, :bundle_sha256
-                )
-                """
-            ),
-            {
-                "bundle_revision_id": bundle_revision_id,
-                "bundle_id": bundle_id,
-                "occurrence_id": primary_occurrence_id,
-                "occurrence_revision_id": primary_occurrence_revision_id,
-                "occurrence_sha256": primary_occurrence_sha256,
-                "bundle_sha256": bundle_sha256,
-            },
-        )
-        for occurrence_index, (school_level, grade, month) in enumerate(occurrences):
-            occurrence_id = (
-                primary_occurrence_id
-                if occurrence_index == 0
-                else f"occurrence_{ordinal:016x}{occurrence_index:016x}"
-            )
-            occurrence_revision_id = (
-                primary_occurrence_revision_id
-                if occurrence_index == 0
-                else f"occurrev_{ordinal:016x}{occurrence_index:016x}"
-            )
-            occurrence_sha256 = (
-                primary_occurrence_sha256
-                if occurrence_index == 0
-                else "sha256:" + f"{ordinal * 100 + occurrence_index + 300:064x}"
-            )
-            connection.execute(
-                text(
-                    """
-                    INSERT INTO assessment_occurrence_revisions (
-                        assessment_occurrence_revision_id, assessment_occurrence_id,
-                        revision_sha256, schema_version,
-                        target_school_level, target_grade, administration_month
-                    ) VALUES (
-                        :revision_id, :occurrence_id, :occurrence_sha256,
-                        'assessment-occurrence-revision/2.0',
-                        :school_level, :grade, :month
-                    )
-                    """
-                ),
-                {
-                    "revision_id": occurrence_revision_id,
-                    "occurrence_id": occurrence_id,
-                    "occurrence_sha256": occurrence_sha256,
-                    "school_level": school_level,
-                    "grade": grade,
-                    "month": month,
-                },
-            )
-            connection.execute(
-                text(
-                    """
-                    INSERT INTO item_origin_occurrences (
-                        item_origin_profile_id, assessment_occurrence_id,
-                        assessment_occurrence_revision_id, occurrence_revision_sha256
-                    ) VALUES (:profile_id, :occurrence_id, :revision_id, :occurrence_sha256)
-                    """
-                ),
-                {
-                    "profile_id": profile_id,
-                    "occurrence_id": occurrence_id,
-                    "revision_id": occurrence_revision_id,
-                    "occurrence_sha256": occurrence_sha256,
-                },
-            )
     return analysis_run_id
 
 
-def test_pending_candidates_exclude_non_unique_occurrence_placements() -> None:
+def _insert_candidate(
+    engine: Engine,
+    *,
+    ordinal: int,
+    state: str = "ACCEPTED",
+) -> tuple[str, dict[str, Any]]:
+    source = _source_value(ordinal)
+    _insert_membership(engine, ordinal=ordinal, source=source, state=state)
+    return _insert_analysis(engine, ordinal=ordinal, source=source), source
+
+
+def test_policy_excluded_rows_do_not_consume_limit_and_all_rows_are_classified() -> None:
     engine, service = _query_backed_service()
-    first = _insert_candidate(
-        engine,
-        ordinal=0,
-        occurrences=(("HIGH_SCHOOL", 2, 6),),
-    )
-    _insert_candidate(
-        engine,
-        ordinal=1,
-        occurrences=(("HIGH_SCHOOL", 2, 6), ("HIGH_SCHOOL", 2, 9)),
-    )
-    _insert_candidate(
-        engine,
-        ordinal=2,
-        occurrences=(("HIGH_SCHOOL", 1, 3), ("HIGH_SCHOOL", 1, 6)),
-    )
+    first, _ = _insert_candidate(engine, ordinal=0)
+    second, _ = _insert_candidate(engine, ordinal=1)
+    third, _ = _insert_candidate(engine, ordinal=2)
 
-    candidates = service.pending_candidates(limit=3)
+    def classify(_session: Any, inputs: tuple[PastExamOriginInput, ...]) -> Any:
+        assert tuple(origin.analysis_run_id for origin in inputs) == (first, second, third)
+        return tuple(
+            _resolution(
+                origin,
+                status=(
+                    PastExamOriginStatus.POLICY_EXCLUDED
+                    if origin.analysis_run_id == first
+                    else PastExamOriginStatus.ELIGIBLE
+                ),
+            )
+            for origin in inputs
+        )
 
-    assert tuple(candidate.analysis_run_id for candidate in candidates) == (first,)
-    assert all(
-        candidate.graph_snapshot_revision_id == _GRAPH_REVISION_ID for candidate in candidates
-    )
+    service._resolve_past_exam_origins = Mock(side_effect=classify)  # type: ignore[method-assign]
+
+    candidates = service.pending_candidates(limit=1)
+
+    assert tuple(candidate.analysis_run_id for candidate in candidates) == (second,)
 
 
-def test_pending_candidates_deduplicate_acceptance_reused_by_allowed_batches() -> None:
+def test_acceptance_reused_by_allowed_batches_is_validated_once_and_not_duplicated() -> None:
     engine, service = _query_backed_service(extraction_batch_ids=(_BATCH_ID, _REUSE_BATCH_ID))
-    first = _insert_candidate(
-        engine,
-        ordinal=0,
-        occurrences=(("HIGH_SCHOOL", 2, 6),),
-    )
-    second = _insert_candidate(
-        engine,
-        ordinal=1,
-        occurrences=(("HIGH_SCHOOL", 2, 9),),
-    )
+    first, source = _insert_candidate(engine, ordinal=0)
+    second, _ = _insert_candidate(engine, ordinal=1)
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -398,156 +336,113 @@ def test_pending_candidates_deduplicate_acceptance_reused_by_allowed_batches() -
             ),
             {"batch_id": _REUSE_BATCH_ID},
         )
-        connection.execute(
-            text(
-                """
-                INSERT INTO legacy_item_extraction_batch_work_units (
-                    acceptance_id, extraction_batch_id, ordinal,
-                    assessment_source_bundle_id, assessment_source_bundle_revision_id,
-                    bundle_manifest_sha256, state
-                ) VALUES (
-                    :acceptance_id, :batch_id, 0,
-                    :bundle_id, :bundle_revision_id, :bundle_sha256, 'ACCEPTED'
-                )
-                """
-            ),
-            {
-                "acceptance_id": "itemacceptance_" + f"{0:032x}",
-                "batch_id": _REUSE_BATCH_ID,
-                "bundle_id": "assessbundle_" + f"{0:032x}",
-                "bundle_revision_id": "assessbundlerev_" + f"{0:032x}",
-                "bundle_sha256": "sha256:" + f"{100:064x}",
-            },
-        )
+    _insert_membership(engine, ordinal=0, source=source, batch_id=_REUSE_BATCH_ID)
 
     candidates = service.pending_candidates(limit=2)
 
     assert tuple(candidate.analysis_run_id for candidate in candidates) == (first, second)
+    resolver_inputs = service._resolve_past_exam_origins.call_args.args[1]
+    assert tuple(origin.analysis_run_id for origin in resolver_inputs) == (first, second)
 
 
 @pytest.mark.parametrize(
-    ("mutation_sql", "parameters"),
-    (
-        (
-            """
-            UPDATE legacy_item_extraction_batch_work_units
-            SET state = 'FAILED'
-            WHERE acceptance_id = :acceptance_id
-            """,
-            {"acceptance_id": "itemacceptance_" + f"{0:032x}"},
-        ),
-        (
-            """
-            UPDATE legacy_item_extraction_decisions
-            SET decision = 'REJECT'
-            WHERE acceptance_id = :acceptance_id
-            """,
-            {"acceptance_id": "itemacceptance_" + f"{0:032x}"},
-        ),
-        (
-            """
-            INSERT INTO item_origin_derivations (
-                item_origin_profile_id, source_kind, logical_id, revision_id,
-                manifest_sha256
-            ) VALUES (
-                :profile_id, 'ASSESSMENT_SOURCE_BUNDLE_REVISION', :bundle_id,
-                :bundle_revision_id, :bundle_sha256
-            )
-            """,
-            {
-                "profile_id": "originprofile_" + f"{0:032x}",
-                "bundle_id": "assessbundle_" + "f" * 32,
-                "bundle_revision_id": "assessbundlerev_" + "f" * 32,
-                "bundle_sha256": "sha256:" + "f" * 64,
-            },
-        ),
-        (
-            """
-            UPDATE legacy_item_extraction_batch_work_units
-            SET bundle_manifest_sha256 = :wrong_hash
-            WHERE acceptance_id = :acceptance_id
-            """,
-            {
-                "acceptance_id": "itemacceptance_" + f"{0:032x}",
-                "wrong_hash": "sha256:" + "f" * 64,
-            },
-        ),
-    ),
-    ids=(
-        "work-unit-not-accepted",
-        "decision-rejected",
-        "duplicate-derivation",
-        "bundle-hash-split",
-    ),
+    "mutation",
+    ("state", "acceptance-hash", "source-revision", "item-id", "item-revision"),
 )
-def test_pending_candidates_fail_closed_before_retrieval(
-    mutation_sql: str,
-    parameters: dict[str, str],
-) -> None:
+def test_in_scope_membership_or_source_pointer_drift_is_an_explicit_error(mutation: str) -> None:
     engine, service = _query_backed_service()
-    _insert_candidate(
-        engine,
-        ordinal=0,
-        occurrences=(("HIGH_SCHOOL", 2, 6),),
-    )
+    analysis_run_id, source = _insert_candidate(engine, ordinal=0)
     with engine.begin() as connection:
-        connection.execute(text(mutation_sql), parameters)
+        if mutation == "state":
+            connection.execute(
+                text("UPDATE legacy_item_extraction_batch_work_units SET state='FAILED'")
+            )
+        elif mutation == "acceptance-hash":
+            connection.execute(
+                text("UPDATE legacy_item_extraction_batch_work_units SET acceptance_sha256=:value"),
+                {"value": _hash(999_001)},
+            )
+        else:
+            field = {
+                "source-revision": "source_revision_id",
+                "item-id": "item_id",
+                "item-revision": "item_revision_id",
+            }[mutation]
+            connection.execute(text(f"UPDATE knowledge_analysis_runs SET {field}='wrong'"))
 
-    candidates = service.pending_candidates(limit=3)
+    with pytest.raises(LegacyItemGraphLearningError) as caught:
+        service.pending_candidates(limit=1)
 
-    assert candidates == ()
+    assert caught.value.code == "LEGACY_ITEM_GRAPH_ORIGIN_INVALID"
+    assert caught.value.reason == "batch_membership_or_decision_invalid"
+    assert caught.value.analysis_run_id == analysis_run_id
+    assert caught.value.item_revision_id == source["item_revision_id"]
+    service.retrieval.create.assert_not_called()
 
 
-def test_candidate_lookup_has_the_required_index_path() -> None:
-    # item_revision_id is unique on profiles, the occurrence pair is unique with the profile
-    # first, and the occurrence revision is a primary-key lookup.  The correlated EXISTS is
-    # therefore an indexed membership check and does not multiply the ordered candidate rows.
-    from eom_catalog_service.item_origin_models import (
-        AssessmentOccurrenceRevisionRecord,
-        ItemOriginDerivationRecord,
-        ItemOriginOccurrenceRecord,
-        ItemOriginProfileRecord,
-    )
-    from eom_catalog_service.legacy_assessment_models import (
-        AssessmentSourceBundleRevisionRecord,
-    )
-    from eom_catalog_service.legacy_item_extraction_batch_models import (
-        LegacyItemExtractionBatchWorkUnitRecord,
-    )
+def test_in_scope_malformed_request_errors_but_out_of_scope_malformed_request_is_ignored() -> None:
+    engine, service = _query_backed_service()
+    valid_id, _ = _insert_candidate(engine, ordinal=0)
+    outside = _source_value(1)
+    _insert_analysis(engine, ordinal=1, source=outside, invalid_request=True)
 
-    profile_table = cast(Table, ItemOriginProfileRecord.__table__)
-    occurrence_table = cast(Table, ItemOriginOccurrenceRecord.__table__)
-    occurrence_revision_table = cast(Table, AssessmentOccurrenceRevisionRecord.__table__)
-    derivation_table = cast(Table, ItemOriginDerivationRecord.__table__)
-    bundle_revision_table = cast(Table, AssessmentSourceBundleRevisionRecord.__table__)
+    assert tuple(
+        candidate.analysis_run_id for candidate in service.pending_candidates(limit=2)
+    ) == (valid_id,)
+
+    inside = _source_value(2)
+    _insert_membership(engine, ordinal=2, source=inside)
+    _insert_analysis(engine, ordinal=2, source=inside, invalid_request=True)
+    with pytest.raises(LegacyItemGraphLearningError) as caught:
+        service.pending_candidates(limit=2)
+
+    assert caught.value.reason == "canonical_request_invalid"
+
+
+def test_no_allowlisted_membership_is_a_legitimate_out_of_scope_analysis() -> None:
+    engine, service = _query_backed_service()
+    source = _source_value(0)
+    _insert_analysis(engine, ordinal=0, source=source)
+
+    assert service.pending_candidates(limit=1) == ()
+    service._resolve_past_exam_origins.assert_not_called()
+
+
+def test_invalid_row_after_output_limit_still_fails_before_retrieval() -> None:
+    engine, service = _query_backed_service()
+    analysis_ids = tuple(_insert_candidate(engine, ordinal=value)[0] for value in range(17))
+
+    def reject_tail(_session: Any, inputs: tuple[PastExamOriginInput, ...]) -> Any:
+        assert tuple(origin.analysis_run_id for origin in inputs) == analysis_ids
+        tail = inputs[-1]
+        raise PastExamOriginResolutionError(
+            analysis_run_id=tail.analysis_run_id,
+            item_revision_id=tail.source.item_revision_id,
+            reason="origin_occurrence_cardinality",
+        )
+
+    # Exercise the real boundary translation rather than replacing its wrapper.
+    service._resolve_past_exam_origins = LegacyItemGraphLearningService.__dict__[  # type: ignore[method-assign]
+        "_resolve_past_exam_origins"
+    ].__get__(service, LegacyItemGraphLearningService)
+    import eom_catalog_service.legacy_item_graph_learning_service as module
+
+    original = module.resolve_past_exam_origins
+    module.resolve_past_exam_origins = reject_tail
+    try:
+        with pytest.raises(LegacyItemGraphLearningError) as caught:
+            service.pending_candidates(limit=1)
+    finally:
+        module.resolve_past_exam_origins = original
+
+    assert caught.value.analysis_run_id == analysis_ids[-1]
+    assert caught.value.reason == "origin_occurrence_cardinality"
+    service.retrieval.create.assert_not_called()
+
+
+def test_candidate_membership_lookup_has_stable_unique_order_index() -> None:
     work_unit_table = cast(Table, LegacyItemExtractionBatchWorkUnitRecord.__table__)
-    profile_indexes = {
-        tuple(column.name for column in constraint.columns)
-        for constraint in profile_table.constraints
-        if isinstance(constraint, UniqueConstraint)
-    }
-    occurrence_indexes = {
-        tuple(column.name for column in constraint.columns)
-        for constraint in occurrence_table.constraints
-        if isinstance(constraint, UniqueConstraint)
-    }
-    derivation_indexes = {
-        tuple(column.name for column in constraint.columns)
-        for constraint in derivation_table.constraints
-        if isinstance(constraint, UniqueConstraint)
-    }
 
-    assert ("item_revision_id",) in profile_indexes
-    assert ("item_origin_profile_id", "assessment_occurrence_revision_id") in occurrence_indexes
-    assert any(
-        columns[:2] == ("item_origin_profile_id", "source_kind") for columns in derivation_indexes
-    )
-    assert tuple(occurrence_revision_table.primary_key.columns.keys()) == (
-        "assessment_occurrence_revision_id",
-    )
-    assert tuple(bundle_revision_table.primary_key.columns.keys()) == (
-        "assessment_source_bundle_revision_id",
-    )
     assert any(
         tuple(column.name for column in constraint.columns) == ("extraction_batch_id", "ordinal")
         for constraint in work_unit_table.constraints

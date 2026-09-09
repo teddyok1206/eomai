@@ -23,6 +23,11 @@ New analyses still require a currently `APPROVED` Item Revision. Historical repl
 terminal `APPROVED`, `SUPERSEDED`, or `RETIRED` lineage, with complete approval or supersession
 evidence where applicable.
 
+That historical replay rule does not authorize a new PAST_EXAM placement. Before first publication,
+the shared origin resolver requires the Item and Occurrence logicals to be active at their pinned
+current revisions, the Item Revision to be `APPROVED`, and the Occurrence and source-bundle
+revisions to be `REVIEWED`. Once published, the immutable snapshot remains historical evidence.
+
 ## Pointers and resolution checks
 
 An automatic alignment pins the accepted result pointer, prior snapshot revision, Evidence Bundle
@@ -36,19 +41,32 @@ hash, evidence entry, graph node, and curriculum unit, then recomputes the polic
 
 ## Access patterns, structures, and indexes
 
-- Candidate lookup is an ordered indexed join from configured extraction batches to accepted
-  analyses and the current snapshot membership. Publishability is a correlated exact-cardinality
-  check rather than a one-to-many join, so one accepted analysis occupies exactly one position
-  before ordering and `LIMIT`. It requires one eligible occurrence and one bundle derivation, with
-  exact occurrence, bundle, derivation, and selected-work-unit pointer hashes. The lookup follows
-  the unique `item_origin_profiles.item_revision_id` key, the leading profile columns of
-  `uq_item_origin_occurrence` and `uq_item_origin_derivation`, and the occurrence- and
-  bundle-revision primary keys. It is O(log n + k) over the bounded matching origin relations and
-  requires no extra materialized collection. If an acceptance is reused in multiple configured
-  batches, a window rank chooses its earliest stable
-  `(batch.created_at, batch_id, work-unit ordinal)` provenance before the candidate join. The
-  `(extraction_batch_id, ordinal)` unique index bounds that selection and prevents the reuse from
-  occupying multiple batch positions.
+- Candidate lookup first reads allowlisted work units in stable
+  `(batch.created_at, batch ID, work-unit ordinal, work-unit ID)` order and groups them by exact
+  acceptance ID. It then reads accepted, not-yet-graphed V9 PAST_EXAM analyses whose untrusted JSON
+  acceptance string belongs to that small allowlist. The JSON predicate is only a residual scope
+  filter; every selected request is fully parsed before use. An out-of-scope malformed request
+  cannot block the configured batches, while an in-scope malformed request is an explicit error.
+  The state/history and current-snapshot indexes bound the analysis scan; a new JSON expression
+  index is not justified for this one-time 520-Item corpus.
+- One authoritative resolver serves candidate preflight, pre-retrieval publication validation,
+  occurrence-binding construction, and final Graph publication validation. It performs ten
+  fixed-count indexed bulk reads and builds maps/sets keyed by Item Revision, profile, occurrence,
+  bundle, acceptance, and Item identity. It requires exactly one profile, occurrence relation,
+  assessment-bundle derivation, and matching accepted decision, then cross-binds lifecycle, current
+  pointers, rights, source/Artifact hashes, selected work-unit lineage, and the immutable V9 source.
+  Invalid rows raise a stable error; only a fully valid high-school grade-1 March origin is a policy
+  exclusion. All in-scope pending rows are classified before the 16-Item output limit, so excluded
+  rows do not consume the limit and corrupt rows cannot hide behind a valid prefix. Reused
+  acceptances retain one candidate and every allowlisted membership must describe the same lineage.
+- For `B` allowlisted work units, `A <= 520` pending analyses, and `R` canonical origin rows, a
+  cycle uses `O(B + A log A + R)` time and `O(B + A + R)` temporary space; indexed database lookup
+  remains `O(log n + k)` per bulk relation. Revalidating the shrinking set each 16-Item cycle is
+  bounded for this migration (under about 33 cycles) and intentionally simpler and safer than a
+  mutable cache or keyset checkpoint that could skip an invalid row. The unique profile Item
+  Revision key, leading profile columns of `uq_item_origin_occurrence` and
+  `uq_item_origin_derivation`, revision primary keys, and `(extraction_batch_id, ordinal)` work-unit
+  constraint are the dominant lookup paths.
 - Conceptual proposal-node keys are deduplicated with a set and sorted once. If an older accepted
   analysis contains no conceptual node, the policy falls back only to its semantic Item-element and
   assessment-pattern keys. A legacy analysis containing only its semantic Item-revision key uses

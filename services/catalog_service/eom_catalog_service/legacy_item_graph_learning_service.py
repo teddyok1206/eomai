@@ -6,15 +6,16 @@ from dataclasses import dataclass
 
 from eom_catalog_contracts import (
     PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
-    ApprovedItemKnowledgeSourceV2,
+    ApprovedPastExamItemKnowledgeSourceV3,
     AssessmentOccurrenceItemBinding,
     AutomaticItemCurriculumAlignmentBinding,
     CreateEvidenceBundleCommand,
+    KnowledgeAnalysisRequestV9,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
-from sqlalchemy import Engine, and_, case, exists, func, literal, select
+from sqlalchemy import Engine, and_, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.automatic_item_graph_publication_service import (
@@ -22,12 +23,6 @@ from eom_catalog_service.automatic_item_graph_publication_service import (
     AutomaticItemGraphCandidate,
     AutomaticItemGraphPublicationService,
     build_automatic_item_alignment_retrieval_command,
-)
-from eom_catalog_service.item_origin_models import (
-    AssessmentOccurrenceRevisionRecord,
-    ItemOriginDerivationRecord,
-    ItemOriginOccurrenceRecord,
-    ItemOriginProfileRecord,
 )
 from eom_catalog_service.knowledge_graph_models import KnowledgeSnapshotAnalysisRecord
 from eom_catalog_service.knowledge_graph_projection import AcceptedAnalysisProposal
@@ -38,16 +33,24 @@ from eom_catalog_service.knowledge_graph_publication_service import (
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
 )
-from eom_catalog_service.legacy_assessment_models import (
-    AssessmentSourceBundleRevisionRecord,
-    LegacyItemExtractionAcceptanceRecord,
-    LegacyItemExtractionDecisionRecord,
-)
 from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchRecord,
     LegacyItemExtractionBatchWorkUnitRecord,
 )
-from eom_catalog_service.models import ItemRevisionRecord
+from eom_catalog_service.past_exam_origin_resolution import (
+    PastExamOriginInput as _PastExamOriginInput,
+)
+from eom_catalog_service.past_exam_origin_resolution import (
+    PastExamOriginResolution as _PastExamOriginResolution,
+)
+from eom_catalog_service.past_exam_origin_resolution import (
+    PastExamOriginResolutionError,
+    past_exam_origin_inputs,
+    resolve_past_exam_origins,
+)
+from eom_catalog_service.past_exam_origin_resolution import (
+    PastExamOriginStatus as _PastExamOriginStatus,
+)
 
 MAX_AUTOMATIC_GRAPH_BATCH_SIZE = 16
 
@@ -57,6 +60,46 @@ class LegacyItemGraphCandidate:
     analysis_run_id: str
     requested_by_operator_id: str
     graph_snapshot_revision_id: str
+
+
+class LegacyItemGraphLearningError(ValueError):
+    """Stable fail-closed error raised before any retrieval side effect."""
+
+    code = "LEGACY_ITEM_GRAPH_ORIGIN_INVALID"
+
+    def __init__(self, *, analysis_run_id: str, item_revision_id: str, reason: str) -> None:
+        self.analysis_run_id = analysis_run_id
+        self.item_revision_id = item_revision_id
+        self.reason = reason
+        super().__init__(
+            f"{self.code}: {reason}; analysis_run_id={analysis_run_id}; "
+            f"item_revision_id={item_revision_id}"
+        )
+
+
+@dataclass(frozen=True)
+class _AllowedBatchMembership:
+    order: int
+    state: str
+    acceptance_id: str
+    acceptance_sha256: str | None
+    extraction_result_id: str | None
+    result_sha256: str | None
+    bundle_id: str
+    bundle_revision_id: str
+    bundle_sha256: str
+
+
+@dataclass(frozen=True)
+class _PendingPastExamCandidate:
+    analysis_order: int
+    analysis_run_id: str
+    requested_by_operator_id: str
+    source_revision_id: str
+    item_id: str | None
+    item_revision_id: str | None
+    source: ApprovedPastExamItemKnowledgeSourceV3
+    memberships: tuple[_AllowedBatchMembership, ...]
 
 
 class LegacyItemGraphLearningService:
@@ -89,141 +132,84 @@ class LegacyItemGraphLearningService:
         if limit < 1 or limit > MAX_AUTOMATIC_GRAPH_BATCH_SIZE:
             raise ValueError("Graph publication candidate limit must be within 1..16")
         context = self.publication.current_structure_context(INTEGRATED_SCIENCE_CORPUS_KEY)
-        registration_key = (
-            literal("legacy-item-promotion:")
-            + LegacyItemExtractionDecisionRecord.acceptance_id
-            + literal(":")
-            + LegacyItemExtractionDecisionRecord.item_proposal_id
-        )
-        # One accepted extraction may be reused by more than one configured batch.  Rank those
-        # provenance rows before joining them into the unique analysis candidate relation.
-        ranked_batch_memberships = (
-            select(
-                LegacyItemExtractionBatchWorkUnitRecord.acceptance_id.label("acceptance_id"),
-                LegacyItemExtractionBatchRecord.created_at.label("batch_created_at"),
-                LegacyItemExtractionBatchRecord.extraction_batch_id.label("extraction_batch_id"),
-                LegacyItemExtractionBatchWorkUnitRecord.ordinal.label("work_unit_ordinal"),
-                LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_id.label(
-                    "assessment_source_bundle_id"
-                ),
-                LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_revision_id.label(
-                    "assessment_source_bundle_revision_id"
-                ),
-                LegacyItemExtractionBatchWorkUnitRecord.bundle_manifest_sha256.label(
-                    "bundle_manifest_sha256"
-                ),
-                func.row_number()
-                .over(
-                    partition_by=LegacyItemExtractionBatchWorkUnitRecord.acceptance_id,
-                    order_by=(
+        with self.sessions() as session:
+            # Batch membership is a small ordered provenance relation.  Group it before touching
+            # analyses so reuse of one acceptance by multiple allowlisted batches cannot multiply
+            # candidates or make LIMIT hide a corrupt origin.
+            membership_rows = tuple(
+                session.execute(
+                    select(
+                        LegacyItemExtractionBatchWorkUnitRecord.acceptance_id,
+                        LegacyItemExtractionBatchWorkUnitRecord.acceptance_sha256,
+                        LegacyItemExtractionBatchWorkUnitRecord.extraction_result_id,
+                        LegacyItemExtractionBatchWorkUnitRecord.result_sha256,
+                        LegacyItemExtractionBatchWorkUnitRecord.state,
+                        LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_id,
+                        LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_revision_id,
+                        LegacyItemExtractionBatchWorkUnitRecord.bundle_manifest_sha256,
+                    )
+                    .join(
+                        LegacyItemExtractionBatchRecord,
+                        LegacyItemExtractionBatchRecord.extraction_batch_id
+                        == LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+                    )
+                    .where(
+                        LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
+                            self.extraction_batch_ids
+                        )
+                    )
+                    .order_by(
                         LegacyItemExtractionBatchRecord.created_at,
                         LegacyItemExtractionBatchRecord.extraction_batch_id,
                         LegacyItemExtractionBatchWorkUnitRecord.ordinal,
-                    ),
+                        LegacyItemExtractionBatchWorkUnitRecord.work_unit_id,
+                    )
                 )
-                .label("membership_rank"),
             )
-            .join(
-                LegacyItemExtractionBatchRecord,
-                LegacyItemExtractionBatchRecord.extraction_batch_id
-                == LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
-            )
-            .where(
-                LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
-                    self.extraction_batch_ids
-                ),
-                LegacyItemExtractionBatchWorkUnitRecord.state == "ACCEPTED",
-            )
-            .subquery()
-        )
-        origin_is_publishable = and_(
-            AssessmentOccurrenceRevisionRecord.schema_version
-            == "assessment-occurrence-revision/2.0",
-            ~and_(
-                AssessmentOccurrenceRevisionRecord.target_school_level == "HIGH_SCHOOL",
-                AssessmentOccurrenceRevisionRecord.target_grade == 1,
-                AssessmentOccurrenceRevisionRecord.administration_month == 3,
-            ),
-            ItemOriginOccurrenceRecord.occurrence_revision_sha256
-            == AssessmentOccurrenceRevisionRecord.revision_sha256,
-            AssessmentSourceBundleRevisionRecord.assessment_occurrence_id
-            == AssessmentOccurrenceRevisionRecord.assessment_occurrence_id,
-            AssessmentSourceBundleRevisionRecord.assessment_occurrence_revision_id
-            == AssessmentOccurrenceRevisionRecord.assessment_occurrence_revision_id,
-            AssessmentSourceBundleRevisionRecord.occurrence_revision_sha256
-            == AssessmentOccurrenceRevisionRecord.revision_sha256,
-            ItemOriginDerivationRecord.logical_id
-            == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_id,
-            ItemOriginDerivationRecord.revision_id
-            == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id,
-            ItemOriginDerivationRecord.manifest_sha256
-            == AssessmentSourceBundleRevisionRecord.bundle_manifest_sha256,
-            ranked_batch_memberships.c.assessment_source_bundle_id
-            == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_id,
-            ranked_batch_memberships.c.assessment_source_bundle_revision_id
-            == AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id,
-            ranked_batch_memberships.c.bundle_manifest_sha256
-            == AssessmentSourceBundleRevisionRecord.bundle_manifest_sha256,
-        )
-        has_unique_publishable_origin = exists(
-            select(1)
-            .select_from(ItemOriginProfileRecord)
-            .join(
-                ItemOriginOccurrenceRecord,
-                ItemOriginOccurrenceRecord.item_origin_profile_id
-                == ItemOriginProfileRecord.item_origin_profile_id,
-            )
-            .join(
-                AssessmentOccurrenceRevisionRecord,
-                AssessmentOccurrenceRevisionRecord.assessment_occurrence_revision_id
-                == ItemOriginOccurrenceRecord.assessment_occurrence_revision_id,
-            )
-            .join(
-                ItemOriginDerivationRecord,
-                and_(
-                    ItemOriginDerivationRecord.item_origin_profile_id
-                    == ItemOriginProfileRecord.item_origin_profile_id,
-                    ItemOriginDerivationRecord.source_kind == "ASSESSMENT_SOURCE_BUNDLE_REVISION",
-                ),
-            )
-            .outerjoin(
-                AssessmentSourceBundleRevisionRecord,
-                AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id
-                == ItemOriginDerivationRecord.revision_id,
-            )
-            .where(ItemOriginProfileRecord.item_revision_id == ItemRevisionRecord.item_revision_id)
-            .group_by(ItemOriginProfileRecord.item_origin_profile_id)
-            .having(
-                func.count(func.distinct(ItemOriginOccurrenceRecord.item_origin_occurrence_id))
-                == 1,
-                func.count(func.distinct(ItemOriginDerivationRecord.item_origin_derivation_id))
-                == 1,
-                func.min(case((origin_is_publishable, 1), else_=0)) == 1,
-            )
-        ).correlate(ItemRevisionRecord, ranked_batch_memberships)
-        with self.sessions() as session:
-            rows = tuple(
+            memberships_by_acceptance: dict[str, list[_AllowedBatchMembership]] = {}
+            for membership_order, row in enumerate(membership_rows):
+                (
+                    acceptance_id,
+                    acceptance_sha256,
+                    extraction_result_id,
+                    result_sha256,
+                    state,
+                    bundle_id,
+                    bundle_revision_id,
+                    bundle_sha256,
+                ) = row
+                if acceptance_id is None:
+                    continue
+                memberships_by_acceptance.setdefault(acceptance_id, []).append(
+                    _AllowedBatchMembership(
+                        order=membership_order,
+                        state=state,
+                        acceptance_id=acceptance_id,
+                        acceptance_sha256=acceptance_sha256,
+                        extraction_result_id=extraction_result_id,
+                        result_sha256=result_sha256,
+                        bundle_id=bundle_id,
+                        bundle_revision_id=bundle_revision_id,
+                        bundle_sha256=bundle_sha256,
+                    )
+                )
+            if not memberships_by_acceptance:
+                return ()
+            allowed_acceptance_ids = tuple(sorted(memberships_by_acceptance))
+
+            # The configured legacy corpus has 520 Items.  Fetch its unique pending analysis base
+            # once, scope by the untrusted JSON acceptance string, then fully parse only exact
+            # allowlisted memberships.  This lets malformed in-scope requests fail closed without
+            # letting an unrelated batch's malformed request block this coordinator.
+            analysis_rows = tuple(
                 session.execute(
                     select(
                         KnowledgeAnalysisRunRecord.analysis_run_id,
                         KnowledgeAnalysisRunRecord.created_by_operator_id,
-                    )
-                    .join(
-                        ItemRevisionRecord,
-                        ItemRevisionRecord.item_revision_id
-                        == KnowledgeAnalysisRunRecord.source_revision_id,
-                    )
-                    .join(
-                        LegacyItemExtractionDecisionRecord,
-                        ItemRevisionRecord.registration_key == registration_key,
-                    )
-                    .join(
-                        ranked_batch_memberships,
-                        and_(
-                            ranked_batch_memberships.c.acceptance_id
-                            == LegacyItemExtractionDecisionRecord.acceptance_id,
-                            ranked_batch_memberships.c.membership_rank == 1,
-                        ),
+                        KnowledgeAnalysisRunRecord.source_revision_id,
+                        KnowledgeAnalysisRunRecord.item_id,
+                        KnowledgeAnalysisRunRecord.item_revision_id,
+                        KnowledgeAnalysisRunRecord.canonical_request,
                     )
                     .outerjoin(
                         KnowledgeSnapshotAnalysisRecord,
@@ -235,9 +221,6 @@ class LegacyItemGraphLearningService:
                         ),
                     )
                     .where(
-                        LegacyItemExtractionDecisionRecord.decision.in_(
-                            ("ACCEPT", "CORRECT_AND_ACCEPT")
-                        ),
                         KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
                         KnowledgeAnalysisRunRecord.canonical_request["source"][
                             "source_class"
@@ -245,29 +228,178 @@ class LegacyItemGraphLearningService:
                         == "PAST_EXAM",
                         KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
                         == PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
+                        KnowledgeAnalysisRunRecord.canonical_request["source"][
+                            "extraction_acceptance_id"
+                        ].astext.in_(allowed_acceptance_ids),
                         KnowledgeAnalysisRunRecord.state == "ACCEPTED",
-                        has_unique_publishable_origin,
                         KnowledgeSnapshotAnalysisRecord.analysis_run_id.is_(None),
                     )
                     .order_by(
-                        ranked_batch_memberships.c.batch_created_at,
-                        ranked_batch_memberships.c.extraction_batch_id,
-                        ranked_batch_memberships.c.work_unit_ordinal,
-                        LegacyItemExtractionDecisionRecord.item_number,
                         KnowledgeAnalysisRunRecord.created_at,
                         KnowledgeAnalysisRunRecord.analysis_run_id,
                     )
-                    .limit(limit)
                 )
             )
-        return tuple(
-            LegacyItemGraphCandidate(
-                analysis_run_id=analysis_run_id,
-                requested_by_operator_id=requested_by_operator_id,
-                graph_snapshot_revision_id=context.graph_snapshot_revision_id,
+            pending: list[_PendingPastExamCandidate] = []
+            for analysis_order, row in enumerate(analysis_rows):
+                (
+                    analysis_run_id,
+                    requested_by_operator_id,
+                    source_revision_id,
+                    item_id,
+                    item_revision_id,
+                    canonical_request,
+                ) = row
+                try:
+                    source = KnowledgeAnalysisRequestV9.model_validate(canonical_request).source
+                except ValueError as exc:
+                    raise LegacyItemGraphLearningError(
+                        analysis_run_id=analysis_run_id,
+                        item_revision_id="unknown",
+                        reason="canonical_request_invalid",
+                    ) from exc
+                memberships = tuple(
+                    memberships_by_acceptance.get(source.extraction_acceptance_id, ())
+                )
+                if not memberships:
+                    continue
+                pending.append(
+                    _PendingPastExamCandidate(
+                        analysis_order=analysis_order,
+                        analysis_run_id=analysis_run_id,
+                        requested_by_operator_id=requested_by_operator_id,
+                        source_revision_id=source_revision_id,
+                        item_id=item_id,
+                        item_revision_id=item_revision_id,
+                        source=source,
+                        memberships=memberships,
+                    )
+                )
+            pending.sort(
+                key=lambda candidate: (
+                    candidate.memberships[0].order,
+                    candidate.source.item_number,
+                    candidate.analysis_order,
+                    candidate.analysis_run_id,
+                )
             )
-            for analysis_run_id, requested_by_operator_id in rows
+
+            resolutions = self._resolve_past_exam_origins(
+                session,
+                tuple(
+                    _PastExamOriginInput(
+                        analysis_run_id=candidate.analysis_run_id,
+                        source=candidate.source,
+                    )
+                    for candidate in pending
+                ),
+            )
+
+        resolution_by_analysis = {
+            resolution.analysis_run_id: resolution for resolution in resolutions
+        }
+        if len(resolution_by_analysis) != len(pending):
+            duplicate = pending[0] if pending else None
+            raise LegacyItemGraphLearningError(
+                analysis_run_id=(duplicate.analysis_run_id if duplicate else "unknown"),
+                item_revision_id=(duplicate.source.item_revision_id if duplicate else "unknown"),
+                reason="origin_resolution_coverage_invalid",
+            )
+        selected: list[LegacyItemGraphCandidate] = []
+        for candidate in pending:
+            source = candidate.source
+            resolution = resolution_by_analysis[candidate.analysis_run_id]
+            invalid_membership = (
+                candidate.source_revision_id != source.item_revision_id
+                or candidate.item_id != source.item_id
+                or candidate.item_revision_id != source.item_revision_id
+            )
+            for membership in candidate.memberships:
+                invalid_membership = invalid_membership or (
+                    membership.state != "ACCEPTED"
+                    or membership.acceptance_id != source.extraction_acceptance_id
+                    or membership.acceptance_sha256 != source.extraction_acceptance_sha256
+                    or membership.extraction_result_id != source.extraction_result_id
+                    or membership.result_sha256 != source.extraction_result_sha256
+                    or membership.bundle_id != source.bundle.assessment_source_bundle_id
+                    or membership.bundle_revision_id
+                    != source.bundle.assessment_source_bundle_revision_id
+                    or membership.bundle_sha256 != source.bundle.bundle_manifest_sha256
+                    or resolution.item_number != source.item_number
+                    or resolution.assessment_source_bundle_id != membership.bundle_id
+                    or resolution.assessment_source_bundle_revision_id
+                    != membership.bundle_revision_id
+                    or resolution.assessment_source_bundle_sha256 != membership.bundle_sha256
+                )
+            if invalid_membership:
+                raise LegacyItemGraphLearningError(
+                    analysis_run_id=candidate.analysis_run_id,
+                    item_revision_id=source.item_revision_id,
+                    reason="batch_membership_or_decision_invalid",
+                )
+            if resolution.status == _PastExamOriginStatus.POLICY_EXCLUDED:
+                continue
+            if len(selected) < limit:
+                selected.append(
+                    LegacyItemGraphCandidate(
+                        analysis_run_id=candidate.analysis_run_id,
+                        requested_by_operator_id=candidate.requested_by_operator_id,
+                        graph_snapshot_revision_id=context.graph_snapshot_revision_id,
+                    )
+                )
+        return tuple(selected)
+
+    @staticmethod
+    def _resolve_past_exam_origins(
+        session: Session,
+        inputs: tuple[_PastExamOriginInput, ...],
+    ) -> tuple[_PastExamOriginResolution, ...]:
+        try:
+            return resolve_past_exam_origins(session, inputs)
+        except PastExamOriginResolutionError as exc:
+            raise LegacyItemGraphLearningError(
+                analysis_run_id=exc.analysis_run_id,
+                item_revision_id=exc.item_revision_id,
+                reason=exc.reason,
+            ) from exc
+
+    @classmethod
+    def _resolve_past_exam_analyses(
+        cls,
+        session: Session,
+        analyses: tuple[AcceptedAnalysisProposal, ...],
+    ) -> tuple[_PastExamOriginResolution, ...]:
+        try:
+            inputs = past_exam_origin_inputs(analyses)
+        except PastExamOriginResolutionError as exc:
+            raise LegacyItemGraphLearningError(
+                analysis_run_id=exc.analysis_run_id,
+                item_revision_id=exc.item_revision_id,
+                reason=exc.reason,
+            ) from exc
+        return cls._resolve_past_exam_origins(session, inputs)
+
+    @classmethod
+    def _validate_past_exam_analyses(
+        cls,
+        session: Session,
+        analyses: tuple[AcceptedAnalysisProposal, ...],
+    ) -> None:
+        resolutions = cls._resolve_past_exam_analyses(session, analyses)
+        excluded = next(
+            (
+                resolution
+                for resolution in resolutions
+                if resolution.status == _PastExamOriginStatus.POLICY_EXCLUDED
+            ),
+            None,
         )
+        if excluded is not None:
+            raise LegacyItemGraphLearningError(
+                analysis_run_id=excluded.analysis_run_id,
+                item_revision_id=excluded.item_revision_id,
+                reason="past_exam_origin_policy_excluded",
+            )
 
     def publish(self, candidates: tuple[LegacyItemGraphCandidate, ...]) -> str:
         """Publish one fresh snapshot containing the exact ordered candidate set."""
@@ -285,6 +417,7 @@ class LegacyItemGraphLearningService:
             retrieval_idempotency_namespace="legacy-auto-alignment",
             publication_idempotency_namespace="legacy-auto-graph",
             publisher_version="1.6.0",
+            analysis_validator=self._validate_past_exam_analyses,
             occurrence_binding_resolver=self._assessment_item_occurrence_bindings,
         )
         return receipt.graph_publication.graph_snapshot.graph_snapshot_revision_id
@@ -295,159 +428,55 @@ class LegacyItemGraphLearningService:
         analyses: tuple[AcceptedAnalysisProposal, ...],
         alignments: tuple[AutomaticItemCurriculumAlignmentBinding, ...],
     ) -> tuple[AssessmentOccurrenceItemBinding, ...]:
-        """Resolve new PAST_EXAM analyses into immutable placement values in bulk."""
+        """Revalidate origins, then add alignment IDs to immutable placement values."""
 
-        analysis_by_revision = {
-            analysis.source.item_revision_id: analysis
-            for analysis in analyses
-            if isinstance(analysis.source, ApprovedItemKnowledgeSourceV2)
-            and analysis.source.source_class == "PAST_EXAM"
+        resolutions = LegacyItemGraphLearningService._resolve_past_exam_analyses(session, analyses)
+        resolution_by_revision = {
+            resolution.item_revision_id: resolution for resolution in resolutions
         }
         alignment_by_revision = {alignment.item_revision_id: alignment for alignment in alignments}
-        revision_ids = set(analysis_by_revision)
-        if not revision_ids or revision_ids != set(alignment_by_revision):
+        if (
+            not resolution_by_revision
+            or len(resolution_by_revision) != len(resolutions)
+            or len(alignment_by_revision) != len(alignments)
+            or set(resolution_by_revision) != set(alignment_by_revision)
+        ):
             raise ValueError("PAST_EXAM analyses and automatic alignments must match exactly")
 
-        profiles_by_revision: dict[str, list[ItemOriginProfileRecord]] = {}
-        for profile in session.scalars(
-            select(ItemOriginProfileRecord).where(
-                ItemOriginProfileRecord.item_revision_id.in_(revision_ids)
-            )
-        ):
-            profiles_by_revision.setdefault(profile.item_revision_id, []).append(profile)
-        profile_ids = {
-            row.item_origin_profile_id for values in profiles_by_revision.values() for row in values
-        }
-        occurrences_by_profile: dict[str, list[ItemOriginOccurrenceRecord]] = {}
-        for occurrence_link in session.scalars(
-            select(ItemOriginOccurrenceRecord).where(
-                ItemOriginOccurrenceRecord.item_origin_profile_id.in_(profile_ids)
-            )
-        ):
-            occurrences_by_profile.setdefault(occurrence_link.item_origin_profile_id, []).append(
-                occurrence_link
-            )
-        derivations_by_profile: dict[str, list[ItemOriginDerivationRecord]] = {}
-        for derivation in session.scalars(
-            select(ItemOriginDerivationRecord).where(
-                ItemOriginDerivationRecord.item_origin_profile_id.in_(profile_ids),
-                ItemOriginDerivationRecord.source_kind == "ASSESSMENT_SOURCE_BUNDLE_REVISION",
-            )
-        ):
-            derivations_by_profile.setdefault(derivation.item_origin_profile_id, []).append(
-                derivation
-            )
-        occurrence_revision_ids = {
-            row.assessment_occurrence_revision_id
-            for values in occurrences_by_profile.values()
-            for row in values
-        }
-        occurrences = {
-            row.assessment_occurrence_revision_id: row
-            for row in session.scalars(
-                select(AssessmentOccurrenceRevisionRecord).where(
-                    AssessmentOccurrenceRevisionRecord.assessment_occurrence_revision_id.in_(
-                        occurrence_revision_ids
-                    )
-                )
-            )
-        }
-        bundle_revision_ids = {
-            row.revision_id for values in derivations_by_profile.values() for row in values
-        }
-        bundles = {
-            row.assessment_source_bundle_revision_id: row
-            for row in session.scalars(
-                select(AssessmentSourceBundleRevisionRecord).where(
-                    AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id.in_(
-                        bundle_revision_ids
-                    )
-                )
-            )
-        }
-        decision_rows = tuple(
-            session.execute(
-                select(ItemRevisionRecord.item_revision_id, LegacyItemExtractionDecisionRecord)
-                .join(
-                    LegacyItemExtractionDecisionRecord,
-                    ItemRevisionRecord.registration_key
-                    == (
-                        literal("legacy-item-promotion:")
-                        + LegacyItemExtractionDecisionRecord.acceptance_id
-                        + literal(":")
-                        + LegacyItemExtractionDecisionRecord.item_proposal_id
-                    ),
-                )
-                .where(ItemRevisionRecord.item_revision_id.in_(revision_ids))
-            )
-        )
-        decisions_by_revision: dict[str, list[LegacyItemExtractionDecisionRecord]] = {}
-        for item_revision_id, decision in decision_rows:
-            decisions_by_revision.setdefault(item_revision_id, []).append(decision)
-        acceptance_ids = {decision.acceptance_id for _, decision in decision_rows}
-        acceptances = {
-            row.acceptance_id: row
-            for row in session.scalars(
-                select(LegacyItemExtractionAcceptanceRecord).where(
-                    LegacyItemExtractionAcceptanceRecord.acceptance_id.in_(acceptance_ids)
-                )
-            )
-        }
-
         bindings: list[AssessmentOccurrenceItemBinding] = []
-        for item_revision_id in sorted(revision_ids):
-            analysis = analysis_by_revision[item_revision_id]
-            source = analysis.source
-            profiles = profiles_by_revision.get(item_revision_id, [])
-            if not isinstance(source, ApprovedItemKnowledgeSourceV2) or len(profiles) != 1:
-                raise ValueError("PAST_EXAM Item must have one origin profile")
-            profile = profiles[0]
-            occurrence_links = occurrences_by_profile.get(profile.item_origin_profile_id, [])
-            derivations = derivations_by_profile.get(profile.item_origin_profile_id, [])
-            decisions = decisions_by_revision.get(item_revision_id, [])
-            if len(occurrence_links) != 1 or len(derivations) != 1 or len(decisions) != 1:
-                raise ValueError("PAST_EXAM Item origin placement is not unique")
-            occurrence_link = occurrence_links[0]
-            derivation = derivations[0]
-            decision = decisions[0]
-            occurrence = occurrences.get(occurrence_link.assessment_occurrence_revision_id)
-            bundle = bundles.get(derivation.revision_id)
-            acceptance = acceptances.get(decision.acceptance_id)
-            alignment = alignment_by_revision[item_revision_id]
-            if (
-                occurrence is None
-                or bundle is None
-                or acceptance is None
-                or occurrence.schema_version != "assessment-occurrence-revision/2.0"
-                or occurrence.administration_month is None
-                or occurrence.target_school_level is None
-                or occurrence.target_grade is None
-                or decision.decision not in {"ACCEPT", "CORRECT_AND_ACCEPT"}
-            ):
-                raise ValueError("PAST_EXAM Item placement metadata is incomplete")
+        for resolution in resolutions:
+            if resolution.status != _PastExamOriginStatus.ELIGIBLE:
+                raise LegacyItemGraphLearningError(
+                    analysis_run_id=resolution.analysis_run_id,
+                    item_revision_id=resolution.item_revision_id,
+                    reason="past_exam_origin_policy_excluded",
+                )
+            alignment = alignment_by_revision[resolution.item_revision_id]
             value: dict[str, object] = {
-                "analysis_run_id": analysis.analysis_run_id,
-                "item_id": source.item_id,
-                "item_revision_id": source.item_revision_id,
-                "item_origin_profile_id": profile.item_origin_profile_id,
-                "item_origin_profile_sha256": profile.profile_sha256,
-                "extraction_acceptance_id": acceptance.acceptance_id,
-                "extraction_acceptance_sha256": acceptance.acceptance_sha256,
-                "assessment_source_bundle_id": bundle.assessment_source_bundle_id,
+                "analysis_run_id": resolution.analysis_run_id,
+                "item_id": resolution.item_id,
+                "item_revision_id": resolution.item_revision_id,
+                "item_origin_profile_id": resolution.item_origin_profile_id,
+                "item_origin_profile_sha256": resolution.item_origin_profile_sha256,
+                "extraction_acceptance_id": resolution.extraction_acceptance_id,
+                "extraction_acceptance_sha256": resolution.extraction_acceptance_sha256,
+                "assessment_source_bundle_id": resolution.assessment_source_bundle_id,
                 "assessment_source_bundle_revision_id": (
-                    bundle.assessment_source_bundle_revision_id
+                    resolution.assessment_source_bundle_revision_id
                 ),
-                "assessment_source_bundle_sha256": bundle.bundle_manifest_sha256,
-                "assessment_occurrence_id": occurrence.assessment_occurrence_id,
-                "assessment_occurrence_revision_id": (occurrence.assessment_occurrence_revision_id),
-                "assessment_occurrence_revision_sha256": occurrence.revision_sha256,
-                "occurrence_display_label": occurrence.display_label,
-                "administration_year": occurrence.administration_year,
-                "administration_month": occurrence.administration_month,
-                "target_school_level": occurrence.target_school_level,
-                "target_grade": occurrence.target_grade,
-                "subject_key": occurrence.subject_key,
-                "item_number": decision.item_number,
+                "assessment_source_bundle_sha256": (resolution.assessment_source_bundle_sha256),
+                "assessment_occurrence_id": resolution.assessment_occurrence_id,
+                "assessment_occurrence_revision_id": (resolution.assessment_occurrence_revision_id),
+                "assessment_occurrence_revision_sha256": (
+                    resolution.assessment_occurrence_revision_sha256
+                ),
+                "occurrence_display_label": resolution.occurrence_display_label,
+                "administration_year": resolution.administration_year,
+                "administration_month": resolution.administration_month,
+                "target_school_level": resolution.target_school_level,
+                "target_grade": resolution.target_grade,
+                "subject_key": resolution.subject_key,
+                "item_number": resolution.item_number,
                 "curriculum_unit_ids": list(alignment.curriculum_unit_ids),
                 "placement_sha256": "sha256:" + "0" * 64,
             }

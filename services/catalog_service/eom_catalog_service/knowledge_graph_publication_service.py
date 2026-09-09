@@ -102,13 +102,6 @@ from eom_catalog_service.curriculum_graph_structure import (
     CurriculumGraphStructureError,
     validate_integrated_science_structure_manifest,
 )
-from eom_catalog_service.item_origin_models import (
-    AssessmentOccurrenceRecord,
-    AssessmentOccurrenceRevisionRecord,
-    ItemOriginDerivationRecord,
-    ItemOriginOccurrenceRecord,
-    ItemOriginProfileRecord,
-)
 from eom_catalog_service.knowledge_analysis_sources import (
     EducationalDocumentSourceResolutionCache,
     KnowledgeAnalysisSourceError,
@@ -150,15 +143,16 @@ from eom_catalog_service.knowledge_proposal_resolution import (
     KnowledgeProposalResolutionError,
     resolve_knowledge_analysis_proposal,
 )
-from eom_catalog_service.legacy_assessment_models import (
-    AssessmentSourceBundleRevisionRecord,
-    LegacyItemExtractionAcceptanceRecord,
-    LegacyItemExtractionDecisionRecord,
-)
 from eom_catalog_service.models import (
     ItemComponentRecord,
     ItemRecord,
     ItemRevisionRecord,
+)
+from eom_catalog_service.past_exam_origin_resolution import (
+    PastExamOriginResolutionError,
+    PastExamOriginStatus,
+    past_exam_origin_inputs,
+    resolve_past_exam_origins,
 )
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.settings import CatalogSettings
@@ -412,6 +406,47 @@ def _source_revision_id(
     ):
         return source.document_revision_id
     return source.source_file_id
+
+
+def _run_source_identity_matches(
+    run: KnowledgeAnalysisRunRecord,
+    source: ContentIntakeKnowledgeSourceV2
+    | ApprovedItemKnowledgeSourceV2
+    | ApprovedPastExamItemKnowledgeSourceV3
+    | EducationalDocumentKnowledgeSourceV3
+    | EducationalDocumentKnowledgeSourceV4,
+) -> bool:
+    """Cross-bind persisted source-family columns to the immutable typed request source."""
+
+    if run.source_kind != source.source_kind or run.source_revision_id != _source_revision_id(
+        source
+    ):
+        return False
+    if isinstance(source, ApprovedItemKnowledgeSourceV2):
+        return (
+            run.item_id == source.item_id
+            and run.item_revision_id == source.item_revision_id
+            and run.source_file_id is None
+            and run.educational_document_id is None
+            and run.educational_document_revision_id is None
+        )
+    if isinstance(
+        source, (EducationalDocumentKnowledgeSourceV3, EducationalDocumentKnowledgeSourceV4)
+    ):
+        return (
+            run.educational_document_id == source.document_id
+            and run.educational_document_revision_id == source.document_revision_id
+            and run.source_file_id is None
+            and run.item_id is None
+            and run.item_revision_id is None
+        )
+    return (
+        run.source_file_id == source.source_file_id
+        and run.item_id is None
+        and run.item_revision_id is None
+        and run.educational_document_id is None
+        and run.educational_document_revision_id is None
+    )
 
 
 def _snapshot_source_revision(
@@ -995,6 +1030,7 @@ class KnowledgeGraphPublicationService:
         if (
             resolved_source != request.source
             or run.request_sha256 != request.request_sha256
+            or not _run_source_identity_matches(run, request.source)
             or run.source_artifact_id != request.source.artifact_member.artifact_id
             or run.source_artifact_revision_id
             != request.source.artifact_member.artifact_revision_id
@@ -2127,196 +2163,76 @@ class KnowledgeGraphPublicationService:
         structure: KnowledgeGraphStructureContract | None,
         analyses: tuple[AcceptedAnalysisProposal, ...],
     ) -> None:
-        """Resolve every V5 placement through canonical origin and acceptance records."""
+        """Compare every V5 placement with the authoritative canonical origin resolution."""
 
         if not isinstance(structure, KnowledgeGraphStructureManifestV5):
             return
         placements = structure.assessment_item_occurrences
-        analysis_by_run = {item.analysis_run_id: item for item in analyses}
-        expected_run_ids = {
-            item.analysis_run_id
-            for item in analyses
-            if isinstance(item.source, ApprovedItemKnowledgeSourceV2)
-            and item.source.source_class == "PAST_EXAM"
-        }
-        if {item.analysis_run_id for item in placements} != expected_run_ids:
+        past_exam_analyses = tuple(
+            analysis
+            for analysis in analyses
+            if isinstance(analysis.source, ApprovedItemKnowledgeSourceV2)
+            and analysis.source.source_class == "PAST_EXAM"
+        )
+        expected_run_ids = tuple(analysis.analysis_run_id for analysis in past_exam_analyses)
+        placement_run_ids = tuple(placement.analysis_run_id for placement in placements)
+        if (
+            len(expected_run_ids) != len(set(expected_run_ids))
+            or len(placement_run_ids) != len(set(placement_run_ids))
+            or set(placement_run_ids) != set(expected_run_ids)
+        ):
             raise KnowledgeGraphPublicationError(
                 "KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_COVERAGE_INVALID",
                 "assessment placements must exactly cover PAST_EXAM Item analyses",
             )
-        profile_ids = {item.item_origin_profile_id for item in placements}
-        occurrence_revision_ids = {item.assessment_occurrence_revision_id for item in placements}
-        acceptance_ids = {item.extraction_acceptance_id for item in placements}
-        bundle_revision_ids = {item.assessment_source_bundle_revision_id for item in placements}
-        item_revision_ids = {item.item_revision_id for item in placements}
-        profiles = {
-            row.item_origin_profile_id: row
-            for row in session.scalars(
-                select(ItemOriginProfileRecord).where(
-                    ItemOriginProfileRecord.item_origin_profile_id.in_(profile_ids)
-                )
+        try:
+            resolutions = resolve_past_exam_origins(
+                session,
+                past_exam_origin_inputs(past_exam_analyses),
             )
-        }
-        occurrence_relations: dict[str, list[ItemOriginOccurrenceRecord]] = {}
-        for occurrence_relation in session.scalars(
-            select(ItemOriginOccurrenceRecord).where(
-                ItemOriginOccurrenceRecord.item_origin_profile_id.in_(profile_ids)
+        except PastExamOriginResolutionError as exc:
+            raise KnowledgeGraphPublicationError(
+                "KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_INVALID",
+                "assessment Item placement does not resolve to reviewed canonical evidence",
+            ) from exc
+        resolution_by_run = {resolution.analysis_run_id: resolution for resolution in resolutions}
+        if len(resolution_by_run) != len(expected_run_ids):
+            raise KnowledgeGraphPublicationError(
+                "KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_COVERAGE_INVALID",
+                "assessment origin resolutions must exactly cover PAST_EXAM Item analyses",
             )
-        ):
-            occurrence_relations.setdefault(occurrence_relation.item_origin_profile_id, []).append(
-                occurrence_relation
-            )
-        derivations: dict[str, list[ItemOriginDerivationRecord]] = {}
-        for derivation in session.scalars(
-            select(ItemOriginDerivationRecord).where(
-                ItemOriginDerivationRecord.item_origin_profile_id.in_(profile_ids),
-                ItemOriginDerivationRecord.source_kind == "ASSESSMENT_SOURCE_BUNDLE_REVISION",
-            )
-        ):
-            derivations.setdefault(derivation.item_origin_profile_id, []).append(derivation)
-        occurrences = {
-            row.assessment_occurrence_revision_id: row
-            for row in session.scalars(
-                select(AssessmentOccurrenceRevisionRecord).where(
-                    AssessmentOccurrenceRevisionRecord.assessment_occurrence_revision_id.in_(
-                        occurrence_revision_ids
-                    )
-                )
-            )
-        }
-        occurrence_logicals = {
-            row.assessment_occurrence_id: row
-            for row in session.scalars(
-                select(AssessmentOccurrenceRecord).where(
-                    AssessmentOccurrenceRecord.assessment_occurrence_id.in_(
-                        {item.assessment_occurrence_id for item in placements}
-                    )
-                )
-            )
-        }
-        acceptances = {
-            row.acceptance_id: row
-            for row in session.scalars(
-                select(LegacyItemExtractionAcceptanceRecord).where(
-                    LegacyItemExtractionAcceptanceRecord.acceptance_id.in_(acceptance_ids)
-                )
-            )
-        }
-        decisions: dict[str, list[LegacyItemExtractionDecisionRecord]] = {}
-        for decision in session.scalars(
-            select(LegacyItemExtractionDecisionRecord).where(
-                LegacyItemExtractionDecisionRecord.acceptance_id.in_(acceptance_ids)
-            )
-        ):
-            decisions.setdefault(decision.acceptance_id, []).append(decision)
-        bundles = {
-            row.assessment_source_bundle_revision_id: row
-            for row in session.scalars(
-                select(AssessmentSourceBundleRevisionRecord).where(
-                    AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id.in_(
-                        bundle_revision_ids
-                    )
-                )
-            )
-        }
-        item_revisions = {
-            row.item_revision_id: row
-            for row in session.scalars(
-                select(ItemRevisionRecord).where(
-                    ItemRevisionRecord.item_revision_id.in_(item_revision_ids)
-                )
-            )
-        }
         for placement in placements:
-            analysis = analysis_by_run.get(placement.analysis_run_id)
-            source = analysis.source if analysis is not None else None
-            profile = profiles.get(placement.item_origin_profile_id)
-            occurrence = occurrences.get(placement.assessment_occurrence_revision_id)
-            logical = occurrence_logicals.get(placement.assessment_occurrence_id)
-            acceptance = acceptances.get(placement.extraction_acceptance_id)
-            bundle = bundles.get(placement.assessment_source_bundle_revision_id)
-            revision = item_revisions.get(placement.item_revision_id)
-            profile_occurrences = occurrence_relations.get(placement.item_origin_profile_id, [])
-            profile_derivations = derivations.get(placement.item_origin_profile_id, [])
-            matching_decisions = [
-                decision
-                for decision in decisions.get(placement.extraction_acceptance_id, [])
-                if revision is not None
-                and revision.registration_key
-                == (f"legacy-item-promotion:{decision.acceptance_id}:{decision.item_proposal_id}")
-            ]
-            invalid = (
-                analysis is None
-                or not isinstance(source, ApprovedItemKnowledgeSourceV2)
-                or source.source_class != "PAST_EXAM"
-                or source.item_id != placement.item_id
-                or source.item_revision_id != placement.item_revision_id
-                or profile is None
-                or profile.item_id != placement.item_id
-                or profile.item_revision_id != placement.item_revision_id
-                or profile.profile_sha256 != placement.item_origin_profile_sha256
-                or profile.source_domain != "EXTERNAL_INSTITUTION"
-                or len(profile_occurrences) != 1
-                or profile_occurrences[0].assessment_occurrence_id
-                != placement.assessment_occurrence_id
-                or profile_occurrences[0].assessment_occurrence_revision_id
-                != placement.assessment_occurrence_revision_id
-                or profile_occurrences[0].occurrence_revision_sha256
-                != placement.assessment_occurrence_revision_sha256
-                or len(profile_derivations) != 1
-                or profile_derivations[0].logical_id != placement.assessment_source_bundle_id
-                or profile_derivations[0].revision_id
-                != placement.assessment_source_bundle_revision_id
-                or profile_derivations[0].manifest_sha256
-                != placement.assessment_source_bundle_sha256
-                or profile_derivations[0].relation != "DIGITIZED_FROM"
-                or occurrence is None
-                or occurrence.schema_version != "assessment-occurrence-revision/2.0"
-                or occurrence.assessment_occurrence_id != placement.assessment_occurrence_id
-                or occurrence.revision_sha256 != placement.assessment_occurrence_revision_sha256
-                or occurrence.revision_state != "REVIEWED"
-                or occurrence.display_label != placement.occurrence_display_label
-                or occurrence.administration_year != placement.administration_year
-                or occurrence.administration_month != placement.administration_month
-                or occurrence.target_school_level != placement.target_school_level
-                or occurrence.target_grade != placement.target_grade
-                or occurrence.subject_key != placement.subject_key
-                or logical is None
-                or logical.lifecycle_state != "ACTIVE"
-                or logical.current_revision_id != placement.assessment_occurrence_revision_id
-                or acceptance is None
-                or acceptance.acceptance_sha256 != placement.extraction_acceptance_sha256
-                or acceptance.state != "ACCEPTED"
-                or acceptance.coverage_state != "COMPLETE"
-                or bundle is None
-                or bundle.assessment_source_bundle_id != placement.assessment_source_bundle_id
-                or bundle.bundle_manifest_sha256 != placement.assessment_source_bundle_sha256
-                or bundle.state != "REVIEWED"
-                or bundle.assessment_occurrence_id != placement.assessment_occurrence_id
-                or bundle.assessment_occurrence_revision_id
-                != placement.assessment_occurrence_revision_id
-                or profile.rights_policy_id != bundle.rights_policy_id
-                or profile.rights_policy_revision_id != bundle.rights_policy_revision_id
-                or profile.rights_policy_sha256 != bundle.rights_policy_sha256
-                or occurrence.rights_policy_id != bundle.rights_policy_id
-                or occurrence.rights_policy_revision_id != bundle.rights_policy_revision_id
-                or occurrence.rights_policy_sha256 != bundle.rights_policy_sha256
-                or revision is None
-                or revision.revision_state != "APPROVED"
-                or revision.item_id != placement.item_id
-                or len(matching_decisions) != 1
-                or matching_decisions[0].decision not in {"ACCEPT", "CORRECT_AND_ACCEPT"}
-                or matching_decisions[0].item_number != placement.item_number
-                or (
-                    placement.target_school_level == "HIGH_SCHOOL"
-                    and placement.target_grade == 1
-                    and placement.administration_month == 3
-                )
-            )
-            if invalid:
+            resolution = resolution_by_run.get(placement.analysis_run_id)
+            if (
+                resolution is None
+                or resolution.status != PastExamOriginStatus.ELIGIBLE
+                or placement.item_id != resolution.item_id
+                or placement.item_revision_id != resolution.item_revision_id
+                or placement.item_origin_profile_id != resolution.item_origin_profile_id
+                or placement.item_origin_profile_sha256 != resolution.item_origin_profile_sha256
+                or placement.extraction_acceptance_id != resolution.extraction_acceptance_id
+                or placement.extraction_acceptance_sha256 != resolution.extraction_acceptance_sha256
+                or placement.assessment_source_bundle_id != resolution.assessment_source_bundle_id
+                or placement.assessment_source_bundle_revision_id
+                != resolution.assessment_source_bundle_revision_id
+                or placement.assessment_source_bundle_sha256
+                != resolution.assessment_source_bundle_sha256
+                or placement.assessment_occurrence_id != resolution.assessment_occurrence_id
+                or placement.assessment_occurrence_revision_id
+                != resolution.assessment_occurrence_revision_id
+                or placement.assessment_occurrence_revision_sha256
+                != resolution.assessment_occurrence_revision_sha256
+                or placement.occurrence_display_label != resolution.occurrence_display_label
+                or placement.administration_year != resolution.administration_year
+                or placement.administration_month != resolution.administration_month
+                or placement.target_school_level != resolution.target_school_level
+                or placement.target_grade != resolution.target_grade
+                or placement.subject_key != resolution.subject_key
+                or placement.item_number != resolution.item_number
+            ):
                 raise KnowledgeGraphPublicationError(
                     "KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_INVALID",
-                    "assessment Item placement does not resolve to reviewed canonical evidence",
+                    "assessment Item placement differs from reviewed canonical evidence",
                 )
 
     @staticmethod
