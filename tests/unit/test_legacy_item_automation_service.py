@@ -237,6 +237,39 @@ def test_automatic_learning_refills_second_position_while_first_is_running() -> 
     service.learning.promote_and_schedule.assert_called_once()
 
 
+def test_duplicate_batch_membership_reconciles_once_and_refills_second_position() -> None:
+    engine, service = _query_backed_service(())
+    try:
+        run_id = "analysisrun_" + "4" * 32
+        _insert_terminal(engine, ordinal=1, analysis_run_id=run_id, state="RUNNING")
+        second_batch_id = "legacybatch_" + "2" * 32
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO legacy_item_extraction_batch_work_units
+                        (acceptance_id, extraction_batch_id)
+                    VALUES (:acceptance_id, :batch_id)
+                    """
+                ),
+                {"acceptance_id": "acceptance-1", "batch_id": second_batch_id},
+            )
+        service.extraction_batch_ids = ("legacybatch_" + "1" * 32, second_batch_id)
+        delattr(service, "_active_analyses")
+        service._retryable_analysis = cast(Any, lambda: None)
+        service._candidate = cast(Any, _candidate)
+        _guard(service)
+
+        assert service.advance_once() is True
+
+        service.analyses.reconcile.assert_called_once()
+        command = service.analyses.reconcile.call_args.args[0]
+        assert command.analysis_run_id == run_id
+        service.learning.promote_and_schedule.assert_called_once()
+    finally:
+        engine.dispose()
+
+
 def test_automatic_learning_accepts_validated_review_state_without_human_record() -> None:
     service = object.__new__(LegacyItemAutomaticLearningService)
     service.analyses = Mock()

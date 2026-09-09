@@ -251,9 +251,14 @@ class LegacyItemAutomaticLearningService:
             + LegacyItemExtractionDecisionRecord.item_proposal_id
         )
         with self.sessions() as session:
-            runs = tuple(
-                session.scalars(
-                    select(KnowledgeAnalysisRunRecord)
+            rows = tuple(
+                session.execute(
+                    select(
+                        KnowledgeAnalysisRunRecord.analysis_run_id,
+                        KnowledgeAnalysisRunRecord.created_by_operator_id,
+                        KnowledgeAnalysisRunRecord.state,
+                    )
+                    .distinct()
                     .join(
                         ItemRevisionRecord,
                         ItemRevisionRecord.item_revision_id
@@ -283,7 +288,8 @@ class LegacyItemAutomaticLearningService:
                 )
             )
             return tuple(
-                (run.analysis_run_id, run.created_by_operator_id, run.state) for run in runs
+                (str(row.analysis_run_id), str(row.created_by_operator_id), str(row.state))
+                for row in rows
             )
 
     def _retryable_analysis(self) -> tuple[str, str] | None:
