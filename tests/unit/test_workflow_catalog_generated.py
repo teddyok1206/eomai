@@ -6,6 +6,11 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from eom_catalog_contracts import resolve_integrated_science_curriculum_scope
+from eom_catalog_contracts.mock_exam_production_plan import (
+    CONTENT_TEAM_ITEM_GUIDANCE,
+    CONTENT_TEAM_ITEM_GUIDANCE_SHA256,
+)
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.vector_stimulus import RenderedVectorStimulus
 from eom_catalog_service.workflow_catalog import (
@@ -46,6 +51,8 @@ AUTHORING_V6 = _pointer("authoring", "9", "authoring-result@6.0")
 IMAGE_V6 = _pointer("image", "4", "image-result@6.0")
 AUTHORING_V8 = _pointer("authoring", "2", "authoring-result@8.0")
 IMAGE_V8 = _pointer("image", "3", "image-result@8.0")
+AUTHORING_V10 = _pointer("authoring", "c", "authoring-result@10.0")
+IMAGE_V10 = _pointer("image", "d", "image-result@10.0")
 
 
 def _image_brief() -> dict[str, object]:
@@ -442,6 +449,44 @@ def _content_team_image_result_v8() -> dict[str, object]:
     }
 
 
+def _content_team_authoring_result_v10() -> dict[str, object]:
+    result = json.loads(json.dumps(_content_team_authoring_result_v8()))
+    result["protocol_version"] = "workflow-role/1.20.0"
+    result["job_id"] = AUTHORING_V10.job_id
+    result["artifact"]["logical_artifact_id"] = AUTHORING_V10.logical_artifact_id
+    result["artifact"]["revision_id"] = AUTHORING_V10.revision_id
+    result["output"]["draft"]["schema_version"] = "3.0"
+    result["output"]["metadata"]["knowledge_source_mode"] = "graph_grounded"
+    result["output"]["evidence_usage"] = {
+        "schema_version": "evidence-usage/1.0",
+        "evidence_bundle_id": "evidence_" + "1" * 32,
+        "evidence_bundle_revision_id": "evidencerev_" + "2" * 32,
+        "retrieval_request_id": "retrieval_" + "3" * 32,
+        "graph_snapshot_revision_id": "graphrev_" + "4" * 32,
+        "evidence_manifest_sha256": "sha256:" + "5" * 64,
+        "evidence_context_sha256": "sha256:" + "6" * 64,
+        "citations": [
+            {
+                "evidence_id": "evidenceitem_" + "7" * 32,
+                "anchor_ids": ["anchor_concept"],
+                "application": "CONCEPT_GROUNDING",
+                "application_description": "핵심 과학 개념을 문항의 발문에 적용했다.",
+                "draft_json_paths": ["/stem"],
+            }
+        ],
+    }
+    return cast(dict[str, object], result)
+
+
+def _content_team_image_result_v10() -> dict[str, object]:
+    result = json.loads(json.dumps(_content_team_image_result_v8()))
+    result["protocol_version"] = "workflow-role/1.20.0"
+    result["job_id"] = IMAGE_V10.job_id
+    result["artifact"]["logical_artifact_id"] = IMAGE_V10.logical_artifact_id
+    result["artifact"]["revision_id"] = IMAGE_V10.revision_id
+    return cast(dict[str, object], result)
+
+
 class _Artifacts:
     def __init__(self, *, changed_y: bool = False) -> None:
         self.values = {
@@ -455,11 +500,15 @@ class _Artifacts:
             IMAGE_V6.revision_id: _image_result_v6(),
             AUTHORING_V8.revision_id: _content_team_authoring_result_v8(),
             IMAGE_V8.revision_id: _content_team_image_result_v8(),
+            AUTHORING_V10.revision_id: _content_team_authoring_result_v10(),
+            IMAGE_V10.revision_id: _content_team_image_result_v10(),
         }
         self.commits: list[dict[str, Any]] = []
         self.verified: list[dict[str, str]] = []
+        self.loaded: list[dict[str, str | int]] = []
 
     def load_json_revision(self, **pointer: str | int) -> dict[str, Any]:
+        self.loaded.append(pointer)
         return cast(dict[str, Any], self.values[str(pointer["revision_id"])])
 
     def commit_file_set(self, **values: Any) -> SimpleNamespace:
@@ -549,6 +598,47 @@ def _request() -> WorkflowRequest:
     )
 
 
+def _grounded_content_team_request() -> WorkflowRequest:
+    scope = resolve_integrated_science_curriculum_scope("eom.is.middle.1-1")
+    return WorkflowRequest.model_validate(
+        {
+            "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+            "image_mode": "required",
+            "content_pack": {"pack_key": "generated-knowledge-item", "environment": "test"},
+            "profiles": {
+                "authoring": "generated-knowledge-authoring",
+                "image": "generated-stimulus-drawing",
+                "review": "generated-knowledge-review",
+                "registration": "generated-structured-registration",
+            },
+            "source_intake": {"batch_ids": []},
+            "registry_intent": {"mode": "CREATE_ITEM"},
+            "item_brief": {
+                "schema_version": "3.0",
+                "subject": "통합과학",
+                "topic": "시간과 공간",
+                "task_type": "TEXT",
+                "difficulty": "MEDIUM",
+                "authoring_guidance": CONTENT_TEAM_ITEM_GUIDANCE,
+                "authoring_guidance_sha256": CONTENT_TEAM_ITEM_GUIDANCE_SHA256,
+                "curriculum_scope": scope.model_dump(mode="json"),
+                "mock_exam_slot": None,
+                "original_request_sha256": "0" * 64,
+            },
+            "execution_preset_key": "knowledge-grounded-item",
+            "educational_retrieval": {
+                "schema_version": "educational-retrieval-requirement/1.0",
+                "corpus_key": "integrated-science-textbooks",
+                "query_kind": "ITEM_PREPARATION",
+                "curriculum_root_key": scope.graph_root_stable_key,
+                "topic_keys": [],
+                "required_item_elements": ["choice", "paragraph"],
+                "source_classes": ["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"],
+            },
+        }
+    )
+
+
 def test_image_role_materializes_one_pinned_png_without_payload_in_result(tmp_path: Path) -> None:
     service, artifacts = _service(tmp_path)
     pointer = service.materialize_generated_stimulus(
@@ -624,6 +714,58 @@ def test_content_team_v8_zero_image_decision_never_materializes_an_artifact(
     assert service.content_team_image_slot_count(workflow=_workflow(), authoring=AUTHORING_V8) == 0
     assert service._content_team_image_components(_workflow(), (AUTHORING_V8,)) == ()
     assert artifacts.commits == []
+
+
+def test_content_team_v10_parses_grounded_authoring_image_pair_and_content_v3(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    svg = tmp_path / "content-team-v10.svg"
+    png = tmp_path / "content-team-v10.png"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"></svg>\n', encoding="utf-8")
+    png.write_bytes(b"content-team-v10-png")
+    monkeypatch.setattr(
+        "eom_catalog_service.workflow_catalog.render_generated_vector_stimulus",
+        lambda *_args, **_kwargs: RenderedVectorStimulus(
+            svg,
+            png,
+            "eom-safe-svg-compositor/1.1",
+            "rsvg-convert version 2.58.0",
+            "sha256:" + "a" * 64,
+            "sha256:" + "b" * 64,
+            "sha256:" + "c" * 64,
+        ),
+    )
+
+    assert ROLE_BY_RESULT_SCHEMA["authoring-result@10.0"] == "authoring"
+    assert ROLE_BY_RESULT_SCHEMA["image-result@10.0"] == "image"
+    assert service.content_team_image_slot_count(workflow=_workflow(), authoring=AUTHORING_V10) == 2
+    stimuli = service.materialize_content_team_stimuli(
+        workflow=_workflow(), artifacts=(AUTHORING_V10, IMAGE_V10)
+    )
+    component = service._content_team_knowledge_item_content(
+        _workflow(),
+        _grounded_content_team_request(),
+        (AUTHORING_V10,),
+    )
+
+    assert [(pointer.visual_ordinal, pointer.label) for pointer in stimuli] == [
+        (0, "(가)"),
+        (1, "(나)"),
+    ]
+    assert component.schema_ref == "eom.assessment.item-content/3.0"
+    assert component.metadata["knowledge_source_mode"] == "graph_grounded"
+    assert {
+        "artifact_id": AUTHORING_V10.logical_artifact_id,
+        "revision_id": AUTHORING_V10.revision_id,
+        "content_hash": AUTHORING_V10.content_hash,
+    } in artifacts.loaded
+    content_commit = artifacts.commits[-1]
+    content = json.loads(
+        Path(content_commit["files"]["assessment-item-content.json"]).read_text(encoding="utf-8")
+    )
+    assert content["schema_version"] == "3.0"
 
 
 def test_image_role_cannot_change_the_authoring_drawing_contract(tmp_path: Path) -> None:

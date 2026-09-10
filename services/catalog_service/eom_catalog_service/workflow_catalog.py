@@ -46,8 +46,10 @@ from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV7,
     ContentTeamAuthoringRoleResultV8,
     ContentTeamAuthoringRoleResultV9,
+    ContentTeamAuthoringRoleResultV10,
     ContentTeamImageRoleResultV8,
     ContentTeamImageRoleResultV9,
+    ContentTeamImageRoleResultV10,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
     GeneratedAuthoringRoleResultV5,
@@ -81,6 +83,11 @@ from eom_catalog_service.artifacts import (
     CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION,
     CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH,
     CatalogArtifactService,
+)
+from eom_catalog_service.evidence_usage_receipts import (
+    EvidenceUsageReceiptPair,
+    EvidenceUsageReceiptResolver,
+    OrchestratorEvidenceUsageReceiptResolver,
 )
 from eom_catalog_service.generated_stimulus import (
     BACKGROUND_MEMBER,
@@ -171,6 +178,10 @@ ROLE_BY_RESULT_SCHEMA = {
     "image-result@9.0": "image",
     "review-result@9.0": "review",
     "registration-result@9.0": "item_management",
+    "authoring-result@10.0": "authoring",
+    "image-result@10.0": "image",
+    "review-result@10.0": "review",
+    "registration-result@10.0": "item_management",
     "review-result@7.0": "review",
     "registration-result@7.0": "item_management",
     "knowledge-analysis-proposal-result@1.0": "support",
@@ -283,7 +294,13 @@ def _create_runtime_directory(parent: Path, name: str) -> Path:
 
 
 class WorkflowCatalogService:
-    def __init__(self, engine: Engine, settings: CatalogSettings | None = None) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        settings: CatalogSettings | None = None,
+        *,
+        evidence_usage_receipts: EvidenceUsageReceiptResolver | None = None,
+    ) -> None:
         self.settings = settings or CatalogSettings.from_environment()
         self.sessions = build_session_factory(engine)
         self.artifacts = CatalogArtifactService(engine, self.settings)
@@ -291,6 +308,9 @@ class WorkflowCatalogService:
         self.registry = RegistryService(engine, self.settings)
         self.stimulus = KnowledgeStimulusService(engine, self.settings)
         self.local_image = FixedLocalImageProviderAdapter(self.settings)
+        self.evidence_usage_receipts = (
+            evidence_usage_receipts or OrchestratorEvidenceUsageReceiptResolver(self.sessions)
+        )
 
     def bind_request(
         self,
@@ -881,6 +901,7 @@ class WorkflowCatalogService:
         if authoring.step_key != "authoring" or authoring.result_schema not in {
             "authoring-result@8.0",
             "authoring-result@9.0",
+            "authoring-result@10.0",
         }:
             raise ValueError(
                 "image decision does not reference a supported content-team authoring result"
@@ -888,7 +909,9 @@ class WorkflowCatalogService:
         _, parsed = self._load_upstream_result(workflow, authoring)
         if not isinstance(
             parsed,
-            ContentTeamAuthoringRoleResultV8 | ContentTeamAuthoringRoleResultV9,
+            ContentTeamAuthoringRoleResultV8
+            | ContentTeamAuthoringRoleResultV9
+            | ContentTeamAuthoringRoleResultV10,
         ):
             raise ValueError("content-team image decision result type is invalid")
         return sum(visual.kind == "IMAGE" for visual in parsed.output.draft.visuals)
@@ -906,7 +929,12 @@ class WorkflowCatalogService:
                 pointer
                 for pointer in artifacts
                 if pointer.step_key == "authoring"
-                and pointer.result_schema in {"authoring-result@8.0", "authoring-result@9.0"}
+                and pointer.result_schema
+                in {
+                    "authoring-result@8.0",
+                    "authoring-result@9.0",
+                    "authoring-result@10.0",
+                }
             ),
             None,
         )
@@ -914,6 +942,7 @@ class WorkflowCatalogService:
             {
                 "authoring-result@8.0": "image-result@8.0",
                 "authoring-result@9.0": "image-result@9.0",
+                "authoring-result@10.0": "image-result@10.0",
             }.get(authoring.result_schema)
             if authoring is not None
             else None
@@ -938,6 +967,11 @@ class WorkflowCatalogService:
             image_drawings = image_result.output.drawings
         elif isinstance(authoring_result, ContentTeamAuthoringRoleResultV9):
             if not isinstance(image_result, ContentTeamImageRoleResultV9):
+                raise ValueError("content-team image result types are invalid")
+            authoring_draft = authoring_result.output.draft
+            image_drawings = image_result.output.drawings
+        elif isinstance(authoring_result, ContentTeamAuthoringRoleResultV10):
+            if not isinstance(image_result, ContentTeamImageRoleResultV10):
                 raise ValueError("content-team image result types are invalid")
             authoring_draft = authoring_result.output.draft
             image_drawings = image_result.output.drawings
@@ -1094,6 +1128,10 @@ class WorkflowCatalogService:
         request: WorkflowRequest,
         artifacts: tuple[ArtifactPointer, ...],
     ) -> RegistrationOutcome:
+        evidence_receipts = self._require_evidence_usage_receipts(
+            request=request,
+            artifacts=artifacts,
+        )
         pack_snapshot = cast(dict[str, Any], workflow.runtime_context["content_pack"])
         intent = cast(dict[str, Any], workflow.runtime_context["registry_intent"])
         source_intake = cast(dict[str, Any], workflow.runtime_context["source_intake"])
@@ -1116,6 +1154,10 @@ class WorkflowCatalogService:
                 artifact_revision_id=pointer.revision_id,
                 sha256=pointer.content_hash,
                 logical_name=f"{pointer.step_key}-result",
+                metadata=self._result_component_evidence_metadata(
+                    pointer,
+                    evidence_receipts,
+                ),
             )
             for pointer in artifacts
             if pointer.step_key in COMPONENT_TYPES
@@ -1125,10 +1167,17 @@ class WorkflowCatalogService:
             "KNOWLEDGE_ITEM_REQUEST",
             "GENERATED_KNOWLEDGE_ITEM_REQUEST",
         }:
+            # The receipt gates trusted DB provenance; content assembly independently
+            # dereferences the pinned revision/hash and validates its exact role schema.
             components = (*components, self._knowledge_item_content(workflow, request, artifacts))
             if any(
                 pointer.step_key == "authoring"
-                and pointer.result_schema in {"authoring-result@8.0", "authoring-result@9.0"}
+                and pointer.result_schema
+                in {
+                    "authoring-result@8.0",
+                    "authoring-result@9.0",
+                    "authoring-result@10.0",
+                }
                 for pointer in artifacts
             ):
                 components = (
@@ -1222,6 +1271,58 @@ class WorkflowCatalogService:
             manifest_artifact_revision_id=revision.manifest_artifact_revision_id,
             manifest_sha256=revision.manifest_sha256,
         )
+
+    def _require_evidence_usage_receipts(
+        self,
+        *,
+        request: WorkflowRequest,
+        artifacts: tuple[ArtifactPointer, ...],
+    ) -> EvidenceUsageReceiptPair | None:
+        """Fail before derived artifact writes when a grounded @10 result lacks proof."""
+
+        authoring = tuple(
+            pointer
+            for pointer in artifacts
+            if pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@10.0"
+        )
+        review = tuple(
+            pointer
+            for pointer in artifacts
+            if pointer.step_key == "review" and pointer.result_schema == "review-result@10.0"
+        )
+        has_v10 = any(
+            pointer.result_schema
+            in {
+                "authoring-result@10.0",
+                "image-result@10.0",
+                "review-result@10.0",
+                "registration-result@10.0",
+            }
+            for pointer in artifacts
+        )
+        if not has_v10:
+            return None
+        if len(authoring) != 1 or len(review) != 1:
+            raise ValueError("@10 registration requires one exact authoring/review result pair")
+        if self._knowledge_source_mode(request) != GRAPH_GROUNDED_KNOWLEDGE_SOURCE_MODE:
+            return None
+        return self.evidence_usage_receipts.resolve_pair(
+            authoring=authoring[0],
+            review=review[0],
+        )
+
+    @staticmethod
+    def _result_component_evidence_metadata(
+        pointer: ArtifactPointer,
+        receipts: EvidenceUsageReceiptPair | None,
+    ) -> dict[str, str]:
+        if receipts is None:
+            return {}
+        if pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@10.0":
+            return {"evidence_usage_validation_receipt_sha256": receipts.authoring.receipt_sha256}
+        if pointer.step_key == "review" and pointer.result_schema == "review-result@10.0":
+            return {"evidence_usage_validation_receipt_sha256": receipts.review.receipt_sha256}
+        return {}
 
     @staticmethod
     def _require_compatibility(
@@ -1422,6 +1523,7 @@ class WorkflowCatalogService:
                 "authoring-result@7.0",
                 "authoring-result@8.0",
                 "authoring-result@9.0",
+                "authoring-result@10.0",
             }
             for pointer in artifacts
         ):
@@ -1505,7 +1607,12 @@ class WorkflowCatalogService:
                 pointer
                 for pointer in artifacts
                 if pointer.step_key == "authoring"
-                and pointer.result_schema in {"authoring-result@8.0", "authoring-result@9.0"}
+                and pointer.result_schema
+                in {
+                    "authoring-result@8.0",
+                    "authoring-result@9.0",
+                    "authoring-result@10.0",
+                }
             ),
             None,
         )
@@ -1514,7 +1621,9 @@ class WorkflowCatalogService:
         _, parsed = self._load_upstream_result(workflow, authoring)
         if not isinstance(
             parsed,
-            ContentTeamAuthoringRoleResultV8 | ContentTeamAuthoringRoleResultV9,
+            ContentTeamAuthoringRoleResultV8
+            | ContentTeamAuthoringRoleResultV9
+            | ContentTeamAuthoringRoleResultV10,
         ):
             raise ValueError("content-team authoring result type is invalid")
         slots = tuple(
@@ -1536,9 +1645,13 @@ class WorkflowCatalogService:
                 if pointer.step_key == "image"
                 and pointer.result_schema
                 == (
-                    "image-result@9.0"
-                    if isinstance(parsed, ContentTeamAuthoringRoleResultV9)
-                    else "image-result@8.0"
+                    "image-result@10.0"
+                    if isinstance(parsed, ContentTeamAuthoringRoleResultV10)
+                    else (
+                        "image-result@9.0"
+                        if isinstance(parsed, ContentTeamAuthoringRoleResultV9)
+                        else "image-result@8.0"
+                    )
                 )
             ),
             None,
@@ -1619,6 +1732,7 @@ class WorkflowCatalogService:
                     "authoring-result@7.0",
                     "authoring-result@8.0",
                     "authoring-result@9.0",
+                    "authoring-result@10.0",
                 }
             ),
             None,
@@ -1630,10 +1744,14 @@ class WorkflowCatalogService:
             parsed,
             ContentTeamAuthoringRoleResultV7
             | ContentTeamAuthoringRoleResultV8
-            | ContentTeamAuthoringRoleResultV9,
+            | ContentTeamAuthoringRoleResultV9
+            | ContentTeamAuthoringRoleResultV10,
         ):
             raise ValueError("content-team authoring result type is invalid")
-        is_v3 = isinstance(parsed, ContentTeamAuthoringRoleResultV9)
+        is_v3 = isinstance(
+            parsed,
+            ContentTeamAuthoringRoleResultV9 | ContentTeamAuthoringRoleResultV10,
+        )
         content: AssessmentItemContentV2 | AssessmentItemContentV3 = parsed.output.draft
         expected_source_mode = self._knowledge_source_mode(request)
         if is_v3 and parsed.output.metadata.knowledge_source_mode != expected_source_mode:
@@ -1917,7 +2035,12 @@ class WorkflowCatalogService:
         canonical_result = (
             parsed.model_dump(mode="json")
             if pointer.result_schema
-            in {"authoring-result@7.0", "authoring-result@8.0", "authoring-result@9.0"}
+            in {
+                "authoring-result@7.0",
+                "authoring-result@8.0",
+                "authoring-result@9.0",
+                "authoring-result@10.0",
+            }
             else result
         )
         return canonical_result, parsed
