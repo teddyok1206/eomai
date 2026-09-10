@@ -135,7 +135,7 @@
       "anyOf": [{"const": true}, {"type": "null"}]
     },
     "receipt_sha256": {
-      "description": "SHA-256 of RFC 8785-style canonical JSON for this receipt with receipt_sha256 omitted, using the repository content_sha256 implementation.",
+      "description": "SHA-256 of repository canonical JSON (UTF-8, sorted keys, compact separators, floats forbidden) with receipt_sha256 omitted.",
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     }

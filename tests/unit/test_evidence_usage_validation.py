@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from collections.abc import Mapping
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -16,6 +17,7 @@ from eom_orchestrator.control_models import (
 )
 from eom_orchestrator.evidence_usage_validation import (
     EvidenceUsageValidationError,
+    _resolve_authoring_result,
     _validate_citations,
     _validated_context_evidence_ids,
     canonical_citation_set_sha256,
@@ -24,7 +26,9 @@ from eom_orchestrator.evidence_usage_validation import (
     validate_evidence_usage_for_commit,
 )
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
+from eom_orchestrator.orchestrator import Orchestrator
 from eom_workflow import (
+    ControlSchemaError,
     EvidenceResultArtifactPointer,
     validate_control_contract,
 )
@@ -327,6 +331,31 @@ def test_graph_claim_marks_atomic_commit_receipt_as_required(
     assert commit_calls == []
 
 
+def test_orchestrator_validates_receipt_before_nas_and_persists_it_atomically() -> None:
+    source = inspect.getsource(Orchestrator.submit_workflow_role)
+    branch_start = source.index(
+        'if result_schema in {"authoring-result@10.0", "review-result@10.0"}'
+    )
+    transaction_start = source.index("with transaction(self.sessions) as session:", branch_start)
+    precommit = source[branch_start:transaction_start]
+    assert precommit.index("validate_evidence_usage_for_commit(") < precommit.index(
+        "evidence_receipt_event_data("
+    )
+    assert precommit.index("evidence_receipt_event_data(") < precommit.index(
+        'self._transition(job_id, JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED")'
+    )
+    assert precommit.index("evidence_receipt_event_data(") < precommit.index("commit_artifact(")
+
+    transaction_end = source.index("except WorkflowSchemaError", transaction_start)
+    atomic_commit = source[transaction_start:transaction_end]
+    assert atomic_commit.index("create_artifact_records(") < atomic_commit.index(
+        "**evidence_event_data"
+    )
+    assert atomic_commit.index("**evidence_event_data") < atomic_commit.index("transition_job(")
+    failure_boundary = source[source.index("except EvidenceUsageValidationError") :]
+    assert "ErrorCode.WORKER_RESULT_INVALID" in failure_boundary
+
+
 def test_at10_result_cannot_reinterpret_historical_v3_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -389,6 +418,36 @@ def test_authorization_contract_failure_is_normalized_as_result_validation(
     ) as captured:
         _validate_authoring(fixture, result)
     assert captured.value.code == "EVIDENCE_MATERIAL_RESOLUTION_FAILED"
+
+
+def test_non_object_plan_is_normalized_as_invalid_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+    result = _authoring_result(fixture)
+    record = fixture["session"].records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+    record.canonical_document = []
+
+    with pytest.raises(EvidenceUsageValidationError) as captured:
+        _validate_authoring(fixture, result)
+    assert captured.value.code == "EVIDENCE_PLAN_INVALID"
+
+
+def test_control_schema_resource_failure_is_normalized_as_invalid_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+
+    def unavailable_schema(_name: str, _document: object) -> None:
+        raise ControlSchemaError("installed receipt schema is unavailable")
+
+    monkeypatch.setattr(
+        "eom_orchestrator.evidence_usage_validation.validate_control_contract",
+        unavailable_schema,
+    )
+    with pytest.raises(EvidenceUsageValidationError) as captured:
+        _validate_authoring(fixture, _authoring_result(fixture))
+    assert captured.value.code == "EVIDENCE_RECEIPT_INVALID"
 
 
 @pytest.mark.parametrize(
@@ -507,6 +566,31 @@ def test_usage_model_rejects_noncanonical_citation_collections(
     ):
         with pytest.raises(ValidationError):
             _authoring_result(fixture, citation_changes=changes)
+    document = _authoring_result(fixture).model_dump(mode="json")
+    citations = document["output"]["evidence_usage"]["citations"]
+    citations.append(deepcopy(citations[0]))
+    with pytest.raises(ValidationError, match="sorted unique evidence IDs"):
+        ContentTeamAuthoringRoleResultV10.model_validate(document)
+
+
+def test_usage_model_requires_positive_usage_and_truthful_grounding_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+    avoid_only = _authoring_result(fixture).model_dump(mode="json")
+    avoid_only["output"]["evidence_usage"]["citations"][0]["application"] = "AVOID_COPY_CHECK"
+    with pytest.raises(ValidationError, match="requires a positive citation"):
+        ContentTeamAuthoringRoleResultV10.model_validate(avoid_only)
+
+    graph_without_usage = _authoring_result(fixture).model_dump(mode="json")
+    graph_without_usage["output"]["evidence_usage"] = None
+    with pytest.raises(ValidationError, match="must match knowledge source mode"):
+        ContentTeamAuthoringRoleResultV10.model_validate(graph_without_usage)
+
+    ungrounded_with_usage = _authoring_result(fixture).model_dump(mode="json")
+    ungrounded_with_usage["output"]["metadata"]["knowledge_source_mode"] = "general_model_knowledge"
+    with pytest.raises(ValidationError, match="must match knowledge source mode"):
+        ContentTeamAuthoringRoleResultV10.model_validate(ungrounded_with_usage)
 
 
 def _add_review_step(fixture: dict[str, Any]) -> None:
@@ -558,9 +642,11 @@ def _persist_authoring(
         result=document,
     )
     session.records[(JobRecord, AUTHORING_JOB_ID)] = SimpleNamespace(
+        job_id=AUTHORING_JOB_ID,
+        protocol_version="workflow-role/1.20.0",
         logical_artifact_id=AUTHORING_ARTIFACT_ID,
         revision_id=AUTHORING_REVISION_ID,
-        request={"workflow_id": result.workflow_id},
+        request=_authoring_input(result).model_dump(mode="json"),
     )
     return ArtifactPointer(
         step_key="authoring",
@@ -571,6 +657,53 @@ def _persist_authoring(
         content_hash=content_hash,
         result_schema="authoring-result@10.0",
     )
+
+
+@pytest.mark.parametrize(
+    ("field_path", "value"),
+    [
+        (("job_id",), "job_" + "9" * 32),
+        (("workflow_id",), "workflow_" + "9" * 32),
+        (("step_run_id",), "steprun_" + "9" * 32),
+        (("artifact", "logical_artifact_id"), "artifact_" + "9" * 32),
+        (("artifact", "revision_id"), "rev_" + "9" * 32),
+    ],
+)
+def test_authoring_result_envelope_must_match_exact_pointer_and_job_request(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field_path: tuple[str, ...],
+    value: str,
+) -> None:
+    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+    authoring = _authoring_result(fixture)
+    pointer = _persist_authoring(fixture, authoring)
+    revision = fixture["session"].records[(ArtifactRevisionRecord, AUTHORING_REVISION_ID)]
+    document = deepcopy(revision.result)
+    target = document
+    for segment in field_path[:-1]:
+        target = target[segment]
+    target[field_path[-1]] = value
+    payload = canonical_json_bytes(document)
+    content_hash = sha256_bytes(payload)
+    (Path(revision.nas_path) / "result.json").write_bytes(payload)
+    revision.result = document
+    revision.content_hash = content_hash
+    revision.content_bytes = len(payload)
+    revision.manifest["content_hash"] = content_hash
+    revision.manifest["content_bytes"] = len(payload)
+    pointer = ArtifactPointer.model_validate(
+        pointer.model_dump(mode="json") | {"content_hash": content_hash}
+    )
+
+    with pytest.raises(EvidenceUsageValidationError) as captured:
+        _resolve_authoring_result(
+            fixture["session"],
+            pointer=pointer,
+            workflow_id=authoring.workflow_id,
+            canonical_artifact_root=fixture["artifact_root"],
+        )
+    assert captured.value.code == "EVIDENCE_AUTHORING_RESULT_IDENTITY_MISMATCH"
 
 
 def _review_result(
@@ -714,7 +847,9 @@ def test_review_rejects_stale_authoring_pointer_hash(
         _validate_review(fixture, worker_input, result)
 
 
-@pytest.mark.parametrize("drift", ["nas_path", "result_bytes", "revision_symlink"])
+@pytest.mark.parametrize(
+    "drift", ["nas_path", "result_bytes", "logical_symlink", "revision_symlink"]
+)
 def test_review_rejects_stale_authoring_storage(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drift: str
 ) -> None:
@@ -728,11 +863,16 @@ def test_review_rejects_stale_authoring_storage(
         revision.nas_path = str(fixture["artifact_root"] / "wrong")
     elif drift == "result_bytes":
         (Path(revision.nas_path) / "result.json").write_bytes(b"{}")
-    else:
+    elif drift == "revision_symlink":
         revision_root = Path(revision.nas_path)
         actual_root = revision_root.with_name(revision_root.name + "-actual")
         revision_root.rename(actual_root)
         revision_root.symlink_to(actual_root, target_is_directory=True)
+    else:
+        logical_root = Path(revision.nas_path).parent
+        actual_root = logical_root.with_name(logical_root.name + "-actual")
+        logical_root.rename(actual_root)
+        logical_root.symlink_to(actual_root, target_is_directory=True)
 
     with pytest.raises(EvidenceUsageValidationError):
         _validate_review(fixture, worker_input, result)

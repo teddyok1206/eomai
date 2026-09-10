@@ -90,6 +90,8 @@ The receipt has discriminated authoring/review shapes. Authoring carries its res
 review additionally pins the upstream authoring pointer and both equal citation-set hashes. Its
 `receipt_sha256` is `content_sha256` over the canonical compact UTF-8 JSON object with sorted keys
 and `receipt_sha256` omitted. A supplied digest is compared, never repaired.
+Each citation-set hash is domain-separated as `content_sha256({"schema_version":
+"evidence-usage-citation-set/1.0", "citations": [...]})` over the exact canonical typed tuple.
 
 ## Access patterns and data structures
 

@@ -354,6 +354,12 @@ def test_workflow_role_119_has_exact_inputs_all_four_v9_outputs_and_bundle_hash(
         assert validate_role_result(result.model_dump(mode="json"), role, schema_id) == result
 
 
+def test_workflow_role_120_schema_bundle_hash_is_immutable() -> None:
+    assert role_schema_bundle_hash("workflow-role/1.20.0") == (
+        "sha256:4fe0172ef46c490ccb9c82aa7360c12c1a52c0f2644757190236b9c81fcb459c"
+    )
+
+
 def test_v9_unsafe_svg_is_rejected_by_schema_and_typed_acceptance() -> None:
     unsafe = _image_result().model_dump(mode="json")
     unsafe["output"]["drawings"][0]["drawing"]["svg_overlay"] = (

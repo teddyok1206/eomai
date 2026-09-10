@@ -18,6 +18,7 @@ from eom_catalog_contracts import (
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_workflow import (
     AuthoringEvidenceUsageValidationReceipt,
+    ControlSchemaError,
     EvidenceResultArtifactPointer,
     ResolvedExecutionPlanV3,
     ReviewEvidenceUsageValidationReceipt,
@@ -32,6 +33,7 @@ from eom_workflow.models import (
     RoleWorkerInput,
 )
 from eom_workflow.schemas import WorkflowSchemaError, validate_role_result
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -152,6 +154,26 @@ def validate_evidence_usage_for_commit(
 
     if not isinstance(result, ContentTeamAuthoringRoleResultV10 | ContentTeamReviewRoleResultV10):
         return None
+    expected_result_schema = (
+        "authoring-result@10.0"
+        if isinstance(result, ContentTeamAuthoringRoleResultV10)
+        else "review-result@10.0"
+    )
+    if (
+        worker_input.protocol_version != "workflow-role/1.20.0"
+        or worker_input.role != result.role
+        or worker_input.job_id != result.job_id
+        or worker_input.workflow_id != result.workflow_id
+        or worker_input.step_run_id != result.step_run_id
+        or worker_input.artifact != result.artifact
+        or result_artifact.logical_artifact_id != result.artifact.logical_artifact_id
+        or result_artifact.revision_id != result.artifact.revision_id
+        or result_artifact.result_schema != expected_result_schema
+    ):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_RESULT_IDENTITY_MISMATCH",
+            "@10 result differs from its exact worker input or pending Artifact",
+        )
     if plan_id is None:
         _require_no_evidence_claim(result)
         return None
@@ -160,11 +182,16 @@ def validate_evidence_usage_for_commit(
         raise EvidenceUsageValidationError(
             "EVIDENCE_PLAN_MISSING", "evidence validation plan is missing"
         )
-    if plan_record.canonical_document.get("schema_version") != "resolved-execution-plan/3.0":
+    plan_document = plan_record.canonical_document
+    if not isinstance(plan_document, dict):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_PLAN_INVALID", "evidence validation plan is invalid"
+        )
+    if plan_document.get("schema_version") != "resolved-execution-plan/3.0":
         _require_no_evidence_claim(result)
         return None
     try:
-        plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
+        plan = ResolvedExecutionPlanV3.model_validate(plan_document)
     except ValidationError as exc:
         raise EvidenceUsageValidationError(
             "EVIDENCE_PLAN_INVALID", "evidence validation plan is invalid"
@@ -442,19 +469,36 @@ def _resolve_authoring_result(
     logical = session.get(ArtifactRecord, pointer.logical_artifact_id)
     revision = session.get(ArtifactRevisionRecord, pointer.revision_id)
     job = session.get(JobRecord, pointer.job_id)
+    if logical is None or revision is None or job is None:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_AUTHORING_ARTIFACT_STALE", "authoring Artifact pointer is stale"
+        )
+    try:
+        stored_input = RoleWorkerInput.model_validate(job.request)
+    except ValidationError as exc:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_AUTHORING_ARTIFACT_STALE", "authoring Artifact pointer is stale"
+        ) from exc
     if (
-        logical is None
-        or revision is None
-        or job is None
-        or not logical.approved
+        not logical.approved
         or not revision.approved
         or logical.job_id != pointer.job_id
         or revision.job_id != pointer.job_id
         or revision.logical_artifact_id != pointer.logical_artifact_id
         or revision.content_hash != pointer.content_hash
+        or job.job_id != pointer.job_id
+        or job.protocol_version != stored_input.protocol_version
         or job.logical_artifact_id != pointer.logical_artifact_id
         or job.revision_id != pointer.revision_id
-        or job.request.get("workflow_id") != workflow_id
+        or pointer.step_key != "authoring"
+        or pointer.result_schema != "authoring-result@10.0"
+        or pointer.attempt != stored_input.attempt
+        or stored_input.protocol_version != "workflow-role/1.20.0"
+        or stored_input.role != "authoring"
+        or stored_input.job_id != pointer.job_id
+        or stored_input.workflow_id != workflow_id
+        or stored_input.artifact.logical_artifact_id != pointer.logical_artifact_id
+        or stored_input.artifact.revision_id != pointer.revision_id
     ):
         raise EvidenceUsageValidationError(
             "EVIDENCE_AUTHORING_ARTIFACT_STALE", "authoring Artifact pointer is stale"
@@ -502,6 +546,17 @@ def _resolve_authoring_result(
     if not isinstance(result, ContentTeamAuthoringRoleResultV10):
         raise EvidenceUsageValidationError(
             "EVIDENCE_AUTHORING_RESULT_INVALID", "authoring result type differs"
+        )
+    if (
+        result.job_id != pointer.job_id
+        or result.workflow_id != workflow_id
+        or result.step_run_id != stored_input.step_run_id
+        or result.role != stored_input.role
+        or result.artifact != stored_input.artifact
+    ):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_AUTHORING_RESULT_IDENTITY_MISMATCH",
+            "authoring result envelope differs from its exact pointer and Job request",
         )
     return result
 
@@ -597,8 +652,13 @@ def _authoring_receipt(
     document["receipt_sha256"] = content_sha256(
         {key: value for key, value in document.items() if key != "receipt_sha256"}
     )
-    validate_control_contract("evidence-usage-validation-receipt", document)
-    return AuthoringEvidenceUsageValidationReceipt.model_validate(document)
+    try:
+        validate_control_contract("evidence-usage-validation-receipt", document)
+        return AuthoringEvidenceUsageValidationReceipt.model_validate(document)
+    except (ControlSchemaError, JsonSchemaValidationError, ValidationError) as exc:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_RECEIPT_INVALID", "authoring evidence receipt is invalid"
+        ) from exc
 
 
 def _review_receipt(
@@ -622,5 +682,10 @@ def _review_receipt(
     document["receipt_sha256"] = content_sha256(
         {key: value for key, value in document.items() if key != "receipt_sha256"}
     )
-    validate_control_contract("evidence-usage-validation-receipt", document)
-    return ReviewEvidenceUsageValidationReceipt.model_validate(document)
+    try:
+        validate_control_contract("evidence-usage-validation-receipt", document)
+        return ReviewEvidenceUsageValidationReceipt.model_validate(document)
+    except (ControlSchemaError, JsonSchemaValidationError, ValidationError) as exc:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_RECEIPT_INVALID", "review evidence receipt is invalid"
+        ) from exc

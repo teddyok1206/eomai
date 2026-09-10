@@ -413,6 +413,7 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
     assert len(entries) == 62
     assert len({name for name, _ in entries}) == len(entries)
     assert {
+        "evidence-usage-validation-receipt",
         "execution-preset-revision-v2",
         "knowledge-item-control-bootstrap",
         "knowledge-item-control-bootstrap-v2",
