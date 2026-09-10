@@ -18,10 +18,13 @@ are copied into this row.
 
 ## Decision
 
-- `CREATE_ITEM_PRODUCTION_EVIDENCE` alone receives a 120-second Catalog response timeout. Other
+- Evidence-construction operations (`CREATE_EVIDENCE_BUNDLE` and
+  `CREATE_ITEM_PRODUCTION_EVIDENCE`) receive a 120-second Catalog response idle timeout. Other
   Catalog operations retain the 30-second default.
-- API idempotency claims use a 180-second lease, leaving a bounded margin around the evidence call
-  and its surrounding validation and transaction work.
+- API idempotency claims use a 180-second lease, leaving an operational margin around the expected
+  evidence call and its surrounding validation and transaction work. The socket value is an idle
+  timeout rather than an absolute end-to-end deadline; claim-token compare-and-set provides the
+  correctness boundary if an attempt nevertheless outlives its lease.
 - Every initial claim and expired-lease takeover creates a fresh server-side CSPRNG claim token.
   Client request IDs remain audit-correlation values and never authorize claim completion.
 - `complete` changes the row only when it is still `PROCESSING` and the persisted token matches the
