@@ -141,6 +141,7 @@ def test_v120_patch_successor_requires_non_null_primitive_scalar_citation_leaves
             "`/choices/0/text`",
             "`/statements/0/text`",
             "`/labeled_blocks/0/content`",
+            "`/inquiry/procedure`",
         ):
             assert requirement in prompt
 
@@ -180,13 +181,13 @@ def test_v120_patch_successor_has_pinned_deterministic_release_hashes(tmp_path: 
     built = build_pack(PACK_ROOT, tmp_path)
 
     assert compiled.source_tree_sha256 == (
-        "sha256:c0974bde6abeeb2eed2984a5697d04ec5ba13ab0df89289932328948dffc431b"
+        "sha256:2da4a6aa3681c9f7ebe092145d510bb8e1c64edc700d9e2c2422a14920b2c664"
     )
     assert built.bundle_sha256 == (
-        "sha256:2ee488bc57e27639fe96baab27ce0019498fcfe00004a79926ee6d224130e6e9"
+        "sha256:19e9532388ff7d5201faa8c1399babdb7b73ffc66f1e7cba680d81ebc456cae4"
     )
     assert built.manifest_sha256 == (
-        "sha256:802d976ff27188e08048290602980e5d752ddb08cf3b1913741c5a27c9ca28a6"
+        "sha256:7310fdf9e8457d639b14dfd56bba01fd92f3867a5dfdde18b4cb4b7238591a77"
     )
     assert {profile.profile.version for profile in compiled.profiles} == {"10.0.0", "10.0.1"}
 

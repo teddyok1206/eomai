@@ -49,7 +49,7 @@ anchor_ids, draft_json_paths는 각각 정렬되고 고유해야 한다. 모든 
 숫자, boolean 중 하나인 non-null primitive scalar leaf여야 하며 object, array, null이면 실패시켜라.
 `/choices`, `/choices/0`, `/statements`, `/answer`, `/explanations`, `/inquiry`, `/visuals` 같은 컨테이너는
 허용하지 말고, 실제로 존재하는 `/stem`, `/bottom_stem`, `/choices/0/text`, `/statements/0/text`,
-`/labeled_blocks/0/content`, `/inquiry/goal` 같은 구체 leaf만 허용하라.
+`/labeled_blocks/0/content`, `/inquiry/procedure` 같은 구체 leaf만 허용하라.
 
 모든 검사가 통과했을 때만 evidence_usage_attestation.decision=`VERIFIED`로 하고, authoring_artifact에
 위의 exact logical Artifact ID, revision ID, content hash 및 result_schema=`authoring-result@10.0`을

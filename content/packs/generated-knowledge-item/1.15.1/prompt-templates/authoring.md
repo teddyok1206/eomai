@@ -52,7 +52,7 @@ anchor_ids는 해당 entry.anchor_ids의 부분집합이어야 한다. draft_jso
 leaf여야 하며 object, array, null은 인용 대상이 아니다. 따라서 `/choices`, `/choices/0`, `/statements`,
 `/answer`, `/explanations`, `/inquiry`, `/visuals` 같은 컨테이너를 쓰지 마라. 실제로 존재하는 구체 leaf인
 `/stem`, `/bottom_stem`, `/choices/0/text`, `/statements/0/text`,
-`/labeled_blocks/0/content`, `/inquiry/goal` 등을 사용하라. 배열 인덱스는 선행 0 없는 십진수로 쓰고,
+`/labeled_blocks/0/content`, `/inquiry/procedure` 등을 사용하라. 배열 인덱스는 선행 0 없는 십진수로 쓰고,
 제출 직전에 모든 경로를 최종 draft에서 다시 해석하여 container 또는 null target을 교체하라.
 
 manifest use와 application은 `GROUNDING`→`CONCEPT_GROUNDING`,
