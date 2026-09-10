@@ -1122,9 +1122,11 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/mock-exam-explicit-analysis-review-set-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-production-execution-v2.schema.json",
+        "eom_api_contracts/schemas/mock-exam-production-execution-v3.schema.json",
         "eom_api_contracts/schemas/mock-exam-production-retirement-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-review-eligibility-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-review-eligibility-v2.schema.json",
+        "eom_api_contracts/schemas/mock-exam-review-eligibility-v3.schema.json",
         "eom_api_contracts/schemas/operators.schema.json",
         "eom_api_contracts/schemas/production-item-candidate-v1.schema.json",
         "eom_api_contracts/schemas/production-item-candidate-v2.schema.json",
@@ -1133,7 +1135,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 27 packaged API schemas including release identity, Workflow-start, "
+            "expected exactly 29 packaged API schemas including release identity, Workflow-start, "
             "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "
@@ -1450,14 +1452,18 @@ catalog_resources = {
     "assessment-assembly/mock-exam-rating-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-rating-policy-v1.schema.json",
     "assessment-assembly/mock-exam-item-review-decision-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-decision-v1.schema.json",
     "assessment-assembly/mock-exam-item-review-decision-v2.schema.json": "schemas/assessment-assembly/mock-exam-item-review-decision-v2.schema.json",
+    "assessment-assembly/mock-exam-item-review-decision-v3.schema.json": "schemas/assessment-assembly/mock-exam-item-review-decision-v3.schema.json",
     "assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json",
     "assessment-assembly/mock-exam-item-review-publication-result-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-result-v1.schema.json",
     "assessment-assembly/mock-exam-item-review-publication-result-v2.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-result-v2.schema.json",
+    "assessment-assembly/mock-exam-item-review-publication-result-v3.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-result-v3.schema.json",
     "assessment-assembly/mock-exam-production-plan-v1.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v1.schema.json",
     "assessment-assembly/mock-exam-production-plan-v2.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v2.schema.json",
+    "assessment-assembly/mock-exam-production-plan-v3.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v3.schema.json",
     "assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json",
     "assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json",
     "assessment-assembly/mock-exam-review-eligibility-result-v2.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-result-v2.schema.json",
+    "assessment-assembly/mock-exam-review-eligibility-result-v3.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-result-v3.schema.json",
     "catalog-application/catalog-application-request-v1.schema.json": "schemas/catalog-application/catalog-application-request-v1.schema.json",
     "catalog-application/catalog-application-response-v1.schema.json": "schemas/catalog-application/catalog-application-response-v1.schema.json",
     "catalog-application/catalog-application-request-v2.schema.json": "schemas/catalog-application/catalog-application-request-v2.schema.json",

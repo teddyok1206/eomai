@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Any, Final, Literal, Self
 
 from eom_identifiers import content_sha256
 from pydantic import Field, field_validator, model_validator
@@ -16,17 +16,25 @@ MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_SCHEMA: Final = "mock-exam-item-review-
 MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V2_SCHEMA: Final = (
     "mock-exam-item-review-publication-result-v2"
 )
+MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V3_SCHEMA: Final = (
+    "mock-exam-item-review-publication-result-v3"
+)
 MOCK_EXAM_REVIEW_ELIGIBILITY_QUERY_SCHEMA: Final = "mock-exam-review-eligibility-query"
 MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_SCHEMA: Final = "mock-exam-review-eligibility-result"
 MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V2_SCHEMA: Final = "mock-exam-review-eligibility-result-v2"
+MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V3_SCHEMA: Final = "mock-exam-review-eligibility-result-v3"
 MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA: Final = "mock-exam-item-review-decision"
 MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA: Final = "mock-exam-item-review-decision-v2"
+MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA: Final = "mock-exam-item-review-decision-v3"
 MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME: Final = "mock-exam-item-review-decision.json"
 MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF: Final = (
     "eom://schemas/assessment-assembly/mock-exam-item-review-decision/1.0"
 )
 MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF: Final = (
     "eom://schemas/assessment-assembly/mock-exam-item-review-decision/2.0"
+)
+MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA_REF: Final = (
+    "eom://schemas/assessment-assembly/mock-exam-item-review-decision/3.0"
 )
 
 
@@ -59,6 +67,12 @@ class MockExamReviewFindingCounts(FrozenModel):
     blocking: Literal[0] = 0
 
 
+class MockExamReviewFindingCountsV3(MockExamReviewFindingCounts):
+    """V3 wire form keeps the zero-blocking field explicit rather than defaulted."""
+
+    blocking: Literal[0]
+
+
 class MockExamEligibilityFindingCounts(FrozenModel):
     info: int = Field(ge=0, le=20)
     warning: int = Field(ge=0, le=20)
@@ -69,6 +83,80 @@ class MockExamEligibilityFinding(FrozenModel):
     code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
     severity: Literal["info", "warning", "blocking"]
     message: str = Field(min_length=1, max_length=2000)
+
+
+class MockExamEvidenceUsageResultPointerV1(FrozenModel):
+    """Small exact result/receipt pointer; the complete receipt remains canonical upstream."""
+
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    step_run_id: str = Field(pattern=r"^steprun_[0-9a-f]{32}$")
+    attempt: int = Field(ge=1, le=10)
+    job_id: str = Field(pattern=r"^job_[0-9a-f]{32}$")
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    sha256: Sha256
+    receipt_sha256: Sha256
+
+
+class MockExamAuthoringEvidenceUsageReceiptPointerV1(MockExamEvidenceUsageResultPointerV1):
+    step_key: Literal["authoring"]
+    result_schema: Literal["authoring-result@10.0"]
+
+
+class MockExamReviewEvidenceUsageReceiptPointerV1(MockExamEvidenceUsageResultPointerV1):
+    step_key: Literal["review"]
+    result_schema: Literal["review-result@10.0"]
+
+
+class MockExamTrustedEvidenceUsageReceiptPairV1(FrozenModel):
+    """Resolvable authoring/review receipt identities for one trusted RAG Workflow."""
+
+    schema_version: Literal["mock-exam-trusted-evidence-usage-receipt-pair/1.0"]
+    role_protocol_version: Literal["workflow-role/1.20.0"]
+    receipt_schema_version: Literal["evidence-usage-validation-receipt/1.0"]
+    authoring: MockExamAuthoringEvidenceUsageReceiptPointerV1
+    review: MockExamReviewEvidenceUsageReceiptPointerV1
+
+    @model_validator(mode="after")
+    def one_exact_workflow_chain(self) -> Self:
+        if self.authoring.workflow_id != self.review.workflow_id:
+            raise ValueError("trusted evidence receipts must belong to one Workflow")
+        authoring_identity = (
+            self.authoring.step_run_id,
+            self.authoring.job_id,
+            self.authoring.artifact_id,
+            self.authoring.artifact_revision_id,
+            self.authoring.receipt_sha256,
+        )
+        review_identity = (
+            self.review.step_run_id,
+            self.review.job_id,
+            self.review.artifact_id,
+            self.review.artifact_revision_id,
+            self.review.receipt_sha256,
+        )
+        if any(
+            left == right for left, right in zip(authoring_identity, review_identity, strict=True)
+        ):
+            raise ValueError("authoring and review receipt identities must be distinct")
+        return self
+
+    def matches_review_result(
+        self,
+        *,
+        step_run_id: str,
+        artifact_id: str,
+        artifact_revision_id: str,
+        sha256: str,
+    ) -> bool:
+        """Compare one materialized review projection with the pinned receipt in O(1)."""
+
+        return (
+            self.review.step_run_id == step_run_id
+            and self.review.artifact_id == artifact_id
+            and self.review.artifact_revision_id == artifact_revision_id
+            and self.review.sha256 == sha256
+        )
 
 
 class InspectMockExamReviewEligibilityQuery(FrozenModel):
@@ -142,6 +230,28 @@ class MockExamReviewEligibilityResultV2(MockExamReviewEligibilityResult):
     review_result_schema: Literal["review-result@9.0"]  # type: ignore[assignment]
 
 
+class MockExamReviewEligibilityResultV3(MockExamReviewEligibilityResult):
+    """Eligibility projection whose @10 review is backed by trusted RAG receipts."""
+
+    schema_version: Literal["mock-exam-review-eligibility-result/3.0"]  # type: ignore[assignment]
+    operation: Literal["INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY"]
+    review_result_schema: Literal["review-result@10.0"]  # type: ignore[assignment]
+    decision: Literal["ready_for_human"]
+    trusted_evidence_usage_receipts: MockExamTrustedEvidenceUsageReceiptPairV1
+
+    @model_validator(mode="after")
+    def trusted_receipts_bind_review(self) -> Self:
+        receipts = self.trusted_evidence_usage_receipts
+        if receipts.review.workflow_id != self.workflow_id or not receipts.matches_review_result(
+            step_run_id=self.review_step_run_id,
+            artifact_id=self.review_artifact_id,
+            artifact_revision_id=self.review_artifact_revision_id,
+            sha256=self.review_sha256,
+        ):
+            raise ValueError("trusted evidence receipt pair differs from eligibility review")
+        return self
+
+
 class MockExamSourceReviewPointer(FrozenModel):
     step_run_id: str = Field(pattern=r"^steprun_[0-9a-f]{32}$")
     artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
@@ -156,6 +266,26 @@ class MockExamSourceReviewPointerV2(MockExamSourceReviewPointer):
     """V2 source pointer admitting the content-team V3 review result."""
 
     result_schema: Literal["review-result@9.0"]  # type: ignore[assignment]
+
+
+class MockExamSourceReviewPointerV3(MockExamSourceReviewPointer):
+    """Exact @10 review result plus the trusted authoring/review receipt pair."""
+
+    result_schema: Literal["review-result@10.0"]  # type: ignore[assignment]
+    worker_decision: Literal["ready_for_human"]
+    finding_counts: MockExamReviewFindingCountsV3
+    trusted_evidence_usage_receipts: MockExamTrustedEvidenceUsageReceiptPairV1
+
+    @model_validator(mode="after")
+    def trusted_receipts_bind_source_review(self) -> Self:
+        if not self.trusted_evidence_usage_receipts.matches_review_result(
+            step_run_id=self.step_run_id,
+            artifact_id=self.artifact_id,
+            artifact_revision_id=self.artifact_revision_id,
+            sha256=self.sha256,
+        ):
+            raise ValueError("trusted evidence receipt pair differs from source review")
+        return self
 
 
 class MockExamHumanApprovalPointer(FrozenModel):
@@ -204,6 +334,24 @@ class MockExamItemReviewDecisionV2(MockExamItemReviewDecisionV1):
     source_review: MockExamSourceReviewPointerV2
 
 
+class MockExamItemReviewDecisionV3(MockExamItemReviewDecisionV1):
+    """Immutable operator decision closed over the exact trusted RAG evidence chain."""
+
+    schema_version: Literal["mock-exam-item-review-decision/3.0"]  # type: ignore[assignment]
+    source_review: MockExamSourceReviewPointerV3
+    decision: Literal["APPROVE"]
+    rating_policy_key: Literal["integrated-science-item-rating"]
+
+    @model_validator(mode="after")
+    def trusted_receipts_bind_workflow(self) -> Self:
+        if (
+            self.source_review.trusted_evidence_usage_receipts.review.workflow_id
+            != self.workflow_id
+        ):
+            raise ValueError("trusted evidence receipts differ from decision Workflow")
+        return self
+
+
 def mock_exam_item_review_decision_sha256(value: dict[str, Any]) -> str:
     """Hash the canonical decision payload without its self-hash field."""
 
@@ -245,6 +393,34 @@ class MockExamItemReviewPublicationResultV2(MockExamItemReviewPublicationResult)
         "mock-exam-item-review-publication-result/2.0"  # type: ignore[assignment]
     )
     review_result_schema: Literal["review-result@9.0"]  # type: ignore[assignment]
+
+
+class MockExamItemReviewPublicationResultV3(MockExamItemReviewPublicationResult):
+    """Publication receipt preserving both decision Artifact and trusted source review."""
+
+    schema_version: Literal[  # type: ignore[assignment]
+        "mock-exam-item-review-publication-result/3.0"
+    ]
+    operation: Literal["PUBLISH_MOCK_EXAM_ITEM_REVIEW"]
+    review_result_schema: Literal["review-result@10.0"]  # type: ignore[assignment]
+    decision: Literal["APPROVE"]
+    finding_counts: MockExamReviewFindingCountsV3
+    source_review_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    source_review_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    source_review_sha256: Sha256
+    trusted_evidence_usage_receipts: MockExamTrustedEvidenceUsageReceiptPairV1
+
+    @model_validator(mode="after")
+    def trusted_receipts_bind_publication(self) -> Self:
+        receipts = self.trusted_evidence_usage_receipts
+        if receipts.review.workflow_id != self.workflow_id or not receipts.matches_review_result(
+            step_run_id=self.review_step_run_id,
+            artifact_id=self.source_review_artifact_id,
+            artifact_revision_id=self.source_review_artifact_revision_id,
+            sha256=self.source_review_sha256,
+        ):
+            raise ValueError("trusted evidence receipt pair differs from publication review")
+        return self
 
 
 MockExamReviewEligibilityResultContract = Annotated[

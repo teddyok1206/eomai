@@ -156,7 +156,7 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 205
+    assert len(entries) == 209
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {
@@ -193,9 +193,13 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         "catalog-application-request-v12",
         "catalog-application-response-v12",
         "mock-exam-item-review-decision-v2",
+        "mock-exam-item-review-decision-v3",
         "mock-exam-item-review-publication-result-v2",
+        "mock-exam-item-review-publication-result-v3",
         "mock-exam-review-eligibility-result-v2",
+        "mock-exam-review-eligibility-result-v3",
         "mock-exam-production-plan",
+        "mock-exam-production-plan-v3",
         "mock-exam-assembly-cohort",
         "approved-item-graph-publication-command",
         "approved-item-graph-publication-result",

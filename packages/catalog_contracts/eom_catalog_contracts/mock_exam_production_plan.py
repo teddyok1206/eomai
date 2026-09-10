@@ -51,6 +51,15 @@ CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V2: Literal[
 CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V2: Literal[
     "sha256:977601f0e1060f9f6304c5b58be357723758359adf1b18c931d6f82a35ae4c81"
 ] = "sha256:977601f0e1060f9f6304c5b58be357723758359adf1b18c931d6f82a35ae4c81"
+CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V3: Literal[
+    "sha256:2da4a6aa3681c9f7ebe092145d510bb8e1c64edc700d9e2c2422a14920b2c664"
+] = "sha256:2da4a6aa3681c9f7ebe092145d510bb8e1c64edc700d9e2c2422a14920b2c664"
+CONTENT_TEAM_ROLE_SCHEMA_BUNDLE_SHA256_V3: Literal[
+    "sha256:4fe0172ef46c490ccb9c82aa7360c12c1a52c0f2644757190236b9c81fcb459c"
+] = "sha256:4fe0172ef46c490ccb9c82aa7360c12c1a52c0f2644757190236b9c81fcb459c"
+CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V3: Literal[
+    "sha256:c98e12d67026923a4b1d1eb5470d33512702a8758e9477baed7bb2997956056f"
+] = "sha256:c98e12d67026923a4b1d1eb5470d33512702a8758e9477baed7bb2997956056f"
 _AUTHORING_DIFFICULTY_BY_SLOT = {"LOW": "easy", "MEDIUM": "medium", "HIGH": "hard"}
 
 __all__ = [
@@ -58,18 +67,26 @@ __all__ = [
     "CONTENT_TEAM_ITEM_GUIDANCE_SHA256",
     "CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256",
     "CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V2",
+    "CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V3",
     "CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256",
     "CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V2",
+    "CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V3",
+    "CONTENT_TEAM_ROLE_SCHEMA_BUNDLE_SHA256_V3",
     "ContentTeamItemBriefV3Input",
     "ContentTeamMockExamSlotV1",
+    "ContentTeamTrustedRagItemBriefV3Input",
+    "ContentTeamTrustedRagMockExamSlotV3",
     "MockExamOneItemGenerationBlockV1",
     "MockExamOneItemGenerationBlockV2",
+    "MockExamOneItemGenerationBlockV3",
     "MockExamPlannedWorkflowCallV1",
     "MockExamPlannedWorkflowCallV2",
+    "MockExamPlannedWorkflowCallV3",
     "MockExamProductionPlanContract",
     "MockExamProductionPlanError",
     "MockExamProductionPlanV1",
     "MockExamProductionPlanV2",
+    "MockExamProductionPlanV3",
     "build_integrated_science_mock_exam_production_plan",
     "build_integrated_science_mock_exam_production_plan_v2",
     "classify_content_team_mock_exam_material_profile",
@@ -135,6 +152,17 @@ class ContentTeamMockExamSlotV1(FrozenModel):
         return self
 
 
+class ContentTeamTrustedRagMockExamSlotV3(ContentTeamMockExamSlotV1):
+    """V3 wire form requiring both mutually exclusive slot selectors explicitly."""
+
+    coverage_requirement_id: str | None = Field(
+        pattern=r"^[a-z0-9][a-z0-9._:-]{0,127}$",
+    )
+    balance_large_unit_key: str | None = Field(
+        pattern=r"^eom\.is\.large\.[1-6]$",
+    )
+
+
 class ContentTeamItemBriefV3Input(FrozenModel):
     """Content-neutral presentation input accepted by the existing one-Item block."""
 
@@ -167,6 +195,13 @@ class ContentTeamItemBriefV3Input(FrozenModel):
         ):
             raise ValueError("content-team V3 brief differs from its typed mock-exam slot")
         return self
+
+
+class ContentTeamTrustedRagItemBriefV3Input(ContentTeamItemBriefV3Input):
+    """Canonical V3 production wire input with no silently inserted identity fields."""
+
+    schema_version: Literal["3.0"]
+    mock_exam_slot: ContentTeamTrustedRagMockExamSlotV3
 
 
 class MockExamOneItemGenerationBlockV1(FrozenModel):
@@ -209,6 +244,29 @@ class MockExamOneItemGenerationBlockV2(MockExamOneItemGenerationBlockV1):
     ]
 
 
+class MockExamOneItemGenerationBlockV3(MockExamOneItemGenerationBlockV1):
+    """Fresh-production block that requires orchestrator-trusted RAG receipt evidence."""
+
+    block_revision: Literal["3.0"]  # type: ignore[assignment]
+    workflow_definition_version: Literal["1.10.0"]  # type: ignore[assignment]
+    content_pack_version: Literal["1.15.1"]  # type: ignore[assignment]
+    content_pack_source_tree_sha256: Literal[  # type: ignore[assignment]
+        "sha256:2da4a6aa3681c9f7ebe092145d510bb8e1c64edc700d9e2c2422a14920b2c664"
+    ]
+    role_protocol_version: Literal["workflow-role/1.20.0"]
+    role_schema_bundle_sha256: Literal[
+        "sha256:4fe0172ef46c490ccb9c82aa7360c12c1a52c0f2644757190236b9c81fcb459c"
+    ]
+    knowledge_source_mode: Literal["graph_grounded"]
+    authoring_result_schema: Literal["authoring-result@10.0"]
+    review_result_schema: Literal["review-result@10.0"]
+    evidence_usage_receipt_schema_version: Literal["evidence-usage-validation-receipt/1.0"]
+    trusted_evidence_usage_receipts_required: Literal[True]
+    block_sha256: Literal[  # type: ignore[assignment]
+        "sha256:c98e12d67026923a4b1d1eb5470d33512702a8758e9477baed7bb2997956056f"
+    ]
+
+
 class MockExamPlannedWorkflowCallV1(FrozenModel):
     """One independent CREATE_ITEM invocation assigned to one exam position."""
 
@@ -238,6 +296,14 @@ class MockExamPlannedWorkflowCallV2(MockExamPlannedWorkflowCallV1):
     generation_block_sha256: Literal[  # type: ignore[assignment]
         "sha256:977601f0e1060f9f6304c5b58be357723758359adf1b18c931d6f82a35ae4c81"
     ]
+
+
+class MockExamPlannedWorkflowCallV3(MockExamPlannedWorkflowCallV1):
+    generation_block_revision: Literal["3.0"]  # type: ignore[assignment]
+    generation_block_sha256: Literal[  # type: ignore[assignment]
+        "sha256:c98e12d67026923a4b1d1eb5470d33512702a8758e9477baed7bb2997956056f"
+    ]
+    item_brief: ContentTeamTrustedRagItemBriefV3Input
 
 
 class MockExamProductionPlanV1(FrozenModel):
@@ -328,6 +394,18 @@ class MockExamProductionPlanV2(MockExamProductionPlanV1):
     )
 
 
+class MockExamProductionPlanV3(MockExamProductionPlanV1):
+    """Fresh 25-Item plan pinning the trusted-RAG workflow, role, and pack family."""
+
+    schema_version: Literal["mock-exam-production-plan/3.0"]  # type: ignore[assignment]
+    one_item_generation_block: MockExamOneItemGenerationBlockV3
+    workflow_calls: tuple[MockExamPlannedWorkflowCallV3, ...] = Field(
+        min_length=25,
+        max_length=25,
+    )
+
+
+# Active application dispatch remains V1/V2 until the separately reviewed runtime successor lands.
 MockExamProductionPlanContract = MockExamProductionPlanV1 | MockExamProductionPlanV2
 
 

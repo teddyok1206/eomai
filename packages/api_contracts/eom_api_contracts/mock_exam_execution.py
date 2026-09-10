@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Annotated, Literal, Self
 
+from eom_catalog_contracts.item_review import MockExamTrustedEvidenceUsageReceiptPairV1
 from eom_identifiers import content_sha256
 from pydantic import Field, model_validator
 
@@ -39,6 +41,25 @@ ProductionItemState = Literal[
     "RATED",
     "FAILED",
 ]
+
+_STRICT_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def _require_prefixed_sha256_values(value: object) -> None:
+    """Keep every V3 wire hash explicit without changing historical API models."""
+
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if (
+                (key == "sha256" or key == "content_hash" or key.endswith("_sha256"))
+                and isinstance(child, str)
+                and _STRICT_SHA256.fullmatch(child) is None
+            ):
+                raise ValueError("trusted-RAG V3 SHA-256 values require the sha256: prefix")
+            _require_prefixed_sha256_values(child)
+    elif isinstance(value, list | tuple):
+        for child in value:
+            _require_prefixed_sha256_values(child)
 
 
 class MockExamProductionFailureV1(ApiModel):
@@ -106,6 +127,34 @@ class MockExamGenerationBlockResolutionV2(MockExamGenerationBlockResolutionV1):
     generation_block_revision: Literal["2.0"]  # type: ignore[assignment]
     workflow_definition_version: Literal["1.9.0"]  # type: ignore[assignment]
     content_pack_version: Literal["1.14.0"]  # type: ignore[assignment]
+
+
+class MockExamGenerationBlockResolutionV3(MockExamGenerationBlockResolutionV1):
+    """Exact trusted-RAG runtime family resolved before fresh Item production."""
+
+    generation_block_revision: Literal["3.0"]  # type: ignore[assignment]
+    generation_block_sha256: Literal[
+        "sha256:c98e12d67026923a4b1d1eb5470d33512702a8758e9477baed7bb2997956056f"
+    ]
+    workflow_definition_version: Literal["1.10.0"]  # type: ignore[assignment]
+    content_pack_version: Literal["1.15.1"]  # type: ignore[assignment]
+    content_pack_source_tree_sha256: Literal[
+        "sha256:2da4a6aa3681c9f7ebe092145d510bb8e1c64edc700d9e2c2422a14920b2c664"
+    ]
+    role_protocol_version: Literal["workflow-role/1.20.0"]
+    role_schema_bundle_sha256: Literal[
+        "sha256:4fe0172ef46c490ccb9c82aa7360c12c1a52c0f2644757190236b9c81fcb459c"
+    ]
+    knowledge_source_mode: Literal["graph_grounded"]
+    authoring_result_schema: Literal["authoring-result@10.0"]
+    review_result_schema: Literal["review-result@10.0"]
+    evidence_usage_receipt_schema_version: Literal["evidence-usage-validation-receipt/1.0"]
+    trusted_evidence_usage_receipts_required: Literal[True]
+
+    @model_validator(mode="after")
+    def hashes_are_explicit(self) -> Self:
+        _require_prefixed_sha256_values(self.model_dump(mode="json"))
+        return self
 
 
 class MockExamReviewPointerV1(ApiModel):
@@ -190,6 +239,26 @@ class MockExamReviewPointerV2(MockExamReviewPointerV1):
     result_schema: Literal["review-result@9.0"]  # type: ignore[assignment]
 
 
+class MockExamReviewPointerV3(MockExamReviewPointerV1):
+    """Exact @10 review pointer backed by a resolvable trusted receipt pair."""
+
+    result_schema: Literal["review-result@10.0"]  # type: ignore[assignment]
+    finding_blocking_count: Literal[0]
+    trusted_evidence_usage_receipts: MockExamTrustedEvidenceUsageReceiptPairV1
+
+    @model_validator(mode="after")
+    def trusted_receipts_bind_review(self) -> Self:
+        if not self.trusted_evidence_usage_receipts.matches_review_result(
+            step_run_id=self.step_run_id,
+            artifact_id=self.artifact_id,
+            artifact_revision_id=self.artifact_revision_id,
+            sha256=self.sha256,
+        ):
+            raise ValueError("trusted evidence receipt pair differs from execution review")
+        _require_prefixed_sha256_values(self.model_dump(mode="json"))
+        return self
+
+
 class MockExamReviewEligibilityObservationV2(MockExamReviewEligibilityObservationV1):
     schema_version: Literal["mock-exam-review-eligibility/2.0"]  # type: ignore[assignment]
     result_schema: Literal["review-result@9.0"]  # type: ignore[assignment]
@@ -208,6 +277,47 @@ class MockExamReviewEligibilityObservationV2(MockExamReviewEligibilityObservatio
             finding_info_count=self.finding_info_count,
             finding_warning_count=self.finding_warning_count,
             finding_blocking_count=0,
+        )
+
+
+class MockExamReviewEligibilityObservationV3(MockExamReviewEligibilityObservationV1):
+    """Public @10 eligibility observation backed by trusted RAG receipt identities."""
+
+    schema_version: Literal["mock-exam-review-eligibility/3.0"]  # type: ignore[assignment]
+    reviewer_operator_id: str | None = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    approved_at: UtcDatetime | None
+    result_schema: Literal["review-result@10.0"]  # type: ignore[assignment]
+    worker_decision: Literal["ready_for_human"]
+    trusted_evidence_usage_receipts: MockExamTrustedEvidenceUsageReceiptPairV1
+
+    @model_validator(mode="after")
+    def trusted_receipts_bind_observation(self) -> Self:
+        receipts = self.trusted_evidence_usage_receipts
+        if receipts.review.workflow_id != self.workflow_id or not receipts.matches_review_result(
+            step_run_id=self.step_run_id,
+            artifact_id=self.artifact_id,
+            artifact_revision_id=self.artifact_revision_id,
+            sha256=self.sha256,
+        ):
+            raise ValueError("trusted evidence receipt pair differs from eligibility observation")
+        _require_prefixed_sha256_values(self.model_dump(mode="json"))
+        return self
+
+    def approved_pointer(self) -> MockExamReviewPointerV3:
+        if self.eligibility != "ELIGIBLE" or self.finding_blocking_count != 0:
+            raise ValueError("blocked review cannot be used for approval")
+        return MockExamReviewPointerV3(
+            approval_request_id=self.approval_request_id,
+            approval_resource_version=self.approval_resource_version,
+            step_run_id=self.step_run_id,
+            artifact_id=self.artifact_id,
+            artifact_revision_id=self.artifact_revision_id,
+            sha256=self.sha256,
+            result_schema=self.result_schema,
+            finding_info_count=self.finding_info_count,
+            finding_warning_count=self.finding_warning_count,
+            finding_blocking_count=0,
+            trusted_evidence_usage_receipts=self.trusted_evidence_usage_receipts,
         )
 
 
@@ -271,6 +381,14 @@ class MockExamAnalysisPointerV1(ApiModel):
         return self
 
 
+class MockExamAnalysisPointerV3(MockExamAnalysisPointerV1):
+    """V3 wire form requiring the nullable accepted-result pointer fields explicitly."""
+
+    accepted_result_artifact_id: str | None = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    accepted_result_artifact_revision_id: str | None = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    accepted_result_sha256: Sha256 | None
+
+
 class MockExamRatingPointerV1(ApiModel):
     """Published human rating decision used by the assembly planner."""
 
@@ -330,6 +448,12 @@ class MockExamWorkflowKnowledgeProvenancePointerV1(ApiModel):
             if tuple(sorted(values)) != values or len(values) != len(set(values)):
                 raise ValueError(f"knowledge provenance {label} must be sorted and unique")
         return self
+
+
+class MockExamWorkflowKnowledgeProvenancePointerV3(MockExamWorkflowKnowledgeProvenancePointerV1):
+    """V3 wire form requiring the optional curriculum root to be explicit."""
+
+    curriculum_root_key: str | None = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$")
 
 
 class MockExamProductionItemRunV1(ApiModel):
@@ -462,6 +586,33 @@ class MockExamProductionItemRunV2(MockExamProductionItemRunV1):
     review: MockExamReviewPointerV1 | MockExamReviewPointerV2 | None = None
 
 
+class MockExamProductionItemRunV3(MockExamProductionItemRunV1):
+    """Per-call pointer chain restricted to the trusted-RAG review family."""
+
+    start_command_id: str | None = Field(min_length=1, max_length=128)
+    workflow_id: str | None = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    workflow_resource_version: int | None = Field(ge=1)
+    knowledge_provenance: MockExamWorkflowKnowledgeProvenancePointerV3 | None
+    review: MockExamReviewPointerV3 | None
+    approval_command_id: str | None = Field(min_length=1, max_length=128)
+    human_approval: MockExamHumanApprovalPointerV1 | None
+    registration: MockExamItemRegistrationPointerV1 | None
+    analysis: MockExamAnalysisPointerV3 | None
+    graph_publication_id: str | None = Field(pattern=r"^graphpub_[0-9a-f]{32}$")
+    rating: MockExamRatingPointerV1 | None
+    failure: MockExamProductionFailureV1 | None
+
+    @model_validator(mode="after")
+    def trusted_receipts_bind_workflow(self) -> Self:
+        if self.review is not None and (
+            self.workflow_id is None
+            or self.review.trusted_evidence_usage_receipts.review.workflow_id != self.workflow_id
+        ):
+            raise ValueError("trusted evidence receipts differ from Item-run Workflow")
+        _require_prefixed_sha256_values(self.model_dump(mode="json"))
+        return self
+
+
 def is_mock_exam_provenance_validation_recovery_candidate(
     row: MockExamProductionItemRunV1,
 ) -> bool:
@@ -569,6 +720,12 @@ class MockExamGraphPublicationPointerV1(ApiModel):
         return self
 
 
+class MockExamGraphPublicationPointerV3(MockExamGraphPublicationPointerV1):
+    """V3 wire form requiring the fixed single-batch identity explicitly."""
+
+    batch_number: Literal[1]
+
+
 class MockExamAssemblyPlanPointerV1(ApiModel):
     plan_sha256: Sha256
     cohort_id: str = Field(pattern=r"^assemblycohort_[0-9a-f]{32}$")
@@ -661,6 +818,18 @@ class MockExamHwpxBuildPointerV1(ApiModel):
 
 class MockExamHwpxBuildPointerV2(MockExamHwpxBuildPointerV1):
     renderer_version: Literal["2.0.0", "3.0.0"]  # type: ignore[assignment]
+
+
+class MockExamHwpxBuildPointerV3(MockExamHwpxBuildPointerV2):
+    """V3 wire form requiring every nullable terminal-result field explicitly."""
+
+    renderer_version: Literal["3.0.0"]
+    section_count: int | None = Field(ge=0, le=25)
+    output_artifact_id: str | None = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    output_artifact_revision_id: str | None = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    output_sha256: Sha256 | None
+    failure_code: str | None = Field(pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
+    completed_at: UtcDatetime | None
 
 
 class MockExamAnalysisReviewBindingPointerV1(ApiModel):
@@ -1147,6 +1316,52 @@ class MockExamProductionExecutionV2(MockExamProductionExecutionV1):
             expected_renderer = "3.0.0" if v3_family else "2.0.0"
             if self.hwpx_build.renderer_version != expected_renderer:
                 raise ValueError("execution renderer differs from its generation family")
+        return self
+
+
+class MockExamProductionExecutionV3(MockExamProductionExecutionV1):
+    """Fresh-production checkpoint restricted to the trusted-RAG protocol family."""
+
+    schema_version: Literal["mock-exam-production-execution/3.0"]  # type: ignore[assignment]
+    predecessor_execution_revision_id: str | None = Field(
+        pattern=r"^productionexecrev_[0-9a-f]{32}$"
+    )
+    predecessor_checkpoint_sha256: Sha256 | None
+    generation_block_resolution: MockExamGenerationBlockResolutionV3 | None
+    analysis_policy: MockExamAnalysisPolicyPointerV1 | None
+    analysis_general_knowledge_mode: Literal["DISABLED", "AUXILIARY_UNATTRIBUTED"] | None
+    item_runs: tuple[MockExamProductionItemRunV3, ...] = Field(min_length=25, max_length=25)
+    graph_publication_authorization: MockExamGraphPublicationAuthorizationPointerV1 | None
+    graph_publications: tuple[MockExamGraphPublicationPointerV3, ...] = Field(max_length=1)
+    rating_authorization: MockExamRatingAuthorizationPointerV1 | None
+    assembly_intent: MockExamAssemblyIntentV1 | None
+    assembly_plan: MockExamAssemblyPlanPointerV1 | None
+    assembly: MockExamAssemblyPointerV1 | None
+    hwpx_build: MockExamHwpxBuildPointerV3 | None
+    failure: MockExamProductionFailureV1 | None
+
+    @model_validator(mode="after")
+    def trusted_rag_family_is_exact(self) -> Self:
+        if self.hwpx_build is not None and self.hwpx_build.renderer_version != "3.0.0":
+            raise ValueError("trusted-RAG execution requires the V3 renderer family")
+        receipt_pointers = tuple(
+            pointer
+            for row in self.item_runs
+            if row.review is not None
+            for pointer in (
+                row.review.trusted_evidence_usage_receipts.authoring,
+                row.review.trusted_evidence_usage_receipts.review,
+            )
+        )
+        for values, label in (
+            ((row.step_run_id for row in receipt_pointers), "receipt step run"),
+            ((row.job_id for row in receipt_pointers), "receipt job"),
+            ((row.artifact_id for row in receipt_pointers), "receipt Artifact"),
+            ((row.artifact_revision_id for row in receipt_pointers), "receipt revision"),
+            ((row.receipt_sha256 for row in receipt_pointers), "evidence receipt"),
+        ):
+            _unique_non_null(values, label)
+        _require_prefixed_sha256_values(self.model_dump(mode="json"))
         return self
 
 

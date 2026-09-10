@@ -543,6 +543,7 @@ def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> 
         "mock-exam-assembly-plan-v1.schema.json",
         "mock-exam-assembly-plan-v2.schema.json",
         "mock-exam-production-plan-v2.schema.json",
+        "mock-exam-production-plan-v3.schema.json",
         "mock-exam-assembly-policy-v1.schema.json",
         "mock-exam-layout-policy-v1.schema.json",
         "mock-exam-rating-policy-v1.schema.json",
@@ -582,13 +583,17 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
     for resource in (
         "mock-exam-item-review-decision-v1.schema.json",
         "mock-exam-item-review-decision-v2.schema.json",
+        "mock-exam-item-review-decision-v3.schema.json",
         "mock-exam-item-review-publication-command-v1.schema.json",
         "mock-exam-item-review-publication-result-v1.schema.json",
         "mock-exam-item-review-publication-result-v2.schema.json",
+        "mock-exam-item-review-publication-result-v3.schema.json",
         "mock-exam-production-plan-v1.schema.json",
+        "mock-exam-production-plan-v3.schema.json",
         "mock-exam-review-eligibility-query-v1.schema.json",
         "mock-exam-review-eligibility-result-v1.schema.json",
         "mock-exam-review-eligibility-result-v2.schema.json",
+        "mock-exam-review-eligibility-result-v3.schema.json",
     ):
         assert f'"assessment-assembly/{resource}": ' in deployment
         assert f'"schemas/assessment-assembly/{resource}"' in deployment
@@ -616,7 +621,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
     assert "schemas != expected_api_schemas" in deployment
-    assert "expected exactly 27 packaged API schemas" in deployment
+    assert "expected exactly 29 packaged API schemas" in deployment
     assert '"eom_api_contracts/schemas/api-release-build-info-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
@@ -631,11 +636,13 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/schemas/assessment-learning-page-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-production-execution-v2.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/mock-exam-production-execution-v3.schema.json"' in deployment
     assert (
         '"eom_api_contracts/schemas/mock-exam-production-retirement-v1.schema.json"' in deployment
     )
     assert '"eom_api_contracts/schemas/mock-exam-review-eligibility-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-review-eligibility-v2.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/mock-exam-review-eligibility-v3.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/hwpx-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/workflow-start-v1.schema.json"' in deployment
     assert '"eom_api_contracts/mock_exam_execution.py"' in deployment

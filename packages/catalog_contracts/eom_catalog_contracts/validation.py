@@ -55,6 +55,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:50dddba5c0167a0edb6993825d7ad62abb6c56bb6c707e2d103e7a2adedaa065",
         ),
+        "mock-exam-item-review-publication-result-v3": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-item-review-publication-result-v3.schema.json",
+            "resources/assessment-assembly/mock-exam-item-review-publication-result-v3.schema.json",
+            "3.0",
+            "sha256:b1069f0b2acdd340382cad71ae212117d45525921c61b93c1f2cdb11a29069ee",
+        ),
         "mock-exam-item-review-decision": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-item-review-decision-v1.schema.json",
             "resources/assessment-assembly/mock-exam-item-review-decision-v1.schema.json",
@@ -66,6 +72,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/assessment-assembly/mock-exam-item-review-decision-v2.schema.json",
             "2.0",
             "sha256:7cb83fc19ce124f49bdd9829e3a846c318f85dfa6f3578d69594404fd414bf76",
+        ),
+        "mock-exam-item-review-decision-v3": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-item-review-decision-v3.schema.json",
+            "resources/assessment-assembly/mock-exam-item-review-decision-v3.schema.json",
+            "3.0",
+            "sha256:e5195f0f76997f8b458ea85e4f3eff1c18aaeb1fbbb023214f6653c3ad5e2ddc",
         ),
         "mock-exam-review-eligibility-query": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json",
@@ -85,6 +97,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:d1de598f3f8d754df44aff968199eb532eb0bb3ba0c00a72a04ac09a5f5e1557",
         ),
+        "mock-exam-review-eligibility-result-v3": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-review-eligibility-result-v3.schema.json",
+            "resources/assessment-assembly/mock-exam-review-eligibility-result-v3.schema.json",
+            "3.0",
+            "sha256:a5023d968ad7346f342bf0f9e79dafb5cd46d2b0d49c06cec673ff5e39f89f27",
+        ),
         "mock-exam-production-plan": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-production-plan-v1.schema.json",
             "resources/assessment-assembly/mock-exam-production-plan-v1.schema.json",
@@ -96,6 +114,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/assessment-assembly/mock-exam-production-plan-v2.schema.json",
             "2.0",
             "sha256:d3bddcbbb236cbfba595587ea373445224de9d02bfa2e975a7dd5010ca48483f",
+        ),
+        "mock-exam-production-plan-v3": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-production-plan-v3.schema.json",
+            "resources/assessment-assembly/mock-exam-production-plan-v3.schema.json",
+            "3.0",
+            "sha256:687b663f099310209301d1931eb27368cfd8873a38c77b3ee5d3c05b2106523f",
         ),
         "mock-exam-assembly-manifest": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
