@@ -129,11 +129,6 @@
         "authoring_artifact": {
           "$ref": "#/$defs/EvidenceAuthoringArtifactPointerV1"
         },
-        "citation_set_sha256": {
-          "pattern": "^sha256:[0-9a-f]{64}$",
-          "title": "Citation Set Sha256",
-          "type": "string"
-        },
         "citations": {
           "items": {
             "$ref": "#/$defs/EvidenceUsageCitationV1"
@@ -159,8 +154,7 @@
         "schema_version",
         "decision",
         "authoring_artifact",
-        "citations",
-        "citation_set_sha256"
+        "citations"
       ],
       "title": "EvidenceUsageReviewAttestationV1",
       "type": "object"

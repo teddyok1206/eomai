@@ -21,9 +21,10 @@ manifest and does not become a competing source of truth.
 
 The semantic `manifest_sha256` (the canonical manifest-body self-hash pinned as
 `evidence_manifest_sha256` by the plan) is distinct from the manifest Artifact member's `sha256`
-(the hash of the stored full member bytes). Evidence usage carries both without conflating them.
-The materializer validates the member-byte hash through its Artifact pointer and independently
-validates the semantic self-hash.
+(the hash of the stored full member bytes). Worker evidence usage carries the semantic hash and
+context member hash exposed by the staged manifest. The orchestrator's typed validation receipt
+carries the exact manifest pointer (including its member-byte hash) and both values without
+conflating them.
 
 The relationship is:
 
@@ -33,7 +34,8 @@ Evidence Bundle logical ID -> immutable Evidence Bundle revision
                            -> context Artifact revision + context hash
                            -> selected evidence IDs -> selected anchor IDs
 authoring result revision  -> evidence-usage value + draft JSON paths
-review result revision     -> hash and exact citation-set attestation
+review result revision     -> exact citation-set attestation
+job success event          -> typed validation receipt + canonical citation-set hash
 ```
 
 Logical IDs, revision IDs, Artifact IDs, Artifact revision IDs, and SHA-256 hashes remain separate.
@@ -68,9 +70,11 @@ mismatched values fail closed. An ungrounded plan/output must carry no evidence 
 
 Before review Artifact commit, the orchestrator resolves the exact authoring upstream Artifact,
 repeats the plan/manifest checks, and requires the review attestation to pin its logical Artifact ID,
-Artifact revision ID, content hash, and the independently computed canonical citation-set hash. It
-rejects a missing or different citation set. No implicit latest revision or best-effort substitution
-is allowed.
+Artifact revision ID, content hash, and exact citations. It rejects a missing or different citation
+set. Workers never submit or calculate a digest, and the orchestrator never repairs worker citation
+content. Instead, it derives the canonical authoring and review citation-set hashes and persists a
+typed, self-hashed validation receipt in the same transaction that records Artifact success. No
+implicit latest revision or best-effort substitution is allowed.
 
 ## Access patterns and data structures
 

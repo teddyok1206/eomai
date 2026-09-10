@@ -93,11 +93,6 @@
     "EvidenceUsageV1": {
       "additionalProperties": false,
       "properties": {
-        "citation_set_sha256": {
-          "pattern": "^sha256:[0-9a-f]{64}$",
-          "title": "Citation Set Sha256",
-          "type": "string"
-        },
         "citations": {
           "items": {
             "$ref": "#/$defs/EvidenceUsageCitationV1"
@@ -153,8 +148,7 @@
         "graph_snapshot_revision_id",
         "evidence_manifest_sha256",
         "evidence_context_sha256",
-        "citations",
-        "citation_set_sha256"
+        "citations"
       ],
       "title": "EvidenceUsageV1",
       "type": "object"
