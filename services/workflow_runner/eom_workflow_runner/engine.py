@@ -96,6 +96,13 @@ TERMINAL_WORKFLOW_STATES = {
     state.value
     for state in SUCCESSFUL_TERMINAL_WORKFLOW_STATES | UNSUCCESSFUL_TERMINAL_WORKFLOW_STATES
 }
+CONTENT_TEAM_IMAGE_RESULT_SCHEMAS = frozenset(
+    {"image-result@8.0", "image-result@9.0", "image-result@10.0"}
+)
+
+
+def _is_content_team_image_result_schema(result_schema: str) -> bool:
+    return result_schema in CONTENT_TEAM_IMAGE_RESULT_SCHEMAS
 
 
 def _prompt_name_for_request(
@@ -746,7 +753,7 @@ class WorkflowRunner:
                     definition.worker_role == "image"
                     and full_request.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
                 ):
-                    if definition.result_schema in {"image-result@8.0", "image-result@9.0"}:
+                    if _is_content_team_image_result_schema(definition.result_schema):
                         content_team_stimuli = self.catalog.materialize_content_team_stimuli(
                             workflow=workflow,
                             artifacts=(*upstream, result_pointer),
