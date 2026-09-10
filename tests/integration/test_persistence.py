@@ -4,6 +4,14 @@ from datetime import UTC, datetime
 
 import pytest
 from alembic.runtime.migration import MigrationContext
+from eom_catalog_service.artifacts import (
+    CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION,
+    CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH,
+)
+from eom_catalog_service.knowledge_analysis_service import (
+    KNOWLEDGE_ANALYSIS_DOCUMENT_CATALOG_PROTOCOL,
+    KNOWLEDGE_ANALYSIS_DOCUMENT_CATALOG_SCHEMA_HASH,
+)
 from eom_identifiers import new_job_id, new_logical_artifact_id, new_revision_id
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.models import ArtifactRevisionRecord, JobEventRecord, ProtocolVersionRecord
@@ -41,6 +49,34 @@ def test_migration_revision(integration_engine: Engine) -> None:
         assert MigrationContext.configure(connection).get_current_revision() == (
             CURRENT_MIGRATION_REVISION
         )
+
+
+def test_catalog_item_v3_and_knowledge_document_protocols_coexist(
+    db_session: Session,
+) -> None:
+    ensure_protocol_version(
+        db_session,
+        KNOWLEDGE_ANALYSIS_DOCUMENT_CATALOG_PROTOCOL,
+        KNOWLEDGE_ANALYSIS_DOCUMENT_CATALOG_SCHEMA_HASH,
+    )
+    ensure_protocol_version(
+        db_session,
+        CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION,
+        CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH,
+    )
+    db_session.flush()
+
+    knowledge_document = db_session.get(
+        ProtocolVersionRecord, KNOWLEDGE_ANALYSIS_DOCUMENT_CATALOG_PROTOCOL
+    )
+    item_content_v3 = db_session.get(
+        ProtocolVersionRecord, CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION
+    )
+    assert knowledge_document is not None
+    assert knowledge_document.schema_sha256 == KNOWLEDGE_ANALYSIS_DOCUMENT_CATALOG_SCHEMA_HASH
+    assert item_content_v3 is not None
+    assert item_content_v3.schema_sha256 == CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH
+    assert knowledge_document.version != item_content_v3.version
 
 
 def test_role_protocol_versions_coexist_without_reinterpreting_history(

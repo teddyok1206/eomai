@@ -11,6 +11,10 @@ from eom_catalog_contracts.mock_exam_production_plan import (
     CONTENT_TEAM_ITEM_GUIDANCE,
     CONTENT_TEAM_ITEM_GUIDANCE_SHA256,
 )
+from eom_catalog_service.artifacts import (
+    CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION,
+    CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH,
+)
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.vector_stimulus import RenderedVectorStimulus
 from eom_catalog_service.workflow_catalog import (
@@ -762,6 +766,8 @@ def test_content_team_v10_parses_grounded_authoring_image_pair_and_content_v3(
         "content_hash": AUTHORING_V10.content_hash,
     } in artifacts.loaded
     content_commit = artifacts.commits[-1]
+    assert content_commit["protocol_version"] == CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION
+    assert content_commit["protocol_schema_hash"] == CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH
     content = json.loads(
         Path(content_commit["files"]["assessment-item-content.json"]).read_text(encoding="utf-8")
     )
