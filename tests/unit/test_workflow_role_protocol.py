@@ -135,6 +135,16 @@ def test_all_codex_result_projections_use_the_supported_strict_subset() -> None:
         assert "$id" not in projected
 
 
+def test_v10_codex_contract_makes_all_correct_wrong_answer_empty() -> None:
+    projected = load_codex_result_schema("authoring-result@10.0")
+    wrong_answer = projected["$defs"]["ContentTeamExplanationSections"]["properties"][
+        "wrong_answer"
+    ]
+
+    assert "contains all three labels ㄱ, ㄴ, ㄷ" in wrong_answer["description"]
+    assert "return exactly the empty string" in wrong_answer["description"]
+
+
 @pytest.mark.parametrize("lookaround", ["(?=x)", "(?!x)", "(?<=x)", "(?<!x)"])
 def test_codex_result_projection_rejects_regex_lookaround(lookaround: str) -> None:
     projected = load_codex_result_schema("legacy-item-extraction-result@1.0")

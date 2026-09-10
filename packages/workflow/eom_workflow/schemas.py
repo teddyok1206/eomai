@@ -1896,6 +1896,15 @@ def _project_content_team_authoring_contract(
         "Use the reviewed 탐구/실험 structure only when the item requires it. When present, keep "
         "visuals empty because the program renders the inquiry box as its own layout."
     )
+    if schema_id == "authoring-result@10.0":
+        explanations = _mapping(definitions, "ContentTeamExplanationSections")
+        wrong_answer = _mapping(_mapping(explanations, "properties"), "wrong_answer")
+        wrong_answer["description"] = (
+            "For a STATEMENT_COMBINATION answer, include exactly one labeled line for each "
+            "incorrect statement and no other text. If answer.statement_labels contains all "
+            "three labels ㄱ, ㄴ, ㄷ, there is no incorrect statement: return exactly the empty "
+            "string. Never add a generic wrong-answer summary to an all-correct item."
+        )
 
 
 def _project_knowledge_analysis_codex_contract(schema: dict[str, Any], *, schema_id: str) -> None:

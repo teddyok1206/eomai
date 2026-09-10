@@ -280,6 +280,27 @@ def test_all_correct_item_round_trips_with_an_empty_wrong_answer_section() -> No
     assert reparsed.explanations.wrong_answer == ""
 
 
+def test_all_correct_item_rejects_a_generic_wrong_answer_summary() -> None:
+    value = _content().model_dump(mode="json")
+    value["answer"] = {
+        "answer_kind": "STATEMENT_COMBINATION",
+        "number": "⑤",
+        "statement_labels": ["ㄱ", "ㄴ", "ㄷ"],
+        "answer_content": "ㄱ, ㄴ, ㄷ",
+        "raw_line": "정답 : ⑤ (ㄱ, ㄴ, ㄷ)",
+    }
+    value["explanations"] = {
+        **value["explanations"],
+        "correct_answer": (
+            "ㄱ. 제시된 정보와 일치한다.\nㄴ. 제시된 정보와 일치한다.\nㄷ. 제시된 정보와 일치한다."
+        ),
+        "wrong_answer": "모든 진술이 옳으므로 별도의 오답은 없다.",
+    }
+
+    with pytest.raises(ValueError, match="all-correct item must keep"):
+        AssessmentItemContentV2.model_validate(value)
+
+
 def test_direct_choice_item_is_a_first_class_v2_contract() -> None:
     value = _content().model_dump(mode="json")
     value["statements"] = []
