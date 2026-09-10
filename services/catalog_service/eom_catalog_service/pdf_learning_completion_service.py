@@ -471,7 +471,11 @@ class PdfLearningCompletionService:
         )
         receipt_document: dict[str, object] = {
             "schema_version": (
-                "eom-pdf-learning-completion/1.1"
+                (
+                    "eom-pdf-learning-completion/1.1"
+                    if len(evidence.analysis_recoveries) == 4
+                    else "eom-pdf-learning-completion/1.2"
+                )
                 if collision_version
                 else "eom-pdf-learning-completion/1.0"
             ),
@@ -622,11 +626,17 @@ class PdfLearningCompletionService:
         receipt: PdfLearningCompletionReceipt,
         artifact: ArtifactMember,
     ) -> None:
-        expected_schema_ref = (
-            "eom://schemas/legacy-assessment/pdf-learning-completion/1.1"
-            if receipt.schema_version == "eom-pdf-learning-completion/1.1"
-            else "eom://schemas/legacy-assessment/pdf-learning-completion/1.0"
-        )
+        expected_schema_ref = {
+            "eom-pdf-learning-completion/1.0": (
+                "eom://schemas/legacy-assessment/pdf-learning-completion/1.0"
+            ),
+            "eom-pdf-learning-completion/1.1": (
+                "eom://schemas/legacy-assessment/pdf-learning-completion/1.1"
+            ),
+            "eom-pdf-learning-completion/1.2": (
+                "eom://schemas/legacy-assessment/pdf-learning-completion/1.2"
+            ),
+        }[receipt.schema_version]
         if (
             artifact.member_path != "completion-receipt.json"
             or artifact.schema_ref != expected_schema_ref

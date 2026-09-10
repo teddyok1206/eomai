@@ -109,6 +109,15 @@ LEGACY_ASSESSMENT_SCHEMA_SHA256 = {
     "legacy-item-extraction-validation-recovery": (
         "sha256:9cdbbc056f0919bc84e73040986d913c5ecbf664760c7ecc2f7a7398138a77f0"
     ),
+    "pdf-learning-completion": (
+        "sha256:1652de61ff752ea8e21f79c819b16b214a8896b90bcde2a4d44cc0f5060e10a4"
+    ),
+    "pdf-learning-completion-v2": (
+        "sha256:890281dfe762d3a643e39f573592cafd22dcf4687e8637aa638b64266122e6da"
+    ),
+    "pdf-learning-completion-v3": (
+        "sha256:f2092ffff5c646ca06af87097d14033fee815d0d5d628f54bfb27115a03c3b0d"
+    ),
 }
 
 ITEM_ORIGIN_SCHEMA_SHA256 = {
@@ -147,7 +156,7 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 204
+    assert len(entries) == 205
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {

@@ -376,6 +376,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.1",
             "sha256:890281dfe762d3a643e39f573592cafd22dcf4687e8637aa638b64266122e6da",
         ),
+        "pdf-learning-completion-v3": CatalogSchemaResource(
+            "schemas/legacy-assessment/pdf-learning-completion-v3.schema.json",
+            "resources/legacy-assessment/pdf-learning-completion-v3.schema.json",
+            "1.2",
+            "sha256:f2092ffff5c646ca06af87097d14033fee815d0d5d628f54bfb27115a03c3b0d",
+        ),
         "pdf-learning-item-completion-shard": CatalogSchemaResource(
             "schemas/legacy-assessment/pdf-learning-item-completion-shard-v1.schema.json",
             "resources/legacy-assessment/pdf-learning-item-completion-shard-v1.schema.json",

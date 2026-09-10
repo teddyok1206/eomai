@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     LegacyItemExtractionBatchManifestV2,
     LegacyItemExtractionValidationRecovery,
     LegacySourceInventoryV2,
+    PdfLearningCompletionReceipt,
     PdfLearningItemCompletionShard,
     completion_identity_sha256,
 )
@@ -30,7 +31,13 @@ from eom_catalog_service.pdf_learning_completion_service import (
     ResolvedPdfLearningCompletionSnapshot,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
-from test_pdf_learning_completion import _completion_items, _receipt, validate_payload
+from test_pdf_learning_completion import (
+    ReceiptFixture,
+    _completion_items,
+    _receipt,
+    _v12_receipt,
+    validate_payload,
+)
 
 
 class _Source:
@@ -110,7 +117,7 @@ class _Artifacts:
 
     def commit_completion_receipt(
         self,
-        receipt: object,
+        receipt: PdfLearningCompletionReceipt,
         *,
         completion_identity: str,
     ) -> ArtifactMember:
@@ -123,7 +130,17 @@ class _Artifacts:
             artifact_id="artifact_" + "e" * 32,
             artifact_revision_id="rev_" + "e" * 32,
             member_path="completion-receipt.json",
-            schema_ref="eom://schemas/legacy-assessment/pdf-learning-completion/1.0",
+            schema_ref={
+                "eom-pdf-learning-completion/1.0": (
+                    "eom://schemas/legacy-assessment/pdf-learning-completion/1.0"
+                ),
+                "eom-pdf-learning-completion/1.1": (
+                    "eom://schemas/legacy-assessment/pdf-learning-completion/1.1"
+                ),
+                "eom-pdf-learning-completion/1.2": (
+                    "eom://schemas/legacy-assessment/pdf-learning-completion/1.2"
+                ),
+            }[receipt.schema_version],
             media_type="application/json",
             sha256=sha256_bytes(canonical_json_bytes(document)),
         )
@@ -146,15 +163,21 @@ def _completion_items_from_shards(shards: tuple[object, ...]) -> tuple[object, .
     return tuple(item for shard in shards for item in shard.items)
 
 
-def _snapshot() -> tuple[
+def _snapshot(
+    fixture: ReceiptFixture | None = None,
+) -> tuple[
     PdfLearningCompletionRequest,
     ResolvedPdfLearningCompletionSnapshot,
 ]:
-    fixture = _receipt()
+    fixture = fixture or _receipt()
     receipt = validate_payload(fixture)
     items = _completion_items(fixture)
     generic = LegacyItemCorpusCompletionReceipt.model_construct(
-        schema_version="legacy-item-corpus-completion-receipt/1.0",
+        schema_version=(
+            "legacy-item-corpus-completion-receipt/1.1"
+            if receipt.historical_result_identity_collisions is not None
+            else "legacy-item-corpus-completion-receipt/1.0"
+        ),
         status="COMPLETE",
         requested_by="operator_stage_c",
         command_sha256="sha256:" + "1" * 64,
@@ -179,6 +202,7 @@ def _snapshot() -> tuple[
         accepted_item_map_sha256=receipt.coverage_accepted_map_sha256,
         created_at=receipt.observed_at_utc,
         receipt_sha256="sha256:" + "2" * 64,
+        historical_result_identity_collisions=receipt.historical_result_identity_collisions,
     )
     request = PdfLearningCompletionRequest(
         corpus_completion=generic,
@@ -196,6 +220,7 @@ def _snapshot() -> tuple[
         graph_snapshot=receipt.graph_snapshot,
         analysis_recoveries=receipt.analysis_recoveries,
         quiescence=receipt.quiescence,
+        historical_result_identity_collisions=receipt.historical_result_identity_collisions,
     )
     snapshot = ResolvedPdfLearningCompletionSnapshot(
         requested_by="operator_stage_c",
@@ -242,6 +267,44 @@ def test_service_publishes_nine_canonical_shards_and_replays_exact_receipt() -> 
     assert len({pointer.artifact.artifact_id for pointer in first.receipt.item_shards}) == 9
     assert len(artifacts.shards) == 9
     assert len(artifacts.receipts) == 1
+
+
+def test_service_selects_v12_for_nonlegacy_bounded_recovery_count() -> None:
+    fixture = _v12_receipt()
+    request, snapshot = _snapshot(fixture)
+    artifacts = _Artifacts()
+    service = PdfLearningCompletionService(
+        source=_Source(snapshot),
+        artifacts=artifacts,
+        source_release=validate_payload(fixture).source_release,
+        validator=_Verifier(),
+    )
+
+    publication = service.complete(request)
+
+    assert publication.receipt.schema_version == "eom-pdf-learning-completion/1.2"
+    assert len(publication.receipt.analysis_recoveries) == 6
+    assert publication.receipt_artifact.schema_ref == (
+        "eom://schemas/legacy-assessment/pdf-learning-completion/1.2"
+    )
+
+
+def test_service_retains_v11_for_exactly_four_collision_recoveries() -> None:
+    fixture = _v12_receipt(4)
+    request, snapshot = _snapshot(fixture)
+    service = PdfLearningCompletionService(
+        source=_Source(snapshot),
+        artifacts=_Artifacts(),
+        source_release=validate_payload(fixture).source_release,
+        validator=_Verifier(),
+    )
+
+    publication = service.complete(request)
+
+    assert publication.receipt.schema_version == "eom-pdf-learning-completion/1.1"
+    assert publication.receipt_artifact.schema_ref == (
+        "eom://schemas/legacy-assessment/pdf-learning-completion/1.1"
+    )
 
 
 def test_service_fails_after_publication_when_mutable_state_changed() -> None:

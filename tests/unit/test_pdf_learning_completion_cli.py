@@ -224,7 +224,7 @@ def test_complete_pdf_passes_protected_roots_and_same_installed_release(
     corpus_completion = object()
     pdf_roots = object()
     request = object()
-    receipt = _Document({"schema_version": "eom-pdf-learning-completion/1.0"})
+    receipt = _Document({"schema_version": "eom-pdf-learning-completion/1.2"})
     receipt_artifact = _Document({"artifact_revision_id": "revision"})
     publication = SimpleNamespace(
         completion_identity_sha256="sha256:" + "d" * 64,
@@ -303,7 +303,7 @@ def test_complete_pdf_passes_protected_roots_and_same_installed_release(
         "status": "SUCCEEDED",
         "completion_identity_sha256": "sha256:" + "d" * 64,
         "receipt_artifact": {"artifact_revision_id": "revision"},
-        "receipt": {"schema_version": "eom-pdf-learning-completion/1.0"},
+        "receipt": {"schema_version": "eom-pdf-learning-completion/1.2"},
     }
     assert calls["validated"] == (
         "legacy-item-corpus-completion-receipt",

@@ -28,6 +28,7 @@ from eom_catalog_contracts import (
 )
 from eom_catalog_contracts.pdf_learning_completion import validate_payload as _validate_payload
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 
 
@@ -156,7 +157,7 @@ def _rehash_graph(graph: dict[str, object]) -> None:
     )
 
 
-def _receipt() -> dict[str, object]:
+def _receipt() -> ReceiptFixture:
     original_batch_id = _identity("legacybatch", 1)
     successor_batch_id = _identity("legacybatch", 2)
     inventory_id = _identity("legacyinventory", 1)
@@ -624,6 +625,82 @@ def _receipt() -> dict[str, object]:
     return ReceiptFixture(payload, shard_documents)
 
 
+def _set_analysis_recovery_count(payload: ReceiptFixture, count: int) -> None:
+    items = payload["items"]
+    assert isinstance(items, list)
+    for item in items:
+        analysis = item["analysis"]
+        assert isinstance(analysis, dict)
+        analysis["predecessor_analysis_run_id"] = None
+    recoveries: list[dict[str, object]] = []
+    for index, item in enumerate(items[:count], start=1):
+        analysis = item["analysis"]
+        assert isinstance(analysis, dict)
+        predecessor_run_id = _identity("analysisrun", 10_000 + index)
+        analysis["predecessor_analysis_run_id"] = predecessor_run_id
+        lineage: dict[str, object] = {
+            "item_id": item["item_id"],
+            "item_revision_id": item["item_revision_id"],
+            "predecessor_analysis_run_id": predecessor_run_id,
+            "predecessor_analysis_request_id": _identity("knowledgeanalysis", 10_000 + index),
+            "predecessor_request_sha256": _sha(200_000 + index),
+            "predecessor_submission_sha256": _sha(210_000 + index),
+            "predecessor_state": "FAILED",
+            "predecessor_error_code": "WORKER_RESULT_INVALID",
+            "predecessor_accepted_result_present": False,
+            "predecessor_successor_count": 1,
+            "successor_analysis_run_id": analysis["analysis_run_id"],
+            "successor_analysis_request_id": analysis["analysis_request_id"],
+            "successor_request_sha256": analysis["request_sha256"],
+            "successor_state": "ACCEPTED",
+            "lineage_sha256": _sha(0),
+        }
+        lineage["lineage_sha256"] = content_sha256(
+            {key: value for key, value in lineage.items() if key != "lineage_sha256"}
+        )
+        recoveries.append(lineage)
+    recoveries.sort(key=lambda value: value["predecessor_analysis_run_id"])
+    payload["analysis_recoveries"] = recoveries
+    payload["analysis_recovery_set_sha256"] = content_sha256(recoveries)
+
+
+def _v12_receipt(recovery_count: int = 6) -> ReceiptFixture:
+    payload = _receipt()
+    work_units = payload["effective_work_units"]
+    assert isinstance(work_units, list)
+    for first_index, stop_index in ((0, 5), (5, 8), (8, 10)):
+        first = work_units[first_index]
+        assert isinstance(first, dict)
+        for index in range(first_index + 1, stop_index):
+            member = work_units[index]
+            assert isinstance(member, dict)
+            member["extraction_result_id"] = first["extraction_result_id"]
+    evidence = derive_legacy_extraction_result_identity_collisions(
+        LegacyExtractionResultIdentityCollisionMember(
+            effective_batch_id=unit["effective_batch_id"],
+            effective_work_unit_id=unit["effective_work_unit_id"],
+            effective_ordinal=unit["effective_ordinal"],
+            extraction_request_id=unit["extraction_request_id"],
+            request_sha256=unit["request_sha256"],
+            extraction_result_id=unit["extraction_result_id"],
+            result_artifact=unit["result_artifact"],
+            result_sha256=unit["result_sha256"],
+            extraction_receipt_sha256=unit["extraction_receipt_sha256"],
+            acceptance_id=unit["acceptance_id"],
+            acceptance_sha256=unit["acceptance_sha256"],
+            acceptance_artifact=unit["acceptance_artifact"],
+        )
+        for unit in work_units
+        if isinstance(unit, dict)
+    )
+    assert evidence is not None
+    payload["schema_version"] = "eom-pdf-learning-completion/1.2"
+    payload["historical_result_identity_collisions"] = evidence.model_dump(mode="json")
+    _set_analysis_recovery_count(payload, recovery_count)
+    _rehash_shards(payload)
+    return payload
+
+
 def _graph_evidence(
     payload: dict[str, object],
     *,
@@ -1041,6 +1118,45 @@ def test_valid_exact_520_bijection_passes_schema_pydantic_and_self_hash() -> Non
     assert len(receipt.pdf_sources) == 50
     assert len(receipt.effective_work_units) == 108
     assert receipt.item_count == 520
+
+
+def test_v12_accepts_six_exact_hash_bound_analysis_recoveries() -> None:
+    payload = _v12_receipt()
+
+    receipt = validate_payload(payload)
+
+    assert receipt.schema_version == "eom-pdf-learning-completion/1.2"
+    assert len(receipt.analysis_recoveries) == 6
+    assert receipt.analysis_recovery_set_sha256 == content_sha256(
+        [value.model_dump(mode="json") for value in receipt.analysis_recoveries]
+    )
+
+
+@pytest.mark.parametrize("count", [0, 33])
+def test_v12_rejects_recovery_counts_outside_runtime_bound(count: int) -> None:
+    payload = _v12_receipt(count)
+
+    with pytest.raises(JsonSchemaValidationError):
+        _validate_payload(payload)
+    with pytest.raises(PydanticValidationError):
+        PdfLearningCompletionReceipt.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "schema_version",
+    ["eom-pdf-learning-completion/1.0", "eom-pdf-learning-completion/1.1"],
+)
+def test_legacy_receipt_versions_keep_exactly_four_recoveries(schema_version: str) -> None:
+    payload = _v12_receipt()
+    payload["schema_version"] = schema_version
+    if schema_version.endswith("/1.0"):
+        del payload["historical_result_identity_collisions"]
+    _rehash_shards(payload)
+
+    with pytest.raises(JsonSchemaValidationError):
+        _validate_payload(payload)
+    with pytest.raises(PydanticValidationError, match="exactly four"):
+        PdfLearningCompletionReceipt.model_validate(payload)
 
 
 def test_exact_historical_result_identity_collision_attestation_is_preserved() -> None:

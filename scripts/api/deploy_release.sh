@@ -1540,6 +1540,7 @@ catalog_resources = {
     "legacy-assessment/legacy-item-corpus-coverage-v1.schema.json": "schemas/legacy-assessment/legacy-item-corpus-coverage-v1.schema.json",
     "legacy-assessment/pdf-learning-completion-v1.schema.json": "schemas/legacy-assessment/pdf-learning-completion-v1.schema.json",
     "legacy-assessment/pdf-learning-completion-v2.schema.json": "schemas/legacy-assessment/pdf-learning-completion-v2.schema.json",
+    "legacy-assessment/pdf-learning-completion-v3.schema.json": "schemas/legacy-assessment/pdf-learning-completion-v3.schema.json",
     "legacy-assessment/pdf-learning-item-completion-shard-v1.schema.json": "schemas/legacy-assessment/pdf-learning-item-completion-shard-v1.schema.json",
     "legacy-assessment/legacy-item-promotion-request-v1.schema.json": "schemas/legacy-assessment/legacy-item-promotion-request-v1.schema.json",
     "legacy-assessment/legacy-item-editorial-compatibility-policy-v1.schema.json": "schemas/legacy-assessment/legacy-item-editorial-compatibility-policy-v1.schema.json",

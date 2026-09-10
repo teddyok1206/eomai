@@ -8,6 +8,7 @@ import re
 import signal
 import threading
 
+from eom_catalog_contracts import MAX_PDF_LEARNING_ANALYSIS_RECOVERIES
 from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_engine
 from pydantic import ValidationError
@@ -89,7 +90,7 @@ def _legacy_automation_retry_analysis_run_ids() -> tuple[str, ...]:
     configured = os.environ.get("EOM_LEGACY_ITEM_AUTOMATION_RETRY_ANALYSIS_RUN_IDS", "")
     values = tuple(value.strip() for value in configured.split(",") if value.strip())
     if (
-        len(values) > 32
+        len(values) > MAX_PDF_LEARNING_ANALYSIS_RECOVERIES
         or len(values) != len(set(values))
         or any(_ANALYSIS_RUN_ID_PATTERN.fullmatch(value) is None for value in values)
     ):

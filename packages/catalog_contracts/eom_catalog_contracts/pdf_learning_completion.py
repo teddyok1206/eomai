@@ -54,6 +54,7 @@ from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
 from eom_catalog_contracts.validation import validate_contract
 
 SHA_PATTERN = r"^sha256:[0-9a-f]{64}$"
+MAX_PDF_LEARNING_ANALYSIS_RECOVERIES = 32
 
 
 class ArtifactMember(FrozenModel):
@@ -786,6 +787,7 @@ class PdfLearningCompletionReceipt(FrozenModel):
     schema_version: Literal[
         "eom-pdf-learning-completion/1.0",
         "eom-pdf-learning-completion/1.1",
+        "eom-pdf-learning-completion/1.2",
     ]
     status: Literal["COMPLETE"]
     source_release: SourceRelease
@@ -804,7 +806,10 @@ class PdfLearningCompletionReceipt(FrozenModel):
         min_length=9, max_length=9
     )
     graph_snapshot: GraphSnapshot
-    analysis_recoveries: tuple[AnalysisRecoveryLineage, ...] = Field(min_length=4, max_length=4)
+    analysis_recoveries: tuple[AnalysisRecoveryLineage, ...] = Field(
+        min_length=1,
+        max_length=MAX_PDF_LEARNING_ANALYSIS_RECOVERIES,
+    )
     quiescence: Quiescence
     pdf_sources_sha256: str = Field(pattern=SHA_PATTERN)
     expected_item_keys_sha256: str = Field(pattern=SHA_PATTERN)
@@ -870,9 +875,18 @@ class PdfLearningCompletionReceipt(FrozenModel):
             )
         except ValueError as exc:
             raise ValueError("effective non-result evidence pointers must be unique") from exc
-        collision_version = self.schema_version == "eom-pdf-learning-completion/1.1"
+        collision_version = self.schema_version != "eom-pdf-learning-completion/1.0"
         if collision_version != (self.historical_result_identity_collisions is not None):
             raise ValueError("completion receipt version and collision evidence differ")
+        if (
+            self.schema_version
+            in {
+                "eom-pdf-learning-completion/1.0",
+                "eom-pdf-learning-completion/1.1",
+            }
+            and len(self.analysis_recoveries) != 4
+        ):
+            raise ValueError("legacy completion receipt requires exactly four analysis recoveries")
         if not collision_version and identity_collisions is not None:
             raise ValueError("effective work-unit evidence pointers must be unique")
         if identity_collisions is not None and (
@@ -1011,9 +1025,15 @@ def completion_identity_sha256(receipt: PdfLearningCompletionReceipt) -> str:
 
 
 def validate_payload(payload: dict[str, object]) -> PdfLearningCompletionReceipt:
+    routes = {
+        "eom-pdf-learning-completion/1.0": "pdf-learning-completion",
+        "eom-pdf-learning-completion/1.1": "pdf-learning-completion-v2",
+        "eom-pdf-learning-completion/1.2": "pdf-learning-completion-v3",
+    }
+    schema_version = payload.get("schema_version")
     route = (
-        "pdf-learning-completion-v2"
-        if payload.get("schema_version") == "eom-pdf-learning-completion/1.1"
+        routes.get(schema_version, "pdf-learning-completion")
+        if isinstance(schema_version, str)
         else "pdf-learning-completion"
     )
     validate_contract(route, payload)

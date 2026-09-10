@@ -11,11 +11,12 @@ from eom_orchestrator.control_artifacts import (
 )
 from eom_orchestrator.legacy_assessment_control_artifacts import (
     COMPLETION_RECEIPT_ARTIFACT_TYPE,
+    COMPLETION_RECEIPT_SCHEMA_REF_V3,
     COMPLETION_SHARD_ARTIFACT_TYPE,
     LegacyAssessmentControlArtifactPublisher,
 )
 from eom_workflow import ControlArtifactPointer
-from test_pdf_learning_completion import _receipt, validate_payload
+from test_pdf_learning_completion import _receipt, _v12_receipt, validate_payload
 
 
 class _RecordingPublisher:
@@ -95,3 +96,20 @@ def test_completion_receipt_rejects_source_release_drift_before_publication() ->
         )
 
     assert recording.calls == []
+
+
+def test_v12_completion_receipt_publishes_with_exact_v3_schema_pointer() -> None:
+    receipt = validate_payload(_v12_receipt())
+    recording = _RecordingPublisher()
+    adapter = LegacyAssessmentControlArtifactPublisher(
+        cast(ControlArtifactPublisher, recording),
+        source_release=receipt.source_release,
+    )
+
+    pointer = adapter.commit_completion_receipt(
+        receipt,
+        completion_identity=completion_identity_sha256(receipt),
+    )
+
+    assert recording.calls[0]["schema_ref"] == COMPLETION_RECEIPT_SCHEMA_REF_V3
+    assert pointer.schema_ref == COMPLETION_RECEIPT_SCHEMA_REF_V3

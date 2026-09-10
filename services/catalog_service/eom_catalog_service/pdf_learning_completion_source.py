@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Literal, NoReturn, TypeVar, cast
 
 from eom_catalog_contracts import (
+    MAX_PDF_LEARNING_ANALYSIS_RECOVERIES,
     AnalysisProof,
     AnalysisRecoveryLineage,
     ArtifactMember,
@@ -178,6 +179,28 @@ ACTIVE_WORKFLOW_STATES = frozenset(
     }
 )
 ACTIVE_COMMAND_STATES = frozenset({"PENDING", "LEASED", "PROCESSING"})
+
+
+def _analysis_history_scope_is_exact(
+    *,
+    accepted_ids: Collection[str],
+    predecessor_ids: Collection[str],
+    scoped_ids: Collection[str],
+) -> bool:
+    """Check the bounded V9 leaf/predecessor set without weakening identity equality."""
+
+    accepted = set(accepted_ids)
+    predecessors = set(predecessor_ids)
+    scoped = set(scoped_ids)
+    return (
+        len(accepted) == 520
+        and 1 <= len(predecessors) <= MAX_PDF_LEARNING_ANALYSIS_RECOVERIES
+        and accepted.isdisjoint(predecessors)
+        and len(scoped) == 520 + len(predecessors)
+        and scoped == accepted | predecessors
+    )
+
+
 ACTIVE_ANALYSIS_STATES = frozenset(
     {"REQUESTED", "RESOLVED", "QUEUED", "RUNNING", "VALIDATING", "NEEDS_REVIEW"}
 )
@@ -1924,14 +1947,14 @@ class PostgresPdfLearningCompletionSource:
         )
         for row in child_rows:
             scoped_by_id[row.analysis_run_id] = row
-        if (
-            len(scoped_by_id) != 524
-            or len(predecessor_ids) != 4
-            or set(scoped_by_id) != accepted_ids | predecessor_ids
+        if not _analysis_history_scope_is_exact(
+            accepted_ids=accepted_ids,
+            predecessor_ids=predecessor_ids,
+            scoped_ids=scoped_by_id,
         ):
             self._fail(
                 "PDF_LEARNING_COMPLETION_ANALYSIS_HISTORY_INVALID",
-                "analysis cohort is not exactly 520 accepted leaves plus four predecessors",
+                "analysis cohort is not exactly 520 accepted leaves plus its bounded predecessors",
             )
         successors: dict[str, list[KnowledgeAnalysisRunRecord]] = defaultdict(list)
         for row in scoped_by_id.values():
@@ -2039,10 +2062,10 @@ class PostgresPdfLearningCompletionSource:
                     {**body, "lineage_sha256": content_sha256(body)}
                 )
             )
-        if len(recoveries) != 4:
+        if len(recoveries) != len(predecessor_ids):
             self._fail(
                 "PDF_LEARNING_COMPLETION_ANALYSIS_RECOVERY_INVALID",
-                "analysis retry lineage is not exactly four",
+                "analysis retry lineage does not cover every exact predecessor",
             )
         return (
             tuple(

@@ -560,6 +560,7 @@ from eom_catalog_contracts.models import (
     UncertaintiesDocument,
 )
 from eom_catalog_contracts.pdf_learning_completion import (
+    MAX_PDF_LEARNING_ANALYSIS_RECOVERIES,
     AnalysisProof,
     AnalysisRecoveryLineage,
     ArtifactMember,
@@ -643,6 +644,7 @@ __all__ = [
     "LEGACY_ITEM_MEDIA_COMPATIBILITY_RESOURCE",
     "LEGACY_ITEM_MEDIA_COMPATIBILITY_RESOURCE_SHA256",
     "LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF",
+    "MAX_PDF_LEARNING_ANALYSIS_RECOVERIES",
     "MAX_PLANNER_VISITED_NODES",
     "MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME",
     "MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA",

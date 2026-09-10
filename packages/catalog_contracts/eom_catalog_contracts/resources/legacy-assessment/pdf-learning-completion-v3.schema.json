@@ -1,0 +1,983 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/pdf-learning-completion/1.2",
+  "title": "EOM PDF Learning Completion Receipt V3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "source_release",
+    "inventory",
+    "original_batch",
+    "successor_batch",
+    "recovery_authorization",
+    "historical_result_identity_collisions",
+    "corpus_coverage",
+    "pdf_sources",
+    "effective_work_units",
+    "item_count",
+    "item_shards",
+    "graph_snapshot",
+    "analysis_recoveries",
+    "quiescence",
+    "pdf_sources_sha256",
+    "expected_item_keys_sha256",
+    "coverage_accepted_map_sha256",
+    "analysis_recovery_set_sha256",
+    "completion_map_sha256",
+    "observed_at_utc",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "eom-pdf-learning-completion/1.2"},
+    "status": {"const": "COMPLETE"},
+    "source_release": {"$ref": "#/$defs/sourceRelease"},
+    "inventory": {"$ref": "#/$defs/inventoryPointer"},
+    "original_batch": {"$ref": "#/$defs/originalBatch"},
+    "successor_batch": {"$ref": "#/$defs/successorBatch"},
+    "recovery_authorization": {"$ref": "#/$defs/recoveryAuthorization"},
+    "historical_result_identity_collisions": {
+      "$ref": "eom://schemas/legacy-assessment/legacy-extraction-result-identity-collisions/1.0",
+      "properties": {
+        "collision_group_count": {"const": 3},
+        "collision_membership_count": {"const": 10},
+        "noncanonical_membership_count": {"const": 7}
+      }
+    },
+    "corpus_coverage": {"$ref": "#/$defs/corpusCoverage"},
+    "pdf_sources": {
+      "type": "array",
+      "minItems": 50,
+      "maxItems": 50,
+      "items": {"$ref": "#/$defs/pdfSource"}
+    },
+    "effective_work_units": {
+      "type": "array",
+      "minItems": 108,
+      "maxItems": 108,
+      "items": {"$ref": "#/$defs/effectiveWorkUnit"}
+    },
+    "item_count": {"const": 520},
+    "item_shards": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "prefixItems": [
+        {
+          "allOf": [
+            {"$ref": "#/$defs/itemCompletionShardPointer"},
+            {"properties": {"shard_index": {"const": 0}, "item_count": {"const": 64}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/itemCompletionShardPointer"},
+            {"properties": {"shard_index": {"const": 1}, "item_count": {"const": 64}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/itemCompletionShardPointer"},
+            {"properties": {"shard_index": {"const": 2}, "item_count": {"const": 64}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/itemCompletionShardPointer"},
+            {"properties": {"shard_index": {"const": 3}, "item_count": {"const": 64}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/itemCompletionShardPointer"},
+            {"properties": {"shard_index": {"const": 4}, "item_count": {"const": 64}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/itemCompletionShardPointer"},
+            {"properties": {"shard_index": {"const": 5}, "item_count": {"const": 64}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/itemCompletionShardPointer"},
+            {"properties": {"shard_index": {"const": 6}, "item_count": {"const": 64}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/itemCompletionShardPointer"},
+            {"properties": {"shard_index": {"const": 7}, "item_count": {"const": 64}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/itemCompletionShardPointer"},
+            {"properties": {"shard_index": {"const": 8}, "item_count": {"const": 8}}}
+          ]
+        }
+      ],
+      "items": false
+    },
+    "graph_snapshot": {"$ref": "#/$defs/graphSnapshot"},
+    "analysis_recoveries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {"$ref": "#/$defs/analysisRecoveryLineage"}
+    },
+    "quiescence": {"$ref": "#/$defs/quiescence"},
+    "pdf_sources_sha256": {"$ref": "#/$defs/sha256"},
+    "expected_item_keys_sha256": {"$ref": "#/$defs/sha256"},
+    "coverage_accepted_map_sha256": {"$ref": "#/$defs/sha256"},
+    "analysis_recovery_set_sha256": {"$ref": "#/$defs/sha256"},
+    "completion_map_sha256": {"$ref": "#/$defs/sha256"},
+    "observed_at_utc": {"type": "string", "format": "date-time"},
+    "receipt_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "knowledgeArtifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "logical_name",
+        "member_path"
+      ],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "schema_ref": {"type": "string", "minLength": 1, "maxLength": 256},
+        "media_type": {"type": "string", "minLength": 3, "maxLength": 128},
+        "logical_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\u0000-\\u001f\\u007f]+$"
+        }
+      }
+    },
+    "sourceRelease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["git_commit", "git_tree", "git_archive_sha256"],
+      "properties": {
+        "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "git_tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "git_archive_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "inventoryPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inventory_id", "inventory_sha256", "artifact"],
+      "properties": {
+        "inventory_id": {"type": "string", "pattern": "^legacyinventory_[0-9a-f]{32}$"},
+        "inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "artifact": {"$ref": "#/$defs/artifactMember"}
+      }
+    },
+    "batchBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "extraction_batch_id",
+        "manifest_sha256",
+        "manifest_artifact",
+        "inventory_id",
+        "inventory_sha256",
+        "state",
+        "total_work_unit_count",
+        "accepted_work_unit_count",
+        "failed_work_unit_count",
+        "other_work_unit_count"
+      ],
+      "properties": {
+        "role": {"enum": ["ORIGINAL_SCOPE", "VALIDATION_SUCCESSOR"]},
+        "extraction_batch_id": {
+          "type": "string",
+          "pattern": "^legacybatch_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_artifact": {"$ref": "#/$defs/artifactMember"},
+        "inventory_id": {"type": "string", "pattern": "^legacyinventory_[0-9a-f]{32}$"},
+        "inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "state": {"enum": ["COMPLETED_WITH_GAPS", "SUCCEEDED"]},
+        "total_work_unit_count": {"type": "integer", "minimum": 0},
+        "accepted_work_unit_count": {"type": "integer", "minimum": 0},
+        "failed_work_unit_count": {"type": "integer", "minimum": 0},
+        "other_work_unit_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "originalBatch": {
+      "allOf": [
+        {"$ref": "#/$defs/batchBase"},
+        {
+          "properties": {
+            "role": {"const": "ORIGINAL_SCOPE"},
+            "state": {"const": "COMPLETED_WITH_GAPS"},
+            "total_work_unit_count": {"const": 108},
+            "accepted_work_unit_count": {"const": 105},
+            "failed_work_unit_count": {"const": 3},
+            "other_work_unit_count": {"const": 0}
+          }
+        }
+      ]
+    },
+    "successorBatch": {
+      "allOf": [
+        {"$ref": "#/$defs/batchBase"},
+        {
+          "properties": {
+            "role": {"const": "VALIDATION_SUCCESSOR"},
+            "state": {"const": "SUCCEEDED"},
+            "total_work_unit_count": {"const": 3},
+            "accepted_work_unit_count": {"const": 3},
+            "failed_work_unit_count": {"const": 0},
+            "other_work_unit_count": {"const": 0}
+          }
+        }
+      ]
+    },
+    "recoveryAuthorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recovery_sha256", "artifact"],
+      "properties": {
+        "recovery_sha256": {"$ref": "#/$defs/sha256"},
+        "artifact": {"$ref": "#/$defs/artifactMember"}
+      }
+    },
+    "corpusCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coverage_id",
+        "coverage_sha256",
+        "artifact",
+        "state",
+        "expected_item_count",
+        "accepted_item_count",
+        "missing_item_count",
+        "conflict_item_count"
+      ],
+      "properties": {
+        "coverage_id": {"type": "string", "pattern": "^itemcoverage_[0-9a-f]{32}$"},
+        "coverage_sha256": {"$ref": "#/$defs/sha256"},
+        "artifact": {"$ref": "#/$defs/artifactMember"},
+        "state": {"const": "COMPLETE"},
+        "expected_item_count": {"const": 520},
+        "accepted_item_count": {"const": 520},
+        "missing_item_count": {"const": 0},
+        "conflict_item_count": {"const": 0}
+      }
+    },
+    "pdfSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inventory_entry_key",
+        "content_sha256",
+        "media_type",
+        "bundle_revision_ids"
+      ],
+      "properties": {
+        "inventory_entry_key": {
+          "type": "string",
+          "pattern": "^legacyentry_[0-9a-f]{32}$"
+        },
+        "content_sha256": {"$ref": "#/$defs/sha256"},
+        "media_type": {"const": "application/pdf"},
+        "bundle_revision_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 108,
+          "items": {
+            "type": "string",
+            "pattern": "^assessbundlerev_[0-9a-f]{32}$"
+          }
+        }
+      }
+    },
+    "effectiveWorkUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "original_work_unit_id",
+        "original_ordinal",
+        "effective_batch_id",
+        "effective_work_unit_id",
+        "effective_ordinal",
+        "recovered",
+        "bundle_id",
+        "bundle_revision_id",
+        "bundle_manifest_sha256",
+        "occurrence_id",
+        "occurrence_revision_id",
+        "occurrence_revision_sha256",
+        "expected_item_numbers",
+        "expected_item_numbers_sha256",
+        "extraction_request_id",
+        "request_sha256",
+        "extraction_result_id",
+        "result_sha256",
+        "result_artifact",
+        "extraction_receipt_sha256",
+        "acceptance_id",
+        "acceptance_sha256",
+        "acceptance_artifact",
+        "acceptance_state",
+        "coverage_state"
+      ],
+      "properties": {
+        "original_work_unit_id": {
+          "type": "string",
+          "pattern": "^legacyworkunit_[0-9a-f]{32}$"
+        },
+        "original_ordinal": {"type": "integer", "minimum": 0, "maximum": 107},
+        "effective_batch_id": {
+          "type": "string",
+          "pattern": "^legacybatch_[0-9a-f]{32}$"
+        },
+        "effective_work_unit_id": {
+          "type": "string",
+          "pattern": "^legacyworkunit_[0-9a-f]{32}$"
+        },
+        "effective_ordinal": {"type": "integer", "minimum": 0, "maximum": 107},
+        "recovered": {"type": "boolean"},
+        "bundle_id": {"type": "string", "pattern": "^assessbundle_[0-9a-f]{32}$"},
+        "bundle_revision_id": {
+          "type": "string",
+          "pattern": "^assessbundlerev_[0-9a-f]{32}$"
+        },
+        "bundle_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "occurrence_id": {"type": "string", "pattern": "^occurrence_[0-9a-f]{32}$"},
+        "occurrence_revision_id": {
+          "type": "string",
+          "pattern": "^occurrev_[0-9a-f]{32}$"
+        },
+        "occurrence_revision_sha256": {"$ref": "#/$defs/sha256"},
+        "expected_item_numbers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {"type": "integer", "minimum": 1, "maximum": 10000}
+        },
+        "expected_item_numbers_sha256": {"$ref": "#/$defs/sha256"},
+        "extraction_request_id": {
+          "type": "string",
+          "pattern": "^itemextractreq_[0-9a-f]{32}$"
+        },
+        "request_sha256": {"$ref": "#/$defs/sha256"},
+        "extraction_result_id": {
+          "type": "string",
+          "pattern": "^itemextractresult_[0-9a-f]{32}$"
+        },
+        "result_sha256": {"$ref": "#/$defs/sha256"},
+        "result_artifact": {"$ref": "#/$defs/artifactMember"},
+        "extraction_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "acceptance_id": {
+          "type": "string",
+          "pattern": "^itemacceptance_[0-9a-f]{32}$"
+        },
+        "acceptance_sha256": {"$ref": "#/$defs/sha256"},
+        "acceptance_artifact": {"$ref": "#/$defs/artifactMember"},
+        "acceptance_state": {"const": "ACCEPTED"},
+        "coverage_state": {"const": "COMPLETE"}
+      }
+    },
+    "analysisProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "analysis_run_id",
+        "predecessor_analysis_run_id",
+        "analysis_request_id",
+        "request_sha256",
+        "submission_sha256",
+        "state",
+        "successor_run_count",
+        "source_kind",
+        "source_revision_id",
+        "item_id",
+        "item_revision_id",
+        "source_artifact",
+        "preset_id",
+        "preset_revision_id",
+        "preset_sha256",
+        "risk_policy_revision_id",
+        "risk_policy_sha256",
+        "accepted_result_artifact",
+        "accepted_result_sha256"
+      ],
+      "properties": {
+        "analysis_run_id": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+        "predecessor_analysis_run_id": {
+          "anyOf": [
+            {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+            {"type": "null"}
+          ]
+        },
+        "analysis_request_id": {
+          "type": "string",
+          "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+        },
+        "request_sha256": {"$ref": "#/$defs/sha256"},
+        "submission_sha256": {"$ref": "#/$defs/sha256"},
+        "state": {"const": "ACCEPTED"},
+        "successor_run_count": {"const": 0},
+        "source_kind": {"const": "APPROVED_ITEM_REVISION"},
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "source_artifact": {"$ref": "#/$defs/artifactMember"},
+        "preset_id": {"type": "string", "pattern": "^execpreset_[0-9a-f]{32}$"},
+        "preset_revision_id": {
+          "type": "string",
+          "pattern": "^execpresetrev_[0-9a-f]{32}$"
+        },
+        "preset_sha256": {"$ref": "#/$defs/sha256"},
+        "risk_policy_revision_id": {
+          "type": "string",
+          "pattern": "^analysisriskrev_[0-9a-f]{32}$"
+        },
+        "risk_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "accepted_result_artifact": {"$ref": "#/$defs/artifactMember"},
+        "accepted_result_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "graphPlacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "graph_id",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256",
+        "analysis_run_id",
+        "item_id",
+        "item_revision_id",
+        "item_origin_profile_id",
+        "item_origin_profile_sha256",
+        "extraction_acceptance_id",
+        "extraction_acceptance_sha256",
+        "assessment_source_bundle_id",
+        "assessment_source_bundle_revision_id",
+        "assessment_source_bundle_sha256",
+        "assessment_occurrence_id",
+        "assessment_occurrence_revision_id",
+        "assessment_occurrence_revision_sha256",
+        "occurrence_display_label",
+        "administration_year",
+        "administration_month",
+        "target_school_level",
+        "target_grade",
+        "subject_key",
+        "item_number",
+        "curriculum_unit_ids",
+        "placement_sha256",
+        "membership_sha256"
+      ],
+      "properties": {
+        "graph_id": {"type": "string", "pattern": "^graph_[0-9a-f]{32}$"},
+        "graph_snapshot_revision_id": {
+          "type": "string",
+          "pattern": "^graphrev_[0-9a-f]{32}$"
+        },
+        "graph_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+        "analysis_run_id": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "item_origin_profile_id": {
+          "type": "string",
+          "pattern": "^originprofile_[0-9a-f]{32}$"
+        },
+        "item_origin_profile_sha256": {"$ref": "#/$defs/sha256"},
+        "extraction_acceptance_id": {
+          "type": "string",
+          "pattern": "^itemacceptance_[0-9a-f]{32}$"
+        },
+        "extraction_acceptance_sha256": {"$ref": "#/$defs/sha256"},
+        "assessment_source_bundle_id": {
+          "type": "string",
+          "pattern": "^assessbundle_[0-9a-f]{32}$"
+        },
+        "assessment_source_bundle_revision_id": {
+          "type": "string",
+          "pattern": "^assessbundlerev_[0-9a-f]{32}$"
+        },
+        "assessment_source_bundle_sha256": {"$ref": "#/$defs/sha256"},
+        "assessment_occurrence_id": {
+          "type": "string",
+          "pattern": "^occurrence_[0-9a-f]{32}$"
+        },
+        "assessment_occurrence_revision_id": {
+          "type": "string",
+          "pattern": "^occurrev_[0-9a-f]{32}$"
+        },
+        "assessment_occurrence_revision_sha256": {"$ref": "#/$defs/sha256"},
+        "occurrence_display_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "administration_year": {"type": "integer", "minimum": 1900, "maximum": 2200},
+        "administration_month": {"type": "integer", "minimum": 1, "maximum": 12},
+        "target_school_level": {
+          "enum": ["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"]
+        },
+        "target_grade": {"type": "integer", "minimum": 1, "maximum": 6},
+        "subject_key": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,159}$"
+        },
+        "item_number": {"type": "integer", "minimum": 1, "maximum": 200},
+        "curriculum_unit_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^currunit_[0-9a-f]{32}$"}
+        },
+        "placement_sha256": {"$ref": "#/$defs/sha256"},
+        "membership_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "rightsPolicyProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rights_policy_id",
+        "rights_policy_revision_id",
+        "rights_policy_sha256"
+      ],
+      "properties": {
+        "rights_policy_id": {
+          "type": "string",
+          "pattern": "^rightspolicy_[0-9a-f]{32}$"
+        },
+        "rights_policy_revision_id": {
+          "type": "string",
+          "pattern": "^rightspolicyrev_[0-9a-f]{32}$"
+        },
+        "rights_policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "institutionalOriginProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_origin_profile_id",
+        "item_origin_profile_sha256",
+        "profile_item_id",
+        "profile_item_revision_id",
+        "profile_item_manifest_sha256",
+        "source_domain",
+        "creation_method",
+        "occurrence_relation_count",
+        "derivation_count",
+        "derivation_source_kind",
+        "derivation_relation",
+        "assessment_source_bundle_id",
+        "assessment_source_bundle_revision_id",
+        "assessment_source_bundle_sha256",
+        "bundle_revision_state",
+        "assessment_occurrence_id",
+        "assessment_occurrence_revision_id",
+        "assessment_occurrence_revision_sha256",
+        "occurrence_schema_version",
+        "occurrence_revision_state",
+        "occurrence_lifecycle_state",
+        "occurrence_current_revision_id",
+        "profile_rights_policy",
+        "occurrence_rights_policy",
+        "bundle_rights_policy"
+      ],
+      "properties": {
+        "item_origin_profile_id": {
+          "type": "string",
+          "pattern": "^originprofile_[0-9a-f]{32}$"
+        },
+        "item_origin_profile_sha256": {"$ref": "#/$defs/sha256"},
+        "profile_item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "profile_item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "profile_item_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "source_domain": {"const": "EXTERNAL_INSTITUTION"},
+        "creation_method": {"const": "UNKNOWN"},
+        "occurrence_relation_count": {"const": 1},
+        "derivation_count": {"const": 1},
+        "derivation_source_kind": {
+          "const": "ASSESSMENT_SOURCE_BUNDLE_REVISION"
+        },
+        "derivation_relation": {"const": "DIGITIZED_FROM"},
+        "assessment_source_bundle_id": {
+          "type": "string",
+          "pattern": "^assessbundle_[0-9a-f]{32}$"
+        },
+        "assessment_source_bundle_revision_id": {
+          "type": "string",
+          "pattern": "^assessbundlerev_[0-9a-f]{32}$"
+        },
+        "assessment_source_bundle_sha256": {"$ref": "#/$defs/sha256"},
+        "bundle_revision_state": {"const": "REVIEWED"},
+        "assessment_occurrence_id": {
+          "type": "string",
+          "pattern": "^occurrence_[0-9a-f]{32}$"
+        },
+        "assessment_occurrence_revision_id": {
+          "type": "string",
+          "pattern": "^occurrev_[0-9a-f]{32}$"
+        },
+        "assessment_occurrence_revision_sha256": {"$ref": "#/$defs/sha256"},
+        "occurrence_schema_version": {"const": "assessment-occurrence-revision/2.0"},
+        "occurrence_revision_state": {"const": "REVIEWED"},
+        "occurrence_lifecycle_state": {"const": "ACTIVE"},
+        "occurrence_current_revision_id": {
+          "type": "string",
+          "pattern": "^occurrev_[0-9a-f]{32}$"
+        },
+        "profile_rights_policy": {"$ref": "#/$defs/rightsPolicyProof"},
+        "occurrence_rights_policy": {"$ref": "#/$defs/rightsPolicyProof"},
+        "bundle_rights_policy": {"$ref": "#/$defs/rightsPolicyProof"}
+      }
+    },
+    "itemCompletion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bundle_revision_id",
+        "item_number",
+        "effective_work_unit_id",
+        "acceptance_id",
+        "acceptance_sha256",
+        "item_proposal_id",
+        "decision",
+        "promotion_registration_key",
+        "item_id",
+        "item_revision_id",
+        "item_lifecycle_state",
+        "item_current_revision_id",
+        "item_revision_state",
+        "content_pack_release_id",
+        "item_manifest_sha256",
+        "item_manifest_artifact",
+        "item_content_artifact",
+        "item_origin_profile_id",
+        "item_origin_profile_sha256",
+        "origin",
+        "analysis",
+        "graph_placement"
+      ],
+      "properties": {
+        "bundle_revision_id": {
+          "type": "string",
+          "pattern": "^assessbundlerev_[0-9a-f]{32}$"
+        },
+        "item_number": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "effective_work_unit_id": {
+          "type": "string",
+          "pattern": "^legacyworkunit_[0-9a-f]{32}$"
+        },
+        "acceptance_id": {
+          "type": "string",
+          "pattern": "^itemacceptance_[0-9a-f]{32}$"
+        },
+        "acceptance_sha256": {"$ref": "#/$defs/sha256"},
+        "item_proposal_id": {"type": "string", "pattern": "^itemproposal_[0-9a-f]{32}$"},
+        "decision": {"const": "ACCEPT"},
+        "promotion_registration_key": {
+          "type": "string",
+          "pattern": "^legacy-item-promotion:itemacceptance_[0-9a-f]{32}:itemproposal_[0-9a-f]{32}$"
+        },
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "item_lifecycle_state": {"const": "ACTIVE"},
+        "item_current_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "item_revision_state": {"const": "APPROVED"},
+        "content_pack_release_id": {
+          "type": "string",
+          "pattern": "^packrel_[0-9a-f]{32}$"
+        },
+        "item_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "item_manifest_artifact": {"$ref": "#/$defs/artifactMember"},
+        "item_content_artifact": {"$ref": "#/$defs/artifactMember"},
+        "item_origin_profile_id": {
+          "type": "string",
+          "pattern": "^originprofile_[0-9a-f]{32}$"
+        },
+        "item_origin_profile_sha256": {"$ref": "#/$defs/sha256"},
+        "origin": {"$ref": "#/$defs/institutionalOriginProof"},
+        "analysis": {"$ref": "#/$defs/analysisProof"},
+        "graph_placement": {"$ref": "#/$defs/graphPlacement"}
+      }
+    },
+    "completionItemKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle_revision_id", "item_number"],
+      "properties": {
+        "bundle_revision_id": {
+          "type": "string",
+          "pattern": "^assessbundlerev_[0-9a-f]{32}$"
+        },
+        "item_number": {"type": "integer", "minimum": 1, "maximum": 10000}
+      }
+    },
+    "itemCompletionShardPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shard_index",
+        "first_key",
+        "last_key",
+        "item_count",
+        "shard_sha256",
+        "artifact"
+      ],
+      "properties": {
+        "shard_index": {"type": "integer", "minimum": 0, "maximum": 31},
+        "first_key": {"$ref": "#/$defs/completionItemKey"},
+        "last_key": {"$ref": "#/$defs/completionItemKey"},
+        "item_count": {"type": "integer", "minimum": 1, "maximum": 64},
+        "shard_sha256": {"$ref": "#/$defs/sha256"},
+        "artifact": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactMember"},
+            {
+              "properties": {
+                "member_path": {
+                  "type": "string",
+                  "pattern": "^item-completions/shard-[0-9]{2}\\.json$"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/legacy-assessment/pdf-learning-item-completion-shard/1.0"
+                },
+                "media_type": {"const": "application/json"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "graphSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpus_id",
+        "corpus_key",
+        "corpus_lifecycle_state",
+        "corpus_revision_id",
+        "corpus_source_set_sha256",
+        "graph_id",
+        "graph_snapshot_revision_id",
+        "snapshot_state",
+        "snapshot_sha256",
+        "manifest_sha256",
+        "manifest_artifact",
+        "projections",
+        "structure_manifest_sha256",
+        "structure_manifest_artifact",
+        "snapshot_created_at",
+        "observed_as_current"
+      ],
+      "properties": {
+        "corpus_id": {"type": "string", "pattern": "^corpus_[0-9a-f]{32}$"},
+        "corpus_key": {"const": "integrated-science-textbooks"},
+        "corpus_lifecycle_state": {"const": "ACTIVE"},
+        "corpus_revision_id": {"type": "string", "pattern": "^corpusrev_[0-9a-f]{32}$"},
+        "corpus_source_set_sha256": {"$ref": "#/$defs/sha256"},
+        "graph_id": {"type": "string", "pattern": "^graph_[0-9a-f]{32}$"},
+        "graph_snapshot_revision_id": {
+          "type": "string",
+          "pattern": "^graphrev_[0-9a-f]{32}$"
+        },
+        "snapshot_state": {"const": "PUBLISHED"},
+        "snapshot_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_artifact": {"$ref": "#/$defs/knowledgeArtifactMember"},
+        "projections": {"$ref": "#/$defs/graphProjections"},
+        "structure_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "structure_manifest_artifact": {"$ref": "#/$defs/knowledgeArtifactMember"},
+        "snapshot_created_at": {"type": "string", "format": "date-time"},
+        "observed_as_current": {"const": true}
+      }
+    },
+    "graphProjections": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodes", "edges", "curriculum_closure", "markdown", "lexical_index"],
+      "properties": {
+        "nodes": {"$ref": "#/$defs/knowledgeArtifactMember"},
+        "edges": {"$ref": "#/$defs/knowledgeArtifactMember"},
+        "curriculum_closure": {"$ref": "#/$defs/knowledgeArtifactMember"},
+        "markdown": {"$ref": "#/$defs/knowledgeArtifactMember"},
+        "lexical_index": {"$ref": "#/$defs/knowledgeArtifactMember"}
+      }
+    },
+    "analysisRecoveryLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_id",
+        "item_revision_id",
+        "predecessor_analysis_run_id",
+        "predecessor_analysis_request_id",
+        "predecessor_request_sha256",
+        "predecessor_submission_sha256",
+        "predecessor_state",
+        "predecessor_error_code",
+        "predecessor_accepted_result_present",
+        "predecessor_successor_count",
+        "successor_analysis_run_id",
+        "successor_analysis_request_id",
+        "successor_request_sha256",
+        "successor_state",
+        "lineage_sha256"
+      ],
+      "properties": {
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "predecessor_analysis_run_id": {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "predecessor_analysis_request_id": {
+          "type": "string",
+          "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+        },
+        "predecessor_request_sha256": {"$ref": "#/$defs/sha256"},
+        "predecessor_submission_sha256": {"$ref": "#/$defs/sha256"},
+        "predecessor_state": {"const": "FAILED"},
+        "predecessor_error_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$"
+        },
+        "predecessor_accepted_result_present": {"const": false},
+        "predecessor_successor_count": {"const": 1},
+        "successor_analysis_run_id": {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "successor_analysis_request_id": {
+          "type": "string",
+          "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+        },
+        "successor_request_sha256": {"$ref": "#/$defs/sha256"},
+        "successor_state": {"const": "ACCEPTED"},
+        "lineage_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "quiescence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "automation_mode",
+        "volatile_auto_overlay_present",
+        "deployment_hold",
+        "missing_keys",
+        "conflict_keys",
+        "duplicate_expected_keys",
+        "extra_effective_keys",
+        "unpromoted_items",
+        "active_analysis_leaves",
+        "failed_analysis_leaves",
+        "duplicate_analysis_leaves",
+        "graph_missing_items",
+        "graph_duplicate_items",
+        "source_pending_work_units",
+        "promotion_pending_items",
+        "graph_pending_items",
+        "unaccounted_terminal_work_units",
+        "active_platform_jobs",
+        "active_workflows",
+        "active_workflow_commands",
+        "active_analysis_runs",
+        "slot05_held_leases",
+        "slot06_held_leases"
+      ],
+      "properties": {
+        "automation_mode": {"const": "DISABLED"},
+        "volatile_auto_overlay_present": {"const": false},
+        "deployment_hold": {"const": false},
+        "missing_keys": {"const": 0},
+        "conflict_keys": {"const": 0},
+        "duplicate_expected_keys": {"const": 0},
+        "extra_effective_keys": {"const": 0},
+        "unpromoted_items": {"const": 0},
+        "active_analysis_leaves": {"const": 0},
+        "failed_analysis_leaves": {"const": 0},
+        "duplicate_analysis_leaves": {"const": 0},
+        "graph_missing_items": {"const": 0},
+        "graph_duplicate_items": {"const": 0},
+        "source_pending_work_units": {"const": 0},
+        "promotion_pending_items": {"const": 0},
+        "graph_pending_items": {"const": 0},
+        "unaccounted_terminal_work_units": {"const": 0},
+        "active_platform_jobs": {"const": 0},
+        "active_workflows": {"const": 0},
+        "active_workflow_commands": {"const": 0},
+        "active_analysis_runs": {"const": 0},
+        "slot05_held_leases": {"const": 0},
+        "slot06_held_leases": {"const": 0}
+      }
+    }
+  }
+}

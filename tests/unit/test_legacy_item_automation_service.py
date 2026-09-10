@@ -524,6 +524,21 @@ def test_retry_analysis_ids_reject_duplicates(monkeypatch: pytest.MonkeyPatch) -
     assert _legacy_automation_retry_analysis_run_ids() == ()
 
 
+def test_retry_analysis_ids_share_the_stage_c_bound(monkeypatch: pytest.MonkeyPatch) -> None:
+    bounded = tuple(f"analysisrun_{index:032x}" for index in range(32))
+    monkeypatch.setenv(
+        "EOM_LEGACY_ITEM_AUTOMATION_RETRY_ANALYSIS_RUN_IDS",
+        ",".join(bounded),
+    )
+    assert _legacy_automation_retry_analysis_run_ids() == bounded
+
+    monkeypatch.setenv(
+        "EOM_LEGACY_ITEM_AUTOMATION_RETRY_ANALYSIS_RUN_IDS",
+        ",".join((*bounded, "analysisrun_" + "f" * 32)),
+    )
+    assert _legacy_automation_retry_analysis_run_ids() == ()
+
+
 @pytest.mark.parametrize(("configured", "expected"), [("1", 1), ("8", 8), ("16", 16)])
 def test_graph_batch_size_accepts_bounded_values(
     monkeypatch: pytest.MonkeyPatch,
