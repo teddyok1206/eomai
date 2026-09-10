@@ -41,6 +41,7 @@ from eom_workflow.control_plane import (
     ControlArtifactPointer,
     ResolvedStepExecution,
 )
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from sqlalchemy.orm import Session
 
 from eom_orchestrator.control_models import (
@@ -1399,7 +1400,7 @@ def resolve_evidence_materials(
         else:
             validate_catalog_contract("evidence-bundle-manifest-v2", manifest_value)
             manifest = EvidenceBundleManifestV2.model_validate(manifest_value)
-    except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
+    except (UnicodeError, json.JSONDecodeError, ValueError, JsonSchemaValidationError) as exc:
         raise ControlPlaneError(
             "CONTROL_EVIDENCE_MANIFEST_INVALID", "Evidence Bundle manifest is invalid"
         ) from exc

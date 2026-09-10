@@ -21,6 +21,7 @@ from eom_orchestrator.execution_materializer import (
 )
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_workflow import ControlArtifactPointer
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
 ZERO_SHA = "sha256:" + "0" * 64
 GROUP_ID = os.getgid()
@@ -1000,6 +1001,35 @@ def test_knowledge_materializer_validates_context_before_staging_manifest(
             authorized_artifact_revision_ids=fixture["authorized"],
         )
     assert captured.value.code in {"CONTROL_POINTER_FILE_INVALID", "CONTROL_POINTER_HASH_MISMATCH"}
+    assert not (workspace / "references/evidence/context.md").exists()
+    assert not (workspace / "references/evidence/manifest.json").exists()
+
+
+def test_knowledge_materializer_normalizes_manifest_schema_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+
+    def reject_manifest(_name: str, _value: dict[str, Any]) -> None:
+        raise JsonSchemaValidationError("invalid Evidence Bundle manifest")
+
+    monkeypatch.setattr(
+        "eom_orchestrator.execution_materializer.validate_catalog_contract",
+        reject_manifest,
+    )
+    workspace = _workspace(tmp_path, "knowledge-invalid-manifest")
+    with pytest.raises(ControlPlaneError) as captured:
+        materialize_execution_step(
+            fixture["session"],
+            plan_id=str(fixture["plan_id"]),
+            step_key="authoring",
+            workspace=workspace,
+            canonical_artifact_root=fixture["artifact_root"],
+            worker_group_id=GROUP_ID,
+            authorized_artifact_revision_ids=fixture["authorized"],
+        )
+
+    assert captured.value.code == "CONTROL_EVIDENCE_MANIFEST_INVALID"
     assert not (workspace / "references/evidence/context.md").exists()
     assert not (workspace / "references/evidence/manifest.json").exists()
 
