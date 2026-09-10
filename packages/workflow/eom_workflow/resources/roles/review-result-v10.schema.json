@@ -1,0 +1,321 @@
+{
+  "$defs": {
+    "ArtifactSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "file_name": {
+          "const": "result.json",
+          "title": "File Name",
+          "type": "string"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Logical Artifact Id",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "application/json",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Revision Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "file_name",
+        "media_type"
+      ],
+      "title": "ArtifactSpec",
+      "type": "object"
+    },
+    "EvidenceAuthoringArtifactPointerV1": {
+      "additionalProperties": false,
+      "properties": {
+        "content_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Logical Artifact Id",
+          "type": "string"
+        },
+        "result_schema": {
+          "const": "authoring-result@10.0",
+          "title": "Result Schema",
+          "type": "string"
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Revision Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "content_hash",
+        "result_schema"
+      ],
+      "title": "EvidenceAuthoringArtifactPointerV1",
+      "type": "object"
+    },
+    "EvidenceUsageCitationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor_ids": {
+          "items": {
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Anchor Ids",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "application": {
+          "enum": [
+            "CONCEPT_GROUNDING",
+            "STRUCTURE_PATTERN",
+            "AVOID_COPY_CHECK"
+          ],
+          "title": "Application",
+          "type": "string"
+        },
+        "application_description": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Application Description",
+          "type": "string"
+        },
+        "draft_json_paths": {
+          "items": {
+            "maxLength": 256,
+            "pattern": "^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Draft Json Paths",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence_id": {
+          "pattern": "^evidenceitem_[0-9a-f]{32}$",
+          "title": "Evidence Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "anchor_ids",
+        "application",
+        "application_description",
+        "draft_json_paths"
+      ],
+      "title": "EvidenceUsageCitationV1",
+      "type": "object"
+    },
+    "EvidenceUsageReviewAttestationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "authoring_artifact": {
+          "$ref": "#/$defs/EvidenceAuthoringArtifactPointerV1"
+        },
+        "citation_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Citation Set Sha256",
+          "type": "string"
+        },
+        "citations": {
+          "items": {
+            "$ref": "#/$defs/EvidenceUsageCitationV1"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Citations",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "decision": {
+          "const": "VERIFIED",
+          "title": "Decision",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "evidence-usage-review-attestation/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "decision",
+        "authoring_artifact",
+        "citations",
+        "citation_set_sha256"
+      ],
+      "title": "EvidenceUsageReviewAttestationV1",
+      "type": "object"
+    },
+    "KnowledgeReview": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "const": "ready_for_human",
+          "title": "Decision",
+          "type": "string"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/ReviewFinding"
+          },
+          "maxItems": 20,
+          "title": "Findings",
+          "type": "array"
+        },
+        "summary": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision",
+        "findings",
+        "summary"
+      ],
+      "title": "KnowledgeReview",
+      "type": "object"
+    },
+    "KnowledgeReviewOutputV10": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_usage_attestation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvidenceUsageReviewAttestationV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review": {
+          "$ref": "#/$defs/KnowledgeReview"
+        }
+      },
+      "required": [
+        "review",
+        "evidence_usage_attestation"
+      ],
+      "title": "KnowledgeReviewOutputV10",
+      "type": "object"
+    },
+    "ReviewFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "blocking"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "ReviewFinding",
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/workflow/roles/review-result-v10.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact": {
+      "$ref": "#/$defs/ArtifactSpec"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "job_id": {
+      "pattern": "^job_[0-9a-f]{32}$",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "output": {
+      "$ref": "#/$defs/KnowledgeReviewOutputV10"
+    },
+    "protocol_version": {
+      "const": "workflow-role/1.20.0",
+      "title": "Protocol Version",
+      "type": "string"
+    },
+    "role": {
+      "const": "review",
+      "title": "Role",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "const": "ok",
+      "title": "Status",
+      "type": "string"
+    },
+    "step_run_id": {
+      "pattern": "^steprun_[0-9a-f]{32}$",
+      "title": "Step Run Id",
+      "type": "string"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "title": "Workflow Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "job_id",
+    "workflow_id",
+    "step_run_id",
+    "status",
+    "artifact",
+    "completed_at",
+    "role",
+    "output"
+  ],
+  "title": "ContentTeamReviewRoleResultV10",
+  "type": "object"
+}
