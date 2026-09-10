@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypeVar
@@ -77,10 +78,12 @@ class IdempotencyService:
         endpoint_key: str,
         raw_key: str,
         request_sha256: str,
-        lease_owner: str,
         now: datetime | None = None,
     ) -> IdempotencyClaim:
         timestamp = now or datetime.now(UTC)
+        # Request IDs may be supplied by clients and can repeat. Claim ownership must instead be
+        # unique to this server-side acquisition so a stale callback can never finalize a takeover.
+        lease_owner = "apiidemlease_" + secrets.token_hex(16)
         key_hash = self._key_hash(raw_key)
         record_id = new_idempotency_record_id()
         try:

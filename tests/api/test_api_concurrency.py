@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from threading import Barrier
 
 import pytest
@@ -38,7 +38,6 @@ def test_concurrent_idempotency_claim_has_one_owner() -> None:
                 endpoint_key="test_concurrent_claim",
                 raw_key="concurrent-key-0001",
                 request_sha256="sha256:" + "a" * 64,
-                lease_owner=f"req_concurrent_{number}",
             )
         except ApiError as exc:
             return exc
@@ -53,17 +52,27 @@ def test_concurrent_idempotency_claim_has_one_owner() -> None:
 
         winner = next(value for value in outcomes if isinstance(value, IdempotencyClaim))
         assert winner.lease_owner is not None
-        stale = replace(winner, lease_owner="req_concurrent_stale")
-        service.fail_final(stale, "STALE_ATTEMPT_MUST_NOT_WIN")
+        takeover = service.claim(
+            operator_id=bootstrap.operator.operator_id,
+            endpoint_key="test_concurrent_claim",
+            raw_key="concurrent-key-0001",
+            request_sha256="sha256:" + "a" * 64,
+            now=datetime.now(UTC) + timedelta(seconds=181),
+        )
+        assert takeover.record_id == winner.record_id
+        assert takeover.lease_owner is not None
+        assert takeover.lease_owner != winner.lease_owner
+
+        service.fail_final(winner, "STALE_ATTEMPT_MUST_NOT_WIN")
         with sessions() as session:
             owned = session.get(ApiIdempotencyRecord, winner.record_id)
             assert owned is not None
             assert owned.state == "PROCESSING"
-            assert owned.lease_owner == winner.lease_owner
+            assert owned.lease_owner == takeover.lease_owner
 
         with pytest.raises(ApiError, match="request lease was acquired") as lost:
             service.complete(
-                stale,
+                winner,
                 status=202,
                 body={"resource_id": "workflow_" + "a" * 32},
                 resource_type="workflow",
@@ -72,7 +81,7 @@ def test_concurrent_idempotency_claim_has_one_owner() -> None:
         assert lost.value.error_code == "API_IDEMPOTENCY_CLAIM_LOST"
 
         service.complete(
-            winner,
+            takeover,
             status=202,
             body={"resource_id": "workflow_" + "a" * 32},
             resource_type="workflow",

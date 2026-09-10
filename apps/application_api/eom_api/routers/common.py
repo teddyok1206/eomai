@@ -74,7 +74,6 @@ def run_command(
             endpoint_key=operation_id,
             raw_key=raw_key,
             request_sha256=request_hash,
-            lease_owner=request_context.request_id,
         )
     except Exception as exc:
         error_code = getattr(exc, "error_code", "API_IDEMPOTENCY_CONFLICT")
