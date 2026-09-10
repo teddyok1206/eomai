@@ -104,6 +104,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "8.0",
             "sha256:f2d1dc2ce097cc45221a24d405811fae8829f4a0fc82de15b31fc5c8fff8171b",
         ),
+        "knowledge-item-control-bootstrap-v9": ControlSchemaResource(
+            "schemas/workflow/control-plane/knowledge-item-control-bootstrap-v9.schema.json",
+            "resources/control-plane/knowledge-item-control-bootstrap-v9.schema.json",
+            "9.0",
+            "sha256:0041f286686bac150e424a0dd0d507c9c991d5ea46c9c377f07b83005941dfac",
+        ),
         "legacy-item-extraction-control-bootstrap": ControlSchemaResource(
             "schemas/workflow/control-plane/legacy-item-extraction-control-bootstrap-v1.schema.json",
             "resources/control-plane/legacy-item-extraction-control-bootstrap-v1.schema.json",
@@ -193,6 +199,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/standard-control-bootstrap-v11.schema.json",
             "11.0",
             "sha256:880146b948d0e41f30c32c948f2c3438bdf21b84b68a1ebe887761d7fc9b2238",
+        ),
+        "standard-control-bootstrap-v12": ControlSchemaResource(
+            "schemas/workflow/control-plane/standard-control-bootstrap-v12.schema.json",
+            "resources/control-plane/standard-control-bootstrap-v12.schema.json",
+            "12.0",
+            "sha256:daf30c40e011cc3272637b24f82ac10392f5b3d172f629c6a8f22caa435d0d6d",
         ),
         "instruction-bundle-manifest": ControlSchemaResource(
             "schemas/workflow/control-plane/instruction-bundle-manifest-v1.schema.json",
