@@ -21,6 +21,7 @@ class WorkflowAdmission:
 _ADMISSIONS = (
     WorkflowAdmission("generic-item-development", "1.8.0", "workflow-role/1.17.0"),
     WorkflowAdmission("generic-item-development", "1.9.0", "workflow-role/1.19.0"),
+    WorkflowAdmission("generic-item-development", "1.10.0", "workflow-role/1.20.0"),
     WorkflowAdmission("knowledge-analysis", "1.0.0", "workflow-role/1.4.0"),
     WorkflowAdmission("knowledge-analysis", "4.0.0", "workflow-role/1.7.0"),
     WorkflowAdmission("knowledge-analysis", "8.0.0", "workflow-role/1.11.0"),
