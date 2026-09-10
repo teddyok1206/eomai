@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from eom_catalog_contracts.item_review import MockExamTrustedEvidenceUsageReceiptPairV1
 from eom_identifiers import content_sha256
+from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.models import (
     ArtifactRecord,
     ArtifactRevisionRecord,
@@ -17,7 +19,9 @@ from eom_workflow import (
     ArtifactPointer,
     AuthoringEvidenceUsageValidationReceipt,
     EvidenceResultArtifactPointer,
+    ResolvedExecutionPlanV3,
     ReviewEvidenceUsageValidationReceipt,
+    RoleWorkerInput,
     validate_control_contract,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -39,6 +43,19 @@ class EvidenceUsageReceiptPair:
     review: ReviewEvidenceUsageValidationReceipt
 
 
+@dataclass(frozen=True)
+class EvidenceUsageProvenanceExpectation:
+    """Small checkpoint-side pins needed to bind receipts to one knowledge resolution."""
+
+    plan_id: str
+    plan_sha256: str
+    evidence_bundle_revision_id: str
+    retrieval_request_id: str
+    retrieval_request_sha256: str
+    graph_snapshot_revision_id: str
+    evidence_manifest_sha256: str
+
+
 class EvidenceUsageReceiptResolver(Protocol):
     """Application port for resolving the two receipts required at registration."""
 
@@ -47,6 +64,23 @@ class EvidenceUsageReceiptResolver(Protocol):
         *,
         authoring: ArtifactPointer,
         review: ArtifactPointer,
+    ) -> EvidenceUsageReceiptPair: ...
+
+
+class MockExamEvidenceUsageReceiptResolver(Protocol):
+    """Trusted-RAG review boundary with exact Workflow occurrence context."""
+
+    def resolve_mock_exam_pair(
+        self,
+        *,
+        workflow_id: str,
+        authoring_step_run_id: str,
+        authoring: ArtifactPointer,
+        review_step_run_id: str,
+        review: ArtifactPointer,
+        expected_provenance: EvidenceUsageProvenanceExpectation | None = None,
+        expected_authoring_receipt_sha256: str | None = None,
+        expected_review_receipt_sha256: str | None = None,
     ) -> EvidenceUsageReceiptPair: ...
 
 
@@ -82,6 +116,124 @@ class OrchestratorEvidenceUsageReceiptResolver:
         authoring: ArtifactPointer,
         review: ArtifactPointer,
     ) -> EvidenceUsageReceiptPair:
+        pair, _jobs = self._resolve_pair_with_jobs(authoring=authoring, review=review)
+        return pair
+
+    def resolve_mock_exam_pair(
+        self,
+        *,
+        workflow_id: str,
+        authoring_step_run_id: str,
+        authoring: ArtifactPointer,
+        review_step_run_id: str,
+        review: ArtifactPointer,
+        expected_provenance: EvidenceUsageProvenanceExpectation | None = None,
+        expected_authoring_receipt_sha256: str | None = None,
+        expected_review_receipt_sha256: str | None = None,
+    ) -> EvidenceUsageReceiptPair:
+        """Resolve one pair and bind it to persisted worker inputs and knowledge plan."""
+
+        pair, jobs = self._resolve_pair_with_jobs(authoring=authoring, review=review)
+        contexts = (
+            (authoring, authoring_step_run_id, pair.authoring, "authoring"),
+            (review, review_step_run_id, pair.review, "review"),
+        )
+        for pointer, step_run_id, _receipt, role in contexts:
+            job = jobs[pointer.job_id]
+            try:
+                worker_input = RoleWorkerInput.model_validate(job.request)
+            except (PydanticValidationError, ValueError) as exc:
+                raise EvidenceUsageReceiptResolutionError(
+                    "evidence receipt job request is not a valid role-worker input"
+                ) from exc
+            expected_request_hash = content_sha256(
+                {
+                    "protocol_version": job.protocol_version,
+                    "task_type": job.task_type,
+                    "request": job.request,
+                }
+            )
+            if (
+                job.request_hash != expected_request_hash
+                or worker_input.workflow_id != workflow_id
+                or worker_input.step_run_id != step_run_id
+                or worker_input.attempt != pointer.attempt
+                or worker_input.job_id != pointer.job_id
+                or worker_input.role != role
+                or worker_input.protocol_version != "workflow-role/1.20.0"
+                or worker_input.protocol_version != job.protocol_version
+                or worker_input.artifact.logical_artifact_id != pointer.logical_artifact_id
+                or worker_input.artifact.revision_id != pointer.revision_id
+            ):
+                raise EvidenceUsageReceiptResolutionError(
+                    "evidence receipt job request differs from its Workflow occurrence"
+                )
+
+        if (
+            expected_authoring_receipt_sha256 is not None
+            and pair.authoring.receipt_sha256 != expected_authoring_receipt_sha256
+        ) or (
+            expected_review_receipt_sha256 is not None
+            and pair.review.receipt_sha256 != expected_review_receipt_sha256
+        ):
+            raise EvidenceUsageReceiptResolutionError(
+                "compact evidence receipt hash differs from the canonical terminal receipt"
+            )
+
+        with self.sessions() as session:
+            plan_record = session.scalar(
+                select(ResolvedExecutionPlanRecord).where(
+                    ResolvedExecutionPlanRecord.workflow_id == workflow_id
+                )
+            )
+        try:
+            plan = (
+                ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
+                if plan_record is not None
+                else None
+            )
+        except (PydanticValidationError, ValueError) as exc:
+            raise EvidenceUsageReceiptResolutionError(
+                "evidence receipt knowledge plan is invalid"
+            ) from exc
+        if (
+            plan_record is None
+            or plan is None
+            or not self._plan_record_is_exact(plan_record, plan, workflow_id)
+        ):
+            raise EvidenceUsageReceiptResolutionError(
+                "evidence receipt knowledge plan does not resolve exactly"
+            )
+        self._validate_plan_binding(pair, plan)
+        if expected_provenance is not None:
+            self._validate_expected_provenance(plan, expected_provenance)
+        return pair
+
+    def verify_mock_exam_pair(
+        self,
+        *,
+        receipts: MockExamTrustedEvidenceUsageReceiptPairV1,
+        expected_provenance: EvidenceUsageProvenanceExpectation,
+    ) -> EvidenceUsageReceiptPair:
+        """Re-resolve a compact checkpoint pointer without trusting its claimed hashes."""
+
+        return self.resolve_mock_exam_pair(
+            workflow_id=receipts.authoring.workflow_id,
+            authoring_step_run_id=receipts.authoring.step_run_id,
+            authoring=self._artifact_pointer(receipts.authoring),
+            review_step_run_id=receipts.review.step_run_id,
+            review=self._artifact_pointer(receipts.review),
+            expected_provenance=expected_provenance,
+            expected_authoring_receipt_sha256=receipts.authoring.receipt_sha256,
+            expected_review_receipt_sha256=receipts.review.receipt_sha256,
+        )
+
+    def _resolve_pair_with_jobs(
+        self,
+        *,
+        authoring: ArtifactPointer,
+        review: ArtifactPointer,
+    ) -> tuple[EvidenceUsageReceiptPair, dict[str, JobRecord]]:
         pointers = (authoring, review)
         if (
             authoring.step_key != "authoring"
@@ -145,7 +297,81 @@ class OrchestratorEvidenceUsageReceiptResolver:
             )
         pair = EvidenceUsageReceiptPair(authoring=authoring_receipt, review=review_receipt)
         self._validate_pair(pair)
-        return pair
+        return pair, jobs
+
+    @staticmethod
+    def _artifact_pointer(pointer: Any) -> ArtifactPointer:
+        return ArtifactPointer(
+            step_key=pointer.step_key,
+            attempt=pointer.attempt,
+            job_id=pointer.job_id,
+            logical_artifact_id=pointer.artifact_id,
+            revision_id=pointer.artifact_revision_id,
+            content_hash=pointer.sha256,
+            result_schema=pointer.result_schema,
+        )
+
+    @staticmethod
+    def _plan_record_is_exact(
+        record: ResolvedExecutionPlanRecord,
+        plan: ResolvedExecutionPlanV3,
+        workflow_id: str,
+    ) -> bool:
+        return (
+            record.plan_id == plan.plan_id
+            and record.workflow_id == workflow_id
+            and plan.workflow_id == workflow_id
+            and record.preset_id == plan.preset_id
+            and record.preset_revision_id == plan.preset_revision_id
+            and record.capacity_policy_revision_id == plan.capacity_policy_revision_id
+            and record.graph_snapshot_revision_id == plan.graph_snapshot.graph_snapshot_revision_id
+            and record.evidence_bundle_revision_id == plan.evidence_bundle_revision_id
+            and record.plan_sha256 == plan.plan_sha256
+            and record.resolved_at == plan.resolved_at
+            and plan.workflow_definition_key == "generic-item-development"
+            and plan.workflow_definition_version == "1.10.0"
+        )
+
+    @staticmethod
+    def _validate_plan_binding(
+        pair: EvidenceUsageReceiptPair,
+        plan: ResolvedExecutionPlanV3,
+    ) -> None:
+        receipt = pair.authoring
+        if (
+            receipt.plan_id != plan.plan_id
+            or receipt.plan_sha256 != plan.plan_sha256
+            or receipt.evidence_bundle_id != plan.evidence_bundle_id
+            or receipt.evidence_bundle_revision_id != plan.evidence_bundle_revision_id
+            or receipt.retrieval_request_id != plan.retrieval_request_id
+            or receipt.retrieval_request_sha256 != plan.retrieval_request_sha256
+            or receipt.graph_snapshot_revision_id != plan.graph_snapshot.graph_snapshot_revision_id
+            or receipt.graph_snapshot_sha256 != plan.graph_snapshot.manifest_sha256
+            or receipt.evidence_manifest_artifact != plan.evidence_manifest_artifact
+            or receipt.evidence_manifest_sha256 != plan.evidence_manifest_sha256
+            or receipt.evidence_context_artifact != plan.evidence_context_artifact
+        ):
+            raise EvidenceUsageReceiptResolutionError(
+                "evidence receipts differ from the immutable knowledge plan"
+            )
+
+    @staticmethod
+    def _validate_expected_provenance(
+        plan: ResolvedExecutionPlanV3,
+        expected: EvidenceUsageProvenanceExpectation,
+    ) -> None:
+        if (
+            expected.plan_id != plan.plan_id
+            or expected.plan_sha256 != plan.plan_sha256
+            or expected.evidence_bundle_revision_id != plan.evidence_bundle_revision_id
+            or expected.retrieval_request_id != plan.retrieval_request_id
+            or expected.retrieval_request_sha256 != plan.retrieval_request_sha256
+            or expected.graph_snapshot_revision_id != plan.graph_snapshot.graph_snapshot_revision_id
+            or expected.evidence_manifest_sha256 != plan.evidence_manifest_sha256
+        ):
+            raise EvidenceUsageReceiptResolutionError(
+                "Item-run knowledge provenance differs from the evidence receipt plan"
+            )
 
     @staticmethod
     def _validate_receipt_record(

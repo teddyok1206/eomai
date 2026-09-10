@@ -1488,6 +1488,8 @@ catalog_resources = {
     "catalog-application/catalog-application-response-v11.schema.json": "schemas/catalog-application/catalog-application-response-v11.schema.json",
     "catalog-application/catalog-application-request-v12.schema.json": "schemas/catalog-application/catalog-application-request-v12.schema.json",
     "catalog-application/catalog-application-response-v12.schema.json": "schemas/catalog-application/catalog-application-response-v12.schema.json",
+    "catalog-application/catalog-application-request-v13.schema.json": "schemas/catalog-application/catalog-application-request-v13.schema.json",
+    "catalog-application/catalog-application-response-v13.schema.json": "schemas/catalog-application/catalog-application-response-v13.schema.json",
     "catalog-application/catalog-item-media-request-v1.schema.json": "schemas/catalog-application/catalog-item-media-request-v1.schema.json",
     "catalog-application/catalog-item-media-response-v1.schema.json": "schemas/catalog-application/catalog-item-media-response-v1.schema.json",
     "catalog-application/catalog-assessment-page-list-request-v1.schema.json": "schemas/catalog-application/catalog-assessment-page-list-request-v1.schema.json",
@@ -1830,6 +1832,8 @@ from eom_api_contracts import (
     MockExamGraphPublicationInputV1,
     MockExamProductionExecution,
     MockExamProductionExecutionV1,
+    MockExamProductionExecutionV2,
+    MockExamProductionExecutionV3,
     MockExamProductionRetirementCommandV1,
     MockExamProductionRetirementReceiptV1,
     mock_exam_production_is_terminal,
@@ -1910,6 +1914,8 @@ if any(
         MockExamGenerationBlockResolutionV1,
         MockExamGraphPublicationInputV1,
         MockExamProductionExecutionV1,
+        MockExamProductionExecutionV2,
+        MockExamProductionExecutionV3,
     )
 ):
     raise SystemExit("mock-exam contract package exports are incomplete")
@@ -1930,6 +1936,7 @@ execution_discriminator = TypeAdapter(MockExamProductionExecution).json_schema()
 if set(execution_discriminator.get("mapping", {})) != {
     "mock-exam-production-execution/1.0",
     "mock-exam-production-execution/2.0",
+    "mock-exam-production-execution/3.0",
 }:
     raise SystemExit("mock-exam execution successor dispatch export is incomplete")
 if any(

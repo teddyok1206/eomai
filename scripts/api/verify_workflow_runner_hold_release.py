@@ -41,6 +41,13 @@ _PRODUCTION_REQUEST_ID = re.compile(r"^productionreq_[0-9a-f]{32}$")
 _PRODUCTION_PLAN_ID = re.compile(r"^productionplan_[0-9a-f]{32}$")
 _OPERATOR_ID = re.compile(r"^operator_[0-9a-f]{32}$")
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
+_CHECKPOINT_SCHEMA_BY_VERSION = MappingProxyType(
+    {
+        "mock-exam-production-execution/1.0": "mock-exam-production-execution-v1.schema.json",
+        "mock-exam-production-execution/2.0": "mock-exam-production-execution-v2.schema.json",
+        "mock-exam-production-execution/3.0": "mock-exam-production-execution-v3.schema.json",
+    }
+)
 _RETIREMENT_DISPOSITION_BY_WORKFLOW_STATE = MappingProxyType(
     {
         "REQUESTED": "CANCEL_QUEUED",
@@ -184,13 +191,12 @@ def _validated_release_receipt_lock(
             _fail("current checkpoint differs from its immutable revision")
         checkpoint_data = _load_json_object(checkpoint_lease.current)
         schema_version = checkpoint_data.get("schema_version")
-        schema_by_version = {
-            "mock-exam-production-execution/1.0": ("mock-exam-production-execution-v1.schema.json"),
-            "mock-exam-production-execution/2.0": ("mock-exam-production-execution-v2.schema.json"),
-        }
-        if not isinstance(schema_version, str) or schema_version not in schema_by_version:
+        if (
+            not isinstance(schema_version, str)
+            or schema_version not in _CHECKPOINT_SCHEMA_BY_VERSION
+        ):
             _fail("production checkpoint schema version is invalid")
-        _validate_json_schema(checkpoint_data, schema_by_version[schema_version])
+        _validate_json_schema(checkpoint_data, _CHECKPOINT_SCHEMA_BY_VERSION[schema_version])
         try:
             checkpoint: MockExamProductionExecution = TypeAdapter(
                 MockExamProductionExecution

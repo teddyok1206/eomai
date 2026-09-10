@@ -608,6 +608,8 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
         "catalog-application-response-v11.schema.json",
         "catalog-application-request-v12.schema.json",
         "catalog-application-response-v12.schema.json",
+        "catalog-application-request-v13.schema.json",
+        "catalog-application-response-v13.schema.json",
     ):
         assert f'"catalog-application/{resource}": ' in deployment
         assert f'"schemas/catalog-application/{resource}"' in deployment
@@ -709,6 +711,8 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
     assert '"1.9",\n        "1.10",' in deployment
     assert "definition_v1_8, definition_v1_9, definition_v1_10" in deployment
     assert '"1.8.0", "1.9.0", "1.10.0"}' in deployment
+    assert "MockExamProductionExecutionV3" in deployment
+    assert '"mock-exam-production-execution/3.0",' in deployment
     for role in ("authoring", "image", "review", "item_management"):
         assert f'load_role_input_schema("{role}", "workflow-role/1.19.0")' in deployment
         assert f'load_role_input_schema("{role}", "workflow-role/1.20.0")' in deployment

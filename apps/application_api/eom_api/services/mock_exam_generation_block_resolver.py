@@ -8,10 +8,12 @@ from typing import Literal, Never
 from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV1,
     MockExamGenerationBlockResolutionV2,
+    MockExamGenerationBlockResolutionV3,
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
     MockExamOneItemGenerationBlockV2,
+    MockExamOneItemGenerationBlockV3,
 )
 from eom_catalog_service.models import (
     ContentPackActivationRecord,
@@ -25,7 +27,7 @@ from eom_orchestrator.control_models import (
 from eom_orchestrator.database import build_session_factory
 from eom_workflow import AgentStep, ExecutionPresetRevisionV2, compile_definition_data
 from eom_workflow.admission import workflow_definition_is_admitted
-from eom_workflow.schemas import result_schema_protocol
+from eom_workflow.schemas import result_schema_protocol, role_schema_bundle_hash
 from eom_workflow_runner.models import WorkflowDefinitionRecord
 from sqlalchemy import Engine, select, true
 
@@ -51,7 +53,12 @@ class DatabaseGenerationBlockResolver:
         self.environment = environment
 
     def resolve_generation_block(
-        self, block: MockExamOneItemGenerationBlockV1 | MockExamOneItemGenerationBlockV2
+        self,
+        block: (
+            MockExamOneItemGenerationBlockV1
+            | MockExamOneItemGenerationBlockV2
+            | MockExamOneItemGenerationBlockV3
+        ),
     ) -> MockExamGenerationBlockResolutionV1:
         statement = (
             select(
@@ -123,11 +130,17 @@ class DatabaseGenerationBlockResolver:
                 "PRODUCTION_CONTENT_PACK_DRIFT",
                 "current Content Pack differs from the generation block",
             )
-        compiled = compile_definition_data(
-            definition.canonical_definition,
-            definition.source_path,
-            {"authoring", "image", "review", "item_management"},
-        )
+        try:
+            compiled = compile_definition_data(
+                definition.canonical_definition,
+                definition.source_path,
+                {"authoring", "image", "review", "item_management"},
+            )
+        except ValueError as exc:
+            raise MockExamGenerationBlockResolutionError(
+                "PRODUCTION_WORKFLOW_DEFINITION_INVALID",
+                "generation-block Workflow definition is invalid",
+            ) from exc
         protocols = {
             result_schema_protocol(step.result_schema)
             for step in compiled.definition.steps
@@ -138,6 +151,28 @@ class DatabaseGenerationBlockResolver:
                 "PRODUCTION_WORKFLOW_DEFINITION_INVALID",
                 "generation-block Workflow definition has inconsistent role protocols",
             )
+        protocol = str(next(iter(protocols)))
+        if definition.definition_hash != compiled.sha256:
+            self._fail(
+                "PRODUCTION_WORKFLOW_DEFINITION_DRIFT",
+                "generation-block Workflow definition hash differs from canonical content",
+            )
+        if isinstance(block, MockExamOneItemGenerationBlockV3):
+            result_schemas_by_step = {
+                step.key: step.result_schema
+                for step in compiled.definition.steps
+                if isinstance(step, AgentStep)
+            }
+            if (
+                protocol != block.role_protocol_version
+                or role_schema_bundle_hash(protocol) != block.role_schema_bundle_sha256
+                or result_schemas_by_step.get("authoring") != block.authoring_result_schema
+                or result_schemas_by_step.get("review") != block.review_result_schema
+            ):
+                self._fail(
+                    "PRODUCTION_TRUSTED_RAG_PROTOCOL_DRIFT",
+                    "current Workflow role or result contracts differ from the trusted-RAG block",
+                )
         try:
             preset = ExecutionPresetRevisionV2.model_validate(preset_revision.canonical_document)
         except ValueError as exc:
@@ -150,37 +185,53 @@ class DatabaseGenerationBlockResolver:
             or preset.preset_id != preset_logical.preset_id
             or preset.preset_revision_id != preset_revision.preset_revision_id
             or preset.content_sha256 != preset_revision.content_sha256
-            or str(next(iter(protocols))) not in preset.compatible_workflow_protocols
+            or protocol not in preset.compatible_workflow_protocols
         ):
             self._fail(
                 "PRODUCTION_EXECUTION_PRESET_DRIFT",
                 "current execution preset pointers or protocol compatibility differ",
             )
-        resolution_type = (
-            MockExamGenerationBlockResolutionV2
-            if block.block_revision == "2.0"
-            else MockExamGenerationBlockResolutionV1
-        )
-        return resolution_type.model_validate(
+        trusted_rag_fields = (
             {
-                "generation_block_key": block.block_key,
-                "generation_block_revision": block.block_revision,
-                "generation_block_sha256": block.block_sha256,
-                "workflow_definition_key": definition.definition_key,
-                "workflow_definition_version": definition.definition_version,
-                "workflow_definition_sha256": definition.definition_hash,
-                "content_pack_release_id": release.content_pack_release_id,
-                "content_pack_key": pack.pack_key,
-                "content_pack_version": release.version,
-                "content_pack_release_sha256": release.bundle_sha256,
-                "content_pack_source_tree_sha256": release.source_tree_sha256,
-                "execution_preset_id": preset.preset_id,
-                "execution_preset_revision_id": preset.preset_revision_id,
-                "execution_preset_key": preset_logical.preset_key,
-                "execution_preset_sha256": preset.content_sha256,
-                "resolved_at": datetime.now(UTC),
+                "role_protocol_version": block.role_protocol_version,
+                "role_schema_bundle_sha256": block.role_schema_bundle_sha256,
+                "knowledge_source_mode": block.knowledge_source_mode,
+                "authoring_result_schema": block.authoring_result_schema,
+                "review_result_schema": block.review_result_schema,
+                "evidence_usage_receipt_schema_version": (
+                    block.evidence_usage_receipt_schema_version
+                ),
+                "trusted_evidence_usage_receipts_required": (
+                    block.trusted_evidence_usage_receipts_required
+                ),
             }
+            if isinstance(block, MockExamOneItemGenerationBlockV3)
+            else {}
         )
+        resolution_payload = {
+            "generation_block_key": block.block_key,
+            "generation_block_revision": block.block_revision,
+            "generation_block_sha256": block.block_sha256,
+            "workflow_definition_key": definition.definition_key,
+            "workflow_definition_version": definition.definition_version,
+            "workflow_definition_sha256": definition.definition_hash,
+            "content_pack_release_id": release.content_pack_release_id,
+            "content_pack_key": pack.pack_key,
+            "content_pack_version": release.version,
+            "content_pack_release_sha256": release.bundle_sha256,
+            "content_pack_source_tree_sha256": release.source_tree_sha256,
+            "execution_preset_id": preset.preset_id,
+            "execution_preset_revision_id": preset.preset_revision_id,
+            "execution_preset_key": preset_logical.preset_key,
+            "execution_preset_sha256": preset.content_sha256,
+            "resolved_at": datetime.now(UTC),
+            **trusted_rag_fields,
+        }
+        if isinstance(block, MockExamOneItemGenerationBlockV3):
+            return MockExamGenerationBlockResolutionV3.model_validate(resolution_payload)
+        if isinstance(block, MockExamOneItemGenerationBlockV2):
+            return MockExamGenerationBlockResolutionV2.model_validate(resolution_payload)
+        return MockExamGenerationBlockResolutionV1.model_validate(resolution_payload)
 
     @staticmethod
     def _fail(code: str, message: str) -> Never:

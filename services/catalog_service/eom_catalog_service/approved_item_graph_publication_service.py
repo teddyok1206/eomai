@@ -13,11 +13,13 @@ from eom_catalog_contracts.approved_item_graph_publication import (
 from eom_catalog_contracts.item_review import (
     InspectMockExamReviewEligibilityQuery,
     MockExamReviewEligibilityResult,
+    MockExamReviewEligibilityResultV3,
 )
 from eom_catalog_contracts.knowledge import (
     ApprovedItemKnowledgeSourceV2,
     AutomaticItemCurriculumAlignmentBinding,
     KnowledgeGraphPublicationResult,
+    KnowledgeSourceClass,
 )
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import content_sha256
@@ -82,6 +84,16 @@ _PRODUCTION_WORKFLOW_FAMILIES = {
             }
         ),
     ),
+    "1.10.0": (
+        "workflow-role/1.20.0",
+        "1.15.1",
+        frozenset(
+            {
+                "eom.assessment.item-content/3.0",
+                "eom://schemas/item-registry/assessment-item-content-v3",
+            }
+        ),
+    ),
 }
 _RETRIEVAL_NAMESPACE = "approved-item-auto-alignment"
 _PUBLICATION_NAMESPACE = "approved-item-auto-graph"
@@ -136,7 +148,7 @@ class ApprovedItemGraphPublicationService:
         if replay is not None:
             return replay
         self._validate_input_pointers(command)
-        self._validate_official_review_eligibility(command)
+        official_reviews = self._validate_official_review_eligibility(command)
 
         expected_slot_unit_keys: tuple[str, ...] = ()
 
@@ -149,6 +161,7 @@ class ApprovedItemGraphPublicationService:
                 session,
                 analyses,
                 command.expected_workflow_ids,
+                official_reviews=official_reviews,
             )
 
         common = AutomaticItemGraphPublicationService(
@@ -196,7 +209,7 @@ class ApprovedItemGraphPublicationService:
     def _validate_official_review_eligibility(
         self,
         command: PublishApprovedItemAnalysesCommand,
-    ) -> None:
+    ) -> dict[str, MockExamReviewEligibilityResult]:
         queries = tuple(
             InspectMockExamReviewEligibilityQuery(workflow_id=workflow_id)
             for workflow_id in command.expected_workflow_ids
@@ -221,6 +234,7 @@ class ApprovedItemGraphPublicationService:
                 "APPROVED_ITEM_GRAPH_REVIEW_INELIGIBLE",
                 "every Workflow must have zero blocking findings and exact operator approval",
             )
+        return {row.workflow_id: row for row in reviews}
 
     def _validate_input_pointers(self, command: PublishApprovedItemAnalysesCommand) -> None:
         """Resolve both caller-pinned revisions and hashes before any side effect."""
@@ -427,6 +441,8 @@ class ApprovedItemGraphPublicationService:
         session: Session,
         analyses: tuple[AcceptedAnalysisProposal, ...],
         expected_workflow_ids: tuple[str, ...],
+        *,
+        official_reviews: dict[str, MockExamReviewEligibilityResult] | None = None,
     ) -> tuple[str, ...]:
         run_ids = tuple(analysis.analysis_run_id for analysis in analyses)
         if len(run_ids) != len(expected_workflow_ids):
@@ -489,6 +505,9 @@ class ApprovedItemGraphPublicationService:
                 raise ValueError("generated Item Workflow version is unsupported")
             role_protocol, pack_version, content_schema_refs = family
             family_version = revision.workflow_definition_version
+            official_review = (
+                official_reviews.get(expected_workflow_id) if official_reviews is not None else None
+            )
             if (
                 not isinstance(source, ApprovedItemKnowledgeSourceV2)
                 or source.source_class != "APPROVED_ITEM"
@@ -533,6 +552,24 @@ class ApprovedItemGraphPublicationService:
                 or workflow_request.content_pack is None
                 or workflow_request.content_pack.pack_key != "generated-knowledge-item"
                 or workflow_request.execution_preset_key != "knowledge-grounded-item"
+                or (
+                    family_version == "1.10.0"
+                    and (
+                        workflow_request.educational_retrieval is None
+                        or workflow_request.educational_retrieval.query_kind != "ITEM_PREPARATION"
+                        or workflow_request.educational_retrieval.required_item_elements
+                        != ("choice", "paragraph")
+                        or workflow_request.educational_retrieval.source_classes
+                        != (KnowledgeSourceClass.PAST_EXAM,)
+                        or not isinstance(official_review, MockExamReviewEligibilityResultV3)
+                        or official_review.trusted_evidence_usage_receipts.review.workflow_id
+                        != expected_workflow_id
+                    )
+                )
+                or (
+                    family_version != "1.10.0"
+                    and isinstance(official_review, MockExamReviewEligibilityResultV3)
+                )
                 or not isinstance(workflow_request.item_brief, ContentTeamItemBrief)
                 or workflow_request.item_brief.mock_exam_slot is None
                 or occurrence is None

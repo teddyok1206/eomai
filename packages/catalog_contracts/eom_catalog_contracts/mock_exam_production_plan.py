@@ -89,6 +89,7 @@ __all__ = [
     "MockExamProductionPlanV3",
     "build_integrated_science_mock_exam_production_plan",
     "build_integrated_science_mock_exam_production_plan_v2",
+    "build_integrated_science_mock_exam_production_plan_v3",
     "classify_content_team_mock_exam_material_profile",
     "validate_content_team_mock_exam_slot_output",
     "validate_content_team_mock_exam_slot_output_v2",
@@ -405,8 +406,9 @@ class MockExamProductionPlanV3(MockExamProductionPlanV1):
     )
 
 
-# Active application dispatch remains V1/V2 until the separately reviewed runtime successor lands.
-MockExamProductionPlanContract = MockExamProductionPlanV1 | MockExamProductionPlanV2
+MockExamProductionPlanContract = (
+    MockExamProductionPlanV1 | MockExamProductionPlanV2 | MockExamProductionPlanV3
+)
 
 
 def build_integrated_science_mock_exam_production_plan(
@@ -541,6 +543,45 @@ def build_integrated_science_mock_exam_production_plan_v2(
     )
     plan_sha256 = content_sha256(plan_body)
     return MockExamProductionPlanV2.model_validate(
+        {
+            **plan_body,
+            "production_plan_id": "productionplan_" + plan_sha256.removeprefix("sha256:")[:32],
+            "plan_sha256": plan_sha256,
+        }
+    )
+
+
+def build_integrated_science_mock_exam_production_plan_v3(
+    *,
+    policy: MockExamAssemblyPolicyV1,
+    layout_policy: MockExamLayoutPolicyV1,
+    outline: IntegratedScienceEditorialOutline,
+) -> MockExamProductionPlanV3:
+    """Build the current immutable 25-call trusted-RAG production intent."""
+
+    predecessor = build_integrated_science_mock_exam_production_plan_v2(
+        policy=policy,
+        layout_policy=layout_policy,
+        outline=outline,
+    )
+    block = _one_item_generation_block_v3()
+    calls = tuple(_upgrade_workflow_call_v3(call, block) for call in predecessor.workflow_calls)
+    plan_body = predecessor.model_dump(
+        mode="json",
+        exclude={
+            "production_plan_id",
+            "plan_sha256",
+            "one_item_generation_block",
+            "workflow_calls",
+        },
+    )
+    plan_body.update(
+        schema_version="mock-exam-production-plan/3.0",
+        one_item_generation_block=block.model_dump(mode="json"),
+        workflow_calls=[call.model_dump(mode="json") for call in calls],
+    )
+    plan_sha256 = content_sha256(plan_body)
+    return MockExamProductionPlanV3.model_validate(
         {
             **plan_body,
             "production_plan_id": "productionplan_" + plan_sha256.removeprefix("sha256:")[:32],
@@ -760,6 +801,30 @@ def _one_item_generation_block_v2() -> MockExamOneItemGenerationBlockV2:
     )
 
 
+def _one_item_generation_block_v3() -> MockExamOneItemGenerationBlockV3:
+    return MockExamOneItemGenerationBlockV3(
+        block_key="content-team-one-item-generation",
+        block_revision="3.0",
+        workflow_definition_key="generic-item-development",
+        workflow_definition_version="1.10.0",
+        request_name="GENERATED_KNOWLEDGE_ITEM_REQUEST",
+        image_mode="required",
+        content_pack_key="generated-knowledge-item",
+        content_pack_version="1.15.1",
+        content_pack_source_tree_sha256=CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V3,
+        execution_preset_key="knowledge-grounded-item",
+        registry_mode="CREATE_ITEM",
+        role_protocol_version="workflow-role/1.20.0",
+        role_schema_bundle_sha256=CONTENT_TEAM_ROLE_SCHEMA_BUNDLE_SHA256_V3,
+        knowledge_source_mode="graph_grounded",
+        authoring_result_schema="authoring-result@10.0",
+        review_result_schema="review-result@10.0",
+        evidence_usage_receipt_schema_version="evidence-usage-validation-receipt/1.0",
+        trusted_evidence_usage_receipts_required=True,
+        block_sha256=CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V3,
+    )
+
+
 def _upgrade_workflow_call_v2(
     call: MockExamPlannedWorkflowCallV1,
     block: MockExamOneItemGenerationBlockV2,
@@ -771,6 +836,21 @@ def _upgrade_workflow_call_v2(
         "item_brief": call.item_brief.model_dump(mode="json"),
     }
     return MockExamPlannedWorkflowCallV2.model_validate(
+        {**call_body, "workflow_call_id": _workflow_call_id(call_body)}
+    )
+
+
+def _upgrade_workflow_call_v3(
+    call: MockExamPlannedWorkflowCallV2,
+    block: MockExamOneItemGenerationBlockV3,
+) -> MockExamPlannedWorkflowCallV3:
+    call_body: dict[str, object] = {
+        "generation_block_key": block.block_key,
+        "generation_block_revision": block.block_revision,
+        "generation_block_sha256": block.block_sha256,
+        "item_brief": call.item_brief.model_dump(mode="json"),
+    }
+    return MockExamPlannedWorkflowCallV3.model_validate(
         {**call_body, "workflow_call_id": _workflow_call_id(call_body)}
     )
 

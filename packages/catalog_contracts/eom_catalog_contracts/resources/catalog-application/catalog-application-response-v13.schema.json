@@ -1,0 +1,201 @@
+{
+  "$id": "eom://schemas/catalog-application/catalog-application-response-v13",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "const": "IMPORT_REVIEWED_ITEM_CONTENT"
+        },
+        "result": {
+          "additionalProperties": false,
+          "properties": {
+            "content_artifact_id": {
+              "pattern": "^artifact_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            "content_artifact_revision_id": {
+              "pattern": "^rev_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            "content_sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "item_id": {
+              "pattern": "^item_[a-z0-9]{8,59}$",
+              "type": "string"
+            },
+            "item_revision_id": {
+              "pattern": "^itemrev_[a-z0-9]{8,55}$",
+              "type": "string"
+            },
+            "resource_version": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "item_id",
+            "item_revision_id",
+            "resource_version",
+            "content_artifact_id",
+            "content_artifact_revision_id",
+            "content_sha256"
+          ],
+          "type": "object"
+        },
+        "status": {
+          "const": "OK"
+        }
+      },
+      "required": [
+        "status",
+        "operation",
+        "result"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/item-registry/assessment-item-content-v1"
+            },
+            {
+              "$ref": "eom://schemas/item-registry/assessment-item-content-v2"
+            },
+            {
+              "$ref": "eom://schemas/item-registry/assessment-item-content-v3"
+            }
+          ]
+        },
+        "operation": {
+          "const": "GET_ITEM_CONTENT"
+        },
+        "status": {
+          "const": "OK"
+        }
+      },
+      "required": [
+        "status",
+        "operation",
+        "content"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$",
+          "type": "string"
+        },
+        "operation": {
+          "enum": [
+            "IMPORT_REVIEWED_ITEM_CONTENT",
+            "GET_ITEM_CONTENT"
+          ]
+        },
+        "status": {
+          "const": "ERROR"
+        }
+      },
+      "required": [
+        "status",
+        "operation",
+        "error_code"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "graph_publication": {
+          "$ref": "eom://schemas/knowledge/approved-item-graph-publication-result/1.0"
+        },
+        "operation": {
+          "const": "PUBLISH_APPROVED_ITEM_ANALYSES"
+        },
+        "status": {
+          "const": "OK"
+        }
+      },
+      "required": [
+        "status",
+        "operation",
+        "graph_publication"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "item_review": {
+          "$ref": "https://eom.local/schemas/assessment-assembly/mock-exam-item-review-publication-result-v3.schema.json"
+        },
+        "operation": {
+          "const": "PUBLISH_MOCK_EXAM_ITEM_REVIEW"
+        },
+        "status": {
+          "const": "OK"
+        }
+      },
+      "required": [
+        "status",
+        "operation",
+        "item_review"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "const": "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY"
+        },
+        "review_eligibility": {
+          "$ref": "https://eom.local/schemas/assessment-assembly/mock-exam-review-eligibility-result-v3.schema.json"
+        },
+        "status": {
+          "const": "OK"
+        }
+      },
+      "required": [
+        "status",
+        "operation",
+        "review_eligibility"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$",
+          "type": "string"
+        },
+        "operation": {
+          "enum": [
+            "PUBLISH_APPROVED_ITEM_ANALYSES",
+            "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+            "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY"
+          ]
+        },
+        "status": {
+          "const": "ERROR"
+        }
+      },
+      "required": [
+        "status",
+        "operation",
+        "error_code"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "EOM Catalog Application Trusted RAG Review Response V13"
+}

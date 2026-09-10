@@ -16,13 +16,13 @@ from eom_api_contracts.mock_exam_execution import (
 )
 from eom_catalog_contracts import (
     KnowledgeAnalysisRiskPolicy,
-    build_integrated_science_mock_exam_production_plan_v2,
+    build_integrated_science_mock_exam_production_plan_v3,
     load_integrated_science_editorial_outline,
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
     load_integrated_science_mock_exam_rating_policy,
 )
-from eom_catalog_contracts.mock_exam_production_plan import MockExamProductionPlanV2
+from eom_catalog_contracts.mock_exam_production_plan import MockExamProductionPlanV3
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import (
@@ -118,7 +118,7 @@ class ReleasedMockExamProductionResolver:
         policy = load_integrated_science_mock_exam_policy()
         layout = load_integrated_science_mock_exam_layout_policy()
         outline = load_integrated_science_editorial_outline()
-        self._plan = build_integrated_science_mock_exam_production_plan_v2(
+        self._plan = build_integrated_science_mock_exam_production_plan_v3(
             policy=policy,
             layout_policy=layout,
             outline=outline,
@@ -134,7 +134,7 @@ class ReleasedMockExamProductionResolver:
             rating_policy_sha256=content_sha256(rating.model_dump(mode="json")),
         )
 
-    def production_plan(self) -> MockExamProductionPlanV2:
+    def production_plan(self) -> MockExamProductionPlanV3:
         """Return the frozen, self-hashed plan built only from packaged released inputs."""
 
         return self._plan

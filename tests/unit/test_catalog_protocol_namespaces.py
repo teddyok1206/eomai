@@ -22,6 +22,7 @@ from eom_catalog_service.knowledge_analysis_service import (
 from eom_catalog_service.mock_exam_item_review_publication_service import (
     ITEM_REVIEW_PROTOCOL_VERSION,
     ITEM_REVIEW_PROTOCOL_VERSION_V2,
+    ITEM_REVIEW_PROTOCOL_VERSION_V3,
 )
 from eom_orchestrator.models import Base, ProtocolVersionRecord
 from eom_orchestrator.repository import ensure_protocol_version
@@ -59,10 +60,12 @@ def test_catalog_contract_bundles_have_unique_immutable_protocol_versions() -> N
         KNOWLEDGE_ANALYSIS_VISUAL_ITEM_CATALOG_PROTOCOL,
         ITEM_REVIEW_PROTOCOL_VERSION,
         ITEM_REVIEW_PROTOCOL_VERSION_V2,
+        ITEM_REVIEW_PROTOCOL_VERSION_V3,
     )
 
     assert CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION == "catalog/1.2"
     assert CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION == "catalog/1.13"
+    assert ITEM_REVIEW_PROTOCOL_VERSION_V3 == "catalog/1.14"
     assert CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH == (
         "sha256:4e5fe407e576b68a4162c9105e8cf31f765cfd8fea21982f36be49503505f797"
     )

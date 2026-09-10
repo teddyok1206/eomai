@@ -38,6 +38,13 @@ NOW = datetime(2026, 9, 8, 10, 0, tzinfo=UTC)
 OPERATOR_ID = "operator_" + "a" * 32
 
 
+def test_hold_release_verifier_admits_exact_v3_checkpoint_schema() -> None:
+    assert (
+        verifier._CHECKPOINT_SCHEMA_BY_VERSION["mock-exam-production-execution/3.0"]
+        == "mock-exam-production-execution-v3.schema.json"
+    )
+
+
 def _checkpoint() -> MockExamProductionExecutionV2:
     plan = build_integrated_science_mock_exam_production_plan(
         policy=load_integrated_science_mock_exam_policy(),

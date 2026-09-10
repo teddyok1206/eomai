@@ -27,28 +27,39 @@ from eom_catalog_contracts.item_review import (
     MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
     MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA,
     MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA_REF,
     MOCK_EXAM_ITEM_REVIEW_PUBLICATION_COMMAND_SCHEMA,
     MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_SCHEMA,
     MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V2_SCHEMA,
+    MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V3_SCHEMA,
     MOCK_EXAM_REVIEW_ELIGIBILITY_QUERY_SCHEMA,
     MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_SCHEMA,
     MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V2_SCHEMA,
+    MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V3_SCHEMA,
     InspectMockExamReviewEligibilityQuery,
     MockExamEligibilityFinding,
     MockExamEligibilityFindingCounts,
     MockExamHumanApprovalPointer,
     MockExamItemReviewDecisionV1,
     MockExamItemReviewDecisionV2,
+    MockExamItemReviewDecisionV3,
     MockExamItemReviewPublicationResult,
     MockExamItemReviewPublicationResultV2,
+    MockExamItemReviewPublicationResultV3,
     MockExamReviewEligibilityResult,
     MockExamReviewEligibilityResultV2,
+    MockExamReviewEligibilityResultV3,
     MockExamReviewFindingCounts,
+    MockExamReviewFindingCountsV3,
     MockExamSourceReviewPointer,
     MockExamSourceReviewPointerV2,
+    MockExamSourceReviewPointerV3,
+    MockExamTrustedEvidenceUsageReceiptPairV1,
     PublishMockExamItemReviewCommand,
     mock_exam_item_review_decision_sha256,
 )
+from eom_catalog_contracts.knowledge import KnowledgeSourceClass
 from eom_catalog_contracts.mock_exam_production_plan import (
     validate_content_team_mock_exam_slot_output,
     validate_content_team_mock_exam_slot_output_v2,
@@ -64,12 +75,15 @@ from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV7,
     ContentTeamAuthoringRoleResultV8,
     ContentTeamAuthoringRoleResultV9,
+    ContentTeamAuthoringRoleResultV10,
     ContentTeamImageRoleResultV8,
     ContentTeamImageRoleResultV9,
+    ContentTeamImageRoleResultV10,
     ContentTeamItemBrief,
     ContentTeamReviewRoleResultV7,
     ContentTeamReviewRoleResultV8,
     ContentTeamReviewRoleResultV9,
+    ContentTeamReviewRoleResultV10,
     RoleResultBase,
     RoleWorkerInput,
 )
@@ -91,6 +105,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.evidence_usage_receipts import (
+    EvidenceUsageReceiptResolutionError,
+    MockExamEvidenceUsageReceiptResolver,
+    OrchestratorEvidenceUsageReceiptResolver,
+)
 from eom_catalog_service.models import (
     ItemComponentRecord,
     ItemRecord,
@@ -129,6 +148,20 @@ ITEM_REVIEW_PROTOCOL_SCHEMA_HASH_V2 = content_sha256(
         ],
     }
 )
+ITEM_REVIEW_PROTOCOL_VERSION_V3 = "catalog/1.14"
+ITEM_REVIEW_PROTOCOL_SCHEMA_HASH_V3 = content_sha256(
+    {
+        "protocol": ITEM_REVIEW_PROTOCOL_VERSION_V3,
+        "contracts": [
+            "mock-exam-item-review-publication-command/1.0",
+            "mock-exam-review-eligibility-query/1.0",
+            "mock-exam-review-eligibility-result/3.0",
+            "mock-exam-item-review-decision/3.0",
+            "mock-exam-item-review-publication-result/3.0",
+            "mock-exam-trusted-evidence-usage-receipt-pair/1.0",
+        ],
+    }
+)
 WorkflowContracts = tuple[str, str | None, str, str, str]
 SUPPORTED_WORKFLOWS: dict[str, WorkflowContracts] = {
     "1.7.0": (
@@ -151,6 +184,13 @@ SUPPORTED_WORKFLOWS: dict[str, WorkflowContracts] = {
         "review-result@9.0",
         "registration-result@9.0",
         "workflow-role/1.19.0",
+    ),
+    "1.10.0": (
+        "authoring-result@10.0",
+        "image-result@10.0",
+        "review-result@10.0",
+        "registration-result@10.0",
+        "workflow-role/1.20.0",
     ),
 }
 
@@ -219,9 +259,15 @@ class _PublicationEvidence:
     review_artifact_id: str
     review_artifact_revision_id: str
     review_sha256: str
-    review_result_schema: Literal["review-result@7.0", "review-result@8.0", "review-result@9.0"]
+    review_result_schema: Literal[
+        "review-result@7.0",
+        "review-result@8.0",
+        "review-result@9.0",
+        "review-result@10.0",
+    ]
     finding_counts: MockExamReviewFindingCounts
     approval_resolved_at: datetime
+    trusted_evidence_usage_receipts: MockExamTrustedEvidenceUsageReceiptPairV1 | None = None
 
 
 @dataclass(frozen=True)
@@ -238,6 +284,7 @@ class _ReviewChainEvidence:
         ContentTeamAuthoringRoleResultV7
         | ContentTeamAuthoringRoleResultV8
         | ContentTeamAuthoringRoleResultV9
+        | ContentTeamAuthoringRoleResultV10
     )
     review_step: WorkflowStepRunRecord
     review_pointer: ArtifactPointer
@@ -245,8 +292,10 @@ class _ReviewChainEvidence:
         ContentTeamReviewRoleResultV7
         | ContentTeamReviewRoleResultV8
         | ContentTeamReviewRoleResultV9
+        | ContentTeamReviewRoleResultV10
     )
     gate_upstream_pointers: tuple[ArtifactPointer, ...]
+    trusted_evidence_usage_receipts: MockExamTrustedEvidenceUsageReceiptPairV1 | None = None
 
 
 class MockExamItemReviewPublicationService:
@@ -264,6 +313,7 @@ class MockExamItemReviewPublicationService:
         *,
         artifacts: ItemReviewArtifactStore | None = None,
         session_factory: sessionmaker[Session] | None = None,
+        evidence_usage_receipts: MockExamEvidenceUsageReceiptResolver | None = None,
     ) -> None:
         self.sessions = session_factory or build_session_factory(engine)
         # CatalogArtifactService intentionally owns the infrastructure boundary; this cast keeps
@@ -271,6 +321,9 @@ class MockExamItemReviewPublicationService:
         self.artifacts = artifacts or cast(
             ItemReviewArtifactStore,
             CatalogArtifactService(engine, settings),
+        )
+        self.evidence_usage_receipts = (
+            evidence_usage_receipts or OrchestratorEvidenceUsageReceiptResolver(self.sessions)
         )
 
     def inspect_eligibility(
@@ -395,7 +448,12 @@ class MockExamItemReviewPublicationService:
         )
         eligible = finding_counts.blocking == 0
         review_result_schema = cast(
-            Literal["review-result@7.0", "review-result@8.0", "review-result@9.0"],
+            Literal[
+                "review-result@7.0",
+                "review-result@8.0",
+                "review-result@9.0",
+                "review-result@10.0",
+            ],
             chain.review_step.result_schema,
         )
         result_payload: dict[str, Any] = {
@@ -418,11 +476,24 @@ class MockExamItemReviewPublicationService:
             "eligible": eligible,
             "eligibility_reason": "ELIGIBLE" if eligible else "REVIEW_BLOCKING_FINDINGS",
         }
-        if review_result_schema == "review-result@9.0":
-            result_schema = MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V2_SCHEMA
-            result: MockExamReviewEligibilityResult = (
-                MockExamReviewEligibilityResultV2.model_validate(result_payload)
+        if review_result_schema == "review-result@10.0":
+            if chain.trusted_evidence_usage_receipts is None:
+                self._fail(
+                    "ITEM_REVIEW_EVIDENCE_RECEIPTS_INVALID",
+                    "Trusted RAG review does not resolve its evidence receipts",
+                )
+            result_payload["trusted_evidence_usage_receipts"] = (
+                chain.trusted_evidence_usage_receipts
             )
+            result_payload["schema_version"] = "mock-exam-review-eligibility-result/3.0"
+            result_payload["operation"] = "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY"
+            result_schema = MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V3_SCHEMA
+            result: MockExamReviewEligibilityResult = (
+                MockExamReviewEligibilityResultV3.model_validate(result_payload)
+            )
+        elif review_result_schema == "review-result@9.0":
+            result_schema = MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V2_SCHEMA
+            result = MockExamReviewEligibilityResultV2.model_validate(result_payload)
         else:
             result_schema = MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_SCHEMA
             result = MockExamReviewEligibilityResult.model_validate(result_payload)
@@ -693,6 +764,27 @@ class MockExamItemReviewPublicationService:
                 "ITEM_REVIEW_WORKFLOW_INVALID",
                 "Workflow is not one fresh production-plan mock-exam Item request",
             )
+        if workflow.definition_version == "1.10.0":
+            expected = source_request.expected_resolution
+            if (
+                expected is None
+                or expected.workflow_definition_key != workflow.definition_key
+                or expected.workflow_definition_version != workflow.definition_version
+                or expected.workflow_definition_sha256 != workflow.definition_hash
+                or expected.content_pack_key != "generated-knowledge-item"
+                or expected.content_pack_version != "1.15.1"
+                or expected.execution_preset_key != "knowledge-grounded-item"
+                or source_request.educational_retrieval is None
+                or source_request.educational_retrieval.query_kind != "ITEM_PREPARATION"
+                or source_request.educational_retrieval.required_item_elements
+                != ("choice", "paragraph")
+                or source_request.educational_retrieval.source_classes
+                != (KnowledgeSourceClass.PAST_EXAM,)
+            ):
+                self._fail(
+                    "ITEM_REVIEW_WORKFLOW_INVALID",
+                    "Trusted RAG Workflow does not pin its exact production resolution",
+                )
         return workflow, contracts
 
     def _resolve_review_chain(
@@ -722,8 +814,10 @@ class MockExamItemReviewPublicationService:
             expected_authoring_types = (ContentTeamAuthoringRoleResultV7,)
         elif workflow.definition_version == "1.8.0":
             expected_authoring_types = (ContentTeamAuthoringRoleResultV8,)
-        else:
+        elif workflow.definition_version == "1.9.0":
             expected_authoring_types = (ContentTeamAuthoringRoleResultV9,)
+        else:
+            expected_authoring_types = (ContentTeamAuthoringRoleResultV10,)
         authoring_pointer, authoring_result = self._resolve_role_result(
             session,
             workflow=workflow,
@@ -737,7 +831,8 @@ class MockExamItemReviewPublicationService:
             authoring_result,
             ContentTeamAuthoringRoleResultV7
             | ContentTeamAuthoringRoleResultV8
-            | ContentTeamAuthoringRoleResultV9,
+            | ContentTeamAuthoringRoleResultV9
+            | ContentTeamAuthoringRoleResultV10,
         ):
             self._fail(
                 "ITEM_REVIEW_AUTHORING_RESULT_INVALID",
@@ -747,7 +842,10 @@ class MockExamItemReviewPublicationService:
         assert isinstance(request.item_brief, ContentTeamItemBrief)
         assert request.item_brief.mock_exam_slot is not None
         try:
-            if isinstance(authoring_result, ContentTeamAuthoringRoleResultV9):
+            if isinstance(
+                authoring_result,
+                ContentTeamAuthoringRoleResultV9 | ContentTeamAuthoringRoleResultV10,
+            ):
                 if authoring_result.output.metadata.knowledge_source_mode != "graph_grounded":
                     raise ValueError("production authoring is not Graph-grounded")
                 validate_content_team_mock_exam_slot_output_v2(
@@ -786,7 +884,9 @@ class MockExamItemReviewPublicationService:
         else:
             if not isinstance(
                 authoring_result,
-                ContentTeamAuthoringRoleResultV8 | ContentTeamAuthoringRoleResultV9,
+                ContentTeamAuthoringRoleResultV8
+                | ContentTeamAuthoringRoleResultV9
+                | ContentTeamAuthoringRoleResultV10,
             ):
                 self._fail(
                     "ITEM_REVIEW_IMAGE_STEP_INVALID",
@@ -847,15 +947,21 @@ class MockExamItemReviewPublicationService:
                     role="image",
                     expected_schema=image_schema,
                     expected_types=(
-                        (ContentTeamImageRoleResultV9,)
-                        if isinstance(authoring_result, ContentTeamAuthoringRoleResultV9)
-                        else (ContentTeamImageRoleResultV8,)
+                        (ContentTeamImageRoleResultV10,)
+                        if isinstance(authoring_result, ContentTeamAuthoringRoleResultV10)
+                        else (
+                            (ContentTeamImageRoleResultV9,)
+                            if isinstance(authoring_result, ContentTeamAuthoringRoleResultV9)
+                            else (ContentTeamImageRoleResultV8,)
+                        )
                     ),
                     max_bytes=MAX_ROLE_RESULT_BYTES,
                 )
                 if not isinstance(
                     image_result,
-                    ContentTeamImageRoleResultV8 | ContentTeamImageRoleResultV9,
+                    ContentTeamImageRoleResultV8
+                    | ContentTeamImageRoleResultV9
+                    | ContentTeamImageRoleResultV10,
                 ):
                     self._fail(
                         "ITEM_REVIEW_IMAGE_RESULT_INVALID",
@@ -888,6 +994,52 @@ class MockExamItemReviewPublicationService:
             workflow=workflow,
             step=review_step,
         )
+        trusted_receipts = None
+        if review_step.result_schema == "review-result@10.0":
+            try:
+                resolved_receipts = self.evidence_usage_receipts.resolve_mock_exam_pair(
+                    workflow_id=workflow.workflow_id,
+                    authoring_step_run_id=authoring_step.step_run_id,
+                    authoring=authoring_pointer,
+                    review_step_run_id=review_step.step_run_id,
+                    review=review_pointer,
+                )
+            except EvidenceUsageReceiptResolutionError as exc:
+                raise MockExamItemReviewPublicationError(
+                    "ITEM_REVIEW_EVIDENCE_RECEIPTS_INVALID",
+                    "Trusted RAG evidence receipts do not resolve",
+                ) from exc
+            trusted_receipts = MockExamTrustedEvidenceUsageReceiptPairV1.model_validate(
+                {
+                    "schema_version": "mock-exam-trusted-evidence-usage-receipt-pair/1.0",
+                    "role_protocol_version": "workflow-role/1.20.0",
+                    "receipt_schema_version": "evidence-usage-validation-receipt/1.0",
+                    "authoring": {
+                        "workflow_id": workflow.workflow_id,
+                        "step_run_id": authoring_step.step_run_id,
+                        "step_key": authoring_pointer.step_key,
+                        "attempt": authoring_pointer.attempt,
+                        "job_id": authoring_pointer.job_id,
+                        "artifact_id": authoring_pointer.logical_artifact_id,
+                        "artifact_revision_id": authoring_pointer.revision_id,
+                        "sha256": authoring_pointer.content_hash,
+                        "result_schema": authoring_pointer.result_schema,
+                        "receipt_sha256": resolved_receipts.authoring.receipt_sha256,
+                    },
+                    "review": {
+                        "workflow_id": workflow.workflow_id,
+                        "step_run_id": review_step.step_run_id,
+                        "step_key": review_pointer.step_key,
+                        "attempt": review_pointer.attempt,
+                        "job_id": review_pointer.job_id,
+                        "artifact_id": review_pointer.logical_artifact_id,
+                        "artifact_revision_id": review_pointer.revision_id,
+                        "sha256": review_pointer.content_hash,
+                        "result_schema": review_pointer.result_schema,
+                        "receipt_sha256": resolved_receipts.review.receipt_sha256,
+                    },
+                }
+            )
         return _ReviewChainEvidence(
             workflow=workflow,
             authoring_result=authoring_result,
@@ -895,6 +1047,7 @@ class MockExamItemReviewPublicationService:
             review_pointer=review_pointer,
             review_result=review_result,
             gate_upstream_pointers=(*supporting_pointers, review_pointer),
+            trusted_evidence_usage_receipts=trusted_receipts,
         )
 
     def _single_active_step(
@@ -988,7 +1141,7 @@ class MockExamItemReviewPublicationService:
         registered_content = self._require_item_content(
             session,
             revision.item_revision_id,
-            use_v3=contracts[0] == "authoring-result@9.0",
+            use_v3=contracts[0] in {"authoring-result@9.0", "authoring-result@10.0"},
         )
         chain = self._resolve_review_chain(session, workflow, contracts=contracts)
         if registered_content != chain.authoring_result.output.draft:
@@ -1022,11 +1175,17 @@ class MockExamItemReviewPublicationService:
             review_artifact_revision_id=chain.review_pointer.revision_id,
             review_sha256=chain.review_pointer.content_hash,
             review_result_schema=cast(
-                Literal["review-result@7.0", "review-result@8.0", "review-result@9.0"],
+                Literal[
+                    "review-result@7.0",
+                    "review-result@8.0",
+                    "review-result@9.0",
+                    "review-result@10.0",
+                ],
                 chain.review_step.result_schema,
             ),
             finding_counts=counts,
             approval_resolved_at=cast(datetime, approval.resolved_at),
+            trusted_evidence_usage_receipts=chain.trusted_evidence_usage_receipts,
         )
 
     def _require_item_content(
@@ -1212,15 +1371,18 @@ class MockExamItemReviewPublicationService:
         ArtifactPointer,
         ContentTeamReviewRoleResultV7
         | ContentTeamReviewRoleResultV8
-        | ContentTeamReviewRoleResultV9,
+        | ContentTeamReviewRoleResultV9
+        | ContentTeamReviewRoleResultV10,
     ]:
         expected_type: type[RoleResultBase]
         if step.result_schema == "review-result@7.0":
             expected_type = ContentTeamReviewRoleResultV7
         elif step.result_schema == "review-result@8.0":
             expected_type = ContentTeamReviewRoleResultV8
-        else:
+        elif step.result_schema == "review-result@9.0":
             expected_type = ContentTeamReviewRoleResultV9
+        else:
+            expected_type = ContentTeamReviewRoleResultV10
         pointer, parsed = self._resolve_role_result(
             session,
             workflow=workflow,
@@ -1234,7 +1396,8 @@ class MockExamItemReviewPublicationService:
             parsed,
             ContentTeamReviewRoleResultV7
             | ContentTeamReviewRoleResultV8
-            | ContentTeamReviewRoleResultV9,
+            | ContentTeamReviewRoleResultV9
+            | ContentTeamReviewRoleResultV10,
         ):
             self._fail(
                 "ITEM_REVIEW_RESULT_INVALID",
@@ -1496,6 +1659,7 @@ class MockExamItemReviewPublicationService:
             reviewer_operator_id=command.reviewer_operator_id,
             approved_at=evidence.approval_resolved_at,
         ).model_dump(mode="json")
+        is_v3 = evidence.review_result_schema == "review-result@10.0"
         is_v2 = evidence.review_result_schema == "review-result@9.0"
         source_review_payload = {
             "step_run_id": evidence.review_step_run_id,
@@ -1506,16 +1670,31 @@ class MockExamItemReviewPublicationService:
             "worker_decision": "ready_for_human",
             "finding_counts": evidence.finding_counts,
         }
+        if is_v3:
+            if evidence.trusted_evidence_usage_receipts is None:
+                raise ValueError("trusted RAG decision requires evidence receipts")
+            source_review_payload["trusted_evidence_usage_receipts"] = (
+                evidence.trusted_evidence_usage_receipts
+            )
+            source_review_payload["finding_counts"] = MockExamReviewFindingCountsV3.model_validate(
+                evidence.finding_counts.model_dump(mode="json")
+            )
         source_review: MockExamSourceReviewPointer
-        if is_v2:
+        if is_v3:
+            source_review = MockExamSourceReviewPointerV3.model_validate(source_review_payload)
+        elif is_v2:
             source_review = MockExamSourceReviewPointerV2.model_validate(source_review_payload)
         else:
             source_review = MockExamSourceReviewPointer.model_validate(source_review_payload)
         unsigned: dict[str, Any] = {
             "schema_version": (
-                "mock-exam-item-review-decision/2.0"
-                if is_v2
-                else "mock-exam-item-review-decision/1.0"
+                "mock-exam-item-review-decision/3.0"
+                if is_v3
+                else (
+                    "mock-exam-item-review-decision/2.0"
+                    if is_v2
+                    else "mock-exam-item-review-decision/1.0"
+                )
             ),
             "item_review_record_id": item_review_record_id,
             "item_revision_id": evidence.item_revision_id,
@@ -1531,7 +1710,13 @@ class MockExamItemReviewPublicationService:
             # Hash the exact JSON representation that will be written to the artifact.
             "decided_at": human_approval["approved_at"],
         }
-        decision_model = MockExamItemReviewDecisionV2 if is_v2 else MockExamItemReviewDecisionV1
+        decision_model = (
+            MockExamItemReviewDecisionV3
+            if is_v3
+            else MockExamItemReviewDecisionV2
+            if is_v2
+            else MockExamItemReviewDecisionV1
+        )
         decision = decision_model.model_validate(
             {
                 **unsigned,
@@ -1540,9 +1725,13 @@ class MockExamItemReviewPublicationService:
         )
         validate_contract(
             (
-                MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA
-                if is_v2
-                else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA
+                MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA
+                if is_v3
+                else (
+                    MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA
+                    if is_v2
+                    else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA
+                )
             ),
             decision.model_dump(mode="json"),
         )
@@ -1554,17 +1743,30 @@ class MockExamItemReviewPublicationService:
     ) -> _DecisionArtifactPointer:
         payload = canonical_json_bytes(decision)
         expected_content_hash = sha256_bytes(payload)
+        is_v3 = isinstance(decision, MockExamItemReviewDecisionV3)
         is_v2 = isinstance(decision, MockExamItemReviewDecisionV2)
         decision_schema_ref = (
-            MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF
-            if is_v2
-            else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF
+            MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA_REF
+            if is_v3
+            else (
+                MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF
+                if is_v2
+                else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF
+            )
         )
         protocol_version = (
-            ITEM_REVIEW_PROTOCOL_VERSION_V2 if is_v2 else ITEM_REVIEW_PROTOCOL_VERSION
+            ITEM_REVIEW_PROTOCOL_VERSION_V3
+            if is_v3
+            else ITEM_REVIEW_PROTOCOL_VERSION_V2
+            if is_v2
+            else ITEM_REVIEW_PROTOCOL_VERSION
         )
         protocol_schema_hash = (
-            ITEM_REVIEW_PROTOCOL_SCHEMA_HASH_V2 if is_v2 else ITEM_REVIEW_PROTOCOL_SCHEMA_HASH
+            ITEM_REVIEW_PROTOCOL_SCHEMA_HASH_V3
+            if is_v3
+            else ITEM_REVIEW_PROTOCOL_SCHEMA_HASH_V2
+            if is_v2
+            else ITEM_REVIEW_PROTOCOL_SCHEMA_HASH
         )
         try:
             with tempfile.TemporaryDirectory(prefix="eom-item-review-decision-") as directory:
@@ -1634,19 +1836,32 @@ class MockExamItemReviewPublicationService:
         expected: MockExamItemReviewDecisionV1,
         mismatch_code: str = "ITEM_REVIEW_DECISION_ARTIFACT_INVALID",
     ) -> _DecisionArtifactPointer:
+        is_v3 = isinstance(expected, MockExamItemReviewDecisionV3)
         is_v2 = isinstance(expected, MockExamItemReviewDecisionV2)
         decision_schema = (
-            MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA
-            if is_v2
-            else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA
+            MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA
+            if is_v3
+            else (
+                MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA
+                if is_v2
+                else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA
+            )
         )
         decision_schema_ref = (
-            MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF
-            if is_v2
-            else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF
+            MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA_REF
+            if is_v3
+            else (
+                MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF
+                if is_v2
+                else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF
+            )
         )
         protocol_version = (
-            ITEM_REVIEW_PROTOCOL_VERSION_V2 if is_v2 else ITEM_REVIEW_PROTOCOL_VERSION
+            ITEM_REVIEW_PROTOCOL_VERSION_V3
+            if is_v3
+            else ITEM_REVIEW_PROTOCOL_VERSION_V2
+            if is_v2
+            else ITEM_REVIEW_PROTOCOL_VERSION
         )
         artifact = session.get(ArtifactRecord, pointer.artifact_id)
         revision = session.get(ArtifactRevisionRecord, pointer.revision_id)
@@ -1718,9 +1933,13 @@ class MockExamItemReviewPublicationService:
                 raise ValueError("decision artifact is not an object")
             validate_contract(decision_schema, value)
             parsed = (
-                MockExamItemReviewDecisionV2.model_validate(value)
-                if is_v2
-                else MockExamItemReviewDecisionV1.model_validate(value)
+                MockExamItemReviewDecisionV3.model_validate(value)
+                if is_v3
+                else (
+                    MockExamItemReviewDecisionV2.model_validate(value)
+                    if is_v2
+                    else MockExamItemReviewDecisionV1.model_validate(value)
+                )
             )
         except (
             OSError,
@@ -1838,7 +2057,7 @@ class MockExamItemReviewPublicationService:
         decision: MockExamItemReviewDecisionV1,
         idempotency_key_sha256: str,
     ) -> dict[str, Any]:
-        return {
+        summary: dict[str, Any] = {
             "schema_version": "mock-exam-item-review-severity-summary/1.0",
             "final_rating": command.final_rating,
             "finding_counts": evidence.finding_counts.model_dump(mode="json"),
@@ -1853,6 +2072,11 @@ class MockExamItemReviewPublicationService:
             "decision_sha256": decision.decision_sha256,
             "idempotency_key_sha256": idempotency_key_sha256,
         }
+        if evidence.trusted_evidence_usage_receipts is not None:
+            summary["trusted_evidence_usage_receipts"] = (
+                evidence.trusted_evidence_usage_receipts.model_dump(mode="json")
+            )
+        return summary
 
     def _require_exact_replay(
         self,
@@ -1906,11 +2130,32 @@ class MockExamItemReviewPublicationService:
             "rating_policy_sha256": command.rating_policy_sha256,
             "created": created,
         }
-        if evidence.review_result_schema == "review-result@9.0":
-            result_schema = MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V2_SCHEMA
-            result: MockExamItemReviewPublicationResult = (
-                MockExamItemReviewPublicationResultV2.model_validate(result_payload)
+        if evidence.review_result_schema == "review-result@10.0":
+            if evidence.trusted_evidence_usage_receipts is None:
+                self._fail(
+                    "ITEM_REVIEW_EVIDENCE_RECEIPTS_INVALID",
+                    "Trusted RAG publication does not resolve its evidence receipts",
+                )
+            result_payload.update(
+                {
+                    "schema_version": "mock-exam-item-review-publication-result/3.0",
+                    "operation": "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+                    "finding_counts": MockExamReviewFindingCountsV3.model_validate(
+                        evidence.finding_counts.model_dump(mode="json")
+                    ),
+                    "source_review_artifact_id": evidence.review_artifact_id,
+                    "source_review_artifact_revision_id": (evidence.review_artifact_revision_id),
+                    "source_review_sha256": evidence.review_sha256,
+                    "trusted_evidence_usage_receipts": (evidence.trusted_evidence_usage_receipts),
+                }
             )
+            result_schema = MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V3_SCHEMA
+            result: MockExamItemReviewPublicationResult = (
+                MockExamItemReviewPublicationResultV3.model_validate(result_payload)
+            )
+        elif evidence.review_result_schema == "review-result@9.0":
+            result_schema = MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_V2_SCHEMA
+            result = MockExamItemReviewPublicationResultV2.model_validate(result_payload)
         else:
             result_schema = MOCK_EXAM_ITEM_REVIEW_PUBLICATION_RESULT_SCHEMA
             result = MockExamItemReviewPublicationResult.model_validate(result_payload)

@@ -46,7 +46,10 @@ from eom_catalog_contracts import (
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
 )
-from eom_catalog_contracts.mock_exam_production_plan import MockExamProductionPlanV1
+from eom_catalog_contracts.mock_exam_production_plan import (
+    MockExamProductionPlanV1,
+    MockExamProductionPlanV3,
+)
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
 from sqlalchemy import create_engine
@@ -164,6 +167,10 @@ def test_released_resolver_builds_static_25_plan_and_exact_policy_pointers() -> 
     )
 
     plan = resolver.production_plan()
+    assert isinstance(plan, MockExamProductionPlanV3)
+    assert plan.one_item_generation_block.workflow_definition_version == "1.10.0"
+    assert plan.one_item_generation_block.content_pack_version == "1.15.1"
+    assert plan.one_item_generation_block.trusted_evidence_usage_receipts_required is True
     assert len(plan.workflow_calls) == 25
     assert tuple(call.item_brief.mock_exam_slot.position for call in plan.workflow_calls) == tuple(
         range(1, 26)

@@ -144,6 +144,31 @@ def _write_mirrors(schema: dict[str, Any], *destinations: Path) -> None:
         destination.write_bytes(payload)
 
 
+def _catalog_application_v13_schemas() -> tuple[dict[str, Any], dict[str, Any]]:
+    """Derive the additive trusted-RAG envelope without rewriting V12."""
+
+    source_root = ROOT / "schemas/catalog-application"
+    request = json.loads(
+        (source_root / "catalog-application-request-v12.schema.json").read_text(encoding="utf-8")
+    )
+    response = json.loads(
+        (source_root / "catalog-application-response-v12.schema.json").read_text(encoding="utf-8")
+    )
+    request["$id"] = "eom://schemas/catalog-application/catalog-application-request-v13"
+    request["title"] = "EOM Catalog Application Trusted RAG Review Request V13"
+    response["$id"] = "eom://schemas/catalog-application/catalog-application-response-v13"
+    response["title"] = "EOM Catalog Application Trusted RAG Review Response V13"
+    encoded = json.dumps(response)
+    encoded = encoded.replace(
+        "mock-exam-item-review-publication-result-v2.schema.json",
+        "mock-exam-item-review-publication-result-v3.schema.json",
+    ).replace(
+        "mock-exam-review-eligibility-result-v2.schema.json",
+        "mock-exam-review-eligibility-result-v3.schema.json",
+    )
+    return request, json.loads(encoded)
+
+
 def main() -> None:
     catalog_root = ROOT / "schemas/assessment-assembly"
     catalog_package_root = (
@@ -151,6 +176,10 @@ def main() -> None:
     )
     api_root = ROOT / "schemas/api/v1"
     api_package_root = ROOT / "packages/api_contracts/eom_api_contracts/schemas"
+    catalog_application_root = ROOT / "schemas/catalog-application"
+    catalog_application_package_root = (
+        ROOT / "packages/catalog_contracts/eom_catalog_contracts/resources/catalog-application"
+    )
 
     catalog_schemas: tuple[tuple[str, dict[str, Any]], ...] = (
         (
@@ -191,6 +220,17 @@ def main() -> None:
             schema,
             catalog_root / file_name,
             catalog_package_root / file_name,
+        )
+
+    application_request, application_response = _catalog_application_v13_schemas()
+    for file_name, schema in (
+        ("catalog-application-request-v13.schema.json", application_request),
+        ("catalog-application-response-v13.schema.json", application_response),
+    ):
+        _write_mirrors(
+            schema,
+            catalog_application_root / file_name,
+            catalog_application_package_root / file_name,
         )
 
     api_schemas: tuple[tuple[str, dict[str, Any]], ...] = (

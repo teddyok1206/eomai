@@ -1,0 +1,80 @@
+{
+  "$id": "eom://schemas/catalog-application/catalog-application-request-v13",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision_id": {
+          "pattern": "^itemrev_[a-z0-9]{8,55}$",
+          "type": "string"
+        },
+        "content": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/item-registry/assessment-item-content-v1"
+            },
+            {
+              "$ref": "eom://schemas/item-registry/assessment-item-content-v2"
+            },
+            {
+              "$ref": "eom://schemas/item-registry/assessment-item-content-v3"
+            }
+          ]
+        },
+        "expected_version": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "operation": {
+          "const": "IMPORT_REVIEWED_ITEM_CONTENT"
+        },
+        "review_reason": {
+          "maxLength": 2000,
+          "minLength": 10,
+          "type": "string"
+        },
+        "reviewed_by": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "base_revision_id",
+        "expected_version",
+        "reviewed_by",
+        "review_reason",
+        "content"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "item_revision_id": {
+          "pattern": "^itemrev_[a-z0-9]{8,55}$",
+          "type": "string"
+        },
+        "operation": {
+          "const": "GET_ITEM_CONTENT"
+        }
+      },
+      "required": [
+        "operation",
+        "item_revision_id"
+      ],
+      "type": "object"
+    },
+    {
+      "$ref": "eom://schemas/knowledge/approved-item-graph-publication-command/1.0"
+    },
+    {
+      "$ref": "https://eom.local/schemas/assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json"
+    },
+    {
+      "$ref": "https://eom.local/schemas/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json"
+    }
+  ],
+  "title": "EOM Catalog Application Trusted RAG Review Request V13"
+}

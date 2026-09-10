@@ -1366,7 +1366,7 @@ class MockExamProductionExecutionV3(MockExamProductionExecutionV1):
 
 
 MockExamProductionExecution = Annotated[
-    MockExamProductionExecutionV1 | MockExamProductionExecutionV2,
+    MockExamProductionExecutionV1 | MockExamProductionExecutionV2 | MockExamProductionExecutionV3,
     Field(discriminator="schema_version"),
 ]
 

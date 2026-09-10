@@ -18,10 +18,15 @@ from eom_catalog_contracts.assessment_assembly import (
 from eom_catalog_contracts.curriculum import load_integrated_science_editorial_outline
 from eom_catalog_contracts.item_review import (
     MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA_REF,
     InspectMockExamReviewEligibilityQuery,
     MockExamItemReviewDecisionV2,
+    MockExamItemReviewDecisionV3,
     MockExamItemReviewPublicationResultV2,
+    MockExamItemReviewPublicationResultV3,
+    MockExamReviewEligibilityResultV3,
     MockExamReviewFindingCounts,
+    MockExamTrustedEvidenceUsageReceiptPairV1,
     PublishMockExamItemReviewCommand,
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
@@ -55,6 +60,47 @@ NOW = datetime(2026, 9, 8, 5, tzinfo=UTC)
 
 def _id(prefix: str, digit: str) -> str:
     return prefix + digit * 32
+
+
+def _trusted_receipts(
+    *,
+    workflow_id: str,
+    review_step_run_id: str,
+    review_artifact_id: str,
+    review_artifact_revision_id: str,
+    review_sha256: str,
+) -> MockExamTrustedEvidenceUsageReceiptPairV1:
+    return MockExamTrustedEvidenceUsageReceiptPairV1.model_validate(
+        {
+            "schema_version": "mock-exam-trusted-evidence-usage-receipt-pair/1.0",
+            "role_protocol_version": "workflow-role/1.20.0",
+            "receipt_schema_version": "evidence-usage-validation-receipt/1.0",
+            "authoring": {
+                "workflow_id": workflow_id,
+                "step_run_id": _id("steprun_", "a"),
+                "step_key": "authoring",
+                "attempt": 1,
+                "job_id": _id("job_", "b"),
+                "artifact_id": _id("artifact_", "c"),
+                "artifact_revision_id": _id("rev_", "d"),
+                "sha256": "sha256:" + "e" * 64,
+                "result_schema": "authoring-result@10.0",
+                "receipt_sha256": "sha256:" + "1" * 64,
+            },
+            "review": {
+                "workflow_id": workflow_id,
+                "step_run_id": review_step_run_id,
+                "step_key": "review",
+                "attempt": 1,
+                "job_id": _id("job_", "f"),
+                "artifact_id": review_artifact_id,
+                "artifact_revision_id": review_artifact_revision_id,
+                "sha256": review_sha256,
+                "result_schema": "review-result@10.0",
+                "receipt_sha256": "sha256:" + "2" * 64,
+            },
+        }
+    )
 
 
 class _RoleArtifactStore:
@@ -335,6 +381,92 @@ def test_review_result_9_emits_v2_decision_artifact_and_publication_receipt() ->
     }
 
 
+def test_review_result_10_emits_v3_decision_and_preserves_source_receipts() -> None:
+    policy = load_integrated_science_mock_exam_rating_policy()
+    command = PublishMockExamItemReviewCommand(
+        item_revision_id=_id("itemrev_", "1"),
+        expected_workflow_id=_id("workflow_", "2"),
+        final_rating="B",
+        reviewer_operator_id=_id("operator_", "3"),
+        rating_policy_revision_id=policy.rating_policy_revision_id,
+        rating_policy_sha256=content_sha256(policy.model_dump(mode="json")),
+        idempotency_key="trusted-rag-human-rating",
+    )
+    review_step_run_id = _id("steprun_", "4")
+    review_artifact_id = _id("artifact_", "6")
+    review_artifact_revision_id = _id("rev_", "7")
+    review_sha256 = "sha256:" + "8" * 64
+    receipts = _trusted_receipts(
+        workflow_id=command.expected_workflow_id,
+        review_step_run_id=review_step_run_id,
+        review_artifact_id=review_artifact_id,
+        review_artifact_revision_id=review_artifact_revision_id,
+        review_sha256=review_sha256,
+    )
+    evidence = _PublicationEvidence(
+        item_revision_id=command.item_revision_id,
+        workflow_id=command.expected_workflow_id,
+        review_step_run_id=review_step_run_id,
+        approval_request_id=_id("approval_", "5"),
+        review_artifact_id=review_artifact_id,
+        review_artifact_revision_id=review_artifact_revision_id,
+        review_sha256=review_sha256,
+        review_result_schema="review-result@10.0",
+        finding_counts=MockExamReviewFindingCounts(info=1, warning=0, blocking=0),
+        approval_resolved_at=NOW,
+        trusted_evidence_usage_receipts=receipts,
+    )
+    record_id, key_hash = MockExamItemReviewPublicationService._idempotency_identity(command)
+    decision = MockExamItemReviewPublicationService._decision(
+        command,
+        policy=policy,
+        evidence=evidence,
+        item_review_record_id=record_id,
+        idempotency_key_sha256=key_hash,
+    )
+    record = SimpleNamespace(
+        item_review_record_id=record_id,
+        item_revision_id=command.item_revision_id,
+        workflow_id=command.expected_workflow_id,
+        review_artifact_id=_id("artifact_", "9"),
+        review_artifact_revision_id=_id("rev_", "0"),
+        review_sha256="sha256:" + "3" * 64,
+        reviewer_actor_id=command.reviewer_operator_id,
+    )
+    service = cast(Any, object.__new__(MockExamItemReviewPublicationService))
+    result = service._result(
+        cast(Any, record),
+        evidence=evidence,
+        command=command,
+        decision=decision,
+        created=True,
+    )
+
+    assert isinstance(decision, MockExamItemReviewDecisionV3)
+    assert isinstance(result, MockExamItemReviewPublicationResultV3)
+    assert result.review_artifact_id == record.review_artifact_id
+    assert result.source_review_artifact_id == review_artifact_id
+    assert result.trusted_evidence_usage_receipts == receipts
+    assert MockExamItemReviewPublicationService._severity_summary(
+        command,
+        evidence,
+        decision=decision,
+        idempotency_key_sha256=key_hash,
+    )["trusted_evidence_usage_receipts"] == receipts.model_dump(mode="json")
+
+    store = _DecisionCommitStore()
+    service.artifacts = store
+    service._commit_decision_artifact(decision)
+    assert store.call is not None
+    assert store.call["protocol_version"] == "catalog/1.14"
+    assert store.call["file_metadata"] == {
+        "mock-exam-item-review-decision.json": {
+            "schema_ref": MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA_REF,
+            "media_type": "application/json",
+        }
+    }
+
+
 @pytest.mark.parametrize(
     ("workflow_state", "approval_state", "reviewer_operator_id", "approved_at"),
     (
@@ -411,6 +543,80 @@ def test_eligibility_preserves_review_evidence_before_and_after_approval(
         workflow,
         expected_state="INSPECTABLE",
     )
+
+
+def test_review_result_10_eligibility_requires_and_emits_trusted_receipts() -> None:
+    source_service, source_session, _, source_step = _review_evidence()
+    review_pointer, review_result = source_service._resolve_review_result(
+        cast(Any, source_session),
+        workflow=WorkflowInstanceRecord(
+            workflow_id=_id("workflow_", "1"),
+            role_schema_version="workflow-role/1.17.0",
+        ),
+        step=source_step,
+    )
+    source_step.result_schema = "review-result@10.0"
+    review_pointer = review_pointer.model_copy(update={"result_schema": "review-result@10.0"})
+    workflow = WorkflowInstanceRecord(
+        workflow_id=_id("workflow_", "1"),
+        state="AWAITING_HUMAN_APPROVAL",
+        lock_version=8,
+    )
+    receipts = _trusted_receipts(
+        workflow_id=workflow.workflow_id,
+        review_step_run_id=source_step.step_run_id,
+        review_artifact_id=review_pointer.logical_artifact_id,
+        review_artifact_revision_id=review_pointer.revision_id,
+        review_sha256=review_pointer.content_hash,
+    )
+    chain = _ReviewChainEvidence(
+        workflow=workflow,
+        authoring_result=cast(Any, object()),
+        review_step=source_step,
+        review_pointer=review_pointer,
+        review_result=review_result,
+        gate_upstream_pointers=(review_pointer,),
+        trusted_evidence_usage_receipts=receipts,
+    )
+    approval = SimpleNamespace(
+        approval_request_id=_id("approval_", "8"),
+        lock_version=1,
+        resolved_actor_id=None,
+        resolved_at=None,
+    )
+    service = cast(Any, object.__new__(MockExamItemReviewPublicationService))
+    service._require_supported_workflow = Mock(
+        return_value=(
+            workflow,
+            (
+                "authoring-result@10.0",
+                "image-result@10.0",
+                "review-result@10.0",
+                "registration-result@10.0",
+                "workflow-role/1.20.0",
+            ),
+        )
+    )
+    service._resolve_review_chain = Mock(return_value=chain)
+    service._resolve_pending_approval = Mock(return_value=approval)
+
+    result = service._inspect_eligibility_in_session(cast(Any, Mock()), workflow)
+
+    assert isinstance(result, MockExamReviewEligibilityResultV3)
+    assert result.trusted_evidence_usage_receipts == receipts
+
+    chain = _ReviewChainEvidence(
+        workflow=workflow,
+        authoring_result=cast(Any, object()),
+        review_step=source_step,
+        review_pointer=review_pointer,
+        review_result=review_result,
+        gate_upstream_pointers=(review_pointer,),
+    )
+    service._resolve_review_chain = Mock(return_value=chain)
+    with pytest.raises(MockExamItemReviewPublicationError) as raised:
+        service._inspect_eligibility_in_session(cast(Any, Mock()), workflow)
+    assert raised.value.code == "ITEM_REVIEW_EVIDENCE_RECEIPTS_INVALID"
 
 
 def test_eligibility_batch_bulk_loads_workflows_and_definitions_in_order() -> None:

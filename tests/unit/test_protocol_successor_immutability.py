@@ -100,6 +100,8 @@ def test_additive_successor_schema_mirrors_are_byte_exact() -> None:
         "assessment-assembly/mock-exam-review-eligibility-result-v2.schema.json",
         "catalog-application/catalog-application-request-v12.schema.json",
         "catalog-application/catalog-application-response-v12.schema.json",
+        "catalog-application/catalog-application-request-v13.schema.json",
+        "catalog-application/catalog-application-response-v13.schema.json",
     )
     for name in catalog_names:
         assert (ROOT / "schemas" / name).read_bytes() == (

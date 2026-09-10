@@ -11,6 +11,7 @@ from eom_catalog_contracts.mock_exam_production_plan import (
     CONTENT_TEAM_ITEM_GUIDANCE_SHA256,
 )
 from eom_catalog_service.evidence_usage_receipts import (
+    EvidenceUsageProvenanceExpectation,
     EvidenceUsageReceiptPair,
     EvidenceUsageReceiptResolutionError,
     OrchestratorEvidenceUsageReceiptResolver,
@@ -28,8 +29,11 @@ from eom_workflow import (
     ArtifactPointer,
     AuthoringEvidenceUsageValidationReceipt,
     ReviewEvidenceUsageValidationReceipt,
+    RoleWorkerInput,
+    WorkerRequest,
     WorkflowRequest,
 )
+from eom_workflow.models import ArtifactSpec
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 
 NOW = datetime(2026, 9, 10, tzinfo=UTC)
@@ -205,6 +209,31 @@ def _record_set(
     return job, artifact, revision, event
 
 
+def _worker_input(
+    pointer: ArtifactPointer,
+    *,
+    workflow_id: str,
+    step_run_id: str,
+) -> RoleWorkerInput:
+    return RoleWorkerInput(
+        protocol_version="workflow-role/1.20.0",
+        job_id=pointer.job_id,
+        workflow_id=workflow_id,
+        step_run_id=step_run_id,
+        attempt=pointer.attempt,
+        role=cast(Any, pointer.step_key),
+        request=WorkerRequest(
+            request_name="GENERATED_KNOWLEDGE_ITEM_REQUEST",
+            image_mode="skip",
+        ),
+        upstream_artifacts=(),
+        artifact=ArtifactSpec(
+            logical_artifact_id=pointer.logical_artifact_id,
+            revision_id=pointer.revision_id,
+        ),
+    )
+
+
 def test_trusted_receipt_record_and_pair_bind_exact_artifacts_and_plan() -> None:
     pair = _receipts()
     authoring_records = _record_set(AUTHORING, pair.authoring)
@@ -361,6 +390,134 @@ def test_trusted_receipt_pair_rejects_material_and_citation_mismatch() -> None:
     for mismatched in (material_mismatch, citation_mismatch):
         with pytest.raises(EvidenceUsageReceiptResolutionError, match="immutable chain"):
             OrchestratorEvidenceUsageReceiptResolver._validate_pair(mismatched)
+
+
+def test_mock_exam_receipt_resolution_binds_worker_inputs_plan_and_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workflow_id = "workflow_" + "9" * 32
+    authoring_step_run_id = "steprun_" + "1" * 32
+    review_step_run_id = "steprun_" + "2" * 32
+    pair = _receipts()
+    authoring_job = _record_set(AUTHORING, pair.authoring)[0]
+    review_job = _record_set(REVIEW, pair.review)[0]
+    for job, pointer, step_run_id in (
+        (authoring_job, AUTHORING, authoring_step_run_id),
+        (review_job, REVIEW, review_step_run_id),
+    ):
+        worker_input = _worker_input(
+            pointer,
+            workflow_id=workflow_id,
+            step_run_id=step_run_id,
+        )
+        job.request = worker_input.model_dump(mode="json")
+        job.request_hash = content_sha256(
+            {
+                "protocol_version": job.protocol_version,
+                "task_type": job.task_type,
+                "request": job.request,
+            }
+        )
+    jobs = {AUTHORING.job_id: authoring_job, REVIEW.job_id: review_job}
+    plan = SimpleNamespace(
+        plan_id=pair.authoring.plan_id,
+        workflow_id=workflow_id,
+        preset_id="execpreset_" + "3" * 32,
+        preset_revision_id="execpresetrev_" + "4" * 32,
+        capacity_policy_revision_id="capacityrev_" + "5" * 32,
+        graph_snapshot=SimpleNamespace(
+            graph_snapshot_revision_id=pair.authoring.graph_snapshot_revision_id,
+            manifest_sha256=pair.authoring.graph_snapshot_sha256,
+        ),
+        evidence_bundle_id=pair.authoring.evidence_bundle_id,
+        evidence_bundle_revision_id=pair.authoring.evidence_bundle_revision_id,
+        retrieval_request_id=pair.authoring.retrieval_request_id,
+        retrieval_request_sha256=pair.authoring.retrieval_request_sha256,
+        evidence_manifest_artifact=pair.authoring.evidence_manifest_artifact,
+        evidence_manifest_sha256=pair.authoring.evidence_manifest_sha256,
+        evidence_context_artifact=pair.authoring.evidence_context_artifact,
+        workflow_definition_key="generic-item-development",
+        workflow_definition_version="1.10.0",
+        plan_sha256=pair.authoring.plan_sha256,
+        resolved_at=NOW,
+    )
+    plan_record = SimpleNamespace(
+        plan_id=plan.plan_id,
+        workflow_id=workflow_id,
+        preset_id=plan.preset_id,
+        preset_revision_id=plan.preset_revision_id,
+        capacity_policy_revision_id=plan.capacity_policy_revision_id,
+        graph_snapshot_revision_id=plan.graph_snapshot.graph_snapshot_revision_id,
+        evidence_bundle_revision_id=plan.evidence_bundle_revision_id,
+        plan_sha256=plan.plan_sha256,
+        resolved_at=plan.resolved_at,
+        canonical_document={},
+    )
+
+    class Session:
+        def __enter__(self) -> Session:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def scalar(self, _statement: object) -> object:
+            return plan_record
+
+    resolver = OrchestratorEvidenceUsageReceiptResolver(cast(Any, lambda: Session()))
+    monkeypatch.setattr(
+        resolver,
+        "_resolve_pair_with_jobs",
+        lambda **_kwargs: (pair, jobs),
+    )
+    monkeypatch.setattr(
+        "eom_catalog_service.evidence_usage_receipts.ResolvedExecutionPlanV3.model_validate",
+        staticmethod(lambda _value: plan),
+    )
+    expectation = EvidenceUsageProvenanceExpectation(
+        plan_id=plan.plan_id,
+        plan_sha256=plan.plan_sha256,
+        evidence_bundle_revision_id=plan.evidence_bundle_revision_id,
+        retrieval_request_id=plan.retrieval_request_id,
+        retrieval_request_sha256=plan.retrieval_request_sha256,
+        graph_snapshot_revision_id=plan.graph_snapshot.graph_snapshot_revision_id,
+        evidence_manifest_sha256=plan.evidence_manifest_sha256,
+    )
+
+    resolved = resolver.resolve_mock_exam_pair(
+        workflow_id=workflow_id,
+        authoring_step_run_id=authoring_step_run_id,
+        authoring=AUTHORING,
+        review_step_run_id=review_step_run_id,
+        review=REVIEW,
+        expected_provenance=expectation,
+        expected_authoring_receipt_sha256=pair.authoring.receipt_sha256,
+        expected_review_receipt_sha256=pair.review.receipt_sha256,
+    )
+
+    assert resolved == pair
+
+    wrong_input = _worker_input(
+        REVIEW,
+        workflow_id="workflow_" + "0" * 32,
+        step_run_id=review_step_run_id,
+    )
+    review_job.request = wrong_input.model_dump(mode="json")
+    review_job.request_hash = content_sha256(
+        {
+            "protocol_version": review_job.protocol_version,
+            "task_type": review_job.task_type,
+            "request": review_job.request,
+        }
+    )
+    with pytest.raises(EvidenceUsageReceiptResolutionError, match="Workflow occurrence"):
+        resolver.resolve_mock_exam_pair(
+            workflow_id=workflow_id,
+            authoring_step_run_id=authoring_step_run_id,
+            authoring=AUTHORING,
+            review_step_run_id=review_step_run_id,
+            review=REVIEW,
+        )
 
 
 class _ReceiptResolver:

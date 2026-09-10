@@ -199,7 +199,7 @@ def test_release_builder_derives_and_verifies_source_identity_without_runtime_gi
     assert "verify_install_mode exact-source" in deploy
     assert "verify_install_mode validated-resource-only" in deploy
     assert 'os.environ["SOURCE_IDENTITY_MODE"] == "exact-source"' in deploy
-    assert "expected exactly 27 packaged API schemas" in deploy
+    assert "expected exactly 29 packaged API schemas" in deploy
     assert "subprocess" not in loader
     assert "os.environ" not in loader
     assert ".git" not in loader

@@ -424,14 +424,18 @@ class MockExamItemReviewPublicationResultV3(MockExamItemReviewPublicationResult)
 
 
 MockExamReviewEligibilityResultContract = Annotated[
-    MockExamReviewEligibilityResult | MockExamReviewEligibilityResultV2,
+    MockExamReviewEligibilityResult
+    | MockExamReviewEligibilityResultV2
+    | MockExamReviewEligibilityResultV3,
     Field(discriminator="schema_version"),
 ]
 MockExamItemReviewDecisionContract = Annotated[
-    MockExamItemReviewDecisionV1 | MockExamItemReviewDecisionV2,
+    MockExamItemReviewDecisionV1 | MockExamItemReviewDecisionV2 | MockExamItemReviewDecisionV3,
     Field(discriminator="schema_version"),
 ]
 MockExamItemReviewPublicationResultContract = Annotated[
-    MockExamItemReviewPublicationResult | MockExamItemReviewPublicationResultV2,
+    MockExamItemReviewPublicationResult
+    | MockExamItemReviewPublicationResultV2
+    | MockExamItemReviewPublicationResultV3,
     Field(discriminator="schema_version"),
 ]

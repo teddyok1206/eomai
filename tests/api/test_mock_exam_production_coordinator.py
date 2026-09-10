@@ -30,11 +30,17 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamExplicitRatingV1,
     MockExamGenerationBlockResolutionV1,
     MockExamGenerationBlockResolutionV2,
+    MockExamGenerationBlockResolutionV3,
     MockExamGraphPublicationInputV1,
     MockExamProductionExecutionV1,
     MockExamProductionExecutionV2,
+    MockExamProductionExecutionV3,
     MockExamRatingPolicyPointerV1,
     MockExamReviewEligibilityObservationV1,
+    MockExamReviewEligibilityObservationV3,
+    MockExamReviewPointerV3,
+    MockExamWorkflowKnowledgeProvenancePointerV1,
+    MockExamWorkflowKnowledgeProvenancePointerV3,
     build_mock_exam_explicit_analysis_review_set,
     build_mock_exam_explicit_rating_set,
     mock_exam_production_is_terminal,
@@ -58,14 +64,21 @@ from eom_catalog_contracts.curriculum import (
     resolve_integrated_science_curriculum_scope,
 )
 from eom_catalog_contracts.item_review import (
+    MockExamAuthoringEvidenceUsageReceiptPointerV1,
     MockExamEligibilityFindingCounts,
     MockExamReviewEligibilityResult,
+    MockExamReviewEligibilityResultV3,
+    MockExamReviewEvidenceUsageReceiptPointerV1,
+    MockExamTrustedEvidenceUsageReceiptPairV1,
 )
+from eom_catalog_contracts.knowledge import KnowledgeSourceClass
 from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
+    MockExamOneItemGenerationBlockV3,
     MockExamProductionPlanV1,
     build_integrated_science_mock_exam_production_plan,
     build_integrated_science_mock_exam_production_plan_v2,
+    build_integrated_science_mock_exam_production_plan_v3,
 )
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext, ActorSource, ActorType
@@ -109,6 +122,64 @@ def _hex_id(prefix: str, value: int) -> str:
 
 def _sha(value: int) -> str:
     return "sha256:" + f"{value:064x}"
+
+
+def _trusted_receipts(
+    workflow_id: str, position: int = 1
+) -> MockExamTrustedEvidenceUsageReceiptPairV1:
+    authoring_value = 1_000 + position
+    review_value = 2_000 + position
+    return MockExamTrustedEvidenceUsageReceiptPairV1(
+        schema_version="mock-exam-trusted-evidence-usage-receipt-pair/1.0",
+        role_protocol_version="workflow-role/1.20.0",
+        receipt_schema_version="evidence-usage-validation-receipt/1.0",
+        authoring=MockExamAuthoringEvidenceUsageReceiptPointerV1(
+            workflow_id=workflow_id,
+            step_run_id=_hex_id("steprun_", authoring_value),
+            step_key="authoring",
+            attempt=1,
+            job_id=_hex_id("job_", authoring_value),
+            artifact_id=_hex_id("artifact_", authoring_value),
+            artifact_revision_id=_hex_id("rev_", authoring_value),
+            sha256=_sha(authoring_value),
+            result_schema="authoring-result@10.0",
+            receipt_sha256=_sha(3_000 + position),
+        ),
+        review=MockExamReviewEvidenceUsageReceiptPointerV1(
+            workflow_id=workflow_id,
+            step_run_id=_hex_id("steprun_", review_value),
+            step_key="review",
+            attempt=1,
+            job_id=_hex_id("job_", review_value),
+            artifact_id=_hex_id("artifact_", review_value),
+            artifact_revision_id=_hex_id("rev_", review_value),
+            sha256=_sha(review_value),
+            result_schema="review-result@10.0",
+            receipt_sha256=_sha(4_000 + position),
+        ),
+    )
+
+
+def _trusted_provenance() -> MockExamWorkflowKnowledgeProvenancePointerV3:
+    return MockExamWorkflowKnowledgeProvenancePointerV3(
+        schema_version="workflow-knowledge-provenance/1.0",
+        plan_id=_hex_id("execplan_", 1),
+        plan_sha256=_sha(1),
+        preset_revision_id=_hex_id("execpresetrev_", 1),
+        corpus_key="integrated-science-textbooks",
+        query_kind="ITEM_PREPARATION",
+        curriculum_root_key="curriculum.eom.editorial.integrated-science.space-time",
+        required_item_elements=("choice", "paragraph"),
+        source_classes=("PAST_EXAM",),
+        graph_snapshot_revision_id=_hex_id("graphrev_", 1),
+        evidence_bundle_revision_id=_hex_id("evidencerev_", 1),
+        retrieval_request_id=_hex_id("retrieval_", 1),
+        retrieval_request_sha256=_sha(2),
+        access_policy_revision_id=_hex_id("accessrev_", 1),
+        access_policy_sha256=_sha(3),
+        evidence_manifest_sha256=_sha(4),
+        resolved_at=NOW,
+    )
 
 
 def _fake_assembly_item_set_sha256() -> str:
@@ -187,11 +258,26 @@ class FakeWorkflowOperations:
     def resolve_generation_block(
         self, block: MockExamOneItemGenerationBlockV1
     ) -> MockExamGenerationBlockResolutionV1:
-        resolution_type = (
-            MockExamGenerationBlockResolutionV2
-            if block.block_revision == "2.0"
-            else MockExamGenerationBlockResolutionV1
-        )
+        trusted_rag_fields: dict[str, object] = {}
+        if isinstance(block, MockExamOneItemGenerationBlockV3):
+            resolution_type = MockExamGenerationBlockResolutionV3
+            trusted_rag_fields = {
+                "role_protocol_version": block.role_protocol_version,
+                "role_schema_bundle_sha256": block.role_schema_bundle_sha256,
+                "knowledge_source_mode": block.knowledge_source_mode,
+                "authoring_result_schema": block.authoring_result_schema,
+                "review_result_schema": block.review_result_schema,
+                "evidence_usage_receipt_schema_version": (
+                    block.evidence_usage_receipt_schema_version
+                ),
+                "trusted_evidence_usage_receipts_required": (
+                    block.trusted_evidence_usage_receipts_required
+                ),
+            }
+        elif block.block_revision == "2.0":
+            resolution_type = MockExamGenerationBlockResolutionV2
+        else:
+            resolution_type = MockExamGenerationBlockResolutionV1
         return resolution_type(
             generation_block_key=block.block_key,
             generation_block_revision=block.block_revision,
@@ -209,6 +295,7 @@ class FakeWorkflowOperations:
             execution_preset_key=block.execution_preset_key,
             execution_preset_sha256=_sha(12),
             resolved_at=NOW,
+            **trusted_rag_fields,
         )
 
     def start(
@@ -224,10 +311,11 @@ class FakeWorkflowOperations:
         assert request.item_brief.mock_exam_slot is not None
         assert request.registry_mode == "CREATE_ITEM"
         assert request.definition_key == "generic-item-development"
-        assert request.definition_version == "1.8.0"
         assert request.production_occurrence is not None
         assert request.production_occurrence.production_request_id == PRODUCTION_REQUEST_ID
         assert request.expected_resolution is not None
+        assert request.definition_version == request.expected_resolution.workflow_definition_version
+        assert request.pack_key == request.expected_resolution.content_pack_key
         assert request.item_brief.authoring_guidance.startswith("검토된 요청 범위")
         self.start_requests.append(request)
         self.start_keys.append(idempotency_key)
@@ -257,6 +345,7 @@ class FakeWorkflowOperations:
         position = self._position_by_workflow[workflow_id]
         request = self._request_by_workflow[workflow_id]
         assert request.expected_resolution is not None
+        assert request.educational_retrieval is not None
         assert isinstance(request.item_brief, ContentTeamItemBriefRequestV3)
         selected_unit_key = request.item_brief.curriculum_selected_unit_key
         assert selected_unit_key is not None
@@ -279,7 +368,7 @@ class FakeWorkflowOperations:
         return WorkflowView(
             workflow_id=workflow_id,
             definition_key="generic-item-development",
-            definition_version="1.8.0",
+            definition_version=request.definition_version,
             state=("FAILED" if failed else "COMPLETED" if completed else "AWAITING_HUMAN_APPROVAL"),
             stage="registration" if completed else "review",
             current_step_key="register" if completed else "review",
@@ -302,7 +391,7 @@ class FakeWorkflowOperations:
                 query_kind="ITEM_PREPARATION",
                 curriculum_root_key=curriculum_root_key,
                 required_item_elements=("choice", "paragraph"),
-                source_classes=("APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"),
+                source_classes=request.educational_retrieval.source_classes,
                 graph_snapshot_revision_id=_hex_id("graphrev_", 50 + position),
                 evidence_bundle_revision_id=_hex_id("evidencerev_", 50 + position),
                 retrieval_request_id=_hex_id("retrieval_", 50 + position),
@@ -326,10 +415,41 @@ class FakeWorkflowOperations:
             ),
         )
 
-    def review_eligibility(self, workflow_id: str) -> MockExamReviewEligibilityObservationV1:
+    def review_eligibility(
+        self,
+        workflow_id: str,
+        knowledge_provenance: MockExamWorkflowKnowledgeProvenancePointerV1 | None = None,
+    ) -> MockExamReviewEligibilityObservationV1:
         position = self._position_by_workflow[workflow_id]
         blocking = position in self.blocking_positions
         approved = workflow_id in self._approved
+        request = self._request_by_workflow[workflow_id]
+        if request.definition_version == "1.10.0":
+            assert isinstance(knowledge_provenance, MockExamWorkflowKnowledgeProvenancePointerV3)
+            assert not blocking
+            receipts = _trusted_receipts(workflow_id, position)
+            review = receipts.review
+            return MockExamReviewEligibilityObservationV3(
+                schema_version="mock-exam-review-eligibility/3.0",
+                workflow_id=workflow_id,
+                workflow_resource_version=2 if approved else 1,
+                approval_request_id=_hex_id("approval_", position),
+                approval_resource_version=2 if approved else 1,
+                approval_state="APPROVED" if approved else "PENDING",
+                reviewer_operator_id=self.approved_operator_id if approved else None,
+                approved_at=self.approved_at if approved else None,
+                eligibility="ELIGIBLE",
+                step_run_id=review.step_run_id,
+                artifact_id=review.artifact_id,
+                artifact_revision_id=review.artifact_revision_id,
+                sha256=review.sha256,
+                result_schema="review-result@10.0",
+                worker_decision="ready_for_human",
+                finding_info_count=0,
+                finding_warning_count=0,
+                finding_blocking_count=0,
+                trusted_evidence_usage_receipts=receipts,
+            )
         return MockExamReviewEligibilityObservationV1(
             schema_version="mock-exam-review-eligibility/1.0",
             workflow_id=workflow_id,
@@ -1484,6 +1604,62 @@ def test_catalog_review_reader_projects_pending_and_approved_gate_atomically() -
     assert approved.human_approval_pointer().reviewer_operator_id == OPERATOR_ID
 
 
+def test_catalog_review_reader_v3_requires_and_replays_exact_trusted_receipts() -> None:
+    workflow_id = _hex_id("workflow_", 102)
+    receipts = _trusted_receipts(workflow_id)
+    review = receipts.review
+    result = MockExamReviewEligibilityResultV3(
+        schema_version="mock-exam-review-eligibility-result/3.0",
+        operation="INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
+        workflow_id=workflow_id,
+        workflow_lock_version=4,
+        approval_request_id=_hex_id("approval_", 102),
+        approval_lock_version=2,
+        approval_state="PENDING",
+        reviewer_operator_id=None,
+        approved_at=None,
+        review_step_run_id=review.step_run_id,
+        review_artifact_id=review.artifact_id,
+        review_artifact_revision_id=review.artifact_revision_id,
+        review_sha256=review.sha256,
+        review_result_schema="review-result@10.0",
+        decision="ready_for_human",
+        review_summary="trusted evidence usage verified",
+        findings=(),
+        finding_counts=MockExamEligibilityFindingCounts(info=0, warning=0, blocking=0),
+        eligible=True,
+        eligibility_reason="ELIGIBLE",
+        trusted_evidence_usage_receipts=receipts,
+    )
+
+    class Catalog:
+        def inspect_mock_exam_review_eligibility(self, query: Any) -> Any:
+            assert query.workflow_id == workflow_id
+            return result
+
+    class Verifier:
+        def __init__(self) -> None:
+            self.calls: list[tuple[object, object]] = []
+
+        def verify(self, *, receipts: object, knowledge_provenance: object) -> None:
+            self.calls.append((receipts, knowledge_provenance))
+
+    provenance = _trusted_provenance()
+    verifier = Verifier()
+    observation = CatalogReviewEligibilityReader(Catalog(), verifier).review_eligibility(
+        workflow_id, provenance
+    )
+
+    assert isinstance(observation, MockExamReviewEligibilityObservationV3)
+    assert observation.trusted_evidence_usage_receipts == receipts
+    assert verifier.calls == [(receipts, provenance)]
+    assert observation.approved_pointer().trusted_evidence_usage_receipts == receipts
+
+    with pytest.raises(MockExamProductionCoordinatorError) as missing:
+        CatalogReviewEligibilityReader(Catalog()).review_eligibility(workflow_id, provenance)
+    assert missing.value.code == "WORKFLOW_TRUSTED_RAG_RECEIPT_INVALID"
+
+
 def test_existing_workflow_adapter_pins_observed_approval_expectation() -> None:
     captured: dict[str, Any] = {}
 
@@ -1906,6 +2082,173 @@ def test_plan_v2_pins_execution_v2_and_generation_v2_before_workflow_side_effect
     assert pinned.generation_block_resolution.workflow_definition_version == "1.9.0"
     assert pinned.generation_block_resolution.content_pack_version == "1.14.0"
     assert workflows.occurrence_count == 0
+
+
+def test_plan_v3_write_ahead_pins_trusted_rag_generation_before_workflow_side_effects() -> None:
+    coordinator, workflows, *_ = _coordinator()
+    plan = build_integrated_science_mock_exam_production_plan_v3(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+
+    initial = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    pinned = coordinator.advance_items(plan, initial, _actor(), at=NOW)
+
+    assert isinstance(initial, MockExamProductionExecutionV3)
+    assert isinstance(pinned, MockExamProductionExecutionV3)
+    assert isinstance(pinned.generation_block_resolution, MockExamGenerationBlockResolutionV3)
+    assert pinned.generation_block_resolution.workflow_definition_version == "1.10.0"
+    assert pinned.generation_block_resolution.content_pack_version == "1.15.1"
+    assert pinned.generation_block_resolution.role_protocol_version == "workflow-role/1.20.0"
+    assert pinned.generation_block_resolution.trusted_evidence_usage_receipts_required is True
+    assert workflows.occurrence_count == 0
+
+
+def test_checkpoint_store_round_trips_trusted_rag_execution_v3(tmp_path: Path) -> None:
+    coordinator, *_ = _coordinator()
+    plan = build_integrated_science_mock_exam_production_plan_v3(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    initial = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    store = AtomicJsonMockExamProductionCheckpointStore(tmp_path / "trusted-rag-checkpoints")
+
+    created = store.create(initial)
+    loaded = store.load(initial.execution_id)
+
+    assert isinstance(created, MockExamProductionExecutionV3)
+    assert isinstance(loaded, MockExamProductionExecutionV3)
+    assert loaded == created
+
+
+def test_plan_v3_starts_all_calls_with_past_exam_only_retrieval() -> None:
+    class UnobservableWorkflows(FakeWorkflowOperations):
+        def get(self, workflow_id: str) -> WorkflowView:
+            raise RuntimeError(f"observation intentionally unavailable for {workflow_id}")
+
+    workflows = UnobservableWorkflows()
+    coordinator, *_ = _coordinator(workflows=workflows)
+    plan = build_integrated_science_mock_exam_production_plan_v3(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    initial = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    pinned = coordinator.advance_items(plan, initial, _actor(), at=NOW)
+    started = coordinator.advance_items(plan, pinned, _actor(), at=NOW)
+
+    assert isinstance(started, MockExamProductionExecutionV3)
+    assert len(workflows.start_requests) == 25
+    assert all(request.definition_version == "1.10.0" for request in workflows.start_requests)
+    assert all(
+        request.pack_key == "generated-knowledge-item" for request in workflows.start_requests
+    )
+    assert all(
+        request.educational_retrieval is not None
+        and request.educational_retrieval.source_classes == ("PAST_EXAM",)
+        for request in workflows.start_requests
+    )
+
+
+def test_plan_v3_rejects_workflow_provenance_that_broadens_past_exam_sources() -> None:
+    class BroadProvenanceWorkflows(FakeWorkflowOperations):
+        def get(self, workflow_id: str) -> WorkflowView:
+            view = super().get(workflow_id)
+            assert view.knowledge_provenance is not None
+            return view.model_copy(
+                update={
+                    "knowledge_provenance": view.knowledge_provenance.model_copy(
+                        update={
+                            "source_classes": (
+                                KnowledgeSourceClass.APPROVED_ITEM,
+                                KnowledgeSourceClass.PAST_EXAM,
+                                KnowledgeSourceClass.TEXTBOOK,
+                            )
+                        }
+                    )
+                }
+            )
+
+    workflows = BroadProvenanceWorkflows()
+    coordinator, *_ = _coordinator(workflows=workflows)
+    plan = build_integrated_science_mock_exam_production_plan_v3(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    initial = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    pinned = coordinator.advance_items(plan, initial, _actor(), at=NOW)
+    observed = coordinator.advance_items(plan, pinned, _actor(), at=NOW)
+
+    assert workflows.occurrence_count == 25
+    assert all(row.state == "FAILED" for row in observed.item_runs)
+    assert all(
+        row.failure is not None and row.failure.code == "WORKFLOW_KNOWLEDGE_PROVENANCE_MISMATCH"
+        for row in observed.item_runs
+    )
+
+
+def test_plan_v3_runs_25_registered_items_with_distinct_trusted_receipt_chains() -> None:
+    coordinator, workflows, *_ = _coordinator()
+    plan = build_integrated_science_mock_exam_production_plan_v3(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    checkpoint = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+    checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+    checkpoint = coordinator.advance_items(
+        plan, checkpoint, _actor(), at=NOW + timedelta(seconds=1)
+    )
+
+    assert isinstance(checkpoint, MockExamProductionExecutionV3)
+    assert workflows.occurrence_count == 25
+    assert all(row.state == "REGISTERED" for row in checkpoint.item_runs)
+    assert all(
+        row.knowledge_provenance is not None
+        and row.knowledge_provenance.source_classes == ("PAST_EXAM",)
+        and row.review is not None
+        and isinstance(row.review, MockExamReviewPointerV3)
+        for row in checkpoint.item_runs
+    )
+    receipt_hashes = {
+        pointer.receipt_sha256
+        for row in checkpoint.item_runs
+        if row.review is not None
+        for pointer in (
+            row.review.trusted_evidence_usage_receipts.authoring,
+            row.review.trusted_evidence_usage_receipts.review,
+        )
+    }
+    assert len(receipt_hashes) == 50
 
 
 def test_execution_v2_rejects_mixed_generation_and_review_families() -> None:

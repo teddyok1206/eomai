@@ -468,31 +468,37 @@ def test_v3_models_and_schemas_require_the_same_closed_wire_fields() -> None:
                 assert set(value.get("required", ())) == set(properties)
 
 
-def test_v3_standalone_contracts_do_not_widen_active_v1_v2_dispatch() -> None:
+def test_v3_runtime_contracts_are_admitted_by_active_discriminated_dispatch() -> None:
     plan = _plan()
     execution = _initial_execution(plan)
     receipts = _receipt_pair()
     eligibility = _catalog_eligibility(receipts)
     publication = _publication(receipts)
 
-    rejected: tuple[tuple[object, dict[str, Any]], ...] = (
+    admitted: tuple[tuple[object, dict[str, Any]], ...] = (
         (MockExamProductionPlanContract, plan.model_dump(mode="json")),
         (MockExamProductionExecution, execution.model_dump(mode="json")),
         (MockExamReviewEligibilityResultContract, eligibility.model_dump(mode="json")),
         (MockExamItemReviewPublicationResultContract, publication.model_dump(mode="json")),
     )
-    for contract, value in rejected:
-        with pytest.raises(PydanticValidationError):
-            TypeAdapter(contract).validate_python(value)
+    for contract, value in admitted:
+        assert TypeAdapter(contract).validate_python(value).schema_version.endswith("/3.0")
 
-    with pytest.raises(PydanticValidationError):
-        CatalogApplicationResponse.model_validate(
-            {
-                "status": "OK",
-                "operation": "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
-                "review_eligibility": eligibility.model_dump(mode="json"),
-            }
-        )
+    response = CatalogApplicationResponse.model_validate(
+        {
+            "status": "OK",
+            "operation": "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
+            "review_eligibility": eligibility.model_dump(mode="json"),
+        }
+    )
+    assert isinstance(response.review_eligibility, MockExamReviewEligibilityResultV3)
+    response_payload = {
+        key: value for key, value in response.model_dump(mode="json").items() if value is not None
+    }
+    validate_contract(
+        "catalog-application-response-v13",
+        response_payload,
+    )
 
 
 def test_v3_plan_pins_exact_workflow_role_pack_and_receipt_policy() -> None:

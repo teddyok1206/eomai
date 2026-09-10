@@ -322,6 +322,16 @@ def test_catalog_socket_operation_schema_routes_are_total_and_immutable() -> Non
         route = catalog_application_schema_route(operation, **context)
         assert route.request_schema == "catalog-application-request-v12"
         assert route.response_schema == "catalog-application-response-v12"
+    for operation in (
+        "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+        "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
+    ):
+        route = catalog_application_schema_route(
+            operation,
+            review_result_schema="review-result@10.0",
+        )
+        assert route.request_schema == "catalog-application-request-v13"
+        assert route.response_schema == "catalog-application-response-v13"
     with pytest.raises(ValueError, match="unsupported"):
         catalog_application_schema_route("UNKNOWN")
     with pytest.raises(TypeError):

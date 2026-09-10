@@ -9,7 +9,10 @@ from eom_api.services.mock_exam_generation_block_resolver import (
     DatabaseGenerationBlockResolver,
     MockExamGenerationBlockResolutionError,
 )
-from eom_api_contracts.mock_exam_execution import MockExamGenerationBlockResolutionV2
+from eom_api_contracts.mock_exam_execution import (
+    MockExamGenerationBlockResolutionV2,
+    MockExamGenerationBlockResolutionV3,
+)
 from eom_catalog_contracts import (
     load_integrated_science_editorial_outline,
     load_integrated_science_mock_exam_layout_policy,
@@ -18,8 +21,10 @@ from eom_catalog_contracts import (
 from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
     MockExamOneItemGenerationBlockV2,
+    MockExamOneItemGenerationBlockV3,
     build_integrated_science_mock_exam_production_plan,
     build_integrated_science_mock_exam_production_plan_v2,
+    build_integrated_science_mock_exam_production_plan_v3,
 )
 from eom_workflow import AgentStep, compile_definition
 from eom_workflow.schemas import result_schema_protocol
@@ -72,19 +77,33 @@ def _block_v2() -> MockExamOneItemGenerationBlockV2:
     return plan.one_item_generation_block
 
 
+def _block_v3() -> MockExamOneItemGenerationBlockV3:
+    plan = build_integrated_science_mock_exam_production_plan_v3(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    return plan.one_item_generation_block
+
+
 def _row(
     *,
     source_tree_sha256: str | None = None,
-    block: MockExamOneItemGenerationBlockV1 | MockExamOneItemGenerationBlockV2 | None = None,
+    block: (
+        MockExamOneItemGenerationBlockV1
+        | MockExamOneItemGenerationBlockV2
+        | MockExamOneItemGenerationBlockV3
+        | None
+    ) = None,
 ) -> tuple[object, ...]:
     selected_block = block or _block()
+    definition_file = {
+        "1.8.0": "config/workflows/generic-item-development.v1.8.yaml",
+        "1.9.0": "config/workflows/generic-item-development.v1.9.yaml",
+        "1.10.0": "config/workflows/generic-item-development.v1.10.yaml",
+    }[selected_block.workflow_definition_version]
     compiled = compile_definition(
-        ROOT
-        / (
-            "config/workflows/generic-item-development.v1.9.yaml"
-            if selected_block.workflow_definition_version == "1.9.0"
-            else "config/workflows/generic-item-development.v1.8.yaml"
-        ),
+        ROOT / definition_file,
         {"authoring", "image", "review", "item_management"},
     )
     definition = SimpleNamespace(
@@ -207,3 +226,50 @@ def test_generation_block_v2_pins_a_new_current_compatible_preset_without_plan_c
     assert result.workflow_definition_version == "1.9.0"
     assert result.content_pack_version == "1.14.0"
     assert result.execution_preset_revision_id == "execpresetrev_" + "9" * 32
+
+
+def test_generation_block_v3_pins_the_exact_trusted_rag_contract_family(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    block = _block_v3()
+    row = _row(block=block)
+    revision = row[-1]
+    preset = SimpleNamespace(
+        preset_id=revision.preset_id,
+        preset_revision_id=revision.preset_revision_id,
+        content_sha256=revision.content_sha256,
+        compatible_workflow_protocols=(block.role_protocol_version,),
+    )
+    monkeypatch.setattr(
+        "eom_api.services.mock_exam_generation_block_resolver.ExecutionPresetRevisionV2.model_validate",
+        staticmethod(lambda _value: preset),
+    )
+
+    result = _resolver(_Session(row)).resolve_generation_block(block)
+
+    assert isinstance(result, MockExamGenerationBlockResolutionV3)
+    assert result.workflow_definition_version == "1.10.0"
+    assert result.content_pack_version == "1.15.1"
+    assert result.role_protocol_version == "workflow-role/1.20.0"
+    assert result.role_schema_bundle_sha256 == block.role_schema_bundle_sha256
+    assert result.authoring_result_schema == "authoring-result@10.0"
+    assert result.review_result_schema == "review-result@10.0"
+    assert result.trusted_evidence_usage_receipts_required is True
+
+
+def test_generation_block_v3_rejects_role_contract_drift() -> None:
+    block = _block_v3()
+    row = list(_row(block=block))
+    definition = row[0]
+    canonical_definition = dict(definition.canonical_definition)
+    steps = [dict(step) for step in canonical_definition["steps"]]
+    review = next(step for step in steps if step.get("key") == "review")
+    review["result_schema"] = "review-result@9.0"
+    canonical_definition["steps"] = steps
+    definition.canonical_definition = canonical_definition
+    row[0] = definition
+
+    with pytest.raises(MockExamGenerationBlockResolutionError) as drift:
+        _resolver(_Session(tuple(row))).resolve_generation_block(block)
+
+    assert drift.value.code == "PRODUCTION_WORKFLOW_DEFINITION_INVALID"

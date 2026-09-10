@@ -564,6 +564,10 @@ CATALOG_APPLICATION_V12_SCHEMA_ROUTE: Final = CatalogApplicationSchemaRoute(
     "catalog-application-request-v12",
     "catalog-application-response-v12",
 )
+CATALOG_APPLICATION_V13_SCHEMA_ROUTE: Final = CatalogApplicationSchemaRoute(
+    "catalog-application-request-v13",
+    "catalog-application-response-v13",
+)
 
 
 def catalog_application_schema_route(
@@ -574,8 +578,8 @@ def catalog_application_schema_route(
 ) -> CatalogApplicationSchemaRoute:
     """Resolve the immutable schema pair for one wire payload family.
 
-    The operation-only lookup intentionally remains the historical route. V12 is selected only
-    when the payload itself identifies content V3 or the review-result@9 family, so old V10/V11
+    The operation-only lookup intentionally remains the historical route. Successors are selected
+    only when the payload identifies their immutable content/review family, so old V10/V11/V12
     clients and stored messages keep their original validation semantics.
     """
 
@@ -583,6 +587,15 @@ def catalog_application_schema_route(
         historical_route = CATALOG_APPLICATION_SCHEMA_ROUTES[operation]
     except KeyError as exc:
         raise ValueError("unsupported catalog application operation") from exc
+    if (
+        operation
+        in {
+            "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
+            "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
+        }
+        and review_result_schema == "review-result@10.0"
+    ):
+        return CATALOG_APPLICATION_V13_SCHEMA_ROUTE
     if (
         operation in {"IMPORT_REVIEWED_ITEM_CONTENT", "GET_ITEM_CONTENT"}
         and content_schema_version == "3.0"

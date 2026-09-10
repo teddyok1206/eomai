@@ -1,7 +1,7 @@
 # Mock-exam trusted-RAG production protocol V3
 
-Status: contract-only additive successor. Runtime resolution, orchestration, persistence, and live
-production are intentionally deferred.
+Status: additive successor with runtime resolution, orchestration, checkpoint persistence, and
+Catalog review publication support. Live production remains an explicitly gated operation.
 
 ## 1. Responsibility and system boundary
 
@@ -12,11 +12,11 @@ eligibility/decision/publication values. API contracts own the public review obs
 append-only execution checkpoint. Workers continue to communicate only with the orchestrator,
 materialize local results, and never write Catalog state or NAS.
 
-The V3 contract does not start workflows, resolve releases, publish reviews, register Items, write
-Graph nodes, assemble a form, or build HWPX. Those application behaviors require a separate
-reviewed change. For the same reason, the active V1/V2 production-plan, checkpoint, and Catalog
-application unions do not yet dispatch V3; callers must use the exported V3 models directly until
-an immutable application-envelope successor and runtime selection branch are released together.
+The V3 runtime resolves the generation family once, writes that resolution ahead of side effects,
+starts each planned Workflow through the existing application boundary, re-resolves trusted
+authoring/review receipts, and persists an append-only V3 checkpoint. The Catalog application V13
+envelope carries the V3 review family without widening V12 or earlier identities. Item analysis,
+Graph publication, assembly, and HWPX retain their existing pointer-oriented application services.
 
 ## 2. Canonical source and immutable family
 
@@ -36,6 +36,13 @@ start, the executor must create one immutable generation-block resolution child 
 workflow-definition hash, Content Pack release ID/hash, and execution-preset ID/revision/hash. Every
 started call and retry in that execution must reuse that one resolution; resolving the mutable key
 again is forbidden.
+
+For this production family, the API application service narrows the educational retrieval request
+to the single source class `PAST_EXAM`. The accepted Workflow provenance must preserve exactly that
+class. Consequently every evidence entry available to an authoring worker in this execution is
+derived from the pinned past-exam PDF/Graph lineage; silently broadening to textbook or approved
+Item evidence is an integrity failure. This runtime restriction is additive and does not alter the
+historical V1/V2 retrieval classes.
 
 V1 and V2 schema bytes, constants, unions, and validation meaning remain unchanged. The successor
 uses new `/3.0` discriminators and never widens an old schema identity.
@@ -66,17 +73,17 @@ The pair is ordered and closed: authoring must be `authoring-result@10.0`, revie
 identities must be distinct. Eligibility, source-review, publication, and execution pointers must
 match the same review member byte for byte by identity and SHA-256.
 
-Calling a value "trusted" does not make caller input authoritative. A future application service
-must extend or wrap the existing trusted receipt resolver. For each compact pointer it maps
+Calling a value "trusted" does not make caller input authoritative. The application composition
+wraps the existing trusted receipt resolver. For each compact pointer it maps
 `artifact_id`, `artifact_revision_id`, and `sha256` to the existing `ArtifactPointer` fields,
 resolves the succeeded job, approved Artifact/revision, manifest/content hashes, and the single
 terminal event, then compares the returned receipt's self-hash with `receipt_sha256`. It must also
 parse the persisted `RoleWorkerInput` in `JobRecord.request` and require its `workflow_id`,
 `step_run_id`, `attempt`, `job_id`, role, protocol version, and Artifact pointer to equal the compact
-pointer. The current read-side resolver does not by itself perform all three execution-context
-comparisons, so it is not sufficient as the V3 trust boundary without that wrapper. Receipt
-validation then closes the Graph/evidence pins and authoring-to-review chain. For an execution
-checkpoint, the application service must additionally compare the resolved receipt pair's shared
+pointer. The mock-exam resolver performs those execution-context comparisons and the application
+adapter supplies the expected Item-run provenance. Receipt validation then closes the
+Graph/evidence pins and authoring-to-review chain. For an execution checkpoint, the application
+service additionally compares the resolved receipt pair's shared
 plan ID/hash, Evidence Bundle revision, retrieval request ID/hash, Graph snapshot revision/hash,
 and evidence-manifest hash to that Item run's `knowledge_provenance`; the compact pair deliberately
 does not duplicate those full receipt values. A valid receipt placed beside unrelated provenance
@@ -100,8 +107,7 @@ Discriminated unions and immutable tuples preserve stable family and output orde
 provide O(1) per-key checkpoint and receipt lookup; sets detect duplicate step, job, Artifact,
 revision, call, Workflow, and Item identities. Existing primary/foreign keys and indexes on
 Workflow, job, step-run, Artifact, Artifact Revision, approval, Item Revision, and review records
-serve the future resolver. This contract-only change adds no table, index, cache, queue, or large
-JSONB value.
+serve the runtime resolver. The successor adds no table, index, cache, queue, or large JSONB value.
 
 ## 7. Scale and complexity
 
@@ -113,8 +119,8 @@ payloads. There is no repeated list scan, N+1 query, or O(n-squared) deduplicati
 
 ## 8. Transaction and concurrency boundary
 
-Contracts have no side effects. A later executor must retain the existing boundaries: immutable
-plan creation, one idempotent Workflow-start operation per call, orchestrator validation and NAS
+Contracts have no side effects. The executor retains the existing boundaries: immutable plan
+creation, one idempotent Workflow-start operation per call, orchestrator validation and NAS
 commit in its Artifact-success transaction, Catalog registration/review publication in Catalog
 application transactions, and append-only execution checkpoints with compare-and-swap on the
 current revision. Workers own none of those transactions.

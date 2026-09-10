@@ -13,8 +13,10 @@ from eom_catalog_contracts.item_review import (
     MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME,
     MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
     MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA_REF,
     MockExamItemReviewDecisionV1,
     MockExamItemReviewDecisionV2,
+    MockExamItemReviewDecisionV3,
     mock_exam_item_review_decision_sha256,
 )
 from eom_catalog_service.mock_exam_candidate_repository import (
@@ -179,19 +181,25 @@ def test_candidate_member_resolution_rejects_invalid_or_ambiguous_pointers(
 
 
 @pytest.mark.parametrize(
-    ("decision_version", "review_result_schema", "schema_ref", "require_v2"),
+    ("decision_version", "review_result_schema", "schema_ref", "decision_family"),
     (
         (
             "mock-exam-item-review-decision/1.0",
             "review-result@8.0",
             MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
-            False,
+            1,
         ),
         (
             "mock-exam-item-review-decision/2.0",
             "review-result@9.0",
             MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF,
-            True,
+            2,
+        ),
+        (
+            "mock-exam-item-review-decision/3.0",
+            "review-result@10.0",
+            MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA_REF,
+            3,
         ),
     ),
 )
@@ -200,7 +208,7 @@ def test_candidate_review_pointer_requires_the_exact_content_family_decision(
     decision_version: str,
     review_result_schema: str,
     schema_ref: str,
-    require_v2: bool,
+    decision_family: int,
 ) -> None:
     artifact_id = "artifact_" + "a" * 32
     revision_id = "rev_" + "b" * 32
@@ -209,7 +217,7 @@ def test_candidate_review_pointer_requires_the_exact_content_family_decision(
     item_revision_id = "itemrev_" + "e" * 32
     workflow_id = "workflow_" + "f" * 32
     approved_at = datetime(2026, 9, 8, 6, tzinfo=UTC).isoformat().replace("+00:00", "Z")
-    unsigned = {
+    unsigned: dict[str, Any] = {
         "schema_version": decision_version,
         "item_review_record_id": review_id,
         "item_revision_id": item_revision_id,
@@ -236,14 +244,51 @@ def test_candidate_review_pointer_requires_the_exact_content_family_decision(
         "idempotency_key_sha256": "sha256:" + "9" * 64,
         "decided_at": approved_at,
     }
+    if decision_family == 3:
+        unsigned["source_review"] = {
+            **unsigned["source_review"],
+            "trusted_evidence_usage_receipts": {
+                "schema_version": "mock-exam-trusted-evidence-usage-receipt-pair/1.0",
+                "role_protocol_version": "workflow-role/1.20.0",
+                "receipt_schema_version": "evidence-usage-validation-receipt/1.0",
+                "authoring": {
+                    "workflow_id": workflow_id,
+                    "step_run_id": "steprun_" + "a" * 32,
+                    "step_key": "authoring",
+                    "attempt": 1,
+                    "job_id": "job_" + "b" * 32,
+                    "artifact_id": "artifact_" + "c" * 32,
+                    "artifact_revision_id": "rev_" + "d" * 32,
+                    "sha256": "sha256:" + "e" * 64,
+                    "result_schema": "authoring-result@10.0",
+                    "receipt_sha256": "sha256:" + "a" * 64,
+                },
+                "review": {
+                    "workflow_id": workflow_id,
+                    "step_run_id": unsigned["source_review"]["step_run_id"],
+                    "step_key": "review",
+                    "attempt": 1,
+                    "job_id": "job_" + "f" * 32,
+                    "artifact_id": unsigned["source_review"]["artifact_id"],
+                    "artifact_revision_id": unsigned["source_review"]["artifact_revision_id"],
+                    "sha256": unsigned["source_review"]["sha256"],
+                    "result_schema": "review-result@10.0",
+                    "receipt_sha256": "sha256:" + "b" * 64,
+                },
+            },
+        }
     decision_value = {
         **unsigned,
         "decision_sha256": mock_exam_item_review_decision_sha256(unsigned),
     }
     decision: MockExamItemReviewDecisionV1 = (
-        MockExamItemReviewDecisionV2.model_validate(decision_value)
-        if require_v2
-        else MockExamItemReviewDecisionV1.model_validate(decision_value)
+        MockExamItemReviewDecisionV3.model_validate(decision_value)
+        if decision_family == 3
+        else (
+            MockExamItemReviewDecisionV2.model_validate(decision_value)
+            if decision_family == 2
+            else MockExamItemReviewDecisionV1.model_validate(decision_value)
+        )
     )
     payload = canonical_json_bytes(decision)
     payload_sha256 = sha256_bytes(payload)
@@ -301,6 +346,10 @@ def test_candidate_review_pointer_requires_the_exact_content_family_decision(
         "decision_sha256": decision.decision_sha256,
         "idempotency_key_sha256": decision.idempotency_key_sha256,
     }
+    if isinstance(decision, MockExamItemReviewDecisionV3):
+        summary["trusted_evidence_usage_receipts"] = (
+            decision.source_review.trusted_evidence_usage_receipts.model_dump(mode="json")
+        )
     review = ItemReviewRecord(
         item_review_record_id=review_id,
         item_revision_id=item_revision_id,
@@ -317,15 +366,21 @@ def test_candidate_review_pointer_requires_the_exact_content_family_decision(
         review,
         artifacts={artifact_id: artifact},
         revisions={revision_id: revision},
-        require_v2=require_v2,
     )
 
+    review.severity_summary = {
+        **summary,
+        "review_result_schema": (
+            "review-result@8.0"
+            if review_result_schema != "review-result@8.0"
+            else "review-result@9.0"
+        ),
+    }
     with pytest.raises(MockExamCandidateResolutionError) as mixed_family:
         repository._validate_review_pointer(
             review,
             artifacts={artifact_id: artifact},
             revisions={revision_id: revision},
-            require_v2=not require_v2,
         )
     assert mixed_family.value.code == "ASSEMBLY_ARTIFACT_MANIFEST_INVALID"
 
@@ -335,6 +390,5 @@ def test_candidate_review_pointer_requires_the_exact_content_family_decision(
             review,
             artifacts={artifact_id: artifact},
             revisions={revision_id: revision},
-            require_v2=require_v2,
         )
     assert raised.value.code == "ASSEMBLY_REVIEW_POINTER_INVALID"

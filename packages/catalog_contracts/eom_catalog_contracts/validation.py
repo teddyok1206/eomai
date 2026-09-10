@@ -708,6 +708,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "12.0",
             "sha256:1fa2c37672bfadfa1947b4a19634726d2550d3d8c4c3a3cc614a6070e105a243",
         ),
+        "catalog-application-request-v13": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v13.schema.json",
+            "resources/catalog-application/catalog-application-request-v13.schema.json",
+            "13.0",
+            "sha256:331b531c6ef3ba721f95946f7a1c25f1b58f7963a8aa9053154f7df72b29d082",
+        ),
         "catalog-application-response-v7": CatalogSchemaResource(
             "schemas/catalog-application/catalog-application-response-v7.schema.json",
             "resources/catalog-application/catalog-application-response-v7.schema.json",
@@ -743,6 +749,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/catalog-application/catalog-application-response-v12.schema.json",
             "12.0",
             "sha256:81d158d1f74da6ca3150c2d44a4cb91eb9785575a3d508688df6c537ad93d800",
+        ),
+        "catalog-application-response-v13": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v13.schema.json",
+            "resources/catalog-application/catalog-application-response-v13.schema.json",
+            "13.0",
+            "sha256:691f8828f01a909581aa4a4a73357e6b364d4539a4a7363e338e914970eaa5ae",
         ),
         "catalog-item-media-request": CatalogSchemaResource(
             "schemas/catalog-application/catalog-item-media-request-v1.schema.json",

@@ -11,7 +11,10 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from eom_api.services.command_adapter import _workflow_request_from_api
 from eom_api.services.mock_exam_production_coordinator import _workflow_request
-from eom_api_contracts.mock_exam_execution import MockExamGenerationBlockResolutionV1
+from eom_api_contracts.mock_exam_execution import (
+    MockExamGenerationBlockResolutionV1,
+    MockExamGenerationBlockResolutionV3,
+)
 from eom_catalog_contracts.approved_item_graph_publication import (
     ApprovedItemGraphPublicationResult,
     PublishApprovedItemAnalysesCommand,
@@ -21,6 +24,14 @@ from eom_catalog_contracts.assessment_assembly import (
     load_integrated_science_mock_exam_policy,
 )
 from eom_catalog_contracts.curriculum import load_integrated_science_editorial_outline
+from eom_catalog_contracts.item_review import (
+    MockExamAuthoringEvidenceUsageReceiptPointerV1,
+    MockExamEligibilityFindingCounts,
+    MockExamReviewEligibilityResult,
+    MockExamReviewEligibilityResultV3,
+    MockExamReviewEvidenceUsageReceiptPointerV1,
+    MockExamTrustedEvidenceUsageReceiptPairV1,
+)
 from eom_catalog_contracts.knowledge import (
     ApprovedItemKnowledgeSourceV2,
     ApprovedPastExamItemKnowledgeSourceV3,
@@ -32,6 +43,7 @@ from eom_catalog_contracts.knowledge import (
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
     build_integrated_science_mock_exam_production_plan,
+    build_integrated_science_mock_exam_production_plan_v3,
 )
 from eom_catalog_service.approved_item_graph_publication_service import (
     ApprovedItemGraphPublicationError,
@@ -155,13 +167,23 @@ def _graph_publication_result() -> KnowledgeGraphPublicationResult:
     return KnowledgeGraphPublicationResult.model_validate(value)
 
 
-def _accepted_analysis(position: int = 0) -> AcceptedAnalysisProposal:
+def _accepted_analysis(
+    position: int = 0,
+    *,
+    content_v3: bool = False,
+) -> AcceptedAnalysisProposal:
     source = ApprovedItemKnowledgeSourceV2.model_construct(
         source_class="APPROVED_ITEM",
         item_id=ITEM_IDS[position],
         item_revision_id=ITEM_REVISION_IDS[position],
         lifecycle_state="APPROVED",
-        artifact_member=SimpleNamespace(schema_ref="eom.assessment.item-content/2.0"),
+        artifact_member=SimpleNamespace(
+            schema_ref=(
+                "eom.assessment.item-content/3.0"
+                if content_v3
+                else "eom.assessment.item-content/2.0"
+            )
+        ),
     )
     return AcceptedAnalysisProposal(
         analysis_run_id=ANALYSIS_RUN_IDS[position],
@@ -174,34 +196,62 @@ def _accepted_analysis(position: int = 0) -> AcceptedAnalysisProposal:
     )
 
 
-def _origin_rows(*, stale_position: int | None = None) -> tuple[tuple[Any, ...], ...]:
-    plan = build_integrated_science_mock_exam_production_plan(
+def _origin_rows(
+    *,
+    stale_position: int | None = None,
+    workflow_version: str = "1.8.0",
+) -> tuple[tuple[Any, ...], ...]:
+    plan_builder = (
+        build_integrated_science_mock_exam_production_plan_v3
+        if workflow_version == "1.10.0"
+        else build_integrated_science_mock_exam_production_plan
+    )
+    plan = plan_builder(
         policy=load_integrated_science_mock_exam_policy(),
         layout_policy=load_integrated_science_mock_exam_layout_policy(),
         outline=load_integrated_science_editorial_outline(),
     )
     definition_document = {"schema_version": "1.0", "test": "atomic-25"}
     definition_sha256 = content_sha256(definition_document)
-    resolution = MockExamGenerationBlockResolutionV1(
-        generation_block_key=plan.one_item_generation_block.block_key,
-        generation_block_revision=plan.one_item_generation_block.block_revision,
-        generation_block_sha256=plan.one_item_generation_block.block_sha256,
-        workflow_definition_key="generic-item-development",
-        workflow_definition_version="1.8.0",
-        workflow_definition_sha256=definition_sha256,
-        content_pack_release_id="packrel_" + "a" * 32,
-        content_pack_key="generated-knowledge-item",
-        content_pack_version="1.13.0",
-        content_pack_release_sha256="sha256:" + "b" * 64,
-        content_pack_source_tree_sha256=(
+    resolution_fields: dict[str, Any] = {
+        "generation_block_key": plan.one_item_generation_block.block_key,
+        "generation_block_revision": plan.one_item_generation_block.block_revision,
+        "generation_block_sha256": plan.one_item_generation_block.block_sha256,
+        "workflow_definition_key": "generic-item-development",
+        "workflow_definition_version": workflow_version,
+        "workflow_definition_sha256": definition_sha256,
+        "content_pack_release_id": "packrel_" + "a" * 32,
+        "content_pack_key": "generated-knowledge-item",
+        "content_pack_version": "1.15.1" if workflow_version == "1.10.0" else "1.13.0",
+        "content_pack_release_sha256": "sha256:" + "b" * 64,
+        "content_pack_source_tree_sha256": (
             plan.one_item_generation_block.content_pack_source_tree_sha256
         ),
-        execution_preset_id="execpreset_" + "c" * 32,
-        execution_preset_revision_id="execpresetrev_" + "d" * 32,
-        execution_preset_key="knowledge-grounded-item",
-        execution_preset_sha256="sha256:" + "e" * 64,
-        resolved_at=PUBLISHED_AT,
+        "execution_preset_id": "execpreset_" + "c" * 32,
+        "execution_preset_revision_id": "execpresetrev_" + "d" * 32,
+        "execution_preset_key": "knowledge-grounded-item",
+        "execution_preset_sha256": "sha256:" + "e" * 64,
+        "resolved_at": PUBLISHED_AT,
+    }
+    if workflow_version == "1.10.0":
+        block = plan.one_item_generation_block
+        resolution_fields.update(
+            role_protocol_version=block.role_protocol_version,
+            role_schema_bundle_sha256=block.role_schema_bundle_sha256,
+            knowledge_source_mode=block.knowledge_source_mode,
+            authoring_result_schema=block.authoring_result_schema,
+            review_result_schema=block.review_result_schema,
+            evidence_usage_receipt_schema_version=(block.evidence_usage_receipt_schema_version),
+            trusted_evidence_usage_receipts_required=(
+                block.trusted_evidence_usage_receipts_required
+            ),
+        )
+    resolution_type = (
+        MockExamGenerationBlockResolutionV3
+        if workflow_version == "1.10.0"
+        else MockExamGenerationBlockResolutionV1
     )
+    resolution = resolution_type.model_validate(resolution_fields)
     rows: list[tuple[Any, ...]] = []
     for index, call in enumerate(plan.workflow_calls):
         request = _workflow_request_from_api(
@@ -217,7 +267,7 @@ def _origin_rows(*, stale_position: int | None = None) -> tuple[tuple[Any, ...],
             item_id=ITEM_IDS[index],
             workflow_id=WORKFLOW_IDS[index],
             revision_number=1,
-            workflow_definition_version="1.8.0",
+            workflow_definition_version=workflow_version,
             content_pack_release_id=resolution.content_pack_release_id,
             revision_state="APPROVED",
         )
@@ -242,7 +292,7 @@ def _origin_rows(*, stale_position: int | None = None) -> tuple[tuple[Any, ...],
         definition = SimpleNamespace(
             definition_id="workflowdef_" + "1" * 32,
             definition_key="generic-item-development",
-            definition_version="1.8.0",
+            definition_version=workflow_version,
             definition_hash=definition_sha256,
             canonical_definition=definition_document,
             active=False,
@@ -251,9 +301,11 @@ def _origin_rows(*, stale_position: int | None = None) -> tuple[tuple[Any, ...],
             workflow_id=WORKFLOW_IDS[index],
             definition_id=definition.definition_id,
             definition_key="generic-item-development",
-            definition_version="1.8.0",
+            definition_version=workflow_version,
             definition_hash=definition_sha256,
-            role_schema_version="workflow-role/1.17.0",
+            role_schema_version=(
+                "workflow-role/1.20.0" if workflow_version == "1.10.0" else "workflow-role/1.17.0"
+            ),
             state="COMPLETED",
             stage="COMPLETED",
             current_step_key="complete",
@@ -272,6 +324,83 @@ def _origin_rows(*, stale_position: int | None = None) -> tuple[tuple[Any, ...],
         )
         rows.append((run, revision, item, workflow, definition))
     return tuple(rows)
+
+
+def _trusted_receipts(
+    workflow_id: str,
+    *,
+    seed: int,
+) -> MockExamTrustedEvidenceUsageReceiptPairV1:
+    def identifier(prefix: str, offset: int) -> str:
+        return prefix + f"{seed * 100 + offset:032x}"
+
+    def sha(offset: int) -> str:
+        return "sha256:" + f"{seed * 100 + offset:064x}"
+
+    return MockExamTrustedEvidenceUsageReceiptPairV1(
+        schema_version="mock-exam-trusted-evidence-usage-receipt-pair/1.0",
+        role_protocol_version="workflow-role/1.20.0",
+        receipt_schema_version="evidence-usage-validation-receipt/1.0",
+        authoring=MockExamAuthoringEvidenceUsageReceiptPointerV1(
+            workflow_id=workflow_id,
+            step_run_id=identifier("steprun_", 1),
+            attempt=1,
+            job_id=identifier("job_", 2),
+            artifact_id=identifier("artifact_", 3),
+            artifact_revision_id=identifier("rev_", 4),
+            sha256=sha(5),
+            receipt_sha256=sha(6),
+            step_key="authoring",
+            result_schema="authoring-result@10.0",
+        ),
+        review=MockExamReviewEvidenceUsageReceiptPointerV1(
+            workflow_id=workflow_id,
+            step_run_id=identifier("steprun_", 11),
+            attempt=1,
+            job_id=identifier("job_", 12),
+            artifact_id=identifier("artifact_", 13),
+            artifact_revision_id=identifier("rev_", 14),
+            sha256=sha(15),
+            receipt_sha256=sha(16),
+            step_key="review",
+            result_schema="review-result@10.0",
+        ),
+    )
+
+
+def _official_reviews_v3() -> dict[str, MockExamReviewEligibilityResult]:
+    reviews: dict[str, MockExamReviewEligibilityResult] = {}
+    for position, workflow_id in enumerate(WORKFLOW_IDS, start=1):
+        receipts = _trusted_receipts(workflow_id, seed=position)
+        review = receipts.review
+        reviews[workflow_id] = MockExamReviewEligibilityResultV3(
+            schema_version="mock-exam-review-eligibility-result/3.0",
+            operation="INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
+            workflow_id=workflow_id,
+            workflow_lock_version=3,
+            approval_state="APPROVED",
+            approval_request_id="approval_" + f"{position:032x}",
+            approval_lock_version=2,
+            reviewer_operator_id=OPERATOR_ID,
+            approved_at=PUBLISHED_AT,
+            review_step_run_id=review.step_run_id,
+            review_artifact_id=review.artifact_id,
+            review_artifact_revision_id=review.artifact_revision_id,
+            review_sha256=review.sha256,
+            review_result_schema="review-result@10.0",
+            decision="ready_for_human",
+            review_summary="trusted evidence usage verified",
+            findings=(),
+            finding_counts=MockExamEligibilityFindingCounts(
+                info=0,
+                warning=0,
+                blocking=0,
+            ),
+            eligible=True,
+            eligibility_reason="ELIGIBLE",
+            trusted_evidence_usage_receipts=receipts,
+        )
+    return reviews
 
 
 @pytest.mark.parametrize(
@@ -683,6 +812,55 @@ def test_current_v2_validator_accepts_deactivated_definition_for_pinned_origin()
         tuple(_accepted_analysis(value) for value in range(25)),
         WORKFLOW_IDS,
     )
+
+
+def test_current_validator_accepts_v3_only_with_past_exam_and_trusted_receipts() -> None:
+    session = Mock(spec=Session)
+    session.execute.return_value = _origin_rows(workflow_version="1.10.0")
+
+    unit_keys = ApprovedItemGraphPublicationService._validate_current_v2_item_analyses(
+        session,
+        tuple(_accepted_analysis(value, content_v3=True) for value in range(25)),
+        WORKFLOW_IDS,
+        official_reviews=_official_reviews_v3(),
+    )
+
+    assert len(unit_keys) == 25
+
+
+def test_current_validator_rejects_v3_without_official_trusted_receipts() -> None:
+    session = Mock(spec=Session)
+    session.execute.return_value = _origin_rows(workflow_version="1.10.0")
+
+    with pytest.raises(ValueError, match="fresh completed"):
+        ApprovedItemGraphPublicationService._validate_current_v2_item_analyses(
+            session,
+            tuple(_accepted_analysis(value, content_v3=True) for value in range(25)),
+            WORKFLOW_IDS,
+        )
+
+
+def test_current_validator_rejects_v3_with_broader_retrieval_provenance() -> None:
+    rows = list(_origin_rows(workflow_version="1.10.0"))
+    workflow = rows[0][3]
+    changed = deepcopy(workflow.initial_request)
+    changed["educational_retrieval"]["source_classes"] = ["PAST_EXAM", "TEXTBOOK"]
+    workflow.initial_request = changed
+    workflow.request_payload = changed
+    workflow.request_hash = workflow_business_fingerprint(
+        cast(Any, rows[0][4]),
+        load_persisted_workflow_request(changed),
+    )
+    session = Mock(spec=Session)
+    session.execute.return_value = tuple(rows)
+
+    with pytest.raises(ValueError, match="fresh completed"):
+        ApprovedItemGraphPublicationService._validate_current_v2_item_analyses(
+            session,
+            tuple(_accepted_analysis(value, content_v3=True) for value in range(25)),
+            WORKFLOW_IDS,
+            official_reviews=_official_reviews_v3(),
+        )
 
 
 def test_direct_graph_publication_rejects_unapproved_operator_before_side_effect() -> None:

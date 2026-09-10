@@ -38,8 +38,11 @@ from eom_catalog_contracts.item_review import (
     MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF,
     MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA,
     MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA,
+    MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA_REF,
     MockExamItemReviewDecisionV1,
     MockExamItemReviewDecisionV2,
+    MockExamItemReviewDecisionV3,
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
     classify_content_team_mock_exam_material_profile,
@@ -638,7 +641,6 @@ class MockExamCandidateRepository:
                 review,
                 artifacts=artifacts,
                 revisions=revisions,
-                require_v2=row.component.schema_ref in _CONTENT_TEAM_V3_SCHEMA_REFS,
             )
         return artifacts, revisions
 
@@ -699,18 +701,22 @@ class MockExamCandidateRepository:
         *,
         artifacts: dict[str, ArtifactRecord],
         revisions: dict[str, ArtifactRevisionRecord],
-        require_v2: bool = False,
     ) -> None:
-        decision_schema = (
-            MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA
-            if require_v2
-            else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA
-        )
-        decision_schema_ref = (
-            MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF
-            if require_v2
-            else MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF
-        )
+        review_result_schema = review.severity_summary.get("review_result_schema")
+        if review_result_schema in {"review-result@7.0", "review-result@8.0"}:
+            decision_schema = MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA
+            decision_schema_ref = MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA_REF
+        elif review_result_schema == "review-result@9.0":
+            decision_schema = MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA
+            decision_schema_ref = MOCK_EXAM_ITEM_REVIEW_DECISION_V2_SCHEMA_REF
+        elif review_result_schema == "review-result@10.0":
+            decision_schema = MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA
+            decision_schema_ref = MOCK_EXAM_ITEM_REVIEW_DECISION_V3_SCHEMA_REF
+        else:
+            self._fail(
+                "ASSEMBLY_REVIEW_POINTER_INVALID",
+                "review row does not identify a supported immutable decision family",
+            )
         artifact = artifacts.get(review.review_artifact_id)
         revision = revisions.get(review.review_artifact_revision_id)
         if (
@@ -738,11 +744,14 @@ class MockExamCandidateRepository:
         value = _json_object(payload, "ASSEMBLY_REVIEW_POINTER_INVALID")
         try:
             validate_contract(decision_schema, value)
-            decision: MockExamItemReviewDecisionV1 = (
-                MockExamItemReviewDecisionV2.model_validate(value)
-                if require_v2
-                else MockExamItemReviewDecisionV1.model_validate(value)
-            )
+            if review_result_schema == "review-result@10.0":
+                decision: MockExamItemReviewDecisionV1 = (
+                    MockExamItemReviewDecisionV3.model_validate(value)
+                )
+            elif review_result_schema == "review-result@9.0":
+                decision = MockExamItemReviewDecisionV2.model_validate(value)
+            else:
+                decision = MockExamItemReviewDecisionV1.model_validate(value)
         except (JsonSchemaValidationError, ValueError) as exc:
             raise MockExamCandidateResolutionError(
                 "ASSEMBLY_REVIEW_POINTER_INVALID",
@@ -770,6 +779,15 @@ class MockExamCandidateRepository:
             or decision.human_approval.approval_request_id
             != summary.get("human_approval_request_id")
             or decision.human_approval.reviewer_operator_id != review.reviewer_actor_id
+            or (
+                isinstance(decision, MockExamItemReviewDecisionV3)
+                and decision.source_review.trusted_evidence_usage_receipts.model_dump(mode="json")
+                != summary.get("trusted_evidence_usage_receipts")
+            )
+            or (
+                not isinstance(decision, MockExamItemReviewDecisionV3)
+                and "trusted_evidence_usage_receipts" in summary
+            )
         ):
             self._fail(
                 "ASSEMBLY_REVIEW_POINTER_INVALID",

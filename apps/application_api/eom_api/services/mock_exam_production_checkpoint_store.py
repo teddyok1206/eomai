@@ -20,6 +20,7 @@ from typing import Protocol
 from eom_api_contracts.mock_exam_execution import (
     MockExamProductionExecutionV1,
     MockExamProductionExecutionV2,
+    MockExamProductionExecutionV3,
     is_mock_exam_provenance_validation_recovery_candidate,
     is_mock_exam_provenance_validation_recovery_successor,
 )
@@ -652,13 +653,12 @@ def _file_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int, i
 def _parse_checkpoint(payload: bytes) -> MockExamProductionExecutionV1:
     try:
         value = json.loads(payload.decode("utf-8"))
-        checkpoint_type = (
-            MockExamProductionExecutionV2
-            if isinstance(value, dict)
-            and value.get("schema_version") == "mock-exam-production-execution/2.0"
-            else MockExamProductionExecutionV1
-        )
-        return checkpoint_type.model_validate(value)
+        if isinstance(value, dict):
+            if value.get("schema_version") == "mock-exam-production-execution/3.0":
+                return MockExamProductionExecutionV3.model_validate(value)
+            if value.get("schema_version") == "mock-exam-production-execution/2.0":
+                return MockExamProductionExecutionV2.model_validate(value)
+        return MockExamProductionExecutionV1.model_validate(value)
     except (UnicodeError, json.JSONDecodeError, ValidationError) as exc:
         raise MockExamCheckpointStoreError(
             "CHECKPOINT_CONTRACT_INVALID",
