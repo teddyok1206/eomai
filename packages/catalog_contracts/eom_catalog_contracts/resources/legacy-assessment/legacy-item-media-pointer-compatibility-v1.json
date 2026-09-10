@@ -1,0 +1,42 @@
+{
+  "schema_version": "legacy-item-media-pointer-compatibility-policy/1.0",
+  "policy_id": "legacyitemmediapolicy_0e5837f26e3dcba441b59dd7d394bdb6",
+  "policy_revision_id": "legacyitemmediapolicyrev_f773687f82a7131c6b2b420aaeb393c8",
+  "entries": [
+    {
+      "acceptance_id": "itemacceptance_19e5210f6c2577bf720e3aaa62934016",
+      "acceptance_sha256": "sha256:a8d6d30502f2c3579759b99bd743087ca824ffbce49d1c25d299e30e334c294d",
+      "extraction_result_id": "itemextractresult_01acb11051ff894b118db332f6b0c01c",
+      "result_sha256": "sha256:3f38c4b4a8046b464cabc2e244c08a8a3a461dbafc965392bf997be5a2474405",
+      "extraction_request_id": "itemextractreq_663c3a347b4c69668ffc0a9042b821ee",
+      "request_sha256": "sha256:498e7ac35af3c7aa92513334f378d3bfd60e37767e7ef4dc8da1d116f1aba1ab",
+      "bundle_revision_id": "assessbundlerev_4b1423ea0ceef51eb05cba9555b846ed",
+      "bundle_manifest_sha256": "sha256:205f74683919741517eabd9ace086f84ed31b8e0c69fb76c3df5ff8951c10f5f",
+      "item_proposal_id": "itemproposal_1a8c9b3d7e5f4a2c8d6b1e0f9a7c3d2b",
+      "item_number": 1,
+      "content_path": "body[0]",
+      "block_id": "block_item1_visual",
+      "target_page_input_id": "assessmentpage_ea8a599858b366f464b735ae9bbb6a95",
+      "target_source_role": "PROBLEM_DOCUMENT",
+      "target_physical_page": 1,
+      "target_schema_ref": "eom://schemas/legacy-assessment/page-image/1.0",
+      "source_anchor_id": "assessmentanchor_1a7e3b9c5d2f4a8b6c0e1d3f7a9b5c2d",
+      "source": {
+        "artifact_id": "artifact_c1b3dfac9ec0483a8531b71fc43fa77d",
+        "artifact_revision_id": "rev_b1781335211841c288752249d4272db8",
+        "artifact_member": "pages/problem-1.png",
+        "sha256": "sha256:8f2ab410bf614e71e07a4a70b94d2d7f74382febbed557a64208b6cf11ae27a2",
+        "media_type": "image/png"
+      },
+      "target": {
+        "artifact_id": "artifact_c1b3dfac9ec0483a8531b71fcf43fa77",
+        "artifact_revision_id": "rev_b1781335211841c288752249d4272db8",
+        "artifact_member": "pages/problem-1.png",
+        "sha256": "sha256:8f2ab410bf614e71e07a4a70b94d2d7f74382febbed557a64208b6cf11ae27a2",
+        "media_type": "image/png"
+      },
+      "reason_code": "WORKER_LOGICAL_ARTIFACT_ID_TRANSCRIPTION"
+    }
+  ],
+  "policy_sha256": "sha256:6e96c7ee7e33ca18e5e69c08ea5f1fa327e5a084298b0f57603827cfd57b387b"
+}

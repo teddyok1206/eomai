@@ -10,6 +10,7 @@ from eom_catalog_contracts import (
     LegacyItemExtractionRequest,
     LegacyItemExtractionResult,
     validate_contract,
+    validate_legacy_item_extraction_media_for_request,
     validate_legacy_item_extraction_result_for_request,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -33,6 +34,7 @@ def stage_legacy_item_extraction_result(
 
     try:
         validate_legacy_item_extraction_result_for_request(result, request)
+        validate_legacy_item_extraction_media_for_request(result, request)
     except ValueError as exc:
         raise PlatformError(
             ErrorCode.WORKER_RESULT_INVALID,

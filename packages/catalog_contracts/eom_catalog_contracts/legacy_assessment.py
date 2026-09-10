@@ -10,7 +10,11 @@ from typing import Annotated, Literal
 from eom_identifiers import content_sha256
 from pydantic import Field, field_validator, model_validator
 
-from eom_catalog_contracts.assessment_item import AssessmentItemContent
+from eom_catalog_contracts.assessment_item import (
+    AssessmentItemContent,
+    ImageBlock,
+    MediaArtifactPointer,
+)
 from eom_catalog_contracts.item_origin import (
     AssessmentOccurrencePointer,
     OriginArtifactMemberPointer,
@@ -53,6 +57,18 @@ def _artifact_member_identity(pointer: AssessmentArtifactMemberPointer) -> tuple
         pointer.artifact_revision_id,
         pointer.member_path,
         pointer.schema_ref,
+        pointer.media_type,
+        pointer.sha256,
+    )
+
+
+def _media_artifact_identity(pointer: MediaArtifactPointer) -> tuple[str, ...]:
+    """Return the request-comparable identity of one Item media pointer."""
+
+    return (
+        pointer.artifact_id,
+        pointer.artifact_revision_id,
+        pointer.artifact_member,
         pointer.media_type,
         pointer.sha256,
     )
@@ -780,6 +796,36 @@ def validate_legacy_item_extraction_result_for_request(
                 raise ValueError(
                     "legacy extraction source anchor is outside the pinned materializations"
                 )
+
+
+def validate_legacy_item_extraction_media_for_request(
+    result: LegacyItemExtractionResult,
+    request: LegacyItemExtractionRequest,
+) -> None:
+    """Reject new worker media that does not exactly copy a pinned request page pointer.
+
+    This strict admission check is intentionally separate from historical result coverage
+    verification. One immutable result predates the check and is handled only by its exact,
+    manifest-pinned promotion compatibility policy.
+    """
+
+    page_media = {
+        (
+            page.image.artifact_id,
+            page.image.artifact_revision_id,
+            page.image.member_path,
+            page.image.media_type,
+            page.image.sha256,
+        )
+        for page in request.page_inputs
+    }
+    for item in result.items:
+        for block in item.item_content.body:
+            if (
+                isinstance(block, ImageBlock)
+                and _media_artifact_identity(block.artifact) not in page_media
+            ):
+                raise ValueError("legacy extraction item media is outside the pinned page inputs")
 
 
 class LegacyItemExtractionReceipt(FrozenModel):

@@ -394,6 +394,14 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:2c81a578eebdbfd450af0e386196a7d3892cb7083b061dce97f9b86c8d16b2e5",
         ),
+        "legacy-item-media-pointer-compatibility-policy": CatalogSchemaResource(
+            "schemas/legacy-assessment/"
+            "legacy-item-media-pointer-compatibility-policy-v1.schema.json",
+            "resources/legacy-assessment/"
+            "legacy-item-media-pointer-compatibility-policy-v1.schema.json",
+            "1.0",
+            "sha256:96afd0d95efe77b9a4367977c5629c79d6598429c15cbea0418eee03be779c6f",
+        ),
         "legacy-item-extraction-acceptance": CatalogSchemaResource(
             "schemas/legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json",
             "resources/legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json",

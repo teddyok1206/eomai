@@ -380,6 +380,21 @@ def test_constrained_legacy_extraction_schema_resolves_nested_string_references(
     invalid_pdf_anchor = {**valid_page_anchor, "source": source.model_dump(mode="json")}
     assert not anchor_validator.is_valid(invalid_pdf_anchor)
 
+    item_image = schema["$defs"]["AssessmentItemContent_imageBlock"]
+    media_schema = item_image["properties"]["artifact"]
+    assert len(media_schema["anyOf"]) == 1
+    assert "Byte-for-byte copy one exact page_inputs[].image pointer" in media_schema["description"]
+    exact_item_media = {
+        "artifact_id": image.artifact_id,
+        "artifact_revision_id": image.artifact_revision_id,
+        "artifact_member": image.member_path,
+        "sha256": image.sha256,
+        "media_type": image.media_type,
+    }
+    media_validator = Draft202012Validator({"$defs": schema["$defs"], **media_schema})
+    assert media_validator.is_valid(exact_item_media)
+    assert not media_validator.is_valid({**exact_item_media, "artifact_id": "artifact_" + "f" * 32})
+
     content_reference = proposal["properties"]["item_content"]["$ref"]
     content = schema["$defs"][content_reference.removeprefix("#/$defs/")]
     assert (
@@ -393,9 +408,7 @@ def test_constrained_legacy_extraction_schema_resolves_nested_string_references(
         "one explanation per ID" in solution["properties"]["statement_explanations"]["description"]
     )
     assert "uses_statement_set=true" in proposal["properties"]["linguistic_patterns"]["description"]
-    artifact_member_pattern = schema["$defs"]["AssessmentItemContent_artifactPointer"][
-        "properties"
-    ]["artifact_member"]["pattern"]
+    artifact_member_pattern = media_schema["anyOf"][0]["properties"]["artifact_member"]["pattern"]
     assert not any(token in artifact_member_pattern for token in ("(?=", "(?!", "(?<=", "(?<!"))
     validate_codex_structured_output_schema(schema)
 

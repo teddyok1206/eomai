@@ -51,6 +51,7 @@ from eom_catalog_contracts import (
     LegacyItemCorpusCompletionCommand,
     LegacyItemCorpusCoverage,
     LegacyItemExtractionBatchManifestV2,
+    LegacyItemExtractionRequest,
     LegacyItemExtractionValidationRecovery,
     LegacyRootAlias,
     LegacySourceInventoryV2,
@@ -121,6 +122,10 @@ from eom_catalog_service.legacy_item_corpus_completion_source import (
 )
 from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchWorkUnitRecord,
+)
+from eom_catalog_service.legacy_item_media_compatibility_service import (
+    LegacyItemMediaCompatibilityError,
+    expected_promoted_legacy_item_content,
 )
 from eom_catalog_service.legacy_source_inventory import LegacySourceRootConfiguration
 from eom_catalog_service.models import ItemComponentRecord, ItemRecord, ItemRevisionRecord
@@ -1359,15 +1364,44 @@ class PostgresPdfLearningCompletionSource:
                 ),
                 None,
             )
+            if proposal is None:
+                self._fail(
+                    "PDF_LEARNING_COMPLETION_ITEM_CONTENT_INVALID",
+                    "promoted Item has no unique accepted extraction proposal",
+                )
+            try:
+                extraction_request = LegacyItemExtractionRequest.model_validate(
+                    promotion_workflow.initial_request["legacy_extraction_request"]
+                )
+                expected_item_content = expected_promoted_legacy_item_content(
+                    session,
+                    artifacts=reader,
+                    item_revision_id=revision.item_revision_id,
+                    acceptance=extraction_documents.acceptance,
+                    result=extraction_documents.result,
+                    request=extraction_request,
+                    proposal=proposal,
+                    components=components,
+                )
+            except (
+                KeyError,
+                TypeError,
+                ValidationError,
+                LegacyItemMediaCompatibilityError,
+            ) as exc:
+                self._fail(
+                    "PDF_LEARNING_COMPLETION_ITEM_CONTENT_INVALID",
+                    "promoted Item correction evidence does not resolve exactly",
+                    exc,
+                )
+            expected_content_value = expected_item_content.model_dump(mode="json")
             if (
-                proposal is None
-                or content_component.sha256
-                != content_sha256(proposal.item_content.model_dump(mode="json"))
-                or content_value != proposal.item_content.model_dump(mode="json")
+                content_component.sha256 != content_sha256(expected_content_value)
+                or content_value != expected_content_value
             ):
                 self._fail(
                     "PDF_LEARNING_COMPLETION_ITEM_CONTENT_INVALID",
-                    "promoted Item content differs from its accepted extraction proposal",
+                    "promoted Item content differs from its authorized extraction derivation",
                 )
             origin = self._origin_proof(
                 origin_resolution=origin_resolution,

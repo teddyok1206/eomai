@@ -1,27 +1,39 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from eom_catalog_contracts import (
+    LEGACY_ITEM_MEDIA_COMPATIBILITY_MEMBER,
+    LEGACY_ITEM_MEDIA_COMPATIBILITY_RESOURCE_SHA256,
+    LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF,
+    AppliedLegacyItemMediaCompatibility,
     AssessmentBundleCoverage,
     AssessmentSourceBundleProposal,
     AssessmentSourceBundleRevision,
+    ImageBlock,
     LegacyAssessmentItemProposal,
     LegacyItemCorpusCoverage,
     LegacyItemExtractionAcceptance,
     LegacyItemExtractionRequest,
     LegacyItemExtractionResult,
     LegacyItemPromotionRequest,
+    apply_legacy_item_media_compatibility,
+    load_legacy_item_media_compatibility_policy,
     validate_contract,
+    validate_legacy_item_extraction_media_for_request,
     validate_legacy_item_extraction_result_for_request,
 )
 from eom_catalog_service.legacy_item_promotion_service import (
     LegacyItemPromotionError,
     LegacyItemPromotionService,
 )
+from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import content_sha256
 from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.legacy_item_extraction_artifact import (
@@ -613,6 +625,113 @@ def test_shared_extraction_scope_validator_accepts_exact_closed_result() -> None
     validate_legacy_item_extraction_result_for_request(result, request)
 
 
+def test_shared_extraction_scope_validator_accepts_exact_item_media_pointer() -> None:
+    request = _staging_request()
+    document = _staging_result(request).model_dump(mode="json")
+    item = document["items"][0]
+    page_image = request.page_inputs[0].image
+    item["item_content"]["body"].append(
+        {
+            "block_id": "block_source_image",
+            "type": "image",
+            "purpose": "stimulus",
+            "artifact": {
+                "artifact_id": page_image.artifact_id,
+                "artifact_revision_id": page_image.artifact_revision_id,
+                "artifact_member": page_image.member_path,
+                "sha256": page_image.sha256,
+                "media_type": page_image.media_type,
+            },
+            "alt_text": "문제 원본의 그림",
+            "width_px": 640,
+            "height_px": 360,
+        }
+    )
+    document["result_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "result_sha256"}
+    )
+
+    validate_legacy_item_extraction_media_for_request(
+        LegacyItemExtractionResult.model_validate(document),
+        request,
+    )
+
+
+def test_shared_extraction_scope_validator_rejects_unpinned_item_media_pointer() -> None:
+    request = _staging_request()
+    document = _staging_result(request).model_dump(mode="json")
+    item = document["items"][0]
+    page_image = request.page_inputs[0].image
+    item["item_content"]["body"].append(
+        {
+            "block_id": "block_source_image",
+            "type": "image",
+            "purpose": "stimulus",
+            "artifact": {
+                "artifact_id": "artifact_" + "f" * 32,
+                "artifact_revision_id": page_image.artifact_revision_id,
+                "artifact_member": page_image.member_path,
+                "sha256": page_image.sha256,
+                "media_type": page_image.media_type,
+            },
+            "alt_text": "문제 원본의 그림",
+            "width_px": 640,
+            "height_px": 360,
+        }
+    )
+    document["result_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "result_sha256"}
+    )
+    result = LegacyItemExtractionResult.model_validate(document)
+
+    # Historical corpus verification remains coverage-only so the immutable accepted
+    # result can reach the exact promotion compatibility policy.
+    validate_legacy_item_extraction_result_for_request(result, request)
+    with pytest.raises(ValueError, match="item media is outside the pinned page inputs"):
+        validate_legacy_item_extraction_media_for_request(result, request)
+
+
+def test_extraction_staging_rejects_unpinned_item_media_before_artifact_write(
+    tmp_path: Path,
+) -> None:
+    request = _staging_request()
+    document = _staging_result(request).model_dump(mode="json")
+    item = document["items"][0]
+    page_image = request.page_inputs[0].image
+    item["item_content"]["body"].append(
+        {
+            "block_id": "block_source_image",
+            "type": "image",
+            "purpose": "stimulus",
+            "artifact": {
+                "artifact_id": "artifact_" + "f" * 32,
+                "artifact_revision_id": page_image.artifact_revision_id,
+                "artifact_member": page_image.member_path,
+                "sha256": page_image.sha256,
+                "media_type": page_image.media_type,
+            },
+            "alt_text": "문제 원본의 그림",
+            "width_px": 640,
+            "height_px": 360,
+        }
+    )
+    document["result_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "result_sha256"}
+    )
+
+    with pytest.raises(PlatformError, match="item media is outside the pinned page inputs"):
+        stage_legacy_item_extraction_result(
+            result=LegacyItemExtractionResult.model_validate(document),
+            request=request,
+            completed_at=datetime(2026, 9, 2, tzinfo=UTC),
+            job_id="job_" + "8" * 32,
+            logical_artifact_id="artifact_" + "9" * 32,
+            revision_id="rev_" + "a" * 32,
+            staging=tmp_path,
+        )
+    assert not (tmp_path / "legacy-item-extraction-artifact").exists()
+
+
 def test_shared_extraction_scope_validator_rejects_page_coverage_drift() -> None:
     request = _staging_request()
     document = _staging_result(request).model_dump(mode="json")
@@ -965,3 +1084,369 @@ def test_coverage_requires_an_exact_nonoverlapping_partition() -> None:
     corpus = _hashed(corpus, "coverage_sha256")
     validate_contract("legacy-item-corpus-coverage", corpus)
     assert LegacyItemCorpusCoverage.model_validate(corpus).state == "CONFLICT"
+
+
+def test_corrected_promotion_uses_policy_bound_artifacts_and_full_component_replay(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import eom_catalog_service.legacy_item_promotion_service as promotion_module
+
+    policy = load_legacy_item_media_compatibility_policy()
+    result = LegacyItemExtractionResult.model_validate(_result())
+    acceptance = _acceptance(result)
+    command = _promotion_request(acceptance)
+    proposal = result.items[0]
+    source = SimpleNamespace(
+        acceptance=acceptance,
+        result=result,
+        request=_staging_request(),
+        proposal_index=0,
+        workflow_id="workflow_" + "1" * 32,
+        workflow_definition_key="legacy-item-extraction",
+        workflow_definition_version="1.0.0",
+        source_step_run_id="steprun_" + "1" * 32,
+    )
+    old_key = f"legacy-item-content:{acceptance.acceptance_id}:{proposal.item_proposal_id}"
+
+    class FakeArtifacts:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, Any]] = []
+
+        def commit_file_set(self, **values: Any) -> SimpleNamespace:
+            self.calls.append(values)
+            if values["idempotency_key"] == old_key:
+                return SimpleNamespace(content_hash="sha256:" + "b" * 64)
+            if values["artifact_type"] == "assessment-item-content":
+                return SimpleNamespace(
+                    artifact_id="artifact_" + "a" * 32,
+                    revision_id="rev_" + "a" * 32,
+                    content_hash=next(iter(values["expected_file_sha256"].values())),
+                )
+            return SimpleNamespace(
+                artifact_id="artifact_" + "b" * 32,
+                revision_id="rev_" + "b" * 32,
+                content_hash=LEGACY_ITEM_MEDIA_COMPATIBILITY_RESOURCE_SHA256,
+            )
+
+    class FakeRegistry:
+        request: Any = None
+
+        def register(self, request: Any) -> SimpleNamespace:
+            self.request = request
+            return SimpleNamespace(
+                item_id="item_" + "1" * 32,
+                item_revision_id="itemrev_" + "1" * 32,
+                manifest_sha256="sha256:" + "1" * 64,
+                revision_state="APPROVED",
+                registration_key=request.registration_key,
+                content_pack_release_id=request.content_pack_release_id,
+                workflow_id=request.workflow_id,
+                source_workflow_step_run_id=request.source_workflow_step_run_id,
+                item_type_key=request.item_type_key,
+                primary_taxonomy_ref=request.primary_taxonomy_ref,
+                difficulty_band=request.difficulty_band,
+                metadata_json=request.metadata,
+            )
+
+    artifacts = FakeArtifacts()
+    registry = FakeRegistry()
+    service = object.__new__(LegacyItemPromotionService)
+    service.settings = CatalogSettings(staging_root=tmp_path, nas_artifact_root=tmp_path)
+    service.sessions = lambda: nullcontext(SimpleNamespace(scalar=lambda _query: None))
+    service.artifacts = artifacts
+    service.registry = registry
+    service.origins = SimpleNamespace(
+        register_item_origin=lambda _profile: SimpleNamespace(
+            item_origin_profile_id="originprofile_" + "1" * 32,
+            created=True,
+        )
+    )
+    service._resolve_source = lambda _session, _command: source
+    service._require_pack = lambda _session, _release_id: None
+    service._origin_profile = lambda **_values: SimpleNamespace(profile_sha256="sha256:" + "2" * 64)
+    verified: dict[str, Any] = {}
+    service._verify_registered_revision = lambda revision, request, components: verified.update(
+        revision=revision, request=request, components=components
+    )
+    corrected_content = proposal.item_content.model_copy(
+        update={
+            "body": (
+                ImageBlock(
+                    block_id="block_corrected_image",
+                    purpose="stimulus",
+                    artifact=policy.entries[0].target,
+                    alt_text="교정된 문제 원본 그림",
+                    width_px=640,
+                    height_px=360,
+                ),
+                *proposal.item_content.body[1:],
+            )
+        }
+    )
+    monkeypatch.setattr(
+        promotion_module,
+        "apply_legacy_item_media_compatibility",
+        lambda **_values: AppliedLegacyItemMediaCompatibility(
+            content=corrected_content,
+            entry=policy.entries[0],
+        ),
+    )
+    monkeypatch.setattr(
+        promotion_module,
+        "stage_registry_item_content",
+        lambda _settings, content: (tmp_path / "item.json", content_sha256(content)),
+    )
+
+    service.promote(command)
+
+    assert len(artifacts.calls) == 2
+    content_call, policy_call = artifacts.calls
+    assert content_call["idempotency_key"] != old_key
+    assert policy.policy_sha256 in content_call["idempotency_key"]
+    assert content_call["request"]["source_content_sha256"] == content_sha256(
+        proposal.item_content.model_dump(mode="json")
+    )
+    assert (
+        content_call["result"]["content_sha256"] != content_call["request"]["source_content_sha256"]
+    )
+    assert policy_call["artifact_type"] == "legacy-item-media-pointer-compatibility"
+    assert tuple(verified["components"]) == registry.request.components
+    evidence = registry.request.components[1]
+    assert (
+        evidence.component_type,
+        evidence.schema_ref,
+        evidence.logical_name,
+        evidence.required,
+    ) == (
+        "OTHER",
+        LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF,
+        LEGACY_ITEM_MEDIA_COMPATIBILITY_MEMBER,
+        True,
+    )
+
+    persisted = [
+        SimpleNamespace(
+            component_type=value.component_type,
+            ordinal=value.ordinal,
+            schema_ref=value.schema_ref,
+            media_type=value.media_type,
+            artifact_id=value.artifact_id,
+            artifact_revision_id=value.artifact_revision_id,
+            sha256=value.sha256,
+            logical_name=value.logical_name,
+            required=value.required,
+            metadata_json=value.metadata,
+        )
+        for value in registry.request.components
+    ]
+
+    class ReplaySession:
+        def get(self, _model: Any, _identity: str) -> Any:
+            return verified["revision"]
+
+        def scalars(self, _query: Any) -> tuple[Any, ...]:
+            return tuple(persisted)
+
+    replay_service = object.__new__(LegacyItemPromotionService)
+    replay_service.sessions = lambda: nullcontext(ReplaySession())
+    LegacyItemPromotionService._verify_registered_revision(
+        replay_service,
+        verified["revision"],
+        registry.request,
+        registry.request.components,
+    )
+    persisted.pop()
+    with pytest.raises(LegacyItemPromotionError) as error:
+        LegacyItemPromotionService._verify_registered_revision(
+            replay_service,
+            verified["revision"],
+            registry.request,
+            registry.request.components,
+        )
+    assert error.value.code == "LEGACY_ITEM_PROMOTION_IDEMPOTENCY_CONFLICT"
+
+
+def test_media_compatibility_requires_exact_chain_page_and_anchor() -> None:
+    policy = load_legacy_item_media_compatibility_policy()
+    entry = policy.entries[0]
+    base_request = _staging_request()
+    base_proposal = _staging_result(base_request).items[0]
+    target_image = base_request.page_inputs[0].image.model_copy(
+        update={
+            "artifact_id": entry.target.artifact_id,
+            "artifact_revision_id": entry.target.artifact_revision_id,
+            "member_path": entry.target.artifact_member,
+            "schema_ref": entry.target_schema_ref,
+            "media_type": entry.target.media_type,
+            "sha256": entry.target.sha256,
+        }
+    )
+    target_page = base_request.page_inputs[0].model_copy(
+        update={
+            "page_input_id": entry.target_page_input_id,
+            "source_role": entry.target_source_role,
+            "physical_page": entry.target_physical_page,
+            "image": target_image,
+        }
+    )
+    request = base_request.model_copy(
+        update={
+            "extraction_request_id": entry.extraction_request_id,
+            "request_sha256": entry.request_sha256,
+            "bundle": base_request.bundle.model_copy(
+                update={
+                    "assessment_source_bundle_revision_id": entry.bundle_revision_id,
+                    "bundle_manifest_sha256": entry.bundle_manifest_sha256,
+                }
+            ),
+            "page_inputs": (target_page, *base_request.page_inputs[1:]),
+        }
+    )
+    block = ImageBlock(
+        block_id=entry.block_id,
+        purpose="stimulus",
+        artifact=entry.source,
+        alt_text="문제 원본 그림",
+        width_px=640,
+        height_px=360,
+    )
+    target_anchor = base_proposal.source_anchors[0].model_copy(
+        update={
+            "anchor_id": entry.source_anchor_id,
+            "source": base_proposal.source_anchors[0].source.model_copy(
+                update={
+                    "artifact_id": entry.target.artifact_id,
+                    "artifact_revision_id": entry.target.artifact_revision_id,
+                    "member_path": entry.target.artifact_member,
+                    "schema_ref": entry.target_schema_ref,
+                    "media_type": entry.target.media_type,
+                    "sha256": entry.target.sha256,
+                }
+            ),
+            "source_role": entry.target_source_role,
+            "physical_page": entry.target_physical_page,
+        }
+    )
+    body_mapping = next(
+        value for value in base_proposal.content_anchor_map if value.content_path == "body[0]"
+    ).model_copy(update={"source_anchor_ids": (entry.source_anchor_id,)})
+    proposal = base_proposal.model_copy(
+        update={
+            "item_proposal_id": entry.item_proposal_id,
+            "item_number": entry.item_number,
+            "item_content": base_proposal.item_content.model_copy(
+                update={"body": (block, *base_proposal.item_content.body[1:])}
+            ),
+            "source_anchors": (target_anchor, *base_proposal.source_anchors),
+            "content_anchor_map": (
+                body_mapping,
+                *(
+                    value
+                    for value in base_proposal.content_anchor_map
+                    if value.content_path != "body[0]"
+                ),
+            ),
+        }
+    )
+
+    applied = apply_legacy_item_media_compatibility(
+        policy=policy,
+        acceptance_id=entry.acceptance_id,
+        acceptance_sha256=entry.acceptance_sha256,
+        extraction_result_id=entry.extraction_result_id,
+        result_sha256=entry.result_sha256,
+        request=request,
+        proposal=proposal,
+    )
+    assert applied.entry == entry
+    assert isinstance(applied.content.body[0], ImageBlock)
+    assert applied.content.body[0].artifact == entry.target
+
+    with pytest.raises(ValueError, match="scope is stale"):
+        apply_legacy_item_media_compatibility(
+            policy=policy,
+            acceptance_id=entry.acceptance_id,
+            acceptance_sha256=ZERO_SHA,
+            extraction_result_id=entry.extraction_result_id,
+            result_sha256=entry.result_sha256,
+            request=request,
+            proposal=proposal,
+        )
+
+
+def test_promoted_media_compatibility_evidence_rejects_missing_duplicate_and_unexpected(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import eom_catalog_service.legacy_item_media_compatibility_service as compatibility_service
+
+    policy = load_legacy_item_media_compatibility_policy()
+    result = LegacyItemExtractionResult.model_validate(_result())
+    acceptance = _acceptance(result)
+    proposal = result.items[0]
+    item_revision_id = "itemrev_" + "1" * 32
+    correct = SimpleNamespace(
+        item_revision_id=item_revision_id,
+        component_type="OTHER",
+        ordinal=0,
+        schema_ref=LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF,
+        media_type="application/json",
+        artifact_id="artifact_" + "a" * 32,
+        artifact_revision_id="rev_" + "a" * 32,
+        sha256=LEGACY_ITEM_MEDIA_COMPATIBILITY_RESOURCE_SHA256,
+        logical_name=LEGACY_ITEM_MEDIA_COMPATIBILITY_MEMBER,
+        required=True,
+        metadata_json={
+            "policy_id": policy.policy_id,
+            "policy_revision_id": policy.policy_revision_id,
+            "policy_sha256": policy.policy_sha256,
+        },
+    )
+    monkeypatch.setattr(
+        compatibility_service,
+        "apply_legacy_item_media_compatibility",
+        lambda **_values: AppliedLegacyItemMediaCompatibility(
+            content=proposal.item_content,
+            entry=policy.entries[0],
+        ),
+    )
+    arguments = {
+        "artifacts": SimpleNamespace(
+            settings=CatalogSettings(staging_root=tmp_path, nas_artifact_root=tmp_path)
+        ),
+        "item_revision_id": item_revision_id,
+        "acceptance": acceptance,
+        "result": result,
+        "request": _staging_request(),
+        "proposal": proposal,
+    }
+    wrong = SimpleNamespace(**{**vars(correct), "ordinal": 1})
+    for components in ((), (correct, correct), (wrong,)):
+        with pytest.raises(
+            compatibility_service.LegacyItemMediaCompatibilityError,
+            match=r"evidence|identity",
+        ):
+            compatibility_service.expected_promoted_legacy_item_content(
+                SimpleNamespace(),
+                components=components,
+                **arguments,
+            )
+
+    monkeypatch.setattr(
+        compatibility_service,
+        "apply_legacy_item_media_compatibility",
+        lambda **_values: AppliedLegacyItemMediaCompatibility(
+            content=proposal.item_content,
+            entry=None,
+        ),
+    )
+    with pytest.raises(
+        compatibility_service.LegacyItemMediaCompatibilityError,
+        match="unexpected",
+    ):
+        compatibility_service.expected_promoted_legacy_item_content(
+            SimpleNamespace(),
+            components=(correct,),
+            **arguments,
+        )

@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from importlib.resources import as_file, files
 from typing import Any, NoReturn
 
 from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_FILE_NAME,
     ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
+    LEGACY_ITEM_MEDIA_COMPATIBILITY_MEMBER,
+    LEGACY_ITEM_MEDIA_COMPATIBILITY_RESOURCE,
+    LEGACY_ITEM_MEDIA_COMPATIBILITY_RESOURCE_SHA256,
+    LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF,
     AssessmentOccurrencePointer,
     ItemOriginDerivation,
     ItemOriginProfile,
@@ -22,6 +27,8 @@ from eom_catalog_contracts import (
     OriginArtifactMemberPointer,
     OriginItemRevisionPointer,
     RightsPolicyPointer,
+    apply_legacy_item_media_compatibility,
+    load_legacy_item_media_compatibility_policy,
     validate_contract,
 )
 from eom_identifiers import content_sha256, item_origin_profile_id_for_revision
@@ -81,6 +88,7 @@ class LegacyItemPromotion:
 class _PromotionSource:
     acceptance: LegacyItemExtractionAcceptance
     result: LegacyItemExtractionResult
+    request: LegacyItemExtractionRequest
     proposal_index: int
     workflow_id: str
     workflow_definition_key: str
@@ -132,7 +140,23 @@ class LegacyItemPromotionService:
             )
             item_created = existing is None
 
-        content_data = proposal.item_content.model_dump(mode="json")
+        try:
+            compatibility_policy = load_legacy_item_media_compatibility_policy()
+            applied = apply_legacy_item_media_compatibility(
+                policy=compatibility_policy,
+                acceptance_id=source.acceptance.acceptance_id,
+                acceptance_sha256=source.acceptance.acceptance_sha256,
+                extraction_result_id=source.result.extraction_result_id,
+                result_sha256=source.result.result_sha256,
+                request=source.request,
+                proposal=proposal,
+            )
+        except (JsonSchemaValidationError, ValueError) as exc:
+            raise LegacyItemPromotionError(
+                "LEGACY_ITEM_PROMOTION_MEDIA_COMPATIBILITY_INVALID",
+                "legacy Item media compatibility evidence is stale",
+            ) from exc
+        content_data = applied.content.model_dump(mode="json")
         validate_contract("assessment-item-content", content_data)
         content_hash = content_sha256(content_data)
         staged, staged_sha256 = stage_registry_item_content(self.settings, content_data)
@@ -141,18 +165,35 @@ class LegacyItemPromotionService:
                 "LEGACY_ITEM_PROMOTION_CONTENT_MISMATCH",
                 "accepted item content changed during canonical staging",
             )
+        content_idempotency_key = (
+            f"legacy-item-content:{source.acceptance.acceptance_id}:{proposal.item_proposal_id}"
+            if applied.entry is None
+            else (
+                "legacy-item-content-compatible-v1:"
+                f"{source.acceptance.acceptance_id}:{proposal.item_proposal_id}:"
+                f"{compatibility_policy.policy_sha256}"
+            )
+        )
         content_artifact = self.artifacts.commit_file_set(
             files={ASSESSMENT_ITEM_CONTENT_FILE_NAME: staged},
             primary_file=ASSESSMENT_ITEM_CONTENT_FILE_NAME,
             artifact_type="assessment-item-content",
-            idempotency_key=(
-                f"legacy-item-content:{source.acceptance.acceptance_id}:{proposal.item_proposal_id}"
-            ),
+            idempotency_key=content_idempotency_key,
             request={
                 "acceptance_id": source.acceptance.acceptance_id,
                 "acceptance_sha256": source.acceptance.acceptance_sha256,
                 "item_proposal_id": proposal.item_proposal_id,
                 "content_sha256": content_hash,
+                **(
+                    {
+                        "source_content_sha256": content_sha256(
+                            proposal.item_content.model_dump(mode="json")
+                        ),
+                        "media_compatibility_policy_sha256": (compatibility_policy.policy_sha256),
+                    }
+                    if applied.entry is not None
+                    else {}
+                ),
             },
             result={
                 "schema_ref": LEGACY_PROMOTION_ITEM_SCHEMA_REF,
@@ -166,6 +207,11 @@ class LegacyItemPromotionService:
             },
             expected_file_sha256={ASSESSMENT_ITEM_CONTENT_FILE_NAME: content_hash},
         )
+        if content_artifact.content_hash != content_hash:
+            self._fail(
+                "LEGACY_ITEM_PROMOTION_CONTENT_MISMATCH",
+                "legacy Item content Artifact replay differs from canonical content",
+            )
         component = ComponentPointer(
             component_type="ITEM_CONTENT",
             ordinal=0,
@@ -179,8 +225,72 @@ class LegacyItemPromotionService:
                 "promotion_protocol": "legacy-item-promotion/1.0",
                 "acceptance_id": source.acceptance.acceptance_id,
                 "item_proposal_id": proposal.item_proposal_id,
+                **(
+                    {"media_compatibility_policy_sha256": (compatibility_policy.policy_sha256)}
+                    if applied.entry is not None
+                    else {}
+                ),
             },
         )
+        compatibility_component: ComponentPointer | None = None
+        if applied.entry is not None:
+            resource = files("eom_catalog_contracts").joinpath(
+                "resources",
+                "legacy-assessment",
+                LEGACY_ITEM_MEDIA_COMPATIBILITY_RESOURCE,
+            )
+            with as_file(resource) as policy_path:
+                policy_artifact = self.artifacts.commit_file_set(
+                    files={LEGACY_ITEM_MEDIA_COMPATIBILITY_MEMBER: policy_path},
+                    primary_file=LEGACY_ITEM_MEDIA_COMPATIBILITY_MEMBER,
+                    artifact_type="legacy-item-media-pointer-compatibility",
+                    idempotency_key=(
+                        "legacy-item-media-pointer-compatibility:"
+                        f"{compatibility_policy.policy_revision_id}:"
+                        f"{compatibility_policy.policy_sha256}"
+                    ),
+                    request={
+                        "policy_id": compatibility_policy.policy_id,
+                        "policy_revision_id": compatibility_policy.policy_revision_id,
+                        "policy_sha256": compatibility_policy.policy_sha256,
+                    },
+                    result={
+                        "policy_id": compatibility_policy.policy_id,
+                        "policy_revision_id": compatibility_policy.policy_revision_id,
+                        "policy_sha256": compatibility_policy.policy_sha256,
+                    },
+                    file_metadata={
+                        LEGACY_ITEM_MEDIA_COMPATIBILITY_MEMBER: {
+                            "schema_ref": LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF,
+                            "media_type": "application/json",
+                        }
+                    },
+                    expected_file_sha256={
+                        LEGACY_ITEM_MEDIA_COMPATIBILITY_MEMBER: (
+                            LEGACY_ITEM_MEDIA_COMPATIBILITY_RESOURCE_SHA256
+                        )
+                    },
+                )
+            if policy_artifact.content_hash != LEGACY_ITEM_MEDIA_COMPATIBILITY_RESOURCE_SHA256:
+                self._fail(
+                    "LEGACY_ITEM_PROMOTION_MEDIA_COMPATIBILITY_INVALID",
+                    "legacy Item media compatibility Artifact replay differs",
+                )
+            compatibility_component = ComponentPointer(
+                component_type="OTHER",
+                ordinal=0,
+                schema_ref=LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF,
+                media_type="application/json",
+                artifact_id=policy_artifact.artifact_id,
+                artifact_revision_id=policy_artifact.revision_id,
+                sha256=policy_artifact.content_hash,
+                logical_name=LEGACY_ITEM_MEDIA_COMPATIBILITY_MEMBER,
+                metadata={
+                    "policy_id": compatibility_policy.policy_id,
+                    "policy_revision_id": compatibility_policy.policy_revision_id,
+                    "policy_sha256": compatibility_policy.policy_sha256,
+                },
+            )
         metadata = {
             "item_type_key": LEGACY_PROMOTION_ITEM_TYPE,
             "source_kind": "PAST_EXAM",
@@ -203,7 +313,11 @@ class LegacyItemPromotionService:
             difficulty_band=command.difficulty_band,
             metadata_schema_ref=LEGACY_PROMOTION_METADATA_SCHEMA,
             metadata=metadata,
-            components=(component,),
+            components=(
+                (component,)
+                if compatibility_component is None
+                else (component, compatibility_component)
+            ),
             created_by=command.requested_by,
         )
         try:
@@ -213,7 +327,7 @@ class LegacyItemPromotionService:
                 "LEGACY_ITEM_PROMOTION_REGISTRATION_FAILED",
                 "accepted legacy item registration failed",
             ) from exc
-        self._verify_registered_revision(revision, registration, component)
+        self._verify_registered_revision(revision, registration, registration.components)
 
         profile = self._origin_profile(
             command=command,
@@ -386,6 +500,7 @@ class LegacyItemPromotionService:
         return _PromotionSource(
             acceptance=acceptance,
             result=result,
+            request=extraction,
             proposal_index=proposal_index,
             workflow_id=workflow.workflow_id,
             workflow_definition_key=workflow.definition_key,
@@ -495,20 +610,53 @@ class LegacyItemPromotionService:
         self,
         revision: ItemRevisionRecord,
         request: RegistrationRequest,
-        component: ComponentPointer,
+        components: tuple[ComponentPointer, ...],
     ) -> None:
         with self.sessions() as session:
             persisted = session.get(ItemRevisionRecord, revision.item_revision_id)
-            content = session.scalar(
-                select(ItemComponentRecord).where(
-                    ItemComponentRecord.item_revision_id == revision.item_revision_id,
-                    ItemComponentRecord.component_type == "ITEM_CONTENT",
-                    ItemComponentRecord.ordinal == 0,
+            persisted_components = tuple(
+                session.scalars(
+                    select(ItemComponentRecord)
+                    .where(ItemComponentRecord.item_revision_id == revision.item_revision_id)
+                    .order_by(ItemComponentRecord.component_type, ItemComponentRecord.ordinal)
+                )
+            )
+            expected_components = tuple(
+                sorted(components, key=lambda value: (value.component_type, value.ordinal))
+            )
+            component_match = len(persisted_components) == len(expected_components) and all(
+                (
+                    persisted.component_type,
+                    persisted.ordinal,
+                    persisted.schema_ref,
+                    persisted.media_type,
+                    persisted.artifact_id,
+                    persisted.artifact_revision_id,
+                    persisted.sha256,
+                    persisted.logical_name,
+                    persisted.required,
+                    persisted.metadata_json,
+                )
+                == (
+                    expected.component_type,
+                    expected.ordinal,
+                    expected.schema_ref,
+                    expected.media_type,
+                    expected.artifact_id,
+                    expected.artifact_revision_id,
+                    expected.sha256,
+                    expected.logical_name,
+                    expected.required,
+                    expected.metadata,
+                )
+                for persisted, expected in zip(
+                    persisted_components,
+                    expected_components,
+                    strict=True,
                 )
             )
             if (
                 persisted is None
-                or content is None
                 or persisted.revision_state != "APPROVED"
                 or persisted.registration_key != request.registration_key
                 or persisted.content_pack_release_id != request.content_pack_release_id
@@ -518,9 +666,7 @@ class LegacyItemPromotionService:
                 or persisted.primary_taxonomy_ref != request.primary_taxonomy_ref
                 or persisted.difficulty_band != request.difficulty_band
                 or persisted.metadata_json != request.metadata
-                or content.artifact_id != component.artifact_id
-                or content.artifact_revision_id != component.artifact_revision_id
-                or content.sha256 != component.sha256
+                or not component_match
             ):
                 self._fail(
                     "LEGACY_ITEM_PROMOTION_IDEMPOTENCY_CONFLICT",

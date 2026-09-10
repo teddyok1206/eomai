@@ -49,6 +49,10 @@ from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchRecord,
     LegacyItemExtractionBatchWorkUnitRecord,
 )
+from eom_catalog_service.legacy_item_media_compatibility_service import (
+    LegacyItemMediaCompatibilityError,
+    expected_promoted_legacy_item_content,
+)
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
     ContentIntakeSourceFileRecord,
@@ -538,9 +542,24 @@ def _resolve_past_exam_item_source(
             "past-exam Item evidence is not cross-bound",
         )
     proposal = proposals[0]
+    try:
+        expected_item_content = expected_promoted_legacy_item_content(
+            session,
+            artifacts=artifacts,
+            item_revision_id=revision.item_revision_id,
+            acceptance=acceptance,
+            result=result,
+            request=request,
+            proposal=proposal,
+        )
+    except LegacyItemMediaCompatibilityError as exc:
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_STALE",
+            "promoted Item media compatibility evidence is invalid",
+        ) from exc
     if (
         decision_models[0].decision == "ACCEPT"
-        and content_sha256(proposal.item_content.model_dump(mode="json")) != artifact_member.sha256
+        and content_sha256(expected_item_content.model_dump(mode="json")) != artifact_member.sha256
     ):
         raise KnowledgeAnalysisSourceError(
             "KNOWLEDGE_ANALYSIS_SOURCE_STALE",

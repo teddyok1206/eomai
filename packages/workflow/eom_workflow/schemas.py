@@ -1379,6 +1379,32 @@ def _exact_legacy_source_pointer_schema(
     return projected
 
 
+def _exact_legacy_item_media_schema(
+    schema: dict[str, Any],
+    template: dict[str, Any],
+    pointer: object,
+) -> dict[str, Any]:
+    """Project one request page pointer into the Item-content media field names."""
+
+    projected = _inline_local_schema(schema, template)
+    properties = _mapping(projected, "properties")
+    values = {
+        "artifact_id": getattr(pointer, "artifact_id", None),
+        "artifact_revision_id": getattr(pointer, "artifact_revision_id", None),
+        "artifact_member": getattr(pointer, "member_path", None),
+        "sha256": getattr(pointer, "sha256", None),
+        "media_type": getattr(pointer, "media_type", None),
+    }
+    if set(values) != set(properties) or not all(
+        isinstance(value, str) for value in values.values()
+    ):
+        raise WorkflowSchemaError("legacy Item media pointer is not projectable")
+    for key, value in values.items():
+        assert isinstance(value, str)
+        _bind_result_string_const(schema, _mapping(properties, key), value)
+    return projected
+
+
 def _legacy_source_anchor_variant(
     schema: dict[str, Any],
     template: dict[str, Any],
@@ -1485,6 +1511,22 @@ def _project_legacy_extraction_relations(
         schema,
         _mapping(item_properties, "item_content"),
     )
+    image_definition = _mapping(
+        _mapping(schema, "$defs"),
+        "AssessmentItemContent_imageBlock",
+    )
+    image_properties = _mapping(image_definition, "properties")
+    media_template = _mapping(image_properties, "artifact")
+    image_properties["artifact"] = {
+        "anyOf": [
+            _exact_legacy_item_media_schema(schema, media_template, page.image)
+            for page in extraction_request.page_inputs
+        ],
+        "description": (
+            "Byte-for-byte copy one exact page_inputs[].image pointer supplied by this request. "
+            "Never invent, repair, or derive an Artifact identity."
+        ),
+    }
     _mapping(content_properties, "body")["description"] = (
         "Preserve the observed body blocks in source order. If any statement_set block is "
         "present, solution.statement_explanations MUST contain exactly one explanation for every "
