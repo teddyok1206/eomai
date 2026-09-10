@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
+import eom_catalog_contracts.pdf_learning_completion as completion_contract
 import pytest
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
@@ -1425,6 +1427,133 @@ def test_graph_documents_bind_structure_projection_and_current_database() -> Non
         placement_database_rows=graph_evidence[4],
         snapshot_analysis_database_rows=graph_evidence[5],
     )
+
+
+def test_accepted_analysis_result_binds_committed_json_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Artifact identity uses producer JSON bytes, not the result's semantic self-hash."""
+
+    accepted_at = datetime(2026, 9, 10, tzinfo=UTC)
+    analysis_run_id = _identity("analysisrun", 990_001)
+    analysis_request_id = _identity("knowledgeanalysis", 990_001)
+    request_sha256 = _sha(990_001)
+    risk_policy_revision_id = _identity("analysisriskrev", 990_001)
+    semantic_body = {
+        "accepted_at": "2026-09-10T00:00:00Z",
+        "analysis_request_id": analysis_request_id,
+    }
+    semantic_hash = content_sha256(semantic_body)
+    json_document = {**semantic_body, "result_sha256": semantic_hash}
+    source = SimpleNamespace()
+    result = SimpleNamespace(
+        analysis_request_id=analysis_request_id,
+        analysis_request_sha256=request_sha256,
+        risk_policy_revision_id=risk_policy_revision_id,
+        source=source,
+        result_sha256=semantic_hash,
+    )
+
+    def dump_result(*, mode: str) -> dict[str, object]:
+        document = dict(json_document)
+        if mode == "python":
+            document["accepted_at"] = accepted_at
+        elif mode != "json":
+            raise ValueError(f"unexpected serialization mode: {mode}")
+        return document
+
+    result.model_dump = dump_result
+    artifact_sha256 = sha256_bytes(canonical_json_bytes(result.model_dump(mode="json")))
+    assert result.result_sha256 != artifact_sha256
+    assert sha256_bytes(canonical_json_bytes(result)) != artifact_sha256
+
+    analysis = SimpleNamespace(
+        analysis_run_id=analysis_run_id,
+        analysis_request_id=analysis_request_id,
+        request_sha256=request_sha256,
+        predecessor_analysis_run_id=None,
+        preset_id=_identity("execpreset", 990_001),
+        preset_revision_id=_identity("execpresetrev", 990_001),
+        preset_sha256=_sha(990_002),
+        risk_policy_revision_id=risk_policy_revision_id,
+    )
+    request = SimpleNamespace(
+        analysis_request_id=analysis_request_id,
+        request_sha256=request_sha256,
+        predecessor_analysis_run_id=None,
+        execution_preset_id=analysis.preset_id,
+        execution_preset_revision_id=analysis.preset_revision_id,
+        execution_preset_sha256=analysis.preset_sha256,
+        risk_policy_revision_id=risk_policy_revision_id,
+        source=source,
+    )
+    first_item = SimpleNamespace(
+        analysis=analysis,
+        effective_work_unit_id="effective-work-unit",
+        item_number=1,
+    )
+    first_document = SimpleNamespace(
+        analysis_run_id=analysis_run_id,
+        request_storage="KNOWLEDGE_ANALYSIS_RUN_CANONICAL_REQUEST_JSONB",
+        result_storage="ARTIFACT_REVISION_RESULT_JSONB_AND_MEMBER",
+        request=request,
+        result=result,
+        proposal_receipt=SimpleNamespace(),
+        proposal=SimpleNamespace(),
+    )
+    remaining_run_ids = tuple(
+        _identity("analysisrun", serial) for serial in range(990_002, 990_521)
+    )
+    items = (
+        first_item,
+        *(
+            SimpleNamespace(analysis=SimpleNamespace(analysis_run_id=run_id))
+            for run_id in remaining_run_ids
+        ),
+    )
+    documents = (
+        first_document,
+        *(SimpleNamespace(analysis_run_id=run_id) for run_id in remaining_run_ids),
+    )
+    effective = SimpleNamespace(
+        effective_work_unit_id="effective-work-unit",
+        effective_batch_id="effective-batch",
+    )
+
+    class SerializationObserved(Exception):
+        pass
+
+    observed: list[object] = []
+
+    def capture_serialization(value: object) -> bytes:
+        observed.append(value)
+        raise SerializationObserved
+
+    monkeypatch.setattr(
+        completion_contract,
+        "canonical_json_bytes",
+        capture_serialization,
+    )
+
+    with pytest.raises(SerializationObserved):
+        completion_contract._verify_knowledge_analysis_documents(
+            SimpleNamespace(effective_work_units=(effective,)),
+            items=items,
+            effective_documents=(
+                SimpleNamespace(
+                    effective_work_unit_id="effective-work-unit",
+                    result=SimpleNamespace(items=(SimpleNamespace(item_number=1),)),
+                ),
+            ),
+            knowledge_documents=documents,
+            manifest_units={
+                ("effective-batch", "effective-work-unit"): SimpleNamespace(
+                    request=SimpleNamespace()
+                )
+            },
+        )
+
+    assert observed == [json_document]
 
 
 def test_graph_documents_allow_unrelated_document_analysis_in_incremental_snapshot() -> None:

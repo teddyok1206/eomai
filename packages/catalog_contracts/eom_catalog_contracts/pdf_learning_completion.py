@@ -1664,7 +1664,8 @@ def _verify_knowledge_analysis_documents(
             or result.analysis_request_sha256 != request.request_sha256
             or result.risk_policy_revision_id != request.risk_policy_revision_id
             or result.source != source
-            or sha256_bytes(canonical_json_bytes(result)) != analysis.accepted_result_sha256
+            or sha256_bytes(canonical_json_bytes(result.model_dump(mode="json")))
+            != analysis.accepted_result_sha256
             or proposal_receipt.analysis_request_id != request.analysis_request_id
             or proposal_receipt.source != source
             or proposal_receipt.content_set_sha256 != result.proposal_content_set_sha256
