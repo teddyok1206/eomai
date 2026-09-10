@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Mapping
 from pathlib import PurePosixPath
-from typing import Literal
+from typing import Literal, cast
 
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from pydantic import Field, field_validator, model_validator
@@ -1780,9 +1780,73 @@ def _verify_past_exam_analysis_source(
         or source.item_number != extraction_proposal.item_number
         or source.bundle != extraction_request.bundle
         or source.layout_observation != extraction_request.layout_observation
-        or source.page_inputs != extraction_request.page_inputs
     ):
         raise ValueError("terminal knowledge-analysis V3 source differs from extraction chain")
+    _verify_item_scoped_analysis_pages(
+        source,
+        extraction_request=extraction_request,
+        extraction_proposal=extraction_proposal,
+    )
+
+
+def _verify_item_scoped_analysis_pages(
+    source: ApprovedPastExamItemKnowledgeSourceV3,
+    *,
+    extraction_request: LegacyItemExtractionRequest,
+    extraction_proposal: LegacyAssessmentItemProposal,
+) -> None:
+    """Bind an Item-scoped visual subset to its complete extraction request in linear time."""
+
+    request_by_id = {page.page_input_id: page for page in extraction_request.page_inputs}
+    request_by_position = {
+        (page.source_role, page.physical_page): page for page in extraction_request.page_inputs
+    }
+    source_by_id = {page.page_input_id: page for page in source.page_inputs}
+    source_by_position = {
+        (page.source_role, page.physical_page): page for page in source.page_inputs
+    }
+    ordered_source_pages = tuple(
+        sorted(
+            source.page_inputs,
+            key=lambda page: (
+                0 if page.source_role == "PROBLEM_DOCUMENT" else 1,
+                page.physical_page,
+                page.page_input_id,
+            ),
+        )
+    )
+    if (
+        len(request_by_id) != len(extraction_request.page_inputs)
+        or len(request_by_position) != len(extraction_request.page_inputs)
+        or not source.page_inputs
+        or source.page_inputs != ordered_source_pages
+        or len(source_by_id) != len(source.page_inputs)
+        or len(source_by_position) != len(source.page_inputs)
+        or any(request_by_id.get(page_id) != page for page_id, page in source_by_id.items())
+    ):
+        raise ValueError("terminal knowledge-analysis page subset differs from extraction request")
+
+    required_page_ids: set[str] = set()
+    for anchor in extraction_proposal.source_anchors:
+        if anchor.source_role not in {"PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"}:
+            continue
+        if anchor.physical_page is None:
+            raise ValueError("terminal knowledge-analysis page anchor has no physical page")
+        source_role = cast(
+            Literal["PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"],
+            anchor.source_role,
+        )
+        position = (source_role, anchor.physical_page)
+        request_page = request_by_position.get(position)
+        if (
+            request_page is None
+            or source_by_position.get(position) != request_page
+            or anchor.source != request_page.image
+        ):
+            raise ValueError("terminal knowledge-analysis page anchor differs from its source PNG")
+        required_page_ids.add(request_page.page_input_id)
+    if not required_page_ids.issubset(source_by_id):
+        raise ValueError("terminal knowledge-analysis page subset omits a required page anchor")
 
 
 def _member_pointer_identity(

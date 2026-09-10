@@ -1429,6 +1429,143 @@ def test_graph_documents_bind_structure_projection_and_current_database() -> Non
     )
 
 
+def _analysis_page(
+    page_input_id: str,
+    source_role: str,
+    physical_page: int,
+    *,
+    image_identity: str,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        page_input_id=page_input_id,
+        source_role=source_role,
+        physical_page=physical_page,
+        image=SimpleNamespace(identity=image_identity),
+    )
+
+
+@pytest.mark.parametrize("item_scoped", [True, False])
+def test_analysis_page_inputs_accept_exact_request_subset_or_full_set(
+    item_scoped: bool,
+) -> None:
+    problem = _analysis_page("page-problem", "PROBLEM_DOCUMENT", 1, image_identity="p1")
+    answer = _analysis_page(
+        "page-answer",
+        "ANSWER_EXPLANATION_DOCUMENT",
+        2,
+        image_identity="a2",
+    )
+    source_pages = (problem,) if item_scoped else (problem, answer)
+    anchors = tuple(
+        SimpleNamespace(
+            source_role=page.source_role,
+            physical_page=page.physical_page,
+            source=page.image,
+        )
+        for page in source_pages
+    )
+
+    completion_contract._verify_item_scoped_analysis_pages(
+        SimpleNamespace(page_inputs=source_pages),
+        extraction_request=SimpleNamespace(page_inputs=(problem, answer)),
+        extraction_proposal=SimpleNamespace(source_anchors=anchors),
+    )
+
+
+def test_analysis_page_inputs_reject_page_outside_request() -> None:
+    problem = _analysis_page("page-problem", "PROBLEM_DOCUMENT", 1, image_identity="p1")
+    outside = _analysis_page("page-outside", "PROBLEM_DOCUMENT", 3, image_identity="p3")
+
+    with pytest.raises(ValueError, match="page subset differs"):
+        completion_contract._verify_item_scoped_analysis_pages(
+            SimpleNamespace(page_inputs=(problem, outside)),
+            extraction_request=SimpleNamespace(page_inputs=(problem,)),
+            extraction_proposal=SimpleNamespace(source_anchors=()),
+        )
+
+
+def test_analysis_page_inputs_reject_pointer_drift() -> None:
+    problem = _analysis_page("page-problem", "PROBLEM_DOCUMENT", 1, image_identity="p1")
+    drifted = _analysis_page("page-problem", "PROBLEM_DOCUMENT", 1, image_identity="other")
+
+    with pytest.raises(ValueError, match="page subset differs"):
+        completion_contract._verify_item_scoped_analysis_pages(
+            SimpleNamespace(page_inputs=(drifted,)),
+            extraction_request=SimpleNamespace(page_inputs=(problem,)),
+            extraction_proposal=SimpleNamespace(source_anchors=()),
+        )
+
+
+def test_analysis_page_inputs_require_every_page_anchor() -> None:
+    problem = _analysis_page("page-problem", "PROBLEM_DOCUMENT", 1, image_identity="p1")
+    answer = _analysis_page(
+        "page-answer",
+        "ANSWER_EXPLANATION_DOCUMENT",
+        2,
+        image_identity="a2",
+    )
+
+    with pytest.raises(ValueError, match="page anchor differs"):
+        completion_contract._verify_item_scoped_analysis_pages(
+            SimpleNamespace(page_inputs=(problem,)),
+            extraction_request=SimpleNamespace(page_inputs=(problem, answer)),
+            extraction_proposal=SimpleNamespace(
+                source_anchors=(
+                    SimpleNamespace(
+                        source_role="ANSWER_EXPLANATION_DOCUMENT",
+                        physical_page=2,
+                        source=answer.image,
+                    ),
+                )
+            ),
+        )
+
+
+def test_analysis_page_inputs_allow_unanchored_item_boundary_page() -> None:
+    problem = _analysis_page("page-problem", "PROBLEM_DOCUMENT", 1, image_identity="p1")
+    answer = _analysis_page(
+        "page-answer",
+        "ANSWER_EXPLANATION_DOCUMENT",
+        2,
+        image_identity="a2",
+    )
+
+    completion_contract._verify_item_scoped_analysis_pages(
+        SimpleNamespace(page_inputs=(problem, answer)),
+        extraction_request=SimpleNamespace(page_inputs=(problem, answer)),
+        extraction_proposal=SimpleNamespace(
+            source_anchors=(
+                SimpleNamespace(
+                    source_role="PROBLEM_DOCUMENT",
+                    physical_page=1,
+                    source=problem.image,
+                ),
+            )
+        ),
+    )
+
+
+@pytest.mark.parametrize("reversed_order", [False, True])
+def test_analysis_page_inputs_reject_empty_or_noncanonical_order(
+    reversed_order: bool,
+) -> None:
+    problem = _analysis_page("page-problem", "PROBLEM_DOCUMENT", 1, image_identity="p1")
+    answer = _analysis_page(
+        "page-answer",
+        "ANSWER_EXPLANATION_DOCUMENT",
+        2,
+        image_identity="a2",
+    )
+    pages = (answer, problem) if reversed_order else ()
+
+    with pytest.raises(ValueError, match="page subset differs"):
+        completion_contract._verify_item_scoped_analysis_pages(
+            SimpleNamespace(page_inputs=pages),
+            extraction_request=SimpleNamespace(page_inputs=(problem, answer)),
+            extraction_proposal=SimpleNamespace(source_anchors=()),
+        )
+
+
 def test_accepted_analysis_result_binds_committed_json_bytes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
