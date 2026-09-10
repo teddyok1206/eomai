@@ -313,6 +313,28 @@ def _content_team_validator_class(validator_module: Any, question: Any) -> Any:
     return InputAwareValidator
 
 
+def _project_general_stem_for_handoff(stem: str) -> str:
+    """Collapse authored paragraph boundaries for the reviewed v0.1 Q_STEM slot.
+
+    Item Content V2/V3 deliberately permits a prose stem with multiple paragraphs, while the
+    immutable HwpQuestionEditor handoff rejects a general multiline Q_STEM unless it owns a
+    structured block, visual slot, or inquiry layout. Those structures are represented by separate
+    typed draft fields before this boundary. Preserve the prose text in order and materialize only
+    its paragraph separators as spaces; the canonical Item Content and its hashes remain unchanged.
+    """
+
+    if "\n" not in stem and "\r" not in stem:
+        return stem
+    lines = stem.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    projected = " ".join(line.strip(" \t") for line in lines if line.strip(" \t"))
+    if not projected:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
+            "content-team stem is empty after HWPX handoff projection",
+        )
+    return projected
+
+
 def _external_render(
     runtime: Path,
     template: Path,
@@ -324,6 +346,7 @@ def _external_render(
     score_display_override: str | None = None,
 ) -> dict[str, Any]:
     handoff_value = draft.model_dump(mode="json")
+    handoff_value["stem"] = _project_general_stem_for_handoff(draft.stem)
     for block in handoff_value["labeled_blocks"]:
         block["content"] = normalize_content_team_labeled_block_content(block["content"])
     handoff_draft = type(draft).model_validate(handoff_value)
