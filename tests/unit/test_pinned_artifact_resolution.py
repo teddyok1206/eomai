@@ -42,11 +42,11 @@ def _fixture(
     member_path: str = "evidence/value.json",
     schema_ref: str = "eom://schemas/fixture/value/1.0",
     metadata: bool = True,
+    payload: bytes = b'{"value":1}',
 ) -> tuple[_Session, CatalogSettings, dict[str, object]]:
     artifact_id = "artifact_" + "1" * 32
     revision_id = "rev_" + "2" * 32
     job_id = "job_" + "3" * 32
-    payload = b'{"value":1}'
     artifact_root = root / artifact_id / revision_id
     target = artifact_root / member_path
     target.parent.mkdir(parents=True)
@@ -123,6 +123,64 @@ def test_resolves_exact_member_and_full_provenance(tmp_path: Path) -> None:
     assert resolved.payload == b'{"value":1}'
     assert resolved.approved is True
     assert resolved.producing_job_state == "SUCCEEDED"
+
+
+def test_empty_non_primary_member_requires_explicit_allowance(tmp_path: Path) -> None:
+    session, settings, arguments = _fixture(tmp_path)
+    revision = session.get(ArtifactRevisionRecord, str(arguments["artifact_revision_id"]))
+    assert revision is not None
+    member_path = "normalized/ambiguities.jsonl"
+    target = Path(revision.nas_path) / member_path
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"")
+    files = revision.manifest["files"]
+    assert isinstance(files, list)
+    files.append(
+        {
+            "file_name": member_path,
+            "sha256": sha256_bytes(b""),
+            "bytes": 0,
+            "schema_ref": "eom://schemas/knowledge/ambiguity/3.0",
+            "media_type": "application/x-ndjson",
+        }
+    )
+    revision.manifest_hash = content_sha256(revision.manifest)
+    arguments.update(
+        {
+            "member_path": member_path,
+            "sha256": sha256_bytes(b""),
+            "schema_ref": "eom://schemas/knowledge/ambiguity/3.0",
+            "media_type": "application/x-ndjson",
+        }
+    )
+
+    with pytest.raises(PinnedArtifactResolutionError, match="descriptor differs"):
+        resolve_pinned_artifact_member(
+            session,
+            settings,
+            **arguments,  # type: ignore[arg-type]
+        )
+
+    resolved = resolve_pinned_artifact_member(
+        session,
+        settings,
+        **arguments,  # type: ignore[arg-type]
+        allow_empty=True,
+    )
+
+    assert resolved.payload == b""
+
+
+def test_empty_primary_member_is_rejected_even_with_allowance(tmp_path: Path) -> None:
+    session, settings, arguments = _fixture(tmp_path, payload=b"")
+
+    with pytest.raises(PinnedArtifactResolutionError, match="descriptor differs"):
+        resolve_pinned_artifact_member(
+            session,
+            settings,
+            **arguments,  # type: ignore[arg-type]
+            allow_empty=True,
+        )
 
 
 def test_resolves_exact_logical_and_manifest_artifact_type_pair(tmp_path: Path) -> None:

@@ -119,6 +119,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "worker_capacity_pool_roles",
     "worker_capacity_pool_slots",
     "worker_capacity_pools",
+    "worker_leases",
     "workflow_commands",
     "workflow_definitions",
     "workflow_events",

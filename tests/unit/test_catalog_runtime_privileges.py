@@ -145,6 +145,9 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     assert "pdf_learning_completion_observations" in READ_TABLES
     assert "pdf_learning_completion_observations" in INSERT_TABLES
     assert "pdf_learning_completion_observations" not in UPDATE_TABLES
+    assert "worker_leases" in READ_TABLES
+    assert "worker_leases" not in INSERT_TABLES
+    assert "worker_leases" not in UPDATE_TABLES
     completion_authority_tables = {
         "permissions",
         "role_permissions",

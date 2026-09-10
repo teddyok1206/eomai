@@ -292,6 +292,19 @@ class _AcceptedAnalysisEvidence:
     risk_policy: KnowledgeAnalysisRiskPolicyRevisionRecord
 
 
+_KNOWLEDGE_PROPOSAL_JSONL_MEMBER_PATHS = frozenset(
+    {
+        "normalized/anchors.jsonl",
+        "normalized/nodes.jsonl",
+        "normalized/edges.jsonl",
+        "normalized/claims.jsonl",
+        "normalized/components.jsonl",
+        "normalized/page-images.jsonl",
+        "normalized/ambiguities.jsonl",
+    }
+)
+
+
 class _PinnedCatalogArtifactReader(CatalogArtifactService):
     """Catalog reader whose every DB lookup is pinned to the caller's RR Session."""
 
@@ -322,11 +335,25 @@ class _PinnedCatalogArtifactReader(CatalogArtifactService):
         manifest_artifact_type = revision.manifest.get("artifact_type")
         if not isinstance(primary, str) or not isinstance(manifest_artifact_type, str):
             raise ValueError("pinned Artifact primary member is absent")
-        expected_manifest_types = (
-            {"knowledge-analysis-proposal"}
-            if logical.artifact_type == "workflow_support"
+        if logical.artifact_type == "workflow_support" and (
+            manifest_artifact_type,
+            primary,
+        ) == ("knowledge-analysis-proposal", "normalized/proposal-receipt.json"):
+            expected_manifest_types = {"knowledge-analysis-proposal"}
+        elif logical.artifact_type == "workflow_support" and (
+            manifest_artifact_type,
+            primary,
+        ) == ("legacy-item-extraction-result", "result.json"):
+            expected_manifest_types = {"legacy-item-extraction-result"}
+        else:
+            expected_manifest_types = {logical.artifact_type}
+        allow_empty = (
+            logical.artifact_type == "workflow_support"
+            and manifest_artifact_type == "knowledge-analysis-proposal"
             and primary == "normalized/proposal-receipt.json"
-            else {logical.artifact_type}
+            and member_path != primary
+            and media_type == "application/x-ndjson"
+            and member_path in _KNOWLEDGE_PROPOSAL_JSONL_MEMBER_PATHS
         )
         return resolve_pinned_artifact_member(
             self._session,
@@ -341,6 +368,7 @@ class _PinnedCatalogArtifactReader(CatalogArtifactService):
             expected_primary_file=primary,
             max_bytes=max_bytes,
             expected_manifest_artifact_types=expected_manifest_types,
+            allow_empty=allow_empty,
         ).payload
 
     def verify_member(
@@ -991,7 +1019,7 @@ class PostgresPdfLearningCompletionSource:
             manifest_sha256=snapshot.manifest_sha256,
             manifest_artifact=manifest_pointer,
             projections=manifest.projections,
-            structure_manifest_sha256=structure.manifest_sha256,
+            structure_manifest_sha256=manifest.structure_manifest.sha256,
             structure_manifest_artifact=manifest.structure_manifest,
             snapshot_created_at=snapshot.created_at.astimezone(UTC),
             observed_as_current=True,
@@ -2121,7 +2149,6 @@ class PostgresPdfLearningCompletionSource:
             and request.execution_preset_sha256
             == cast(str, run.canonical_request.get("execution_preset_sha256"))
             and request.risk_policy_revision_id == run.risk_policy_revision_id
-            and run.risk_policy_sha256 == cast(str, run.canonical_request.get("risk_policy_sha256"))
             and source.source_kind == run.source_kind
             and source.item_revision_id == run.source_revision_id
             and source.item_id == run.item_id

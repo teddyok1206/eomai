@@ -52,6 +52,7 @@ def resolve_pinned_artifact_member(
     max_bytes: int,
     expected_manifest_artifact_types: Collection[str] | None = None,
     historical_metadata_compatibility: bool = False,
+    allow_empty: bool = False,
 ) -> PinnedArtifactMember:
     """Resolve one member without opening a second database transaction.
 
@@ -74,6 +75,7 @@ def resolve_pinned_artifact_member(
         or any(part in {"", ".", ".."} for part in relative.parts)
         or "\\" in member_path
         or max_bytes < 1
+        or type(allow_empty) is not bool
         or not expected_artifact_types
         or not manifest_artifact_types
     ):
@@ -137,7 +139,8 @@ def resolve_pinned_artifact_member(
     if (
         entry.get("sha256") != sha256
         or type(size) is not int
-        or size < 1
+        or size < 0
+        or (size == 0 and (not allow_empty or member_path == expected_primary_file))
         or size > max_bytes
         or not (metadata_matches or historical_contract)
         or (member_path == expected_primary_file and revision.content_hash != sha256)
