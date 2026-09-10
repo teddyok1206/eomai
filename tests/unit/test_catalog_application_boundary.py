@@ -13,6 +13,7 @@ from eom_api.services.catalog_application_client import (
     CatalogApplicationClient,
     CatalogApplicationClientError,
 )
+from eom_api.services.idempotency_service import DEFAULT_IDEMPOTENCY_LEASE_SECONDS
 from eom_catalog_contracts import (
     AssessmentItemContent,
     AssessmentItemContentV2,
@@ -455,7 +456,8 @@ def _client(server: CatalogApplicationServer) -> CatalogApplicationClient:
 
 
 def test_catalog_evidence_generation_uses_its_bounded_response_window() -> None:
-    assert EVIDENCE_RESPONSE_TIMEOUT_SECONDS == 120.0
+    assert EVIDENCE_RESPONSE_TIMEOUT_SECONDS == 50.0
+    assert EVIDENCE_RESPONSE_TIMEOUT_SECONDS < DEFAULT_IDEMPOTENCY_LEASE_SECONDS
     assert (
         CatalogApplicationClient._response_timeout_seconds(_retrieval_command())
         == EVIDENCE_RESPONSE_TIMEOUT_SECONDS

@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from eom_api.errors import ApiError
 
 ResultT = TypeVar("ResultT")
+DEFAULT_IDEMPOTENCY_LEASE_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,7 @@ class IdempotencyService:
         engine: Engine,
         hash_key: bytes,
         *,
-        lease_seconds: int = 60,
+        lease_seconds: int = DEFAULT_IDEMPOTENCY_LEASE_SECONDS,
         retention_seconds: int = 86_400,
         response_limit_bytes: int = 65_536,
     ) -> None:

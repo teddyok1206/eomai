@@ -60,10 +60,10 @@ from pydantic import ValidationError
 
 CONNECT_TIMEOUT_SECONDS = 5.0
 RESPONSE_TIMEOUT_SECONDS = 30.0
-# Evidence selection validates and ranks a bounded Graph snapshot before publishing its
-# immutable bundle.  Live rev67 retrievals can legitimately exceed the short metadata RPC bound,
-# so these two evidence-producing operations receive their own bounded response window.
-EVIDENCE_RESPONSE_TIMEOUT_SECONDS = 120.0
+# Evidence selection validates and ranks a bounded Graph snapshot before publishing its immutable
+# bundle. It can exceed the short metadata RPC bound, but this response window must remain below
+# the API idempotency claim lease so a second owner cannot overlap a still-running callback.
+EVIDENCE_RESPONSE_TIMEOUT_SECONDS = 50.0
 
 
 @dataclass(frozen=True)
