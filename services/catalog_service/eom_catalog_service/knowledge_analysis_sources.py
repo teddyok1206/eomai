@@ -38,7 +38,7 @@ from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import CatalogArtifactReader
 from eom_catalog_service.legacy_assessment_models import (
     AssessmentLayoutObservationRecord,
     AssessmentSourceBundleRevisionRecord,
@@ -194,7 +194,7 @@ def resolve_content_intake_source(
 def _resolve_item_source(
     session: Session,
     *,
-    artifacts: CatalogArtifactService | None,
+    artifacts: CatalogArtifactReader | None,
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
     eligible_revision_states: frozenset[str],
@@ -312,7 +312,7 @@ def _resolve_item_source(
 def _resolve_past_exam_item_source(
     session: Session,
     *,
-    artifacts: CatalogArtifactService,
+    artifacts: CatalogArtifactReader,
     revision: ItemRevisionRecord,
     artifact_member: KnowledgeAnalysisSourceArtifactMemberV2,
 ) -> ApprovedPastExamItemKnowledgeSourceV3:
@@ -683,7 +683,7 @@ def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _read_json_member(
-    artifacts: CatalogArtifactService,
+    artifacts: CatalogArtifactReader,
     *,
     artifact_id: str,
     revision_id: str,
@@ -714,7 +714,7 @@ def _read_json_member(
 def resolve_approved_item_source(
     session: Session,
     *,
-    artifacts: CatalogArtifactService | None = None,
+    artifacts: CatalogArtifactReader | None = None,
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
 ) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
@@ -732,7 +732,7 @@ def resolve_approved_item_source(
 def resolve_historically_approved_item_source(
     session: Session,
     *,
-    artifacts: CatalogArtifactService | None = None,
+    artifacts: CatalogArtifactReader | None = None,
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
 ) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
@@ -749,7 +749,7 @@ def resolve_historically_approved_item_source(
 
 def resolve_educational_document_source(
     session: Session,
-    artifacts: CatalogArtifactService,
+    artifacts: CatalogArtifactReader,
     *,
     document_revision_id: str,
     source_class: Literal["TEXTBOOK", "CURRICULUM", "INTERNAL_GUIDE"],

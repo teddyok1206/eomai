@@ -8,6 +8,7 @@ import eom_catalog_service.knowledge_retrieval_service as retrieval_module
 import pytest
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
+    ApprovedPastExamItemKnowledgeSourceV3,
     ContentIntakeKnowledgeSourceV2,
     CreateItemProductionEvidenceCommand,
     EducationRetrievalRequestV2,
@@ -26,6 +27,7 @@ from eom_catalog_service.knowledge_retrieval_service import (
     _RequestScopedArtifactValidationCache,
     _SnapshotSourceResolutionCache,
 )
+from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import content_sha256
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from sqlalchemy.orm import Session
@@ -470,6 +472,7 @@ def test_snapshot_source_preload_query_count_is_constant_for_repeated_pointers()
 
 class _CountingArtifactService:
     def __init__(self) -> None:
+        self.settings = CatalogSettings()
         self.read_count = 0
         self.verify_count = 0
         self.fail_next_read = False
@@ -483,6 +486,55 @@ class _CountingArtifactService:
 
     def verify_member(self, **_kwargs: object) -> None:
         self.verify_count += 1
+
+
+def test_past_exam_resolution_cache_preserves_artifact_settings_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    delegate = _CountingArtifactService()
+    cache = _SnapshotSourceResolutionCache(
+        associations_by_run_id={},
+        runs_by_id={},
+        artifacts=_RequestScopedArtifactValidationCache(delegate),
+    )
+    source = ApprovedPastExamItemKnowledgeSourceV3.model_construct(
+        source_class="PAST_EXAM",
+        item_id="item_" + "1" * 32,
+        item_revision_id="itemrev_" + "2" * 32,
+        artifact_member=_member(
+            "3",
+            media_type="application/json",
+            schema_ref="eom.assessment.item-content/1.0",
+        ),
+    )
+
+    def resolve_past_exam(
+        _session: Session,
+        *,
+        artifacts: Any,
+        item_revision_id: str,
+        source_class: str,
+    ) -> ApprovedPastExamItemKnowledgeSourceV3:
+        # Corrected legacy media resolution dereferences this exact storage boundary.
+        assert artifacts.settings is delegate.settings
+        assert item_revision_id == source.item_revision_id
+        assert source_class == "PAST_EXAM"
+        return source
+
+    monkeypatch.setattr(
+        retrieval_module,
+        "resolve_historically_approved_item_source",
+        resolve_past_exam,
+    )
+
+    assert (
+        KnowledgeRetrievalApplicationService._resolve_declared_source(
+            cast(Session, SimpleNamespace()),
+            source,
+            cache=cache,
+        )
+        is source
+    )
 
 
 def _artifact_member_arguments() -> dict[str, object]:

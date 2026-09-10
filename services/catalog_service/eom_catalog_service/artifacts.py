@@ -7,7 +7,7 @@ import os
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from eom_identifiers import (
     content_sha256,
@@ -147,6 +147,37 @@ class CatalogArtifact:
     content_bytes: int
     nas_path: str
     manifest: dict[str, Any]
+
+
+class CatalogArtifactReader(Protocol):
+    """Minimal immutable-member port shared by direct and request-cached readers."""
+
+    @property
+    def settings(self) -> CatalogSettings: ...
+
+    def read_member(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        sha256: str,
+        media_type: str,
+        schema_ref: str,
+        max_bytes: int,
+    ) -> bytes: ...
+
+    def verify_member(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        sha256: str,
+        media_type: str,
+        schema_ref: str,
+        max_bytes: int,
+    ) -> None: ...
 
 
 class CatalogArtifactService:

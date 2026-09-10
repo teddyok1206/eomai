@@ -7,7 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
@@ -54,7 +54,11 @@ from sqlalchemy import Engine, distinct, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactService
+from eom_catalog_service.artifacts import (
+    CatalogArtifact,
+    CatalogArtifactReader,
+    CatalogArtifactService,
+)
 from eom_catalog_service.knowledge_analysis_sources import (
     EducationalDocumentSourceResolutionCache,
     KnowledgeAnalysisSourceError,
@@ -242,11 +246,17 @@ class _ArtifactMemberValidationKey:
 class _RequestScopedArtifactValidationCache:
     """Reuse a completed exact immutable-member check only inside one retrieval request."""
 
-    def __init__(self, delegate: CatalogArtifactService) -> None:
+    def __init__(self, delegate: CatalogArtifactReader) -> None:
         self._delegate = delegate
         self._member_bytes: dict[_ArtifactMemberValidationKey, bytes] = {}
         self._member_bytes_total = 0
         self._verified_members: set[_ArtifactMemberValidationKey] = set()
+
+    @property
+    def settings(self) -> CatalogSettings:
+        """Preserve the immutable reader's storage boundary for nested pointer checks."""
+
+        return self._delegate.settings
 
     @staticmethod
     def _key(
@@ -1345,7 +1355,7 @@ class KnowledgeRetrievalApplicationService:
         if isinstance(source, ApprovedPastExamItemKnowledgeSourceV3):
             return resolve_historically_approved_item_source(
                 session,
-                artifacts=cast(CatalogArtifactService, cache.artifacts),
+                artifacts=cache.artifacts,
                 item_revision_id=source.item_revision_id,
                 source_class=source.source_class,
             )
@@ -1355,7 +1365,7 @@ class KnowledgeRetrievalApplicationService:
         ):
             return resolve_educational_document_source(
                 session,
-                cast(CatalogArtifactService, cache.artifacts),
+                cache.artifacts,
                 document_revision_id=source.document_revision_id,
                 source_class=source.source_class,
                 first_physical_page=source.first_physical_page,
@@ -1372,7 +1382,7 @@ class KnowledgeRetrievalApplicationService:
             )
         return resolve_historically_approved_item_source(
             session,
-            artifacts=cast(CatalogArtifactService, cache.artifacts),
+            artifacts=cache.artifacts,
             item_revision_id=source.item_revision_id,
             source_class=source.source_class,
         )

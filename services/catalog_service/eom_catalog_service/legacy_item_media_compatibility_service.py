@@ -23,7 +23,7 @@ from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import CatalogArtifactReader
 from eom_catalog_service.models import ItemComponentRecord
 from eom_catalog_service.pinned_artifact_resolution import resolve_pinned_artifact_member
 
@@ -37,7 +37,7 @@ class LegacyItemMediaCompatibilityError(ValueError):
 def expected_promoted_legacy_item_content(
     session: Session,
     *,
-    artifacts: CatalogArtifactService,
+    artifacts: CatalogArtifactReader,
     item_revision_id: str,
     acceptance: LegacyItemExtractionAcceptance,
     result: LegacyItemExtractionResult,
