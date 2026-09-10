@@ -3,9 +3,11 @@ from __future__ import annotations
 import hashlib
 import os
 import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import eom_api.services.catalog_application_client as catalog_application_client_module
 import pytest
 from eom_api.services.catalog_application_client import (
     EVIDENCE_RESPONSE_TIMEOUT_SECONDS,
@@ -429,6 +431,7 @@ def _server(
     allowed_uid: int | None = None,
     registry: FakeRegistry | None = None,
     item_reviews: FakeItemReviews | None = None,
+    knowledge_retrieval: FakeKnowledgeRetrieval | None = None,
 ) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -438,7 +441,7 @@ def _server(
         registry or FakeRegistry(),
         FakeKnowledgeAnalysis(),
         FakeKnowledgeAnalysisBatch(),
-        FakeKnowledgeRetrieval(),
+        knowledge_retrieval or FakeKnowledgeRetrieval(),
         mock_exam_item_reviews=item_reviews,  # type: ignore[arg-type]
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid() if allowed_uid is None else allowed_uid,
@@ -470,6 +473,33 @@ def test_catalog_evidence_generation_uses_its_bounded_response_window() -> None:
         CatalogApplicationClient._response_timeout_seconds(_batch_command())
         == RESPONSE_TIMEOUT_SECONDS
     )
+
+
+def test_catalog_evidence_response_window_is_applied_to_the_unix_socket(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SlowKnowledgeRetrieval(FakeKnowledgeRetrieval):
+        def create_item_production(
+            self, command: CreateItemProductionEvidenceCommand
+        ) -> EvidenceBundlePublicationResultV2:
+            time.sleep(0.1)
+            return super().create_item_production(command)
+
+    # Scale both bounds down while preserving their production ordering. If the client applies the
+    # ordinary metadata timeout after send, this real AF_UNIX round trip deterministically fails.
+    monkeypatch.setattr(catalog_application_client_module, "RESPONSE_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(catalog_application_client_module, "EVIDENCE_RESPONSE_TIMEOUT_SECONDS", 1.0)
+    server = _server(tmp_path, knowledge_retrieval=SlowKnowledgeRetrieval())
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        result = _client(server).create_item_production_evidence(_item_evidence_command())
+        assert result.context_artifact.member_path == "evidence/context.md"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_catalog_application_contract_validates_schema_and_typed_models() -> None:
