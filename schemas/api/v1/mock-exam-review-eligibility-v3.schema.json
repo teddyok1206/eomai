@@ -1,0 +1,399 @@
+{
+  "$defs": {
+    "MockExamAuthoringEvidenceUsageReceiptPointerV1": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "attempt": {
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "receipt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Receipt Sha256",
+          "type": "string"
+        },
+        "result_schema": {
+          "const": "authoring-result@10.0",
+          "title": "Result Schema",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "step_key": {
+          "const": "authoring",
+          "title": "Step Key",
+          "type": "string"
+        },
+        "step_run_id": {
+          "pattern": "^steprun_[0-9a-f]{32}$",
+          "title": "Step Run Id",
+          "type": "string"
+        },
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "title": "Workflow Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow_id",
+        "step_run_id",
+        "attempt",
+        "job_id",
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "receipt_sha256",
+        "step_key",
+        "result_schema"
+      ],
+      "title": "MockExamAuthoringEvidenceUsageReceiptPointerV1",
+      "type": "object"
+    },
+    "MockExamReviewEvidenceUsageReceiptPointerV1": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "attempt": {
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "receipt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Receipt Sha256",
+          "type": "string"
+        },
+        "result_schema": {
+          "const": "review-result@10.0",
+          "title": "Result Schema",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "step_key": {
+          "const": "review",
+          "title": "Step Key",
+          "type": "string"
+        },
+        "step_run_id": {
+          "pattern": "^steprun_[0-9a-f]{32}$",
+          "title": "Step Run Id",
+          "type": "string"
+        },
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "title": "Workflow Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow_id",
+        "step_run_id",
+        "attempt",
+        "job_id",
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "receipt_sha256",
+        "step_key",
+        "result_schema"
+      ],
+      "title": "MockExamReviewEvidenceUsageReceiptPointerV1",
+      "type": "object"
+    },
+    "MockExamTrustedEvidenceUsageReceiptPairV1": {
+      "additionalProperties": false,
+      "description": "Resolvable authoring/review receipt identities for one trusted RAG Workflow.",
+      "properties": {
+        "authoring": {
+          "$ref": "#/$defs/MockExamAuthoringEvidenceUsageReceiptPointerV1"
+        },
+        "receipt_schema_version": {
+          "const": "evidence-usage-validation-receipt/1.0",
+          "title": "Receipt Schema Version",
+          "type": "string"
+        },
+        "review": {
+          "$ref": "#/$defs/MockExamReviewEvidenceUsageReceiptPointerV1"
+        },
+        "role_protocol_version": {
+          "const": "workflow-role/1.20.0",
+          "title": "Role Protocol Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "mock-exam-trusted-evidence-usage-receipt-pair/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "role_protocol_version",
+        "receipt_schema_version",
+        "authoring",
+        "review"
+      ],
+      "title": "MockExamTrustedEvidenceUsageReceiptPairV1",
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/api/v1/mock-exam-review-eligibility-v3.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "approval_state": {
+            "const": "PENDING"
+          }
+        },
+        "required": [
+          "approval_state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "approved_at": {
+            "type": "null"
+          },
+          "reviewer_operator_id": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "approval_state": {
+            "const": "APPROVED"
+          }
+        },
+        "required": [
+          "approval_state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "approved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reviewer_operator_id": {
+            "pattern": "^operator_[0-9a-f]{32}$",
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "else": {
+        "properties": {
+          "finding_blocking_count": {
+            "minimum": 1
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "eligibility": {
+            "const": "ELIGIBLE"
+          }
+        },
+        "required": [
+          "eligibility"
+        ]
+      },
+      "then": {
+        "properties": {
+          "finding_blocking_count": {
+            "const": 0
+          }
+        }
+      }
+    }
+  ],
+  "description": "Public @10 eligibility observation backed by trusted RAG receipt identities.",
+  "properties": {
+    "approval_request_id": {
+      "pattern": "^approval_[0-9a-f]{32}$",
+      "title": "Approval Request Id",
+      "type": "string"
+    },
+    "approval_resource_version": {
+      "minimum": 1,
+      "title": "Approval Resource Version",
+      "type": "integer"
+    },
+    "approval_state": {
+      "enum": [
+        "PENDING",
+        "APPROVED"
+      ],
+      "title": "Approval State",
+      "type": "string"
+    },
+    "approved_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Approved At"
+    },
+    "artifact_id": {
+      "pattern": "^artifact_[0-9a-f]{32}$",
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "artifact_revision_id": {
+      "pattern": "^rev_[0-9a-f]{32}$",
+      "title": "Artifact Revision Id",
+      "type": "string"
+    },
+    "eligibility": {
+      "enum": [
+        "ELIGIBLE",
+        "BLOCKED"
+      ],
+      "title": "Eligibility",
+      "type": "string"
+    },
+    "finding_blocking_count": {
+      "maximum": 20,
+      "minimum": 0,
+      "title": "Finding Blocking Count",
+      "type": "integer"
+    },
+    "finding_info_count": {
+      "maximum": 20,
+      "minimum": 0,
+      "title": "Finding Info Count",
+      "type": "integer"
+    },
+    "finding_warning_count": {
+      "maximum": 20,
+      "minimum": 0,
+      "title": "Finding Warning Count",
+      "type": "integer"
+    },
+    "result_schema": {
+      "const": "review-result@10.0",
+      "title": "Result Schema",
+      "type": "string"
+    },
+    "reviewer_operator_id": {
+      "anyOf": [
+        {
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reviewer Operator Id"
+    },
+    "schema_version": {
+      "const": "mock-exam-review-eligibility/3.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "step_run_id": {
+      "pattern": "^steprun_[0-9a-f]{32}$",
+      "title": "Step Run Id",
+      "type": "string"
+    },
+    "trusted_evidence_usage_receipts": {
+      "$ref": "#/$defs/MockExamTrustedEvidenceUsageReceiptPairV1"
+    },
+    "worker_decision": {
+      "const": "ready_for_human",
+      "title": "Worker Decision",
+      "type": "string"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "title": "Workflow Id",
+      "type": "string"
+    },
+    "workflow_resource_version": {
+      "minimum": 1,
+      "title": "Workflow Resource Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "workflow_id",
+    "workflow_resource_version",
+    "approval_request_id",
+    "approval_resource_version",
+    "approval_state",
+    "reviewer_operator_id",
+    "approved_at",
+    "eligibility",
+    "step_run_id",
+    "artifact_id",
+    "artifact_revision_id",
+    "sha256",
+    "result_schema",
+    "worker_decision",
+    "finding_info_count",
+    "finding_warning_count",
+    "finding_blocking_count",
+    "trusted_evidence_usage_receipts"
+  ],
+  "title": "MockExamReviewEligibilityObservationV3",
+  "type": "object"
+}

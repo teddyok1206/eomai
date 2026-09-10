@@ -1,0 +1,1999 @@
+{
+  "$defs": {
+    "MockExamAnalysisPointerV3": {
+      "additionalProperties": false,
+      "description": "V3 wire form requiring the nullable accepted-result pointer fields explicitly.",
+      "properties": {
+        "accepted_result_artifact_id": {
+          "anyOf": [
+            {
+              "pattern": "^artifact_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Accepted Result Artifact Id"
+        },
+        "accepted_result_artifact_revision_id": {
+          "anyOf": [
+            {
+              "pattern": "^rev_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Accepted Result Artifact Revision Id"
+        },
+        "accepted_result_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Accepted Result Sha256"
+        },
+        "analysis_run_id": {
+          "pattern": "^analysisrun_[0-9a-f]{32}$",
+          "title": "Analysis Run Id",
+          "type": "string"
+        },
+        "request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "resource_version": {
+          "minimum": 1,
+          "title": "Resource Version",
+          "type": "integer"
+        },
+        "risk_policy_revision_id": {
+          "pattern": "^analysisriskrev_[0-9a-f]{32}$",
+          "title": "Risk Policy Revision Id",
+          "type": "string"
+        },
+        "risk_policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Risk Policy Sha256",
+          "type": "string"
+        },
+        "source_item_revision_id": {
+          "pattern": "^itemrev_[0-9a-f]{32}$",
+          "title": "Source Item Revision Id",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "REQUESTED",
+            "RESOLVED",
+            "QUEUED",
+            "RUNNING",
+            "VALIDATING",
+            "NEEDS_REVIEW",
+            "ACCEPTED",
+            "REJECTED",
+            "FAILED",
+            "CANCELLED"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "analysis_run_id",
+        "source_item_revision_id",
+        "request_sha256",
+        "risk_policy_revision_id",
+        "risk_policy_sha256",
+        "state",
+        "resource_version",
+        "accepted_result_artifact_id",
+        "accepted_result_artifact_revision_id",
+        "accepted_result_sha256"
+      ],
+      "title": "MockExamAnalysisPointerV3",
+      "type": "object"
+    },
+    "MockExamAnalysisPolicyPointerV1": {
+      "additionalProperties": false,
+      "properties": {
+        "risk_policy_revision_id": {
+          "pattern": "^analysisriskrev_[0-9a-f]{32}$",
+          "title": "Risk Policy Revision Id",
+          "type": "string"
+        },
+        "risk_policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Risk Policy Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "risk_policy_revision_id",
+        "risk_policy_sha256"
+      ],
+      "title": "MockExamAnalysisPolicyPointerV1",
+      "type": "object"
+    },
+    "MockExamAnalysisReviewAuthorizationPointerV1": {
+      "additionalProperties": false,
+      "description": "Write-ahead pointer for an exact self-hashed analysis-review decision set.",
+      "properties": {
+        "authorized_at": {
+          "format": "date-time",
+          "title": "Authorized At",
+          "type": "string"
+        },
+        "bindings": {
+          "items": {
+            "$ref": "#/$defs/MockExamAnalysisReviewBindingPointerV1"
+          },
+          "maxItems": 25,
+          "minItems": 1,
+          "title": "Bindings",
+          "type": "array"
+        },
+        "decision_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Decision Set Sha256",
+          "type": "string"
+        },
+        "reviewer_operator_id": {
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "title": "Reviewer Operator Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_set_sha256",
+        "reviewer_operator_id",
+        "authorized_at",
+        "bindings"
+      ],
+      "title": "MockExamAnalysisReviewAuthorizationPointerV1",
+      "type": "object"
+    },
+    "MockExamAnalysisReviewBindingPointerV1": {
+      "additionalProperties": false,
+      "description": "Identity-only binding covered by one explicit operator review-set hash.",
+      "properties": {
+        "analysis_run_id": {
+          "pattern": "^analysisrun_[0-9a-f]{32}$",
+          "title": "Analysis Run Id",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "APPROVE",
+            "REJECT"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "expected_resource_version": {
+          "minimum": 1,
+          "title": "Expected Resource Version",
+          "type": "integer"
+        },
+        "position": {
+          "maximum": 25,
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "workflow_call_id": {
+          "pattern": "^workflowcall_[0-9a-f]{32}$",
+          "title": "Workflow Call Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow_call_id",
+        "position",
+        "analysis_run_id",
+        "expected_resource_version",
+        "decision"
+      ],
+      "title": "MockExamAnalysisReviewBindingPointerV1",
+      "type": "object"
+    },
+    "MockExamAssemblyIntentV1": {
+      "additionalProperties": false,
+      "properties": {
+        "deliverable_id": {
+          "pattern": "^deliverable_[0-9a-f]{32}$",
+          "title": "Deliverable Id",
+          "type": "string"
+        },
+        "deliverable_revision_id": {
+          "pattern": "^delivrev_[0-9a-f]{32}$",
+          "title": "Deliverable Revision Id",
+          "type": "string"
+        },
+        "display_label": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Display Label",
+          "type": "string"
+        },
+        "form_key": {
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$",
+          "title": "Form Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "deliverable_id",
+        "deliverable_revision_id",
+        "form_key",
+        "display_label"
+      ],
+      "title": "MockExamAssemblyIntentV1",
+      "type": "object"
+    },
+    "MockExamAssemblyPlanPointerV1": {
+      "additionalProperties": false,
+      "properties": {
+        "assembly_idempotency_key_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Assembly Idempotency Key Sha256",
+          "type": "string"
+        },
+        "cohort_id": {
+          "pattern": "^assemblycohort_[0-9a-f]{32}$",
+          "title": "Cohort Id",
+          "type": "string"
+        },
+        "cohort_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Cohort Sha256",
+          "type": "string"
+        },
+        "graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "title": "Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "graph_snapshot_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Graph Snapshot Sha256",
+          "type": "string"
+        },
+        "item_revision_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25,
+          "minItems": 25,
+          "title": "Item Revision Ids",
+          "type": "array"
+        },
+        "plan_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Plan Sha256",
+          "type": "string"
+        },
+        "planned_at": {
+          "format": "date-time",
+          "title": "Planned At",
+          "type": "string"
+        },
+        "policy_revision_id": {
+          "pattern": "^assemblypolicyrev_[0-9a-f]{32}$",
+          "title": "Policy Revision Id",
+          "type": "string"
+        },
+        "policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Policy Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_sha256",
+        "cohort_id",
+        "cohort_sha256",
+        "assembly_idempotency_key_sha256",
+        "policy_revision_id",
+        "policy_sha256",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256",
+        "item_revision_ids",
+        "planned_at"
+      ],
+      "title": "MockExamAssemblyPlanPointerV1",
+      "type": "object"
+    },
+    "MockExamAssemblyPointerV1": {
+      "additionalProperties": false,
+      "properties": {
+        "assessment_assembly_id": {
+          "pattern": "^assembly_[0-9a-f]{32}$",
+          "title": "Assessment Assembly Id",
+          "type": "string"
+        },
+        "assessment_assembly_revision_id": {
+          "pattern": "^assemblyrev_[0-9a-f]{32}$",
+          "title": "Assessment Assembly Revision Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "item_revision_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25,
+          "minItems": 25,
+          "title": "Item Revision Ids",
+          "type": "array"
+        },
+        "item_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Item Set Sha256",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assessment_assembly_id",
+        "assessment_assembly_revision_id",
+        "manifest_sha256",
+        "item_set_sha256",
+        "item_revision_ids",
+        "created_at"
+      ],
+      "title": "MockExamAssemblyPointerV1",
+      "type": "object"
+    },
+    "MockExamAuthoringEvidenceUsageReceiptPointerV1": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "attempt": {
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "receipt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Receipt Sha256",
+          "type": "string"
+        },
+        "result_schema": {
+          "const": "authoring-result@10.0",
+          "title": "Result Schema",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "step_key": {
+          "const": "authoring",
+          "title": "Step Key",
+          "type": "string"
+        },
+        "step_run_id": {
+          "pattern": "^steprun_[0-9a-f]{32}$",
+          "title": "Step Run Id",
+          "type": "string"
+        },
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "title": "Workflow Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow_id",
+        "step_run_id",
+        "attempt",
+        "job_id",
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "receipt_sha256",
+        "step_key",
+        "result_schema"
+      ],
+      "title": "MockExamAuthoringEvidenceUsageReceiptPointerV1",
+      "type": "object"
+    },
+    "MockExamGenerationBlockResolutionV3": {
+      "additionalProperties": false,
+      "description": "Exact trusted-RAG runtime family resolved before fresh Item production.",
+      "properties": {
+        "authoring_result_schema": {
+          "const": "authoring-result@10.0",
+          "title": "Authoring Result Schema",
+          "type": "string"
+        },
+        "content_pack_key": {
+          "const": "generated-knowledge-item",
+          "title": "Content Pack Key",
+          "type": "string"
+        },
+        "content_pack_release_id": {
+          "pattern": "^packrel_[0-9a-f]{32}$",
+          "title": "Content Pack Release Id",
+          "type": "string"
+        },
+        "content_pack_release_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Content Pack Release Sha256",
+          "type": "string"
+        },
+        "content_pack_source_tree_sha256": {
+          "const": "sha256:2da4a6aa3681c9f7ebe092145d510bb8e1c64edc700d9e2c2422a14920b2c664",
+          "title": "Content Pack Source Tree Sha256",
+          "type": "string"
+        },
+        "content_pack_version": {
+          "const": "1.15.1",
+          "title": "Content Pack Version",
+          "type": "string"
+        },
+        "evidence_usage_receipt_schema_version": {
+          "const": "evidence-usage-validation-receipt/1.0",
+          "title": "Evidence Usage Receipt Schema Version",
+          "type": "string"
+        },
+        "execution_preset_id": {
+          "pattern": "^execpreset_[0-9a-f]{32}$",
+          "title": "Execution Preset Id",
+          "type": "string"
+        },
+        "execution_preset_key": {
+          "const": "knowledge-grounded-item",
+          "title": "Execution Preset Key",
+          "type": "string"
+        },
+        "execution_preset_revision_id": {
+          "pattern": "^execpresetrev_[0-9a-f]{32}$",
+          "title": "Execution Preset Revision Id",
+          "type": "string"
+        },
+        "execution_preset_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Execution Preset Sha256",
+          "type": "string"
+        },
+        "generation_block_key": {
+          "const": "content-team-one-item-generation",
+          "title": "Generation Block Key",
+          "type": "string"
+        },
+        "generation_block_revision": {
+          "const": "3.0",
+          "title": "Generation Block Revision",
+          "type": "string"
+        },
+        "generation_block_sha256": {
+          "const": "sha256:c98e12d67026923a4b1d1eb5470d33512702a8758e9477baed7bb2997956056f",
+          "title": "Generation Block Sha256",
+          "type": "string"
+        },
+        "knowledge_source_mode": {
+          "const": "graph_grounded",
+          "title": "Knowledge Source Mode",
+          "type": "string"
+        },
+        "resolved_at": {
+          "format": "date-time",
+          "title": "Resolved At",
+          "type": "string"
+        },
+        "review_result_schema": {
+          "const": "review-result@10.0",
+          "title": "Review Result Schema",
+          "type": "string"
+        },
+        "role_protocol_version": {
+          "const": "workflow-role/1.20.0",
+          "title": "Role Protocol Version",
+          "type": "string"
+        },
+        "role_schema_bundle_sha256": {
+          "const": "sha256:4fe0172ef46c490ccb9c82aa7360c12c1a52c0f2644757190236b9c81fcb459c",
+          "title": "Role Schema Bundle Sha256",
+          "type": "string"
+        },
+        "trusted_evidence_usage_receipts_required": {
+          "const": true,
+          "title": "Trusted Evidence Usage Receipts Required",
+          "type": "boolean"
+        },
+        "workflow_definition_key": {
+          "const": "generic-item-development",
+          "title": "Workflow Definition Key",
+          "type": "string"
+        },
+        "workflow_definition_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Workflow Definition Sha256",
+          "type": "string"
+        },
+        "workflow_definition_version": {
+          "const": "1.10.0",
+          "title": "Workflow Definition Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "generation_block_key",
+        "generation_block_revision",
+        "generation_block_sha256",
+        "workflow_definition_key",
+        "workflow_definition_version",
+        "workflow_definition_sha256",
+        "content_pack_release_id",
+        "content_pack_key",
+        "content_pack_version",
+        "content_pack_release_sha256",
+        "content_pack_source_tree_sha256",
+        "execution_preset_id",
+        "execution_preset_revision_id",
+        "execution_preset_key",
+        "execution_preset_sha256",
+        "resolved_at",
+        "role_protocol_version",
+        "role_schema_bundle_sha256",
+        "knowledge_source_mode",
+        "authoring_result_schema",
+        "review_result_schema",
+        "evidence_usage_receipt_schema_version",
+        "trusted_evidence_usage_receipts_required"
+      ],
+      "title": "MockExamGenerationBlockResolutionV3",
+      "type": "object"
+    },
+    "MockExamGraphPublicationAuthorizationPointerV1": {
+      "additionalProperties": false,
+      "description": "Write-ahead authorization for one exact atomic Graph publication command.",
+      "properties": {
+        "access_policy_revision_id": {
+          "pattern": "^accessrev_[0-9a-f]{32}$",
+          "title": "Access Policy Revision Id",
+          "type": "string"
+        },
+        "access_policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Access Policy Sha256",
+          "type": "string"
+        },
+        "authorization_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Authorization Sha256",
+          "type": "string"
+        },
+        "authorized_at": {
+          "format": "date-time",
+          "title": "Authorized At",
+          "type": "string"
+        },
+        "current_graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "title": "Current Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "current_graph_snapshot_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Current Graph Snapshot Sha256",
+          "type": "string"
+        },
+        "supersedes_authorization_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supersedes Authorization Sha256"
+        }
+      },
+      "required": [
+        "current_graph_snapshot_revision_id",
+        "current_graph_snapshot_sha256",
+        "access_policy_revision_id",
+        "access_policy_sha256",
+        "authorized_at",
+        "supersedes_authorization_sha256",
+        "authorization_sha256"
+      ],
+      "title": "MockExamGraphPublicationAuthorizationPointerV1",
+      "type": "object"
+    },
+    "MockExamGraphPublicationPointerV3": {
+      "additionalProperties": false,
+      "description": "V3 wire form requiring the fixed single-batch identity explicitly.",
+      "properties": {
+        "access_policy_revision_id": {
+          "pattern": "^accessrev_[0-9a-f]{32}$",
+          "title": "Access Policy Revision Id",
+          "type": "string"
+        },
+        "access_policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Access Policy Sha256",
+          "type": "string"
+        },
+        "analysis_run_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25,
+          "minItems": 25,
+          "title": "Analysis Run Ids",
+          "type": "array"
+        },
+        "authorized_at": {
+          "format": "date-time",
+          "title": "Authorized At",
+          "type": "string"
+        },
+        "batch_number": {
+          "const": 1,
+          "title": "Batch Number",
+          "type": "integer"
+        },
+        "graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "title": "Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "graph_snapshot_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Graph Snapshot Sha256",
+          "type": "string"
+        },
+        "item_revision_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25,
+          "minItems": 25,
+          "title": "Item Revision Ids",
+          "type": "array"
+        },
+        "outcome": {
+          "enum": [
+            "CREATED",
+            "REPLAYED"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "previous_graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "title": "Previous Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "previous_graph_snapshot_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Previous Graph Snapshot Sha256",
+          "type": "string"
+        },
+        "publication_id": {
+          "pattern": "^graphpub_[0-9a-f]{32}$",
+          "title": "Publication Id",
+          "type": "string"
+        },
+        "published_at": {
+          "format": "date-time",
+          "title": "Published At",
+          "type": "string"
+        },
+        "result_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Result Sha256",
+          "type": "string"
+        },
+        "workflow_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25,
+          "minItems": 25,
+          "title": "Workflow Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "batch_number",
+        "publication_id",
+        "previous_graph_snapshot_revision_id",
+        "previous_graph_snapshot_sha256",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256",
+        "access_policy_revision_id",
+        "access_policy_sha256",
+        "analysis_run_ids",
+        "workflow_ids",
+        "item_revision_ids",
+        "authorized_at",
+        "outcome",
+        "result_sha256",
+        "published_at"
+      ],
+      "title": "MockExamGraphPublicationPointerV3",
+      "type": "object"
+    },
+    "MockExamHumanApprovalPointerV1": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_request_id": {
+          "pattern": "^approval_[0-9a-f]{32}$",
+          "title": "Approval Request Id",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "reviewer_operator_id": {
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "title": "Reviewer Operator Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approval_request_id",
+        "reviewer_operator_id",
+        "approved_at"
+      ],
+      "title": "MockExamHumanApprovalPointerV1",
+      "type": "object"
+    },
+    "MockExamHwpxBuildPointerV3": {
+      "additionalProperties": false,
+      "description": "V3 wire form requiring every nullable terminal-result field explicitly.",
+      "properties": {
+        "assembly_manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Assembly Manifest Sha256",
+          "type": "string"
+        },
+        "assessment_assembly_id": {
+          "pattern": "^assembly_[0-9a-f]{32}$",
+          "title": "Assessment Assembly Id",
+          "type": "string"
+        },
+        "assessment_assembly_revision_id": {
+          "pattern": "^assemblyrev_[0-9a-f]{32}$",
+          "title": "Assessment Assembly Revision Id",
+          "type": "string"
+        },
+        "build_id": {
+          "pattern": "^hwpxbuild_[0-9a-f]{32}$",
+          "title": "Build Id",
+          "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Completed At"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by_operator_id": {
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "title": "Created By Operator Id",
+          "type": "string"
+        },
+        "download_available": {
+          "title": "Download Available",
+          "type": "boolean"
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9_]{2,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Failure Code"
+        },
+        "graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "title": "Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "graph_snapshot_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Graph Snapshot Sha256",
+          "type": "string"
+        },
+        "item_count": {
+          "const": 25,
+          "title": "Item Count",
+          "type": "integer"
+        },
+        "item_revision_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25,
+          "minItems": 25,
+          "title": "Item Revision Ids",
+          "type": "array"
+        },
+        "item_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Item Set Sha256",
+          "type": "string"
+        },
+        "output_artifact_id": {
+          "anyOf": [
+            {
+              "pattern": "^artifact_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Artifact Id"
+        },
+        "output_artifact_revision_id": {
+          "anyOf": [
+            {
+              "pattern": "^rev_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Artifact Revision Id"
+        },
+        "output_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Sha256"
+        },
+        "policy_revision_id": {
+          "pattern": "^assemblypolicyrev_[0-9a-f]{32}$",
+          "title": "Policy Revision Id",
+          "type": "string"
+        },
+        "policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Policy Sha256",
+          "type": "string"
+        },
+        "renderer": {
+          "const": "content-team-exam",
+          "title": "Renderer",
+          "type": "string"
+        },
+        "renderer_version": {
+          "const": "3.0.0",
+          "title": "Renderer Version",
+          "type": "string"
+        },
+        "resource_version": {
+          "minimum": 1,
+          "title": "Resource Version",
+          "type": "integer"
+        },
+        "section_count": {
+          "anyOf": [
+            {
+              "maximum": 25,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Section Count"
+        },
+        "state": {
+          "enum": [
+            "REQUESTED",
+            "RUNNING",
+            "VALIDATING",
+            "SUCCEEDED",
+            "FAILED"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "validation_state": {
+          "enum": [
+            "PENDING",
+            "PASS",
+            "FAIL"
+          ],
+          "title": "Validation State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "build_id",
+        "assessment_assembly_id",
+        "assessment_assembly_revision_id",
+        "assembly_manifest_sha256",
+        "policy_revision_id",
+        "policy_sha256",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256",
+        "item_set_sha256",
+        "item_revision_ids",
+        "renderer",
+        "renderer_version",
+        "state",
+        "validation_state",
+        "item_count",
+        "section_count",
+        "output_artifact_id",
+        "output_artifact_revision_id",
+        "output_sha256",
+        "download_available",
+        "resource_version",
+        "failure_code",
+        "created_by_operator_id",
+        "created_at",
+        "completed_at"
+      ],
+      "title": "MockExamHwpxBuildPointerV3",
+      "type": "object"
+    },
+    "MockExamItemRegistrationPointerV1": {
+      "additionalProperties": false,
+      "description": "New V2 Item Revision produced by the exact workflow occurrence.",
+      "properties": {
+        "item_id": {
+          "pattern": "^item_[0-9a-f]{32}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "item_revision_id": {
+          "pattern": "^itemrev_[0-9a-f]{32}$",
+          "title": "Item Revision Id",
+          "type": "string"
+        },
+        "manifest_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Manifest Artifact Id",
+          "type": "string"
+        },
+        "manifest_artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Manifest Artifact Revision Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "revision_number": {
+          "const": 1,
+          "title": "Revision Number",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_id",
+        "item_revision_id",
+        "revision_number",
+        "manifest_artifact_id",
+        "manifest_artifact_revision_id",
+        "manifest_sha256"
+      ],
+      "title": "MockExamItemRegistrationPointerV1",
+      "type": "object"
+    },
+    "MockExamProductionFailureV1": {
+      "additionalProperties": false,
+      "description": "Sanitized failure evidence; it never contains prompts, content, or logs.",
+      "properties": {
+        "category": {
+          "enum": [
+            "REQUEST_CONTRACT_FAILED",
+            "PIN_RESOLUTION_FAILED",
+            "WORKFLOW_EXECUTION_FAILED",
+            "QUALITY_GATE_FAILED",
+            "HUMAN_REJECTED",
+            "REGISTRATION_FAILED",
+            "ANALYSIS_FAILED",
+            "GRAPH_PUBLICATION_FAILED",
+            "RATING_FAILED",
+            "ASSEMBLY_FAILED",
+            "DELIVERY_FAILED",
+            "ARTIFACT_INTEGRITY_FAILED",
+            "RUNTIME_NOT_READY",
+            "OPERATION_OUTCOME_UNKNOWN"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "code": {
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "stage": {
+          "enum": [
+            "PREFLIGHT",
+            "WORKFLOW_START",
+            "WORKFLOW_EXECUTION",
+            "REVIEW_GATE",
+            "HUMAN_APPROVAL",
+            "REGISTRATION",
+            "ANALYSIS",
+            "GRAPH_PUBLICATION",
+            "RATING",
+            "ASSEMBLY_PLAN",
+            "ASSEMBLY",
+            "HWPX"
+          ],
+          "title": "Stage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage",
+        "category",
+        "code",
+        "retryable",
+        "observed_at"
+      ],
+      "title": "MockExamProductionFailureV1",
+      "type": "object"
+    },
+    "MockExamProductionItemRunV3": {
+      "additionalProperties": false,
+      "description": "Per-call pointer chain restricted to the trusted-RAG review family.",
+      "properties": {
+        "analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MockExamAnalysisPointerV3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "approval_command_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Approval Command Id"
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MockExamProductionFailureV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "graph_publication_id": {
+          "anyOf": [
+            {
+              "pattern": "^graphpub_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Graph Publication Id"
+        },
+        "human_approval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MockExamHumanApprovalPointerV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "knowledge_provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MockExamWorkflowKnowledgeProvenancePointerV3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "position": {
+          "maximum": 25,
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "rating": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MockExamRatingPointerV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "registration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MockExamItemRegistrationPointerV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MockExamReviewPointerV3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "start_command_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Start Command Id"
+        },
+        "state": {
+          "enum": [
+            "PLANNED",
+            "START_UNCONFIRMED",
+            "WORKFLOW_UNCONFIRMED",
+            "WORKFLOW_ACTIVE",
+            "REVIEW_BLOCKED",
+            "APPROVAL_UNCONFIRMED",
+            "APPROVAL_SUBMITTED",
+            "REGISTERED",
+            "ANALYSIS_UNCONFIRMED",
+            "ANALYSIS_ACTIVE",
+            "ANALYSIS_REVIEW_REQUIRED",
+            "ANALYSIS_ACCEPTED",
+            "GRAPH_PUBLISHED",
+            "RATING_UNCONFIRMED",
+            "RATED",
+            "FAILED"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "workflow_call_id": {
+          "pattern": "^workflowcall_[0-9a-f]{32}$",
+          "title": "Workflow Call Id",
+          "type": "string"
+        },
+        "workflow_id": {
+          "anyOf": [
+            {
+              "pattern": "^workflow_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Workflow Id"
+        },
+        "workflow_resource_version": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Workflow Resource Version"
+        }
+      },
+      "required": [
+        "workflow_call_id",
+        "position",
+        "state",
+        "start_command_id",
+        "workflow_id",
+        "workflow_resource_version",
+        "knowledge_provenance",
+        "review",
+        "approval_command_id",
+        "human_approval",
+        "registration",
+        "analysis",
+        "graph_publication_id",
+        "rating",
+        "failure"
+      ],
+      "title": "MockExamProductionItemRunV3",
+      "type": "object"
+    },
+    "MockExamRatingAuthorizationPointerV1": {
+      "additionalProperties": false,
+      "description": "Exact operator rating-set authorization pinned before publication.",
+      "properties": {
+        "authorized_at": {
+          "format": "date-time",
+          "title": "Authorized At",
+          "type": "string"
+        },
+        "decision_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Decision Set Sha256",
+          "type": "string"
+        },
+        "rating_policy_revision_id": {
+          "pattern": "^ratingpolicyrev_[0-9a-f]{32}$",
+          "title": "Rating Policy Revision Id",
+          "type": "string"
+        },
+        "rating_policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Rating Policy Sha256",
+          "type": "string"
+        },
+        "reviewer_operator_id": {
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "title": "Reviewer Operator Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_set_sha256",
+        "reviewer_operator_id",
+        "authorized_at",
+        "rating_policy_revision_id",
+        "rating_policy_sha256"
+      ],
+      "title": "MockExamRatingAuthorizationPointerV1",
+      "type": "object"
+    },
+    "MockExamRatingPointerV1": {
+      "additionalProperties": false,
+      "description": "Published human rating decision used by the assembly planner.",
+      "properties": {
+        "decision_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Decision Sha256",
+          "type": "string"
+        },
+        "final_rating": {
+          "enum": [
+            "A",
+            "B",
+            "C"
+          ],
+          "title": "Final Rating",
+          "type": "string"
+        },
+        "human_approval_request_id": {
+          "pattern": "^approval_[0-9a-f]{32}$",
+          "title": "Human Approval Request Id",
+          "type": "string"
+        },
+        "item_review_record_id": {
+          "pattern": "^itemreview_[0-9a-f]{32}$",
+          "title": "Item Review Record Id",
+          "type": "string"
+        },
+        "item_revision_id": {
+          "pattern": "^itemrev_[0-9a-f]{32}$",
+          "title": "Item Revision Id",
+          "type": "string"
+        },
+        "rating_policy_revision_id": {
+          "pattern": "^ratingpolicyrev_[0-9a-f]{32}$",
+          "title": "Rating Policy Revision Id",
+          "type": "string"
+        },
+        "rating_policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Rating Policy Sha256",
+          "type": "string"
+        },
+        "reviewer_operator_id": {
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "title": "Reviewer Operator Id",
+          "type": "string"
+        },
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "title": "Workflow Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_review_record_id",
+        "item_revision_id",
+        "workflow_id",
+        "human_approval_request_id",
+        "decision_sha256",
+        "final_rating",
+        "reviewer_operator_id",
+        "rating_policy_revision_id",
+        "rating_policy_sha256"
+      ],
+      "title": "MockExamRatingPointerV1",
+      "type": "object"
+    },
+    "MockExamReviewEvidenceUsageReceiptPointerV1": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "attempt": {
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "receipt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Receipt Sha256",
+          "type": "string"
+        },
+        "result_schema": {
+          "const": "review-result@10.0",
+          "title": "Result Schema",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "step_key": {
+          "const": "review",
+          "title": "Step Key",
+          "type": "string"
+        },
+        "step_run_id": {
+          "pattern": "^steprun_[0-9a-f]{32}$",
+          "title": "Step Run Id",
+          "type": "string"
+        },
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "title": "Workflow Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow_id",
+        "step_run_id",
+        "attempt",
+        "job_id",
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "receipt_sha256",
+        "step_key",
+        "result_schema"
+      ],
+      "title": "MockExamReviewEvidenceUsageReceiptPointerV1",
+      "type": "object"
+    },
+    "MockExamReviewPointerV3": {
+      "additionalProperties": false,
+      "description": "Exact @10 review pointer backed by a resolvable trusted receipt pair.",
+      "properties": {
+        "approval_request_id": {
+          "pattern": "^approval_[0-9a-f]{32}$",
+          "title": "Approval Request Id",
+          "type": "string"
+        },
+        "approval_resource_version": {
+          "minimum": 1,
+          "title": "Approval Resource Version",
+          "type": "integer"
+        },
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "finding_blocking_count": {
+          "const": 0,
+          "title": "Finding Blocking Count",
+          "type": "integer"
+        },
+        "finding_info_count": {
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Finding Info Count",
+          "type": "integer"
+        },
+        "finding_warning_count": {
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Finding Warning Count",
+          "type": "integer"
+        },
+        "result_schema": {
+          "const": "review-result@10.0",
+          "title": "Result Schema",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "step_run_id": {
+          "pattern": "^steprun_[0-9a-f]{32}$",
+          "title": "Step Run Id",
+          "type": "string"
+        },
+        "trusted_evidence_usage_receipts": {
+          "$ref": "#/$defs/MockExamTrustedEvidenceUsageReceiptPairV1"
+        }
+      },
+      "required": [
+        "approval_request_id",
+        "approval_resource_version",
+        "step_run_id",
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "result_schema",
+        "finding_info_count",
+        "finding_warning_count",
+        "finding_blocking_count",
+        "trusted_evidence_usage_receipts"
+      ],
+      "title": "MockExamReviewPointerV3",
+      "type": "object"
+    },
+    "MockExamTrustedEvidenceUsageReceiptPairV1": {
+      "additionalProperties": false,
+      "description": "Resolvable authoring/review receipt identities for one trusted RAG Workflow.",
+      "properties": {
+        "authoring": {
+          "$ref": "#/$defs/MockExamAuthoringEvidenceUsageReceiptPointerV1"
+        },
+        "receipt_schema_version": {
+          "const": "evidence-usage-validation-receipt/1.0",
+          "title": "Receipt Schema Version",
+          "type": "string"
+        },
+        "review": {
+          "$ref": "#/$defs/MockExamReviewEvidenceUsageReceiptPointerV1"
+        },
+        "role_protocol_version": {
+          "const": "workflow-role/1.20.0",
+          "title": "Role Protocol Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "mock-exam-trusted-evidence-usage-receipt-pair/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "role_protocol_version",
+        "receipt_schema_version",
+        "authoring",
+        "review"
+      ],
+      "title": "MockExamTrustedEvidenceUsageReceiptPairV1",
+      "type": "object"
+    },
+    "MockExamWorkflowKnowledgeProvenancePointerV3": {
+      "additionalProperties": false,
+      "description": "V3 wire form requiring the optional curriculum root to be explicit.",
+      "properties": {
+        "access_policy_revision_id": {
+          "pattern": "^accessrev_[0-9a-f]{32}$",
+          "title": "Access Policy Revision Id",
+          "type": "string"
+        },
+        "access_policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Access Policy Sha256",
+          "type": "string"
+        },
+        "corpus_key": {
+          "pattern": "^[a-z][a-z0-9_-]{1,63}$",
+          "title": "Corpus Key",
+          "type": "string"
+        },
+        "curriculum_root_key": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Curriculum Root Key"
+        },
+        "evidence_bundle_revision_id": {
+          "pattern": "^evidencerev_[0-9a-f]{32}$",
+          "title": "Evidence Bundle Revision Id",
+          "type": "string"
+        },
+        "evidence_manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Evidence Manifest Sha256",
+          "type": "string"
+        },
+        "graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "title": "Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "plan_id": {
+          "pattern": "^execplan_[0-9a-f]{32}$",
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "plan_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Plan Sha256",
+          "type": "string"
+        },
+        "preset_revision_id": {
+          "pattern": "^execpresetrev_[0-9a-f]{32}$",
+          "title": "Preset Revision Id",
+          "type": "string"
+        },
+        "query_kind": {
+          "enum": [
+            "CURRICULUM_COMPONENTS",
+            "APPROVED_ITEM_STRUCTURE",
+            "ITEM_PREPARATION"
+          ],
+          "title": "Query Kind",
+          "type": "string"
+        },
+        "required_item_elements": {
+          "items": {
+            "enum": [
+              "paragraph",
+              "table",
+              "image",
+              "equation",
+              "statement_set",
+              "choice"
+            ],
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Required Item Elements",
+          "type": "array"
+        },
+        "resolved_at": {
+          "format": "date-time",
+          "title": "Resolved At",
+          "type": "string"
+        },
+        "retrieval_request_id": {
+          "pattern": "^retrieval_[0-9a-f]{32}$",
+          "title": "Retrieval Request Id",
+          "type": "string"
+        },
+        "retrieval_request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Retrieval Request Sha256",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "workflow-knowledge-provenance/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_classes": {
+          "items": {
+            "enum": [
+              "CURRICULUM",
+              "TEXTBOOK",
+              "APPROVED_ITEM",
+              "PAST_EXAM",
+              "INTERNAL_GUIDE"
+            ],
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "title": "Source Classes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "plan_id",
+        "plan_sha256",
+        "preset_revision_id",
+        "corpus_key",
+        "query_kind",
+        "curriculum_root_key",
+        "required_item_elements",
+        "source_classes",
+        "graph_snapshot_revision_id",
+        "evidence_bundle_revision_id",
+        "retrieval_request_id",
+        "retrieval_request_sha256",
+        "access_policy_revision_id",
+        "access_policy_sha256",
+        "evidence_manifest_sha256",
+        "resolved_at"
+      ],
+      "title": "MockExamWorkflowKnowledgeProvenancePointerV3",
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/api/v1/mock-exam-production-execution-v3.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Fresh-production checkpoint restricted to the trusted-RAG protocol family.",
+  "properties": {
+    "analysis_general_knowledge_mode": {
+      "anyOf": [
+        {
+          "enum": [
+            "DISABLED",
+            "AUXILIARY_UNATTRIBUTED"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Analysis General Knowledge Mode"
+    },
+    "analysis_policy": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MockExamAnalysisPolicyPointerV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "analysis_review_authorizations": {
+      "items": {
+        "$ref": "#/$defs/MockExamAnalysisReviewAuthorizationPointerV1"
+      },
+      "maxItems": 25,
+      "title": "Analysis Review Authorizations",
+      "type": "array"
+    },
+    "assembly": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MockExamAssemblyPointerV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "assembly_intent": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MockExamAssemblyIntentV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "assembly_plan": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MockExamAssemblyPlanPointerV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "checkpoint_sequence": {
+      "minimum": 0,
+      "title": "Checkpoint Sequence",
+      "type": "integer"
+    },
+    "checkpoint_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Checkpoint Sha256",
+      "type": "string"
+    },
+    "checkpointed_at": {
+      "format": "date-time",
+      "title": "Checkpointed At",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "execution_id": {
+      "pattern": "^productionexec_[0-9a-f]{32}$",
+      "title": "Execution Id",
+      "type": "string"
+    },
+    "execution_revision_id": {
+      "pattern": "^productionexecrev_[0-9a-f]{32}$",
+      "title": "Execution Revision Id",
+      "type": "string"
+    },
+    "failure": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MockExamProductionFailureV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "generation_block_resolution": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MockExamGenerationBlockResolutionV3"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "graph_publication_authorization": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MockExamGraphPublicationAuthorizationPointerV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "graph_publications": {
+      "items": {
+        "$ref": "#/$defs/MockExamGraphPublicationPointerV3"
+      },
+      "maxItems": 1,
+      "title": "Graph Publications",
+      "type": "array"
+    },
+    "hwpx_build": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MockExamHwpxBuildPointerV3"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "item_runs": {
+      "items": {
+        "$ref": "#/$defs/MockExamProductionItemRunV3"
+      },
+      "maxItems": 25,
+      "minItems": 25,
+      "title": "Item Runs",
+      "type": "array"
+    },
+    "operator_id": {
+      "pattern": "^operator_[0-9a-f]{32}$",
+      "title": "Operator Id",
+      "type": "string"
+    },
+    "predecessor_checkpoint_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Predecessor Checkpoint Sha256"
+    },
+    "predecessor_execution_revision_id": {
+      "anyOf": [
+        {
+          "pattern": "^productionexecrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Predecessor Execution Revision Id"
+    },
+    "production_plan_id": {
+      "pattern": "^productionplan_[0-9a-f]{32}$",
+      "title": "Production Plan Id",
+      "type": "string"
+    },
+    "production_plan_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Production Plan Sha256",
+      "type": "string"
+    },
+    "production_request_id": {
+      "pattern": "^productionreq_[0-9a-f]{32}$",
+      "title": "Production Request Id",
+      "type": "string"
+    },
+    "rating_authorization": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MockExamRatingAuthorizationPointerV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_version": {
+      "const": "mock-exam-production-execution/3.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "ITEM_PRODUCTION",
+        "ANALYSIS",
+        "GRAPH_PUBLICATION",
+        "RATING",
+        "ASSEMBLY",
+        "HWPX",
+        "COMPLETED",
+        "BLOCKED"
+      ],
+      "title": "State",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "execution_id",
+    "execution_revision_id",
+    "production_request_id",
+    "production_plan_id",
+    "production_plan_sha256",
+    "operator_id",
+    "checkpoint_sequence",
+    "predecessor_execution_revision_id",
+    "predecessor_checkpoint_sha256",
+    "state",
+    "generation_block_resolution",
+    "analysis_policy",
+    "analysis_general_knowledge_mode",
+    "analysis_review_authorizations",
+    "item_runs",
+    "graph_publication_authorization",
+    "graph_publications",
+    "rating_authorization",
+    "assembly_intent",
+    "assembly_plan",
+    "assembly",
+    "hwpx_build",
+    "failure",
+    "created_at",
+    "checkpointed_at",
+    "checkpoint_sha256"
+  ],
+  "title": "MockExamProductionExecutionV3",
+  "type": "object"
+}
