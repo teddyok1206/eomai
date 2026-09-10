@@ -64,7 +64,12 @@ not require a particular source class such as `PAST_EXAM`.
 
 Draft locations are RFC 6901 JSON Pointers relative to the authored draft. The empty/root pointer is
 forbidden. Each pointer is canonically escaped, arrays use canonical decimal indices without leading
-zeroes, and every segment must resolve. Evidence IDs, anchor IDs, citations, and draft pointers are
+zeroes, and every segment must resolve to a scalar leaf. Every citation application is limited to
+worker-authored semantic roots: `stem`, `bottom_stem`, `labeled_blocks`, `statements`, `choices`,
+`inquiry`, `visuals`, `answer`, or `explanations`. Administrative, provenance, and derived fields
+such as `schema_version`, `item_number`, `score_display`, renderer/prompt/archive hashes,
+`visual_layout`, and `equation_sources` cannot satisfy an evidence citation. Evidence IDs, anchor
+IDs, citations, and draft pointers are
 nonempty, sorted, and unique. Missing, unknown, duplicate, unordered, stale, unresolved, or
 mismatched values fail closed. An ungrounded plan/output must carry no evidence usage.
 
@@ -75,6 +80,11 @@ set. Workers never submit or calculate a digest, and the orchestrator never repa
 content. Instead, it derives the canonical authoring and review citation-set hashes and persists a
 typed, self-hashed validation receipt in the same transaction that records Artifact success. No
 implicit latest revision or best-effort substitution is allowed.
+
+The receipt has discriminated authoring/review shapes. Authoring carries its result pointer once;
+review additionally pins the upstream authoring pointer and both equal citation-set hashes. Its
+`receipt_sha256` is `content_sha256` over the canonical compact UTF-8 JSON object with sorted keys
+and `receipt_sha256` omitted. A supplied digest is compared, never repaired.
 
 ## Access patterns and data structures
 

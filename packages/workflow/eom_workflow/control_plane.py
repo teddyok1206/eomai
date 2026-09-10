@@ -70,6 +70,98 @@ class FrozenModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, use_enum_values=True)
 
 
+class EvidenceResultArtifactPointer(FrozenModel):
+    """Exact structured result revision pinned by an evidence validation receipt."""
+
+    logical_artifact_id: ArtifactId
+    revision_id: ArtifactRevisionId
+    content_hash: Sha256
+    result_schema: Literal["authoring-result@10.0", "review-result@10.0"]
+
+
+class EvidenceUsageValidationReceiptBase(FrozenModel):
+    """Trusted pins shared by authoring and review evidence validation receipts."""
+
+    schema_version: Literal["evidence-usage-validation-receipt/1.0"] = (
+        "evidence-usage-validation-receipt/1.0"
+    )
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    plan_sha256: Sha256
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    retrieval_request_sha256: Sha256
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    graph_snapshot_sha256: Sha256
+    evidence_manifest_artifact: KnowledgeArtifactMemberPointer
+    evidence_manifest_sha256: Sha256
+    evidence_context_artifact: KnowledgeArtifactMemberPointer
+    receipt_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_materials_and_hash(self) -> EvidenceUsageValidationReceiptBase:
+        if (
+            self.evidence_manifest_artifact.member_path != "evidence/manifest.json"
+            or self.evidence_manifest_artifact.media_type != "application/json"
+            or self.evidence_manifest_artifact.schema_ref
+            not in {
+                "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
+            }
+            or self.evidence_context_artifact.member_path != "evidence/context.md"
+            or self.evidence_context_artifact.media_type != "text/markdown"
+            or self.evidence_context_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-context/1.0"
+        ):
+            raise ValueError("evidence validation receipt material pointer is incompatible")
+        if content_sha256(
+            self.model_dump(mode="json", exclude={"receipt_sha256"})
+        ) != self.receipt_sha256:
+            raise ValueError("evidence validation receipt hash differs")
+        return self
+
+
+class AuthoringEvidenceUsageValidationReceipt(EvidenceUsageValidationReceiptBase):
+    """Receipt for a Graph-grounded authoring result."""
+
+    step_key: Literal["authoring"] = "authoring"
+    result_artifact: EvidenceResultArtifactPointer
+    authoring_citation_set_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_authoring_result_family(self) -> AuthoringEvidenceUsageValidationReceipt:
+        if self.result_artifact.result_schema != "authoring-result@10.0":
+            raise ValueError("authoring evidence receipt result schema differs")
+        return self
+
+
+class ReviewEvidenceUsageValidationReceipt(EvidenceUsageValidationReceiptBase):
+    """Receipt for an independent review of exact authoring evidence citations."""
+
+    step_key: Literal["review"] = "review"
+    result_artifact: EvidenceResultArtifactPointer
+    authoring_artifact: EvidenceResultArtifactPointer
+    authoring_citation_set_sha256: Sha256
+    review_citation_set_sha256: Sha256
+    citation_sets_equal: Literal[True]
+
+    @model_validator(mode="after")
+    def exact_review_result_family(self) -> ReviewEvidenceUsageValidationReceipt:
+        if (
+            self.result_artifact.result_schema != "review-result@10.0"
+            or self.authoring_artifact.result_schema != "authoring-result@10.0"
+            or self.review_citation_set_sha256 != self.authoring_citation_set_sha256
+        ):
+            raise ValueError("review evidence receipt fields differ")
+        return self
+
+
+EvidenceUsageValidationReceipt = (
+    AuthoringEvidenceUsageValidationReceipt | ReviewEvidenceUsageValidationReceipt
+)
+
+
 class ReasoningEffort(StrEnum):
     MINIMAL = "minimal"
     LOW = "low"

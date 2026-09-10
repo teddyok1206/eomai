@@ -611,6 +611,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.17.0",
         "workflow-role/1.18.0",
         "workflow-role/1.19.0",
+        "workflow-role/1.20.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -716,6 +717,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.17.0",
         "workflow-role/1.18.0",
         "workflow-role/1.19.0",
+        "workflow-role/1.20.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1516,6 +1518,130 @@ class ContentTeamRegistrationRoleResultV9(RoleResultBase):
     output: KnowledgeRegistrationOutput
 
 
+EvidenceAnchorId = Annotated[
+    str,
+    Field(pattern=r"^anchor_[a-z0-9][a-z0-9_-]{0,63}$"),
+]
+DraftJsonPointer = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=256,
+        pattern=r"^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$",
+    ),
+]
+
+
+class EvidenceUsageCitationV1(FrozenModel):
+    """One manifest entry and the exact authored draft locations it influenced."""
+
+    evidence_id: str = Field(pattern=r"^evidenceitem_[0-9a-f]{32}$")
+    anchor_ids: tuple[EvidenceAnchorId, ...] = Field(min_length=1, max_length=32)
+    application: Literal[
+        "CONCEPT_GROUNDING",
+        "STRUCTURE_PATTERN",
+        "AVOID_COPY_CHECK",
+    ]
+    application_description: str = Field(min_length=1, max_length=2000)
+    draft_json_paths: tuple[DraftJsonPointer, ...] = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def canonical_members(self) -> EvidenceUsageCitationV1:
+        for values, label in (
+            (self.anchor_ids, "anchor IDs"),
+            (self.draft_json_paths, "draft JSON pointers"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"evidence usage {label} must be sorted and unique")
+        return self
+
+
+class EvidenceUsageV1(FrozenModel):
+    """Manifest-visible Graph evidence identity and canonical, bounded citations."""
+
+    schema_version: Literal["evidence-usage/1.0"] = "evidence-usage/1.0"
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    evidence_manifest_sha256: Sha256
+    evidence_context_sha256: Sha256
+    citations: tuple[EvidenceUsageCitationV1, ...] = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def canonical_positive_citation_set(self) -> EvidenceUsageV1:
+        evidence_ids = tuple(item.evidence_id for item in self.citations)
+        if evidence_ids != tuple(sorted(set(evidence_ids))):
+            raise ValueError("evidence usage citations must have sorted unique evidence IDs")
+        if not any(
+            item.application in {"CONCEPT_GROUNDING", "STRUCTURE_PATTERN"}
+            for item in self.citations
+        ):
+            raise ValueError("Graph-grounded evidence usage requires a positive citation")
+        return self
+
+
+class ContentTeamAuthoringOutputV10(FrozenModel):
+    draft: AssessmentItemContentV3
+    metadata: KnowledgeAuthoringMetadataV2
+    evidence_usage: EvidenceUsageV1 | None
+
+    @model_validator(mode="after")
+    def truthful_evidence_mode(self) -> ContentTeamAuthoringOutputV10:
+        grounded = self.metadata.knowledge_source_mode == "graph_grounded"
+        if grounded != (self.evidence_usage is not None):
+            raise ValueError("authoring evidence usage must match knowledge source mode")
+        return self
+
+
+class ContentTeamAuthoringRoleResultV10(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.20.0"] = "workflow-role/1.20.0"
+    role: Literal["authoring"]
+    output: ContentTeamAuthoringOutputV10
+
+
+class ContentTeamImageRoleResultV10(ContentTeamImageRoleResultV9):
+    protocol_version: Literal["workflow-role/1.20.0"] = "workflow-role/1.20.0"  # type: ignore[assignment]
+
+
+class EvidenceAuthoringArtifactPointerV1(FrozenModel):
+    logical_artifact_id: ArtifactId
+    revision_id: RevisionId
+    content_hash: Sha256
+    result_schema: Literal["authoring-result@10.0"] = "authoring-result@10.0"
+
+
+class EvidenceUsageReviewAttestationV1(FrozenModel):
+    schema_version: Literal["evidence-usage-review-attestation/1.0"] = (
+        "evidence-usage-review-attestation/1.0"
+    )
+    decision: Literal["VERIFIED"] = "VERIFIED"
+    authoring_artifact: EvidenceAuthoringArtifactPointerV1
+    citations: tuple[EvidenceUsageCitationV1, ...] = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def canonical_citation_receipt(self) -> EvidenceUsageReviewAttestationV1:
+        evidence_ids = tuple(item.evidence_id for item in self.citations)
+        if evidence_ids != tuple(sorted(set(evidence_ids))):
+            raise ValueError("reviewed citations must have sorted unique evidence IDs")
+        return self
+
+
+class KnowledgeReviewOutputV10(FrozenModel):
+    review: KnowledgeReview
+    evidence_usage_attestation: EvidenceUsageReviewAttestationV1 | None
+
+
+class ContentTeamReviewRoleResultV10(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.20.0"] = "workflow-role/1.20.0"
+    role: Literal["review"]
+    output: KnowledgeReviewOutputV10
+
+
+class ContentTeamRegistrationRoleResultV10(ContentTeamRegistrationRoleResultV9):
+    protocol_version: Literal["workflow-role/1.20.0"] = "workflow-role/1.20.0"  # type: ignore[assignment]
+
+
 class KnowledgeAnalysisProposalOutput(FrozenModel):
     proposal: KnowledgeAnalysisWorkerProposal
 
@@ -1654,6 +1780,10 @@ RoleResult = (
     | ContentTeamImageRoleResultV9
     | ContentTeamReviewRoleResultV9
     | ContentTeamRegistrationRoleResultV9
+    | ContentTeamAuthoringRoleResultV10
+    | ContentTeamImageRoleResultV10
+    | ContentTeamReviewRoleResultV10
+    | ContentTeamRegistrationRoleResultV10
     | KnowledgeAnalysisProposalRoleResult
     | KnowledgeAnalysisProposalRoleResultV2
     | KnowledgeAnalysisProposalRoleResultV3

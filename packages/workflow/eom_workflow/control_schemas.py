@@ -47,6 +47,15 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "2.0",
             "sha256:a05ed05270b170fb1e1207c6c4709df81f7ac436a2142489a40d140fdf6d72ea",
         ),
+        "evidence-usage-validation-receipt": ControlSchemaResource(
+            (
+                "schemas/workflow/control-plane/"
+                "evidence-usage-validation-receipt-v1.schema.json"
+            ),
+            "resources/control-plane/evidence-usage-validation-receipt-v1.schema.json",
+            "1.0",
+            "sha256:5626a23cc1ac81a1d73ab14fd896bb2e14cf72fd99b276e7a641700c836da826",
+        ),
         "knowledge-item-control-bootstrap": ControlSchemaResource(
             "schemas/workflow/control-plane/knowledge-item-control-bootstrap-v1.schema.json",
             "resources/control-plane/knowledge-item-control-bootstrap-v1.schema.json",
