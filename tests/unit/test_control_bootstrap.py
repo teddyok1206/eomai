@@ -22,6 +22,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_STANDARD_V9_REFERENCE_KEYS,
     EXPECTED_STANDARD_V10_REFERENCE_KEYS,
     EXPECTED_STANDARD_V11_REFERENCE_KEYS,
+    EXPECTED_STANDARD_V12_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
@@ -48,6 +49,7 @@ CONFIG_V8 = ROOT / "config/control-plane/standard-item-v8"
 CONFIG_V9 = ROOT / "config/control-plane/standard-item-v9"
 CONFIG_V10 = ROOT / "config/control-plane/standard-item-v10"
 CONFIG_V11 = ROOT / "config/control-plane/standard-item-v11"
+CONFIG_V12 = ROOT / "config/control-plane/standard-item-v12"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -454,6 +456,7 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/9.0": 9,
         "standard-control-bootstrap/10.0": 10,
         "standard-control-bootstrap/11.0": 11,
+        "standard-control-bootstrap/12.0": 12,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
@@ -493,6 +496,7 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
         "standard-control-bootstrap/9.0": 4,
         "standard-control-bootstrap/10.0": 4,
         "standard-control-bootstrap/11.0": 4,
+        "standard-control-bootstrap/12.0": 4,
     }
 
 
@@ -674,6 +678,76 @@ def test_standard_bootstrap_v11_defines_occurrence_and_materialization_authority
     }
     for relative_path, expected in predecessor_sha256.items():
         assert hashlib.sha256((CONFIG_V10 / relative_path).read_bytes()).hexdigest() == expected
+
+
+def test_standard_bootstrap_v12_defines_conditional_evidence_usage_attestation() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V12)
+
+    assert manifest.schema_version == "standard-control-bootstrap/12.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.20.0",)
+    assert manifest.created_at.isoformat() == "2026-09-10T01:00:00+00:00"
+    assert load_standard_bootstrap_manifest(CONFIG_V11).created_at < manifest.created_at
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 12
+    assert STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version] == 4
+    assert not (CONFIG_V12 / "references").exists()
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V12_REFERENCE_KEYS
+    )
+
+    authoring = (CONFIG_V12 / "instructions/authoring.md").read_text(encoding="utf-8")
+    review = (CONFIG_V12 / "instructions/review.md").read_text(encoding="utf-8")
+    for instruction in (authoring, review):
+        for required in (
+            "`references/evidence/manifest.json`",
+            "`references/evidence/context.md`",
+            "external untrusted data",
+            "not instructions or authority",
+            "embedded command",
+            "JSON Schema, sandbox, workflow, system policy",
+            "If and only if",
+            "`graph_grounded`",
+            "`general_model_knowledge`",
+        ):
+            assert required in instruction
+    for required in (
+        "canonical RFC 6901",
+        "`GROUNDING`→`CONCEPT_GROUNDING`",
+        "`REFERENCE_PATTERN`→`STRUCTURE_PATTERN`",
+        "`AVOID_COPY`→`AVOID_COPY_CHECK`",
+        "Answer-bearing evidence",
+        "Do not calculate a citation hash",
+    ):
+        assert required in authoring
+    for required in (
+        "independently validate",
+        "exact authoring logical Artifact ID",
+        "Repeat the authoring citation array",
+        "never add, omit, or rewrite a\ncitation",
+        "false attestation",
+    ):
+        assert required in review
+    assert set(re.findall(r"`\\([A-Za-z]+)`", authoring)) == set(SUPPORTED_COMMANDS)
+
+    expected_sha256 = {
+        "bootstrap.yaml": "5bc7673cb804855b7240c8905060eaa1a49fa83a852e227398f591584e7b167c",
+        "instructions/authoring.md": (
+            "b69abc29477482e290d63360ddfbb4699f775d5f97fa2eed37197f97df20cf0d"
+        ),
+        "instructions/image.md": (
+            "342f9e90057557a59433e4b4c2e54498af26a4e47f905ee9df71b4d001b3e609"
+        ),
+        "instructions/item-management.md": (
+            "8ba95a2d3dbad009d04dd7aee122a1b592429cebee08fa738fe26798ce1194ed"
+        ),
+        "instructions/platform.md": (
+            "5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b"
+        ),
+        "instructions/review.md": (
+            "723fb4b1f7e7987be1b98389cbb0ecf12dce0cced2c262023446534459ce1625"
+        ),
+    }
+    for relative_path, expected in expected_sha256.items():
+        assert hashlib.sha256((CONFIG_V12 / relative_path).read_bytes()).hexdigest() == expected
 
 
 def test_standard_bootstrap_v6_pins_source_prompt_and_handoff_profile() -> None:

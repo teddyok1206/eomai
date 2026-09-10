@@ -1,0 +1,48 @@
+schema_version: knowledge-item-control-bootstrap/9.0
+preset_key: knowledge-grounded-item
+display_name: Graph 근거 통합과학 문항 제작 · 근거 사용 증명 계약
+description: 검증된 교과서·기출문항 Graph 근거의 정확한 identity, anchor, draft 적용 위치와 독립 review attestation을 표준 정책에 결속하는 통합과학 정책입니다.
+created_at: "2026-09-10T01:05:00Z"
+base_preset_key: standard-item
+base_preset_schema_version: execution-preset-revision/1.0
+base_instruction_bundle_ids:
+  authoring: instrbundle_7bcd83d35c6ac27021fb5fcd8d9065a4
+  image: instrbundle_f536a34f517207e39abd32d469a4e834
+  review: instrbundle_713c412dfd049dfdaa8b2bbe961eeda8
+  item_management: instrbundle_bea9c5397ee3b8069d3ee9ef74418a37
+base_instruction_bundle_revision_ids:
+  authoring: instrrev_839b244faddefda6199bbe361a4ff8a2
+  image: instrrev_721829a87e6048d2096611407a28dbba
+  review: instrrev_73f07339500f5e7f008fa29be5e77a82
+  item_management: instrrev_da71ff515300d075d0acfa9ff0283b7e
+base_instruction_member_sha256s:
+  platform: sha256:5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b
+  authoring: sha256:b69abc29477482e290d63360ddfbb4699f775d5f97fa2eed37197f97df20cf0d
+  image: sha256:342f9e90057557a59433e4b4c2e54498af26a4e47f905ee9df71b4d001b3e609
+  review: sha256:723fb4b1f7e7987be1b98389cbb0ecf12dce0cced2c262023446534459ce1625
+  item_management: sha256:8ba95a2d3dbad009d04dd7aee122a1b592429cebee08fa738fe26798ce1194ed
+general_knowledge_policy: ALLOW_WITH_PROVENANCE
+compatible_workflow_protocols:
+  - workflow-role/1.20.0
+evidence_access_by_role:
+  authoring: EVIDENCE_CONTEXT
+  image: EVIDENCE_CONTEXT
+  review: EVIDENCE_CONTEXT
+  item_management: NONE
+retrieval_policy:
+  access_policy_revision_id: accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9
+  access_policy_sha256: sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0
+  allowed_corpus_keys:
+    - integrated-science-textbooks
+  allowed_query_kinds:
+    - ITEM_PREPARATION
+  allowed_source_classes:
+    - APPROVED_ITEM
+    - PAST_EXAM
+    - TEXTBOOK
+  maximum_budget:
+    max_documents: 16
+    max_item_revisions: 32
+    max_graph_nodes: 128
+    max_claims: 64
+    max_context_tokens: 16000

@@ -699,11 +699,17 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
     hwpx_deployment = _source("scripts/hwpx/deploy_builder.sh")
     runbook = _source("docs/architecture/CONTENT_TEAM_MOCK_EXAM_ITEM_PROTOCOL_V3.md")
 
-    assert '"1.8", "1.9")' in deployment
-    assert "definition_v1_8, definition_v1_9" in deployment
-    assert '"1.7.0", "1.8.0", "1.9.0"}' in deployment
+    assert '"1.9",\n        "1.10",' in deployment
+    assert "definition_v1_8, definition_v1_9, definition_v1_10" in deployment
+    assert '"1.8.0", "1.9.0", "1.10.0"}' in deployment
     for role in ("authoring", "image", "review", "item_management"):
         assert f'load_role_input_schema("{role}", "workflow-role/1.19.0")' in deployment
+        assert f'load_role_input_schema("{role}", "workflow-role/1.20.0")' in deployment
+    for control_schema in (
+        "standard-control-bootstrap-v12",
+        "knowledge-item-control-bootstrap-v9",
+    ):
+        assert control_schema in deployment
     for runtime in (
         "eom_image_contracts/safe_svg.py",
         "hwpx-content-team-editorial-question-v2.schema.json",
