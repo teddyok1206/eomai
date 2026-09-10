@@ -60,6 +60,10 @@ from pydantic import ValidationError
 
 CONNECT_TIMEOUT_SECONDS = 5.0
 RESPONSE_TIMEOUT_SECONDS = 30.0
+# Evidence selection validates and ranks a bounded Graph snapshot before publishing its
+# immutable bundle.  Live rev67 retrievals can legitimately exceed the short metadata RPC bound,
+# so these two evidence-producing operations receive their own bounded response window.
+EVIDENCE_RESPONSE_TIMEOUT_SECONDS = 120.0
 
 
 @dataclass(frozen=True)
@@ -424,7 +428,7 @@ class CatalogApplicationClient:
             if len(encoded) + 1 > CATALOG_APPLICATION_MAX_MESSAGE_BYTES:
                 raise ValueError("Catalog application request exceeds its fixed bound")
             connection.sendall(encoded + b"\n")
-            connection.settimeout(RESPONSE_TIMEOUT_SECONDS)
+            connection.settimeout(self._response_timeout_seconds(command))
             raw = self._read_response(connection)
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
@@ -469,6 +473,24 @@ class CatalogApplicationClient:
         if response.status == "ERROR":
             self._raise_remote_error(response.error_code)
         return response
+
+    @staticmethod
+    def _response_timeout_seconds(
+        command: ReviewedItemContentImportCommand
+        | ItemContentQuery
+        | CreateKnowledgeAnalysisCommand
+        | ReconcileKnowledgeAnalysisCommand
+        | ReviewKnowledgeAnalysisCommand
+        | CreateKnowledgeAnalysisBatchCommand
+        | CreateEvidenceBundleCommand
+        | CreateItemProductionEvidenceCommand
+        | PublishApprovedItemAnalysesCommand
+        | PublishMockExamItemReviewCommand
+        | InspectMockExamReviewEligibilityQuery,
+    ) -> float:
+        if isinstance(command, (CreateEvidenceBundleCommand, CreateItemProductionEvidenceCommand)):
+            return EVIDENCE_RESPONSE_TIMEOUT_SECONDS
+        return RESPONSE_TIMEOUT_SECONDS
 
     def _validate_socket(self) -> None:
         try:

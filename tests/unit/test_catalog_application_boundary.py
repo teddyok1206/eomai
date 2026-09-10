@@ -8,6 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 from eom_api.services.catalog_application_client import (
+    EVIDENCE_RESPONSE_TIMEOUT_SECONDS,
+    RESPONSE_TIMEOUT_SECONDS,
     CatalogApplicationClient,
     CatalogApplicationClientError,
 )
@@ -449,6 +451,22 @@ def _client(server: CatalogApplicationServer) -> CatalogApplicationClient:
         server.socket_path,
         expected_uid=os.getuid(),
         expected_gid=os.getgid(),
+    )
+
+
+def test_catalog_evidence_generation_uses_its_bounded_response_window() -> None:
+    assert EVIDENCE_RESPONSE_TIMEOUT_SECONDS == 120.0
+    assert (
+        CatalogApplicationClient._response_timeout_seconds(_retrieval_command())
+        == EVIDENCE_RESPONSE_TIMEOUT_SECONDS
+    )
+    assert (
+        CatalogApplicationClient._response_timeout_seconds(_item_evidence_command())
+        == EVIDENCE_RESPONSE_TIMEOUT_SECONDS
+    )
+    assert (
+        CatalogApplicationClient._response_timeout_seconds(_batch_command())
+        == RESPONSE_TIMEOUT_SECONDS
     )
 
 
