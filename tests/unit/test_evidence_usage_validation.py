@@ -10,7 +10,10 @@ from typing import Any, Literal, cast
 import pytest
 from eom_catalog_contracts import EvidenceBundleManifestV2
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
-from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
+from eom_orchestrator.control_models import (
+    ExecutionBundleRevisionRecord,
+    ResolvedExecutionPlanRecord,
+)
 from eom_orchestrator.evidence_usage_validation import (
     EvidenceUsageValidationError,
     _validate_citations,
@@ -365,6 +368,27 @@ def test_commit_validation_reloads_and_rejects_stale_plan_chain(
 
     with pytest.raises(EvidenceUsageValidationError):
         _validate_authoring(fixture, result)
+
+
+def test_authorization_contract_failure_is_normalized_as_result_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+    result = _authoring_result(fixture)
+    plan = (
+        fixture["session"]
+        .records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+        .canonical_document
+    )
+    instruction_revision_id = plan["steps"][0]["instruction_bundle"]["bundle_revision_id"]
+    bundle = fixture["session"].records[(ExecutionBundleRevisionRecord, instruction_revision_id)]
+    bundle.canonical_document = {}
+
+    with pytest.raises(
+        EvidenceUsageValidationError, match="pinned evidence material cannot be re-resolved"
+    ) as captured:
+        _validate_authoring(fixture, result)
+    assert captured.value.code == "EVIDENCE_MATERIAL_RESOLUTION_FAILED"
 
 
 @pytest.mark.parametrize(

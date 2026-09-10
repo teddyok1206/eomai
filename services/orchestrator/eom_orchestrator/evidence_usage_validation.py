@@ -191,17 +191,17 @@ def validate_evidence_usage_for_commit(
         _require_no_evidence_claim(result)
         return None
 
-    authorized = authorized_execution_artifact_revisions(
-        session, plan_id=plan_id, step_key=step_key
-    )
     try:
+        authorized = authorized_execution_artifact_revisions(
+            session, plan_id=plan_id, step_key=step_key
+        )
         materials = resolve_evidence_materials(
             session,
             plan=plan,
             canonical_artifact_root=canonical_artifact_root,
             authorized_artifact_revision_ids=authorized,
         )
-    except ControlPlaneError as exc:
+    except (ControlPlaneError, ValidationError) as exc:
         # Pointer resolution errors are result-validation failures at this post-worker boundary.
         raise EvidenceUsageValidationError(
             "EVIDENCE_MATERIAL_RESOLUTION_FAILED",
