@@ -1270,8 +1270,7 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
         authoring = tuple(
             pointer
             for pointer in worker_input.upstream_artifacts
-            if pointer.step_key == "authoring"
-            and pointer.result_schema == "authoring-result@10.0"
+            if pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@10.0"
         )
         if len(authoring) != 1:
             raise WorkflowSchemaError(
