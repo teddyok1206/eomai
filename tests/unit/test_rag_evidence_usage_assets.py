@@ -5,13 +5,16 @@ from pathlib import Path
 
 import pytest
 import yaml
+from eom_api.services.command_adapter import _workflow_request_from_api
 from eom_api_contracts.workflows import WorkflowStartRequest
-from eom_catalog_service.content_pack_files import compile_pack
+from eom_catalog_service.content_pack_files import build_pack, compile_pack
+from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_workflow import WORKFLOW_ADMISSION_BY_IDENTITY
 from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
-PACK_ROOT = ROOT / "content/packs/generated-knowledge-item/1.15.0"
+PACK_ROOT_V1_15_0 = ROOT / "content/packs/generated-knowledge-item/1.15.0"
+PACK_ROOT = ROOT / "content/packs/generated-knowledge-item/1.15.1"
 DEFINITION_PATH = ROOT / "config/workflows/generic-item-development.v1.10.yaml"
 
 
@@ -67,7 +70,7 @@ def test_v120_workflow_and_pack_are_one_exact_admitted_family() -> None:
     assert admission.role_protocol_version == "workflow-role/1.20.0"
 
     pack = compile_pack(PACK_ROOT)
-    assert pack.manifest.pack.version == "1.15.0"
+    assert pack.manifest.pack.version == "1.15.1"
     assert pack.manifest.compatibility.protocol.minimum == "1.20.0"
     assert pack.manifest.compatibility.protocol.maximum_exclusive == "1.21.0"
     assert pack.manifest.compatibility.workflow_definitions[0].versions == ("1.10.0",)
@@ -119,6 +122,82 @@ def test_v120_prompts_require_evidence_reading_without_trusting_embedded_command
         "새 citation을 만들거나 설명을 고쳐 쓰거나 누락하지 마라",
     ):
         assert required in review
+
+
+def test_v120_patch_successor_requires_non_null_primitive_scalar_citation_leaves() -> None:
+    authoring = (PACK_ROOT / "prompt-templates/authoring.md").read_text(encoding="utf-8")
+    review = (PACK_ROOT / "prompt-templates/review.md").read_text(encoding="utf-8")
+
+    for prompt in (authoring, review):
+        for requirement in (
+            "non-null primitive scalar",
+            "JSON 문자열",
+            "숫자",
+            "boolean",
+            "object, array, null",
+            "`/choices`",
+            "`/choices/0`",
+            "`/statements`",
+            "`/choices/0/text`",
+            "`/statements/0/text`",
+            "`/labeled_blocks/0/content`",
+        ):
+            assert requirement in prompt
+
+
+def test_v120_patch_successor_preserves_every_unrelated_released_member() -> None:
+    changed = {
+        "pack.yaml",
+        "profiles/generated-knowledge-authoring.yaml",
+        "profiles/generated-knowledge-review.yaml",
+        "prompt-templates/authoring.md",
+        "prompt-templates/review.md",
+    }
+    predecessor = {
+        path.relative_to(PACK_ROOT_V1_15_0).as_posix(): path
+        for path in PACK_ROOT_V1_15_0.rglob("*")
+        if path.is_file()
+    }
+    successor = {
+        path.relative_to(PACK_ROOT).as_posix(): path
+        for path in PACK_ROOT.rglob("*")
+        if path.is_file()
+    }
+
+    assert predecessor.keys() == successor.keys()
+    assert {
+        relative_path
+        for relative_path in predecessor
+        if predecessor[relative_path].read_bytes() != successor[relative_path].read_bytes()
+    } == changed
+    assert hashlib.sha256((PACK_ROOT_V1_15_0 / "pack.yaml").read_bytes()).hexdigest() == (
+        "1427f54e5991409dd863d3b20fac113bdf823c184413b00eb42ecb8a1549fe6e"
+    )
+
+
+def test_v120_patch_successor_has_pinned_deterministic_release_hashes(tmp_path: Path) -> None:
+    compiled = compile_pack(PACK_ROOT)
+    built = build_pack(PACK_ROOT, tmp_path)
+
+    assert compiled.source_tree_sha256 == (
+        "sha256:c0974bde6abeeb2eed2984a5697d04ec5ba13ab0df89289932328948dffc431b"
+    )
+    assert built.bundle_sha256 == (
+        "sha256:2ee488bc57e27639fe96baab27ce0019498fcfe00004a79926ee6d224130e6e9"
+    )
+    assert built.manifest_sha256 == (
+        "sha256:802d976ff27188e08048290602980e5d752ddb08cf3b1913741c5a27c9ca28a6"
+    )
+    assert {profile.profile.version for profile in compiled.profiles} == {"10.0.0", "10.0.1"}
+
+
+def test_catalog_admits_v120_patch_successor_for_content_team_brief() -> None:
+    api_request = WorkflowStartRequest.model_validate(_content_team_start_request())
+    workflow_request = _workflow_request_from_api(api_request)
+
+    WorkflowCatalogService._require_item_brief_release(
+        "generated-knowledge-item", "1.15.1", workflow_request
+    )
 
 
 def test_api_accepts_standalone_v120_content_team_start_contract() -> None:

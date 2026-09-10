@@ -1,0 +1,23 @@
+{
+  "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+  "image_mode": "required",
+  "content_pack": {"pack_key": "generated-knowledge-item", "environment": "development"},
+  "profiles": {
+    "authoring": "generated-knowledge-authoring",
+    "image": "generated-stimulus-drawing",
+    "review": "generated-knowledge-review",
+    "registration": "generated-structured-registration"
+  },
+  "registry_intent": {"mode": "CREATE_ITEM"},
+  "item_brief": {
+    "schema_version": "3.0",
+    "subject": "검토된 요청의 교과 범위",
+    "topic": "검토된 요청의 문항 주제",
+    "task_type": "검토된 요청의 문항 유형",
+    "difficulty": "검토된 요청의 난도",
+    "authoring_guidance": "검토된 요청 범위 안에서 콘텐츠팀 출제 원문과 편집 프로그램 계약을 그대로 적용하여 문항을 작성해 주세요.",
+    "authoring_guidance_sha256": "sha256:b60aba3badb50adf8d4b2919fa07f3d69962f06c53514cd1659d645862c48a64",
+    "curriculum_scope": null,
+    "original_request_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

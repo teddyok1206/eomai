@@ -127,6 +127,24 @@ Existing `workflow-role/1.19.0` and `authoring-result@9.0` bytes remain immutabl
 pack revision, standard control bootstrap revision, and knowledge-grounded preset revision opt in as
 one admitted family. Historical families remain readable without reinterpretation.
 
+The first `generated-knowledge-item/1.15.0` one-shot exposed an instruction/validator gap: its
+authoring output passed JSON Schema and Pydantic but cited array containers, while the trusted
+validator correctly requires each draft pointer to terminate at a non-null primitive scalar leaf.
+`generated-knowledge-item/1.15.1` is the adjacent immutable patch successor. Its authoring and
+review profiles and prompts state the existing validator rule and give schema-valid leaf examples;
+all unrelated pack members remain byte-identical to `1.15.0`.
+
+No workflow, role schema, validator, database, Standard preset, or knowledge-grounded preset
+successor is created for this correction. The canonical rule and indexed lookup/linear pointer walk
+remain the orchestrator implementation described above, with the same `O(E + U)` validation cost,
+transaction boundary, stable failure codes, and idempotency behavior. The Content Pack owns the
+rendered task prompt and is therefore the smallest versioned boundary that can close the gap. A
+Standard/knowledge preset cascade would change additional immutable pointers without adding a new
+rule; changing the role schema would create a new protocol family even though cross-field leaf
+resolution is already enforced at the trusted application boundary. Release and activation of the
+patch remain explicit Catalog operations, so `1.15.0` workflows retain their exact historical
+bytes and no implicit latest-version substitution occurs.
+
 ## Failure, retry, and observability
 
 Schema failures, plan/manifest mismatches, unknown evidence or anchors, unresolved draft paths, and
