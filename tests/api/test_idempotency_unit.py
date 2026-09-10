@@ -1,4 +1,5 @@
-from eom_api.services.idempotency_service import IdempotencyService
+from eom_api.services.idempotency_service import IdempotencyClaim, IdempotencyService
+from eom_identity_service.models import ApiIdempotencyRecord
 from sqlalchemy import create_engine
 
 
@@ -51,3 +52,22 @@ def test_submission_key_is_stable_scoped_and_one_way() -> None:
     )
     assert raw not in first
     assert len(first) == 68
+
+
+def test_only_the_current_processing_lease_owner_can_finalize_a_claim() -> None:
+    record = ApiIdempotencyRecord(state="PROCESSING", lease_owner="request-current")
+
+    assert IdempotencyService._claim_owns_record(
+        record,
+        IdempotencyClaim("apiidem_" + "a" * 32, lease_owner="request-current"),
+    )
+    assert not IdempotencyService._claim_owns_record(
+        record,
+        IdempotencyClaim("apiidem_" + "a" * 32, lease_owner="request-stale"),
+    )
+
+    record.state = "COMPLETED"
+    assert not IdempotencyService._claim_owns_record(
+        record,
+        IdempotencyClaim("apiidem_" + "a" * 32, lease_owner="request-current"),
+    )

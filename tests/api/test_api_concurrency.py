@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from threading import Barrier
 
 import pytest
@@ -49,6 +50,39 @@ def test_concurrent_idempotency_claim_has_one_owner() -> None:
         rejected = [value for value in outcomes if isinstance(value, ApiError)]
         assert len(rejected) == 1
         assert rejected[0].error_code == "API_IDEMPOTENCY_IN_PROGRESS"
+
+        winner = next(value for value in outcomes if isinstance(value, IdempotencyClaim))
+        assert winner.lease_owner is not None
+        stale = replace(winner, lease_owner="req_concurrent_stale")
+        service.fail_final(stale, "STALE_ATTEMPT_MUST_NOT_WIN")
+        with sessions() as session:
+            owned = session.get(ApiIdempotencyRecord, winner.record_id)
+            assert owned is not None
+            assert owned.state == "PROCESSING"
+            assert owned.lease_owner == winner.lease_owner
+
+        with pytest.raises(ApiError, match="request lease was acquired") as lost:
+            service.complete(
+                stale,
+                status=202,
+                body={"resource_id": "workflow_" + "a" * 32},
+                resource_type="workflow",
+                resource_id="workflow_" + "a" * 32,
+            )
+        assert lost.value.error_code == "API_IDEMPOTENCY_CLAIM_LOST"
+
+        service.complete(
+            winner,
+            status=202,
+            body={"resource_id": "workflow_" + "a" * 32},
+            resource_type="workflow",
+            resource_id="workflow_" + "a" * 32,
+        )
+        with sessions() as session:
+            completed = session.get(ApiIdempotencyRecord, winner.record_id)
+            assert completed is not None
+            assert completed.state == "COMPLETED"
+            assert completed.resource_id == "workflow_" + "a" * 32
     finally:
         with transaction(sessions) as session:
             session.execute(

@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from eom_api.errors import ApiError
 
 ResultT = TypeVar("ResultT")
-DEFAULT_IDEMPOTENCY_LEASE_SECONDS = 60
+DEFAULT_IDEMPOTENCY_LEASE_SECONDS = 180
 
 
 @dataclass(frozen=True)
@@ -26,6 +26,7 @@ class IdempotencyClaim:
     record_id: str
     replay_body: dict[str, Any] | None = None
     replay_status: int | None = None
+    lease_owner: str | None = None
 
     @property
     def replayed(self) -> bool:
@@ -100,7 +101,7 @@ class IdempotencyService:
                     )
                 )
                 session.flush()
-            return IdempotencyClaim(record_id)
+            return IdempotencyClaim(record_id, lease_owner=lease_owner)
         except IntegrityError:
             pass
         with transaction(self.sessions) as session:
@@ -154,7 +155,10 @@ class IdempotencyService:
             record.lease_owner = lease_owner
             record.lease_expires_at = timestamp + timedelta(seconds=self._lease_seconds)
             record.updated_at = timestamp
-            return IdempotencyClaim(record.api_idempotency_record_id)
+            return IdempotencyClaim(
+                record.api_idempotency_record_id,
+                lease_owner=lease_owner,
+            )
 
     def complete(
         self,
@@ -178,6 +182,13 @@ class IdempotencyService:
             record = session.get(ApiIdempotencyRecord, claim.record_id, with_for_update=True)
             if record is None:
                 raise RuntimeError("idempotency claim disappeared")
+            if not self._claim_owns_record(record, claim):
+                raise ApiError(
+                    409,
+                    "API_IDEMPOTENCY_CLAIM_LOST",
+                    "Idempotency claim lost",
+                    "The request lease was acquired by another attempt; replay the same request.",
+                )
             record.state = "COMPLETED"
             record.response_status = status
             record.response_body = body
@@ -192,7 +203,7 @@ class IdempotencyService:
         now = datetime.now(UTC)
         with transaction(self.sessions) as session:
             record = session.get(ApiIdempotencyRecord, claim.record_id, with_for_update=True)
-            if record is None:
+            if record is None or not self._claim_owns_record(record, claim):
                 return
             record.state = "FAILED_FINAL"
             record.error_code = error_code
@@ -200,6 +211,15 @@ class IdempotencyService:
             record.lease_expires_at = None
             record.updated_at = now
             record.completed_at = now
+
+    @staticmethod
+    def _claim_owns_record(record: ApiIdempotencyRecord, claim: IdempotencyClaim) -> bool:
+        return (
+            record.state == "PROCESSING"
+            and record.lease_owner is not None
+            and claim.lease_owner is not None
+            and hmac.compare_digest(record.lease_owner, claim.lease_owner)
+        )
 
     def _key_hash(self, raw_key: str) -> str:
         return "sha256:" + hmac.new(self._key, raw_key.encode("ascii"), hashlib.sha256).hexdigest()
