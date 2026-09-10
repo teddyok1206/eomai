@@ -899,11 +899,14 @@ def _document_analysis_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.parametrize("manifest_schema_version", ["2.0", "4.0"])
-def test_knowledge_materializer_stages_only_exact_context_and_records_provenance(
+def test_knowledge_materializer_stages_exact_manifest_and_context_and_records_provenance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manifest_schema_version: str
 ) -> None:
     fixture = _knowledge_fixture(
-        tmp_path, monkeypatch, manifest_schema_version=manifest_schema_version
+        tmp_path,
+        monkeypatch,
+        manifest_schema_version=manifest_schema_version,
+        workflow_definition_version="1.10.0",
     )
     authorized = authorized_execution_artifact_revisions(
         fixture["session"], plan_id=str(fixture["plan_id"]), step_key="authoring"
@@ -921,11 +924,34 @@ def test_knowledge_materializer_stages_only_exact_context_and_records_provenance
         authorized_artifact_revision_ids=authorized,
     )
     assert (workspace / "references/evidence/context.md").read_bytes() == fixture["context_payload"]
-    assert not (workspace / "evidence/manifest.json").exists()
+    assert (workspace / "references/evidence/manifest.json").read_bytes() == fixture[
+        "manifest_payload"
+    ]
     assert result.evidence_bundle_revision_id == fixture["manifest"]["evidence_bundle_revision_id"]
     assert result.evidence_manifest_sha256 == fixture["manifest"]["manifest_sha256"]
     assert result.evidence_context_sha256 == sha256_bytes(fixture["context_payload"])
+    assert result.materialized_member_count == 5
     assert all("path" not in key for key in result.event_data())
+
+
+def test_knowledge_materializer_keeps_pre_110_context_only_workspace_and_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+    workspace = _workspace(tmp_path, "knowledge-legacy")
+    result = materialize_execution_step(
+        fixture["session"],
+        plan_id=str(fixture["plan_id"]),
+        step_key="authoring",
+        workspace=workspace,
+        canonical_artifact_root=fixture["artifact_root"],
+        worker_group_id=GROUP_ID,
+        authorized_artifact_revision_ids=fixture["authorized"],
+    )
+
+    assert (workspace / "references/evidence/context.md").read_bytes() == fixture["context_payload"]
+    assert not (workspace / "references/evidence/manifest.json").exists()
+    assert result.materialized_member_count == 4
 
 
 def test_knowledge_materializer_rejects_manifest_hash_drift_before_context_copy(
@@ -950,10 +976,40 @@ def test_knowledge_materializer_rejects_manifest_hash_drift_before_context_copy(
         )
     assert captured.value.code in {"CONTROL_POINTER_FILE_INVALID", "CONTROL_POINTER_HASH_MISMATCH"}
     assert not (workspace / "references/evidence/context.md").exists()
+    assert not (workspace / "references/evidence/manifest.json").exists()
+
+
+def test_knowledge_materializer_validates_context_before_staging_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+    context_record = fixture["session"].records[
+        (ArtifactRevisionRecord, fixture["context_revision_id"])
+    ]
+    context_path = Path(context_record.nas_path) / "evidence/context.md"
+    context_path.write_bytes(b"stale context")
+    workspace = _workspace(tmp_path, "knowledge")
+    with pytest.raises(ControlPlaneError) as captured:
+        materialize_execution_step(
+            fixture["session"],
+            plan_id=str(fixture["plan_id"]),
+            step_key="authoring",
+            workspace=workspace,
+            canonical_artifact_root=fixture["artifact_root"],
+            worker_group_id=GROUP_ID,
+            authorized_artifact_revision_ids=fixture["authorized"],
+        )
+    assert captured.value.code in {"CONTROL_POINTER_FILE_INVALID", "CONTROL_POINTER_HASH_MISMATCH"}
+    assert not (workspace / "references/evidence/context.md").exists()
+    assert not (workspace / "references/evidence/manifest.json").exists()
 
 
 def _knowledge_fixture(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, manifest_schema_version: str = "2.0"
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    manifest_schema_version: str = "2.0",
+    workflow_definition_version: str | None = None,
 ) -> dict[str, Any]:
     if manifest_schema_version not in {"2.0", "4.0"}:
         raise ValueError("unsupported test manifest schema version")
@@ -973,7 +1029,13 @@ def _knowledge_fixture(
         bundle_record.manifest_artifact_revision_id = step_pointer["manifest_artifact"][
             "artifact_revision_id"
         ]
-    context_payload = b"# Bounded evidence\n\nPinned pointers only.\n"
+    context_payload = (
+        b"# Bounded evidence\n\n"
+        b"- `evidenceitem_33333333333333333333333333333333` score=900 "
+        b"use=REFERENCE_PATTERN class=APPROVED_ITEM "
+        b"source=`itemrev_44444444444444444444444444444444` "
+        b"nodes=knode_item: item structure\n"
+    )
     context_hash = sha256_bytes(context_payload)
     context_artifact_id = "artifact_" + "d" * 32
     context_revision_id = "rev_" + "d" * 32
@@ -1032,7 +1094,7 @@ def _knowledge_fixture(
             {
                 "evidence_id": "evidenceitem_" + "3" * 32,
                 "evidence_kind": "ITEM_REVISION",
-                "use": "AVOID_COPY",
+                "use": "REFERENCE_PATTERN",
                 "source": {
                     "source_kind": "APPROVED_ITEM_REVISION",
                     "source_class": "APPROVED_ITEM",
@@ -1044,7 +1106,7 @@ def _knowledge_fixture(
                 "graph_node_ids": ["knode_item"],
                 "anchor_ids": ["anchor_item"],
                 "relevance_milli": 900,
-                "answer_bearing": True,
+                "answer_bearing": False,
             }
         ],
         "budget": {
@@ -1120,7 +1182,9 @@ def _knowledge_fixture(
         "preset_revision_id": old_plan["preset_revision_id"],
         "preset_sha256": old_plan["preset_sha256"],
         "workflow_definition_key": old_plan["workflow_definition_key"],
-        "workflow_definition_version": old_plan["workflow_definition_version"],
+        "workflow_definition_version": (
+            workflow_definition_version or old_plan["workflow_definition_version"]
+        ),
         "workflow_definition_sha256": old_plan["workflow_definition_sha256"],
         "content_pack_release_id": old_plan["content_pack_release_id"],
         "content_pack_sha256": old_plan["content_pack_sha256"],
@@ -1167,6 +1231,7 @@ def _knowledge_fixture(
                 (*fixture["authorized"], manifest_revision_id, context_revision_id)
             ),
             "context_payload": context_payload,
+            "manifest_payload": manifest_payload,
             "manifest_revision_id": manifest_revision_id,
             "context_revision_id": context_revision_id,
             "manifest": manifest,

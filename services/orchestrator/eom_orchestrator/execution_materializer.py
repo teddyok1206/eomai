@@ -115,6 +115,15 @@ class MaterializedExecution:
         }
 
 
+@dataclass(frozen=True)
+class ResolvedEvidenceMaterials:
+    """Exact, fully validated Evidence Bundle members safe to stage or inspect."""
+
+    manifest: EvidenceBundleManifestV2 | EvidenceBundleManifestV3 | EvidenceBundleManifestV4
+    manifest_payload: bytes
+    context_payload: bytes
+
+
 def materialize_execution_step(
     session: Session,
     *,
@@ -262,7 +271,7 @@ def materialize_execution_step(
     elif isinstance(plan, ResolvedExecutionPlanV3):
         assert isinstance(step, ResolvedStepExecutionV3)
         if step.evidence_access == "EVIDENCE_CONTEXT":
-            payload = _materialize_evidence_context(
+            evidence_materials = _materialize_evidence_context(
                 session,
                 plan=plan,
                 workspace=workspace,
@@ -270,8 +279,11 @@ def materialize_execution_step(
                 worker_group_id=worker_group_id,
                 authorized_artifact_revision_ids=authorized_artifact_revision_ids,
             )
-            total_bytes += len(payload)
+            total_bytes += len(evidence_materials.context_payload)
             member_count += 1
+            if plan_stages_evidence_manifest(plan):
+                total_bytes += len(evidence_materials.manifest_payload)
+                member_count += 1
             _require_total_size(total_bytes, analysis=False)
             evidence_bundle_revision_id = plan.evidence_bundle_revision_id
             evidence_manifest_sha256 = plan.evidence_manifest_sha256
@@ -1317,9 +1329,50 @@ def _materialize_evidence_context(
     artifact_root: Path,
     worker_group_id: int,
     authorized_artifact_revision_ids: frozenset[str],
-) -> bytes:
-    """Validate the immutable manifest, then stage only its bounded context Markdown."""
+) -> ResolvedEvidenceMaterials:
+    """Validate both immutable Evidence Bundle members before staging either one."""
 
+    materials = resolve_evidence_materials(
+        session,
+        plan=plan,
+        canonical_artifact_root=artifact_root,
+        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+    )
+    destination_root = workspace / "references" / "evidence"
+    _ensure_parent(destination_root, workspace=workspace, group_id=worker_group_id)
+    if plan_stages_evidence_manifest(plan):
+        _write_exclusive(
+            destination_root / "manifest.json",
+            materials.manifest_payload,
+            group_id=worker_group_id,
+        )
+    _write_exclusive(
+        destination_root / "context.md",
+        materials.context_payload,
+        group_id=worker_group_id,
+    )
+    return materials
+
+
+def plan_stages_evidence_manifest(plan: ResolvedExecutionPlanV3) -> bool:
+    """Keep historical 1.9 workspaces/events stable; only the 1.10 family exposes IDs."""
+
+    return (
+        plan.workflow_definition_key == "generic-item-development"
+        and plan.workflow_definition_version == "1.10.0"
+    )
+
+
+def resolve_evidence_materials(
+    session: Session,
+    *,
+    plan: ResolvedExecutionPlanV3,
+    canonical_artifact_root: Path,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> ResolvedEvidenceMaterials:
+    """Resolve the exact plan-pinned manifest and context without materializing them."""
+
+    artifact_root = _canonical_root(canonical_artifact_root)
     for pointer in (plan.evidence_manifest_artifact, plan.evidence_context_artifact):
         if pointer.artifact_revision_id not in authorized_artifact_revision_ids:
             raise ControlPlaneError(
@@ -1365,22 +1418,23 @@ def _materialize_evidence_context(
         raise ControlPlaneError(
             "CONTROL_EVIDENCE_POINTER_MISMATCH", "Evidence Bundle manifest differs from plan"
         )
-    payload = _knowledge_member_payload(
+    context_payload = _knowledge_member_payload(
         session,
         pointer=plan.evidence_context_artifact,
         artifact_root=artifact_root,
         maximum_bytes=MAX_MARKDOWN_MEMBER_BYTES,
     )
     try:
-        payload.decode("utf-8")
+        context_payload.decode("utf-8")
     except UnicodeError as exc:
         raise ControlPlaneError(
             "CONTROL_POINTER_ENCODING_INVALID", "Evidence context is not UTF-8"
         ) from exc
-    destination = workspace / "references" / "evidence" / "context.md"
-    _ensure_parent(destination.parent, workspace=workspace, group_id=worker_group_id)
-    _write_exclusive(destination, payload, group_id=worker_group_id)
-    return payload
+    return ResolvedEvidenceMaterials(
+        manifest=manifest,
+        manifest_payload=manifest_payload,
+        context_payload=context_payload,
+    )
 
 
 def _knowledge_member_payload(

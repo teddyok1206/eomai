@@ -9,6 +9,7 @@ from itertools import pairwise
 from typing import Annotated, Any, Literal
 
 from eom_catalog_contracts import (
+    AnchorId,
     AssessmentItemContent,
     AssessmentItemContentV2,
     AssessmentItemContentV3,
@@ -1518,10 +1519,6 @@ class ContentTeamRegistrationRoleResultV9(RoleResultBase):
     output: KnowledgeRegistrationOutput
 
 
-EvidenceAnchorId = Annotated[
-    str,
-    Field(pattern=r"^anchor_[a-z0-9][a-z0-9_-]{0,63}$"),
-]
 DraftJsonPointer = Annotated[
     str,
     Field(
@@ -1536,7 +1533,7 @@ class EvidenceUsageCitationV1(FrozenModel):
     """One manifest entry and the exact authored draft locations it influenced."""
 
     evidence_id: str = Field(pattern=r"^evidenceitem_[0-9a-f]{32}$")
-    anchor_ids: tuple[EvidenceAnchorId, ...] = Field(min_length=1, max_length=32)
+    anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=32)
     application: Literal[
         "CONCEPT_GROUNDING",
         "STRUCTURE_PATTERN",

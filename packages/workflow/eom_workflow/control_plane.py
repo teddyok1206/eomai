@@ -115,9 +115,10 @@ class EvidenceUsageValidationReceiptBase(FrozenModel):
             != "eom://schemas/knowledge/evidence-bundle-context/1.0"
         ):
             raise ValueError("evidence validation receipt material pointer is incompatible")
-        if content_sha256(
-            self.model_dump(mode="json", exclude={"receipt_sha256"})
-        ) != self.receipt_sha256:
+        if (
+            content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))
+            != self.receipt_sha256
+        ):
             raise ValueError("evidence validation receipt hash differs")
         return self
 
@@ -157,9 +158,10 @@ class ReviewEvidenceUsageValidationReceipt(EvidenceUsageValidationReceiptBase):
         return self
 
 
-EvidenceUsageValidationReceipt = (
-    AuthoringEvidenceUsageValidationReceipt | ReviewEvidenceUsageValidationReceipt
-)
+EvidenceUsageValidationReceipt = Annotated[
+    AuthoringEvidenceUsageValidationReceipt | ReviewEvidenceUsageValidationReceipt,
+    Field(discriminator="step_key"),
+]
 
 
 class ReasoningEffort(StrEnum):

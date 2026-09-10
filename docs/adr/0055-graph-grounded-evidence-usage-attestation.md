@@ -49,6 +49,11 @@ It stages the already validated manifest and context as read-only job-local file
 worker must attest is present in the manifest. The orchestrator's validation receipt binds the result
 to the remaining exact resolved-plan identity and immutable Artifact pointers.
 
+Manifest staging is gated to the exact `generic-item-development/1.10.0` workflow identity. Older
+resolved-plan V3 executions retain their historical context-only workspace, member count, byte
+accounting, and event semantics. The trusted validator still re-resolves canonical manifest bytes at
+the orchestrator boundary; it never broadens an older worker's staged inputs.
+
 Before authoring Artifact commit, the orchestrator requires Graph-grounded output to contain the
 exact bundle logical/revision IDs, semantic manifest hash, retrieval request ID, Graph Snapshot
 revision ID, and context Artifact member hash exposed by the manifest. The validation receipt binds

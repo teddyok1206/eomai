@@ -21,6 +21,7 @@ from eom_protocol import (
     WorkerResult,
     validate_message,
 )
+from eom_workflow.control_plane import EvidenceResultArtifactPointer
 from eom_workflow.models import (
     ArtifactPointer,
     KnowledgeAnalysisProposalRoleResult,
@@ -65,6 +66,11 @@ from eom_orchestrator.control_models import ResolvedExecutionPlanRecord, WorkerL
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.errors import PlatformError
+from eom_orchestrator.evidence_usage_validation import (
+    EvidenceUsageValidationError,
+    evidence_receipt_event_data,
+    validate_evidence_usage_for_commit,
+)
 from eom_orchestrator.execution_materializer import (
     MaterializedExecution,
     authorized_execution_artifact_revisions,
@@ -513,6 +519,8 @@ class Orchestrator:
                     "workflow worker result identifiers do not match input",
                 )
             result_document = result.model_dump(mode="json")
+            evidence_receipt = None
+            evidence_event_data: dict[str, object] = {}
             if result_schema in {
                 "knowledge-analysis-proposal-result@1.0",
                 "knowledge-analysis-proposal-result@2.0",
@@ -637,6 +645,32 @@ class Orchestrator:
                     staging=staging,
                     worker_slot=slot.slot_id,
                 )
+                if result_schema in {"authoring-result@10.0", "review-result@10.0"}:
+                    with self.sessions() as validation_session:
+                        evidence_receipt = validate_evidence_usage_for_commit(
+                            validation_session,
+                            plan_id=plan_id,
+                            step_key=step_key,
+                            worker_input=worker_input,
+                            result=result,
+                            result_artifact=EvidenceResultArtifactPointer(
+                                logical_artifact_id=artifact.logical_artifact_id,
+                                revision_id=artifact.revision_id,
+                                content_hash=staged.content_hash,
+                                result_schema=cast(
+                                    Literal["authoring-result@10.0", "review-result@10.0"],
+                                    result_schema,
+                                ),
+                            ),
+                            canonical_artifact_root=self.settings.nas_artifact_root,
+                        )
+                    evidence_event_data = evidence_receipt_event_data(
+                        result,
+                        evidence_receipt,
+                        logical_artifact_id=artifact.logical_artifact_id,
+                        revision_id=artifact.revision_id,
+                        content_hash=staged.content_hash,
+                    )
                 self._transition(job_id, JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED")
                 final_path = commit_artifact(staged, self.settings.nas_artifact_root)
                 content_hash = staged.content_hash
@@ -658,19 +692,23 @@ class Orchestrator:
                     manifest=manifest_document,
                     result=database_result,
                 )
+                event_data: dict[str, object] = {
+                    "logical_artifact_id": artifact.logical_artifact_id,
+                    "revision_id": artifact.revision_id,
+                    "content_hash": content_hash,
+                    **evidence_event_data,
+                }
                 transition_job(
                     session,
                     job_id,
                     JobState.SUCCEEDED,
                     "ARTIFACT_COMMITTED",
-                    data={
-                        "logical_artifact_id": artifact.logical_artifact_id,
-                        "revision_id": artifact.revision_id,
-                        "content_hash": content_hash,
-                    },
+                    data=event_data,
                 )
         except WorkflowSchemaError as exc:
             self._fail(job_id, ErrorCode.WORKER_RESULT_INVALID, str(exc), slot)
+        except EvidenceUsageValidationError as exc:
+            self._fail(job_id, ErrorCode.WORKER_RESULT_INVALID, exc.code, slot)
         except ControlPlaneError as exc:
             if exc.code not in RETRYABLE_CONTROL_ADMISSION_ERRORS:
                 self._fail(job_id, ErrorCode.WORKER_UNAVAILABLE, exc.code, slot)
