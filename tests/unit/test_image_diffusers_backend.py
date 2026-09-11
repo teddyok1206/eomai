@@ -170,7 +170,7 @@ def _runtime_modules(
     return torch, DiffusionPipeline
 
 
-def test_ssd1b_uses_supported_and_verified_float16_loader_argument(
+def test_ssd1b_uses_consumed_and_verified_float16_loader_argument(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -185,7 +185,7 @@ def test_ssd1b_uses_supported_and_verified_float16_loader_argument(
     assert pipeline_class.call == (
         str(tmp_path),
         {
-            "dtype": torch.float16,
+            "torch_dtype": torch.float16,
             "variant": "fp16",
             "local_files_only": True,
             "use_safetensors": True,

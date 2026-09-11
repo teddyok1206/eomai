@@ -127,9 +127,9 @@ policy. The worker result, drawing hash, provider request prompt hash, and provi
 immutable audit chain. The provider uses both pinned SSD-1B CLIP tokenizers to reject any positive
 or negative prompt that would be truncated. This is an O(prompt tokens) validation performed before
 CUDA transfer. A character limit alone is insufficient because Korean and English text have
-different token expansion. The Diffusers 0.35 loader receives its supported `dtype` argument, and
-the provider verifies the loaded UNet is actually float16; an argument that is ignored cannot
-satisfy runtime policy.
+different token expansion. The installed Diffusers 0.35 pipeline loader consumes its
+`torch_dtype` argument, and the provider independently verifies that the loaded UNet is actually
+float16; a loader argument that is ignored cannot satisfy runtime policy.
 
 Dangling model pointers, stale revisions, hash mismatch, unavailable GPU, unsupported route, OOM,
 or timeout must fail closed. There is no silent fallback from local generation to a different model
