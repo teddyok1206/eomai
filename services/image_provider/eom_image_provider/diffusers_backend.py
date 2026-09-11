@@ -35,12 +35,15 @@ class Ssd1bDiffusersBackend:
         try:
             pipeline = DiffusionPipeline.from_pretrained(
                 str(model_directory),
-                torch_dtype=torch.float16,
+                dtype=torch.float16,
                 variant="fp16",
                 local_files_only=True,
                 use_safetensors=True,
             )
-            if pipeline.scheduler.__class__.__name__ != "EulerDiscreteScheduler":
+            if (
+                pipeline.scheduler.__class__.__name__ != "EulerDiscreteScheduler"
+                or getattr(getattr(pipeline, "unet", None), "dtype", None) != torch.float16
+            ):
                 raise ProviderError("LOCAL_IMAGE_MODEL_UNAVAILABLE")
             _require_untruncated_prompts(pipeline, request)
             pipeline.set_progress_bar_config(disable=True)

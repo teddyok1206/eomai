@@ -123,9 +123,9 @@ Before inference, Catalog places the worker's subject description first, removes
 worker-facing instruction prefix, and appends one concise route policy. The provider uses both
 pinned SSD-1B CLIP tokenizers to reject any positive or negative prompt that would be truncated.
 This is an O(prompt tokens) validation performed before CUDA transfer. A character limit alone is
-insufficient because Korean and English text have different token expansion. The Diffusers loader
-passes the pinned float16 dtype through its supported `torch_dtype` argument; ignored loader
-arguments are not accepted as runtime policy.
+insufficient because Korean and English text have different token expansion. The Diffusers 0.35
+loader receives its supported `dtype` argument, and the provider verifies the loaded UNet is
+actually float16; an argument that is ignored cannot satisfy runtime policy.
 
 Dangling model pointers, stale revisions, hash mismatch, unavailable GPU, unsupported route, OOM,
 or timeout must fail closed. There is no silent fallback from local generation to a different model

@@ -26,10 +26,11 @@ class EulerDiscreteScheduler:
 
 
 class _Pipeline:
-    def __init__(self, *, token_count: int) -> None:
+    def __init__(self, *, token_count: int, dtype: object) -> None:
         self.scheduler = EulerDiscreteScheduler()
         self.tokenizer = _Tokenizer(token_count=token_count)
         self.tokenizer_2 = _Tokenizer(token_count=token_count)
+        self.unet = SimpleNamespace(dtype=dtype)
         self.transferred_to: str | None = None
 
     def set_progress_bar_config(self, *, disable: bool) -> None:
@@ -133,8 +134,13 @@ def _runtime_modules(
     monkeypatch: pytest.MonkeyPatch,
     *,
     token_count: int,
+    loaded_dtype_matches: bool = True,
 ) -> tuple[SimpleNamespace, type[Any]]:
-    pipeline = _Pipeline(token_count=token_count)
+    float16 = object()
+    pipeline = _Pipeline(
+        token_count=token_count,
+        dtype=float16 if loaded_dtype_matches else object(),
+    )
 
     class DiffusionPipeline:
         call: tuple[str, dict[str, object]] | None = None
@@ -146,7 +152,7 @@ def _runtime_modules(
 
     torch = SimpleNamespace(
         cuda=_Cuda(),
-        float16=object(),
+        float16=float16,
         Generator=_Generator,
         version=SimpleNamespace(cuda="12.8"),
         __version__="2.7.1+cu128",
@@ -164,7 +170,7 @@ def _runtime_modules(
     return torch, DiffusionPipeline
 
 
-def test_ssd1b_uses_supported_float16_loader_argument(
+def test_ssd1b_uses_supported_and_verified_float16_loader_argument(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -179,7 +185,7 @@ def test_ssd1b_uses_supported_float16_loader_argument(
     assert pipeline_class.call == (
         str(tmp_path),
         {
-            "torch_dtype": torch.float16,
+            "dtype": torch.float16,
             "variant": "fp16",
             "local_files_only": True,
             "use_safetensors": True,
@@ -200,3 +206,16 @@ def test_ssd1b_rejects_prompt_truncation_before_cuda_transfer(
         )
 
     assert pipeline_class.call is not None
+
+
+def test_ssd1b_rejects_a_loader_that_did_not_apply_float16(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _runtime_modules(monkeypatch, token_count=20, loaded_dtype_matches=False)
+
+    with pytest.raises(ProviderError, match="LOCAL_IMAGE_MODEL_UNAVAILABLE"):
+        Ssd1bDiffusersBackend().generate(
+            model_directory=tmp_path,
+            request=_request(),
+        )
