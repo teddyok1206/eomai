@@ -1382,6 +1382,114 @@ async def test_gateway_validates_assessment_learning_batch_and_exam_progress() -
 
 
 @pytest.mark.anyio
+async def test_gateway_validates_batch_free_assessment_corpus_projection() -> None:
+    occurrence_revision_id = "occurrev_" + "6" * 32
+    page_input_id = "assessmentpage_" + "9" * 32
+    content = b"\x89PNG\r\n\x1a\nCORPUS_PAGE"
+    digest = "sha256:" + hashlib.sha256(content).hexdigest()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/api/v1/assessment-learning-corpus":
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "schema_version": "assessment-learning-corpus-view/1.0",
+                        "corpus_id": "corpus_" + "1" * 32,
+                        "corpus_revision_id": "corpusrev_" + "2" * 32,
+                        "display_name": "통합과학 기출 자료",
+                        "graph_snapshot_revision_id": "graphrev_" + "3" * 32,
+                        "graph_snapshot_sha256": "sha256:" + "4" * 64,
+                        "graph_revision_number": 67,
+                        "source_pdf_count": 50,
+                        "exam_count": 25,
+                        "approved_item_count": 520,
+                        "updated_at": NOW.isoformat(),
+                    }
+                ),
+            )
+        if path == "/api/v1/assessment-learning-corpus/exams":
+            assert request.url.params["limit"] == "200"
+            return httpx.Response(
+                200,
+                json=_list(
+                    [
+                        {
+                            "schema_version": "assessment-learning-exam-view/2.0",
+                            "graph_snapshot_revision_id": "graphrev_" + "3" * 32,
+                            "assessment_occurrence_id": "occurrence_" + "5" * 32,
+                            "assessment_occurrence_revision_id": occurrence_revision_id,
+                            "assessment_occurrence_revision_sha256": "sha256:" + "7" * 64,
+                            "display_label": "2025년 고1 6월 통합과학",
+                            "administration_year": 2025,
+                            "administration_month": 6,
+                            "target_school_level": "HIGH_SCHOOL",
+                            "target_grade": 1,
+                            "subject_key": "integrated-science",
+                            "source_pdf_count": 2,
+                            "approved_item_count": 20,
+                        }
+                    ]
+                ),
+            )
+        if path.endswith("/pages"):
+            return httpx.Response(
+                200,
+                json=_list(
+                    [
+                        {
+                            "schema_version": "assessment-learning-page-view/2.0",
+                            "assessment_occurrence_revision_id": occurrence_revision_id,
+                            "page_input_id": page_input_id,
+                            "source_role": "PROBLEM_DOCUMENT",
+                            "physical_page": 1,
+                            "artifact_id": "artifact_" + "8" * 32,
+                            "artifact_revision_id": "rev_" + "9" * 32,
+                            "artifact_member": "pages/problem-1.png",
+                            "sha256": digest,
+                            "media_type": "image/png",
+                            "content_length": len(content),
+                            "width_px": 1240,
+                            "height_px": 1754,
+                        }
+                    ]
+                ),
+            )
+        return httpx.Response(
+            200,
+            content=content,
+            headers={
+                "Content-Type": "image/png",
+                "Content-Length": str(len(content)),
+                "ETag": f'"{digest}"',
+            },
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    corpus = await gateway.assessment_learning_corpus(_session())
+    exams = await gateway.assessment_learning_corpus_exams(_session())
+    pages = await gateway.assessment_learning_corpus_pages(_session(), occurrence_revision_id)
+    media = await gateway.assessment_learning_corpus_page_media(
+        _session(), occurrence_revision_id, page_input_id
+    )
+    assert corpus.source_pdf_count == 50
+    assert corpus.approved_item_count == 520
+    assert exams[0].approved_item_count == 20
+    assert pages[0].artifact_revision_id == "rev_" + "9" * 32
+    assert media.content == content
+    serialized = repr((corpus.model_dump(), exams[0].model_dump(), pages[0].model_dump()))
+    assert "batch" not in serialized
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_gateway_validates_assessment_page_pointer_and_png_bytes() -> None:
     batch_id = "legacybatch_" + "1" * 32
     occurrence_revision_id = "occurrev_" + "2" * 32

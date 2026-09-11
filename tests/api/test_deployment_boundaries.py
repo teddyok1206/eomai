@@ -634,8 +634,11 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/assessment-learning-corpus-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/assessment-learning-exam-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-page-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/assessment-learning-page-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-production-execution-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-production-execution-v3.schema.json"' in deployment

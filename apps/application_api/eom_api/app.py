@@ -92,6 +92,7 @@ def create_app(services: AppServices | None = None) -> FastAPI:
         system,
     ):
         app.include_router(module.router, prefix=API_PREFIX)
+    app.include_router(assessment_learning.corpus_router, prefix=API_PREFIX)
     install_route_metadata(app)
     install_exception_handlers(app)
     app.add_middleware(

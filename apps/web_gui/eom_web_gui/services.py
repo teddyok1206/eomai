@@ -9,9 +9,12 @@ from typing import Any
 
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
+    AssessmentLearningCorpusStatus,
     AssessmentLearningExamStatus,
+    AssessmentLearningExamStatusV2,
     AssessmentLearningItemStatus,
     AssessmentLearningPageStatus,
+    AssessmentLearningPageStatusV2,
     CodexAccountAdminCommand,
     CodexAuthChallengeReveal,
     CodexAuthEnrollmentStart,
@@ -242,6 +245,46 @@ class WebServices:
     ) -> tuple[AssessmentLearningBatchStatus, ...]:
         _require_admin(session)
         return await self.gateway.assessment_learning_batches(session)
+
+    async def assessment_learning_corpus(
+        self, session: WebSession
+    ) -> AssessmentLearningCorpusStatus:
+        _require_admin(session)
+        return await self.gateway.assessment_learning_corpus(session)
+
+    async def assessment_learning_corpus_exams(
+        self, session: WebSession
+    ) -> tuple[AssessmentLearningExamStatusV2, ...]:
+        _require_admin(session)
+        return await self.gateway.assessment_learning_corpus_exams(session)
+
+    async def assessment_learning_corpus_pages(
+        self, session: WebSession, occurrence_revision_id: str
+    ) -> tuple[AssessmentLearningPageStatusV2, ...]:
+        _require_admin(session)
+        return await self.gateway.assessment_learning_corpus_pages(session, occurrence_revision_id)
+
+    async def assessment_learning_corpus_items(
+        self,
+        session: WebSession,
+        occurrence_revision_id: str,
+        *,
+        item_number: int | None,
+    ) -> tuple[AssessmentLearningItemStatus, ...]:
+        _require_admin(session)
+        exams = await self.gateway.assessment_learning_corpus_exams(session)
+        matches = tuple(
+            exam
+            for exam in exams
+            if exam.assessment_occurrence_revision_id == occurrence_revision_id
+        )
+        if len(matches) != 1:
+            raise GatewayError(status=404, code="ASSESSMENT_EXAM_NOT_FOUND")
+        return await self.gateway.assessment_learning_items(
+            session,
+            matches[0],
+            item_number=item_number,
+        )
 
     async def assessment_learning_exams(
         self, session: WebSession, batch_id: str

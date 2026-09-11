@@ -12,9 +12,12 @@ from eom_api_contracts.assessment_assemblies import (
 )
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
+    AssessmentLearningCorpusView,
     AssessmentLearningExamView,
+    AssessmentLearningExamViewV2,
     AssessmentLearningItemCounts,
     AssessmentLearningPageView,
+    AssessmentLearningPageViewV2,
     AssessmentLearningWorkUnitCounts,
 )
 from eom_api_contracts.auth import LoginRequest
@@ -463,6 +466,74 @@ def test_assessment_learning_schemas_match_typed_progress_and_exclude_march() ->
             analysis_failed=0,
             graph_published=3,
         )
+
+
+def test_assessment_learning_user_projection_is_batch_free_and_schema_exact() -> None:
+    packaged_root = (
+        Path(__file__).resolve().parents[2] / "packages/api_contracts/eom_api_contracts/schemas"
+    )
+    for name in (
+        "assessment-learning-corpus-v1.schema.json",
+        "assessment-learning-exam-v2.schema.json",
+        "assessment-learning-page-v2.schema.json",
+    ):
+        canonical = SCHEMA_ROOT / name
+        packaged = packaged_root / name
+        assert canonical.read_bytes() == packaged.read_bytes()
+        Draft202012Validator.check_schema(json.loads(canonical.read_text(encoding="utf-8")))
+
+    now = datetime(2026, 9, 11, 15, 0, tzinfo=UTC)
+    corpus = AssessmentLearningCorpusView(
+        corpus_id="corpus_" + "1" * 32,
+        corpus_revision_id="corpusrev_" + "2" * 32,
+        display_name="통합과학 기출 자료",
+        graph_snapshot_revision_id="graphrev_" + "3" * 32,
+        graph_snapshot_sha256="sha256:" + "4" * 64,
+        graph_revision_number=67,
+        source_pdf_count=50,
+        exam_count=25,
+        approved_item_count=520,
+        updated_at=now,
+    ).model_dump(mode="json")
+    exam = AssessmentLearningExamViewV2(
+        graph_snapshot_revision_id="graphrev_" + "3" * 32,
+        assessment_occurrence_id="occurrence_" + "5" * 32,
+        assessment_occurrence_revision_id="occurrev_" + "6" * 32,
+        assessment_occurrence_revision_sha256="sha256:" + "7" * 64,
+        display_label="2025년 고1 6월 통합과학",
+        administration_year=2025,
+        administration_month=6,
+        target_school_level="HIGH_SCHOOL",
+        target_grade=1,
+        subject_key="integrated-science",
+        source_pdf_count=2,
+        approved_item_count=20,
+    ).model_dump(mode="json")
+    page = AssessmentLearningPageViewV2(
+        assessment_occurrence_revision_id="occurrev_" + "6" * 32,
+        page_input_id="assessmentpage_" + "8" * 32,
+        source_role="PROBLEM_DOCUMENT",
+        physical_page=1,
+        artifact_id="artifact_" + "9" * 32,
+        artifact_revision_id="rev_" + "a" * 32,
+        artifact_member="pages/problem-1.png",
+        sha256="sha256:" + "b" * 64,
+        content_length=1024,
+        width_px=1240,
+        height_px=1754,
+    ).model_dump(mode="json")
+    for name, value in (
+        ("assessment-learning-corpus-v1.schema.json", corpus),
+        ("assessment-learning-exam-v2.schema.json", exam),
+        ("assessment-learning-page-v2.schema.json", page),
+    ):
+        schema = json.loads((SCHEMA_ROOT / name).read_text(encoding="utf-8"))
+        assert tuple(Draft202012Validator(schema).iter_errors(value)) == ()
+        assert not any("batch" in key or "work_unit" in key for key in value)
+        assert tuple(Draft202012Validator(schema).iter_errors(value | {"extraction_batch_id": "x"}))
+
+    with pytest.raises(ValidationError, match="source PDF count differs"):
+        AssessmentLearningCorpusView.model_validate(corpus | {"source_pdf_count": 48})
 
 
 def test_request_contracts_forbid_unknown_fields_and_redact_secrets() -> None:

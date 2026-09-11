@@ -419,6 +419,61 @@ def create_app(
         return await actual.recent_items(session)
 
     @app.get(
+        f"{API_PREFIX}/admin/assessment-learning-corpus/exams/{{occurrence_revision_id}}/pages"
+    )
+    async def assessment_learning_corpus_pages(
+        occurrence_revision_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> tuple[dict[str, object], ...]:
+        return tuple(
+            value.model_dump(mode="json")
+            for value in await actual.assessment_learning_corpus_pages(
+                session, occurrence_revision_id
+            )
+        )
+
+    @app.get(
+        f"{API_PREFIX}/admin/assessment-learning-corpus/exams/{{occurrence_revision_id}}/items"
+    )
+    async def assessment_learning_corpus_items(
+        occurrence_revision_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+        item_number: int | None = None,
+    ) -> tuple[dict[str, object], ...]:
+        return tuple(
+            value.model_dump(mode="json")
+            for value in await actual.assessment_learning_corpus_items(
+                session,
+                occurrence_revision_id,
+                item_number=item_number,
+            )
+        )
+
+    @app.get(
+        f"{API_PREFIX}/admin/assessment-learning-corpus/exams/"
+        "{occurrence_revision_id}/pages/{page_input_id}/image"
+    )
+    async def assessment_learning_corpus_page_media(
+        occurrence_revision_id: str,
+        page_input_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> Response:
+        value = await actual.gateway.assessment_learning_corpus_page_media(
+            session,
+            occurrence_revision_id,
+            page_input_id,
+        )
+        return Response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "ETag": value.etag,
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @app.get(
         f"{API_PREFIX}/admin/assessment-learning-batches/{{batch_id}}/exams/"
         "{occurrence_revision_id}/pages"
     )
@@ -542,6 +597,21 @@ def create_app(
         return tuple(
             value.model_dump(mode="json")
             for value in await actual.assessment_learning_batches(session)
+        )
+
+    @app.get(f"{API_PREFIX}/admin/assessment-learning-corpus")
+    async def assessment_learning_corpus(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, object]:
+        return (await actual.assessment_learning_corpus(session)).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/admin/assessment-learning-corpus/exams")
+    async def assessment_learning_corpus_exams(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> tuple[dict[str, object], ...]:
+        return tuple(
+            value.model_dump(mode="json")
+            for value in await actual.assessment_learning_corpus_exams(session)
         )
 
     @app.get(f"{API_PREFIX}/admin/assessment-learning-batches/{{batch_id}}/exams")

@@ -9,6 +9,82 @@ from pydantic import Field, model_validator
 from eom_api_contracts.common import ApiModel, Sha256, UtcDatetime
 
 
+class AssessmentLearningCorpusView(ApiModel):
+    """Batch-free projection of the PDF-backed Item corpus in one immutable Graph revision."""
+
+    schema_version: Literal["assessment-learning-corpus-view/1.0"] = (
+        "assessment-learning-corpus-view/1.0"
+    )
+    corpus_id: str = Field(pattern=r"^corpus_[0-9a-f]{32}$")
+    corpus_revision_id: str = Field(pattern=r"^corpusrev_[0-9a-f]{32}$")
+    display_name: str = Field(min_length=1, max_length=128)
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    graph_snapshot_sha256: Sha256
+    graph_revision_number: int = Field(ge=1)
+    source_pdf_count: int = Field(ge=2, le=20_000)
+    exam_count: int = Field(ge=1, le=10_000)
+    approved_item_count: int = Field(ge=1, le=100_000)
+    updated_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def coherent_corpus(self) -> Self:
+        if self.source_pdf_count != self.exam_count * 2:
+            raise ValueError("assessment learning source PDF count differs from exam corpus")
+        if self.approved_item_count < self.exam_count:
+            raise ValueError("assessment learning Item count is smaller than exam count")
+        return self
+
+
+class AssessmentLearningExamViewV2(ApiModel):
+    """One deduplicated assessment occurrence in the current Graph snapshot."""
+
+    schema_version: Literal["assessment-learning-exam-view/2.0"] = (
+        "assessment-learning-exam-view/2.0"
+    )
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    assessment_occurrence_id: str = Field(pattern=r"^occurrence_[0-9a-f]{32}$")
+    assessment_occurrence_revision_id: str = Field(pattern=r"^occurrev_[0-9a-f]{32}$")
+    assessment_occurrence_revision_sha256: Sha256
+    display_label: str = Field(min_length=1, max_length=512)
+    administration_year: int = Field(ge=1900, le=2200)
+    administration_month: int = Field(ge=1, le=12)
+    target_school_level: Literal["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"]
+    target_grade: int = Field(ge=1, le=6)
+    subject_key: str = Field(pattern=r"^[a-z0-9][a-z0-9._:-]{0,159}$")
+    source_pdf_count: Literal[2] = 2
+    approved_item_count: int = Field(ge=1, le=200)
+
+    @model_validator(mode="after")
+    def exclude_unlearnable_march_source(self) -> Self:
+        if (
+            self.target_school_level == "HIGH_SCHOOL"
+            and self.target_grade == 1
+            and self.administration_month == 3
+        ):
+            raise ValueError("high-school grade 1 March evidence is not learnable")
+        return self
+
+
+class AssessmentLearningPageViewV2(ApiModel):
+    """Batch-free immutable page pointer for an assessment occurrence."""
+
+    schema_version: Literal["assessment-learning-page-view/2.0"] = (
+        "assessment-learning-page-view/2.0"
+    )
+    assessment_occurrence_revision_id: str = Field(pattern=r"^occurrev_[0-9a-f]{32}$")
+    page_input_id: str = Field(pattern=r"^assessmentpage_[0-9a-f]{32}$")
+    source_role: Literal["PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"]
+    physical_page: int = Field(ge=1, le=100000)
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    artifact_member: str = Field(min_length=1, max_length=512)
+    sha256: Sha256
+    media_type: Literal["image/png"] = "image/png"
+    content_length: int = Field(ge=1, le=32 * 1024 * 1024)
+    width_px: int = Field(ge=1, le=20000)
+    height_px: int = Field(ge=1, le=20000)
+
+
 class AssessmentLearningWorkUnitCounts(ApiModel):
     pending: int = Field(ge=0, le=10_000)
     claimed: int = Field(ge=0, le=10_000)

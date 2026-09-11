@@ -4,20 +4,149 @@ from __future__ import annotations
 
 from typing import Literal
 
-from eom_api_contracts import ListResponse
+from eom_api_contracts import ListResponse, SingleResponse
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
+    AssessmentLearningCorpusView,
     AssessmentLearningExamView,
+    AssessmentLearningExamViewV2,
     AssessmentLearningPageView,
+    AssessmentLearningPageViewV2,
 )
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request
 from starlette.responses import StreamingResponse
 
 from eom_api.dependencies import require_permission
-from eom_api.routers.common import many
+from eom_api.routers.common import many, one
 
 router = APIRouter(prefix="/assessment-learning-batches", tags=["assessment-learning"])
+corpus_router = APIRouter(prefix="/assessment-learning-corpus", tags=["assessment-learning"])
+
+
+@corpus_router.get(
+    "",
+    operation_id="assessment_learning_corpus_get",
+    response_model=SingleResponse[AssessmentLearningCorpusView],
+    dependencies=[
+        Depends(require_permission(PermissionKey.KNOWLEDGE_ANALYSIS_READ, admin_only=True))
+    ],
+)
+def get_assessment_learning_corpus(
+    request: Request,
+) -> SingleResponse[AssessmentLearningCorpusView]:
+    return one(request, request.app.state.services.queries.assessment_learning_corpus())
+
+
+@corpus_router.get(
+    "/exams",
+    operation_id="assessment_learning_corpus_exam_list",
+    response_model=ListResponse[AssessmentLearningExamViewV2],
+    dependencies=[
+        Depends(require_permission(PermissionKey.KNOWLEDGE_ANALYSIS_READ, admin_only=True))
+    ],
+)
+def list_assessment_learning_corpus_exams(
+    request: Request,
+    limit: int = Query(default=100, ge=1, le=200),
+    cursor: str | None = Query(default=None, max_length=1024),
+) -> ListResponse[AssessmentLearningExamViewV2]:
+    page = request.app.state.services.queries.assessment_learning_corpus_exams(
+        limit=limit,
+        cursor=cursor,
+    )
+    return many(
+        request,
+        page.data,
+        limit=limit,
+        next_cursor=page.next_cursor,
+        has_more=page.has_more,
+    )
+
+
+@corpus_router.get(
+    "/exams/{occurrence_revision_id}/pages",
+    operation_id="assessment_learning_corpus_page_list",
+    response_model=ListResponse[AssessmentLearningPageViewV2],
+    dependencies=[
+        Depends(require_permission(PermissionKey.KNOWLEDGE_ANALYSIS_READ, admin_only=True))
+    ],
+)
+def list_assessment_learning_corpus_pages(
+    request: Request,
+    occurrence_revision_id: str = Path(pattern=r"^occurrev_[0-9a-f]{32}$"),
+) -> ListResponse[AssessmentLearningPageViewV2]:
+    batch_id = request.app.state.services.queries.assessment_learning_corpus_source_locator(
+        occurrence_revision_id
+    )
+    pointers = request.app.state.services.catalog_application.assessment_pages(
+        batch_id,
+        occurrence_revision_id,
+    )
+    values = tuple(
+        AssessmentLearningPageViewV2(
+            assessment_occurrence_revision_id=occurrence_revision_id,
+            page_input_id=pointer.page_input_id,
+            source_role=pointer.source_role,
+            physical_page=pointer.physical_page,
+            artifact_id=pointer.artifact_id,
+            artifact_revision_id=pointer.artifact_revision_id,
+            artifact_member=pointer.member_path,
+            sha256=pointer.sha256,
+            content_length=pointer.content_length,
+            width_px=pointer.width_px,
+            height_px=pointer.height_px,
+        )
+        for pointer in pointers
+    )
+    return many(
+        request,
+        values,
+        limit=min(200, max(1, len(values))),
+        next_cursor=None,
+        has_more=False,
+    )
+
+
+@corpus_router.get(
+    "/exams/{occurrence_revision_id}/pages/{page_input_id}/image",
+    operation_id="assessment_learning_corpus_page_image_get",
+    dependencies=[
+        Depends(require_permission(PermissionKey.KNOWLEDGE_ANALYSIS_READ, admin_only=True))
+    ],
+)
+def get_assessment_learning_corpus_page_image(
+    request: Request,
+    occurrence_revision_id: str = Path(pattern=r"^occurrev_[0-9a-f]{32}$"),
+    page_input_id: str = Path(pattern=r"^assessmentpage_[0-9a-f]{32}$"),
+) -> StreamingResponse:
+    batch_id = request.app.state.services.queries.assessment_learning_corpus_source_locator(
+        occurrence_revision_id
+    )
+    value = request.app.state.services.catalog_application.download_assessment_page(
+        batch_id,
+        occurrence_revision_id,
+        page_input_id,
+    )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="ASSESSMENT_PAGE_IMAGE_READ_AUTHORIZED",
+        operation_id="assessment_learning_corpus_page_image_get",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="assessment_page_input",
+        target_id=page_input_id,
+    )
+    return StreamingResponse(
+        value.iter_chunks(),
+        media_type="image/png",
+        headers={
+            "Content-Length": str(value.content_length),
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "ETag": f'"{value.sha256}"',
+        },
+    )
 
 
 @router.get(

@@ -1,0 +1,21 @@
+{
+  "$id": "https://eom.local/schemas/api/assessment-learning-corpus-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "assessment-learning-corpus-view/1.0"},
+    "corpus_id": {"type": "string", "pattern": "^corpus_[0-9a-f]{32}$"},
+    "corpus_revision_id": {"type": "string", "pattern": "^corpusrev_[0-9a-f]{32}$"},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+    "graph_snapshot_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "graph_revision_number": {"type": "integer", "minimum": 1},
+    "source_pdf_count": {"type": "integer", "minimum": 2, "maximum": 20000},
+    "exam_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "approved_item_count": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "updated_at": {"type": "string", "format": "date-time"}
+  },
+  "required": ["schema_version", "corpus_id", "corpus_revision_id", "display_name", "graph_snapshot_revision_id", "graph_snapshot_sha256", "graph_revision_number", "source_pdf_count", "exam_count", "approved_item_count", "updated_at"],
+  "title": "Assessment Learning Corpus View V1",
+  "type": "object"
+}

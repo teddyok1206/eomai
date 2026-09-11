@@ -24,7 +24,9 @@ from eom_api_contracts.assessment_assemblies import (
 )
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
+    AssessmentLearningCorpusView,
     AssessmentLearningExamView,
+    AssessmentLearningExamViewV2,
     AssessmentLearningItemCounts,
     AssessmentLearningWorkUnitCounts,
 )
@@ -111,6 +113,7 @@ from eom_catalog_service.knowledge_graph_models import (
 )
 from eom_catalog_service.legacy_assessment_models import (
     AssessmentLayoutObservationRecord,
+    AssessmentSourceBundleMemberRecord,
     AssessmentSourceBundleRevisionRecord,
     LegacyItemExtractionDecisionRecord,
 )
@@ -221,6 +224,14 @@ class _AssessmentLearningExamAggregate:
     analysis_failed_item_revision_ids: set[str] = field(default_factory=set)
     graph_item_revision_ids: set[str] = field(default_factory=set)
     progress_updated_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class _AssessmentLearningCorpusProjection:
+    corpus: KnowledgeCorpusRecord
+    snapshot: KnowledgeGraphSnapshotRecord
+    placements: tuple[AssessmentItemOccurrenceReferenceRecord, ...]
+    source_members_by_bundle: dict[str, tuple[AssessmentSourceBundleMemberRecord, ...]]
 
 
 class CursorCodec:
@@ -1678,6 +1689,120 @@ class QueryAdapter:
             )
             return PageResult(values, next_cursor, more)
 
+    def assessment_learning_corpus(self) -> AssessmentLearningCorpusView:
+        """Project the deduplicated PDF corpus from the current immutable Graph revision."""
+
+        with self.sessions() as session:
+            projection = self._assessment_learning_corpus_projection(session)
+            occurrence_ids = {
+                row.assessment_occurrence_revision_id for row in projection.placements
+            }
+            item_revision_ids = {row.item_revision_id for row in projection.placements}
+            source_pointers = {
+                (member.source_artifact_revision_id, member.source_member_path)
+                for members in projection.source_members_by_bundle.values()
+                for member in members
+            }
+            return AssessmentLearningCorpusView(
+                corpus_id=projection.corpus.corpus_id,
+                corpus_revision_id=projection.snapshot.corpus_revision_id,
+                display_name=projection.corpus.display_name,
+                graph_snapshot_revision_id=projection.snapshot.graph_snapshot_revision_id,
+                graph_snapshot_sha256=projection.snapshot.snapshot_sha256,
+                graph_revision_number=projection.snapshot.revision_number,
+                source_pdf_count=len(source_pointers),
+                exam_count=len(occurrence_ids),
+                approved_item_count=len(item_revision_ids),
+                updated_at=projection.snapshot.created_at,
+            )
+
+    def assessment_learning_corpus_exams(
+        self,
+        *,
+        limit: int,
+        cursor: str | None,
+    ) -> PageResult[AssessmentLearningExamViewV2]:
+        """Return one row per immutable exam occurrence in the current Graph revision."""
+
+        with self.sessions() as session:
+            projection = self._assessment_learning_corpus_projection(session)
+            by_occurrence: dict[str, list[AssessmentItemOccurrenceReferenceRecord]] = {}
+            for row in projection.placements:
+                by_occurrence.setdefault(row.assessment_occurrence_revision_id, []).append(row)
+            ordered = sorted(
+                by_occurrence.values(),
+                key=lambda rows: (
+                    rows[0].administration_year,
+                    rows[0].administration_month,
+                    rows[0].occurrence_display_label,
+                    rows[0].assessment_occurrence_revision_id,
+                ),
+            )
+            snapshot_id = projection.snapshot.graph_snapshot_revision_id
+            offset = (
+                self.cursors.decode_ordinal(cursor, "assessment-learning-corpus-exam", snapshot_id)
+                if cursor
+                else 0
+            )
+            if offset > len(ordered):
+                raise ApiError(
+                    400,
+                    "API_CURSOR_INVALID",
+                    "Invalid cursor",
+                    "The pagination cursor is outside the current assessment corpus.",
+                )
+            page = ordered[offset : offset + limit + 1]
+            more = len(page) > limit
+            page = page[:limit]
+            values = tuple(self._assessment_learning_corpus_exam(projection, rows) for rows in page)
+            next_offset = offset + len(values)
+            next_cursor = (
+                self.cursors.encode_ordinal(
+                    "assessment-learning-corpus-exam", snapshot_id, next_offset
+                )
+                if more
+                else None
+            )
+            return PageResult(values, next_cursor, more)
+
+    def assessment_learning_corpus_source_locator(self, occurrence_revision_id: str) -> str:
+        """Resolve a public occurrence revision to a private accepted batch locator."""
+
+        with self.sessions() as session:
+            projection = self._assessment_learning_corpus_projection(session)
+            bundle_ids = {
+                row.assessment_source_bundle_revision_id
+                for row in projection.placements
+                if row.assessment_occurrence_revision_id == occurrence_revision_id
+            }
+            if not bundle_ids:
+                self._not_found("ASSESSMENT_EXAM_NOT_FOUND")
+            if len(bundle_ids) != 1:
+                self._assessment_learning_projection_invalid()
+            bundle_revision_id = next(iter(bundle_ids))
+            batch_id = session.scalar(
+                select(LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id)
+                .join(
+                    LegacyItemExtractionBatchRecord,
+                    LegacyItemExtractionBatchRecord.extraction_batch_id
+                    == LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+                )
+                .where(
+                    LegacyItemExtractionBatchWorkUnitRecord.assessment_source_bundle_revision_id
+                    == bundle_revision_id,
+                    LegacyItemExtractionBatchWorkUnitRecord.state == "ACCEPTED",
+                    LegacyItemExtractionBatchRecord.state.in_(("SUCCEEDED", "COMPLETED_WITH_GAPS")),
+                )
+                .order_by(
+                    LegacyItemExtractionBatchWorkUnitRecord.updated_at.desc(),
+                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+                )
+                .limit(1)
+            )
+            if batch_id is None:
+                self._assessment_learning_projection_invalid()
+            return batch_id
+
     def assessment_learning_exams(
         self,
         batch_id: str,
@@ -1726,6 +1851,154 @@ class QueryAdapter:
                 next_cursor,
                 more,
             )
+
+    def _assessment_learning_corpus_projection(
+        self, session: Session
+    ) -> _AssessmentLearningCorpusProjection:
+        corpus = session.scalar(
+            select(KnowledgeCorpusRecord).where(
+                KnowledgeCorpusRecord.corpus_key == INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
+                KnowledgeCorpusRecord.lifecycle_state == "ACTIVE",
+            )
+        )
+        snapshot = (
+            session.get(KnowledgeGraphSnapshotRecord, corpus.current_graph_snapshot_revision_id)
+            if corpus is not None and corpus.current_graph_snapshot_revision_id is not None
+            else None
+        )
+        if (
+            corpus is None
+            or corpus.current_corpus_revision_id is None
+            or snapshot is None
+            or snapshot.state != "PUBLISHED"
+            or snapshot.graph_id != corpus.graph_id
+            or snapshot.corpus_revision_id != corpus.current_corpus_revision_id
+        ):
+            self._assessment_learning_projection_invalid()
+        placements = tuple(
+            session.scalars(
+                select(AssessmentItemOccurrenceReferenceRecord)
+                .where(
+                    AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id
+                    == snapshot.graph_snapshot_revision_id
+                )
+                .order_by(
+                    AssessmentItemOccurrenceReferenceRecord.administration_year,
+                    AssessmentItemOccurrenceReferenceRecord.administration_month,
+                    AssessmentItemOccurrenceReferenceRecord.assessment_occurrence_revision_id,
+                    AssessmentItemOccurrenceReferenceRecord.item_number,
+                )
+            )
+        )
+        if not placements or len({row.item_revision_id for row in placements}) != len(placements):
+            self._assessment_learning_projection_invalid()
+        bundles_by_occurrence: dict[str, set[str]] = {}
+        for row in placements:
+            bundles_by_occurrence.setdefault(row.assessment_occurrence_revision_id, set()).add(
+                row.assessment_source_bundle_revision_id
+            )
+        if any(len(bundle_ids) != 1 for bundle_ids in bundles_by_occurrence.values()):
+            self._assessment_learning_projection_invalid()
+        bundle_ids = {
+            bundle_id for values in bundles_by_occurrence.values() for bundle_id in values
+        }
+        members_by_bundle: dict[str, list[AssessmentSourceBundleMemberRecord]] = {}
+        members = session.scalars(
+            select(AssessmentSourceBundleMemberRecord)
+            .where(
+                AssessmentSourceBundleMemberRecord.assessment_source_bundle_revision_id.in_(
+                    bundle_ids
+                ),
+                AssessmentSourceBundleMemberRecord.role.in_(
+                    ("PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT")
+                ),
+            )
+            .order_by(
+                AssessmentSourceBundleMemberRecord.assessment_source_bundle_revision_id,
+                AssessmentSourceBundleMemberRecord.role,
+                AssessmentSourceBundleMemberRecord.ordinal,
+            )
+        )
+        for member in members:
+            members_by_bundle.setdefault(member.assessment_source_bundle_revision_id, []).append(
+                member
+            )
+        expected_roles = {"PROBLEM_DOCUMENT", "ANSWER_EXPLANATION_DOCUMENT"}
+        if set(members_by_bundle) != bundle_ids or any(
+            len(values) != 2
+            or {value.role for value in values} != expected_roles
+            or len(
+                {(value.source_artifact_revision_id, value.source_member_path) for value in values}
+            )
+            != 2
+            for values in members_by_bundle.values()
+        ):
+            self._assessment_learning_projection_invalid()
+        frozen_members = {key: tuple(values) for key, values in members_by_bundle.items()}
+        return _AssessmentLearningCorpusProjection(
+            corpus=corpus,
+            snapshot=snapshot,
+            placements=placements,
+            source_members_by_bundle=frozen_members,
+        )
+
+    def _assessment_learning_corpus_exam(
+        self,
+        projection: _AssessmentLearningCorpusProjection,
+        rows: list[AssessmentItemOccurrenceReferenceRecord],
+    ) -> AssessmentLearningExamViewV2:
+        first = rows[0]
+        identity = (
+            first.assessment_occurrence_id,
+            first.assessment_occurrence_revision_id,
+            first.assessment_occurrence_revision_sha256,
+            first.occurrence_display_label,
+            first.administration_year,
+            first.administration_month,
+            first.target_school_level,
+            first.target_grade,
+            first.subject_key,
+            first.assessment_source_bundle_revision_id,
+        )
+        if any(
+            (
+                row.assessment_occurrence_id,
+                row.assessment_occurrence_revision_id,
+                row.assessment_occurrence_revision_sha256,
+                row.occurrence_display_label,
+                row.administration_year,
+                row.administration_month,
+                row.target_school_level,
+                row.target_grade,
+                row.subject_key,
+                row.assessment_source_bundle_revision_id,
+            )
+            != identity
+            for row in rows
+        ):
+            self._assessment_learning_projection_invalid()
+        members = projection.source_members_by_bundle.get(
+            first.assessment_source_bundle_revision_id
+        )
+        if members is None or len(members) != 2:
+            self._assessment_learning_projection_invalid()
+        return AssessmentLearningExamViewV2(
+            graph_snapshot_revision_id=projection.snapshot.graph_snapshot_revision_id,
+            assessment_occurrence_id=first.assessment_occurrence_id,
+            assessment_occurrence_revision_id=first.assessment_occurrence_revision_id,
+            assessment_occurrence_revision_sha256=first.assessment_occurrence_revision_sha256,
+            display_label=first.occurrence_display_label,
+            administration_year=first.administration_year,
+            administration_month=first.administration_month,
+            target_school_level=cast(
+                Literal["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"],
+                first.target_school_level,
+            ),
+            target_grade=first.target_grade,
+            subject_key=first.subject_key,
+            source_pdf_count=2,
+            approved_item_count=len({row.item_revision_id for row in rows}),
+        )
 
     def knowledge_analysis_batch(self, batch_id: str) -> KnowledgeAnalysisBatchView:
         with self.sessions() as session:

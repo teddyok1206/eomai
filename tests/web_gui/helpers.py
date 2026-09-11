@@ -6,9 +6,12 @@ from typing import Any
 from eom_web_gui.app import create_app
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
+    AssessmentLearningCorpusStatus,
     AssessmentLearningExamStatus,
+    AssessmentLearningExamStatusV2,
     AssessmentLearningItemCounts,
     AssessmentLearningPageStatus,
+    AssessmentLearningPageStatusV2,
     AssessmentLearningWorkUnitCounts,
     CodexAuthEnrollmentStatusView,
     CodexDeviceChallengeView,
@@ -821,6 +824,24 @@ class FakeGateway:
             ),
         )
 
+    async def assessment_learning_corpus(
+        self, session: WebSession
+    ) -> AssessmentLearningCorpusStatus:
+        del session
+        return AssessmentLearningCorpusStatus(
+            schema_version="assessment-learning-corpus-view/1.0",
+            corpus_id="corpus_" + "d" * 32,
+            corpus_revision_id="corpusrev_" + "e" * 32,
+            display_name="통합과학 기출 자료",
+            graph_snapshot_revision_id="graphrev_" + "4" * 32,
+            graph_snapshot_sha256="sha256:" + "f" * 64,
+            graph_revision_number=67,
+            source_pdf_count=50,
+            exam_count=25,
+            approved_item_count=520,
+            updated_at=NOW,
+        )
+
     async def item_bank_entries(
         self,
         session: WebSession,
@@ -984,6 +1005,28 @@ class FakeGateway:
             ),
         )
 
+    async def assessment_learning_corpus_exams(
+        self, session: WebSession
+    ) -> tuple[AssessmentLearningExamStatusV2, ...]:
+        del session
+        return (
+            AssessmentLearningExamStatusV2(
+                schema_version="assessment-learning-exam-view/2.0",
+                graph_snapshot_revision_id="graphrev_" + "4" * 32,
+                assessment_occurrence_id="occurrence_" + "5" * 32,
+                assessment_occurrence_revision_id="occurrev_" + "6" * 32,
+                assessment_occurrence_revision_sha256="sha256:" + "7" * 64,
+                display_label="2025년 고1 6월 통합과학",
+                administration_year=2025,
+                administration_month=6,
+                target_school_level="HIGH_SCHOOL",
+                target_grade=1,
+                subject_key="integrated-science",
+                source_pdf_count=2,
+                approved_item_count=20,
+            ),
+        )
+
     async def assessment_learning_pages(
         self, session: WebSession, batch_id: str, occurrence_revision_id: str
     ) -> tuple[AssessmentLearningPageStatus, ...]:
@@ -1009,6 +1052,29 @@ class FakeGateway:
             ),
         )
 
+    async def assessment_learning_corpus_pages(
+        self, session: WebSession, occurrence_revision_id: str
+    ) -> tuple[AssessmentLearningPageStatusV2, ...]:
+        del session
+        assert occurrence_revision_id == "occurrev_" + "6" * 32
+        return (
+            AssessmentLearningPageStatusV2(
+                schema_version="assessment-learning-page-view/2.0",
+                assessment_occurrence_revision_id=occurrence_revision_id,
+                page_input_id="assessmentpage_" + "9" * 32,
+                source_role="PROBLEM_DOCUMENT",
+                physical_page=1,
+                artifact_id="artifact_" + "a" * 32,
+                artifact_revision_id="rev_" + "b" * 32,
+                artifact_member="pages/problem-1.png",
+                sha256="sha256:" + "c" * 64,
+                media_type="image/png",
+                content_length=16,
+                width_px=1240,
+                height_px=1754,
+            ),
+        )
+
     async def assessment_learning_page_media(
         self,
         session: WebSession,
@@ -1018,6 +1084,21 @@ class FakeGateway:
     ) -> ItemMedia:
         del session
         assert batch_id == "legacybatch_" + "1" * 32
+        assert occurrence_revision_id == "occurrev_" + "6" * 32
+        assert page_input_id == "assessmentpage_" + "9" * 32
+        return ItemMedia(
+            content=b"\x89PNG\r\n\x1a\nWEB_PAGE",
+            content_type="image/png",
+            etag='"sha256:' + "c" * 64 + '"',
+        )
+
+    async def assessment_learning_corpus_page_media(
+        self,
+        session: WebSession,
+        occurrence_revision_id: str,
+        page_input_id: str,
+    ) -> ItemMedia:
+        del session
         assert occurrence_revision_id == "occurrev_" + "6" * 32
         assert page_input_id == "assessmentpage_" + "9" * 32
         return ItemMedia(

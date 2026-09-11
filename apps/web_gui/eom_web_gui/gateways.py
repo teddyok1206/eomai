@@ -13,9 +13,12 @@ import httpx
 
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
+    AssessmentLearningCorpusStatus,
     AssessmentLearningExamStatus,
+    AssessmentLearningExamStatusV2,
     AssessmentLearningItemStatus,
     AssessmentLearningPageStatus,
+    AssessmentLearningPageStatusV2,
     CodexAccountStatusView,
     CodexAuthEnrollmentStatusView,
     CodexControlCommandStatusView,
@@ -417,6 +420,25 @@ class ApplicationGateway(Protocol):
         self, session: WebSession
     ) -> tuple[AssessmentLearningBatchStatus, ...]: ...
 
+    async def assessment_learning_corpus(
+        self, session: WebSession
+    ) -> AssessmentLearningCorpusStatus: ...
+
+    async def assessment_learning_corpus_exams(
+        self, session: WebSession
+    ) -> tuple[AssessmentLearningExamStatusV2, ...]: ...
+
+    async def assessment_learning_corpus_pages(
+        self, session: WebSession, occurrence_revision_id: str
+    ) -> tuple[AssessmentLearningPageStatusV2, ...]: ...
+
+    async def assessment_learning_corpus_page_media(
+        self,
+        session: WebSession,
+        occurrence_revision_id: str,
+        page_input_id: str,
+    ) -> ItemMedia: ...
+
     async def assessment_learning_exams(
         self, session: WebSession, batch_id: str
     ) -> tuple[AssessmentLearningExamStatus, ...]: ...
@@ -428,7 +450,7 @@ class ApplicationGateway(Protocol):
     async def assessment_learning_items(
         self,
         session: WebSession,
-        exam: AssessmentLearningExamStatus,
+        exam: AssessmentLearningExamStatus | AssessmentLearningExamStatusV2,
         *,
         item_number: int | None,
     ) -> tuple[AssessmentLearningItemStatus, ...]: ...
@@ -826,6 +848,70 @@ class HttpApplicationGateway:
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
+    async def assessment_learning_corpus(
+        self, session: WebSession
+    ) -> AssessmentLearningCorpusStatus:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/assessment-learning-corpus",
+        )
+        try:
+            return AssessmentLearningCorpusStatus.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def assessment_learning_corpus_exams(
+        self, session: WebSession
+    ) -> tuple[AssessmentLearningExamStatusV2, ...]:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/assessment-learning-corpus/exams",
+            params={"limit": 200},
+        )
+        try:
+            return tuple(
+                AssessmentLearningExamStatusV2.model_validate(value)
+                for value in self._list_data(response)
+            )
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def assessment_learning_corpus_pages(
+        self, session: WebSession, occurrence_revision_id: str
+    ) -> tuple[AssessmentLearningPageStatusV2, ...]:
+        _require_id(occurrence_revision_id, "occurrev_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/assessment-learning-corpus/exams/{occurrence_revision_id}/pages",
+        )
+        try:
+            return tuple(
+                AssessmentLearningPageStatusV2.model_validate(value)
+                for value in self._list_data(response)
+            )
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def assessment_learning_corpus_page_media(
+        self,
+        session: WebSession,
+        occurrence_revision_id: str,
+        page_input_id: str,
+    ) -> ItemMedia:
+        _require_id(occurrence_revision_id, "occurrev_")
+        _require_id(page_input_id, "assessmentpage_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/assessment-learning-corpus/exams/{occurrence_revision_id}/pages/"
+            f"{page_input_id}/image",
+            headers={"Accept": "image/png"},
+        )
+        return self._assessment_page_media(response)
+
     async def assessment_learning_exams(
         self, session: WebSession, batch_id: str
     ) -> tuple[AssessmentLearningExamStatus, ...]:
@@ -865,7 +951,7 @@ class HttpApplicationGateway:
     async def assessment_learning_items(
         self,
         session: WebSession,
-        exam: AssessmentLearningExamStatus,
+        exam: AssessmentLearningExamStatus | AssessmentLearningExamStatusV2,
         *,
         item_number: int | None,
     ) -> tuple[AssessmentLearningItemStatus, ...]:
@@ -929,6 +1015,10 @@ class HttpApplicationGateway:
             f"{occurrence_revision_id}/pages/{page_input_id}/image",
             headers={"Accept": "image/png"},
         )
+        return self._assessment_page_media(response)
+
+    @staticmethod
+    def _assessment_page_media(response: httpx.Response) -> ItemMedia:
         content_type = response.headers.get("content-type", "").split(";", 1)[0]
         etag = response.headers.get("etag", "")
         content_length = response.headers.get("content-length", "")

@@ -1,0 +1,24 @@
+{
+  "$id": "https://eom.local/schemas/api/assessment-learning-exam-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [{"not": {"properties": {"administration_month": {"const": 3}, "target_grade": {"const": 1}, "target_school_level": {"const": "HIGH_SCHOOL"}}, "required": ["administration_month", "target_grade", "target_school_level"]}}],
+  "properties": {
+    "schema_version": {"const": "assessment-learning-exam-view/2.0"},
+    "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+    "assessment_occurrence_id": {"type": "string", "pattern": "^occurrence_[0-9a-f]{32}$"},
+    "assessment_occurrence_revision_id": {"type": "string", "pattern": "^occurrev_[0-9a-f]{32}$"},
+    "assessment_occurrence_revision_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "display_label": {"type": "string", "minLength": 1, "maxLength": 512},
+    "administration_year": {"type": "integer", "minimum": 1900, "maximum": 2200},
+    "administration_month": {"type": "integer", "minimum": 1, "maximum": 12},
+    "target_school_level": {"enum": ["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"]},
+    "target_grade": {"type": "integer", "minimum": 1, "maximum": 6},
+    "subject_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,159}$"},
+    "source_pdf_count": {"const": 2},
+    "approved_item_count": {"type": "integer", "minimum": 1, "maximum": 200}
+  },
+  "required": ["schema_version", "graph_snapshot_revision_id", "assessment_occurrence_id", "assessment_occurrence_revision_id", "assessment_occurrence_revision_sha256", "display_label", "administration_year", "administration_month", "target_school_level", "target_grade", "subject_key", "source_pdf_count", "approved_item_count"],
+  "title": "Assessment Learning Exam View V2",
+  "type": "object"
+}

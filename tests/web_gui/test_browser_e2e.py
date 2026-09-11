@@ -50,14 +50,12 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
         assert client.get("/studio/assets/eom-mark.svg").status_code == 200
         assert client.get("/studio/assets/item-preview.js").status_code == 200
         assert client.get("/studio/assets/presentation-vocabulary.ko-KR.json").status_code == 200
-        learning_batches = client.get("/studio/api/v1/admin/assessment-learning-batches")
-        assert learning_batches.status_code == 200
-        learning_batch_id = learning_batches.json()[0]["extraction_batch_id"]
-        learning_exams = client.get(
-            f"/studio/api/v1/admin/assessment-learning-batches/{learning_batch_id}/exams"
-        )
+        learning_corpus = client.get("/studio/api/v1/admin/assessment-learning-corpus")
+        assert learning_corpus.status_code == 200
+        assert learning_corpus.json()["approved_item_count"] == 520
+        learning_exams = client.get("/studio/api/v1/admin/assessment-learning-corpus/exams")
         assert learning_exams.status_code == 200
-        assert learning_exams.json()[0]["image_required_work_unit_count"] == 4
+        assert learning_exams.json()[0]["source_pdf_count"] == 2
 
         draft = client.post(
             "/studio/api/v1/request-drafts",
@@ -189,9 +187,10 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "analysisBatchPollTimer" in javascript
     assert 'data-view-target="learning"' in html
     assert 'id="learning-exam-list"' in html
-    assert 'api("/admin/assessment-learning-batches")' in javascript
-    assert "assessmentLearningPollTimer" in javascript
-    assert "10000" in javascript
+    assert 'api("/admin/assessment-learning-corpus")' in javascript
+    assert "/admin/assessment-learning-batches" not in javascript
+    assert "selectedAssessmentLearningBatchId" not in javascript
+    assert "학습 배치" not in html
     assert 'data-view-target="knowledge"' in html
     assert 'id="knowledge-quality-load"' in html
     assert "공개된 지식 그래프 버전이 아닙니다." in html

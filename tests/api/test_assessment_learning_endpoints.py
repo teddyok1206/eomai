@@ -10,7 +10,9 @@ from eom_api.dependencies import get_authentication
 from eom_api.services.query_adapter import PageResult
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
+    AssessmentLearningCorpusView,
     AssessmentLearningExamView,
+    AssessmentLearningExamViewV2,
     AssessmentLearningItemCounts,
     AssessmentLearningWorkUnitCounts,
 )
@@ -131,6 +133,37 @@ def _exam() -> AssessmentLearningExamView:
     )
 
 
+def _corpus() -> AssessmentLearningCorpusView:
+    return AssessmentLearningCorpusView(
+        corpus_id="corpus_" + "d" * 32,
+        corpus_revision_id="corpusrev_" + "e" * 32,
+        display_name="통합과학 기출 자료",
+        graph_snapshot_revision_id="graphrev_" + "6" * 32,
+        graph_snapshot_sha256="sha256:" + "f" * 64,
+        graph_revision_number=67,
+        source_pdf_count=50,
+        exam_count=25,
+        approved_item_count=520,
+        updated_at=NOW,
+    )
+
+
+def _corpus_exam() -> AssessmentLearningExamViewV2:
+    return AssessmentLearningExamViewV2(
+        graph_snapshot_revision_id="graphrev_" + "6" * 32,
+        assessment_occurrence_id="occurrence_" + "7" * 32,
+        assessment_occurrence_revision_id="occurrev_" + "8" * 32,
+        assessment_occurrence_revision_sha256="sha256:" + "9" * 64,
+        display_label="2025년 고1 6월 통합과학",
+        administration_year=2025,
+        administration_month=6,
+        target_school_level="HIGH_SCHOOL",
+        target_grade=1,
+        subject_key="integrated-science",
+        approved_item_count=20,
+    )
+
+
 class FakeQueries:
     list_values: dict[str, object] | None = None
     exam_values: tuple[str, dict[str, object]] | None = None
@@ -146,6 +179,18 @@ class FakeQueries:
     ) -> PageResult[AssessmentLearningExamView]:
         self.exam_values = (batch_id, values)
         return PageResult((_exam(),), None, False)
+
+    def assessment_learning_corpus(self) -> AssessmentLearningCorpusView:
+        return _corpus()
+
+    def assessment_learning_corpus_exams(
+        self, **_values: Any
+    ) -> PageResult[AssessmentLearningExamViewV2]:
+        return PageResult((_corpus_exam(),), None, False)
+
+    def assessment_learning_corpus_source_locator(self, occurrence_revision_id: str) -> str:
+        assert occurrence_revision_id == "occurrev_" + "8" * 32
+        return BATCH_ID
 
 
 class FakeCatalogApplication:
@@ -271,5 +316,36 @@ def test_admin_lists_and_streams_exact_exam_page_png() -> None:
         assert image.content == b"\x89PNG\r\n\x1a\nEXAM_PAGE"
         assert image.headers["content-type"] == "image/png"
         assert image.headers["cache-control"] == "no-store"
+    finally:
+        services.engine.dispose()
+
+
+def test_user_projection_is_batch_free_while_admin_batch_routes_remain_available() -> None:
+    client, services, _queries = _client(admin=True)
+    occurrence_revision_id = "occurrev_" + "8" * 32
+    page_input_id = "assessmentpage_" + "a" * 32
+    try:
+        with client:
+            corpus = client.get("/api/v1/assessment-learning-corpus")
+            exams = client.get("/api/v1/assessment-learning-corpus/exams")
+            pages = client.get(
+                f"/api/v1/assessment-learning-corpus/exams/{occurrence_revision_id}/pages"
+            )
+            image = client.get(
+                f"/api/v1/assessment-learning-corpus/exams/{occurrence_revision_id}/pages/"
+                f"{page_input_id}/image"
+            )
+            admin_batches = client.get("/api/v1/assessment-learning-batches")
+        assert corpus.status_code == exams.status_code == pages.status_code == 200
+        assert image.status_code == admin_batches.status_code == 200
+        assert corpus.json()["data"]["approved_item_count"] == 520
+        assert exams.json()["data"][0]["approved_item_count"] == 20
+        assert pages.json()["data"][0]["page_input_id"] == page_input_id
+        assert image.content == b"\x89PNG\r\n\x1a\nEXAM_PAGE"
+        user_payload = (corpus.json(), exams.json(), pages.json())
+        serialized = repr(user_payload)
+        assert "batch" not in serialized
+        assert "work_unit" not in serialized
+        assert admin_batches.json()["data"][0]["extraction_batch_id"] == BATCH_ID
     finally:
         services.engine.dispose()
