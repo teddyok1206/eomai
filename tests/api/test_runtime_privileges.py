@@ -70,6 +70,7 @@ def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
     assessment_learning_tables = {
         "assessment_layout_observations",
         "assessment_occurrence_revisions",
+        "assessment_source_bundle_members",
         "assessment_source_bundle_revisions",
         "legacy_item_extraction_batch_work_units",
         "legacy_item_extraction_batches",

@@ -26,6 +26,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "assessment_layout_observations",
     "assessment_item_occurrence_references",
     "assessment_occurrence_revisions",
+    "assessment_source_bundle_members",
     "assessment_source_bundle_revisions",
     "artifact_revisions",
     "artifacts",
