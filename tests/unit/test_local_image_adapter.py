@@ -15,7 +15,11 @@ from eom_catalog_service.local_image_adapter import (
     load_local_image_provider_binding,
 )
 from eom_image_contracts import LocalImageProviderBinding, content_sha256
-from eom_workflow.models import GeneratedVectorDrawingV5, GeneratedVectorDrawingV6
+from eom_workflow.models import (
+    CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX,
+    GeneratedVectorDrawingV5,
+    GeneratedVectorDrawingV6,
+)
 
 
 def _chunk(kind: bytes, payload: bytes) -> bytes:
@@ -237,20 +241,15 @@ def test_v6_hybrid_request_describes_a_semantic_raster_not_a_background(tmp_path
     assert "contact sheet" in request.generation.negative_prompt
 
 
-def test_v6_hybrid_request_strips_worker_instruction_prefix_before_provider(
+def test_v6_hybrid_request_preserves_content_team_details_before_provider_policy(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "generated-overlay.png"
     path.write_bytes(_overlay_png())
     path.chmod(0o640)
-    detail = "one fox standing beside sparse grass"
+    detail = "one fox  standing beside\nsparse grass"
     drawing = _hybrid_drawing().model_copy(
-        update={
-            "generation_prompt": (
-                "아래의 요청사항에 대한 문제의 그림을 그려줘. "
-                "내가 소스에 넣어둔 이미지 규칙을 잊지 말고 지켜 " + detail
-            )
-        }
+        update={"generation_prompt": CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX + " " + detail}
     )
 
     request = _build_request(
@@ -262,7 +261,7 @@ def test_v6_hybrid_request_strips_worker_instruction_prefix_before_provider(
         overlay_path=path,
     )
 
-    assert request.generation.prompt.startswith(detail + ".")
+    assert request.generation.prompt.startswith(detail + ". ")
     assert "아래의 요청사항" not in request.generation.prompt
 
 

@@ -219,9 +219,9 @@ def _build_request(
         if drawing.production_route == "HYBRID_LOCAL_GENERATIVE"
         else _SAFE_BACKGROUND_PREFIX
     )
-    subject = " ".join(
-        drawing.generation_prompt.removeprefix(CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX).split()
-    )
+    subject = drawing.generation_prompt.removeprefix(
+        CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX
+    ).strip()
     if not subject:
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
     prompt = f"{subject}. {policy}"

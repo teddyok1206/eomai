@@ -119,13 +119,17 @@ Before committing output, Catalog must verify:
 - deterministic SVG overlay is applied after the generated background and remains the source of
   scientific truth.
 
-Before inference, Catalog places the worker's subject description first, removes the fixed
-worker-facing instruction prefix, and appends one concise route policy. The provider uses both
-pinned SSD-1B CLIP tokenizers to reject any positive or negative prompt that would be truncated.
-This is an O(prompt tokens) validation performed before CUDA transfer. A character limit alone is
-insufficient because Korean and English text have different token expansion. The Diffusers 0.35
-loader receives its supported `dtype` argument, and the provider verifies the loaded UNet is
-actually float16; an argument that is ignored cannot satisfy runtime policy.
+Before inference, Catalog verifies that the content-team `illustration_prompt` is exactly equal to
+the drawing's `generation_prompt`. It removes only the fixed worker-facing instruction prefix,
+preserves the remaining subject, relationship, count, and placement text (including internal
+whitespace and line breaks) at the start of the provider prompt, and appends one concise route
+policy. The worker result, drawing hash, provider request prompt hash, and provider receipt form the
+immutable audit chain. The provider uses both pinned SSD-1B CLIP tokenizers to reject any positive
+or negative prompt that would be truncated. This is an O(prompt tokens) validation performed before
+CUDA transfer. A character limit alone is insufficient because Korean and English text have
+different token expansion. The Diffusers 0.35 loader receives its supported `dtype` argument, and
+the provider verifies the loaded UNet is actually float16; an argument that is ignored cannot
+satisfy runtime policy.
 
 Dangling model pointers, stale revisions, hash mismatch, unavailable GPU, unsupported route, OOM,
 or timeout must fail closed. There is no silent fallback from local generation to a different model
