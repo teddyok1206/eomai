@@ -31,6 +31,7 @@ from eom_hwpx_contracts import (
 from pydantic import ValidationError
 
 from eom_hwpx_builder.analyzer import analyze_package
+from eom_hwpx_builder.archive import FIXED_ZIP_TIMESTAMP, read_package
 from eom_hwpx_builder.content_team_handoff import (
     EXPECTED_MEMBER_HASHES,
     ContentTeamHandoffEvidence,
@@ -45,6 +46,7 @@ from eom_hwpx_builder.handoff import (
     write_private_json,
 )
 from eom_hwpx_builder.util import canonical_json_bytes, sha256_bytes, sha256_file
+from eom_hwpx_builder.xmlsafe import local_name, parse_xml, serialize_xml
 
 CONTENT_TEAM_RENDERER_VERSION = "2.0.0"
 CONTENT_TEAM_RENDERER_VERSION_V3 = "3.0.0"
@@ -53,6 +55,11 @@ MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_MARKDOWN_BYTES = 1024 * 1024
 MAX_SOURCE_MEMBER_BYTES = 1024 * 1024
 SOURCE_PREFIX = "HwpQuestionEditor_handoff_export/source_snapshot/src/hwp_question_editor/"
+SECTION_MEMBER = "Contents/section0.xml"
+VISUAL_AREA_TABLE_ID = "1511140813"
+VISUAL_ORIGINAL_SAMPLE_TABLE_ID = "1729004418"
+VISIBLE_BORDER_FILL_IDS = ("3", "3", "3", "19")
+HIDDEN_BORDER_FILL_ID = "7"
 PROTOTYPE_TARGETS = {
     "automation-template": "templates/automation.hwpx",
     "equation-prototypes": "templates/prototypes/v02_equation_prototypes.hwpx",
@@ -335,6 +342,94 @@ def _project_general_stem_for_handoff(stem: str) -> str:
     return projected
 
 
+def _hide_unused_visual_sample(output: Path) -> bool:
+    """Hide the immutable template's empty two-column visual sample.
+
+    The reviewed handoff clears this sample's text but intentionally retains its
+    table topology.  For a text-only item that leaves a visible empty box in the
+    authored HWPX.  Preserve the topology expected by the handoff validator and
+    change only the sample table/cell borders to the template's existing
+    borderless fill.
+    """
+
+    package = read_package(output)
+    by_name = package.by_name()
+    section_entry = by_name.get(SECTION_MEMBER)
+    if section_entry is None:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team HWPX section is missing",
+        )
+    section = parse_xml(section_entry.data, SECTION_MEMBER)
+    sample_tables = [
+        element
+        for element in section.root.iter()
+        if local_name(element.tag) == "tbl" and element.get("id") == VISUAL_ORIGINAL_SAMPLE_TABLE_ID
+    ]
+    if len(sample_tables) != 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team visual sample table is ambiguous",
+        )
+    sample = sample_tables[0]
+    outer_tables = [
+        ancestor for ancestor in sample.iterancestors() if local_name(ancestor.tag) == "tbl"
+    ]
+    if not outer_tables or outer_tables[0].get("id") != VISUAL_AREA_TABLE_ID:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team visual sample is outside its reviewed area",
+        )
+    if any(
+        (element.text or "").strip() for element in sample.iter() if local_name(element.tag) == "t"
+    ) or any(local_name(element.tag) in {"equation", "pic"} for element in sample.iter()):
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team visual sample unexpectedly contains authored content",
+        )
+    bordered = [
+        sample,
+        *(element for element in sample.iter() if local_name(element.tag) == "tc"),
+    ]
+    actual_border_fills = tuple(element.get("borderFillIDRef", "") for element in bordered)
+    if actual_border_fills != VISIBLE_BORDER_FILL_IDS:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team visual sample border signature drifted",
+        )
+    for element in bordered:
+        element.set("borderFillIDRef", HIDDEN_BORDER_FILL_ID)
+
+    section_bytes = serialize_xml(section)
+    temporary = output.with_name(".content-team-unused-visual-sample.hwpx")
+    if temporary.exists() or temporary.is_symlink():
+        raise HwpxError(HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED, "HWPX output is not fresh")
+    try:
+        with zipfile.ZipFile(temporary, "x", allowZip64=False) as archive:
+            for entry in package.entries:
+                info = zipfile.ZipInfo(entry.info.filename, FIXED_ZIP_TIMESTAMP)
+                info.compress_type = entry.info.compress_type
+                info.comment = entry.info.comment
+                info.extra = entry.info.extra
+                info.internal_attr = entry.info.internal_attr
+                info.external_attr = entry.info.external_attr
+                info.create_system = entry.info.create_system
+                data = section_bytes if entry.info.filename == SECTION_MEMBER else entry.data
+                archive.writestr(info, data)
+        temporary.chmod(0o600)
+        analysis = analyze_package(temporary)
+        if analysis.active_content or analysis.external_links or not analysis.sections:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team visual sample cleanup failed package validation",
+            )
+        temporary.replace(output)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+    return True
+
+
 def _external_render(
     runtime: Path,
     template: Path,
@@ -409,6 +504,14 @@ def _external_render(
             engine.create_document(template, output, question)
         finally:
             dynamic_validator_module.HwpxValidator = original_validator
+        unused_visual_sample_hidden = False
+        if (
+            not draft.labeled_blocks
+            and not draft.visuals
+            and draft.inquiry is None
+            and draft.visual_layout == "NONE"
+        ):
+            unused_visual_sample_hidden = _hide_unused_visual_sample(output)
         validator_class(template).assert_valid(
             output,
             expected_labeled_blocks=tuple(block.kind for block in draft.labeled_blocks),
@@ -424,6 +527,7 @@ def _external_render(
             "visual_layout": draft.visual_layout,
             "handoff_projection_applied": handoff_markdown != markdown,
             "handoff_projection_sha256": sha256_bytes(handoff_markdown),
+            "unused_visual_sample_hidden": unused_visual_sample_hidden,
         }
         if item_number_override is not None or score_display_override is not None:
             report.update(
@@ -572,7 +676,7 @@ def render_content_team_workspace(
     report = _external_render(runtime, template, markdown_bytes, output, draft)
     image_set_sha256 = sha256_bytes(canonical_json_bytes([]))
     embedded_image_count = 0
-    if isinstance(request, (ContentTeamRenderRequestV2, ContentTeamRenderRequestV3)):
+    if isinstance(request, ContentTeamRenderRequestV2 | ContentTeamRenderRequestV3):
         expected_slots = tuple(
             (ordinal, visual.label)
             for ordinal, visual in enumerate(draft.visuals)
@@ -637,7 +741,7 @@ def render_content_team_workspace(
         "started_at": started,
         "completed_at": datetime.now(UTC),
     }
-    if isinstance(request, (ContentTeamRenderRequestV2, ContentTeamRenderRequestV3)):
+    if isinstance(request, ContentTeamRenderRequestV2 | ContentTeamRenderRequestV3):
         result_values.update(
             image_set_sha256=image_set_sha256,
             embedded_image_count=embedded_image_count,
@@ -717,7 +821,7 @@ def failed_content_team_result(
         "started_at": started,
         "completed_at": datetime.now(UTC),
     }
-    if isinstance(request, (ContentTeamRenderRequestV2, ContentTeamRenderRequestV3)):
+    if isinstance(request, ContentTeamRenderRequestV2 | ContentTeamRenderRequestV3):
         result_values.update(
             image_set_sha256=sha256_bytes(
                 canonical_json_bytes([image.model_dump(mode="json") for image in request.images])

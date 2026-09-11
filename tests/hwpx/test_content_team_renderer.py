@@ -219,7 +219,15 @@ def test_reviewed_handoff_projects_general_multiline_stem_without_mutating_sourc
     assert result.output_sha256 == _sha256(output.read_bytes())
     assert report["handoff_projection_applied"] is True
     assert report["handoff_projection_sha256"] != _sha256(markdown)
+    assert report["unused_visual_sample_hidden"] is True
     assert json.loads((input_root / "item-content.json").read_text())["stem"] == draft.stem
+    with zipfile.ZipFile(output) as package:
+        section = package.read("Contents/section0.xml").decode("utf-8")
+    assert section.count('id="1729004418"') == 1
+    sample = section.split('id="1729004418"', 1)[1].split("</hp:tbl>", 1)[0]
+    assert 'borderFillIDRef="3"' not in sample
+    assert 'borderFillIDRef="19"' not in sample
+    assert sample.count('borderFillIDRef="7"') == 4
 
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
