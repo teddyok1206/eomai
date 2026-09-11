@@ -108,6 +108,8 @@ def test_fixed_composite_smoke_uses_production_adapter_and_is_not_an_item_workfl
     assert "LOCAL_GENERATIVE_BACKGROUND" in source
     assert "compose_vector_overlay_svg" in source
     assert "LOCAL_IMAGE_FIXED_UNIT_SMOKE_PASS" in source
+    assert "subtle sparse flat-gray scientific background shapes" in source
+    assert "pale blue" not in source
     assert 'grp.getgrnam("eom-image")' in source
     assert "provider_group.gr_gid not in os.getgroups()" in source
     assert "shutil.rmtree(workspace)" in source

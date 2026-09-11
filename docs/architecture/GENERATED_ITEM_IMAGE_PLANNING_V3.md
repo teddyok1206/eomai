@@ -23,12 +23,15 @@ Two routes are executable:
 The word `realistic` in a route reason describes the presence of a natural object or scene; it does
 not authorize photorealistic rendering. Both routes share one reviewed presentation language:
 pure-white background, simplified anonymous forms, minimal facial detail, crisp dark outlines,
-flat shapes, and restrained grayscale or limited flat color. It also requires one coherent
+flat shapes, and only functional flat gray or hatching. Chromatic color is not permitted. It also
+requires one coherent
 single-panel composition with the exact requested subject count and forbids collage/contact-sheet
 layouts or duplicate subjects. The fixed local-provider adapter
-prepends that style contract to every GPU request. Worker-authored generation text describes only
-the subject, pose, and placement. Conflicting photo, detailed-face, 3D, gradient, shadow, dramatic
-lighting, or cinematic directives fail before the fixed GPU unit starts.
+places the bounded mandatory style first, followed immediately by exact worker-authored subject,
+count, pose, relationship, and placement. The negative prompt likewise places mandatory prohibited
+styles first, followed by worker-authored exclusions. Conflicting chromatic color, photo,
+detailed-face, 3D, gradient, shadow, dramatic-lighting, or cinematic directives fail before the
+fixed GPU unit starts.
 
 External image APIs remain forbidden. `LOCAL_GENERATIVE_BACKGROUND` remains a historical V5 value
 and is not reinterpreted.
@@ -101,9 +104,10 @@ second scheduling use case.
 
 The image workflow step is the durable attempt. Provider execution occurs outside the artifact
 commit transaction. Its request identity pins the workflow, image-result revision, drawing hash,
-and provider binding hash. Re-entry validates and reuses the exact receipt; it never chooses a new
-seed or invokes the provider twice. There is no automatic route fallback. A provider failure fails
-the image step before Item registration.
+provider binding hash, derived prompt-policy revision, and full positive/negative prompt hashes.
+Re-entry validates and reuses the exact receipt; it never chooses a new seed or invokes the provider
+twice. There is no automatic route fallback. A provider failure fails the image step before Item
+registration.
 
 The deterministic branch never constructs a provider request. This is both a capacity invariant and
 a security boundary: an item that does not require generative pixels cannot consume GPU time.

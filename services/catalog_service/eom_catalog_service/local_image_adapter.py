@@ -32,6 +32,10 @@ from eom_workflow.models import (
     GeneratedVectorDrawingV6,
 )
 
+from eom_catalog_service.local_image_prompt_policy import (
+    LOCAL_GPU_PROMPT_POLICY_REVISION,
+    compose_local_gpu_prompts,
+)
 from eom_catalog_service.settings import CatalogSettings
 
 SYSTEMCTL: Final = Path("/usr/bin/systemctl")
@@ -45,21 +49,6 @@ BACKGROUND_MEMBER: Final = "generated-background.png"
 FINAL_MEMBER: Final = "generated-stimulus.png"
 RECEIPT_MEMBER: Final = "local-image-receipt.json"
 PROVIDER_RECEIPT_MEMBER: Final = "composite-receipt.json"
-_SAFE_BACKGROUND_PREFIX: Final = (
-    "Non-authoritative background only. Clean flat 2D science textbook style, simple shapes, "
-    "white background, one panel. No people, text, labels, numbers, symbols, equations, graphs, "
-    "scales, logos, watermarks, photorealism, gradients, shadows, or 3D."
-)
-_SAFE_RASTER_PREFIX: Final = (
-    "Clean flat 2D science textbook illustration. Crisp dark outlines, simple shapes, white "
-    "background, one panel, exact subject count. No text, labels, numbers, symbols, equations, "
-    "graphs, scales, logos, watermarks, photorealism, gradients, shadows, or 3D."
-)
-_SAFE_NEGATIVE_PROMPT: Final = (
-    "photorealistic, detailed face, uncanny face, duplicate person, duplicate subject, collage, "
-    "contact sheet, text, labels, numbers, symbols, equations, graphs, scales, logo, watermark, "
-    "3d, gradient, shadow"
-)
 _FORBIDDEN_GENERATION_STYLE_TERMS: Final = (
     "photoreal",
     "photo-real",
@@ -77,6 +66,13 @@ _FORBIDDEN_GENERATION_STYLE_TERMS: Final = (
     "사실적인 사람",
     "상세한 얼굴",
     "시네마틱",
+)
+_FORBIDDEN_CHROMATIC_TERMS: Final = re.compile(
+    r"(?:\b(?:red|orange|yellow|green|blue|purple|violet|pink|brown|cyan|magenta|gold|golden|"
+    r"color|colored|colour|coloured|colorful)\b|"
+    r"빨간|붉은|주황|노란|노랑|초록|녹색|파란|푸른|남색|보라|분홍|갈색|청록|자홍|금색|"
+    r"컬러|색채|색상)",
+    re.IGNORECASE,
 )
 _FORBIDDEN_GPU_HUMAN_SUBJECT: Final = re.compile(
     r"(?:\b(?:student|person|people|human|boy|girl|man|woman|teacher|child|teenager)\b|"
@@ -210,34 +206,38 @@ def _build_request(
     if drawing.generation_prompt is None:
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
     normalized_generation_prompt = drawing.generation_prompt.casefold()
-    if any(
-        forbidden in normalized_generation_prompt for forbidden in _FORBIDDEN_GENERATION_STYLE_TERMS
-    ) or _FORBIDDEN_GPU_HUMAN_SUBJECT.search(drawing.generation_prompt):
+    if (
+        any(
+            forbidden in normalized_generation_prompt
+            for forbidden in _FORBIDDEN_GENERATION_STYLE_TERMS
+        )
+        or _FORBIDDEN_GPU_HUMAN_SUBJECT.search(drawing.generation_prompt)
+        or _FORBIDDEN_CHROMATIC_TERMS.search(drawing.generation_prompt)
+    ):
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
-    policy = (
-        _SAFE_RASTER_PREFIX
-        if drawing.production_route == "HYBRID_LOCAL_GENERATIVE"
-        else _SAFE_BACKGROUND_PREFIX
-    )
     subject = drawing.generation_prompt.removeprefix(
         CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX
     ).strip()
     if not subject:
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
-    prompt = f"{subject}. {policy}"
-    negative = (
-        _SAFE_NEGATIVE_PROMPT
-        if drawing.negative_prompt is None
-        else _SAFE_NEGATIVE_PROMPT + ", " + drawing.negative_prompt
+    prompt, negative = compose_local_gpu_prompts(
+        subject=subject,
+        background_only=drawing.production_route == "LOCAL_GENERATIVE_BACKGROUND",
+        worker_negative=drawing.negative_prompt,
     )
     if len(prompt) > 4000 or len(negative) > 2000:
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
+    prompt_sha256 = text_sha256(prompt)
+    negative_prompt_sha256 = text_sha256(negative)
     identity = content_sha256(
         {
             "workflow_id": workflow_id,
             "result_revision_id": result_revision_id,
             "drawing_sha256": drawing_hash,
             "binding_sha256": binding.binding_sha256,
+            "prompt_policy_revision": LOCAL_GPU_PROMPT_POLICY_REVISION,
+            "prompt_sha256": prompt_sha256,
+            "negative_prompt_sha256": negative_prompt_sha256,
         }
     ).removeprefix("sha256:")
     request_id = "imgreq_" + identity[:32]
@@ -248,9 +248,9 @@ def _build_request(
         "idempotency_key": "local-image:" + identity,
         "model": binding.model.model_dump(mode="json"),
         "prompt": prompt,
-        "prompt_sha256": text_sha256(prompt),
+        "prompt_sha256": prompt_sha256,
         "negative_prompt": negative,
-        "negative_prompt_sha256": text_sha256(negative),
+        "negative_prompt_sha256": negative_prompt_sha256,
         "seed": seed,
         "sampler": binding.sampler.model_dump(mode="json"),
         "generation_canvas": {"width_px": 800, "height_px": 504},

@@ -59,7 +59,7 @@ def _drawing() -> GeneratedVectorDrawingV5:
             "scene_description": "문자 없는 옅은 과학 교재 배경 위에 도형을 배치한다.",
             "scientific_constraints": ["검증용 원은 하나이다."],
             "required_labels": ["A"],
-            "generation_prompt": "subtle pale blue and warm gray educational paper texture",
+            "generation_prompt": "subtle sparse flat-gray scientific background shapes",
             "negative_prompt": "objects, people, instruments",
             "width_px": 800,
             "height_px": 500,
