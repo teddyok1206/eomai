@@ -219,8 +219,22 @@ def test_admin_reads_durable_batch_and_exam_progress_without_fresh_auth() -> Non
         assert batches.json()["data"][0]["image_observation_mode"] == "REQUIRED"
         assert batches.json()["data"][0]["text_evidence_mode"] == ("AUXILIARY_WHEN_AVAILABLE")
         assert exams.json()["data"][0]["display_label"] == "2025년 고1 6월 통합과학"
+        assert exams.json()["page"]["limit"] == 100
         assert queries.list_values == {"limit": 10, "cursor": None, "state": "RUNNING"}
         assert queries.exam_values == (BATCH_ID, {"limit": 100, "cursor": None})
+    finally:
+        services.engine.dispose()
+
+
+def test_exam_progress_rejects_limit_above_shared_page_contract() -> None:
+    client, services, _queries = _client(admin=True)
+    try:
+        with client:
+            response = client.get(
+                f"/api/v1/assessment-learning-batches/{BATCH_ID}/exams",
+                params={"limit": 500},
+            )
+        assert response.status_code == 422
     finally:
         services.engine.dispose()
 
@@ -253,6 +267,7 @@ def test_admin_lists_and_streams_exact_exam_page_png() -> None:
         assert pages.status_code == image.status_code == 200
         assert pages.json()["data"][0]["page_input_id"] == page_input_id
         assert pages.json()["data"][0]["artifact_member"] == "pages/problem-1.png"
+        assert pages.json()["page"]["limit"] == 1
         assert image.content == b"\x89PNG\r\n\x1a\nEXAM_PAGE"
         assert image.headers["content-type"] == "image/png"
         assert image.headers["cache-control"] == "no-store"

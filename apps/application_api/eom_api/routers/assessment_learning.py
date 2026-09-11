@@ -67,7 +67,7 @@ def list_assessment_learning_batches(
 def list_assessment_learning_exams(
     request: Request,
     batch_id: str,
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=100, ge=1, le=200),
     cursor: str | None = Query(default=None, max_length=1024),
 ) -> ListResponse[AssessmentLearningExamView]:
     page = request.app.state.services.queries.assessment_learning_exams(
@@ -118,7 +118,13 @@ def list_assessment_learning_pages(
         )
         for pointer in pointers
     )
-    return many(request, values, limit=max(1, len(values)), next_cursor=None, has_more=False)
+    return many(
+        request,
+        values,
+        limit=min(200, max(1, len(values))),
+        next_cursor=None,
+        has_more=False,
+    )
 
 
 @router.get(

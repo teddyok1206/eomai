@@ -834,7 +834,7 @@ class HttpApplicationGateway:
             session,
             "GET",
             f"/api/v1/assessment-learning-batches/{batch_id}/exams",
-            params={"limit": 500},
+            params={"limit": 200},
         )
         try:
             return tuple(

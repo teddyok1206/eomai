@@ -1322,7 +1322,7 @@ async def test_gateway_validates_assessment_learning_batch_and_exam_progress() -
                 ),
             )
         assert request.url.path == f"/api/v1/assessment-learning-batches/{batch_id}/exams"
-        assert request.url.params["limit"] == "500"
+        assert request.url.params["limit"] == "200"
         return httpx.Response(
             200,
             json=_list(
