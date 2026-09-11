@@ -26,7 +26,11 @@ from eom_image_contracts import (
     text_sha256,
     validate_contract,
 )
-from eom_workflow.models import GeneratedVectorDrawingV5, GeneratedVectorDrawingV6
+from eom_workflow.models import (
+    CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX,
+    GeneratedVectorDrawingV5,
+    GeneratedVectorDrawingV6,
+)
 
 from eom_catalog_service.settings import CatalogSettings
 
@@ -41,35 +45,20 @@ BACKGROUND_MEMBER: Final = "generated-background.png"
 FINAL_MEMBER: Final = "generated-stimulus.png"
 RECEIPT_MEMBER: Final = "local-image-receipt.json"
 PROVIDER_RECEIPT_MEMBER: Final = "composite-receipt.json"
-_EOM_TEXTBOOK_ILLUSTRATION_STYLE: Final = (
-    "Use exactly the visual language of an EOM deterministic Python/SVG figure: a clean Korean "
-    "high-school science assessment illustration with simplified generic figures, minimal facial "
-    "features, crisp dark outlines, flat shapes, restrained grayscale or limited flat colors, a "
-    "pure white background, and a clear front or side view. Use one coherent single-panel "
-    "composition with exactly the requested subject count; never make a collage, contact sheet, "
-    "or duplicated subject. Do not create photorealism, photographic texture, gradients, shadows, "
-    "glossy highlights, dramatic lighting, detailed skin, or cinematic composition. "
-)
 _SAFE_BACKGROUND_PREFIX: Final = (
-    "Non-authoritative background layer only. "
-    + _EOM_TEXTBOOK_ILLUSTRATION_STYLE
-    + "Render no text, labels, numbers, symbols, equations, graphs, scales, measurement marks, "
-    "logos, or watermarks. "
+    "Non-authoritative background only. Clean flat 2D science textbook style, simple shapes, "
+    "white background, one panel. No people, text, labels, numbers, symbols, equations, graphs, "
+    "scales, logos, watermarks, photorealism, gradients, shadows, or 3D."
 )
 _SAFE_RASTER_PREFIX: Final = (
-    "Semantic raster layer for an educational science stimulus. "
-    + _EOM_TEXTBOOK_ILLUSTRATION_STYLE
-    + "Render only the requested person, animal, organism, natural object, or scene. Render no "
-    "text, labels, numbers, symbols, equations, graph axes, scale marks, measurement marks, logos, "
-    "or watermarks. "
+    "Clean flat 2D science textbook illustration. Crisp dark outlines, simple shapes, white "
+    "background, one panel, exact subject count. No text, labels, numbers, symbols, equations, "
+    "graphs, scales, logos, watermarks, photorealism, gradients, shadows, or 3D."
 )
 _SAFE_NEGATIVE_PROMPT: Final = (
-    "photorealistic, photograph, photographic texture, detailed face, detailed skin, uncanny face, "
-    "multiple people, duplicate person, duplicate subject, collage, contact sheet, multiple "
-    "panels, "
-    "3d render, gradient, shadow, glossy highlight, dramatic lighting, cinematic composition, "
-    "text, letters, labels, numbers, symbols, equations, graph axes, scale marks, measurement "
-    "marks, logo, watermark"
+    "photorealistic, detailed face, uncanny face, duplicate person, duplicate subject, collage, "
+    "contact sheet, text, labels, numbers, symbols, equations, graphs, scales, logo, watermark, "
+    "3d, gradient, shadow"
 )
 _FORBIDDEN_GENERATION_STYLE_TERMS: Final = (
     "photoreal",
@@ -225,12 +214,17 @@ def _build_request(
         forbidden in normalized_generation_prompt for forbidden in _FORBIDDEN_GENERATION_STYLE_TERMS
     ) or _FORBIDDEN_GPU_HUMAN_SUBJECT.search(drawing.generation_prompt):
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
-    prefix = (
+    policy = (
         _SAFE_RASTER_PREFIX
         if drawing.production_route == "HYBRID_LOCAL_GENERATIVE"
         else _SAFE_BACKGROUND_PREFIX
     )
-    prompt = prefix + drawing.generation_prompt
+    subject = " ".join(
+        drawing.generation_prompt.removeprefix(CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX).split()
+    )
+    if not subject:
+        raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
+    prompt = f"{subject}. {policy}"
     negative = (
         _SAFE_NEGATIVE_PROMPT
         if drawing.negative_prompt is None

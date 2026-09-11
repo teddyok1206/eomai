@@ -119,6 +119,14 @@ Before committing output, Catalog must verify:
 - deterministic SVG overlay is applied after the generated background and remains the source of
   scientific truth.
 
+Before inference, Catalog places the worker's subject description first, removes the fixed
+worker-facing instruction prefix, and appends one concise route policy. The provider uses both
+pinned SSD-1B CLIP tokenizers to reject any positive or negative prompt that would be truncated.
+This is an O(prompt tokens) validation performed before CUDA transfer. A character limit alone is
+insufficient because Korean and English text have different token expansion. The Diffusers loader
+passes the pinned float16 dtype through its supported `torch_dtype` argument; ignored loader
+arguments are not accepted as runtime policy.
+
 Dangling model pointers, stale revisions, hash mismatch, unavailable GPU, unsupported route, OOM,
 or timeout must fail closed. There is no silent fallback from local generation to a different model
 or hosted provider.
@@ -169,6 +177,7 @@ Failures should use stable codes:
 - `LOCAL_IMAGE_PROVIDER_TIMEOUT`
 - `LOCAL_IMAGE_PROVIDER_OOM`
 - `LOCAL_IMAGE_OUTPUT_INVALID`
+- `LOCAL_IMAGE_INPUT_INVALID` when an actual model tokenizer would truncate the request
 - `LOCAL_IMAGE_ROUTE_UNDEPLOYED`
 
 Automatic regeneration is forbidden for assessment output unless a higher-level workflow explicitly

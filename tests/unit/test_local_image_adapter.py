@@ -179,8 +179,8 @@ def test_composite_request_is_deterministic_and_input_pinned(tmp_path: Path) -> 
     assert first == second
     assert first.overlay.sha256 == "sha256:" + hashlib.sha256(overlay).hexdigest()
     assert first.generation.model == binding.model
-    assert first.generation.prompt.startswith("Non-authoritative background layer only.")
-    assert "no text" in first.generation.prompt
+    assert first.generation.prompt.startswith("muted natural grass background without text.")
+    assert "Non-authoritative background only." in first.generation.prompt
     assert first.generation.request_id.startswith("imgreq_")
 
     changed = drawing.model_copy(update={"generation_prompt": "different natural background"})
@@ -224,19 +224,46 @@ def test_v6_hybrid_request_describes_a_semantic_raster_not_a_background(tmp_path
         overlay_path=path,
     )
 
-    assert request.generation.prompt.startswith("Semantic raster layer")
-    assert "deterministic Python/SVG figure" in request.generation.prompt
-    assert "simplified generic figures" in request.generation.prompt
-    assert "pure white background" in request.generation.prompt
-    assert "one coherent single-panel composition" in request.generation.prompt
-    assert "never make a collage" in request.generation.prompt
-    assert "one fox" in request.generation.prompt
-    assert "background layer only" not in request.generation.prompt
+    assert request.generation.prompt.startswith("one fox standing beside sparse grass.")
+    assert "Clean flat 2D science textbook illustration." in request.generation.prompt
+    assert "white background" in request.generation.prompt
+    assert "one panel" in request.generation.prompt
+    assert "exact subject count" in request.generation.prompt
+    assert "background only" not in request.generation.prompt
     assert "text" in request.generation.negative_prompt
     assert "photorealistic" in request.generation.negative_prompt
     assert "uncanny face" in request.generation.negative_prompt
     assert "duplicate person" in request.generation.negative_prompt
     assert "contact sheet" in request.generation.negative_prompt
+
+
+def test_v6_hybrid_request_strips_worker_instruction_prefix_before_provider(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "generated-overlay.png"
+    path.write_bytes(_overlay_png())
+    path.chmod(0o640)
+    detail = "one fox standing beside sparse grass"
+    drawing = _hybrid_drawing().model_copy(
+        update={
+            "generation_prompt": (
+                "아래의 요청사항에 대한 문제의 그림을 그려줘. "
+                "내가 소스에 넣어둔 이미지 규칙을 잊지 말고 지켜 " + detail
+            )
+        }
+    )
+
+    request = _build_request(
+        workflow_id="workflow_" + "c" * 32,
+        result_revision_id="rev_" + "d" * 32,
+        drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+        drawing=drawing,
+        binding=LocalImageProviderBinding.model_validate(_binding_value()),
+        overlay_path=path,
+    )
+
+    assert request.generation.prompt.startswith(detail + ".")
+    assert "아래의 요청사항" not in request.generation.prompt
 
 
 @pytest.mark.parametrize(
