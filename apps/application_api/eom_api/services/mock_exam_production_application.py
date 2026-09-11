@@ -80,6 +80,14 @@ class MockExamProductionRunnerPort(Protocol):
         at: datetime,
     ) -> MockExamProductionRetirementReceiptV1: ...
 
+    def force_retire_items(
+        self,
+        execution_id: str,
+        actor: ActorContext,
+        *,
+        at: datetime,
+    ) -> MockExamProductionRetirementReceiptV1: ...
+
     def advance_analyses(
         self,
         plan: MockExamProductionPlanV1,
@@ -368,6 +376,27 @@ class MockExamProductionApplicationService:
         # current plan for this one use case.
         self._historical_owned_checkpoint(execution_id, actor)
         return self._runner.retire_items(execution_id, actor, at=at)
+
+    def force_retire_items(
+        self,
+        execution_id: str,
+        actor: ActorContext,
+    ) -> MockExamProductionRetirementReceiptV1:
+        """Force-revoke one exact held cohort with explicit reconcile permission."""
+
+        at = self._now()
+        self._authorize(
+            actor,
+            {
+                PermissionKey.WORKFLOW_READ,
+                PermissionKey.WORKFLOW_CANCEL,
+                PermissionKey.WORKFLOW_RECONCILE,
+            },
+            at=at,
+            fresh=True,
+        )
+        self._historical_owned_checkpoint(execution_id, actor)
+        return self._runner.force_retire_items(execution_id, actor, at=at)
 
     def advance_analyses(
         self,

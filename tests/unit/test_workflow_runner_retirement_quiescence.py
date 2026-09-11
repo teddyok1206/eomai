@@ -31,6 +31,7 @@ from eom_workflow import WorkflowRequest
 from eom_workflow_runner.mock_exam_production_retirement import (
     MockExamProductionRetirementError,
     MockExamProductionRetirementService,
+    _fence_older_commands,
 )
 from eom_workflow_runner.repository import CommandType, workflow_request_storage_document
 from eom_workflow_runner.retirement_quiescence import (
@@ -40,6 +41,7 @@ from eom_workflow_runner.retirement_quiescence import (
     WORKFLOW_RUNNER_FRAGMENT_PATH,
     WorkflowRunnerQuiescenceEvidence,
 )
+from eom_workflow_runner.state_machine import CommandState
 from eom_workflow_runner.systemd_retirement_quiescence import (
     SystemdWorkflowRunnerQuiescenceAdapter,
     WorkflowRunnerQuiescenceAdapterError,
@@ -279,6 +281,59 @@ def test_unsafe_unit_state_is_rejected_before_any_database_statement(
         assert statements == []
     finally:
         engine.dispose()
+
+
+def test_force_retirement_requires_reconcile_permission_before_database_access() -> None:
+    engine: Engine = create_engine("sqlite+pysqlite:///:memory:")
+    statements: list[str] = []
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def record_statement(
+        _connection: Any,
+        _cursor: Any,
+        statement: str,
+        _parameters: Any,
+        _context: Any,
+        _executemany: bool,
+    ) -> None:
+        statements.append(statement)
+
+    service = MockExamProductionRetirementService(
+        engine,
+        quiescence=_ObservedUnit(),
+        lease_reconciler=_UnexpectedLeaseReconciliation(),
+    )
+    try:
+        with pytest.raises(MockExamProductionRetirementError) as raised:
+            service.force_retire(_checkpoint(), _actor(), at=NOW)
+        assert raised.value.code == "PRODUCTION_RETIREMENT_FORCE_PERMISSION_REQUIRED"
+        assert statements == []
+    finally:
+        engine.dispose()
+
+
+def test_force_fence_cancels_exact_held_command_and_clears_lease() -> None:
+    command = SimpleNamespace(
+        command_id="wfcmd_" + "a" * 32,
+        state=CommandState.PROCESSING.value,
+        lease_owner="runner-" + "b" * 32,
+        lease_expires_at=NOW + timedelta(hours=1),
+        processed_at=None,
+    )
+    session = SimpleNamespace(scalars=lambda _query: (command,))
+
+    revoked = _fence_older_commands(
+        session,
+        ("workflow_" + "c" * 32,),
+        at=NOW,
+        force_unexpired_lease=True,
+    )
+
+    assert revoked == (command.command_id,)
+    assert command.state == CommandState.CANCELLED.value
+    assert command.lease_owner == "runner-" + "b" * 32
+    assert command.lease_expires_at == NOW + timedelta(hours=1)
+    assert command.processed_at is not None
 
 
 def test_foreign_checkpoint_scope_fails_before_expired_lease_reconciliation(

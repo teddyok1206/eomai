@@ -196,6 +196,24 @@ def retire_items(
     )
 
 
+@mock_exam_production_app.command("force-retire-items")
+def force_retire_items(
+    execution_id: str,
+    access_token_file: AccessTokenFile,
+    checkpoint_root: CheckpointRoot = DEFAULT_CHECKPOINT_ROOT,
+) -> None:
+    """Force-revoke held commands for one exact cohort under admin reconciliation permission."""
+
+    _execute(
+        access_token_file,
+        checkpoint_root,
+        lambda session: session.runtime.application.force_retire_items(
+            execution_id,
+            session.actor,
+        ),
+    )
+
+
 @mock_exam_production_app.command("advance-analyses")
 def advance_analyses(
     execution_id: str,

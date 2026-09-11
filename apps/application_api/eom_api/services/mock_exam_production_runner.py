@@ -76,6 +76,20 @@ class MockExamProductionRunner:
         checkpoint = self._checkpoints.load(execution_id)
         return self._retirements.retire(checkpoint, actor, at=at)
 
+    def force_retire_items(
+        self,
+        execution_id: str,
+        actor: ActorContext,
+        *,
+        at: datetime,
+    ) -> MockExamProductionRetirementReceiptV1:
+        """Force-revoke one exact held cohort through the audited recovery boundary."""
+
+        if self._retirements is None:
+            raise RuntimeError("mock-exam production retirement adapter is unavailable")
+        checkpoint = self._checkpoints.load(execution_id)
+        return self._retirements.force_retire(checkpoint, actor, at=at)
+
     def advance_items(
         self,
         plan: MockExamProductionPlanV1,

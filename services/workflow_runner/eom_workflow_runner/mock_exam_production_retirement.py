@@ -20,7 +20,7 @@ from eom_api_contracts.mock_exam_retirement import (
     WorkflowRetirementSourceState,
 )
 from eom_identifiers import content_sha256
-from eom_operator_identity import ActorContext
+from eom_operator_identity import ActorContext, PermissionKey
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.workflow_job_retirement import (
     WorkflowJobRetirementBinding,
@@ -60,6 +60,7 @@ from eom_workflow_runner.state_machine import (
 )
 
 _RETIREMENT_EVENT = "WORKFLOW_PRODUCTION_RETIREMENT_REQUESTED"
+_FORCE_REVOKE_EVENT = "WORKFLOW_COMMAND_LEASE_FORCE_REVOKED"
 _RETIREMENT_REASON = "SUPERSEDED_BY_CORRECTED_PROTOCOL"
 _CANCEL_REASON = "production occurrence superseded by corrected protocol"
 
@@ -140,7 +141,69 @@ class MockExamProductionRetirementService:
                 retirement_id=retirement_id,
                 at=at,
             )
-        return self._execute(command, checkpoint=checkpoint)
+        return self._execute(
+            command, checkpoint=checkpoint, actor=actor, force_unexpired_lease=False
+        )
+
+    def force_retire(
+        self,
+        checkpoint: MockExamProductionExecutionV1,
+        actor: ActorContext,
+        *,
+        at: datetime,
+    ) -> MockExamProductionRetirementReceiptV1:
+        """Force-revoke held commands for one exact cohort under an admin audit boundary.
+
+        This is intentionally separate from ordinary retirement. It is a development recovery
+        escape hatch for a runner that is already held inactive; it never sweeps unrelated
+        commands and still requires worker-lease and platform-job quiescence.
+        """
+
+        _require_utc(at)
+        if PermissionKey.WORKFLOW_RECONCILE not in actor.permissions:
+            _fail(
+                "PRODUCTION_RETIREMENT_FORCE_PERMISSION_REQUIRED",
+                "force retirement requires workflow reconciliation permission",
+            )
+        self._require_runner_quiescence()
+        if actor.actor_id != checkpoint.operator_id:
+            _fail(
+                "PRODUCTION_RETIREMENT_OPERATOR_MISMATCH",
+                "the retirement actor does not own the production execution",
+            )
+        rows = _checkpoint_workflow_rows(checkpoint)
+        workflow_ids = tuple(row.workflow_id for row in rows)
+        retirement_id = _retirement_id(checkpoint)
+        with self._sessions() as session:
+            self._preflight_exact_scope(
+                session,
+                checkpoint=checkpoint,
+                rows=rows,
+                retirement_id=retirement_id,
+            )
+            replay = self._replay_receipt(
+                session,
+                checkpoint=checkpoint,
+                retirement_id=retirement_id,
+            )
+            if replay is not None:
+                return replay
+        # A held worker lease may itself be expired while the runner is stopped. Reconcile only
+        # this pinned cohort before preparing the write command; unrelated leases remain untouched.
+        self._lease_reconciler.reconcile_expired_for_workflows(
+            workflow_ids,
+            observed_at=at,
+        )
+        with self._sessions() as session:
+            command = self._prepare_command(
+                session,
+                checkpoint=checkpoint,
+                retirement_id=retirement_id,
+                at=at,
+            )
+        return self._execute(
+            command, checkpoint=checkpoint, actor=actor, force_unexpired_lease=True
+        )
 
     def _preflight_exact_scope(
         self,
@@ -229,6 +292,8 @@ class MockExamProductionRetirementService:
         command: MockExamProductionRetirementCommandV1,
         *,
         checkpoint: MockExamProductionExecutionV1,
+        actor: ActorContext,
+        force_unexpired_lease: bool,
     ) -> MockExamProductionRetirementReceiptV1:
         # Re-observe immediately before entering the write transaction. The persistent systemd
         # drop-in makes this evidence stable until its explicit privileged post-retirement release.
@@ -270,7 +335,12 @@ class MockExamProductionRetirementService:
                 )
 
             _fence_platform_jobs(session, workflow_ids)
-            _fence_older_commands(session, workflow_ids, at=command.authorized_at)
+            force_revoked_command_ids = _fence_older_commands(
+                session,
+                workflow_ids,
+                at=command.authorized_at,
+                force_unexpired_lease=force_unexpired_lease,
+            )
 
             outcomes: list[MockExamProductionRetirementOutcomeV1] = []
             for binding in command.bindings:
@@ -342,6 +412,16 @@ class MockExamProductionRetirementService:
                         "retired_at": command.authorized_at.isoformat().replace("+00:00", "Z"),
                         "retirement_workflow_resource_version": (
                             retirement_workflow_resource_version
+                        ),
+                        "force_revoked_command_ids": force_revoked_command_ids,
+                        "force_revoke_event": _FORCE_REVOKE_EVENT
+                        if force_unexpired_lease
+                        else None,
+                        "force_revoked_by": actor.actor_id if force_unexpired_lease else None,
+                        "force_revoked_at": (
+                            command.authorized_at.isoformat().replace("+00:00", "Z")
+                            if force_unexpired_lease
+                            else None
                         ),
                     },
                 )
@@ -664,7 +744,8 @@ def _fence_older_commands(
     workflow_ids: tuple[str, ...],
     *,
     at: datetime,
-) -> None:
+    force_unexpired_lease: bool = False,
+) -> tuple[str, ...]:
     commands = tuple(
         session.scalars(
             select(WorkflowCommandRecord)
@@ -682,18 +763,27 @@ def _fence_older_commands(
             .with_for_update()
         )
     )
+    force_revoked_command_ids: list[str] = []
     for command in commands:
         state = CommandState(command.state)
         if state in {CommandState.LEASED, CommandState.PROCESSING} and (
             command.lease_expires_at is None or command.lease_expires_at >= at
         ):
-            _fail(
-                "PRODUCTION_RETIREMENT_COMMAND_LEASE_HELD",
-                "an unexpired Workflow command lease blocks production retirement",
-            )
+            if not force_unexpired_lease:
+                _fail(
+                    "PRODUCTION_RETIREMENT_COMMAND_LEASE_HELD",
+                    "an unexpired Workflow command lease blocks production retirement",
+                )
+            if command.lease_owner is None or command.lease_expires_at is None:
+                _fail(
+                    "PRODUCTION_RETIREMENT_FORCE_LEASE_IDENTITY_INVALID",
+                    "a forced command lease lacks an owner or expiry identity",
+                )
+            force_revoked_command_ids.append(command.command_id)
         if state is CommandState.PROCESSING:
             transition_command(command, CommandState.PENDING)
         transition_command(command, CommandState.CANCELLED)
+    return tuple(force_revoked_command_ids)
 
 
 def _fence_platform_jobs(session: Session, workflow_ids: tuple[str, ...]) -> None:
