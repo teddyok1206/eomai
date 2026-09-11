@@ -1186,7 +1186,7 @@ class HwpxBuildView(WebModel):
     renderer_version: Literal["4.9.0", "1.0.0", "2.0.0", "3.0.0"]
     state: Literal["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]
     validation_state: Literal["PENDING", "PASS", "FAIL"]
-    native_equation_count: int | None = Field(default=None, ge=0, le=32)
+    native_equation_count: int | None = Field(default=None, ge=0, le=128)
     native_table_count: int | None = Field(default=None, ge=0, le=20)
     output_artifact_id: str | None = None
     output_artifact_revision_id: str | None = None

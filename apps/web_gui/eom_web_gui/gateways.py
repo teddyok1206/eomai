@@ -52,6 +52,7 @@ from eom_web_gui.sessions import ApiTokens, WebSession
 
 ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{7,127}$")
 SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
+HWPX_BUILD_STATES = frozenset({"REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"})
 INTEGRATED_SCIENCE_OUTLINE_SHA256 = (
     "sha256:f11389c8ab26c2bd5b93acf66fe92d30fea9c1d0bc7e6b91a6b6751fdccb5108"
 )
@@ -546,10 +547,16 @@ class ObserveClient:
         if response.status_code == 401:
             self._authenticated = False
             await self._ensure_session()
-            response = await self._client.get(path, headers={"Accept": "application/json"})
+            try:
+                response = await self._client.get(path, headers={"Accept": "application/json"})
+            except httpx.HTTPError:
+                return None
         if response.status_code != 200:
             return None
-        value = response.json()
+        try:
+            value = response.json()
+        except ValueError:
+            return None
         return value if isinstance(value, dict) else None
 
     async def _ensure_session(self) -> None:
@@ -626,7 +633,8 @@ class HttpApplicationGateway:
         )
         data = self._data(response)
         tokens = _tokens(data)
-        me = await self._client.get(
+        me = await self._application_request(
+            "GET",
             "/api/v1/auth/me",
             headers={
                 "Authorization": f"Bearer {tokens.access_token}",
@@ -1368,7 +1376,7 @@ class HttpApplicationGateway:
             "/api/v1/item-bank/entries",
             params=params,
         )
-        document = response.json()
+        document = self._document(response)
         values = document.get("data") if isinstance(document, dict) else None
         page = document.get("page") if isinstance(document, dict) else None
         if (
@@ -1796,6 +1804,7 @@ class HttpApplicationGateway:
                 )
                 values = [self._data(response)]
             else:
+                requested_state = query.status if query.status in HWPX_BUILD_STATES else None
                 response = await self._authorized(
                     session,
                     "GET",
@@ -1803,11 +1812,11 @@ class HttpApplicationGateway:
                     params={
                         "limit": query.limit,
                         "cursor": query.cursor,
-                        "state": query.status,
+                        "state": requested_state,
                     },
                 )
                 values = self._list_data(response)
-            hwpx_page = response.json().get("page", {})
+            hwpx_page = self._document(response).get("page", {})
             return ExplorerResult(
                 entity=query.entity,
                 columns=hwpx_columns,
@@ -1836,7 +1845,7 @@ class HttpApplicationGateway:
                 params["state"] = query.status
             response = await self._authorized(session, "GET", path, params=params)
             values = self._list_data(response)
-            page = response.json().get("page", {})
+            page = self._document(response).get("page", {})
         rows = _filtered_rows(values, columns, query)
         return ExplorerResult(
             entity=query.entity,
@@ -1885,7 +1894,7 @@ class HttpApplicationGateway:
             params["to_time"] = query.date_to.isoformat()
         response = await self._authorized(session, "GET", "/api/v1/events", params=params)
         values = self._list_data(response)
-        page = response.json().get("page", {})
+        page = self._document(response).get("page", {})
         rows = _filtered_rows(values, columns, query)
         return ExplorerResult(
             entity=query.entity,
@@ -1932,12 +1941,21 @@ class HttpApplicationGateway:
         headers: dict[str, str] | None = None,
         params: dict[str, str | int | float | bool | None] | None = None,
     ) -> httpx.Response:
+        # HTTPX serializes ``None`` query values as empty strings. FastAPI then
+        # treats those empty enum/integer/cursor values as supplied-but-invalid
+        # input. Optional filters are absent values at this boundary, so omit
+        # them once here for every Studio-to-Application-API request.
+        request_params = (
+            {key: value for key, value in params.items() if value is not None}
+            if params is not None
+            else None
+        )
         used_access_token = session.tokens.access_token
-        response = await self._client.request(
+        response = await self._application_request(
             method,
             path,
             json=json,
-            params=params,
+            params=request_params,
             headers={
                 "Authorization": f"Bearer {used_access_token}",
                 "Accept": "application/json",
@@ -1956,11 +1974,11 @@ class HttpApplicationGateway:
                     json={"refresh_token": session.tokens.refresh_token},
                 )
                 session.tokens = _tokens(self._data(refresh))
-        response = await self._client.request(
+        response = await self._application_request(
             method,
             path,
             json=json,
-            params=params,
+            params=request_params,
             headers={
                 "Authorization": f"Bearer {session.tokens.access_token}",
                 "Accept": "application/json",
@@ -1972,31 +1990,57 @@ class HttpApplicationGateway:
         return response
 
     async def _request(self, method: str, path: str, *, json: dict[str, object]) -> httpx.Response:
+        response = await self._application_request(
+            method,
+            path,
+            json=json,
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+        )
+        if response.status_code >= 400:
+            raise _gateway_error(response)
+        return response
+
+    async def _application_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: dict[str, object] | None = None,
+        headers: dict[str, str] | None = None,
+        params: dict[str, str | int | float | bool] | None = None,
+    ) -> httpx.Response:
         try:
             response = await self._client.request(
                 method,
                 path,
                 json=json,
-                headers={"Accept": "application/json", "Content-Type": "application/json"},
+                headers=headers,
+                params=params,
             )
         except httpx.HTTPError as exc:
             raise GatewayError(status=503, code="APPLICATION_API_UNAVAILABLE") from exc
-        if response.status_code >= 400:
-            raise _gateway_error(response)
         return response
 
     @staticmethod
-    def _data(response: httpx.Response) -> dict[str, Any]:
-        value = response.json()
-        data = value.get("data") if isinstance(value, dict) else None
+    def _document(response: httpx.Response) -> dict[str, Any]:
+        try:
+            value = response.json()
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+        if not isinstance(value, dict):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return value
+
+    @classmethod
+    def _data(cls, response: httpx.Response) -> dict[str, Any]:
+        data = cls._document(response).get("data")
         if not isinstance(data, dict):
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
         return data
 
-    @staticmethod
-    def _list_data(response: httpx.Response) -> list[dict[str, Any]]:
-        value = response.json()
-        data = value.get("data") if isinstance(value, dict) else None
+    @classmethod
+    def _list_data(cls, response: httpx.Response) -> list[dict[str, Any]]:
+        data = cls._document(response).get("data")
         if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
         return data

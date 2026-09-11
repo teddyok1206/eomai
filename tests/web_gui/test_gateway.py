@@ -523,6 +523,7 @@ async def test_gateway_validates_item_bank_page_and_forwards_graph_filters() -> 
         assert request.url.params["target_school_level"] == "HIGH_SCHOOL"
         assert request.url.params["target_grade"] == "1"
         assert request.url.params["item_number"] == "12"
+        assert "cursor" not in request.url.params
         return httpx.Response(
             200,
             json=_list(
@@ -592,9 +593,11 @@ async def test_gateway_accepts_complete_application_hwpx_build_view() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == f"/api/v1/hwpx-builds/{build_id}"
+        value = _hwpx_build_data(build_id)
+        value["native_equation_count"] = 128
         return httpx.Response(
             200,
-            json=_single(_hwpx_build_data(build_id)),
+            json=_single(value),
         )
 
     gateway = HttpApplicationGateway(
@@ -607,6 +610,7 @@ async def test_gateway_accepts_complete_application_hwpx_build_view() -> None:
     value = await gateway.hwpx_build(_session(), build_id)
     assert value.state == "SUCCEEDED"
     assert value.download_available is True
+    assert value.native_equation_count == 128
     assert value.output_artifact_revision_id == "rev_" + "7" * 32
     assert value.resource_version == 3
     await gateway.close()
@@ -1075,6 +1079,8 @@ async def test_gateway_projects_bounded_recent_hwpx_builds_for_admin_ui() -> Non
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/v1/hwpx-builds"
         assert request.url.params["limit"] == "20"
+        assert "cursor" not in request.url.params
+        assert "state" not in request.url.params
         return httpx.Response(200, json=_list([_hwpx_build_data(build_id)]))
 
     gateway = HttpApplicationGateway(
@@ -1092,6 +1098,73 @@ async def test_gateway_projects_bounded_recent_hwpx_builds_for_admin_ui() -> Non
     assert result.rows[0]["build_id"] == build_id
     assert result.rows[0]["item_revision_id"] == "itemrev_" + "3" * 32
     assert result.rows[0]["output_artifact_revision_id"] == "rev_" + "7" * 32
+    await gateway.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("status", "expected_state"),
+    (("SUCCEEDED", "SUCCEEDED"), ("COMPLETED", None)),
+)
+async def test_gateway_forwards_only_valid_hwpx_state_filters(
+    status: str, expected_state: str | None
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/hwpx-builds"
+        assert request.url.params.get("state") == expected_state
+        return httpx.Response(200, json=_list([]))
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    result = await gateway.explorer(
+        _session(),
+        ExplorerQuery(entity=ExplorerEntity.HWPX_BUILDS, status=status, limit=20),
+    )
+    assert result.rows == ()
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_gateway_maps_authorized_transport_failure_to_stable_unavailable_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("test-only unavailable", request=request)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(GatewayError) as failure:
+        await gateway.explorer(
+            _session(),
+            ExplorerQuery(entity=ExplorerEntity.HWPX_BUILDS, sort="created_desc", limit=20),
+        )
+    assert failure.value.status == 503
+    assert failure.value.code == "APPLICATION_API_UNAVAILABLE"
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_gateway_maps_invalid_application_json_to_stable_response_error() -> None:
+    build_id = "hwpxbuild_" + "1" * 32
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, content=b"test-only-not-json")),
+    )
+    with pytest.raises(GatewayError) as failure:
+        await gateway.hwpx_build(_session(), build_id)
+    assert failure.value.status == 502
+    assert failure.value.code == "APPLICATION_API_RESPONSE_INVALID"
     await gateway.close()
 
 
