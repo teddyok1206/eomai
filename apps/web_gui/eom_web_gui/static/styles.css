@@ -164,8 +164,12 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .event-content strong { display: block; font-size: var(--eom-type-body); }
 .event-content small { color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
 .event-meta { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px; }
-.event-meta code { padding: 2px 5px; border-radius: 3px; background: var(--eom-surface-muted); color: #445066; font-size: 12px; }
+.event-meta span { padding: 2px 5px; border-radius: 3px; background: var(--eom-surface-muted); color: #445066; font-size: var(--eom-type-caption); }
+.event-technical-details { margin-top: 7px; }
+.event-technical-details summary { padding: 6px 8px; }
+.event-technical-details .inspector-list { padding: 8px; font-size: var(--eom-type-caption); }
 .empty-state { padding: 26px 12px; color: var(--eom-text-muted); text-align: center; font-size: var(--eom-type-label); }
+.operational-log-panel > summary { cursor: pointer; list-style-position: inside; }
 .operational-log { min-height: 118px; max-height: 220px; overflow: auto; padding: 12px 15px; background: #f8f9fb; }
 .operational-log p { margin: 0 0 7px; color: #4b5568; font: var(--eom-type-caption)/1.55 "JetBrains Mono", monospace; }
 .inspector-list, .summary-grid, .capability-grid { margin: 0; padding: 14px 15px; display: grid; grid-template-columns: minmax(92px, .8fr) minmax(0, 1.4fr); gap: 9px 11px; font-size: var(--eom-type-label); }
@@ -178,6 +182,9 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .technical-details summary { padding: 12px 15px; color: var(--eom-info-cobalt); font: 700 var(--eom-type-caption) "JetBrains Mono", "SFMono-Regular", Consolas, monospace; cursor: pointer; list-style-position: inside; }
 .technical-details[open] summary { border-bottom: 1px solid var(--eom-border); background: #f5f9ff; }
 .technical-details .inspector-list { background: #f8fbff; }
+.inline-technical-details { border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); overflow: hidden; background: var(--eom-surface); }
+.inline-technical-details summary { padding: 9px 11px; }
+.inline-technical-details .inspector-list { padding: 10px 11px; }
 
 .request-layout, .approval-layout { display: grid; grid-template-columns: minmax(310px, .8fr) minmax(520px, 1.2fr); gap: 16px; align-items: start; }
 .request-composer textarea { width: 100%; resize: vertical; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); padding: 16px; color: var(--eom-text); font-size: 16px; line-height: 1.7; }
@@ -204,6 +211,8 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .draft-meta { display: grid; grid-template-columns: 100px 1fr; gap: 6px 10px; padding: 11px; background: var(--eom-surface-muted); font-size: var(--eom-type-caption); }
 .draft-meta span { color: var(--eom-text-muted); }
 .draft-meta code { overflow: hidden; text-overflow: ellipsis; }
+.item-id-recovery { margin: 0 0 14px; }
+.item-id-recovery .heading-actions { padding: 12px; }
 .handoff-guide { list-style: none; margin: 0 0 15px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .handoff-guide li { min-height: 54px; display: grid; grid-template-columns: 28px 1fr; align-content: center; align-items: center; column-gap: 9px; padding: 10px 12px; border: 1px solid var(--eom-border); border-radius: 10px; background: var(--eom-surface); }
 .handoff-guide li > span { width: 28px; height: 28px; display: grid; place-items: center; align-self: center; border: 1px solid var(--eom-blue-300); border-radius: 50%; background: var(--eom-blue-50); color: var(--eom-blue-700); font: 700 var(--eom-type-caption) "JetBrains Mono", monospace; }
@@ -328,9 +337,6 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .item-bank-card header strong { font-size: 15px; }
 .item-bank-unit-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .item-bank-unit-chip { padding: 5px 8px; border: 1px solid var(--eom-blue-200); border-radius: 999px; background: #f8fbff; color: var(--eom-info-cobalt); cursor: pointer; font: inherit; font-size: var(--eom-type-caption); }
-.item-bank-pointers { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 4px 8px; margin: 0; font-size: var(--eom-type-caption); }
-.item-bank-pointers dt { color: var(--eom-text-muted); }
-.item-bank-pointers dd { margin: 0; overflow: hidden; color: var(--eom-info-cobalt); font-family: "JetBrains Mono", monospace; text-overflow: ellipsis; white-space: nowrap; }
 .mock-exam-assembly-panel { margin-top: 16px; padding: 15px; }
 .mock-exam-form-grid { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 10px; margin: 14px 0; }
 .mock-exam-form-grid label { display: grid; gap: 6px; color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
@@ -345,12 +351,13 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .learning-exam-list { display: grid; gap: 9px; padding: 14px; max-height: 680px; overflow: auto; }
 .learning-exam-card { display: grid; grid-template-columns: minmax(210px, 1fr) minmax(360px, 1.5fr); gap: 10px 16px; align-items: center; padding: 13px; border: 1px solid var(--eom-border); border-radius: 10px; background: var(--eom-porcelain); }
 .learning-exam-heading { min-width: 0; }
-.learning-exam-heading strong, .learning-exam-heading code { display: block; }
-.learning-exam-heading code { margin-top: 4px; overflow: hidden; color: var(--eom-info-cobalt); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.learning-exam-metrics { display: grid; grid-template-columns: repeat(3, minmax(72px, 1fr)); gap: 5px 9px; margin: 0; }
+.learning-exam-heading strong { display: block; }
+.learning-exam-metrics { display: grid; grid-template-columns: repeat(2, minmax(72px, 1fr)); gap: 5px 9px; margin: 0; }
 .learning-exam-metrics dt { color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
 .learning-exam-metrics dd { margin: 0; font: 700 12px "JetBrains Mono", monospace; }
 .learning-exam-card progress { grid-column: 1 / -1; width: 100%; height: 7px; accent-color: var(--eom-primary); }
+.learning-exam-technical { grid-column: 1 / -1; }
+.learning-technical-details { margin: 0 0 14px; }
 .learning-page-actions, .learning-item-panel, .learning-page-panel { grid-column: 1 / -1; }
 .learning-page-actions { display: flex; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
 .learning-page-actions input { width: 110px; min-height: 40px; padding: 7px 10px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); background: #fff; }
@@ -363,7 +370,7 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .learning-page-grid figure { min-width: 0; margin: 0; padding: 9px; border: 1px solid var(--eom-border); border-radius: 10px; background: #fff; }
 .learning-page-grid img { display: block; width: 100%; height: auto; max-height: 420px; object-fit: contain; background: #f7f9fc; }
 .learning-page-grid figcaption { margin-top: 6px; color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
-.learning-page-grid code { display: block; margin-top: 4px; overflow: hidden; color: var(--eom-info-cobalt); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.learning-page-technical { margin-top: 7px; }
 .admin-preset-panel { margin-top: 15px; }
 .advanced-policy > summary { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px; cursor: pointer; list-style-position: inside; }
 .advanced-policy > summary::marker { color: var(--eom-info-cobalt); }

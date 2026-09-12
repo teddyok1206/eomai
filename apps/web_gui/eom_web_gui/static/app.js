@@ -59,6 +59,7 @@ const state = {
   assessmentLearningItemsByExam: new Map(),
   presentationVocabulary: null,
   curriculumOutline: null,
+  curriculumUnitsByKey: new Map(),
   curriculumSelection: {large: "", middle: "", small: ""},
 };
 
@@ -345,6 +346,7 @@ function renderCurriculumOutline() {
   const units = state.curriculumOutline?.units;
   if (!Array.isArray(units)) return;
   const byKey = new Map(units.map((unit) => [unit.key, unit]));
+  state.curriculumUnitsByKey = byKey;
   const options = curriculumOptionsForSelection(units, state.curriculumSelection);
   replaceCurriculumOptions(
     form.elements.curriculum_large_unit_key,
@@ -434,10 +436,16 @@ async function loadCurriculumOutline() {
     syncCurriculumSelectorAvailability();
   } catch (failure) {
     state.curriculumOutline = null;
+    state.curriculumUnitsByKey = new Map();
     syncCurriculumSelectorAvailability();
     syncGraphGroundingCapability();
     showMessage($("#draft-message"), `교육과정 목록 조회 실패: ${failure.message}`, "error");
   }
+}
+
+function curriculumDisplayLabel(key) {
+  const unit = state.curriculumUnitsByKey.get(key);
+  return unit ? `${unit.code} ${unit.label}` : "교육과정 범위";
 }
 
 function installRequestDraft() {
@@ -646,7 +654,14 @@ function renderWorkflowEvidence(provenance) {
     appendEvidenceChip(root, "과학 지식", "작업자 기본 지식");
     return;
   }
-  if (provenance.curriculum_root_key) appendEvidenceChip(root, "교육과정", String(provenance.curriculum_root_key));
+  if (provenance.curriculum_root_key) {
+    appendEvidenceChip(
+      root,
+      "교육과정",
+      curriculumDisplayLabel(provenance.curriculum_root_key),
+      `기술 키: ${provenance.curriculum_root_key}`,
+    );
+  }
   const sourceClasses = Array.isArray(provenance.source_classes) ? provenance.source_classes.filter(Boolean) : [];
   if (sourceClasses.length) appendEvidenceChip(root, "근거 유형", sourceClasses.join(" · "));
   if (provenance.evidence_bundle_revision_id) {
@@ -667,6 +682,18 @@ function renderDefinitionList(element, values) {
     dd.textContent = value === null || value === undefined || value === "" ? "-" : String(value);
     element.append(dt, dd);
   }
+}
+
+function technicalDisclosure(label, values, extraClass = "") {
+  const disclosure = document.createElement("details");
+  disclosure.className = `technical-details inline-technical-details${extraClass ? ` ${extraClass}` : ""}`;
+  const summary = document.createElement("summary");
+  summary.textContent = label;
+  const list = document.createElement("dl");
+  list.className = "inspector-list";
+  renderDefinitionList(list, values);
+  disclosure.append(summary, list);
+  return disclosure;
 }
 
 function renderStages(workflow, steps) {
@@ -724,13 +751,31 @@ function renderTimeline(events) {
     stateLabel.title = `기술 상태: ${presentation.raw}`;
     const meta = document.createElement("div");
     meta.className = "event-meta";
-    for (const value of [event.step, event.worker_slot, event.job_id, event.attempt ? `attempt ${event.attempt}` : null, event.artifact_id, event.validation_result, event.elapsed_ms !== null ? `${event.elapsed_ms}ms` : null, event.error_code]) {
+    for (const value of [
+      event.step ? stageLabel(event.step) : null,
+      event.validation_result ? statePresentation("generic", event.validation_result).label : null,
+      event.elapsed_ms !== null && event.elapsed_ms !== undefined && Number.isFinite(Number(event.elapsed_ms))
+        ? `${(Number(event.elapsed_ms) / 1000).toFixed(1)}초`
+        : null,
+    ]) {
       if (!value) continue;
-      const code = document.createElement("code");
-      code.textContent = String(value);
-      meta.append(code);
+      const detail = document.createElement("span");
+      detail.textContent = String(value);
+      meta.append(detail);
     }
-    content.append(title, stateLabel, meta);
+    content.append(title, stateLabel);
+    if (meta.children.length) content.append(meta);
+    const technicalValues = {
+      "원본 단계": event.step,
+      "작업 슬롯": event.worker_slot,
+      "작업 ID": event.job_id,
+      "실행 시도": event.attempt,
+      "결과 파일 ID": event.artifact_id,
+      "오류 코드": event.error_code,
+    };
+    if (Object.values(technicalValues).some((value) => value !== null && value !== undefined && value !== "")) {
+      content.append(technicalDisclosure("기술 정보", technicalValues, "event-technical-details"));
+    }
     row.append(time, mark, content);
     root.append(row);
   }
@@ -812,7 +857,14 @@ function installApproval() {
 
 function renderApprovalSummary(bundle) {
   const workflow = bundle.workflow || {};
-  renderDefinitionList($("#approval-summary"), {"문항 제작 진행 ID": workflow.workflow_id, "진행 상태": statePresentation("workflow", workflow.state).label, "현재 단계": stageLabel(workflow.current_step_key), "동시 편집 확인값": bundle.etag});
+  renderDefinitionList($("#approval-summary"), {
+    "진행 상태": statePresentation("workflow", workflow.state).label,
+    "현재 단계": stageLabel(workflow.current_step_key),
+  });
+  renderDefinitionList($("#approval-technical-summary"), {
+    "문항 제작 진행 ID": workflow.workflow_id,
+    "동시 편집 확인값": bundle.etag,
+  });
   const waiting = ["AWAITING_HUMAN_APPROVAL", "AWAITING_APPROVAL"].includes(workflow.state) || String(workflow.stage || "").includes("APPROVAL");
   if (waiting) setStatus($("#approval-state"), "warning", "◆", "검토 승인 대기");
   else setStateStatus($("#approval-state"), "workflow", workflow.state);
@@ -824,11 +876,11 @@ async function approveWorkflow() {
   const etag = $("#approval-etag").value;
   const message = $("#approval-message");
   try {
-    const result = await api(`/workflows/${encodeURIComponent(workflowId)}/approvals`, {
+    await api(`/workflows/${encodeURIComponent(workflowId)}/approvals`, {
       method: "POST", mutation: true,
       body: {etag, idempotency_key: `studio-approval:${workflowId}:${etag.replaceAll('"', "")}`, reason: $("#approval-reason").value.trim() || null},
     });
-    showMessage(message, `검토 승인 요청이 접수되었습니다. ${result.command_id || ""}`, "success");
+    showMessage(message, "검토 승인 요청이 접수되었습니다.", "success");
     $("#workflow-id").value = workflowId;
     await loadWorkflow();
     showView("approval");
@@ -906,9 +958,12 @@ function renderMockExamSelections() {
     for (const shortage of plan.shortages || []) {
       const row = document.createElement("div");
       row.className = "mock-exam-selection";
+      const scopeLabel = shortage.balance_large_unit_key
+        ? curriculumDisplayLabel(shortage.balance_large_unit_key)
+        : "필수 배치 조건";
       row.append(
         Object.assign(document.createElement("strong"), {textContent: String(shortage.position)}),
-        Object.assign(document.createElement("span"), {textContent: shortage.coverage_requirement_id || shortage.balance_large_unit_key || shortage.slot_id}),
+        Object.assign(document.createElement("span"), {textContent: scopeLabel}),
         Object.assign(document.createElement("small"), {textContent: `${shortage.reason} · 후보 ${shortage.available_candidate_count}개`}),
       );
       root.append(row);
@@ -920,8 +975,8 @@ function renderMockExamSelections() {
     const row = document.createElement("div");
     row.className = "mock-exam-selection";
     const role = placement.coverage_role === "REQUIRED"
-      ? `필수 · ${placement.coverage_unit_key}`
-      : `균형 · ${placement.large_unit_key}`;
+      ? `필수 · ${curriculumDisplayLabel(placement.coverage_unit_key)}`
+      : `균형 · ${curriculumDisplayLabel(placement.large_unit_key)}`;
     row.append(
       Object.assign(document.createElement("strong"), {textContent: placement.display_number}),
       Object.assign(document.createElement("span"), {textContent: `${role} · ${(placement.points_milli / 1000).toFixed(1)}점`}),
@@ -957,7 +1012,7 @@ async function submitMockExamAssembly() {
     $("#mock-exam-assembly-revision").value = result.resource_id;
     $("#mock-exam-hwpx-submit").disabled = false;
     $("#mock-exam-hwpx-state").textContent = "제작 가능";
-    showMessage(message, `모의고사 조립 리비전이 고정되었습니다: ${result.resource_id}`, "success");
+    showMessage(message, "모의고사 구성이 고정되었습니다. 전체 시험지 HWPX를 만들 수 있습니다.", "success");
   } catch (failure) {
     showMessage(message, `모의고사 조립 실패: ${failure.message}`, "error");
   } finally {
@@ -980,7 +1035,7 @@ async function createMockExamHwpxBuild() {
       },
     });
     state.mockExamHwpxBuildId = command.resource_id;
-    showMessage($("#mock-exam-hwpx-message"), `전체 시험지 제작을 시작했습니다: ${command.resource_id}`, "success");
+    showMessage($("#mock-exam-hwpx-message"), "전체 시험지 제작을 시작했습니다.", "success");
     await loadMockExamHwpxBuild();
   } catch (failure) {
     button.disabled = false;
@@ -1097,19 +1152,12 @@ function renderItemBank() {
       });
       units.append(button);
     }
-    const pointers = document.createElement("dl");
-    pointers.className = "item-bank-pointers";
-    for (const [name, value] of [
-      ["문항 버전", entry.item_revision_id],
-      ["시험지 버전", entry.assessment_occurrence_revision_id],
-      ["Graph snapshot", entry.graph_snapshot_revision_id],
-    ]) {
-      const term = document.createElement("dt");
-      const detail = document.createElement("dd");
-      term.textContent = name;
-      detail.textContent = value;
-      pointers.append(term, detail);
-    }
+    const pointers = technicalDisclosure("고정 버전 정보", {
+      "문항 ID": entry.item_id,
+      "문항 버전 ID": entry.item_revision_id,
+      "시험지 버전 ID": entry.assessment_occurrence_revision_id,
+      "Graph 버전 ID": entry.graph_snapshot_revision_id,
+    });
     const actions = document.createElement("div");
     actions.className = "form-actions";
     actions.append(
@@ -1140,10 +1188,10 @@ async function loadRecentItems() {
       state.recentItems.length ? "최근 완성 문항 선택" : "현재 선택 가능한 완성 문항 없음",
       "",
     ));
-    for (const item of state.recentItems) {
-      const reference = item.human_reference_code ? `${item.human_reference_code} · ` : "";
+    for (const [index, item] of state.recentItems.entries()) {
+      const reference = item.human_reference_code || `최근 문항 ${index + 1}`;
       const when = item.created_at || "시각 미상";
-      select.append(new Option(`${reference}${item.item_id} · ${when}`, item.item_id));
+      select.append(new Option(`${reference} · ${when}`, item.item_id));
     }
     if (!$("#item-id").value.trim() && state.recentItems.length) {
       select.value = state.recentItems[0].item_id;
@@ -1197,7 +1245,16 @@ function renderItemPreview(preview) {
   $("#preview-authoring-intent").textContent = preview.authoring_intent || "";
   const blocks = $("#preview-blocks");
   blocks.replaceChildren();
-  for (const block of orderedItemPreviewBlocks(preview)) blocks.append(renderPreviewBlock(block));
+  const orderedBlocks = orderedItemPreviewBlocks(preview);
+  const statementLabels = new Map();
+  for (const block of orderedBlocks) {
+    if (block.type === "statement_set") {
+      for (const statement of block.statements || []) {
+        statementLabels.set(statement.statement_id, statement.label);
+      }
+    }
+    blocks.append(renderPreviewBlock(block));
+  }
   const choices = $("#preview-choices");
   choices.replaceChildren();
   for (const choice of preview.choices || []) {
@@ -1211,7 +1268,8 @@ function renderItemPreview(preview) {
     const row = document.createElement("p");
     row.className = "statement-explanation";
     const label = document.createElement("strong");
-    label.textContent = value.statement_id;
+    label.textContent = statementLabels.get(value.statement_id) || "판단";
+    label.title = `기술 ID: ${value.statement_id}`;
     const text = document.createElement("span");
     text.textContent = value.text;
     row.append(label, text);
@@ -1294,7 +1352,7 @@ async function loadStructuredImportIntakes() {
   for (const value of values) {
     const option = document.createElement("option");
     option.value = value.intake_batch_id;
-    option.textContent = `${value.batch_name} · ${value.intake_batch_id}`;
+    option.textContent = value.batch_name;
     select.append(option);
   }
 }
@@ -1347,7 +1405,7 @@ async function importStructuredItem() {
     });
     $("#revision-id").value = result.resource_id;
     $("#hwpx-revision-id").value = result.resource_id;
-    showMessage(message, `변경되지 않는 새 문항 버전 ${result.resource_id}가 등록되었습니다.`, "success");
+    showMessage(message, "변경되지 않는 새 문항 버전이 등록되었습니다.", "success");
     await loadItemPreview();
   } catch (failure) {
     showMessage(message, `등록 실패: ${failure.message}`, "error");
@@ -1608,15 +1666,12 @@ function renderAssessmentLearningExams(exams) {
     heading.className = "learning-exam-heading";
     const title = document.createElement("strong");
     title.textContent = exam.display_label;
-    const source = document.createElement("code");
-    source.textContent = exam.assessment_occurrence_revision_id;
-    heading.append(title, source);
+    heading.append(title);
     const metrics = document.createElement("dl");
     metrics.className = "learning-exam-metrics";
     const values = [
       ["원본 PDF", exam.source_pdf_count],
       ["승인 문항", exam.approved_item_count],
-      ["Graph 버전", exam.graph_snapshot_revision_id],
     ];
     for (const [label, value] of values) {
       const term = document.createElement("dt");
@@ -1664,7 +1719,11 @@ function renderAssessmentLearningExams(exams) {
       await loadAssessmentLearningItems(exam, itemPanel, null, pagePanel, pageButton);
     }, true);
     pageActions.append(itemNumber, itemButton, allItemsButton, pageButton);
-    card.append(heading, metrics, progress, pageActions, itemPanel, pagePanel);
+    const technical = technicalDisclosure("고정 버전 정보", {
+      "시험 회차 버전 ID": exam.assessment_occurrence_revision_id,
+      "Graph 버전 ID": exam.graph_snapshot_revision_id,
+    }, "learning-exam-technical");
+    card.append(heading, metrics, progress, technical, pageActions, itemPanel, pagePanel);
     root.append(card);
   }
 }
@@ -1751,8 +1810,10 @@ async function loadAssessmentLearningPages(exam, panel, button) {
       + `/pages/${encodeURIComponent(page.page_input_id)}/image`;
     const caption = document.createElement("figcaption");
     caption.textContent = `${page.source_role === "PROBLEM_DOCUMENT" ? "문제" : "정답·해설"} ${page.physical_page}쪽 · ${page.width_px}×${page.height_px}`;
-    const identity = document.createElement("code");
-    identity.textContent = `${page.artifact_revision_id} · ${page.sha256}`;
+    const identity = technicalDisclosure("원본 기술 정보", {
+      "결과 파일 버전 ID": page.artifact_revision_id,
+      "내용 검증값": page.sha256,
+    }, "learning-page-technical");
     figure.append(image, caption, identity);
     grid.append(figure);
   }
@@ -1829,16 +1890,19 @@ function renderAnalysisBatches(batches) {
     showMessage($("#analysis-batch-message"), "분석 작업 0개 · 제품 기능과 독립된 조회 전용 상태");
     return;
   }
-  for (const batch of batches) {
-    const {card, details} = controlCard(batch.batch_id, batch.state, "knowledge_analysis");
+  for (const [index, batch] of batches.entries()) {
+    const {card, details} = controlCard(`교과서 분석 ${index + 1}`, batch.state, "knowledge_analysis");
     const completed = batch.accepted_range_count + batch.failed_range_count;
     const percent = Math.floor((completed * 100) / batch.total_range_count);
     addControlDetail(details, "분석 완료", `${batch.accepted_range_count} / ${batch.total_range_count}`);
     addControlDetail(details, "실패", batch.failed_range_count);
     addControlDetail(details, "진행률", `${percent}%`);
     addControlDetail(details, "예상 남은 시간", analysisBatchEta(batch, completed));
-    addControlDetail(details, "실패 코드", batch.failure_code);
     addControlDetail(details, "최근 갱신", batch.updated_at);
+    card.append(technicalDisclosure("작업 기술 정보", {
+      "분석 작업 ID": batch.batch_id,
+      "실패 코드": batch.failure_code,
+    }));
     const progress = document.createElement("progress");
     progress.className = "analysis-progress";
     progress.max = batch.total_range_count;
@@ -1910,7 +1974,7 @@ function renderKnowledgeQuality(report) {
   $("#quality-overlaps").textContent = `${report.overlap_page_count}`;
   $("#knowledge-observed-at").textContent = `확인 시각 ${report.observed_at}`;
   renderKnowledgeMap(report.documents || []);
-  renderKnowledgeFindings(report.findings || []);
+  renderKnowledgeFindings(report.findings || [], report.documents || []);
   renderKnowledgeDocuments(report.documents || []);
 }
 
@@ -1918,19 +1982,20 @@ function renderKnowledgeMap(documents) {
   const root = $("#knowledge-map");
   root.replaceChildren();
   let edgeCount = 0;
-  for (const documentCoverage of documents) {
+  for (const [index, documentCoverage] of documents.entries()) {
     const unitKeys = documentCoverage.curriculum_unit_keys || [];
     edgeCount += unitKeys.length;
     const row = document.createElement("div");
     row.className = "knowledge-map-row";
     const unit = document.createElement("code");
-    unit.textContent = unitKeys.join(" · ") || "미분류";
+    unit.textContent = unitKeys.map(curriculumDisplayLabel).join(" · ") || "미분류";
     const arrow = document.createElement("span");
     arrow.setAttribute("aria-hidden", "true");
     arrow.textContent = "→";
     const target = document.createElement("div");
     const revision = document.createElement("strong");
-    revision.textContent = documentCoverage.document_revision_id;
+    revision.textContent = `분석 문서 ${index + 1}`;
+    revision.title = `기술 ID: ${documentCoverage.document_revision_id}`;
     const pages = document.createElement("small");
     pages.textContent = `실제 페이지 ${documentCoverage.first_physical_page}–${documentCoverage.last_physical_page}`;
     target.append(revision, pages);
@@ -1946,7 +2011,7 @@ function renderKnowledgeMap(documents) {
   $("#knowledge-edge-count").textContent = `관계 ${edgeCount}개`;
 }
 
-function renderKnowledgeFindings(findings) {
+function renderKnowledgeFindings(findings, documents) {
   const root = $("#knowledge-findings");
   root.replaceChildren();
   if (!findings.length) {
@@ -1966,6 +2031,12 @@ function renderKnowledgeFindings(findings) {
     RANGE_ORDINAL_SEQUENCE_INVALID: "페이지 범위 처리 순서가 연속적이지 않음",
     SOURCE_POINTER_DRIFT: "한 문서 안에서 원본 자료 포인터가 일치하지 않음",
   };
+  const documentLabels = new Map(
+    documents.map((documentCoverage, index) => [
+      documentCoverage.document_revision_id,
+      `분석 문서 ${index + 1}`,
+    ]),
+  );
   for (const finding of findings) {
     const item = document.createElement("article");
     item.className = `quality-finding${finding.severity === "ERROR" ? " error" : ""}`;
@@ -1974,7 +2045,8 @@ function renderKnowledgeFindings(findings) {
     const context = document.createElement("small");
     const pageScope = finding.first_physical_page === null ? "" : ` · 페이지 ${finding.first_physical_page}–${finding.last_physical_page}`;
     const severity = finding.severity === "ERROR" ? "오류" : finding.severity === "WARN" ? "검토 필요" : "정보";
-    context.textContent = `${severity}${finding.document_revision_id ? ` · ${finding.document_revision_id}` : ""}${pageScope}`;
+    const documentLabel = documentLabels.get(finding.document_revision_id);
+    context.textContent = `${severity}${documentLabel ? ` · ${documentLabel}` : ""}${pageScope}`;
     item.append(code, context);
     root.append(item);
   }
@@ -1983,14 +2055,16 @@ function renderKnowledgeFindings(findings) {
 function renderKnowledgeDocuments(documents) {
   const root = $("#knowledge-document-list");
   root.replaceChildren();
-  for (const documentCoverage of documents) {
+  for (const [index, documentCoverage] of documents.entries()) {
     const card = document.createElement("article");
     card.className = "document-coverage-card";
     const identity = document.createElement("div");
-    const revision = document.createElement("code");
-    revision.textContent = documentCoverage.document_revision_id;
+    const revision = document.createElement("strong");
+    revision.textContent = `분석 문서 ${index + 1}`;
+    revision.title = `기술 ID: ${documentCoverage.document_revision_id}`;
     const scope = document.createElement("small");
-    scope.textContent = `페이지 ${documentCoverage.first_physical_page}–${documentCoverage.last_physical_page} · ${documentCoverage.curriculum_unit_keys.join(", ") || "미분류"}`;
+    const units = documentCoverage.curriculum_unit_keys.map(curriculumDisplayLabel).join(", ");
+    scope.textContent = `페이지 ${documentCoverage.first_physical_page}–${documentCoverage.last_physical_page} · ${units || "미분류"}`;
     identity.append(revision, scope);
     card.append(identity);
     for (const [label, value] of [["범위", documentCoverage.range_count], ["고유 페이지", documentCoverage.unique_page_count], ["분석 완료", documentCoverage.accepted_page_count], ["취소", documentCoverage.cancelled_page_count], ["누락", documentCoverage.gap_page_count], ["중복", documentCoverage.overlap_page_count]]) {
@@ -2583,7 +2657,9 @@ async function pollCodexAuthEnrollment(enrollmentId) {
     const enrollmentPresentation = statePresentation("generic", value.state);
     $("#codex-reauth-state").textContent = enrollmentPresentation.label;
     $("#codex-reauth-expires").textContent = value.expires_at || "-";
-    $("#codex-reauth-result").textContent = value.assignment_revision_id || value.error_code || "진행 중";
+    $("#codex-reauth-result").textContent = value.state === "SUCCEEDED"
+      ? "계정 연결 갱신 완료"
+      : value.error_code || "진행 중";
     const terminal = ["SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"].includes(value.state);
     $("#codex-challenge-reveal").hidden = !value.challenge_available;
     if (terminal) {
@@ -2676,12 +2752,14 @@ function renderExecutionPresets(presets) {
     const latest = revisions[0];
     const current = revisions.find((revision) => revision.preset_revision_id === preset.current_revision_id);
     const {card, details} = controlCard(current?.display_name || "고정 실행 설정", preset.state, "execution_preset");
-    addControlDetail(details, "실행 설정 ID", preset.preset_id);
-    addControlDetail(details, "현재 고정 버전", preset.current_revision_id);
     addControlDetail(details, "고정 버전 수", revisions.length);
-    addControlDetail(details, "정책 내용 검증값", current ? current.content_sha256 : null);
     addControlDetail(details, "모델·추론 설정", current ? current.role_policies.map((policy) => `${presetRoleLabel(policy.role)}:${policy.model_candidates.map((candidate) => `${candidate.model}/${candidate.reasoning_effort}`).join("|")}`).join(", ") : null);
     addControlDetail(details, "검증 결과", current && current.evaluations.length ? current.evaluations.map((value) => `${value.scope}:${value.outcome}`).join(", ") : "없음");
+    card.append(technicalDisclosure("설정 기술 정보", {
+      "실행 설정 ID": preset.preset_id,
+      "현재 고정 버전 ID": preset.current_revision_id,
+      "정책 내용 검증값": current ? current.content_sha256 : null,
+    }));
     const actions = document.createElement("div");
     actions.className = "form-actions";
     if (latest && latest.state === "DRAFT") actions.append(actionButton("사용 가능 전환 검토", () => openPresetReleaseReview(preset, latest)));
@@ -2694,12 +2772,12 @@ function renderExecutionPresets(presets) {
 async function deprecatePreset(identifier, resourceVersion) {
   const path = `/admin/execution-presets/${encodeURIComponent(identifier)}/deprecations`;
   try {
-    const result = await api(path, {
+    await api(path, {
       method: "POST",
       mutation: true,
       body: {resource_version: resourceVersion, idempotency_key: `studio:preset:deprecate:${identifier}:${crypto.randomUUID()}`},
     });
-    showMessage($("#execution-preset-message"), `사용 중단 완료: ${result.resource_id}`, "success");
+    showMessage($("#execution-preset-message"), "실행 설정 사용을 중단했습니다.", "success");
     await loadAdminSettings();
   } catch (failure) {
     showMessage($("#execution-preset-message"), `사용 중단 실패: ${failure.message}`, "error");
@@ -2712,12 +2790,12 @@ async function createPresetDraft() {
     return showMessage($("#preset-draft-message"), "검토 확인 후 설정 초안을 생성하세요.", "error");
   }
   try {
-    const result = await api("/admin/execution-presets", {
+    await api("/admin/execution-presets", {
       method: "POST",
       mutation: true,
       body: {...value, idempotency_key: `studio:preset:draft:${crypto.randomUUID()}`},
     });
-    showMessage($("#preset-draft-message"), `설정 초안 ${result.resource_id} 생성`, "success");
+    showMessage($("#preset-draft-message"), "새 실행 설정 초안을 생성했습니다.", "success");
     clearPresetDraftReview();
     await loadAdminSettings();
   } catch (failure) {
@@ -2762,7 +2840,7 @@ async function releaseReviewedPreset() {
     return showMessage($("#execution-preset-message"), "사용 가능 전환 검토 확인이 필요합니다.", "error");
   }
   try {
-    const result = await api(`/admin/execution-preset-revisions/${encodeURIComponent(candidate.preset_revision_id)}/releases`, {
+    await api(`/admin/execution-preset-revisions/${encodeURIComponent(candidate.preset_revision_id)}/releases`, {
       method: "POST",
       mutation: true,
       body: {
@@ -2770,7 +2848,7 @@ async function releaseReviewedPreset() {
         idempotency_key: `studio:preset:release:${candidate.preset_revision_id}:${crypto.randomUUID()}`,
       },
     });
-    showMessage($("#execution-preset-message"), `사용 가능 전환 완료: ${result.resource_id}`, "success");
+    showMessage($("#execution-preset-message"), "검토한 실행 설정을 사용할 수 있습니다.", "success");
     clearPresetReleaseReview();
     await loadAdminSettings();
   } catch (failure) {
@@ -2801,10 +2879,13 @@ function renderRecentHwpxBuilds() {
     (row) => !selectedRevision || row.item_revision_id === selectedRevision,
   );
   const select = $("#hwpx-recent-builds");
-  select.replaceChildren(new Option(rows.length ? "최근 Build 선택" : "조건에 맞는 최근 Build 없음", ""));
-  for (const row of rows) {
+  select.replaceChildren(new Option(rows.length ? "최근 제작 결과 선택" : "조건에 맞는 최근 제작 결과 없음", ""));
+  for (const [index, row] of rows.entries()) {
     const when = row.completed_at || row.created_at || "시각 미상";
-    select.append(new Option(`${statePresentation("hwpx_build", row.state).label} · ${row.build_id} · ${when}`, row.build_id));
+    select.append(new Option(
+      `최근 제작 ${index + 1} · ${statePresentation("hwpx_build", row.state).label} · ${when}`,
+      row.build_id,
+    ));
   }
 }
 

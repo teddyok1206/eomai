@@ -131,6 +131,20 @@ Exact IDs, ETags, schema versions, hashes, and raw diagnostic codes remain avail
 technical material is grouped under native `details` disclosure on user-facing surfaces. Recovery
 controls that require an ID, such as opening a known HWPX build, remain directly visible.
 
+The default surface distinguishes identifiers by purpose:
+
+- a human reference, state, date, count, curriculum label, or next action may be shown directly;
+- an ID the user must supply to recover a resource remains in an explicitly labeled recovery control;
+- an ID, key, ETag, hash, protocol version, or artifact pointer the loaded resource already carries is
+  hidden under technical disclosure;
+- administrator review boundaries may expose an exact pin when that value is required to verify a
+  consequential mutation.
+
+Option values and application state continue to carry exact immutable IDs even when option labels use
+human references. Hiding a value is presentation only: it does not truncate, replace, or resolve an
+implicit latest revision, and it does not remove the exact-ID paths in the global opener, recovery
+controls, or administrator data explorer.
+
 ### Codex slot overview
 
 Codex execution management is a live slot overview, not an account-detail dump. Each slot is keyed

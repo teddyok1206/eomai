@@ -139,6 +139,32 @@ def test_technical_details_are_progressively_disclosed_without_hiding_recovery()
     assert 'id="hwpx-build-load"' in HTML
 
 
+def test_non_actionable_identifiers_are_hidden_without_removing_exact_id_paths() -> None:
+    assert "function technicalDisclosure(label, values" in JAVASCRIPT
+    assert '<summary>요청 기술 정보</summary><div class="draft-meta">' in HTML
+    assert "<summary>ID로 문항 열기</summary>" in HTML
+    assert '<input id="approval-etag" type="hidden">' in HTML
+    assert 'id="approval-technical-summary"' in HTML
+    assert "<summary>제작 기술 정보</summary>" in HTML
+    assert '<input id="mock-exam-assembly-revision" type="hidden">' in HTML
+    assert "<summary>학습 기술 정보</summary>" in HTML
+    assert 'class="panel operational-log-panel"' in HTML
+    assert 'technicalDisclosure("고정 버전 정보"' in JAVASCRIPT
+    assert 'technicalDisclosure("원본 기술 정보"' in JAVASCRIPT
+    assert 'technicalDisclosure("설정 기술 정보"' in JAVASCRIPT
+    assert "const statementLabels = new Map();" in JAVASCRIPT
+    assert "label.textContent = statementLabels.get(value.statement_id)" in JAVASCRIPT
+    assert "option.textContent = value.batch_name;" in JAVASCRIPT
+    assert "curriculumDisplayLabel(provenance.curriculum_root_key)" in JAVASCRIPT
+    assert 'data-view="explorer"' in HTML
+    assert '<label>정확한 ID<input name="exact_id"' in HTML
+    assert 'id="global-id"' in HTML
+    assert 'id="hwpx-existing-build-id"' in HTML
+    assert "`${reference}${item.item_id} · ${when}`" not in JAVASCRIPT
+    raw_hwpx_option = '`${statePresentation("hwpx_build", row.state).label} · ${row.build_id}'
+    assert raw_hwpx_option not in JAVASCRIPT
+
+
 def test_execution_preset_mutation_is_guided_and_separately_reviewed() -> None:
     assert '<details id="advanced-preset-policy"' in HTML
     assert "고급 실행 정책" in HTML
