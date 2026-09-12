@@ -1,0 +1,51 @@
+{
+  "$id": "eom://schemas/catalog-application/catalog-application-response-v14",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "analysis": {
+          "additionalProperties": false,
+          "properties": {
+            "accepted_result_artifact_revision_id": {
+              "anyOf": [
+                {"pattern": "^rev_[0-9a-f]{32}$", "type": "string"},
+                {"type": "null"}
+              ]
+            },
+            "analysis_run_id": {"pattern": "^analysisrun_[0-9a-f]{32}$", "type": "string"},
+            "proposal_artifact_revision_id": {
+              "anyOf": [
+                {"pattern": "^rev_[0-9a-f]{32}$", "type": "string"},
+                {"type": "null"}
+              ]
+            },
+            "resource_version": {"minimum": 1, "type": "integer"},
+            "state": {
+              "enum": ["REQUESTED", "RESOLVED", "QUEUED", "RUNNING", "VALIDATING", "NEEDS_REVIEW", "ACCEPTED", "REJECTED", "FAILED", "CANCELLED"]
+            },
+            "workflow_id": {"pattern": "^workflow_[0-9a-f]{32}$", "type": "string"}
+          },
+          "required": ["analysis_run_id", "workflow_id", "state", "resource_version", "proposal_artifact_revision_id", "accepted_result_artifact_revision_id"],
+          "type": "object"
+        },
+        "operation": {"const": "CREATE_KNOWLEDGE_SOLUTION_ANALYSIS"},
+        "status": {"const": "OK"}
+      },
+      "required": ["status", "operation", "analysis"],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {"pattern": "^[A-Z][A-Z0-9_]{2,127}$", "type": "string"},
+        "operation": {"const": "CREATE_KNOWLEDGE_SOLUTION_ANALYSIS"},
+        "status": {"const": "ERROR"}
+      },
+      "required": ["status", "operation", "error_code"],
+      "type": "object"
+    }
+  ],
+  "title": "EOM Create Additive Knowledge Solution Analysis Response V14"
+}

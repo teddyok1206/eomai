@@ -1,0 +1,36 @@
+{
+  "$id": "eom://schemas/catalog-application/catalog-application-request-v14",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "base_analysis_run_id": {
+      "pattern": "^analysisrun_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "idempotency_key": {
+      "maxLength": 128,
+      "minLength": 16,
+      "pattern": "^[!-~]+$",
+      "type": "string"
+    },
+    "operation": {
+      "const": "CREATE_KNOWLEDGE_SOLUTION_ANALYSIS"
+    },
+    "preset_key": {
+      "const": "knowledge-analysis"
+    },
+    "requested_by": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "operation",
+    "base_analysis_run_id",
+    "preset_key",
+    "requested_by",
+    "idempotency_key"
+  ],
+  "title": "EOM Create Additive Knowledge Solution Analysis Request V14",
+  "type": "object"
+}

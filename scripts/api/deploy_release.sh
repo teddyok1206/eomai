@@ -1497,6 +1497,8 @@ catalog_resources = {
     "catalog-application/catalog-application-response-v12.schema.json": "schemas/catalog-application/catalog-application-response-v12.schema.json",
     "catalog-application/catalog-application-request-v13.schema.json": "schemas/catalog-application/catalog-application-request-v13.schema.json",
     "catalog-application/catalog-application-response-v13.schema.json": "schemas/catalog-application/catalog-application-response-v13.schema.json",
+    "catalog-application/catalog-application-request-v14.schema.json": "schemas/catalog-application/catalog-application-request-v14.schema.json",
+    "catalog-application/catalog-application-response-v14.schema.json": "schemas/catalog-application/catalog-application-response-v14.schema.json",
     "catalog-application/catalog-item-media-request-v1.schema.json": "schemas/catalog-application/catalog-item-media-request-v1.schema.json",
     "catalog-application/catalog-item-media-response-v1.schema.json": "schemas/catalog-application/catalog-item-media-response-v1.schema.json",
     "catalog-application/catalog-assessment-page-list-request-v1.schema.json": "schemas/catalog-application/catalog-assessment-page-list-request-v1.schema.json",
