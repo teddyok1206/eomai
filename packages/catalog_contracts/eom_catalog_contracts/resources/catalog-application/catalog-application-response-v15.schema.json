@@ -6,6 +6,23 @@
     {
       "type": "object",
       "additionalProperties": false,
+      "required": ["status", "operation", "evidence"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {"const": "CREATE_EVIDENCE_BUNDLE"},
+        "evidence": {
+          "oneOf": [
+            {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/1.0"},
+            {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/3.0"},
+            {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/4.0"},
+            {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/5.0"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
       "required": ["status", "operation", "item_production_evidence"],
       "properties": {
         "status": {"const": "OK"},
@@ -26,7 +43,7 @@
       "required": ["status", "operation", "error_code"],
       "properties": {
         "status": {"const": "ERROR"},
-        "operation": {"const": "CREATE_ITEM_PRODUCTION_EVIDENCE"},
+        "operation": {"enum": ["CREATE_EVIDENCE_BUNDLE", "CREATE_ITEM_PRODUCTION_EVIDENCE"]},
         "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}
       }
     }

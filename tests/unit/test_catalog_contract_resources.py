@@ -194,6 +194,7 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
         "catalog-application-response-v12",
         "catalog-application-request-v13",
         "catalog-application-response-v13",
+        "catalog-application-response-v15",
         "mock-exam-item-review-decision-v2",
         "mock-exam-item-review-decision-v3",
         "mock-exam-item-review-publication-result-v2",

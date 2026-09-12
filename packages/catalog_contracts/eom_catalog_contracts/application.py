@@ -29,6 +29,7 @@ from eom_catalog_contracts.knowledge import (
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
     EvidenceBundlePublicationResultV4,
+    EvidenceBundlePublicationResultV5,
     KnowledgeSourceClass,
     PermissionKeyValue,
 )
@@ -449,12 +450,14 @@ class CatalogApplicationResponse(FrozenModel):
         EvidenceBundlePublicationResult
         | EvidenceBundlePublicationResultV3
         | EvidenceBundlePublicationResultV4
+        | EvidenceBundlePublicationResultV5
         | None
     ) = None
     item_production_evidence: (
         EvidenceBundlePublicationResultV2
         | EvidenceBundlePublicationResultV3
         | EvidenceBundlePublicationResultV4
+        | EvidenceBundlePublicationResultV5
         | None
     ) = None
     graph_publication: ApprovedItemGraphPublicationResult | None = None
@@ -556,11 +559,11 @@ CATALOG_APPLICATION_SCHEMA_ROUTES: Final = MappingProxyType(
         ),
         "CREATE_EVIDENCE_BUNDLE": CatalogApplicationSchemaRoute(
             "catalog-application-request-v3",
-            "catalog-application-response-v9",
+            "catalog-application-response-v15",
         ),
         "CREATE_ITEM_PRODUCTION_EVIDENCE": CatalogApplicationSchemaRoute(
             "catalog-application-request-v4",
-            "catalog-application-response-v8",
+            "catalog-application-response-v15",
         ),
         "PUBLISH_APPROVED_ITEM_ANALYSES": CatalogApplicationSchemaRoute(
             "catalog-application-request-v11",
