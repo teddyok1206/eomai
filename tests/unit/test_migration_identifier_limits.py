@@ -15,6 +15,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20260903_0027_legacy_item_extraction_batches",
     "migrations.versions.20260904_0028_extraction_acceptance_provenance",
     "migrations.versions.20260909_0033_pdf_learning_completion",
+    "migrations.versions.20260912_0034_workflow_command_fencing",
 )
 
 
@@ -54,8 +55,16 @@ class _MigrationOperationRecorder:
     def create_index(self, name: str, *_: object, **__: object) -> None:
         self._record("index", name)
 
+    def add_column(self, table_name: str, column: sa.Column[object]) -> None:
+        self._record("table", table_name)
+        self._record("column", column.name)
+
     def drop_index(self, name: str, *_: object, **__: object) -> None:
         self._record("index", name)
+
+    def drop_column(self, table_name: str, column_name: str) -> None:
+        self._record("table", table_name)
+        self._record("column", column_name)
 
     def drop_constraint(self, name: str, *_: object, **__: object) -> None:
         self._record("constraint", name)

@@ -663,7 +663,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert "mock-exam terminal-state contract export is incomplete" in deployment
     assert "mock-exam retirement contract package exports are incomplete" in deployment
     assert "legacy Graph automation must preserve its local 1..16 batch contract" in deployment
-    assert 'CURRENT_MIGRATION_REVISION != "20260909_0033"' in deployment
+    assert 'CURRENT_MIGRATION_REVISION != "20260912_0034"' in deployment
 
 
 def test_release_verifies_assessment_occurrence_graph_schema_resources() -> None:
