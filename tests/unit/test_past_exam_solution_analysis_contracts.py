@@ -25,7 +25,11 @@ from eom_catalog_service.solution_evidence_resolution import (
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
-from eom_workflow.models import KnowledgeAnalysisProposalRoleResultV10, RoleWorkerInput
+from eom_workflow.models import (
+    KnowledgeAnalysisProposalRoleResultV10,
+    RoleWorkerInput,
+    WorkflowRequest,
+)
 from eom_workflow.schemas import (
     constrained_result_schema,
     load_codex_result_schema,
@@ -57,6 +61,24 @@ def test_base_node_type_is_already_normalized_to_its_wire_string() -> None:
     assert isinstance(node.node_type, str)
     assert node.node_type in SOLUTION_REFERENCE_NODE_TYPES
     assert "ITEM_REVISION" not in SOLUTION_REFERENCE_NODE_TYPES
+
+
+def test_solution_analysis_workflow_preserves_required_visual_input_mode() -> None:
+    request = KnowledgeAnalysisRequestV10.model_validate(_request_value())
+
+    workflow_request = WorkflowRequest(
+        request_name="KNOWLEDGE_ANALYSIS_REQUEST",
+        image_mode="required",
+        analysis_request=request,
+    )
+
+    assert workflow_request.analysis_request == request
+    with pytest.raises(ValidationError, match="matching image mode"):
+        WorkflowRequest(
+            request_name="KNOWLEDGE_ANALYSIS_REQUEST",
+            image_mode="skip",
+            analysis_request=request,
+        )
 
 
 def _pointer(seed: str, *, member_path: str, schema_ref: str, media_type: str) -> dict[str, object]:

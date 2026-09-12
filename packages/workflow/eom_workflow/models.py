@@ -456,7 +456,10 @@ class WorkflowRequest(FrozenModel):
         elif self.request_name == "KNOWLEDGE_ANALYSIS_REQUEST":
             analysis_image_mode = (
                 "required"
-                if isinstance(self.analysis_request, KnowledgeAnalysisRequestV9)
+                if isinstance(
+                    self.analysis_request,
+                    (KnowledgeAnalysisRequestV9, KnowledgeAnalysisRequestV10),
+                )
                 else "skip"
             )
             if (
