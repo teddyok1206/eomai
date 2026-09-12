@@ -44,6 +44,7 @@ const state = {
   codexReauthAccount: null,
   codexAuthEnrollmentId: null,
   codexAuthPollTimer: null,
+  codexAccountPollTimer: null,
   executionPresets: [],
   presetEditorBases: [],
   presetDraftBase: null,
@@ -71,6 +72,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
   approval: "human",
   hwpx: "human",
   control: "engine",
+  "admin-settings": "engine",
   learning: "engine",
   knowledge: "engine",
   explorer: "engine",
@@ -248,8 +250,12 @@ function showView(name) {
   syncUiMode(name);
   $(".sidebar").classList.remove("open");
   if (name === "hwpx") loadHwpx();
-  if (name !== "control") window.clearTimeout(state.analysisBatchPollTimer);
-  if (name === "control" && hasAdminRole()) loadControlPlane();
+  if (name !== "control") {
+    window.clearTimeout(state.codexAccountPollTimer);
+    window.clearTimeout(state.analysisBatchPollTimer);
+  }
+  if (name === "control" && hasAdminRole()) loadCodexControlPlane();
+  if (name === "admin-settings" && hasAdminRole()) loadAdminSettings();
   if (name === "learning" && hasAdminRole()) loadAssessmentLearning();
   if (name === "dashboard" && state.health) renderDashboard(state.health);
   const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
@@ -1513,7 +1519,8 @@ function hasAdminRole() {
 }
 
 function installControlPlane() {
-  $("#control-refresh").addEventListener("click", loadControlPlane);
+  $("#control-refresh").addEventListener("click", loadCodexControlPlane);
+  $("#admin-settings-refresh").addEventListener("click", loadAdminSettings);
   $("#preset-base-select").addEventListener("change", loadPresetEditorBase);
   $("#preset-guided-form").addEventListener("input", invalidatePresetDraftReview);
   $("#preset-guided-form").addEventListener("change", invalidatePresetDraftReview);
@@ -1752,26 +1759,43 @@ async function loadAssessmentLearningPages(exam, panel, button) {
   panel.replaceChildren(grid);
 }
 
-async function loadControlPlane() {
-  if (!hasAdminRole()) return;
+function scheduleCodexAccountRefresh() {
+  window.clearTimeout(state.codexAccountPollTimer);
+  if ($('[data-view="control"].active')) {
+    state.codexAccountPollTimer = window.setTimeout(loadCodexAccounts, 5000);
+  }
+}
+
+async function loadCodexAccounts() {
+  if (!hasAdminRole() || !$('[data-view="control"].active')) return;
+  window.clearTimeout(state.codexAccountPollTimer);
   try {
-    const [accounts, presets, batches] = await Promise.all([
-      api("/admin/codex-accounts"),
-      api("/admin/execution-presets"),
-      api("/admin/knowledge-analysis-batches"),
-    ]);
+    const accounts = await api("/admin/codex-accounts");
     state.codexAccounts = accounts;
-    state.executionPresets = presets;
-    state.knowledgeAnalysisBatches = batches;
     renderCodexAccounts(accounts);
+    showMessage($("#codex-account-message"), "");
+  } catch (failure) {
+    showMessage($("#codex-account-message"), `작업 슬롯 조회 실패: ${failure.message}`, "error");
+  } finally {
+    scheduleCodexAccountRefresh();
+  }
+}
+
+async function loadCodexControlPlane() {
+  if (!hasAdminRole() || !$('[data-view="control"].active')) return;
+  await Promise.all([loadCodexAccounts(), loadAnalysisBatches()]);
+}
+
+async function loadAdminSettings() {
+  if (!hasAdminRole() || !$('[data-view="admin-settings"].active')) return;
+  try {
+    const presets = await api("/admin/execution-presets");
+    state.executionPresets = presets;
     renderExecutionPresets(presets);
     renderPresetEditorChoices(presets);
-    renderAnalysisBatches(batches);
-    showMessage($("#codex-account-message"), `${accounts.length}개 고정 작업 계정 · 자격증명 비노출`, "success");
     showMessage($("#execution-preset-message"), `${presets.length}개 실행 설정 · 고정 버전`, "success");
-    scheduleAnalysisBatchRefresh(batches);
   } catch (failure) {
-    showMessage($("#codex-account-message"), `실행 관리 조회 실패: ${failure.message}`, "error");
+    showMessage($("#execution-preset-message"), `실행 설정 조회 실패: ${failure.message}`, "error");
   }
 }
 
@@ -2018,6 +2042,44 @@ function controlCard(title, stateValue, domain = "generic") {
   const details = document.createElement("dl");
   card.append(header, details);
   return {card, details};
+}
+
+function codexSlotCard(account) {
+  const activeLeaseCount = Number(account.active_lease_count) || 0;
+  const card = document.createElement("details");
+  card.className = "control-card codex-slot-card";
+  card.dataset.bindingId = account.binding_id;
+  if (activeLeaseCount > 0) {
+    card.classList.add("is-active");
+  } else if (account.state !== "READY") {
+    card.classList.add("is-unavailable");
+  }
+
+  const summary = document.createElement("summary");
+  summary.className = "codex-slot-summary";
+  const activity = document.createElement("span");
+  activity.className = "codex-slot-activity";
+  activity.setAttribute("aria-hidden", "true");
+  const heading = document.createElement("h3");
+  heading.textContent = workerSlotLabel(account.slot_key);
+  const badge = document.createElement("span");
+  if (activeLeaseCount > 0) {
+    setStatus(badge, "success", "●", `${activeLeaseCount}개 작업 중`);
+  } else {
+    setStateStatus(badge, "codex_account", account.state);
+  }
+  const disclosure = document.createElement("span");
+  disclosure.className = "codex-slot-disclosure";
+  disclosure.setAttribute("aria-hidden", "true");
+  disclosure.textContent = "⌄";
+  summary.append(activity, heading, badge, disclosure);
+
+  const body = document.createElement("div");
+  body.className = "codex-slot-body";
+  const facts = document.createElement("dl");
+  body.append(facts);
+  card.append(summary, body);
+  return {card, body, facts};
 }
 
 function addControlDetail(list, label, value) {
@@ -2330,7 +2392,27 @@ function syncPresetReviewActions() {
 
 function renderCodexAccounts(accounts) {
   const root = $("#codex-account-list");
+  const openBindings = new Set(
+    $$("#codex-account-list .codex-slot-card[open]").map((element) => element.dataset.bindingId),
+  );
   root.replaceChildren();
+  const activeSlotCount = accounts.filter((account) => Number(account.active_lease_count) > 0).length;
+  const activeJobCount = accounts.reduce(
+    (total, account) => total + (Number(account.active_lease_count) || 0),
+    0,
+  );
+  if (activeSlotCount > 0) {
+    setStatus(
+      $("#codex-slots-summary"),
+      "success",
+      "●",
+      `${activeSlotCount}개 슬롯 · ${activeJobCount}개 작업 중`,
+    );
+  } else if (accounts.length > 0) {
+    setStatus($("#codex-slots-summary"), "neutral", "○", `${accounts.length}개 슬롯 대기`);
+  } else {
+    setStatus($("#codex-slots-summary"), "neutral", "■", "등록된 슬롯 없음");
+  }
   if (!accounts.length) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
@@ -2339,16 +2421,19 @@ function renderCodexAccounts(accounts) {
     return;
   }
   for (const account of accounts) {
-    const {card, details} = controlCard(`${workerSlotLabel(account.slot_key)} · ${account.account_label}`, account.state, "codex_account");
+    const {card, body, facts} = codexSlotCard(account);
+    card.open = openBindings.has(account.binding_id);
     const capabilities = (account.capabilities || []).map((value) => `${value.model}/${value.reasoning_effort}`).join(", ") || "관측 없음";
-    addControlDetail(details, "계정 연결 ID", account.binding_id);
-    addControlDetail(details, "Codex 버전", account.codex_cli_version);
-    addControlDetail(details, "사용 가능 모델", capabilities);
-    addControlDetail(details, "진행 중인 작업", account.active_lease_count);
-    addControlDetail(details, "최근 성공 작업", account.last_successful_job_id);
-    addControlDetail(details, "확인 시각", account.observed_at);
-    addControlDetail(details, "로그인 변경", account.active_auth_enrollment_state ? statePresentation("generic", account.active_auth_enrollment_state).label : "없음");
-    card.append(renderCodexUsage(account.usage_observation));
+    addControlDetail(facts, "계정", account.account_label);
+    addControlDetail(facts, "계정 상태", statePresentation("codex_account", account.state).label);
+    addControlDetail(facts, "계정 연결 ID", account.binding_id);
+    addControlDetail(facts, "Codex 버전", account.codex_cli_version);
+    addControlDetail(facts, "사용 가능 모델", capabilities);
+    addControlDetail(facts, "진행 중인 작업", account.active_lease_count);
+    addControlDetail(facts, "최근 성공 작업", account.last_successful_job_id);
+    addControlDetail(facts, "확인 시각", account.observed_at);
+    addControlDetail(facts, "로그인 변경", account.active_auth_enrollment_state ? statePresentation("generic", account.active_auth_enrollment_state).label : "없음");
+    body.append(renderCodexUsage(account.usage_observation));
     const actions = document.createElement("div");
     actions.className = "form-actions";
     actions.append(
@@ -2371,7 +2456,7 @@ function renderCodexAccounts(accounts) {
       reauth.title = "현재 작업이 끝난 뒤 로그인 계정을 변경할 수 있습니다.";
     }
     actions.append(reauth);
-    card.append(actions);
+    body.append(actions);
     root.append(card);
   }
 }
@@ -2511,7 +2596,7 @@ async function pollCodexAuthEnrollment(enrollmentId) {
           : `로그인 변경 종료: ${value.error_code || value.state}`,
         value.state === "SUCCEEDED" ? "success" : "error",
       );
-      await loadControlPlane();
+      await loadCodexAccounts();
       return;
     }
     state.codexAuthPollTimer = window.setTimeout(() => pollCodexAuthEnrollment(enrollmentId), 2000);
@@ -2568,7 +2653,7 @@ async function pollControlCommand(commandId) {
     const value = await api(`/admin/codex-control-commands/${encodeURIComponent(commandId)}`);
     if (["SUCCEEDED", "FAILED"].includes(value.state)) {
       showMessage($("#codex-account-message"), `${codexCommandLabel(value.command_type)}: ${statePresentation("generic", value.state).label}${value.error_code ? ` · 기술 코드 ${value.error_code}` : ""}`, value.state === "SUCCEEDED" ? "success" : "error");
-      await loadControlPlane();
+      await loadCodexAccounts();
       return;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 1000));
@@ -2615,7 +2700,7 @@ async function deprecatePreset(identifier, resourceVersion) {
       body: {resource_version: resourceVersion, idempotency_key: `studio:preset:deprecate:${identifier}:${crypto.randomUUID()}`},
     });
     showMessage($("#execution-preset-message"), `사용 중단 완료: ${result.resource_id}`, "success");
-    await loadControlPlane();
+    await loadAdminSettings();
   } catch (failure) {
     showMessage($("#execution-preset-message"), `사용 중단 실패: ${failure.message}`, "error");
   }
@@ -2634,7 +2719,7 @@ async function createPresetDraft() {
     });
     showMessage($("#preset-draft-message"), `설정 초안 ${result.resource_id} 생성`, "success");
     clearPresetDraftReview();
-    await loadControlPlane();
+    await loadAdminSettings();
   } catch (failure) {
     showMessage($("#preset-draft-message"), `설정 초안 생성 실패: ${failure.message}`, "error");
   }
@@ -2687,7 +2772,7 @@ async function releaseReviewedPreset() {
     });
     showMessage($("#execution-preset-message"), `사용 가능 전환 완료: ${result.resource_id}`, "success");
     clearPresetReleaseReview();
-    await loadControlPlane();
+    await loadAdminSettings();
   } catch (failure) {
     showMessage($("#execution-preset-message"), `사용 가능 전환 실패: ${failure.message}`, "error");
   }

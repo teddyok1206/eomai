@@ -29,6 +29,7 @@ def test_surface_mode_is_route_derived_and_not_a_user_theme() -> None:
         'approval: "human"',
         'hwpx: "human"',
         'control: "engine"',
+        '"admin-settings": "engine"',
         'explorer: "engine"',
         'dashboard: "human"',
     }
@@ -151,6 +152,35 @@ def test_execution_preset_mutation_is_guided_and_separately_reviewed() -> None:
     assert 'actionButton("사용 가능 전환 검토"' in JAVASCRIPT
     assert "state.reviewedPresetDraft" in JAVASCRIPT
     assert "state.presetReleaseCandidate" in JAVASCRIPT
+
+
+def test_execution_settings_have_a_separate_admin_view() -> None:
+    control_start = HTML.index('data-view="control"')
+    settings_start = HTML.index('data-view="admin-settings"')
+    learning_start = HTML.index('data-view="learning"')
+    control_view = HTML[control_start:settings_start]
+    settings_view = HTML[settings_start:learning_start]
+
+    assert 'data-view-target="admin-settings"' in HTML
+    assert 'id="admin-settings-refresh"' in settings_view
+    assert 'id="execution-preset-list"' not in control_view
+    assert 'id="advanced-preset-policy"' not in control_view
+    assert 'id="execution-preset-list"' in settings_view
+    assert 'id="advanced-preset-policy"' in settings_view
+    assert 'if (name === "admin-settings" && hasAdminRole()) loadAdminSettings();' in JAVASCRIPT
+
+
+def test_codex_slots_show_live_activity_and_disclose_details_on_demand() -> None:
+    assert 'id="codex-slots-summary"' in HTML
+    assert 'class="control-list codex-slot-list"' in HTML
+    assert 'document.createElement("details")' in JAVASCRIPT
+    assert 'card.classList.add("is-active")' in JAVASCRIPT
+    assert "Number(account.active_lease_count) > 0" in JAVASCRIPT
+    assert "openBindings = new Set" in JAVASCRIPT
+    assert "window.setTimeout(loadCodexAccounts, 5000)" in JAVASCRIPT
+    assert ".codex-slot-card[open]" in CSS
+    assert ".codex-slot-card.is-active" in CSS
+    assert ".codex-slot-body" in CSS
 
 
 def test_static_design_assets_have_no_external_runtime_dependency() -> None:

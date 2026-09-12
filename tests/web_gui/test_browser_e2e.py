@@ -174,7 +174,8 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert 'entity: "hwpx_builds"' in javascript
     assert "state.hwpxBuildId = buildId" in javascript
     assert 'id="analysis-batch-list"' in html
-    assert "최대 6개 · 동시 3개" in html
+    assert 'id="codex-slots-summary"' in html
+    assert "window.setTimeout(loadCodexAccounts, 5000)" in javascript
     assert "최대 5개" not in html
     assert 'api("/admin/knowledge-analysis-batches")' in javascript
     assert 'const accounts = await api("/admin/codex-accounts")' in javascript

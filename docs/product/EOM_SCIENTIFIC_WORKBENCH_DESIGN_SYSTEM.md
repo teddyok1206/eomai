@@ -67,7 +67,7 @@ preference.
 | Mode | Views | Purpose |
 | --- | --- | --- |
 | 사용자 작업면 (`human`) | 새 문항 요청, 완성 문항, 승인, HWPX, 대시보드 | Goals, content, decisions, and delivery use plain Korean and calm sans-serif hierarchy. |
-| 운영·근거 화면 (`engine`) | 문항 제작 진행, Codex 실행 관리, 교육 지식 맵, DB Explorer | Provenance, execution state, timings, immutable IDs, and diagnostics may use compact mono accents. |
+| 운영·근거 화면 (`engine`) | 문항 제작 진행, Codex 실행 관리, 관리자 설정, 교육 지식 맵, DB Explorer | Provenance, execution state, timings, immutable IDs, and diagnostics may use compact mono accents. |
 
 Both modes expose the same authorized capabilities. Mode changes density and emphasis only; it never
 changes requests, permissions, fields, state transitions, or error handling. The mode is an internal
@@ -131,6 +131,16 @@ Exact IDs, ETags, schema versions, hashes, and raw diagnostic codes remain avail
 technical material is grouped under native `details` disclosure on user-facing surfaces. Recovery
 controls that require an ID, such as opening a known HWPX build, remain directly visible.
 
+### Codex slot overview
+
+Codex execution management is a live slot overview, not an account-detail dump. Each slot is keyed
+by its binding ID and shows its name and current state at a glance. A slot is visually active only
+when the API reports a positive `active_lease_count`; the GUI does not infer activity from an old job
+or account state. Account identity, CLI version, capabilities, usage, job history, and controls stay
+inside a native `details` disclosure. Open binding IDs are retained in a set while the visible view
+polls every five seconds, so refreshing is O(n), preserves the user's place, and adds no client-side
+canonical state.
+
 ### Document surface
 
 The completed item preview remains typographically distinct from application chrome. It represents a
@@ -152,7 +162,9 @@ from the existing Item Revision, HWPX build, validation, and download-availabili
 ### Advanced execution policy
 
 Execution Preset mutation is an infrequent administrator operation, not routine production work. It
-remains collapsed under `고급 실행 정책` by default. The Studio does not accept an arbitrary preset
+therefore lives in the separate `관리자 설정` view and remains collapsed under `고급 실행 정책` by
+default. Codex slot monitoring remains in `Codex 실행 관리`; these views share authorized API data
+but have distinct operational responsibilities. The Studio does not accept an arbitrary preset
 JSON document: an administrator selects an existing active immutable V1 revision, changes only the
 guided model/effort/timeout and descriptive fields, and preserves its pinned capacity, instruction,
 reference, sandbox, network, and protocol pointers.
