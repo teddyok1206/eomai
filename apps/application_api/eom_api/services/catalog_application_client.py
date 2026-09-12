@@ -34,6 +34,7 @@ from eom_catalog_contracts import (
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
+    CreateKnowledgeSolutionAnalysisCommand,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
@@ -289,6 +290,11 @@ class CatalogApplicationClient:
     ) -> KnowledgeAnalysisApplicationResult:
         return self._analysis_request(command)
 
+    def create_knowledge_solution_analysis(
+        self, command: CreateKnowledgeSolutionAnalysisCommand
+    ) -> KnowledgeAnalysisApplicationResult:
+        return self._analysis_request(command)
+
     def create_knowledge_analysis_batch(
         self, command: CreateKnowledgeAnalysisBatchCommand
     ) -> KnowledgeAnalysisBatchApplicationResult:
@@ -379,6 +385,7 @@ class CatalogApplicationClient:
     def _analysis_request(
         self,
         command: CreateKnowledgeAnalysisCommand
+        | CreateKnowledgeSolutionAnalysisCommand
         | ReconcileKnowledgeAnalysisCommand
         | ReviewKnowledgeAnalysisCommand,
     ) -> KnowledgeAnalysisApplicationResult:
@@ -395,6 +402,7 @@ class CatalogApplicationClient:
         command: ReviewedItemContentImportCommand
         | ItemContentQuery
         | CreateKnowledgeAnalysisCommand
+        | CreateKnowledgeSolutionAnalysisCommand
         | ReconcileKnowledgeAnalysisCommand
         | ReviewKnowledgeAnalysisCommand
         | CreateKnowledgeAnalysisBatchCommand
@@ -480,6 +488,7 @@ class CatalogApplicationClient:
         command: ReviewedItemContentImportCommand
         | ItemContentQuery
         | CreateKnowledgeAnalysisCommand
+        | CreateKnowledgeSolutionAnalysisCommand
         | ReconcileKnowledgeAnalysisCommand
         | ReviewKnowledgeAnalysisCommand
         | CreateKnowledgeAnalysisBatchCommand

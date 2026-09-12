@@ -143,6 +143,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 "IMPORT_REVIEWED_ITEM_CONTENT",
                 "GET_ITEM_CONTENT",
                 "CREATE_KNOWLEDGE_ANALYSIS",
+                "CREATE_KNOWLEDGE_SOLUTION_ANALYSIS",
                 "CREATE_KNOWLEDGE_ANALYSIS_BATCH",
                 "RECONCILE_KNOWLEDGE_ANALYSIS",
                 "REVIEW_KNOWLEDGE_ANALYSIS",

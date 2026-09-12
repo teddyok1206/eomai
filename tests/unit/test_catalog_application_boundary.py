@@ -147,6 +147,14 @@ class FakeKnowledgeAnalysis:
             resource_version=3,
         )
 
+    def create_solution(self, _command: object) -> KnowledgeAnalysisApplicationResult:
+        return KnowledgeAnalysisApplicationResult(
+            analysis_run_id="analysisrun_" + "b" * 32,
+            workflow_id="workflow_" + "c" * 32,
+            state="QUEUED",
+            resource_version=3,
+        )
+
     reconcile = create
     review = create
 
@@ -702,6 +710,14 @@ def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
             )
         )
         assert analysis.analysis_run_id == "analysisrun_" + "7" * 32
+        solution = client.create_knowledge_solution_analysis(
+            CreateKnowledgeSolutionAnalysisCommand(
+                base_analysis_run_id="analysisrun_" + "a" * 32,
+                requested_by="operator_test_admin",
+                idempotency_key="knowledge-solution-analysis-round-trip",
+            )
+        )
+        assert solution.analysis_run_id == "analysisrun_" + "b" * 32
         batch = client.create_knowledge_analysis_batch(_batch_command())
         assert batch.batch_id == "analysisbatch_" + "9" * 32
         evidence = client.create_evidence_bundle(_retrieval_command())
