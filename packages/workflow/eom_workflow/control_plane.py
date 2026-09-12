@@ -15,6 +15,7 @@ from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV4,
     EducationalRetrievalRequirement,
     EvidenceBudget,
+    KnowledgeAnalysisBaseResultPointer,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphSnapshotPointer,
     KnowledgeSourceClass,
@@ -752,6 +753,14 @@ class ResolvedExecutionPlanV8(FrozenModel):
         if content_sha256(body) != self.plan_sha256:
             raise ValueError("visual Item analysis plan hash does not match canonical content")
         return self
+
+
+class ResolvedExecutionPlanV9(ResolvedExecutionPlanV8):
+    """One additive solution pass pinned to an exact accepted visual analysis."""
+
+    schema_version: Literal["resolved-execution-plan/9.0"] = "resolved-execution-plan/9.0"  # type: ignore[assignment]
+    base_analysis: KnowledgeAnalysisBaseResultPointer
+    resolver_version: Literal["9.0.0"] = "9.0.0"  # type: ignore[assignment]
 
 
 class CodexInvocation(FrozenModel):

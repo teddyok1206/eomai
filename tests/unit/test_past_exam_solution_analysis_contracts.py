@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -25,6 +26,8 @@ from eom_workflow.schemas import (
     validate_schema_message,
 )
 from pydantic import ValidationError
+
+from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
 
 NOW = datetime(2026, 9, 12, 3, tzinfo=UTC)
 
@@ -518,6 +521,51 @@ def test_v10_additive_contracts_validate_in_json_schema_and_pydantic() -> None:
     ):
         validate_contract(schema_name, value)
     validate_knowledge_solution_report_references(request, proposal)
+
+
+def test_v10_staging_commits_only_new_report_and_composite_receipt(tmp_path: Path) -> None:
+    request = KnowledgeAnalysisRequestV10.model_validate(_request_value())
+    proposal = KnowledgeAnalysisWorkerProposalV8.model_validate(_proposal_value())
+
+    staged, receipt = stage_knowledge_analysis_proposal(
+        proposal=proposal,
+        request=request,
+        job_id="job_" + "1" * 32,
+        logical_artifact_id="artifact_" + "4" * 32,
+        revision_id="rev_" + "5" * 32,
+        staging=tmp_path,
+    )
+
+    assert isinstance(receipt, KnowledgeAnalysisProposalReceiptV9)
+    assert {member.relative_path for member in staged.files} == {
+        "normalized/proposal-receipt.json",
+        "normalized/solution-report.json",
+    }
+    assert receipt.base_analysis == request.base_analysis
+    assert receipt.solution_report.artifact_revision_id == "rev_" + "5" * 32
+    assert receipt.solution_counts.solution_steps == 1
+    assert not (staged.directory / "normalized/nodes.jsonl").exists()
+    validate_contract("knowledge-analysis-proposal-receipt-v9", receipt.model_dump(mode="json"))
+
+
+def test_v10_staging_rejects_reference_outside_base_before_writing(tmp_path: Path) -> None:
+    request = KnowledgeAnalysisRequestV10.model_validate(_request_value())
+    proposal_value = _proposal_value()
+    report = cast(dict[str, Any], proposal_value["solution_report"])
+    steps = cast(list[dict[str, Any]], report["solution_steps"])
+    steps[0]["anchor_ids"] = ["anchor_unknown"]
+    proposal = KnowledgeAnalysisWorkerProposalV8.model_validate(proposal_value)
+
+    with pytest.raises(Exception, match="does not resolve"):
+        stage_knowledge_analysis_proposal(
+            proposal=proposal,
+            request=request,
+            job_id="job_" + "1" * 32,
+            logical_artifact_id="artifact_" + "4" * 32,
+            revision_id="rev_" + "5" * 32,
+            staging=tmp_path,
+        )
+    assert not (tmp_path / "knowledge-proposal-source").exists()
 
 
 def test_v10_role_schema_and_request_projection_are_closed() -> None:

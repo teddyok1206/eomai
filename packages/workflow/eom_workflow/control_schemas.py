@@ -263,6 +263,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "8.0",
             "sha256:29febeb63b65fbbdc029a1deb46d18992e0c04cb7020f38ed288345d82f77b71",
         ),
+        "resolved-execution-plan-v9": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v9.schema.json",
+            "resources/control-plane/resolved-execution-plan-v9.schema.json",
+            "9.0",
+            "sha256:cf7cb9c5309d61558a6e5d55f0520d9d6911413382e8e4258f1111240b42f328",
+        ),
         "codex-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-invocation-v1.schema.json",
             "resources/control-plane/codex-invocation-v1.schema.json",
@@ -508,6 +514,7 @@ def _control_schema_registry() -> Registry[Any]:
         "knowledge-analysis-types-v3",
         "knowledge-analysis-types-v4",
         "knowledge-analysis-types-v5",
+        "knowledge-analysis-solution-types-v1",
         "item-origin-types",
         "legacy-assessment-types",
         "legacy-item-extraction-request",

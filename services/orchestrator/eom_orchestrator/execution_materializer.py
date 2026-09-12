@@ -14,7 +14,10 @@ from eom_catalog_contracts import (
     EvidenceBundleManifestV2,
     EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
+    KnowledgeAnalysisProposalReceiptV8,
+    KnowledgeAnalysisResultV9,
     KnowledgeArtifactMemberPointer,
+    KnowledgeProposalArtifactMember,
     OriginArtifactMemberPointer,
 )
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
@@ -33,6 +36,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV6,
     ResolvedExecutionPlanV7,
     ResolvedExecutionPlanV8,
+    ResolvedExecutionPlanV9,
     ResolvedStepExecutionV3,
     validate_control_contract,
 )
@@ -150,6 +154,7 @@ def materialize_execution_step(
         "resolved-execution-plan/6.0",
         "resolved-execution-plan/7.0",
         "resolved-execution-plan/8.0",
+        "resolved-execution-plan/9.0",
     }
     plan: (
         ResolvedExecutionPlan
@@ -160,6 +165,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV6
         | ResolvedExecutionPlanV7
         | ResolvedExecutionPlanV8
+        | ResolvedExecutionPlanV9
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -175,6 +181,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV7.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/8.0":
         plan = ResolvedExecutionPlanV8.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/9.0":
+        plan = ResolvedExecutionPlanV9.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -330,6 +338,17 @@ def materialize_execution_step(
         )
         total_bytes += visual_item_bytes
         member_count += visual_item_members
+        if isinstance(plan, ResolvedExecutionPlanV9):
+            base_bytes, base_members = _materialize_base_analysis(
+                session,
+                plan=plan,
+                workspace=workspace,
+                artifact_root=artifact_root,
+                worker_group_id=worker_group_id,
+                authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            )
+            total_bytes += base_bytes
+            member_count += base_members
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.item_source.artifact_member.artifact_revision_id
         source_sha256 = plan.item_source.artifact_member.sha256
@@ -501,6 +520,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV6
             | ResolvedExecutionPlanV7
             | ResolvedExecutionPlanV8
+            | ResolvedExecutionPlanV9
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -514,6 +534,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV7.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/8.0":
         plan = ResolvedExecutionPlanV8.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/9.0":
+        plan = ResolvedExecutionPlanV9.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -573,6 +595,18 @@ def authorized_execution_artifact_revisions(
         )
         revision_ids.update(page.source.artifact_revision_id for page in source.page_inputs)
         revision_ids.update(page.image.artifact_revision_id for page in source.page_inputs)
+        if isinstance(plan, ResolvedExecutionPlanV9):
+            base = plan.base_analysis
+            revision_ids.update(
+                {
+                    base.accepted_result_artifact.artifact_revision_id,
+                    base.proposal_receipt.artifact_revision_id,
+                    *(
+                        getattr(base.base_members, name).artifact_revision_id
+                        for name in base.base_members.__class__.model_fields
+                    ),
+                }
+            )
     bundles: list[tuple[BundleRevisionPointer, str]] = [(step.instruction_bundle, "INSTRUCTION")]
     if step.reference_bundle is not None:
         bundles.append((step.reference_bundle, "REFERENCE"))
@@ -1178,6 +1212,146 @@ def _materialize_past_exam_item_source(
         member_count += 1
         _require_total_size(total_bytes, analysis=True)
     return total_bytes, member_count
+
+
+def _materialize_base_analysis(
+    session: Session,
+    *,
+    plan: ResolvedExecutionPlanV9,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> tuple[int, int]:
+    """Stage one accepted base analysis without copying it into a new canonical Artifact."""
+
+    base = plan.base_analysis
+    members: tuple[tuple[str, KnowledgeProposalArtifactMember], ...] = (
+        ("accepted-result.json", base.accepted_result_artifact),
+        ("proposal-receipt.json", base.proposal_receipt),
+        *(
+            (pointer.member_path.removeprefix("normalized/"), pointer)
+            for pointer in (
+                base.base_members.normalized_markdown,
+                base.base_members.anchors,
+                base.base_members.nodes,
+                base.base_members.edges,
+                base.base_members.claims,
+                base.base_members.component_observations,
+                base.base_members.page_image_observations,
+                base.base_members.unresolved_ambiguities,
+            )
+        ),
+    )
+    payloads: dict[str, bytes] = {}
+    for relative_name, pointer in members:
+        payload = _materialize_assessment_member(
+            session,
+            pointer=OriginArtifactMemberPointer(
+                artifact_id=pointer.artifact_id,
+                artifact_revision_id=pointer.artifact_revision_id,
+                member_path=pointer.member_path,
+                schema_ref=pointer.schema_ref,
+                media_type=pointer.media_type,
+                sha256=pointer.sha256,
+            ),
+            relative_path=f"source/base-analysis/{relative_name}",
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=2 * 1024 * 1024,
+        )
+        if len(payload) != pointer.bytes:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_MANIFEST_MISMATCH",
+                "base analysis member byte count differs from its pointer",
+            )
+        payloads[relative_name] = payload
+
+    accepted_value = _json_object(payloads["accepted-result.json"], "accepted base result")
+    receipt_value = _json_object(payloads["proposal-receipt.json"], "base proposal receipt")
+    try:
+        validate_catalog_contract("knowledge-analysis-result-v9", accepted_value)
+        validate_catalog_contract("knowledge-analysis-proposal-receipt-v8", receipt_value)
+        accepted = KnowledgeAnalysisResultV9.model_validate(accepted_value)
+        receipt = KnowledgeAnalysisProposalReceiptV8.model_validate(receipt_value)
+    except (JsonSchemaValidationError, ValueError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_BASE_ANALYSIS_INVALID",
+            "base analysis accepted result or proposal receipt is invalid",
+        ) from exc
+    if (
+        accepted.analysis_result_id != base.analysis_result_id
+        or accepted.analysis_request_id != base.analysis_request_id
+        or accepted.result_sha256 != base.accepted_result_sha256
+        or accepted.proposal_receipt != base.proposal_receipt
+        or accepted.proposal_content_set_sha256 != base.proposal_content_set_sha256
+        or accepted.counts != base.base_counts
+        or accepted.source != plan.item_source
+        or receipt.analysis_request_id != base.analysis_request_id
+        or receipt.source != plan.item_source
+        or receipt.members != base.base_members
+        or receipt.counts != base.base_counts
+        or receipt.content_set_sha256 != base.proposal_content_set_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_BASE_ANALYSIS_POINTER_MISMATCH",
+            "base analysis content differs from the pinned execution plan",
+        )
+
+    try:
+        markdown = payloads["document.md"].decode("utf-8")
+    except UnicodeError as exc:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_ENCODING_INVALID",
+            "base analysis Markdown is not UTF-8",
+        ) from exc
+    if not markdown.strip():
+        raise ControlPlaneError("CONTROL_BASE_ANALYSIS_INVALID", "base analysis Markdown is empty")
+    expected_counts = {
+        "anchors.jsonl": base.base_counts.anchors,
+        "nodes.jsonl": base.base_counts.nodes,
+        "edges.jsonl": base.base_counts.edges,
+        "claims.jsonl": base.base_counts.claims,
+        "components.jsonl": base.base_counts.component_observations,
+        "page-images.jsonl": base.base_counts.page_image_observations,
+        "ambiguities.jsonl": base.base_counts.ambiguities,
+    }
+    for name, expected_count in expected_counts.items():
+        if _jsonl_object_count(payloads[name], name) != expected_count:
+            raise ControlPlaneError(
+                "CONTROL_BASE_ANALYSIS_COUNT_MISMATCH",
+                "base analysis member count differs from its accepted result",
+            )
+    return sum(len(payload) for payload in payloads.values()), len(payloads)
+
+
+def _json_object(payload: bytes, label: str) -> dict[str, object]:
+    try:
+        value: object = json.loads(payload)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_ENCODING_INVALID", f"{label} is not UTF-8 JSON"
+        ) from exc
+    if not isinstance(value, dict):
+        raise ControlPlaneError("CONTROL_POINTER_MEDIA_MISMATCH", f"{label} is not an object")
+    return value
+
+
+def _jsonl_object_count(payload: bytes, label: str) -> int:
+    try:
+        lines = payload.decode("utf-8").splitlines()
+        values = [json.loads(line) for line in lines if line.strip()]
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_ENCODING_INVALID", f"base analysis {label} is not UTF-8 JSONL"
+        ) from exc
+    if any(not isinstance(value, dict) for value in values):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_MEDIA_MISMATCH", f"base analysis {label} has a non-object row"
+        )
+    return len(values)
 
 
 def _assessment_member_expected_bytes(

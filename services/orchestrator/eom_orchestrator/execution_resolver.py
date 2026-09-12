@@ -20,6 +20,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisRequestV9,
+    KnowledgeAnalysisRequestV10,
     LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionRequest,
 )
@@ -35,6 +36,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV6,
     ResolvedExecutionPlanV7,
     ResolvedExecutionPlanV8,
+    ResolvedExecutionPlanV9,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     WorkerRole,
@@ -412,6 +414,7 @@ def resolve_knowledge_analysis_plan(
         | KnowledgeAnalysisRequestV7
         | KnowledgeAnalysisRequestV8
         | KnowledgeAnalysisRequestV9
+        | KnowledgeAnalysisRequestV10
     ),
     resolved_at: datetime | None = None,
 ) -> (
@@ -419,6 +422,7 @@ def resolve_knowledge_analysis_plan(
     | ResolvedExecutionPlanV4
     | ResolvedExecutionPlanV5
     | ResolvedExecutionPlanV8
+    | ResolvedExecutionPlanV9
 ):
     """Resolve one exact released support policy without consulting a mutable latest pointer."""
 
@@ -428,6 +432,8 @@ def resolve_knowledge_analysis_plan(
         )
     )
     if existing is not None:
+        if isinstance(request, KnowledgeAnalysisRequestV10):
+            return ResolvedExecutionPlanV9.model_validate(existing.canonical_document)
         if isinstance(request, KnowledgeAnalysisRequestV9):
             return ResolvedExecutionPlanV8.model_validate(existing.canonical_document)
         if isinstance(request.source, EducationalDocumentKnowledgeSourceV4):
@@ -497,7 +503,16 @@ def resolve_knowledge_analysis_plan(
         "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
-    if isinstance(request, KnowledgeAnalysisRequestV9):
+    if isinstance(request, KnowledgeAnalysisRequestV10):
+        document.update(
+            {
+                "schema_version": "resolved-execution-plan/9.0",
+                "item_source": request.source.model_dump(mode="json"),
+                "base_analysis": request.base_analysis.model_dump(mode="json"),
+                "resolver_version": "9.0.0",
+            }
+        )
+    elif isinstance(request, KnowledgeAnalysisRequestV9):
         document.update(
             {
                 "schema_version": "resolved-execution-plan/8.0",
@@ -543,8 +558,12 @@ def resolve_knowledge_analysis_plan(
         | ResolvedExecutionPlanV4
         | ResolvedExecutionPlanV5
         | ResolvedExecutionPlanV8
+        | ResolvedExecutionPlanV9
     )
-    if document["schema_version"] == "resolved-execution-plan/8.0":
+    if document["schema_version"] == "resolved-execution-plan/9.0":
+        validate_control_contract("resolved-execution-plan-v9", document)
+        model = ResolvedExecutionPlanV9.model_validate(document)
+    elif document["schema_version"] == "resolved-execution-plan/8.0":
         validate_control_contract("resolved-execution-plan-v8", document)
         model = ResolvedExecutionPlanV8.model_validate(document)
     elif document["schema_version"] == "resolved-execution-plan/5.0":

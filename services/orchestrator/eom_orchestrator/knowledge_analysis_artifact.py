@@ -15,6 +15,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV6,
     KnowledgeAnalysisProposalReceiptV7,
     KnowledgeAnalysisProposalReceiptV8,
+    KnowledgeAnalysisProposalReceiptV9,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
@@ -23,6 +24,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisRequestV9,
+    KnowledgeAnalysisRequestV10,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
@@ -30,14 +32,17 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV5,
     KnowledgeAnalysisWorkerProposalV6,
     KnowledgeAnalysisWorkerProposalV7,
+    KnowledgeAnalysisWorkerProposalV8,
     KnowledgeProposalArtifactMember,
     KnowledgeProposalCounts,
     KnowledgeProposalCountsV2,
     KnowledgeProposalMembers,
     KnowledgeProposalMembersV2,
+    KnowledgeSolutionCounts,
     ProposedKnowledgeEdgeV2,
     validate_assessment_page_observation_anchors,
     validate_knowledge_edge_endpoint_types,
+    validate_knowledge_solution_report_references,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol import ErrorCode
@@ -193,6 +198,123 @@ def _validate_observed_page_structured_evidence(
         )
 
 
+def _stage_solution_report(
+    *,
+    proposal: KnowledgeAnalysisWorkerProposalV8,
+    request: KnowledgeAnalysisRequestV10,
+    job_id: str,
+    logical_artifact_id: str,
+    revision_id: str,
+    staging: Path,
+) -> tuple[StagedFileSet, KnowledgeAnalysisProposalReceiptV9]:
+    """Commit only the additive report while retaining immutable base pointers."""
+
+    try:
+        validate_knowledge_solution_report_references(request, proposal)
+    except ValueError as exc:
+        raise PlatformError(
+            ErrorCode.WORKER_RESULT_INVALID,
+            "solution report does not resolve against the accepted base analysis",
+        ) from exc
+
+    source_directory = staging / "knowledge-proposal-source"
+    artifact_stage = staging / "knowledge-proposal-artifact"
+    if source_directory.exists() or artifact_stage.exists():
+        raise PlatformError(
+            ErrorCode.ARTIFACT_COMMIT_FAILED,
+            "knowledge proposal staging path already exists",
+        )
+    try:
+        source_directory.mkdir(mode=0o750)
+        report_member_path = "normalized/solution-report.json"
+        report_payload = canonical_json_bytes(proposal.solution_report)
+        report_path = source_directory / "solution-report.json"
+        report_path.write_bytes(report_payload)
+        report_path.chmod(0o640)
+        report_member = KnowledgeProposalArtifactMember(
+            artifact_id=logical_artifact_id,
+            artifact_revision_id=revision_id,
+            member_path=report_member_path,
+            sha256=sha256_bytes(report_payload),
+            bytes=len(report_payload),
+            schema_ref="eom://schemas/knowledge/knowledge-analysis-solution-report/1.0",
+            media_type="application/json",
+            logical_name="solution-report.json",
+        )
+        base_members = tuple(
+            getattr(request.base_analysis.base_members, name)
+            for name in request.base_analysis.base_members.__class__.model_fields
+        )
+        descriptors = [
+            {
+                "artifact_id": member.artifact_id,
+                "artifact_revision_id": member.artifact_revision_id,
+                "member_path": member.member_path,
+                "sha256": member.sha256,
+                "bytes": member.bytes,
+                "schema_ref": member.schema_ref,
+                "media_type": member.media_type,
+            }
+            for member in (*base_members, report_member)
+        ]
+        receipt = KnowledgeAnalysisProposalReceiptV9(
+            analysis_request_id=request.analysis_request_id,
+            source=request.source,
+            base_analysis=request.base_analysis,
+            solution_report=report_member,
+            solution_counts=KnowledgeSolutionCounts(
+                solution_steps=len(proposal.solution_report.solution_steps),
+                concept_assessment_links=len(proposal.solution_report.concept_assessment_links),
+                choice_diagnostics=len(proposal.solution_report.choice_diagnostics),
+                unresolved_issues=len(proposal.solution_report.unresolved_issues),
+            ),
+            general_knowledge_used=proposal.solution_report.general_knowledge_used,
+            content_set_sha256=content_sha256(
+                sorted(descriptors, key=lambda item: str(item["member_path"]))
+            ),
+            completed_at=proposal.completed_at,
+        )
+        receipt_payload = canonical_json_bytes(receipt)
+        receipt_path = source_directory / "proposal-receipt.json"
+        receipt_path.write_bytes(receipt_payload)
+        receipt_path.chmod(0o640)
+        receipt_member_path = "normalized/proposal-receipt.json"
+        staged = stage_file_set_artifact(
+            files={report_member_path: report_path, receipt_member_path: receipt_path},
+            primary_file=receipt_member_path,
+            job_id=job_id,
+            logical_artifact_id=logical_artifact_id,
+            revision_id=revision_id,
+            artifact_type="knowledge-analysis-proposal",
+            staging=artifact_stage,
+            manifest_version="knowledge-analysis-proposal-file-set/1.0",
+            file_metadata={
+                report_member_path: {
+                    "schema_ref": report_member.schema_ref,
+                    "media_type": report_member.media_type,
+                },
+                receipt_member_path: {
+                    "schema_ref": (
+                        "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/9.0"
+                    ),
+                    "media_type": "application/json",
+                },
+            },
+            created_at=proposal.completed_at,
+        )
+        if staged.primary_hash != sha256_bytes(receipt_payload):
+            raise PlatformError(
+                ErrorCode.ARTIFACT_HASH_MISMATCH,
+                "solution proposal receipt checksum mismatch",
+            )
+        return staged, receipt
+    except OSError as exc:
+        raise PlatformError(
+            ErrorCode.ARTIFACT_COMMIT_FAILED,
+            "solution proposal staging failed",
+        ) from exc
+
+
 def stage_knowledge_analysis_proposal(
     *,
     proposal: (
@@ -203,6 +325,7 @@ def stage_knowledge_analysis_proposal(
         | KnowledgeAnalysisWorkerProposalV5
         | KnowledgeAnalysisWorkerProposalV6
         | KnowledgeAnalysisWorkerProposalV7
+        | KnowledgeAnalysisWorkerProposalV8
     ),
     request: (
         KnowledgeAnalysisRequestV2
@@ -213,6 +336,7 @@ def stage_knowledge_analysis_proposal(
         | KnowledgeAnalysisRequestV7
         | KnowledgeAnalysisRequestV8
         | KnowledgeAnalysisRequestV9
+        | KnowledgeAnalysisRequestV10
     ),
     job_id: str,
     logical_artifact_id: str,
@@ -227,10 +351,30 @@ def stage_knowledge_analysis_proposal(
     | KnowledgeAnalysisProposalReceiptV5
     | KnowledgeAnalysisProposalReceiptV6
     | KnowledgeAnalysisProposalReceiptV7
-    | KnowledgeAnalysisProposalReceiptV8,
+    | KnowledgeAnalysisProposalReceiptV8
+    | KnowledgeAnalysisProposalReceiptV9,
 ]:
     """Split one bounded worker value into deterministic immutable Artifact members."""
 
+    if isinstance(request, KnowledgeAnalysisRequestV10):
+        if not isinstance(proposal, KnowledgeAnalysisWorkerProposalV8):
+            raise PlatformError(
+                ErrorCode.WORKER_RESULT_INVALID,
+                "solution analysis requires the V8 worker proposal",
+            )
+        return _stage_solution_report(
+            proposal=proposal,
+            request=request,
+            job_id=job_id,
+            logical_artifact_id=logical_artifact_id,
+            revision_id=revision_id,
+            staging=staging,
+        )
+    if isinstance(proposal, KnowledgeAnalysisWorkerProposalV8):
+        raise PlatformError(
+            ErrorCode.WORKER_RESULT_INVALID,
+            "solution proposal requires the V10 analysis request",
+        )
     proposal = _without_incompatible_edges(proposal)
 
     if proposal.analysis_request_id != request.analysis_request_id:
