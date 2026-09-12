@@ -49,6 +49,7 @@ ACTIVE_ANALYSIS_STATES = (
 # leases on support slots 05 and 06.  The capacity controller remains authoritative
 # for the global-three, pool-two, and per-slot-one lease limits.
 MAX_AUTOMATIC_ACTIVE_ANALYSES = 2
+SOLUTION_ANALYSIS_REQUEST_SCHEMA_VERSION = "knowledge-analysis-request/10.0"
 
 
 @dataclass(frozen=True)
@@ -198,25 +199,58 @@ class LegacyItemAutomaticLearningService:
             + literal(":")
             + LegacyItemExtractionDecisionRecord.item_proposal_id
         )
-        terminal_filters = [
+        scoped_terminal_filters = [
             LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
                 self.extraction_batch_ids
             ),
             KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
             KnowledgeAnalysisRunRecord.state.in_(("FAILED", "REJECTED", "CANCELLED")),
+            KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
+            != SOLUTION_ANALYSIS_REQUEST_SCHEMA_VERSION,
+            successor.analysis_run_id.is_(None),
+        ]
+        solution_terminal_filters = [
+            KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
+            KnowledgeAnalysisRunRecord.state.in_(("FAILED", "REJECTED", "CANCELLED")),
+            KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
+            == SOLUTION_ANALYSIS_REQUEST_SCHEMA_VERSION,
+            KnowledgeAnalysisRunRecord.canonical_request["source"]["source_class"].astext
+            == "PAST_EXAM",
             successor.analysis_run_id.is_(None),
         ]
         if self.retry_analysis_run_ids:
             # Exact retry predecessors are intentionally terminal until their one allowed
             # successor is created.  Every other terminal leaf remains an immediate fail-stop.
-            terminal_filters.append(
+            scoped_terminal_filters.append(
+                KnowledgeAnalysisRunRecord.analysis_run_id.not_in(self.retry_analysis_run_ids)
+            )
+            solution_terminal_filters.append(
                 KnowledgeAnalysisRunRecord.analysis_run_id.not_in(self.retry_analysis_run_ids)
             )
         with self.sessions() as session:
-            row = session.execute(
+            solution_row = session.execute(
                 select(
                     KnowledgeAnalysisRunRecord.analysis_run_id,
                     KnowledgeAnalysisRunRecord.state,
+                    KnowledgeAnalysisRunRecord.created_at,
+                )
+                .outerjoin(
+                    successor,
+                    successor.predecessor_analysis_run_id
+                    == KnowledgeAnalysisRunRecord.analysis_run_id,
+                )
+                .where(*solution_terminal_filters)
+                .order_by(
+                    KnowledgeAnalysisRunRecord.created_at,
+                    KnowledgeAnalysisRunRecord.analysis_run_id,
+                )
+                .limit(1)
+            ).one_or_none()
+            scoped_row = session.execute(
+                select(
+                    KnowledgeAnalysisRunRecord.analysis_run_id,
+                    KnowledgeAnalysisRunRecord.state,
+                    KnowledgeAnalysisRunRecord.created_at,
                 )
                 .join(
                     ItemRevisionRecord,
@@ -237,47 +271,30 @@ class LegacyItemAutomaticLearningService:
                     successor.predecessor_analysis_run_id
                     == KnowledgeAnalysisRunRecord.analysis_run_id,
                 )
-                .where(*terminal_filters)
+                .where(*scoped_terminal_filters)
                 .order_by(
                     KnowledgeAnalysisRunRecord.created_at,
                     KnowledgeAnalysisRunRecord.analysis_run_id,
                 )
                 .limit(1)
             ).one_or_none()
+            rows = tuple(row for row in (solution_row, scoped_row) if row is not None)
+            row = min(
+                rows, key=lambda value: (value.created_at, value.analysis_run_id), default=None
+            )
         if row is None:
             return None
         return str(row.analysis_run_id), str(row.state)
 
     def _solution_candidate(self) -> tuple[str, str] | None:
-        """Select one accepted V9 base with no additive V10 successor."""
+        """Select one accepted V9 base with no V10 successor, independent of intake."""
 
         successor = aliased(KnowledgeAnalysisRunRecord)
-        registration_key = (
-            literal("legacy-item-promotion:")
-            + LegacyItemExtractionDecisionRecord.acceptance_id
-            + literal(":")
-            + LegacyItemExtractionDecisionRecord.item_proposal_id
-        )
         with self.sessions() as session:
             row = session.execute(
                 select(
                     KnowledgeAnalysisRunRecord.analysis_run_id,
                     KnowledgeAnalysisRunRecord.created_by_operator_id,
-                )
-                .distinct()
-                .join(
-                    ItemRevisionRecord,
-                    ItemRevisionRecord.item_revision_id
-                    == KnowledgeAnalysisRunRecord.source_revision_id,
-                )
-                .join(
-                    LegacyItemExtractionDecisionRecord,
-                    ItemRevisionRecord.registration_key == registration_key,
-                )
-                .join(
-                    LegacyItemExtractionBatchWorkUnitRecord,
-                    LegacyItemExtractionBatchWorkUnitRecord.acceptance_id
-                    == LegacyItemExtractionDecisionRecord.acceptance_id,
                 )
                 .outerjoin(
                     successor,
@@ -287,16 +304,16 @@ class LegacyItemAutomaticLearningService:
                     )
                     & (
                         successor.canonical_request["schema_version"].astext
-                        == "knowledge-analysis-request/10.0"
+                        == SOLUTION_ANALYSIS_REQUEST_SCHEMA_VERSION
                     ),
                 )
                 .where(
-                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
-                        self.extraction_batch_ids
-                    ),
+                    KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
                     KnowledgeAnalysisRunRecord.state == "ACCEPTED",
                     KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
                     == PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
+                    KnowledgeAnalysisRunRecord.canonical_request["source"]["source_class"].astext
+                    == "PAST_EXAM",
                     successor.analysis_run_id.is_(None),
                 )
                 .order_by(
@@ -328,6 +345,8 @@ class LegacyItemAutomaticLearningService:
             )
 
     def _active_analyses(self) -> tuple[tuple[str, str, str], ...]:
+        """Merge global active V10 and private-batch active source analyses."""
+
         registration_key = (
             literal("legacy-item-promotion:")
             + LegacyItemExtractionDecisionRecord.acceptance_id
@@ -335,7 +354,32 @@ class LegacyItemAutomaticLearningService:
             + LegacyItemExtractionDecisionRecord.item_proposal_id
         )
         with self.sessions() as session:
-            rows = tuple(
+            solution_rows = tuple(
+                session.execute(
+                    select(
+                        KnowledgeAnalysisRunRecord.analysis_run_id,
+                        KnowledgeAnalysisRunRecord.created_by_operator_id,
+                        KnowledgeAnalysisRunRecord.state,
+                        KnowledgeAnalysisRunRecord.created_at,
+                    )
+                    .where(
+                        KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
+                        KnowledgeAnalysisRunRecord.state.in_(ACTIVE_ANALYSIS_STATES),
+                        KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
+                        == SOLUTION_ANALYSIS_REQUEST_SCHEMA_VERSION,
+                        KnowledgeAnalysisRunRecord.canonical_request["source"][
+                            "source_class"
+                        ].astext
+                        == "PAST_EXAM",
+                    )
+                    .order_by(
+                        KnowledgeAnalysisRunRecord.created_at,
+                        KnowledgeAnalysisRunRecord.analysis_run_id,
+                    )
+                    .limit(MAX_AUTOMATIC_ACTIVE_ANALYSES)
+                )
+            )
+            source_rows = tuple(
                 session.execute(
                     select(
                         KnowledgeAnalysisRunRecord.analysis_run_id,
@@ -364,6 +408,8 @@ class LegacyItemAutomaticLearningService:
                         ),
                         KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
                         KnowledgeAnalysisRunRecord.state.in_(ACTIVE_ANALYSIS_STATES),
+                        KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
+                        != SOLUTION_ANALYSIS_REQUEST_SCHEMA_VERSION,
                     )
                     .order_by(
                         KnowledgeAnalysisRunRecord.created_at,
@@ -371,6 +417,12 @@ class LegacyItemAutomaticLearningService:
                     )
                     .limit(MAX_AUTOMATIC_ACTIVE_ANALYSES)
                 )
+            )
+            rows = tuple(
+                sorted(
+                    (*solution_rows, *source_rows),
+                    key=lambda row: (row.created_at, row.analysis_run_id),
+                )[:MAX_AUTOMATIC_ACTIVE_ANALYSES]
             )
             return tuple(
                 (str(row.analysis_run_id), str(row.created_by_operator_id), str(row.state))
@@ -442,16 +494,10 @@ class LegacyItemAutomaticLearningService:
             return None
 
     def _retryable_solution_analysis(self) -> tuple[str, str, str] | None:
-        """Select one allowlisted failed V10 whose deterministic retry does not exist."""
+        """Select one global allowlisted failed V10 whose deterministic retry does not exist."""
 
         if not self.retry_analysis_run_ids:
             return None
-        registration_key = (
-            literal("legacy-item-promotion:")
-            + LegacyItemExtractionDecisionRecord.acceptance_id
-            + literal(":")
-            + LegacyItemExtractionDecisionRecord.item_proposal_id
-        )
         retry_order = case(
             {
                 analysis_run_id: ordinal
@@ -468,36 +514,23 @@ class LegacyItemAutomaticLearningService:
                     KnowledgeAnalysisRunRecord.created_by_operator_id,
                     KnowledgeAnalysisRunRecord.canonical_request,
                 )
-                .distinct()
-                .join(
-                    ItemRevisionRecord,
-                    ItemRevisionRecord.item_revision_id
-                    == KnowledgeAnalysisRunRecord.source_revision_id,
-                )
-                .join(
-                    LegacyItemExtractionDecisionRecord,
-                    ItemRevisionRecord.registration_key == registration_key,
-                )
-                .join(
-                    LegacyItemExtractionBatchWorkUnitRecord,
-                    LegacyItemExtractionBatchWorkUnitRecord.acceptance_id
-                    == LegacyItemExtractionDecisionRecord.acceptance_id,
-                )
                 .where(
-                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
-                        self.extraction_batch_ids
-                    ),
                     KnowledgeAnalysisRunRecord.analysis_run_id.in_(self.retry_analysis_run_ids),
                     KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
                     KnowledgeAnalysisRunRecord.state.in_(("FAILED", "REJECTED", "CANCELLED")),
                     KnowledgeAnalysisRunRecord.predecessor_analysis_run_id.is_not(None),
+                    KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
+                    == SOLUTION_ANALYSIS_REQUEST_SCHEMA_VERSION,
+                    KnowledgeAnalysisRunRecord.canonical_request["source"]["source_class"].astext
+                    == "PAST_EXAM",
                 )
                 .order_by(retry_order, KnowledgeAnalysisRunRecord.analysis_run_id)
             ).all()
             solution_rows = tuple(
                 row
                 for row in rows
-                if row.canonical_request.get("schema_version") == "knowledge-analysis-request/10.0"
+                if row.canonical_request.get("schema_version")
+                == SOLUTION_ANALYSIS_REQUEST_SCHEMA_VERSION
                 and row.predecessor_analysis_run_id is not None
             )
             if not solution_rows:

@@ -141,6 +141,7 @@ def _insert_terminal(
     schema_version: str = "knowledge-analysis-request/9.0",
     predecessor_analysis_run_id: str | None = None,
     idempotency_key: str | None = None,
+    extraction_batch_id: str = "legacybatch_" + "1" * 32,
 ) -> None:
     acceptance_id = f"acceptance-{ordinal}"
     item_proposal_id = f"proposal-{ordinal}"
@@ -176,7 +177,7 @@ def _insert_terminal(
                 VALUES (:acceptance_id, :batch_id)
                 """
             ),
-            {"acceptance_id": acceptance_id, "batch_id": "legacybatch_" + "1" * 32},
+            {"acceptance_id": acceptance_id, "batch_id": extraction_batch_id},
         )
         connection.execute(
             text(
@@ -197,13 +198,73 @@ def _insert_terminal(
                 "source_revision_id": item_revision_id,
                 "state": state,
                 "predecessor_analysis_run_id": predecessor_analysis_run_id,
-                "canonical_request": '{"schema_version":"' + schema_version + '"}',
+                "canonical_request": (
+                    '{"schema_version":"'
+                    + schema_version
+                    + '","source":{"source_class":"PAST_EXAM"}}'
+                ),
                 "idempotency_key": idempotency_key or f"analysis-attempt-{ordinal}",
                 "operator_id": f"operator-{ordinal}",
                 # Reverse chronological order proves the explicit allowlist CASE wins.
                 "created_at": f"2026-09-{30 - ordinal:02d}T00:00:00+00:00",
             },
         )
+
+
+def test_solution_candidate_is_independent_of_private_batch_membership() -> None:
+    engine, service = _query_backed_service(())
+    try:
+        run_id = "analysisrun_" + "4" * 32
+        _insert_terminal(
+            engine,
+            ordinal=1,
+            analysis_run_id=run_id,
+            state="ACCEPTED",
+            extraction_batch_id="legacybatch_" + "2" * 32,
+        )
+        delattr(service, "_solution_candidate")
+
+        assert service._solution_candidate() == (run_id, "operator-1")
+    finally:
+        engine.dispose()
+
+
+def test_active_solution_is_reconciled_outside_private_batch_membership() -> None:
+    engine, service = _query_backed_service(())
+    try:
+        run_id = "analysisrun_" + "5" * 32
+        _insert_terminal(
+            engine,
+            ordinal=1,
+            analysis_run_id=run_id,
+            state="RUNNING",
+            schema_version="knowledge-analysis-request/10.0",
+            predecessor_analysis_run_id="analysisrun_" + "4" * 32,
+            extraction_batch_id="legacybatch_" + "2" * 32,
+        )
+        delattr(service, "_active_analyses")
+
+        assert service._active_analyses() == ((run_id, "operator-1", "RUNNING"),)
+    finally:
+        engine.dispose()
+
+
+def test_terminal_solution_fail_stops_outside_private_batch_membership() -> None:
+    engine, service = _query_backed_service(())
+    try:
+        run_id = "analysisrun_" + "5" * 32
+        _insert_terminal(
+            engine,
+            ordinal=1,
+            analysis_run_id=run_id,
+            schema_version="knowledge-analysis-request/10.0",
+            predecessor_analysis_run_id="analysisrun_" + "4" * 32,
+            extraction_batch_id="legacybatch_" + "2" * 32,
+        )
+
+        assert service._terminal_analysis() == (run_id, "FAILED")
+    finally:
+        engine.dispose()
 
 
 def test_automatic_learning_reconciles_two_active_runs_before_refilling() -> None:
