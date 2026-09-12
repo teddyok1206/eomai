@@ -66,6 +66,7 @@ ANALYSIS_CONFIG_V13 = ROOT / "config/control-plane/knowledge-analysis-v13"
 ANALYSIS_CONFIG_V14 = ROOT / "config/control-plane/knowledge-analysis-v14"
 ANALYSIS_CONFIG_V15 = ROOT / "config/control-plane/knowledge-analysis-v15"
 ANALYSIS_CONFIG_V16 = ROOT / "config/control-plane/knowledge-analysis-v16"
+ANALYSIS_CONFIG_V17 = ROOT / "config/control-plane/knowledge-analysis-v17"
 
 
 def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version() -> None:
@@ -74,7 +75,7 @@ def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version
     )
 
     assert set(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS) == schema_versions
-    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 17))
+    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 18))
 
 
 def test_knowledge_analysis_v13_adds_parallel_capacity_without_changing_worker_semantics() -> None:
@@ -213,6 +214,37 @@ def test_knowledge_analysis_v16_adds_solution_reports_without_weakening_v9() -> 
         assert required in normalized
     assert (ANALYSIS_CONFIG_V15 / "bootstrap.yaml").read_bytes() != (
         ANALYSIS_CONFIG_V16 / "bootstrap.yaml"
+    ).read_bytes()
+
+
+def test_knowledge_analysis_v17_makes_every_solution_id_order_explicit() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V17)
+
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/17.0"
+    assert manifest.created_at.isoformat() == "2026-09-12T10:42:00+00:00"
+    assert manifest.compatible_workflow_protocols[-1] == "workflow-role/1.21.0"
+    instruction = (ANALYSIS_CONFIG_V17 / "instructions/knowledge-analysis.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(instruction.split())
+    for required in (
+        "Every array of IDs",
+        "lexicographic ascending order",
+        "`depends_on_step_ids`",
+        "`node_ids`",
+        "`item_element_node_ids`",
+        "`anchor_ids`",
+        "`reasoning_step_ids`",
+        "`assessment_pattern_node_ids`",
+        "`solutionstep_evaluate_helium`",
+        "validate the whole object",
+    ):
+        assert required in normalized
+    assert (ANALYSIS_CONFIG_V16 / "instructions/platform.md").read_bytes() == (
+        ANALYSIS_CONFIG_V17 / "instructions/platform.md"
+    ).read_bytes()
+    assert (ANALYSIS_CONFIG_V16 / "instructions/knowledge-analysis.md").read_bytes() != (
+        ANALYSIS_CONFIG_V17 / "instructions/knowledge-analysis.md"
     ).read_bytes()
 
 
