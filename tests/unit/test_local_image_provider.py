@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import binascii
 import hashlib
+import io
 import json
 import os
 import stat
@@ -24,12 +25,14 @@ from eom_image_provider.model_manifest import SSD1B_REQUIRED_FILES, create_model
 from eom_image_provider.provider import (
     GeneratedBackground,
     ProviderError,
+    _compose_png,
     acquire_gpu_lease,
     generate_background,
     generate_composite_handoff,
     reuse_composite_handoff,
     verify_model_revision,
 )
+from PIL import Image  # type: ignore[import-not-found]
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 MODEL_ID = "imgmodel_" + "1" * 32
@@ -350,6 +353,26 @@ def test_composite_handoff_is_idempotent_and_manager_readable(
     lock_root.chmod(0o700)
     with acquire_gpu_lease(lock_root / "gpu0.lock"):
         assert reuse_composite_handoff(workspace=workspace, request=request) == first
+
+
+def test_real_compositor_preserves_background_and_applies_authoritative_overlay(
+    tmp_path: Path,
+) -> None:
+    background_path = tmp_path / "generated-background.png"
+    overlay_path = tmp_path / "generated-overlay.png"
+    background_path.write_bytes(_png())
+    overlay_path.write_bytes(_rgba_png())
+
+    payload = _compose_png(background_path, overlay_path)
+
+    with Image.open(io.BytesIO(payload)) as image:
+        image.load()
+        assert image.format == "PNG"
+        assert image.mode == "RGB"
+        assert image.size == (800, 500)
+        assert image.getpixel((50, 50)) == (255, 255, 255)
+        assert image.getpixel((200, 110)) == (0, 0, 0)
+    assert payload != _png()
 
 
 def test_composite_handoff_rejects_a_symlink_overlay(tmp_path: Path) -> None:

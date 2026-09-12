@@ -458,5 +458,11 @@ def test_v3_renderer_combines_labeled_blocks_with_exact_pinned_images(
         for ordinal, image in enumerate(images):
             assert archive.read(f"BinData/content-team-visual-{ordinal}.png") == image
             assert f"eomContentTeamVisual{ordinal}".encode() in section
-    assert "그림 삽입" not in section.decode("utf-8")
-    assert 'id="1729004418"' not in section.decode("utf-8")
+    section_text = section.decode("utf-8")
+    assert "그림 삽입" not in section_text
+    assert 'id="1729004418"' not in section_text
+    if image_count == 1:
+        assert "(가)" not in section_text
+        assert "(나)" not in section_text
+    else:
+        assert section_text.index("(가)") < section_text.index("(나)")

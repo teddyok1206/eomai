@@ -22,8 +22,8 @@ from eom_catalog_service.vector_stimulus import (
     SVG_RASTERIZER,
     compose_vector_overlay_svg,
     compose_vector_svg,
-    sanitize_svg_overlay,
 )
+from eom_image_contracts import sanitize_svg_overlay
 from eom_workflow.models import (
     GeneratedImageBrief,
     GeneratedLineGraphDrawing,
@@ -280,6 +280,28 @@ def test_vector_overlay_uses_reviewed_content_team_fonts_by_script() -> None:
 
     assert f'font-family="{SVG_LATIN_FONT_FAMILY}"' in clean
     assert f'font-family="{SVG_MATH_FONT_FAMILY}"' in clean
+
+
+def test_vector_overlay_preserves_worker_declared_labels_and_geometry_without_ab_assumptions() -> (
+    None
+):
+    source = (
+        '<g fill="none" stroke="#000000" stroke-linecap="round" stroke-width="4">'
+        '<line x1="120" y1="250" x2="680" y2="250"></line>'
+        '<polygon fill="#000000" points="680,250 652,232 652,268"></polygon>'
+        "</g>"
+        '<g fill="#000000" font-family="Century Old Style" font-size="28">'
+        '<text x="180" y="220">P</text>'
+        '<text x="580" y="220">Q</text>'
+        "</g>"
+    )
+
+    clean = sanitize_svg_overlay(source, ("P", "Q"))
+
+    assert "P" in clean
+    assert "Q" in clean
+    assert '<line x1="120" x2="680" y1="250" y2="250"' in clean
+    assert '<polygon fill="#000000" points="680,250 652,232 652,268"' in clean
 
 
 def test_vector_overlay_rejects_missing_font_and_korean_in_latin_font() -> None:
