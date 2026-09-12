@@ -27,6 +27,12 @@ A single image must never acquire `(가)` or `(나)`.  A two-image item must pre
 such as `A`/`B`, `P`/`Q`, or a measured value, are independent worker-authored overlay labels and
 must not be confused with the HWPX panel labels.
 
+For `IMAGE_IMAGE`, the HWPX representation is one two-column, two-row visual-area table.  Row zero
+contains the two separately pinned PNG members, one per cell.  Row one contains editable HWPX text
+runs `(가)` and `(나)` in the corresponding cells.  Panel labels must never be rasterized into,
+flattened with, or otherwise made part of either PNG.  For `IMAGE_ONLY`, the label row is removed
+entirely rather than retained with an empty label.
+
 ## Access pattern, structure, and complexity
 
 The canonical collection is an immutable ordered tuple bounded to two members.  Catalog and HWPX
@@ -47,7 +53,8 @@ proves that:
 1. arbitrary required scientific labels and geometry survive deterministic overlay rasterization;
 2. the overlay is applied over the generated-background-sized canvas;
 3. each composed PNG is embedded byte-for-byte at its original visual ordinal;
-4. one image removes the panel-label row, while two images render `(가)` then `(나)`; and
+4. one image removes the panel-label row, while two images place separate PNGs in row zero and
+   editable `(가)`, `(나)` text runs in row one of the same HWPX table; and
 5. label, count, ordinal, pointer, or hash drift fails before HWPX publication.
 
 Workers still write only local results.  Catalog and the orchestrator retain provider invocation,

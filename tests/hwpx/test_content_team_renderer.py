@@ -6,6 +6,7 @@ import stat
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from eom_hwpx_builder.analyzer import analyze_package
@@ -15,6 +16,7 @@ from eom_hwpx_builder.content_team_renderer import (
     render_content_team_workspace,
 )
 from eom_hwpx_builder.errors import HwpxError
+from eom_hwpx_builder.xmlsafe import local_name, parse_xml
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
     ContentTeamHandoffMember,
@@ -40,6 +42,75 @@ HANDOFF = ROOT / "staging/HwpQuestionEditor_handoff_export.zip"
 
 def _sha256(value: bytes) -> str:
     return "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+def _direct_cells_by_address(table: Any) -> dict[tuple[str, str], Any]:
+    cells: dict[tuple[str, str], Any] = {}
+    for row in table:
+        if local_name(row.tag) != "tr":
+            continue
+        for cell in row:
+            if local_name(cell.tag) != "tc":
+                continue
+            addresses = [child for child in cell if local_name(child.tag) == "cellAddr"]
+            assert len(addresses) == 1
+            row_address = addresses[0].get("rowAddr")
+            column_address = addresses[0].get("colAddr")
+            assert row_address is not None
+            assert column_address is not None
+            address = (row_address, column_address)
+            assert address not in cells
+            cells[address] = cell
+    return cells
+
+
+def _assert_separate_png_cells_and_text_label_row(section: bytes, image_count: int) -> None:
+    root = parse_xml(section, "Contents/section0.xml").root
+    image_nodes = [
+        node
+        for node in root.iter()
+        if local_name(node.tag) == "img"
+        and (node.get("binaryItemIDRef") or "").startswith("eomContentTeamVisual")
+    ]
+    assert len(image_nodes) == image_count
+    visual_tables = {
+        id(table): table
+        for node in image_nodes
+        for table in [
+            next(ancestor for ancestor in node.iterancestors() if local_name(ancestor.tag) == "tbl")
+        ]
+    }
+    assert len(visual_tables) == 1
+    table = next(iter(visual_tables.values()))
+    assert table.get("colCnt") == "2"
+    assert table.get("rowCnt") == ("1" if image_count == 1 else "2")
+    cells = _direct_cells_by_address(table)
+
+    for ordinal, node in enumerate(image_nodes):
+        cell = next(
+            ancestor for ancestor in node.iterancestors() if local_name(ancestor.tag) == "tc"
+        )
+        addresses = [child for child in cell if local_name(child.tag) == "cellAddr"]
+        assert len(addresses) == 1
+        assert addresses[0].get("rowAddr") == "0"
+        assert addresses[0].get("colAddr") == str(ordinal)
+        assert node.get("binaryItemIDRef") == f"eomContentTeamVisual{ordinal}"
+
+    if image_count == 1:
+        assert not any(row == "1" for row, _column in cells)
+        return
+
+    assert set(cells) == {("0", "0"), ("0", "1"), ("1", "0"), ("1", "1")}
+    for column, expected in (("0", "(가)"), ("1", "(나)")):
+        label_cell = cells[("1", column)]
+        label_nodes = [
+            node
+            for node in label_cell.iter()
+            if local_name(node.tag) == "t" and (node.text or "").strip()
+        ]
+        assert len(label_nodes) == 1
+        assert label_nodes[0].text == expected
+        assert not any(local_name(node.tag) == "img" for node in label_cell.iter())
 
 
 def test_general_stem_projection_is_linear_deterministic_and_boundary_local() -> None:
@@ -365,6 +436,7 @@ def test_v2_renderer_replaces_image_slots_with_exact_pinned_pngs(
     for ordinal in range(image_count):
         assert f"eomContentTeamVisual{ordinal}".encode() in section
     assert "그림 삽입" not in section.decode("utf-8")
+    _assert_separate_png_cells_and_text_label_row(section, image_count)
 
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
@@ -461,6 +533,7 @@ def test_v3_renderer_combines_labeled_blocks_with_exact_pinned_images(
     section_text = section.decode("utf-8")
     assert "그림 삽입" not in section_text
     assert 'id="1729004418"' not in section_text
+    _assert_separate_png_cells_and_text_label_row(section, image_count)
     if image_count == 1:
         assert "(가)" not in section_text
         assert "(나)" not in section_text
