@@ -1355,6 +1355,7 @@ class WorkflowCatalogService:
             "1.15.2",
             "1.15.3",
             "1.15.4",
+            "1.15.5",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1370,6 +1371,7 @@ class WorkflowCatalogService:
                 "1.15.2",
                 "1.15.3",
                 "1.15.4",
+                "1.15.5",
             } and (
                 request.image_mode != "required"
                 or request.profiles is None

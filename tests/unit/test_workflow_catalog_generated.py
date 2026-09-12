@@ -774,6 +774,30 @@ def test_content_team_v10_parses_grounded_authoring_image_pair_and_content_v3(
     assert content["schema_version"] == "3.0"
 
 
+def test_content_team_v10_rejects_one_based_first_visual_ordinal(tmp_path: Path) -> None:
+    service, artifacts = _service(tmp_path)
+    authoring = _content_team_authoring_result_v10()
+    authoring_output = cast(dict[str, Any], authoring["output"])
+    authoring_draft = cast(dict[str, Any], authoring_output["draft"])
+    authoring_draft["visuals"] = cast(list[dict[str, Any]], authoring_draft["visuals"])[:1]
+    cast(list[dict[str, Any]], authoring_draft["visuals"])[0]["label"] = ""
+    authoring_draft["visual_layout"] = "IMAGE_ONLY"
+    image = _content_team_image_result_v10()
+    image_output = cast(dict[str, Any], image["output"])
+    drawings = cast(list[dict[str, Any]], image_output["drawings"])
+    image_output["drawings"] = drawings[:1]
+    drawings[0]["visual_ordinal"] = 1
+    drawings[0]["label"] = ""
+    artifacts.values[AUTHORING_V10.revision_id] = authoring
+    artifacts.values[IMAGE_V10.revision_id] = image
+
+    with pytest.raises(ValueError, match="changed the ordered IMAGE slots"):
+        service.materialize_content_team_stimuli(
+            workflow=_workflow(), artifacts=(AUTHORING_V10, IMAGE_V10)
+        )
+    assert artifacts.commits == []
+
+
 def test_image_role_cannot_change_the_authoring_drawing_contract(tmp_path: Path) -> None:
     service, artifacts = _service(tmp_path, changed_y=True)
     with pytest.raises(ValueError, match="changed the authoring image brief"):
