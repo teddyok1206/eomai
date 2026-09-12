@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import PurePosixPath
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
 
 from eom_identifiers import content_sha256
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -1778,19 +1778,25 @@ class KnowledgeAnalysisAcceptedResultArtifactMember(KnowledgeProposalArtifactMem
     media_type: Literal["application/json"] = "application/json"
 
 
+KnowledgeSolutionReferenceNodeType = Literal[
+    "CONCEPT",
+    "CLAIM",
+    "PROCESS",
+    "OBSERVABLE_PROPERTY",
+    "FORMULA",
+    "ITEM_ELEMENT",
+    "ASSESSMENT_PATTERN",
+]
+SOLUTION_REFERENCE_NODE_TYPES: frozenset[str] = frozenset(
+    get_args(KnowledgeSolutionReferenceNodeType)
+)
+
+
 class KnowledgeAnalysisBaseReferenceNode(FrozenModel):
     """Small typed identity copied from one exact accepted base proposal."""
 
     node_id: NodeId
-    node_type: Literal[
-        "CONCEPT",
-        "CLAIM",
-        "PROCESS",
-        "OBSERVABLE_PROPERTY",
-        "FORMULA",
-        "ITEM_ELEMENT",
-        "ASSESSMENT_PATTERN",
-    ]
+    node_type: KnowledgeSolutionReferenceNodeType
 
     @model_validator(mode="after")
     def node_identity_carries_its_type(self) -> KnowledgeAnalysisBaseReferenceNode:

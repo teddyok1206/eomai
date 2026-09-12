@@ -8,11 +8,13 @@ from typing import Any, cast
 
 import pytest
 from eom_catalog_contracts import (
+    SOLUTION_REFERENCE_NODE_TYPES,
     ApprovedPastExamItemKnowledgeSourceV3,
     KnowledgeAnalysisProposalReceiptV9,
     KnowledgeAnalysisRequestV10,
     KnowledgeAnalysisResultV10,
     KnowledgeAnalysisWorkerProposalV8,
+    ProposedKnowledgeNodeV2,
     validate_contract,
     validate_knowledge_solution_report_references,
 )
@@ -38,6 +40,23 @@ NOW = datetime(2026, 9, 12, 3, tzinfo=UTC)
 
 def _sha(seed: str) -> str:
     return "sha256:" + seed * 64
+
+
+def test_base_node_type_is_already_normalized_to_its_wire_string() -> None:
+    node = ProposedKnowledgeNodeV2.model_validate(
+        {
+            "node_id": "knode_concept_motion",
+            "node_type": "CONCEPT",
+            "stable_key": "concept.motion",
+            "label": "운동",
+            "anchor_ids": ["anchor_problem"],
+        }
+    )
+
+    assert node.node_type == "CONCEPT"
+    assert isinstance(node.node_type, str)
+    assert node.node_type in SOLUTION_REFERENCE_NODE_TYPES
+    assert "ITEM_REVISION" not in SOLUTION_REFERENCE_NODE_TYPES
 
 
 def _pointer(seed: str, *, member_path: str, schema_ref: str, media_type: str) -> dict[str, object]:

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from eom_catalog_contracts import (
+    SOLUTION_REFERENCE_NODE_TYPES,
     ApprovedItemKnowledgeAnalysisSelection,
     ApprovedItemKnowledgeSourceV2,
     ApprovedPastExamItemKnowledgeSourceV3,
@@ -927,9 +928,12 @@ class KnowledgeAnalysisApplicationService:
                 (
                     KnowledgeAnalysisBaseReferenceNode(
                         node_id=node.node_id,
-                        node_type=cast(Any, node.node_type.value),
+                        # Frozen Catalog contracts persist StrEnum fields as their wire strings.
+                        # The additive index must reuse that normalized value directly.
+                        node_type=cast(Any, node.node_type),
                     )
                     for node in proposal.nodes
+                    if node.node_type in SOLUTION_REFERENCE_NODE_TYPES
                 ),
                 key=lambda node: node.node_id,
             )
