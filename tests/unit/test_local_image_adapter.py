@@ -228,7 +228,7 @@ def test_prompt_policy_revision_is_part_of_provider_request_identity(
     monkeypatch.setattr(
         local_image_adapter,
         "LOCAL_GPU_PROMPT_POLICY_REVISION",
-        "local-gpu-image-prompt-policy/1.1",
+        "local-gpu-image-prompt-policy/1.2",
     )
     changed = _build_request(
         workflow_id="workflow_" + "3" * 32,
@@ -317,7 +317,7 @@ def test_v6_hybrid_request_preserves_content_team_details_after_mandatory_style_
 def test_local_gpu_prompt_policy_pins_two_unchanged_reviewed_sources() -> None:
     root = Path(__file__).resolve().parents[2]
 
-    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.0"
+    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.1"
     assert len(LOCAL_GPU_PROMPT_SOURCE_PINS) == 2
     for relative_path, expected_sha256 in LOCAL_GPU_PROMPT_SOURCE_PINS:
         source = root / relative_path
@@ -424,6 +424,66 @@ def test_v6_hybrid_request_rejects_human_subjects_that_require_deterministic_svg
         _build_request(
             workflow_id="workflow_" + "a" * 32,
             result_revision_id="rev_" + "b" * 32,
+            drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+            drawing=drawing,
+            binding=LocalImageProviderBinding.model_validate(_binding_value()),
+            overlay_path=path,
+        )
+
+
+@pytest.mark.parametrize(
+    "detail",
+    (
+        "별과 성운만 배치하고 사람, 문자, 숫자는 포함하지 않는다",
+        "사람을 그리지 않고 별과 성운만 배치한다",
+        "a star field without people",
+        "a star field where people, text, and numbers are excluded",
+    ),
+)
+def test_v6_hybrid_request_allows_explicit_human_exclusion(
+    tmp_path: Path,
+    detail: str,
+) -> None:
+    path = tmp_path / "generated-overlay.png"
+    path.write_bytes(_overlay_png())
+    path.chmod(0o640)
+    prompt = CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX + " " + detail
+    drawing = _hybrid_drawing().model_copy(update={"generation_prompt": prompt})
+
+    request = _build_request(
+        workflow_id="workflow_" + "3" * 32,
+        result_revision_id="rev_" + "4" * 32,
+        drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+        drawing=drawing,
+        binding=LocalImageProviderBinding.model_validate(_binding_value()),
+        overlay_path=path,
+    )
+
+    assert f"Subject: {detail}. " in request.generation.prompt
+
+
+@pytest.mark.parametrize(
+    "detail",
+    (
+        "사람을 배치하고 문자만 포함하지 않는다",
+        "사람을 그리고 숫자는 넣지 않는다",
+        "include one person but do not include text",
+    ),
+)
+def test_v6_hybrid_request_rejects_positive_human_action_before_other_exclusion(
+    tmp_path: Path,
+    detail: str,
+) -> None:
+    path = tmp_path / "generated-overlay.png"
+    path.write_bytes(_overlay_png())
+    path.chmod(0o640)
+    prompt = CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX + " " + detail
+    drawing = _hybrid_drawing().model_copy(update={"generation_prompt": prompt})
+
+    with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_INPUT_INVALID"):
+        _build_request(
+            workflow_id="workflow_" + "5" * 32,
+            result_revision_id="rev_" + "6" * 32,
             drawing_hash=content_sha256(drawing.model_dump(mode="json")),
             drawing=drawing,
             binding=LocalImageProviderBinding.model_validate(_binding_value()),

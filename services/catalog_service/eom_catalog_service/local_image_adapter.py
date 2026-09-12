@@ -79,6 +79,23 @@ _FORBIDDEN_GPU_HUMAN_SUBJECT: Final = re.compile(
     r"학생|사람|소년|소녀|남자|여자|교사|선생|어린이|청소년)",
     re.IGNORECASE,
 )
+_HUMAN_EXCLUSION: Final = re.compile(
+    r"(?:없(?:이|는|도록)|제외(?:하|된|한다|하고)?|배제(?:하|된|한다|하고)?|"
+    r"(?:포함|배치|묘사|표현|등장)(?:하지|하지\s+않|하지\s+말)|"
+    r"(?:그리|넣)(?:지|지\s+않|지\s+말)|"
+    r"\b(?:must\s+not|do\s+not|not\s+included|excluded|absent)\b)",
+    re.IGNORECASE,
+)
+_HUMAN_AFFIRMATIVE_ACTION: Final = re.compile(
+    r"(?:배치|묘사|표현|포함|등장)(?:하고|하며|한다|하도록|해|하여|된|하는)|"
+    r"(?:그리|넣)(?:고|며|도록|어|어서|은|는)|"
+    r"\b(?:draw|include|show|depict|place|feature)(?:s|ed|ing)?\b",
+    re.IGNORECASE,
+)
+_HUMAN_AFFIRMATIVE_PREFIX: Final = re.compile(
+    r"\b(?:draw|include|show|depict|place|feature)\s+(?:(?:one|a|the|some)\s+)?$",
+    re.IGNORECASE,
+)
 _WORKFLOW_ID: Final = re.compile(r"^workflow_[0-9a-f]{32}$")
 _REVISION_ID: Final = re.compile(r"^rev_[0-9a-f]{32}$")
 _SHA256: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -211,7 +228,7 @@ def _build_request(
             forbidden in normalized_generation_prompt
             for forbidden in _FORBIDDEN_GENERATION_STYLE_TERMS
         )
-        or _FORBIDDEN_GPU_HUMAN_SUBJECT.search(drawing.generation_prompt)
+        or _contains_positive_human_subject(drawing.generation_prompt)
         or _FORBIDDEN_CHROMATIC_TERMS.search(drawing.generation_prompt)
     ):
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
@@ -276,6 +293,34 @@ def _build_request(
     )
     validate_contract("composite-request", request.model_dump(mode="json"))
     return request
+
+
+def _contains_positive_human_subject(value: str) -> bool:
+    """Reject human subjects while allowing an explicit bounded exclusion clause."""
+
+    for match in _FORBIDDEN_GPU_HUMAN_SUBJECT.finditer(value):
+        sentence_start = max(
+            value.rfind(marker, 0, match.start()) for marker in (".", "!", "?", ";", "\n")
+        )
+        sentence_end_candidates = tuple(
+            position
+            for marker in (".", "!", "?", ";", "\n")
+            if (position := value.find(marker, match.end())) >= 0
+        )
+        sentence_end = min(sentence_end_candidates, default=len(value))
+        before = value[max(sentence_start + 1, match.start() - 24) : match.start()]
+        after = value[match.end() : min(sentence_end, match.end() + 128)]
+        exclusion = _HUMAN_EXCLUSION.search(after)
+        if (
+            exclusion is not None
+            and _HUMAN_AFFIRMATIVE_PREFIX.search(before) is None
+            and _HUMAN_AFFIRMATIVE_ACTION.search(after[: exclusion.start()]) is None
+        ):
+            continue
+        if re.search(r"(?:\b(?:no|without)\s+)$", before, re.IGNORECASE):
+            continue
+        return True
+    return False
 
 
 def _overlay_pointer(path: Path) -> LocalImageOverlayInput:

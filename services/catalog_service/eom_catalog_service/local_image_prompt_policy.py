@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Final
 
-LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.0"
+LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.1"
 
 # These are provenance pins for the two reviewed inputs.  They are not runtime paths and the
 # Catalog service does not dereference repository files while handling a request.
