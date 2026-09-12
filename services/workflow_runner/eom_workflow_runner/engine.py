@@ -428,7 +428,7 @@ class WorkflowRunner:
 
     def serve_maintenance(self) -> None:
         while True:
-            if self.reconcile_expired_once() is None:
+            if self.maintain_once() is None:
                 time.sleep(self.runner_config.poll_interval_seconds)
 
     def reconcile(self, workflow_id: str) -> None:

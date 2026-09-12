@@ -8,15 +8,16 @@ generation.  The runner renews that exact identity while a command is executing 
 the beginning and end of every Workflow-runner database transaction.  A transaction whose lease was
 reclaimed or expired is rolled back before commit.
 
-Worker-capacity and worker-lease expiry reconciliation also has a maintenance-only entry point.  It
-never claims Workflow or control commands and may remain active while the command runner is
-deliberately held inactive.
+Worker-capacity and worker-lease expiry reconciliation plus automatic observation of idle Codex
+bindings also have a maintenance-only entry point.  It never claims Workflow or operator control
+commands and may remain active while the command runner is deliberately held inactive.
 
 ## Required design procedure
 
 1. **Responsibility and boundary.** The Workflow runner owns command claim, renewal, fencing, and
-   terminalization.  The maintenance loop owns expiry reconciliation only.  Workers and Catalog do
-   not inspect or mutate Workflow command leases.
+   terminalization.  The maintenance loop owns expiry reconciliation and bounded automatic
+   observation of due, idle Codex bindings.  Workers and Catalog do not inspect or mutate Workflow
+   command leases.
 2. **Canonical source.** `workflow_commands` is the canonical command/lease record.  The systemd
    runner and maintenance units are runtime materializations of the repository-owned unit files.
 3. **Entity and revision model.** `command_id` is the logical command.  `lease_generation` is its
@@ -46,8 +47,8 @@ deliberately held inactive.
 10. **Failure, retry, and idempotency.** A renewal database error fails the acquisition closed; the
     runner does not guess whether ownership survived.  A mismatched row is terminal lease loss.
     Reclaim always generates a different token and higher generation.  A stale executor cannot mark
-    the command succeeded or failed.  Maintenance reconciliation is idempotent and never dispatches
-    work.
+    the command succeeded or failed.  Maintenance reconciliation and automatic idle-binding
+    observation are idempotent and never dispatch work or claim operator commands.
 11. **Simpler alternative.** A longer fixed lease or a process-wide runner ID does not fence a stale
     executor.  Holding one database transaction during model execution would exhaust connections and
     retain locks for up to hours.  Per-acquisition fencing plus short heartbeats gives the required
@@ -56,5 +57,5 @@ deliberately held inactive.
 ## Operational boundary
 
 The maintenance unit may be active while `eom-workflow-runner.service` is under a deployment hold.
-Releasing a deployment hold remains a separate reviewed operation; maintenance does not start,
-approve, cancel, or otherwise execute queued commands.
+Releasing a deployment hold remains a separate reviewed operation; maintenance may refresh due,
+idle capability evidence but does not start, approve, cancel, or otherwise execute queued commands.
