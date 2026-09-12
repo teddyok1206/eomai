@@ -68,6 +68,7 @@ ANALYSIS_CONFIG_V15 = ROOT / "config/control-plane/knowledge-analysis-v15"
 ANALYSIS_CONFIG_V16 = ROOT / "config/control-plane/knowledge-analysis-v16"
 ANALYSIS_CONFIG_V17 = ROOT / "config/control-plane/knowledge-analysis-v17"
 ANALYSIS_CONFIG_V18 = ROOT / "config/control-plane/knowledge-analysis-v18"
+ANALYSIS_CONFIG_V19 = ROOT / "config/control-plane/knowledge-analysis-v19"
 
 
 def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version() -> None:
@@ -76,7 +77,7 @@ def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version
     )
 
     assert set(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS) == schema_versions
-    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 19))
+    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 20))
 
 
 def test_knowledge_analysis_v13_adds_parallel_capacity_without_changing_worker_semantics() -> None:
@@ -260,6 +261,39 @@ def test_knowledge_analysis_v18_preserves_v17_behavior_as_new_provenance_revisio
     ).read_bytes()
     assert (ANALYSIS_CONFIG_V16 / "instructions/knowledge-analysis.md").read_bytes() != (
         ANALYSIS_CONFIG_V17 / "instructions/knowledge-analysis.md"
+    ).read_bytes()
+
+
+def test_knowledge_analysis_v19_requires_the_complete_solution_semantic_closure() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V19)
+
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/19.0"
+    assert manifest.created_at.isoformat() == "2026-09-12T10:56:00+00:00"
+    assert manifest.compatible_workflow_protocols[-1] == "workflow-role/1.21.0"
+    instruction = (ANALYSIS_CONFIG_V19 / "instructions/knowledge-analysis.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(instruction.split())
+    for required in (
+        "exactly `{1, 2, ..., N}`",
+        "last step uses `CONCLUDE`",
+        "strictly earlier step",
+        "union of every `reasoning_step_ids`",
+        "exactly equal the set of all `solution_steps[*].step_id`",
+        "`problem_anchor_ids`",
+        "`answer_explanation_anchor_ids`",
+        "`ASSESSMENT_PATTERN`",
+        "`ITEM_ELEMENT`",
+        "at least one assessment-pattern or item-element target",
+        "`UNAVAILABLE` if and only if",
+        "Perform this checklist mechanically",
+    ):
+        assert required in normalized
+    assert (ANALYSIS_CONFIG_V18 / "instructions/platform.md").read_bytes() == (
+        ANALYSIS_CONFIG_V19 / "instructions/platform.md"
+    ).read_bytes()
+    assert (ANALYSIS_CONFIG_V18 / "instructions/knowledge-analysis.md").read_bytes() != (
+        ANALYSIS_CONFIG_V19 / "instructions/knowledge-analysis.md"
     ).read_bytes()
 
 
