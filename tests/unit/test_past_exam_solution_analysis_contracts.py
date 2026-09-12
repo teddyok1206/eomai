@@ -34,6 +34,7 @@ from eom_workflow.schemas import (
     WorkflowSchemaError,
     constrained_result_schema,
     load_codex_result_schema,
+    load_role_result_schema,
     validate_role_input,
     validate_role_result,
     validate_schema_message,
@@ -631,6 +632,123 @@ def test_v10_role_schema_and_request_projection_are_closed() -> None:
     assert isinstance(parsed, KnowledgeAnalysisProposalRoleResultV10)
     assert parsed.output.proposal.base_analysis_result_id == "knowledgeanalysisresult_" + "a" * 32
     assert len(load_codex_result_schema("knowledge-analysis-proposal-result@10.0")["$defs"]) == 4
+
+
+def test_v10_role_result_canonicalizes_only_set_like_collection_order() -> None:
+    result = _role_result_value()
+    output = cast(dict[str, Any], result["output"])
+    proposal = cast(dict[str, Any], output["proposal"])
+    report = cast(dict[str, Any], proposal["solution_report"])
+    first_step = cast(dict[str, Any], cast(list[dict[str, Any]], report["solution_steps"])[0])
+    first_step.update(
+        {
+            "step_id": "solutionstep_zeta",
+            "ordinal": 1,
+            "operation": "APPLY_CONCEPT",
+        }
+    )
+    second_step = deepcopy(first_step)
+    second_step.update(
+        {
+            "step_id": "solutionstep_alpha",
+            "ordinal": 2,
+            "operation": "CONCLUDE",
+            "depends_on_step_ids": ["solutionstep_zeta"],
+        }
+    )
+    report["solution_steps"] = [second_step, first_step]
+    report["concept_assessment_links"] = [
+        {
+            "concept_node_id": "knode_concept_motion",
+            "role": "REQUIRED_KNOWLEDGE",
+            "reasoning_step_ids": ["solutionstep_zeta"],
+            "assessment_pattern_node_ids": [],
+            "item_element_node_ids": ["knode_item_element_stem"],
+            "summary": "출제에 필요한 개념을 연결한다.",
+        },
+        {
+            "concept_node_id": "knode_concept_motion",
+            "role": "ANSWER_CRITERION",
+            "reasoning_step_ids": ["solutionstep_alpha"],
+            "assessment_pattern_node_ids": ["knode_assessment_pattern_reason"],
+            "item_element_node_ids": [],
+            "summary": "정답 판단 기준을 연결한다.",
+        },
+    ]
+    report["choice_diagnostics"] = [
+        {
+            "choice_key": "②",
+            "verdict": "INCORRECT",
+            "rationale": "풀이 단계와 비교한다.",
+            "targeted_misconception": "개념 적용 순서를 혼동한다.",
+            "reasoning_step_ids": ["solutionstep_zeta"],
+            "node_ids": ["knode_item_element_stem"],
+            "anchor_ids": ["anchor_problem"],
+        },
+        {
+            "choice_key": "①",
+            "verdict": "CORRECT",
+            "rationale": "두 풀이 단계를 함께 적용한다.",
+            "targeted_misconception": None,
+            "reasoning_step_ids": ["solutionstep_zeta", "solutionstep_alpha"],
+            "node_ids": ["knode_item_element_stem", "knode_concept_motion"],
+            "anchor_ids": ["anchor_problem", "anchor_answer"],
+        },
+    ]
+    report["unresolved_issues"] = [
+        {"code": "ZZZ_ISSUE", "summary": "두 번째 이슈", "anchor_ids": []},
+        {
+            "code": "AAA_ISSUE",
+            "summary": "첫 번째 이슈",
+            "anchor_ids": ["anchor_problem", "anchor_answer"],
+        },
+    ]
+
+    validate_schema_message(
+        load_role_result_schema("knowledge-analysis-proposal-result@10.0"),
+        result,
+        "knowledge-analysis-proposal-result@10.0",
+    )
+    with pytest.raises(ValidationError):
+        KnowledgeAnalysisProposalRoleResultV10.model_validate(result)
+
+    parsed = validate_role_result(
+        result,
+        "support",
+        "knowledge-analysis-proposal-result@10.0",
+    )
+    assert isinstance(parsed, KnowledgeAnalysisProposalRoleResultV10)
+    parsed_report = parsed.output.proposal.solution_report
+    assert tuple(step.ordinal for step in parsed_report.solution_steps) == (1, 2)
+    assert parsed_report.choice_diagnostics[0].choice_key == "①"
+    assert parsed_report.choice_diagnostics[0].reasoning_step_ids == (
+        "solutionstep_alpha",
+        "solutionstep_zeta",
+    )
+    assert parsed_report.choice_diagnostics[0].node_ids == (
+        "knode_concept_motion",
+        "knode_item_element_stem",
+    )
+    assert parsed_report.choice_diagnostics[0].anchor_ids == (
+        "anchor_answer",
+        "anchor_problem",
+    )
+    assert tuple(issue.code for issue in parsed_report.unresolved_issues) == (
+        "AAA_ISSUE",
+        "ZZZ_ISSUE",
+    )
+
+
+def test_v10_role_result_rejects_duplicate_before_order_canonicalization() -> None:
+    result = _role_result_value()
+    output = cast(dict[str, Any], result["output"])
+    proposal = cast(dict[str, Any], output["proposal"])
+    report = cast(dict[str, Any], proposal["solution_report"])
+    steps = cast(list[dict[str, Any]], report["solution_steps"])
+    steps[0]["node_ids"] = ["knode_concept_motion", "knode_concept_motion"]
+
+    with pytest.raises(WorkflowSchemaError, match="non-unique"):
+        validate_role_result(result, "support", "knowledge-analysis-proposal-result@10.0")
 
 
 def test_v10_constrained_schema_rejects_reference_outside_exact_base_index() -> None:

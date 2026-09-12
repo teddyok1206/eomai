@@ -59,6 +59,16 @@ Pydantic and Orchestrator validation remain authoritative after execution. The d
 intentional: schema-constrained generation prevents syntactically valid fabricated IDs, while the
 post-result resolver protects storage against drift or a nonconforming worker.
 
+JSON Schema validates every raw V10 worker message before any transformation and rejects duplicate
+set members. Because JSON Schema 2020-12 cannot express lexicographic array order, the workflow
+contract adapter then sorts only the bounded, semantically set-like report collections before
+Pydantic validation. It never adds, removes, substitutes, or deduplicates a value. Solution steps
+are ordered by their declared ordinal; the other collections use the same canonical keys enforced
+by their Pydantic models. This explicit O(n log n) representation boundary prevents harmless model
+ordering variance from becoming a failed analysis while preserving all membership, reference,
+closure, and uniqueness failures as hard errors. The largest affected collection has 64 members,
+and no normalized copy is persisted independently of the validated result Artifact.
+
 ## Access patterns and data structures
 
 The dominant read is an indexed lookup from Item Revision or base analysis run to the one accepted

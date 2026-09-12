@@ -625,6 +625,102 @@ def _filter_invalid_knowledge_analysis_v9_edges(value: object) -> object:
     return canonical
 
 
+def _canonicalize_knowledge_analysis_solution_result(value: object) -> object:
+    """Order bounded V10 set-like collections after raw JSON Schema validation.
+
+    The canonical schema rejects duplicate members before this function is called.  Sorting is the
+    only transformation: identities and values are never added, removed, replaced, or deduplicated.
+    Pydantic and the request-bound semantic resolver remain the authoritative closure checks.
+    """
+
+    if not isinstance(value, dict):
+        return value
+    output = value.get("output")
+    if not isinstance(output, dict):
+        return value
+    proposal = output.get("proposal")
+    if not isinstance(proposal, dict):
+        return value
+    report = proposal.get("solution_report")
+    if not isinstance(report, dict):
+        return value
+
+    canonical = copy.deepcopy(value)
+    canonical_output = _mapping(canonical, "output")
+    canonical_proposal = _mapping(canonical_output, "proposal")
+    canonical_report = _mapping(canonical_proposal, "solution_report")
+
+    solution_steps = canonical_report.get("solution_steps")
+    if isinstance(solution_steps, list):
+        for step in solution_steps:
+            if isinstance(step, dict):
+                for field_name in (
+                    "depends_on_step_ids",
+                    "node_ids",
+                    "item_element_node_ids",
+                    "anchor_ids",
+                ):
+                    values = step.get(field_name)
+                    if isinstance(values, list):
+                        values.sort()
+        solution_steps.sort(
+            key=lambda step: step.get("ordinal", 0) if isinstance(step, dict) else 0
+        )
+
+    concept_links = canonical_report.get("concept_assessment_links")
+    if isinstance(concept_links, list):
+        for link in concept_links:
+            if isinstance(link, dict):
+                for field_name in (
+                    "reasoning_step_ids",
+                    "assessment_pattern_node_ids",
+                    "item_element_node_ids",
+                ):
+                    values = link.get(field_name)
+                    if isinstance(values, list):
+                        values.sort()
+        concept_links.sort(
+            key=lambda link: (
+                (
+                    link.get("concept_node_id", ""),
+                    link.get("role", ""),
+                )
+                if isinstance(link, dict)
+                else ("", "")
+            )
+        )
+
+    choice_diagnostics = canonical_report.get("choice_diagnostics")
+    if isinstance(choice_diagnostics, list):
+        for choice in choice_diagnostics:
+            if isinstance(choice, dict):
+                for field_name in ("reasoning_step_ids", "node_ids", "anchor_ids"):
+                    values = choice.get(field_name)
+                    if isinstance(values, list):
+                        values.sort()
+        choice_diagnostics.sort(
+            key=lambda choice: choice.get("choice_key", "") if isinstance(choice, dict) else ""
+        )
+
+    comparison = canonical_report.get("official_explanation_comparison")
+    if isinstance(comparison, dict):
+        answer_anchor_ids = comparison.get("answer_explanation_anchor_ids")
+        if isinstance(answer_anchor_ids, list):
+            answer_anchor_ids.sort()
+
+    unresolved_issues = canonical_report.get("unresolved_issues")
+    if isinstance(unresolved_issues, list):
+        for issue in unresolved_issues:
+            if isinstance(issue, dict):
+                anchor_ids = issue.get("anchor_ids")
+                if isinstance(anchor_ids, list):
+                    anchor_ids.sort()
+        unresolved_issues.sort(
+            key=lambda issue: issue.get("code", "") if isinstance(issue, dict) else ""
+        )
+    return canonical
+
+
 def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult:
     canonical_value = value
     if (
@@ -645,6 +741,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
     validate_schema_message(load_role_result_schema(schema_id), canonical_value, schema_id)
     if schema_id == "knowledge-analysis-proposal-result@9.0" and role == "support":
         canonical_value = _filter_invalid_knowledge_analysis_v9_edges(canonical_value)
+    elif schema_id == "knowledge-analysis-proposal-result@10.0" and role == "support":
+        canonical_value = _canonicalize_knowledge_analysis_solution_result(canonical_value)
     try:
         if schema_id == "authoring-result@4.0" and role == "authoring":
             return GeneratedAuthoringRoleResultV4.model_validate(value)
