@@ -19,6 +19,9 @@ from eom_orchestrator.knowledge_item_bootstrap import (
     EXPECTED_V9_BASE_INSTRUCTION_BUNDLE_IDS,
     EXPECTED_V9_BASE_INSTRUCTION_BUNDLE_REVISION_IDS,
     EXPECTED_V9_BASE_INSTRUCTION_MEMBER_SHA256S,
+    EXPECTED_V10_BASE_INSTRUCTION_BUNDLE_IDS,
+    EXPECTED_V10_BASE_INSTRUCTION_BUNDLE_REVISION_IDS,
+    EXPECTED_V10_BASE_INSTRUCTION_MEMBER_SHA256S,
     KnowledgeItemBootstrapManifest,
     load_knowledge_item_bootstrap_manifest,
 )
@@ -36,10 +39,12 @@ CONFIG_V6 = ROOT / "config/control-plane/knowledge-grounded-item-v6"
 CONFIG_V7 = ROOT / "config/control-plane/knowledge-grounded-item-v7"
 CONFIG_V8 = ROOT / "config/control-plane/knowledge-grounded-item-v8"
 CONFIG_V9 = ROOT / "config/control-plane/knowledge-grounded-item-v9"
+CONFIG_V10 = ROOT / "config/control-plane/knowledge-grounded-item-v10"
 STANDARD_CONFIG_V9 = ROOT / "config/control-plane/standard-item-v9"
 STANDARD_CONFIG_V10 = ROOT / "config/control-plane/standard-item-v10"
 STANDARD_CONFIG_V11 = ROOT / "config/control-plane/standard-item-v11"
 STANDARD_CONFIG_V12 = ROOT / "config/control-plane/standard-item-v12"
+STANDARD_CONFIG_V13 = ROOT / "config/control-plane/standard-item-v13"
 
 
 def test_knowledge_item_bootstrap_is_schema_first_and_exact() -> None:
@@ -356,6 +361,35 @@ def test_knowledge_item_v9_projects_exact_evidence_usage_standard_successor() ->
     )
     assert hashlib.sha256((CONFIG_V9 / "bootstrap.yaml").read_bytes()).hexdigest() == (
         "5e1e9eadd79daadfaeba268aea813311b109703aab56b42842bc4d50dcdb4804"
+    )
+
+
+def test_knowledge_item_v10_pins_exact_two_prompt_standard_successor() -> None:
+    standard = load_standard_bootstrap_manifest(STANDARD_CONFIG_V13)
+    manifest = load_knowledge_item_bootstrap_manifest(CONFIG_V10)
+    value = manifest.model_dump(mode="json")
+
+    validate_control_contract("knowledge-item-control-bootstrap-v10", value)
+    assert manifest.schema_version == "knowledge-item-control-bootstrap/10.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.20.0",)
+    assert manifest.created_at.isoformat() == "2026-09-12T00:05:00+00:00"
+    assert standard.created_at < manifest.created_at
+    assert manifest.base_instruction_bundle_ids == dict(EXPECTED_V10_BASE_INSTRUCTION_BUNDLE_IDS)
+    assert manifest.base_instruction_bundle_revision_ids == dict(
+        EXPECTED_V10_BASE_INSTRUCTION_BUNDLE_REVISION_IDS
+    )
+    assert manifest.base_instruction_bundle_revision_ids == {
+        role: control_bootstrap._stable_id("instrrev_", f"standard-item:{role}:v13")
+        for role in ("authoring", "image", "review", "item_management")
+    }
+    assert manifest.base_instruction_member_sha256s == dict(
+        EXPECTED_V10_BASE_INSTRUCTION_MEMBER_SHA256S
+    )
+    assert manifest.base_instruction_member_sha256s["image"] == (
+        "sha256:4641d2fdeb7d78431d2b00190c117c6b27433e02f14c3750a89fbefbde0cdfb2"
+    )
+    assert hashlib.sha256((CONFIG_V10 / "bootstrap.yaml").read_bytes()).hexdigest() == (
+        "14d2a192cd6f9c92d8e50ca8ca639e2c0346a25da9c0c03aff6398892b1cfe36"
     )
 
 

@@ -104,11 +104,32 @@ EXPECTED_V9_BASE_INSTRUCTION_MEMBER_SHA256S = MappingProxyType(
         ),
     }
 )
+EXPECTED_V10_BASE_INSTRUCTION_BUNDLE_REVISION_IDS = MappingProxyType(
+    {
+        "authoring": "instrrev_4461aab9c805e6d0ebba20221f5ff106",
+        "image": "instrrev_bf70df3ccaba7fbd7914ceaeab0668d0",
+        "review": "instrrev_49e3e2b33cf9cacd577776b09f8ba5ae",
+        "item_management": "instrrev_b605d7ca148a0172c0818501fc5f16ed",
+    }
+)
+EXPECTED_V10_BASE_INSTRUCTION_BUNDLE_IDS = EXPECTED_V9_BASE_INSTRUCTION_BUNDLE_IDS
+EXPECTED_V10_BASE_INSTRUCTION_MEMBER_SHA256S = MappingProxyType(
+    {
+        "platform": "sha256:5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b",
+        "authoring": "sha256:b69abc29477482e290d63360ddfbb4699f775d5f97fa2eed37197f97df20cf0d",
+        "image": "sha256:4641d2fdeb7d78431d2b00190c117c6b27433e02f14c3750a89fbefbde0cdfb2",
+        "review": "sha256:723fb4b1f7e7987be1b98389cbb0ecf12dce0cced2c262023446534459ce1625",
+        "item_management": (
+            "sha256:8ba95a2d3dbad009d04dd7aee122a1b592429cebee08fa738fe26798ce1194ed"
+        ),
+    }
+)
 PINNED_STANDARD_INSTRUCTION_REVISION_BY_KNOWLEDGE_SCHEMA = MappingProxyType(
     {
         "knowledge-item-control-bootstrap/7.0": 10,
         "knowledge-item-control-bootstrap/8.0": 11,
         "knowledge-item-control-bootstrap/9.0": 12,
+        "knowledge-item-control-bootstrap/10.0": 13,
     }
 )
 
@@ -164,6 +185,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
         "knowledge-item-control-bootstrap/7.0",
         "knowledge-item-control-bootstrap/8.0",
         "knowledge-item-control-bootstrap/9.0",
+        "knowledge-item-control-bootstrap/10.0",
     ]
     preset_key: Literal["knowledge-grounded-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -231,6 +253,17 @@ class KnowledgeItemBootstrapManifest(BaseModel):
                 EXPECTED_V9_BASE_INSTRUCTION_MEMBER_SHA256S
             ):
                 raise ValueError("knowledge item V9 base instruction hashes differ")
+        elif self.schema_version == "knowledge-item-control-bootstrap/10.0":
+            if self.base_instruction_bundle_ids != dict(EXPECTED_V10_BASE_INSTRUCTION_BUNDLE_IDS):
+                raise ValueError("knowledge item V10 base instruction bundle identities differ")
+            if self.base_instruction_bundle_revision_ids != dict(
+                EXPECTED_V10_BASE_INSTRUCTION_BUNDLE_REVISION_IDS
+            ):
+                raise ValueError("knowledge item V10 base instruction revisions differ")
+            if self.base_instruction_member_sha256s != dict(
+                EXPECTED_V10_BASE_INSTRUCTION_MEMBER_SHA256S
+            ):
+                raise ValueError("knowledge item V10 base instruction hashes differ")
         elif (
             self.base_instruction_bundle_ids is not None
             or self.base_instruction_bundle_revision_ids is not None
@@ -247,6 +280,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
             "knowledge-item-control-bootstrap/7.0": "workflow-role/1.19.0",
             "knowledge-item-control-bootstrap/8.0": "workflow-role/1.19.0",
             "knowledge-item-control-bootstrap/9.0": "workflow-role/1.20.0",
+            "knowledge-item-control-bootstrap/10.0": "workflow-role/1.20.0",
         }[self.schema_version]
         if self.compatible_workflow_protocols != (expected_protocol,):
             raise ValueError("knowledge item workflow protocol differs")
@@ -298,6 +332,7 @@ def load_knowledge_item_bootstrap_manifest(
             "knowledge-item-control-bootstrap/7.0": "knowledge-item-control-bootstrap-v7",
             "knowledge-item-control-bootstrap/8.0": "knowledge-item-control-bootstrap-v8",
             "knowledge-item-control-bootstrap/9.0": "knowledge-item-control-bootstrap-v9",
+            "knowledge-item-control-bootstrap/10.0": "knowledge-item-control-bootstrap-v10",
         }.get(schema_version)
         if schema_name is None:
             raise ValueError("knowledge item bootstrap schema version is unsupported")
@@ -613,6 +648,7 @@ def _require_base_instruction_bundle_identities(
     if manifest.schema_version not in {
         "knowledge-item-control-bootstrap/8.0",
         "knowledge-item-control-bootstrap/9.0",
+        "knowledge-item-control-bootstrap/10.0",
     }:
         return
     expected = manifest.base_instruction_bundle_ids

@@ -734,6 +734,8 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
     for control_schema in (
         "standard-control-bootstrap-v12",
         "knowledge-item-control-bootstrap-v9",
+        "standard-control-bootstrap-v13",
+        "knowledge-item-control-bootstrap-v10",
     ):
         assert control_schema in deployment
     for runtime in (

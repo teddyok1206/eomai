@@ -2036,6 +2036,8 @@ if not {
     "knowledge-item-control-bootstrap-v8",
     "standard-control-bootstrap-v12",
     "knowledge-item-control-bootstrap-v9",
+    "standard-control-bootstrap-v13",
+    "knowledge-item-control-bootstrap-v10",
 }.issubset(control_schema_names):
     raise SystemExit("control-policy successor schema inventory is incomplete")
 for schema_name in control_schema_names:

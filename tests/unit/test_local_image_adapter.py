@@ -228,7 +228,7 @@ def test_prompt_policy_revision_is_part_of_provider_request_identity(
     monkeypatch.setattr(
         local_image_adapter,
         "LOCAL_GPU_PROMPT_POLICY_REVISION",
-        "local-gpu-image-prompt-policy/1.4",
+        "local-gpu-image-prompt-policy/1.5",
     )
     changed = _build_request(
         workflow_id="workflow_" + "3" * 32,
@@ -310,11 +310,11 @@ def test_v6_hybrid_request_projects_worker_alt_text_and_keeps_team_prompt_in_ide
     assert request.generation.request_id.startswith("imgreq_")
 
 
-def test_local_gpu_prompt_policy_pins_two_unchanged_reviewed_sources() -> None:
+def test_local_gpu_prompt_policy_pins_both_team_lead_sources_and_kice_guide() -> None:
     root = Path(__file__).resolve().parents[2]
 
-    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.3"
-    assert len(LOCAL_GPU_PROMPT_SOURCE_PINS) == 2
+    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.4"
+    assert len(LOCAL_GPU_PROMPT_SOURCE_PINS) == 3
     for relative_path, expected_sha256 in LOCAL_GPU_PROMPT_SOURCE_PINS:
         source = root / relative_path
         assert source.is_file()

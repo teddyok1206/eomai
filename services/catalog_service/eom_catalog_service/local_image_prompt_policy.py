@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Final
 
-LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.3"
+LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.4"
 LOCAL_GPU_MAX_SUBJECT_CHARS: Final = 50
 
-# These are provenance pins for the two reviewed inputs.  They are not runtime paths and the
+# These are provenance pins for the three reviewed inputs. They are not runtime paths and the
 # Catalog service does not dereference repository files while handling a request.
 LOCAL_GPU_PROMPT_SOURCE_PINS: Final = (
     (
@@ -16,15 +16,20 @@ LOCAL_GPU_PROMPT_SOURCE_PINS: Final = (
         "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435",
     ),
     (
+        "config/control-plane/standard-item-v6/references/guidance/"
+        "content-team-hwp-question-editor-handoff-v1.md",
+        "sha256:6fdfd8f9dbc67abfcac9ef2761059bbe841a8b994640925fef30388d95a00ee5",
+    ),
+    (
         "content/image-specs/kice-integrated-science-illustration-v1.md",
         "sha256:9acdb63cfbc69583d852b386fddb205dfc6efc493a6b68195375b222139396ed",
     ),
 )
 
 # The fixed SSD-1B provider has two 77-token CLIP encoders. The complete reviewed team-lead
-# instruction remains pinned in the drawing and its hash; the GPU receives the worker-authored,
-# concise alt text as its semantic subject. Authoritative labels and geometry remain in the
-# deterministic overlay.
+# instructions and editor layout contract remain pinned outside the model prompt; the GPU receives
+# the worker-authored concise alt text as its semantic subject. Authoritative scientific labels and
+# geometry remain in the deterministic overlay, while panel labels remain editable HWPX text.
 LOCAL_GPU_RASTER_REQUIREMENTS: Final = ("monochrome:",)
 LOCAL_GPU_BACKGROUND_REQUIREMENTS: Final = ("monochrome:",)
 

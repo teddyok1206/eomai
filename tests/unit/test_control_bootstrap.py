@@ -23,6 +23,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_STANDARD_V10_REFERENCE_KEYS,
     EXPECTED_STANDARD_V11_REFERENCE_KEYS,
     EXPECTED_STANDARD_V12_REFERENCE_KEYS,
+    EXPECTED_STANDARD_V13_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
@@ -50,6 +51,7 @@ CONFIG_V9 = ROOT / "config/control-plane/standard-item-v9"
 CONFIG_V10 = ROOT / "config/control-plane/standard-item-v10"
 CONFIG_V11 = ROOT / "config/control-plane/standard-item-v11"
 CONFIG_V12 = ROOT / "config/control-plane/standard-item-v12"
+CONFIG_V13 = ROOT / "config/control-plane/standard-item-v13"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -603,6 +605,7 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/10.0": 10,
         "standard-control-bootstrap/11.0": 11,
         "standard-control-bootstrap/12.0": 12,
+        "standard-control-bootstrap/13.0": 13,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
@@ -643,6 +646,7 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
         "standard-control-bootstrap/10.0": 4,
         "standard-control-bootstrap/11.0": 4,
         "standard-control-bootstrap/12.0": 4,
+        "standard-control-bootstrap/13.0": 5,
     }
 
 
@@ -894,6 +898,60 @@ def test_standard_bootstrap_v12_defines_conditional_evidence_usage_attestation()
     }
     for relative_path, expected in expected_sha256.items():
         assert hashlib.sha256((CONFIG_V12 / relative_path).read_bytes()).hexdigest() == expected
+
+
+def test_standard_bootstrap_v13_projects_both_team_lead_sources_to_image_role() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V13)
+
+    assert manifest.schema_version == "standard-control-bootstrap/13.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.20.0",)
+    assert manifest.created_at.isoformat() == "2026-09-12T00:00:00+00:00"
+    assert load_standard_bootstrap_manifest(CONFIG_V12).created_at < manifest.created_at
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 13
+    assert STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version] == 5
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V13_REFERENCE_KEYS
+    )
+    image_role = next(role for role in manifest.roles if role.role == "image")
+    assert image_role.reference_keys == (
+        "general-knowledge-provenance",
+        "content-team-integrated-science-authoring-v05",
+        "content-team-hwp-question-editor-handoff-v1",
+        "kice-integrated-science-illustration",
+    )
+    image_instruction = (CONFIG_V13 / image_role.instruction_path).read_text(encoding="utf-8")
+    for required in (
+        "content-team-integrated-science-authoring-v05.md",
+        "content-team-hwp-question-editor-handoff-v1.md",
+        "kice-integrated-science-illustration-v1.md",
+        "One IMAGE produces one PNG with an empty panel label",
+        "Two IMAGE members",
+        "editable HWPX text",
+        "must not be rasterized",
+        "mixed\nIMAGE/TABLE layout preserves its actual ordinal",
+        "deterministic SVG overlay",
+    ):
+        assert required in image_instruction
+    assert hashlib.sha256(image_instruction.encode()).hexdigest() == (
+        "4641d2fdeb7d78431d2b00190c117c6b27433e02f14c3750a89fbefbde0cdfb2"
+    )
+    assert hashlib.sha256((CONFIG_V13 / "bootstrap.yaml").read_bytes()).hexdigest() == (
+        "c8c71e7c33b10f11076736b816eee3862cba1c544d0908c2cea3cfc7bbffff8f"
+    )
+    for unchanged in ("platform.md", "authoring.md", "review.md", "item-management.md"):
+        assert (CONFIG_V13 / "instructions" / unchanged).read_bytes() == (
+            CONFIG_V12 / "instructions" / unchanged
+        ).read_bytes()
+
+
+def test_standard_bootstrap_v13_rejects_image_role_without_handoff_reference() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V13)
+    forged = manifest.model_dump(mode="json")
+    image_role = next(role for role in forged["roles"] if role["role"] == "image")
+    image_role["reference_keys"].remove("content-team-hwp-question-editor-handoff-v1")
+
+    with pytest.raises(ValidationError, match="role reference map differs"):
+        StandardBootstrapManifest.model_validate(forged)
 
 
 def test_standard_bootstrap_v6_pins_source_prompt_and_handoff_profile() -> None:
