@@ -1352,6 +1352,7 @@ class WorkflowCatalogService:
             "1.14.0",
             "1.15.0",
             "1.15.1",
+            "1.15.2",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1359,7 +1360,13 @@ class WorkflowCatalogService:
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "content-team pack requires the V3 item brief",
                 )
-            if release_version in {"1.13.0", "1.14.0", "1.15.0", "1.15.1"} and (
+            if release_version in {
+                "1.13.0",
+                "1.14.0",
+                "1.15.0",
+                "1.15.1",
+                "1.15.2",
+            } and (
                 request.image_mode != "required"
                 or request.profiles is None
                 or request.profiles.image != "generated-stimulus-drawing"
