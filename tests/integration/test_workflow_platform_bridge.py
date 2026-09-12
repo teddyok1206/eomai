@@ -5,13 +5,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
+from eom_orchestrator.models import ArtifactRevisionRecord, JobEventRecord, JobRecord
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_orchestrator.settings import Settings
+from eom_orchestrator.state_machine import JobState
 from eom_orchestrator.worker import CodexWorkerAdapter, WorkerRun
 from eom_orchestrator.worker_registry import WorkerSlot
-from eom_workflow.models import ArtifactPointer, WorkflowRequest
-from sqlalchemy import Engine
+from eom_workflow.models import ArtifactPointer, WorkerRequest
+from sqlalchemy import Engine, select
 from sqlalchemy.engine import Connection, RootTransaction
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -187,7 +188,7 @@ def test_workflow_role_uses_existing_platform_job_and_artifact_path(
                 step_key=role,
                 attempt=1,
                 role=role,
-                request=WorkflowRequest(
+                request=WorkerRequest(
                     request_name="PLACEHOLDER_REQUEST",
                     image_mode="required",
                 ),
@@ -236,7 +237,7 @@ def test_workflow_role_recovers_completed_worker_after_runner_loss(
             step_key="authoring",
             attempt=1,
             role="authoring",
-            request=WorkflowRequest(
+            request=WorkerRequest(
                 request_name="PLACEHOLDER_REQUEST",
                 image_mode="required",
             ),
@@ -268,6 +269,89 @@ def test_workflow_role_recovers_completed_worker_after_runner_loss(
         revision = session.get(ArtifactRevisionRecord, recovered.revision_id)
         assert revision is not None
         assert Path(revision.nas_path, "result.json").is_file()
+    finally:
+        session.close()
+        outer.rollback()
+        connection.close()
+
+
+@pytest.mark.parametrize("interrupted_state", ["CREATED", "VALIDATED"])
+def test_workflow_role_replay_resumes_exact_pre_execution_job(
+    integration_engine: Engine,
+    tmp_path: Path,
+    interrupted_state: str,
+) -> None:
+    adapter = FakeStructuredAdapter()
+    orchestrator, session, resources = _orchestrator(integration_engine, tmp_path, adapter)
+    connection, outer = resources
+    original_transition = orchestrator._transition
+    interrupted = False
+
+    def interrupt_transition(
+        job_id: str,
+        target: JobState,
+        event: str,
+        data: dict[str, object] | None = None,
+    ) -> None:
+        nonlocal interrupted
+        if not interrupted and event == "REQUEST_VALIDATED":
+            interrupted = True
+            if interrupted_state == "CREATED":
+                raise SimulatedRunnerLoss
+            original_transition(job_id, target, event, data)
+            raise SimulatedRunnerLoss
+        original_transition(job_id, target, event, data)
+
+    def submit() -> JobRecord:
+        return orchestrator.submit_workflow_role(
+            workflow_id="workflow_0123456789abcdef0123456789abcdef",
+            step_run_id="steprun_0123456789abcdef0123456789abcdef",
+            step_key="authoring",
+            attempt=1,
+            role="authoring",
+            request=WorkerRequest(
+                request_name="PLACEHOLDER_REQUEST",
+                image_mode="required",
+            ),
+            upstream_artifacts=(),
+            result_schema="authoring-result@1.0",
+            idempotency_key=f"workflow-bridge-pre-execution-{interrupted_state.lower()}",
+            prompt_path=Path("content/prompt-templates/placeholders/authoring.txt"),
+        )
+
+    try:
+        orchestrator._transition = interrupt_transition  # type: ignore[method-assign]
+        with pytest.raises(SimulatedRunnerLoss):
+            submit()
+        partial = (
+            session.query(JobRecord)
+            .filter_by(
+                idempotency_key=(f"workflow-bridge-pre-execution-{interrupted_state.lower()}")
+            )
+            .one()
+        )
+        session.refresh(partial)
+        assert partial.status == interrupted_state
+        assert adapter.calls == []
+
+        orchestrator._transition = original_transition  # type: ignore[method-assign]
+        recovered = submit()
+
+        assert recovered.job_id == partial.job_id
+        assert recovered.status == "SUCCEEDED"
+        assert adapter.calls == ["authoring"]
+        events = tuple(
+            session.scalars(
+                select(JobEventRecord)
+                .where(JobEventRecord.job_id == partial.job_id)
+                .order_by(JobEventRecord.sequence)
+            )
+        )
+        assert [event.event for event in events[:3]] == [
+            "JOB_CREATED",
+            "REQUEST_VALIDATED",
+            "JOB_QUEUED",
+        ]
     finally:
         session.close()
         outer.rollback()

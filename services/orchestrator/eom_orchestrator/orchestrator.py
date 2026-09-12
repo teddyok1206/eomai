@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal, cast
 from uuid import uuid4
 
-from eom_identifiers import new_job_id, new_logical_artifact_id, new_revision_id
+from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
 from eom_protocol import (
     ArtifactSpec,
     ErrorCode,
@@ -108,6 +108,61 @@ RETRYABLE_CONTROL_ADMISSION_ERRORS = frozenset(
         "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE",
     }
 )
+
+
+WorkflowRoleRequest = (
+    WorkerRequest
+    | KnowledgeAnalysisWorkerRequest
+    | LegacyItemExtractionWorkerRequest
+    | LegacyItemEditorialCompatibilityWorkerRequest
+)
+
+
+def _validated_workflow_role_replay(
+    existing: JobRecord,
+    *,
+    workflow_id: str,
+    step_run_id: str,
+    attempt: int,
+    role: str,
+    request: WorkflowRoleRequest,
+    upstream_artifacts: tuple[ArtifactPointer, ...],
+    result_schema: str,
+) -> tuple[RoleWorkerInput, dict[str, object]]:
+    """Bind one idempotent replay to the exact immutable worker input."""
+
+    try:
+        worker_input = RoleWorkerInput.model_validate(existing.request)
+    except ValidationError as exc:
+        raise ValueError("stored workflow role input is invalid") from exc
+    input_document = worker_input.model_dump(mode="json")
+    expected_task_type = f"workflow_{role}"
+    expected_protocol = result_schema_protocol(result_schema)
+    stored_request_hash = content_sha256(
+        {
+            "protocol_version": worker_input.protocol_version,
+            "task_type": expected_task_type,
+            "request": input_document,
+        }
+    )
+    if (
+        existing.job_id != worker_input.job_id
+        or existing.logical_artifact_id != worker_input.artifact.logical_artifact_id
+        or existing.revision_id != worker_input.artifact.revision_id
+        or existing.task_type != expected_task_type
+        or existing.protocol_version != worker_input.protocol_version
+        or worker_input.protocol_version != expected_protocol
+        or existing.request_hash != stored_request_hash
+        or worker_input.workflow_id != workflow_id
+        or worker_input.step_run_id != step_run_id
+        or worker_input.attempt != attempt
+        or worker_input.role != role
+        or worker_input.request.model_dump(mode="json") != request.model_dump(mode="json")
+        or worker_input.upstream_artifacts != upstream_artifacts
+    ):
+        raise ValueError("workflow role idempotency key conflicts with stored job")
+    validate_role_input(input_document, role, worker_input.protocol_version)
+    return worker_input, input_document
 
 
 class Orchestrator:
@@ -252,12 +307,7 @@ class Orchestrator:
         step_key: str,
         attempt: int,
         role: str,
-        request: (
-            WorkerRequest
-            | KnowledgeAnalysisWorkerRequest
-            | LegacyItemExtractionWorkerRequest
-            | LegacyItemEditorialCompatibilityWorkerRequest
-        ),
+        request: WorkflowRoleRequest,
         upstream_artifacts: tuple[ArtifactPointer, ...],
         result_schema: str,
         idempotency_key: str,
@@ -270,26 +320,27 @@ class Orchestrator:
         existing = self._job_by_idempotency_key(idempotency_key)
         recovery_state: JobState | None = None
         if existing is not None:
-            stored = existing.request
-            if (
-                stored.get("workflow_id") != workflow_id
-                or stored.get("step_run_id") != step_run_id
-                or stored.get("role") != role
-                or stored.get("attempt") != attempt
-            ):
-                raise ValueError("workflow role idempotency key conflicts with stored job")
-            existing_state = JobState(existing.status)
+            worker_input, input_document = _validated_workflow_role_replay(
+                existing,
+                workflow_id=workflow_id,
+                step_run_id=step_run_id,
+                attempt=attempt,
+                role=role,
+                request=request,
+                upstream_artifacts=upstream_artifacts,
+                result_schema=result_schema,
+            )
+            job_id = existing.job_id
+            artifact = worker_input.artifact
+            protocol_version = worker_input.protocol_version
+            existing_state = self._resume_pre_execution_job(job_id)
+            existing = self.get_job(job_id)
             if existing_state in TERMINAL_STATES:
                 return existing
             if existing_state in {JobState.RUNNING, JobState.VALIDATING_RESULT}:
                 recovery_state = existing_state
             elif existing_state is not JobState.QUEUED:
                 return existing
-            job_id = existing.job_id
-            worker_input = RoleWorkerInput.model_validate(existing.request)
-            input_document = worker_input.model_dump(mode="json")
-            artifact = worker_input.artifact
-            protocol_version = worker_input.protocol_version
         else:
             job_id = new_job_id()
             artifact = WorkflowArtifactSpec(
@@ -742,6 +793,22 @@ class Orchestrator:
                 except (ControlPlaneError, SQLAlchemyError, KeyError):
                     LOGGER.exception("failed to release worker capacity lease")
         return self.get_job(job_id)
+
+    def _resume_pre_execution_job(self, job_id: str) -> JobState:
+        """Advance only unambiguous pre-worker states under one row lock."""
+
+        with transaction(self.sessions) as session:
+            job = session.execute(
+                select(JobRecord).where(JobRecord.job_id == job_id).with_for_update()
+            ).scalar_one()
+            state = JobState(job.status)
+            if state is JobState.CREATED:
+                transition_job(session, job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
+                state = JobState.VALIDATED
+            if state is JobState.VALIDATED:
+                transition_job(session, job_id, JobState.QUEUED, "JOB_QUEUED")
+                state = JobState.QUEUED
+            return state
 
     def _job_by_idempotency_key(self, idempotency_key: str) -> JobRecord | None:
         with self.sessions() as session:
