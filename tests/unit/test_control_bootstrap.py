@@ -67,6 +67,7 @@ ANALYSIS_CONFIG_V14 = ROOT / "config/control-plane/knowledge-analysis-v14"
 ANALYSIS_CONFIG_V15 = ROOT / "config/control-plane/knowledge-analysis-v15"
 ANALYSIS_CONFIG_V16 = ROOT / "config/control-plane/knowledge-analysis-v16"
 ANALYSIS_CONFIG_V17 = ROOT / "config/control-plane/knowledge-analysis-v17"
+ANALYSIS_CONFIG_V18 = ROOT / "config/control-plane/knowledge-analysis-v18"
 
 
 def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version() -> None:
@@ -75,7 +76,7 @@ def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version
     )
 
     assert set(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS) == schema_versions
-    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 18))
+    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 19))
 
 
 def test_knowledge_analysis_v13_adds_parallel_capacity_without_changing_worker_semantics() -> None:
@@ -242,6 +243,20 @@ def test_knowledge_analysis_v17_makes_every_solution_id_order_explicit() -> None
         assert required in normalized
     assert (ANALYSIS_CONFIG_V16 / "instructions/platform.md").read_bytes() == (
         ANALYSIS_CONFIG_V17 / "instructions/platform.md"
+    ).read_bytes()
+
+
+def test_knowledge_analysis_v18_preserves_v17_behavior_as_new_provenance_revision() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V18)
+
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/18.0"
+    assert manifest.created_at.isoformat() == "2026-09-12T10:45:00+00:00"
+    assert manifest.compatible_workflow_protocols[-1] == "workflow-role/1.21.0"
+    assert (ANALYSIS_CONFIG_V17 / "instructions/platform.md").read_bytes() == (
+        ANALYSIS_CONFIG_V18 / "instructions/platform.md"
+    ).read_bytes()
+    assert (ANALYSIS_CONFIG_V17 / "instructions/knowledge-analysis.md").read_bytes() == (
+        ANALYSIS_CONFIG_V18 / "instructions/knowledge-analysis.md"
     ).read_bytes()
     assert (ANALYSIS_CONFIG_V16 / "instructions/knowledge-analysis.md").read_bytes() != (
         ANALYSIS_CONFIG_V17 / "instructions/knowledge-analysis.md"

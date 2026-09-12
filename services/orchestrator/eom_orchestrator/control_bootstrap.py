@@ -204,7 +204,7 @@ STANDARD_COMPATIBLE_CURRENT_CAPACITY_REVISIONS = MappingProxyType(
     }
 )
 KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(
-    {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 18)}
+    {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 19)}
 )
 
 
@@ -428,6 +428,7 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
         "knowledge-analysis-control-bootstrap/15.0",
         "knowledge-analysis-control-bootstrap/16.0",
         "knowledge-analysis-control-bootstrap/17.0",
+        "knowledge-analysis-control-bootstrap/18.0",
     ]
     preset_key: Literal["knowledge-analysis"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -467,6 +468,7 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
         elif self.schema_version in {
             "knowledge-analysis-control-bootstrap/16.0",
             "knowledge-analysis-control-bootstrap/17.0",
+            "knowledge-analysis-control-bootstrap/18.0",
         }:
             expected_protocols = (
                 "workflow-role/1.4.0",
@@ -987,6 +989,7 @@ def bootstrap_knowledge_analysis_control_plane(
         "knowledge-analysis-control-bootstrap/15.0",
         "knowledge-analysis-control-bootstrap/16.0",
         "knowledge-analysis-control-bootstrap/17.0",
+        "knowledge-analysis-control-bootstrap/18.0",
     }
     support_slots = tuple(
         slot for slot in registry.config.slots if str(slot.role) == "support" and slot.enabled
