@@ -561,6 +561,21 @@ class KnowledgeAnalysisServiceError(RuntimeError):
         self.code = code
 
 
+def _solution_workflow_idempotency_key(
+    command: CreateKnowledgeSolutionAnalysisCommand,
+) -> str:
+    """Bind one Workflow identity to the caller's immutable solution attempt."""
+
+    identity = content_sha256(
+        {
+            "operation": command.operation,
+            "base_analysis_run_id": command.base_analysis_run_id,
+            "idempotency_key": command.idempotency_key,
+        }
+    ).removeprefix("sha256:")
+    return f"knowledge-solution-analysis:{identity}"
+
+
 class KnowledgeAnalysisApplicationService:
     def __init__(self, engine: Engine, settings: CatalogSettings | None = None) -> None:
         self.settings = settings or CatalogSettings.from_environment()
@@ -705,7 +720,7 @@ class KnowledgeAnalysisApplicationService:
                     session,
                     definition=definition,
                     request=workflow_request,
-                    idempotency_key=f"knowledge-solution-analysis:{base.analysis_run_id}",
+                    idempotency_key=_solution_workflow_idempotency_key(command),
                     actor_type="system",
                     actor_id=command.requested_by,
                     runtime_context={"knowledge_analysis_request_sha256": request.request_sha256},

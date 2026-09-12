@@ -5,13 +5,17 @@ from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts import CreateKnowledgeSolutionAnalysisCommand
 from eom_catalog_service.application_runner import (
     _legacy_automation_batch_ids,
     _legacy_automation_graph_batch_size,
     _legacy_automation_preset_pin,
     _legacy_automation_retry_analysis_run_ids,
 )
-from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
+from eom_catalog_service.knowledge_analysis_service import (
+    KnowledgeAnalysisApplicationService,
+    _solution_workflow_idempotency_key,
+)
 from eom_catalog_service.legacy_item_automation_service import (
     LegacyItemAutomaticLearningService,
     _LearningCandidate,
@@ -57,6 +61,8 @@ def _guard(service: LegacyItemAutomaticLearningService) -> None:
     service._terminal_analysis = cast(Any, lambda: None)
     if "_solution_candidate" not in service.__dict__:
         service._solution_candidate = cast(Any, lambda: None)
+    if "_retryable_solution_analysis" not in service.__dict__:
+        service._retryable_solution_analysis = cast(Any, lambda: None)
 
 
 def _query_backed_service(
@@ -74,6 +80,8 @@ def _query_backed_service(
                 source_revision_id TEXT NOT NULL,
                 source_kind TEXT NOT NULL,
                 state TEXT NOT NULL,
+                canonical_request TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL UNIQUE,
                 created_by_operator_id TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
@@ -130,6 +138,9 @@ def _insert_terminal(
     ordinal: int,
     analysis_run_id: str,
     state: str = "FAILED",
+    schema_version: str = "knowledge-analysis-request/9.0",
+    predecessor_analysis_run_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> None:
     acceptance_id = f"acceptance-{ordinal}"
     item_proposal_id = f"proposal-{ordinal}"
@@ -172,10 +183,12 @@ def _insert_terminal(
                 """
                 INSERT INTO knowledge_analysis_runs (
                     analysis_run_id, predecessor_analysis_run_id, source_revision_id,
-                    source_kind, state, created_by_operator_id, created_at
+                    source_kind, state, canonical_request, idempotency_key,
+                    created_by_operator_id, created_at
                 ) VALUES (
-                    :analysis_run_id, NULL, :source_revision_id,
-                    'APPROVED_ITEM_REVISION', :state, :operator_id, :created_at
+                    :analysis_run_id, :predecessor_analysis_run_id, :source_revision_id,
+                    'APPROVED_ITEM_REVISION', :state, :canonical_request, :idempotency_key,
+                    :operator_id, :created_at
                 )
                 """
             ),
@@ -183,6 +196,9 @@ def _insert_terminal(
                 "analysis_run_id": analysis_run_id,
                 "source_revision_id": item_revision_id,
                 "state": state,
+                "predecessor_analysis_run_id": predecessor_analysis_run_id,
+                "canonical_request": '{"schema_version":"' + schema_version + '"}',
+                "idempotency_key": idempotency_key or f"analysis-attempt-{ordinal}",
                 "operator_id": f"operator-{ordinal}",
                 # Reverse chronological order proves the explicit allowlist CASE wins.
                 "created_at": f"2026-09-{30 - ordinal:02d}T00:00:00+00:00",
@@ -264,6 +280,124 @@ def test_automatic_learning_schedules_additive_report_before_graph_or_new_source
     service.graph.pending_candidates.assert_not_called()
     service.learning.retry_failed_analysis.assert_not_called()
     service._candidate.assert_not_called()
+
+
+def test_automatic_learning_retries_only_allowlisted_failed_solution_once() -> None:
+    service = object.__new__(LegacyItemAutomaticLearningService)
+    service.analyses = Mock()
+    service.learning = Mock()
+    _without_graph(service)
+    service._active_analyses = cast(Any, tuple)
+    service._retryable_solution_analysis = cast(
+        Any,
+        lambda: (
+            "analysisrun_" + "4" * 32,
+            "operator_owner",
+            "analysisrun_" + "5" * 32,
+        ),
+    )
+    service._solution_candidate = Mock()
+    service._retryable_analysis = Mock()
+    service._candidate = Mock()
+    _guard(service)
+
+    assert service.advance_once() is True
+
+    command = service.analyses.create_solution.call_args.args[0]
+    assert command.base_analysis_run_id == "analysisrun_" + "4" * 32
+    assert command.requested_by == "operator_owner"
+    assert command.idempotency_key == "legacy-item-solution-retry:" + "analysisrun_" + "5" * 32
+    service._solution_candidate.assert_not_called()
+    service._retryable_analysis.assert_not_called()
+    service._candidate.assert_not_called()
+
+
+def test_solution_workflow_identity_is_attempt_scoped_and_replay_stable() -> None:
+    base_id = "analysisrun_" + "4" * 32
+    first = CreateKnowledgeSolutionAnalysisCommand(
+        base_analysis_run_id=base_id,
+        requested_by="operator_owner",
+        idempotency_key=f"legacy-item-solution:{base_id}",
+    )
+    retry = first.model_copy(update={"idempotency_key": "legacy-item-solution-retry:" + "5" * 32})
+
+    assert _solution_workflow_idempotency_key(first) == _solution_workflow_idempotency_key(first)
+    assert _solution_workflow_idempotency_key(first) != _solution_workflow_idempotency_key(retry)
+
+
+def test_allowlisted_v10_selector_creates_at_most_one_solution_retry() -> None:
+    failed_id = "analysisrun_" + "5" * 32
+    base_id = "analysisrun_" + "4" * 32
+    engine, service = _query_backed_service((failed_id,))
+    try:
+        _insert_terminal(
+            engine,
+            ordinal=1,
+            analysis_run_id=failed_id,
+            schema_version="knowledge-analysis-request/10.0",
+            predecessor_analysis_run_id=base_id,
+        )
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO knowledge_analysis_runs (
+                        analysis_run_id, predecessor_analysis_run_id, source_revision_id,
+                        source_kind, state, canonical_request, idempotency_key,
+                        created_by_operator_id, created_at
+                    ) VALUES (
+                        :analysis_run_id, NULL, :source_revision_id,
+                        'APPROVED_ITEM_REVISION', 'ACCEPTED', :canonical_request,
+                        :idempotency_key, :operator_id, :created_at
+                    )
+                    """
+                ),
+                {
+                    "analysis_run_id": base_id,
+                    "source_revision_id": "item-revision-1",
+                    "canonical_request": ('{"schema_version":"knowledge-analysis-request/9.0"}'),
+                    "idempotency_key": "accepted-base",
+                    "operator_id": "operator-1",
+                    "created_at": "2026-09-01T00:00:00+00:00",
+                },
+            )
+
+        assert service._retryable_solution_analysis() == (
+            base_id,
+            "operator-1",
+            failed_id,
+        )
+        assert service._retryable_analysis() is None
+
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO knowledge_analysis_runs (
+                        analysis_run_id, predecessor_analysis_run_id, source_revision_id,
+                        source_kind, state, canonical_request, idempotency_key,
+                        created_by_operator_id, created_at
+                    ) VALUES (
+                        :analysis_run_id, :predecessor_analysis_run_id, :source_revision_id,
+                        'APPROVED_ITEM_REVISION', 'QUEUED', :canonical_request,
+                        :idempotency_key, :operator_id, :created_at
+                    )
+                    """
+                ),
+                {
+                    "analysis_run_id": "analysisrun_" + "6" * 32,
+                    "predecessor_analysis_run_id": base_id,
+                    "source_revision_id": "item-revision-1",
+                    "canonical_request": ('{"schema_version":"knowledge-analysis-request/10.0"}'),
+                    "idempotency_key": f"legacy-item-solution-retry:{failed_id}",
+                    "operator_id": "operator-1",
+                    "created_at": "2026-09-02T00:00:00+00:00",
+                },
+            )
+
+        assert service._retryable_solution_analysis() is None
+    finally:
+        engine.dispose()
 
 
 def test_duplicate_batch_membership_reconciles_once_and_refills_second_position() -> None:

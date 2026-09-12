@@ -135,6 +135,17 @@ class LegacyItemAutomaticLearningService:
                 )
         if len(active_analyses) == MAX_AUTOMATIC_ACTIVE_ANALYSES:
             return progressed
+        solution_retry = self._retryable_solution_analysis()
+        if solution_retry is not None:
+            base_analysis_run_id, requested_by, failed_analysis_run_id = solution_retry
+            self.analyses.create_solution(
+                CreateKnowledgeSolutionAnalysisCommand(
+                    base_analysis_run_id=base_analysis_run_id,
+                    requested_by=requested_by,
+                    idempotency_key=(f"legacy-item-solution-retry:{failed_analysis_run_id}"),
+                )
+            )
+            return True
         solution_candidate = self._solution_candidate()
         if solution_candidate is not None:
             analysis_run_id, requested_by = solution_candidate
@@ -367,7 +378,7 @@ class LegacyItemAutomaticLearningService:
             )
 
     def _retryable_analysis(self) -> tuple[str, str] | None:
-        """Select one explicitly allowlisted terminal run that has no successor."""
+        """Select one explicitly allowlisted pre-V10 terminal run with no successor."""
 
         if not self.retry_analysis_run_ids:
             return None
@@ -387,10 +398,11 @@ class LegacyItemAutomaticLearningService:
             else_=len(self.retry_analysis_run_ids),
         )
         with self.sessions() as session:
-            row = session.execute(
+            rows = session.execute(
                 select(
                     KnowledgeAnalysisRunRecord.analysis_run_id,
                     KnowledgeAnalysisRunRecord.created_by_operator_id,
+                    KnowledgeAnalysisRunRecord.canonical_request,
                 )
                 .join(
                     ItemRevisionRecord,
@@ -421,11 +433,113 @@ class LegacyItemAutomaticLearningService:
                     successor.analysis_run_id.is_(None),
                 )
                 .order_by(retry_order, KnowledgeAnalysisRunRecord.analysis_run_id)
-                .limit(1)
-            ).one_or_none()
-            if row is None:
+            ).all()
+            for row in rows:
+                if row.canonical_request.get("schema_version") != (
+                    "knowledge-analysis-request/10.0"
+                ):
+                    return str(row.analysis_run_id), str(row.created_by_operator_id)
+            return None
+
+    def _retryable_solution_analysis(self) -> tuple[str, str, str] | None:
+        """Select one allowlisted failed V10 whose deterministic retry does not exist."""
+
+        if not self.retry_analysis_run_ids:
+            return None
+        registration_key = (
+            literal("legacy-item-promotion:")
+            + LegacyItemExtractionDecisionRecord.acceptance_id
+            + literal(":")
+            + LegacyItemExtractionDecisionRecord.item_proposal_id
+        )
+        retry_order = case(
+            {
+                analysis_run_id: ordinal
+                for ordinal, analysis_run_id in enumerate(self.retry_analysis_run_ids)
+            },
+            value=KnowledgeAnalysisRunRecord.analysis_run_id,
+            else_=len(self.retry_analysis_run_ids),
+        )
+        with self.sessions() as session:
+            rows = session.execute(
+                select(
+                    KnowledgeAnalysisRunRecord.analysis_run_id,
+                    KnowledgeAnalysisRunRecord.predecessor_analysis_run_id,
+                    KnowledgeAnalysisRunRecord.created_by_operator_id,
+                    KnowledgeAnalysisRunRecord.canonical_request,
+                )
+                .distinct()
+                .join(
+                    ItemRevisionRecord,
+                    ItemRevisionRecord.item_revision_id
+                    == KnowledgeAnalysisRunRecord.source_revision_id,
+                )
+                .join(
+                    LegacyItemExtractionDecisionRecord,
+                    ItemRevisionRecord.registration_key == registration_key,
+                )
+                .join(
+                    LegacyItemExtractionBatchWorkUnitRecord,
+                    LegacyItemExtractionBatchWorkUnitRecord.acceptance_id
+                    == LegacyItemExtractionDecisionRecord.acceptance_id,
+                )
+                .where(
+                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
+                        self.extraction_batch_ids
+                    ),
+                    KnowledgeAnalysisRunRecord.analysis_run_id.in_(self.retry_analysis_run_ids),
+                    KnowledgeAnalysisRunRecord.source_kind == "APPROVED_ITEM_REVISION",
+                    KnowledgeAnalysisRunRecord.state.in_(("FAILED", "REJECTED", "CANCELLED")),
+                    KnowledgeAnalysisRunRecord.predecessor_analysis_run_id.is_not(None),
+                )
+                .order_by(retry_order, KnowledgeAnalysisRunRecord.analysis_run_id)
+            ).all()
+            solution_rows = tuple(
+                row
+                for row in rows
+                if row.canonical_request.get("schema_version") == "knowledge-analysis-request/10.0"
+                and row.predecessor_analysis_run_id is not None
+            )
+            if not solution_rows:
                 return None
-            return str(row.analysis_run_id), str(row.created_by_operator_id)
+            base_ids = tuple(str(row.predecessor_analysis_run_id) for row in solution_rows)
+            bases = {
+                str(row.analysis_run_id): (str(row.state), row.canonical_request)
+                for row in session.execute(
+                    select(
+                        KnowledgeAnalysisRunRecord.analysis_run_id,
+                        KnowledgeAnalysisRunRecord.state,
+                        KnowledgeAnalysisRunRecord.canonical_request,
+                    ).where(KnowledgeAnalysisRunRecord.analysis_run_id.in_(base_ids))
+                )
+            }
+            retry_keys = tuple(
+                f"legacy-item-solution-retry:{row.analysis_run_id}" for row in solution_rows
+            )
+            existing_retry_keys = set(
+                session.scalars(
+                    select(KnowledgeAnalysisRunRecord.idempotency_key).where(
+                        KnowledgeAnalysisRunRecord.idempotency_key.in_(retry_keys)
+                    )
+                )
+            )
+            for row in solution_rows:
+                base_id = str(row.predecessor_analysis_run_id)
+                base = bases.get(base_id)
+                retry_key = f"legacy-item-solution-retry:{row.analysis_run_id}"
+                if (
+                    base is not None
+                    and base[0] == "ACCEPTED"
+                    and base[1].get("schema_version")
+                    == PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION
+                    and retry_key not in existing_retry_keys
+                ):
+                    return (
+                        base_id,
+                        str(row.created_by_operator_id),
+                        str(row.analysis_run_id),
+                    )
+            return None
 
     def _candidate(self) -> _LearningCandidate | None:
         registration_key = (
