@@ -141,6 +141,45 @@ def test_serve_reconciles_capacity_before_polling(
     engine.dispose()
 
 
+def test_maintenance_service_never_claims_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = create_engine("sqlite://")
+    observed: list[str] = []
+
+    class Reconciler:
+        def reconcile_expired(self, *, observed_at: datetime) -> tuple[object, ...]:
+            del observed_at
+            observed.append("capacity")
+            return ()
+
+    runner = WorkflowRunner(
+        engine,
+        _workflow_settings(tmp_path),
+        catalog=cast(WorkflowCatalogPort, object()),
+        actor_authorizer=cast(WorkflowActorAuthorizer, object()),
+        readiness=cast(WorkflowExecutionReadiness, object()),
+        available_roles=frozenset({"authoring"}),
+        capacity_reconciler=Reconciler(),
+    )
+
+    def forbidden_claim(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("maintenance service claimed an executable command")
+
+    monkeypatch.setattr(runner, "run_once", forbidden_claim)
+
+    def stop(_seconds: float) -> None:
+        observed.append("sleep")
+        raise RuntimeError("stop-loop")
+
+    monkeypatch.setattr("eom_workflow_runner.engine.time.sleep", stop)
+    with pytest.raises(RuntimeError, match="stop-loop"):
+        runner.serve_maintenance()
+
+    assert observed == ["capacity", "sleep"]
+    engine.dispose()
+
+
 def test_runner_rejects_missing_worker_roles() -> None:
     engine = create_engine("sqlite://")
     with pytest.raises(ValueError, match="worker roles are required"):

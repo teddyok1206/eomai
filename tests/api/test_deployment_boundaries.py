@@ -835,6 +835,7 @@ def test_shared_platform_release_restarts_every_long_lived_consumer() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
     consumers = (
         "eom-catalog-application-runner.service",
+        "eom-workflow-maintenance.service",
         "eom-workflow-runner.service",
         "eom-hwpx-application-runner.service",
         "eom-api.service",

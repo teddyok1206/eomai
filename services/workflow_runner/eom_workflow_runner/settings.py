@@ -52,7 +52,14 @@ class RunnerConfig(BaseModel):
     version: int = Field(ge=1)
     poll_interval_seconds: int = Field(ge=1, le=60)
     command_lease_seconds: int = Field(ge=10, le=MAX_WORKFLOW_COMMAND_LEASE_SECONDS)
+    command_lease_heartbeat_seconds: int = Field(default=30, ge=1, le=300)
     max_commands_per_run: int = Field(ge=1, le=1000)
+
+    @model_validator(mode="after")
+    def heartbeat_precedes_lease_expiry(self) -> RunnerConfig:
+        if self.command_lease_heartbeat_seconds * 3 >= self.command_lease_seconds:
+            raise ValueError("command lease must exceed three heartbeat intervals")
+        return self
 
 
 @dataclass(frozen=True)

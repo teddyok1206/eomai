@@ -54,6 +54,7 @@ from eom_workflow_runner.repository import (
     CommandType,
     active_approval,
     claim_next_command,
+    command_lease_identity,
     create_approval_request,
     create_step_run,
     create_workflow_instance,
@@ -61,6 +62,8 @@ from eom_workflow_runner.repository import (
     import_workflow_definition,
     list_step_runs,
     list_workflow_events,
+    renew_command_lease,
+    require_command_lease,
 )
 from eom_workflow_runner.settings import WorkflowSettings
 from eom_workflow_runner.state_machine import (
@@ -1462,6 +1465,8 @@ def test_command_idempotency_lease_recovery_and_optimistic_lock(
             assert recovered is not None
             assert recovered.command_id == first.command_id
             assert recovered.lease_owner == "recovery-runner"
+            assert recovered.lease_token is not None
+            assert recovered.lease_generation == 1
             assert recovered.attempts == 1
         with transaction(sessions) as session:
             workflow = session.get(WorkflowInstanceRecord, workflow_id)
@@ -1499,6 +1504,9 @@ def test_runner_refuses_a_command_lease_owned_by_another_runner(
             transition_command(command, CommandState.LEASED)
             transition_command(command, CommandState.PROCESSING)
             command.lease_owner = "another-runner"
+            command.lease_token = "wflease_" + "a" * 32
+            command.lease_generation = 1
+            command.lease_expires_at = datetime.now(UTC) + timedelta(seconds=60)
             command_id = command.command_id
         with pytest.raises(WorkflowError) as error:
             runner._renew_command_lease(command_id)
@@ -1508,6 +1516,46 @@ def test_runner_refuses_a_command_lease_owned_by_another_runner(
             assert command is not None
             assert command.state == CommandState.PROCESSING.value
             assert command.lease_owner == "another-runner"
+    finally:
+        _close(resources)
+
+
+def test_reclaimed_command_rejects_the_stale_fencing_identity(
+    integration_engine: Engine,
+) -> None:
+    _runner, _executor, sessions, workflow_id, resources = _environment(
+        integration_engine, "skip", "workflow-integration-lease-fencing"
+    )
+    try:
+        with transaction(sessions) as session:
+            first = claim_next_command(
+                session,
+                runner_id="runner-one",
+                lease_seconds=60,
+                workflow_id=workflow_id,
+            )
+            assert first is not None
+            first_identity = command_lease_identity(first)
+            transition_command(first, CommandState.PROCESSING)
+            first.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+
+        with transaction(sessions) as session:
+            second = claim_next_command(
+                session,
+                runner_id="runner-two",
+                lease_seconds=60,
+                workflow_id=workflow_id,
+            )
+            assert second is not None
+            second_identity = command_lease_identity(second)
+            assert second_identity.lease_generation == first_identity.lease_generation + 1
+            assert second_identity.lease_token != first_identity.lease_token
+
+        with transaction(sessions) as session:
+            with pytest.raises(WorkflowError) as stale:
+                renew_command_lease(session, first_identity, lease_seconds=60)
+            assert stale.value.code is WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT
+            assert require_command_lease(session, second_identity).command_id == second.command_id
     finally:
         _close(resources)
 

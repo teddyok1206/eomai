@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -78,6 +79,16 @@ class WorkflowDefinitionAdmissionStatus:
             and admission is not None
             and self.role_protocol_version == admission.role_protocol_version
         )
+
+
+@dataclass(frozen=True, slots=True)
+class CommandLeaseIdentity:
+    """Immutable fencing identity for one command acquisition."""
+
+    command_id: str
+    runner_id: str
+    lease_token: str
+    lease_generation: int
 
 
 def _compiled_role_protocol(compiled: CompiledWorkflowDefinition) -> str:
@@ -501,9 +512,72 @@ def claim_next_command(
     transition_command(command, CommandState.LEASED)
     command.attempts += 1
     command.lease_owner = runner_id
+    command.lease_token = f"wflease_{secrets.token_hex(16)}"
+    command.lease_generation += 1
     command.lease_expires_at = now + timedelta(seconds=lease_seconds)
     session.flush()
     return command
+
+
+def command_lease_identity(command: WorkflowCommandRecord) -> CommandLeaseIdentity:
+    if command.lease_owner is None or command.lease_token is None:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+            "workflow command does not have a complete lease identity",
+        )
+    return CommandLeaseIdentity(
+        command_id=command.command_id,
+        runner_id=command.lease_owner,
+        lease_token=command.lease_token,
+        lease_generation=command.lease_generation,
+    )
+
+
+def require_command_lease(
+    session: Session,
+    identity: CommandLeaseIdentity,
+    *,
+    observed_at: datetime | None = None,
+    for_update: bool = False,
+) -> WorkflowCommandRecord:
+    query = (
+        select(WorkflowCommandRecord)
+        .where(WorkflowCommandRecord.command_id == identity.command_id)
+        .execution_options(populate_existing=True)
+    )
+    if for_update:
+        query = query.with_for_update()
+    command = session.execute(query).scalar_one_or_none()
+    now = observed_at or datetime.now(UTC)
+    if (
+        command is None
+        or command.state not in {CommandState.LEASED.value, CommandState.PROCESSING.value}
+        or command.lease_owner != identity.runner_id
+        or command.lease_token != identity.lease_token
+        or command.lease_generation != identity.lease_generation
+        or command.lease_expires_at is None
+        or command.lease_expires_at <= now
+    ):
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+            "workflow command lease ownership was lost",
+        )
+    return command
+
+
+def renew_command_lease(
+    session: Session,
+    identity: CommandLeaseIdentity,
+    *,
+    lease_seconds: int,
+    observed_at: datetime | None = None,
+) -> datetime:
+    now = observed_at or datetime.now(UTC)
+    command = require_command_lease(session, identity, observed_at=now)
+    expires_at = now + timedelta(seconds=lease_seconds)
+    command.lease_expires_at = expires_at
+    session.flush()
+    return expires_at
 
 
 def claimable_command_exists(session: Session, *, workflow_id: str | None = None) -> bool:

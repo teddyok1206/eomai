@@ -8,6 +8,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 UNIT = ROOT / "infra/systemd/eom-workflow-runner.service"
+MAINTENANCE_UNIT = ROOT / "infra/systemd/eom-workflow-maintenance.service"
 DEPLOY = ROOT / "scripts/workflow/deploy_runner_service.sh"
 
 
@@ -117,6 +118,35 @@ def test_workflow_runner_deployer_is_commit_pinned_and_noninteractive() -> None:
 def test_workflow_runner_unit_verifies_without_diagnostics() -> None:
     completed = subprocess.run(
         ["systemd-analyze", "verify", str(UNIT)],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == ""
+    assert completed.stderr == ""
+
+
+def test_workflow_maintenance_unit_cannot_execute_or_materialize_work() -> None:
+    source = MAINTENANCE_UNIT.read_text(encoding="utf-8")
+
+    assert "User=eom-workflow-runner" in source
+    assert (
+        "ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner serve-maintenance" in source
+    )
+    assert _directives(source, "ReadWritePaths") == {"/var/lib/eom-workflow-runner"}
+    inaccessible = _directives(source, "InaccessiblePaths")
+    assert "/srv/eom/workspaces" in inaccessible
+    assert "/srv/eom/image-workspaces" in inaccessible
+    assert "/mnt/nas" in inaccessible
+    assert "RestrictSUIDSGID=true" in source
+
+
+@pytest.mark.skipif(shutil.which("systemd-analyze") is None, reason="systemd-analyze unavailable")
+def test_workflow_maintenance_unit_verifies_without_diagnostics() -> None:
+    completed = subprocess.run(
+        ["systemd-analyze", "verify", str(MAINTENANCE_UNIT)],
         capture_output=True,
         check=False,
         text=True,

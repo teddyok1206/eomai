@@ -93,10 +93,20 @@ def test_runner_lease_bound_covers_long_analysis_without_becoming_unbounded(
     settings = WorkflowSettings(runner_config_path=runner)
 
     assert settings.load_runner().command_lease_seconds == 7500
+    assert settings.load_runner().command_lease_heartbeat_seconds == 30
 
     runner.write_text(
         "version: 1\npoll_interval_seconds: 2\n"
         f"command_lease_seconds: {MAX_WORKFLOW_COMMAND_LEASE_SECONDS + 1}\n"
+        "max_commands_per_run: 100\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="invalid workflow configuration"):
+        settings.load_runner()
+
+    runner.write_text(
+        "version: 1\npoll_interval_seconds: 2\n"
+        "command_lease_seconds: 60\ncommand_lease_heartbeat_seconds: 20\n"
         "max_commands_per_run: 100\n",
         encoding="utf-8",
     )

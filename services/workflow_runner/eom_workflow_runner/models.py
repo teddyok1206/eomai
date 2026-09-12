@@ -219,6 +219,12 @@ class WorkflowCommandRecord(Base):
             "created_at",
             "command_id",
         ),
+        Index(
+            "uq_workflow_commands_lease_token",
+            "lease_token",
+            unique=True,
+            postgresql_where=text("lease_token IS NOT NULL"),
+        ),
     )
 
     command_id: Mapped[str] = mapped_column(String(38), primary_key=True)
@@ -235,6 +241,8 @@ class WorkflowCommandRecord(Base):
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_token: Mapped[str | None] = mapped_column(String(41), nullable=True)
+    lease_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

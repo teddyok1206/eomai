@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from threading import Event, Thread
 from typing import Protocol
 from uuid import uuid4
 
@@ -35,7 +39,7 @@ from eom_workflow import (
     evaluate_decision,
 )
 from sqlalchemy import Engine, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from eom_workflow_runner.actor_authorization import (
     WorkflowActorAuthorization,
@@ -62,16 +66,20 @@ from eom_workflow_runner.readiness import (
     WorkflowRuntimeNotReady,
 )
 from eom_workflow_runner.repository import (
+    CommandLeaseIdentity,
     CommandType,
     active_approval,
     claim_next_command,
     claimable_command_exists,
+    command_lease_identity,
     create_approval_request,
     create_step_run,
     enqueue_command,
     link_superseded_attempts,
     list_step_runs,
     load_persisted_workflow_request,
+    renew_command_lease,
+    require_command_lease,
 )
 from eom_workflow_runner.settings import WorkflowSettings
 from eom_workflow_runner.state_machine import (
@@ -90,6 +98,24 @@ from eom_workflow_runner.state_machine import (
     transition_step,
     transition_workflow,
 )
+
+_ACTIVE_COMMAND_LEASE: ContextVar[CommandLeaseIdentity | None] = ContextVar(
+    "active_workflow_command_lease", default=None
+)
+
+
+@contextmanager
+def _command_fenced_transaction(factory: sessionmaker[Session]) -> Iterator[Session]:
+    lease = _ACTIVE_COMMAND_LEASE.get()
+    with transaction(factory) as session:
+        if lease is not None:
+            require_command_lease(session, lease)
+        yield session
+        session.flush()
+        if lease is not None:
+            # Locking the command row closes the check-to-commit race with a reclaimer.
+            require_command_lease(session, lease, for_update=True)
+
 
 LOGGER = logging.getLogger("eom.workflow.runner")
 TERMINAL_WORKFLOW_STATES = {
@@ -206,7 +232,7 @@ class PlatformRoleJobExecutor:
         )
 
         def bind_platform_job(job_id: str) -> None:
-            with transaction(self.sessions) as session:
+            with _command_fenced_transaction(self.sessions) as session:
                 current = session.execute(
                     select(WorkflowStepRunRecord)
                     .where(WorkflowStepRunRecord.step_run_id == step.step_run_id)
@@ -301,7 +327,7 @@ class WorkflowRunner:
         if not has_work:
             return None
         self._require_runtime_ready()
-        with transaction(self.sessions) as session:
+        with self._fenced_transaction() as session:
             command = claim_next_command(
                 session,
                 runner_id=self.runner_id,
@@ -311,27 +337,21 @@ class WorkflowRunner:
             if command is None:
                 return None
             command_id = command.command_id
-        with transaction(self.sessions) as session:
-            processing = session.execute(
-                select(WorkflowCommandRecord)
-                .where(WorkflowCommandRecord.command_id == command_id)
-                .with_for_update()
-            ).scalar_one()
+            lease = command_lease_identity(command)
+        with self._fenced_transaction() as session:
+            processing = require_command_lease(session, lease, for_update=True)
             transition_command(processing, CommandState.PROCESSING)
 
         try:
-            self._process_command(command_id)
+            with self._command_lease_scope(lease):
+                self._process_command(command_id)
         except WorkflowError as exc:
-            with transaction(self.sessions) as session:
-                failed = session.execute(
-                    select(WorkflowCommandRecord)
-                    .where(WorkflowCommandRecord.command_id == command_id)
-                    .with_for_update()
-                ).scalar_one()
-                if (
-                    failed.state == CommandState.PROCESSING.value
-                    and failed.lease_owner == self.runner_id
-                ):
+            with self._fenced_transaction() as session:
+                try:
+                    failed = require_command_lease(session, lease, for_update=True)
+                except WorkflowError:
+                    failed = None
+                if failed is not None and failed.state == CommandState.PROCESSING.value:
                     failed.error_code = exc.code.value
                     transition_command(failed, CommandState.FAILED)
             log_workflow_event(
@@ -343,16 +363,12 @@ class WorkflowRunner:
                 error_code=exc.code.value,
             )
         else:
-            with transaction(self.sessions) as session:
-                succeeded = session.execute(
-                    select(WorkflowCommandRecord)
-                    .where(WorkflowCommandRecord.command_id == command_id)
-                    .with_for_update()
-                ).scalar_one()
-                if (
-                    succeeded.state == CommandState.PROCESSING.value
-                    and succeeded.lease_owner == self.runner_id
-                ):
+            with self._fenced_transaction() as session:
+                try:
+                    succeeded = require_command_lease(session, lease, for_update=True)
+                except WorkflowError:
+                    succeeded = None
+                if succeeded is not None and succeeded.state == CommandState.PROCESSING.value:
                     transition_command(succeeded, CommandState.SUCCEEDED)
         with self.sessions() as session:
             result = session.get(WorkflowCommandRecord, command_id)
@@ -382,13 +398,7 @@ class WorkflowRunner:
 
     def serve(self) -> None:
         while True:
-            if self.capacity_reconciler is not None:
-                self.capacity_reconciler.reconcile_expired(observed_at=datetime.now(UTC))
-            maintenance_result = (
-                self.control_processor.maintain_once()
-                if self.control_processor is not None
-                else None
-            )
+            maintenance_result = self.maintain_once()
             control_result = (
                 self.control_processor.process_once()
                 if self.control_processor is not None
@@ -399,6 +409,26 @@ class WorkflowRunner:
             except WorkflowRuntimeNotReady:
                 result = None
             if result is None and maintenance_result is None and control_result is None:
+                time.sleep(self.runner_config.poll_interval_seconds)
+
+    def maintain_once(self) -> object | None:
+        """Reconcile expiry only; this entry point never claims executable commands."""
+
+        capacity_result = self.reconcile_expired_once()
+        control_result = (
+            self.control_processor.maintain_once() if self.control_processor is not None else None
+        )
+        return control_result if control_result is not None else capacity_result
+
+    def reconcile_expired_once(self) -> object | None:
+        if self.capacity_reconciler is None:
+            return None
+        outcomes = self.capacity_reconciler.reconcile_expired(observed_at=datetime.now(UTC))
+        return outcomes or None
+
+    def serve_maintenance(self) -> None:
+        while True:
+            if self.reconcile_expired_once() is None:
                 time.sleep(self.runner_config.poll_interval_seconds)
 
     def reconcile(self, workflow_id: str) -> None:
@@ -473,13 +503,13 @@ class WorkflowRunner:
             workflow, compiled = self._load_workflow(workflow_id)
             if workflow.state in TERMINAL_WORKFLOW_STATES:
                 if workflow.state == WorkflowState.COMPLETED.value:
-                    with transaction(self.sessions) as session:
+                    with self._fenced_transaction() as session:
                         link_superseded_attempts(session, workflow.workflow_id)
                 return
             if workflow.state == WorkflowState.AWAITING_HUMAN_APPROVAL.value:
                 return
             if workflow.state == WorkflowState.REQUESTED.value:
-                with transaction(self.sessions) as session:
+                with self._fenced_transaction() as session:
                     transition_workflow(
                         session,
                         workflow_id,
@@ -497,7 +527,7 @@ class WorkflowRunner:
                 if step_definition.worker_role == "item_management" and workflow.state == (
                     WorkflowState.APPROVED.value
                 ):
-                    with transaction(self.sessions) as session:
+                    with self._fenced_transaction() as session:
                         transition_workflow(
                             session,
                             workflow_id,
@@ -562,7 +592,7 @@ class WorkflowRunner:
         actor_type: str,
         actor_id: str,
     ) -> bool:
-        with transaction(self.sessions) as session:
+        with self._fenced_transaction() as session:
             current = session.get(WorkflowInstanceRecord, workflow.workflow_id)
             if current is None:
                 raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "workflow disappeared")
@@ -696,7 +726,7 @@ class WorkflowRunner:
                     upstream=upstream,
                 )
                 prompt_text = prepared.text
-                with transaction(self.sessions) as session:
+                with self._fenced_transaction() as session:
                     prepared_step = session.execute(
                         select(WorkflowStepRunRecord)
                         .where(WorkflowStepRunRecord.step_run_id == step_run_id)
@@ -764,7 +794,7 @@ class WorkflowRunner:
                             artifacts=(*upstream, result_pointer),
                         )
         except Exception as exc:
-            with transaction(self.sessions) as session:
+            with self._fenced_transaction() as session:
                 failed_step = session.execute(
                     select(WorkflowStepRunRecord)
                     .where(WorkflowStepRunRecord.step_run_id == step_run_id)
@@ -787,7 +817,7 @@ class WorkflowRunner:
                 "platform role execution failed",
             ) from exc
         if execution.status == "QUEUED":
-            with transaction(self.sessions) as session:
+            with self._fenced_transaction() as session:
                 queued_step = session.execute(
                     select(WorkflowStepRunRecord)
                     .where(WorkflowStepRunRecord.step_run_id == step_run_id)
@@ -832,7 +862,7 @@ class WorkflowRunner:
             return False
 
         execution_failed = execution.status != "SUCCEEDED" or execution.content_hash is None
-        with transaction(self.sessions) as session:
+        with self._fenced_transaction() as session:
             step = session.execute(
                 select(WorkflowStepRunRecord)
                 .where(WorkflowStepRunRecord.step_run_id == step_run_id)
@@ -994,7 +1024,7 @@ class WorkflowRunner:
                 ) from exc
         else:
             target = evaluate_decision(definition, workflow.initial_request)
-        with transaction(self.sessions) as session:
+        with self._fenced_transaction() as session:
             step = self._latest_active_step(session, workflow.workflow_id, definition.key)
             if step is None:
                 step = create_step_run(
@@ -1077,7 +1107,7 @@ class WorkflowRunner:
         actor_type: str,
         actor_id: str,
     ) -> None:
-        with transaction(self.sessions) as session:
+        with self._fenced_transaction() as session:
             approval = active_approval(session, workflow.workflow_id, for_update=True)
             if approval is not None:
                 return
@@ -1125,7 +1155,7 @@ class WorkflowRunner:
 
     def _approve(self, command: WorkflowCommandRecord) -> None:
         authorization = self._authorize_actor(command.actor_id, PermissionKey.WORKFLOW_APPROVE)
-        with transaction(self.sessions) as session:
+        with self._fenced_transaction() as session:
             approval = self._validate_pending_approval(
                 session, command, authorization.workflow_roles
             )
@@ -1176,7 +1206,7 @@ class WorkflowRunner:
     def _resume_capacity_queued_failure(self, command: WorkflowCommandRecord) -> bool:
         """Reconcile a failed workflow only when its worker job never started."""
 
-        with transaction(self.sessions) as session:
+        with self._fenced_transaction() as session:
             workflow = session.execute(
                 select(WorkflowInstanceRecord)
                 .where(WorkflowInstanceRecord.workflow_id == command.workflow_id)
@@ -1329,7 +1359,7 @@ class WorkflowRunner:
                 WorkflowErrorCode.APPROVAL_INVALID_REWORK_TARGET,
                 "rework command payload is invalid",
             )
-        with transaction(self.sessions) as session:
+        with self._fenced_transaction() as session:
             approval = self._validate_pending_approval(
                 session, command, authorization.workflow_roles
             )
@@ -1448,7 +1478,7 @@ class WorkflowRunner:
                 WorkflowErrorCode.APPROVAL_UNAUTHORIZED,
                 "only an admin can cancel a workflow",
             )
-        with transaction(self.sessions) as session:
+        with self._fenced_transaction() as session:
             workflow = session.get(WorkflowInstanceRecord, command.workflow_id)
             if workflow is None:
                 raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "workflow not found")
@@ -1506,7 +1536,7 @@ class WorkflowRunner:
         actor_type: str,
         actor_id: str,
     ) -> None:
-        with transaction(self.sessions) as session:
+        with self._fenced_transaction() as session:
             step = self._latest_active_step(session, workflow.workflow_id, definition.key)
             if step is None:
                 step = create_step_run(
@@ -1701,25 +1731,83 @@ class WorkflowRunner:
             session.expunge(step)
             return step
 
+    @contextmanager
+    def _fenced_transaction(self) -> Iterator[Session]:
+        with _command_fenced_transaction(self.sessions) as session:
+            yield session
+
+    @contextmanager
+    def _command_lease_scope(self, lease: CommandLeaseIdentity) -> Iterator[None]:
+        stop = Event()
+        lost = Event()
+
+        def heartbeat() -> None:
+            while not stop.wait(self.runner_config.command_lease_heartbeat_seconds):
+                try:
+                    with transaction(self.sessions) as session:
+                        renew_command_lease(
+                            session,
+                            lease,
+                            lease_seconds=self.runner_config.command_lease_seconds,
+                        )
+                except WorkflowError:
+                    lost.set()
+                    return
+                except Exception as exc:
+                    # A transient database error is fail-closed for this acquisition. The worker
+                    # may finish its local attempt, but no later Workflow transaction can commit.
+                    lost.set()
+                    log_workflow_event(
+                        LOGGER,
+                        logging.ERROR,
+                        "workflow command lease heartbeat failed",
+                        event="WORKFLOW_COMMAND_LEASE_HEARTBEAT_FAILED",
+                        command_id=lease.command_id,
+                        error_code=type(exc).__name__,
+                    )
+                    return
+
+        with transaction(self.sessions) as session:
+            renew_command_lease(
+                session,
+                lease,
+                lease_seconds=self.runner_config.command_lease_seconds,
+            )
+        context_token = _ACTIVE_COMMAND_LEASE.set(lease)
+        thread = Thread(
+            target=heartbeat,
+            name=f"workflow-command-heartbeat-{lease.command_id}",
+            daemon=True,
+        )
+        thread.start()
+        try:
+            yield
+            if lost.is_set():
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                    "workflow command lease heartbeat was lost",
+                )
+            with transaction(self.sessions) as session:
+                require_command_lease(session, lease, for_update=True)
+        finally:
+            stop.set()
+            thread.join(timeout=max(1, self.runner_config.command_lease_heartbeat_seconds + 1))
+            _ACTIVE_COMMAND_LEASE.reset(context_token)
+
     def _renew_command_lease(self, command_id: str | None) -> None:
         if command_id is None:
             return
+        lease = _ACTIVE_COMMAND_LEASE.get()
+        if lease is None or lease.command_id != command_id:
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                "workflow command lease context is missing",
+            )
         with transaction(self.sessions) as session:
-            command = session.execute(
-                select(WorkflowCommandRecord)
-                .where(WorkflowCommandRecord.command_id == command_id)
-                .with_for_update()
-            ).scalar_one()
-            if (
-                command.state != CommandState.PROCESSING.value
-                or command.lease_owner != self.runner_id
-            ):
-                raise WorkflowError(
-                    WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
-                    "workflow command lease ownership was lost",
-                )
-            command.lease_expires_at = datetime.now(UTC) + timedelta(
-                seconds=self.runner_config.command_lease_seconds
+            renew_command_lease(
+                session,
+                lease,
+                lease_seconds=self.runner_config.command_lease_seconds,
             )
 
     @staticmethod

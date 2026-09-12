@@ -20,6 +20,8 @@ def main(argv: list[str] | None = None) -> int:
     run_once = subparsers.add_parser("run-once")
     run_once.add_argument("--workflow-id")
     subparsers.add_parser("serve")
+    subparsers.add_parser("maintain-once")
+    subparsers.add_parser("serve-maintenance")
     reconcile = subparsers.add_parser("reconcile")
     reconcile.add_argument("workflow_id")
     subparsers.add_parser("doctor")
@@ -52,6 +54,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result is not None else 2
         if args.command == "serve":
             runtime.runner.serve()
+            return 0
+        if args.command == "maintain-once":
+            runtime.runner.maintain_once()
+            return 0
+        if args.command == "serve-maintenance":
+            runtime.runner.serve_maintenance()
             return 0
         if args.command == "reconcile":
             try:

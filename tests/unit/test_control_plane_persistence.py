@@ -518,3 +518,8 @@ def test_workflow_command_claim_index_includes_delayed_availability() -> None:
         "created_at",
         "command_id",
     )
+    fencing = indexes["uq_workflow_commands_lease_token"]
+    assert fencing.unique is True
+    assert tuple(column.name for column in fencing.columns) == ("lease_token",)
+    assert str(fencing.dialect_options["postgresql"]["where"]) == "lease_token IS NOT NULL"
+    assert table.columns["lease_generation"].nullable is False

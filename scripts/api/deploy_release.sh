@@ -10,14 +10,18 @@ SHA256SUM="/usr/bin/sha256sum"
 TAR="/usr/bin/tar"
 SERVICE="eom-api.service"
 WORKFLOW_RUNNER_SERVICE="eom-workflow-runner.service"
+WORKFLOW_MAINTENANCE_SERVICE="eom-workflow-maintenance.service"
 PLATFORM_CONSUMER_SERVICES=(
   "eom-catalog-application-runner.service"
+  "eom-workflow-maintenance.service"
   "eom-workflow-runner.service"
   "eom-hwpx-application-runner.service"
   "eom-api.service"
 )
 UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-api.service"
 UNIT_TARGET="/etc/systemd/system/eom-api.service"
+WORKFLOW_MAINTENANCE_UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/${WORKFLOW_MAINTENANCE_SERVICE}"
+WORKFLOW_MAINTENANCE_UNIT_TARGET="/etc/systemd/system/${WORKFLOW_MAINTENANCE_SERVICE}"
 METADATA_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_deployment_metadata.sh"
 METADATA_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-deployment-metadata"
 RUNTIME_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_runtime_isolation.sh"
@@ -2440,16 +2444,19 @@ restart_platform_consumers() {
 
 install_service() {
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
-  systemd-analyze verify "${UNIT_SOURCE}"
+  systemd-analyze verify "${UNIT_SOURCE}" "${WORKFLOW_MAINTENANCE_UNIT_SOURCE}"
   install_workflow_runner_hold_release_boundary
   sudo -n install -o root -g root -m 0755 \
     "${METADATA_VERIFIER_SOURCE}" "${METADATA_VERIFIER_TARGET}"
   sudo -n install -o root -g root -m 0755 \
     "${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}"
   sudo -n install -o root -g root -m 0644 "${UNIT_SOURCE}" "${UNIT_TARGET}"
+  sudo -n install -o root -g root -m 0644 \
+    "${WORKFLOW_MAINTENANCE_UNIT_SOURCE}" "${WORKFLOW_MAINTENANCE_UNIT_TARGET}"
   sudo -n "${METADATA_VERIFIER_TARGET}"
   sudo -n systemctl daemon-reload
   sudo -n systemctl enable "${SERVICE}" >/dev/null
+  sudo -n systemctl enable "${WORKFLOW_MAINTENANCE_SERVICE}" >/dev/null
   restart_platform_consumers
   verify_workflow_runner_deployment_hold
   wait_for_health
