@@ -27,12 +27,13 @@ from eom_image_contracts import (
     validate_contract,
 )
 from eom_workflow.models import (
-    CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX,
     GeneratedVectorDrawingV5,
     GeneratedVectorDrawingV6,
 )
 
 from eom_catalog_service.local_image_prompt_policy import (
+    LOCAL_GPU_MAX_SUBJECT_CHARS,
+    LOCAL_GPU_MAX_WORKER_NEGATIVE_CHARS,
     LOCAL_GPU_PROMPT_POLICY_REVISION,
     compose_local_gpu_prompts,
 )
@@ -222,21 +223,21 @@ def _build_request(
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
     if drawing.generation_prompt is None:
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
-    normalized_generation_prompt = drawing.generation_prompt.casefold()
-    if (
-        any(
-            forbidden in normalized_generation_prompt
-            for forbidden in _FORBIDDEN_GENERATION_STYLE_TERMS
-        )
-        or _contains_positive_human_subject(drawing.generation_prompt)
-        or _FORBIDDEN_CHROMATIC_TERMS.search(drawing.generation_prompt)
-    ):
+    if _has_forbidden_gpu_content(drawing.generation_prompt):
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
-    subject = drawing.generation_prompt.removeprefix(
-        CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX
-    ).strip()
-    if not subject:
-        raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
+    if isinstance(drawing, GeneratedVectorDrawingV6):
+        subject = drawing.alt_text
+        if (
+            len(subject) > LOCAL_GPU_MAX_SUBJECT_CHARS
+            or _has_forbidden_gpu_content(subject)
+            or (
+                drawing.negative_prompt is not None
+                and len(drawing.negative_prompt) > LOCAL_GPU_MAX_WORKER_NEGATIVE_CHARS
+            )
+        ):
+            raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
+    else:
+        subject = drawing.generation_prompt
     prompt, negative = compose_local_gpu_prompts(
         subject=subject,
         background_only=drawing.production_route == "LOCAL_GENERATIVE_BACKGROUND",
@@ -293,6 +294,15 @@ def _build_request(
     )
     validate_contract("composite-request", request.model_dump(mode="json"))
     return request
+
+
+def _has_forbidden_gpu_content(value: str) -> bool:
+    normalized = value.casefold()
+    return (
+        any(forbidden in normalized for forbidden in _FORBIDDEN_GENERATION_STYLE_TERMS)
+        or _contains_positive_human_subject(value)
+        or _FORBIDDEN_CHROMATIC_TERMS.search(value) is not None
+    )
 
 
 def _contains_positive_human_subject(value: str) -> bool:

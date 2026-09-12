@@ -17,6 +17,8 @@ from eom_catalog_service.local_image_adapter import (
 )
 from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_BACKGROUND_REQUIREMENTS,
+    LOCAL_GPU_MAX_SUBJECT_CHARS,
+    LOCAL_GPU_MAX_WORKER_NEGATIVE_CHARS,
     LOCAL_GPU_NEGATIVE_REQUIREMENTS,
     LOCAL_GPU_PROMPT_POLICY_REVISION,
     LOCAL_GPU_PROMPT_SOURCE_PINS,
@@ -191,8 +193,7 @@ def test_composite_request_is_deterministic_and_input_pinned(tmp_path: Path) -> 
     assert first == second
     assert first.overlay.sha256 == "sha256:" + hashlib.sha256(overlay).hexdigest()
     assert first.generation.model == binding.model
-    assert "Subject: muted natural grass background without text." in first.generation.prompt
-    assert "Non-authoritative background layer only." in first.generation.prompt
+    assert first.generation.prompt == "monochrome: muted natural grass background without text"
     assert first.generation.request_id.startswith("imgreq_")
 
     changed = drawing.model_copy(update={"generation_prompt": "different natural background"})
@@ -228,7 +229,7 @@ def test_prompt_policy_revision_is_part_of_provider_request_identity(
     monkeypatch.setattr(
         local_image_adapter,
         "LOCAL_GPU_PROMPT_POLICY_REVISION",
-        "local-gpu-image-prompt-policy/1.2",
+        "local-gpu-image-prompt-policy/1.3",
     )
     changed = _build_request(
         workflow_id="workflow_" + "3" * 32,
@@ -274,9 +275,7 @@ def test_v6_hybrid_request_describes_a_semantic_raster_not_a_background(tmp_path
     )
 
     assert request.generation.prompt == (
-        LOCAL_GPU_RASTER_REQUIREMENTS[0]
-        + " Subject: one fox standing beside sparse grass. "
-        + " ".join(LOCAL_GPU_RASTER_REQUIREMENTS[1:])
+        LOCAL_GPU_RASTER_REQUIREMENTS[0] + " 방형구에서 식물 분포를 조사하는 장면"
     )
     for requirement in LOCAL_GPU_RASTER_REQUIREMENTS:
         assert requirement in request.generation.prompt
@@ -289,7 +288,7 @@ def test_v6_hybrid_request_describes_a_semantic_raster_not_a_background(tmp_path
         assert requirement in request.generation.negative_prompt
 
 
-def test_v6_hybrid_request_preserves_content_team_details_after_mandatory_style_lead(
+def test_v6_hybrid_request_projects_worker_alt_text_and_keeps_team_prompt_in_identity(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "generated-overlay.png"
@@ -309,15 +308,15 @@ def test_v6_hybrid_request_preserves_content_team_details_after_mandatory_style_
         overlay_path=path,
     )
 
-    assert request.generation.prompt.startswith(LOCAL_GPU_RASTER_REQUIREMENTS[0])
-    assert f"Subject: {detail}. " in request.generation.prompt
-    assert "아래의 요청사항" not in request.generation.prompt
+    assert request.generation.prompt == "monochrome: 방형구에서 식물 분포를 조사하는 장면"
+    assert detail not in request.generation.prompt
+    assert request.generation.request_id.startswith("imgreq_")
 
 
 def test_local_gpu_prompt_policy_pins_two_unchanged_reviewed_sources() -> None:
     root = Path(__file__).resolve().parents[2]
 
-    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.1"
+    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.2"
     assert len(LOCAL_GPU_PROMPT_SOURCE_PINS) == 2
     for relative_path, expected_sha256 in LOCAL_GPU_PROMPT_SOURCE_PINS:
         source = root / relative_path
@@ -459,7 +458,35 @@ def test_v6_hybrid_request_allows_explicit_human_exclusion(
         overlay_path=path,
     )
 
-    assert f"Subject: {detail}. " in request.generation.prompt
+    assert request.generation.prompt == "monochrome: 방형구에서 식물 분포를 조사하는 장면"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("alt_text", "가" * (LOCAL_GPU_MAX_SUBJECT_CHARS + 1)),
+        ("negative_prompt", "x" * (LOCAL_GPU_MAX_WORKER_NEGATIVE_CHARS + 1)),
+    ),
+)
+def test_local_gpu_request_rejects_unbounded_worker_prompt_fields(
+    tmp_path: Path,
+    field: str,
+    value: str,
+) -> None:
+    path = tmp_path / "generated-overlay.png"
+    path.write_bytes(_overlay_png())
+    path.chmod(0o640)
+    drawing = _hybrid_drawing().model_copy(update={field: value})
+
+    with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_INPUT_INVALID"):
+        _build_request(
+            workflow_id="workflow_" + "7" * 32,
+            result_revision_id="rev_" + "8" * 32,
+            drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+            drawing=drawing,
+            binding=LocalImageProviderBinding.model_validate(_binding_value()),
+            overlay_path=path,
+        )
 
 
 @pytest.mark.parametrize(

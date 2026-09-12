@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Final
 
-LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.1"
+LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.2"
+LOCAL_GPU_MAX_SUBJECT_CHARS: Final = 50
+LOCAL_GPU_MAX_WORKER_NEGATIVE_CHARS: Final = 120
 
 # These are provenance pins for the two reviewed inputs.  They are not runtime paths and the
 # Catalog service does not dereference repository files while handling a request.
@@ -20,36 +22,25 @@ LOCAL_GPU_PROMPT_SOURCE_PINS: Final = (
     ),
 )
 
-# Ordered sentences keep the highest-value subject-independent constraints inside both 77-token
-# CLIP encoders. The renderer style leads, followed immediately by exact subject-specific content.
-LOCAL_GPU_RASTER_REQUIREMENTS: Final = (
-    "Monochrome KICE exam line art on blank pure white canvas, isolated subjects, crisp black "
-    "outlines, flat gray or hatching inside objects only, single composition.",
-    "Exact count, position, direction, scale, ratio, geometry, scientific relation.",
-    "Necessary objects, wide blank margins.",
-)
-LOCAL_GPU_BACKGROUND_REQUIREMENTS: Final = (
-    "Non-authoritative background layer only.",
-    *LOCAL_GPU_RASTER_REQUIREMENTS,
-)
+# The fixed SSD-1B provider has two 77-token CLIP encoders. The complete reviewed team-lead
+# instruction remains pinned in the drawing and its hash; the GPU receives the worker-authored,
+# concise alt text as its semantic subject. Authoritative labels and geometry remain in the
+# deterministic overlay.
+LOCAL_GPU_RASTER_REQUIREMENTS: Final = ("monochrome:",)
+LOCAL_GPU_BACKGROUND_REQUIREMENTS: Final = ("monochrome:",)
 
 # Ordered terms combine the two sources' always-on prohibitions.  Authoritative labels, graphs,
 # equations, arrows, scales, and exact geometry remain in the deterministic SVG overlay.
 LOCAL_GPU_NEGATIVE_REQUIREMENTS: Final = (
     "color",
-    "colored background",
     "gray background",
-    "background fill",
     "border",
     "frame",
     "gradient",
     "shadow",
-    "gloss",
-    "photo texture",
     "photo",
     "3d",
     "perspective",
-    "tilted view",
     "scenery",
     "decoration",
     "extra objects",
@@ -61,9 +52,6 @@ LOCAL_GPU_NEGATIVE_REQUIREMENTS: Final = (
     "numbers",
     "symbols",
     "equations",
-    "graphs",
-    "scales",
-    "watermark",
 )
 
 
@@ -75,13 +63,10 @@ def compose_local_gpu_prompts(
 ) -> tuple[str, str]:
     """Arrange mandatory renderer style and exact worker content without truncation."""
 
-    requirements = (
+    prefix = (
         LOCAL_GPU_BACKGROUND_REQUIREMENTS if background_only else LOCAL_GPU_RASTER_REQUIREMENTS
-    )
-    leading_count = 2 if background_only else 1
-    leading = " ".join(requirements[:leading_count])
-    trailing = " ".join(requirements[leading_count:])
-    positive = f"{leading} Subject: {subject}. {trailing}"
+    )[0]
+    positive = f"{prefix} {subject}"
     negative_parts = (
         (*LOCAL_GPU_NEGATIVE_REQUIREMENTS, worker_negative)
         if worker_negative is not None
