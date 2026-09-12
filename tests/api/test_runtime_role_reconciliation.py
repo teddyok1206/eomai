@@ -277,10 +277,20 @@ def test_disposable_database_runs_workflow_preclaim_integration() -> None:
     assert "tests/integration/test_knowledge_analysis_v9.py" not in source
 
 
+def test_disposable_database_runs_hwpx_persistence_without_runtime_reconciliation() -> None:
+    source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
+
+    assert "{verify|migrate|hwpx-tests|tests}" in source
+    hwpx_branch = source.index('if [[ "${action}" == "hwpx-tests" ]]')
+    runtime_environment = source.index('runtime_environment="${state_directory}/runtime.env"')
+    assert hwpx_branch < runtime_environment
+    assert '"${PYTHON}" -m pytest -q tests/integration/test_hwpx_persistence.py' in source
+
+
 def test_disposable_migration_verifies_head_and_migration_0006_objects() -> None:
     source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
 
-    assert "{verify|migrate|tests}" in source
+    assert "{verify|migrate|hwpx-tests|tests}" in source
     assert "validate_application_schema_metadata" in source
     assert "SELECT version_num FROM app.alembic_version" in source
     assert "app.reject_identity_key_change()" in source

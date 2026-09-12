@@ -12,6 +12,7 @@ sudo -n scripts/api/testdb_prepare.sh
 sudo -k
 scripts/api/testdb_run.sh verify /tmp/eom-api-testdb-<ID>
 scripts/api/testdb_run.sh migrate /tmp/eom-api-testdb-<ID>
+scripts/api/testdb_run.sh hwpx-tests /tmp/eom-api-testdb-<ID>
 
 sudo -v
 sudo -n scripts/api/testdb_prepare.sh --reconcile /tmp/eom-api-testdb-<ID>
@@ -27,6 +28,10 @@ Replace `<ID>` only with the exact non-sensitive directory printed by prepare. C
 these privileged phases. The state directory is `eom:eom:0700`; `owner.env`, `runtime.env`, and
 `manifest.json` are 0600. Neither script prints a credential or URL. Do not source these files
 outside the runner.
+
+The optional `hwpx-tests` action runs only the six HWPX persistence integration tests as the
+disposable migration owner. It runs after the migration cycle and before runtime-role reconciliation,
+uses the same guarded owner URL validation, and never falls back to production credentials.
 
 Prepare creates only `eom_api_test_*` names and records
 `EOM_API_DISPOSABLE_TEST_DB:<ID>` comments. Migration runs as the isolated database owner. Runtime

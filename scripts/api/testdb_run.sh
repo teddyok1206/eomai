@@ -10,8 +10,9 @@ fail() {
   exit 1
 }
 
-if (($# != 2)) || [[ "$1" != "verify" && "$1" != "migrate" && "$1" != "tests" ]]; then
-  printf '%s\n' "usage: $0 {verify|migrate|tests} /tmp/eom-api-testdb-<ID>" >&2
+if (($# != 2)) || \
+  [[ "$1" != "verify" && "$1" != "migrate" && "$1" != "hwpx-tests" && "$1" != "tests" ]]; then
+  printf '%s\n' "usage: $0 {verify|migrate|hwpx-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -149,6 +150,13 @@ PY
   printf 'Disposable API test database migration cycle passed.\n'
   printf 'Next privileged phase: scripts/api/testdb_prepare.sh --reconcile %s\n' \
     "${state_directory}"
+  exit 0
+fi
+
+if [[ "${action}" == "hwpx-tests" ]]; then
+  export EOM_RUN_INTEGRATION=1
+  "${PYTHON}" -m pytest -q tests/integration/test_hwpx_persistence.py
+  printf 'Disposable HWPX persistence integration tests passed.\n'
   exit 0
 fi
 
