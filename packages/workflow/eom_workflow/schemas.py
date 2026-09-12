@@ -1037,6 +1037,111 @@ def _normalize_duplicate_legacy_source_anchor_ids(
                 observation["source_anchor_ids"] = expanded
 
 
+def _bind_solution_id_array(
+    field_schema: dict[str, Any],
+    allowed_ids: tuple[str, ...],
+    *,
+    field_name: str,
+) -> None:
+    """Constrain one report reference array to the exact immutable request index."""
+
+    items = _mapping(field_schema, "items")
+    if allowed_ids:
+        items["enum"] = list(allowed_ids)
+        return
+    if int(field_schema.get("minItems", 0)) > 0:
+        raise WorkflowSchemaError(f"solution reference index has no values for {field_name}")
+    field_schema["maxItems"] = 0
+
+
+def _bind_solution_reference_index(
+    report_properties: dict[str, Any],
+    request: KnowledgeAnalysisRequestV10,
+) -> None:
+    """Project the closed V9 node/anchor index into the worker's V10 JSON Schema."""
+
+    index = request.base_analysis.reference_index
+    node_ids = tuple(sorted(node.node_id for node in index.nodes))
+    item_element_ids = tuple(
+        sorted(node.node_id for node in index.nodes if node.node_type == "ITEM_ELEMENT")
+    )
+    concept_ids = tuple(
+        sorted(
+            node.node_id
+            for node in index.nodes
+            if node.node_type in {"CONCEPT", "PROCESS", "OBSERVABLE_PROPERTY", "FORMULA"}
+        )
+    )
+    assessment_pattern_ids = tuple(
+        sorted(node.node_id for node in index.nodes if node.node_type == "ASSESSMENT_PATTERN")
+    )
+    all_anchor_ids = tuple(sorted(index.anchor_ids))
+    problem_anchor_ids = tuple(sorted(index.problem_anchor_ids))
+    answer_anchor_ids = tuple(sorted(index.answer_explanation_anchor_ids))
+
+    steps = _mapping(report_properties, "solution_steps")
+    step_properties = _mapping(_mapping(steps, "items"), "properties")
+    _bind_solution_id_array(
+        _mapping(step_properties, "node_ids"), node_ids, field_name="solution_steps.node_ids"
+    )
+    _bind_solution_id_array(
+        _mapping(step_properties, "item_element_node_ids"),
+        item_element_ids,
+        field_name="solution_steps.item_element_node_ids",
+    )
+    _bind_solution_id_array(
+        _mapping(step_properties, "anchor_ids"),
+        problem_anchor_ids,
+        field_name="solution_steps.anchor_ids",
+    )
+
+    links = _mapping(report_properties, "concept_assessment_links")
+    link_properties = _mapping(_mapping(links, "items"), "properties")
+    concept_node = _mapping(link_properties, "concept_node_id")
+    if not concept_ids:
+        raise WorkflowSchemaError("solution reference index has no concept-like node")
+    concept_node["enum"] = list(concept_ids)
+    _bind_solution_id_array(
+        _mapping(link_properties, "assessment_pattern_node_ids"),
+        assessment_pattern_ids,
+        field_name="concept_assessment_links.assessment_pattern_node_ids",
+    )
+    _bind_solution_id_array(
+        _mapping(link_properties, "item_element_node_ids"),
+        item_element_ids,
+        field_name="concept_assessment_links.item_element_node_ids",
+    )
+
+    choices = _mapping(report_properties, "choice_diagnostics")
+    choice_properties = _mapping(_mapping(choices, "items"), "properties")
+    _bind_solution_id_array(
+        _mapping(choice_properties, "node_ids"),
+        node_ids,
+        field_name="choice_diagnostics.node_ids",
+    )
+    _bind_solution_id_array(
+        _mapping(choice_properties, "anchor_ids"),
+        all_anchor_ids,
+        field_name="choice_diagnostics.anchor_ids",
+    )
+
+    comparison = _mapping(report_properties, "official_explanation_comparison")
+    comparison_properties = _mapping(comparison, "properties")
+    _bind_solution_id_array(
+        _mapping(comparison_properties, "answer_explanation_anchor_ids"),
+        answer_anchor_ids,
+        field_name="official_explanation_comparison.answer_explanation_anchor_ids",
+    )
+
+    issues = _mapping(report_properties, "unresolved_issues")
+    issue_properties = _mapping(_mapping(issues, "items"), "properties")
+    _bind_solution_id_array(
+        _mapping(issue_properties, "anchor_ids"),
+        all_anchor_ids,
+        field_name="unresolved_issues.anchor_ids",
+    )
+
+
 def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> dict[str, Any]:
     schema = load_codex_result_schema(schema_id)
     properties = _mapping(schema, "properties")
@@ -1112,6 +1217,10 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
             _mapping(report_properties, "base_analysis_result_id")["const"] = (
                 analysis_request.base_analysis.analysis_result_id
             )
+            _mapping(report_properties, "general_knowledge_used")["const"] = (
+                analysis_request.general_knowledge_mode == "AUXILIARY_UNATTRIBUTED"
+            )
+            _bind_solution_reference_index(report_properties, analysis_request)
         source = analysis_request.source
         if isinstance(analysis_request, (KnowledgeAnalysisRequestV9, KnowledgeAnalysisRequestV10)):
             if isinstance(analysis_request, KnowledgeAnalysisRequestV10):

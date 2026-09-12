@@ -69,6 +69,7 @@ ANALYSIS_CONFIG_V16 = ROOT / "config/control-plane/knowledge-analysis-v16"
 ANALYSIS_CONFIG_V17 = ROOT / "config/control-plane/knowledge-analysis-v17"
 ANALYSIS_CONFIG_V18 = ROOT / "config/control-plane/knowledge-analysis-v18"
 ANALYSIS_CONFIG_V19 = ROOT / "config/control-plane/knowledge-analysis-v19"
+ANALYSIS_CONFIG_V20 = ROOT / "config/control-plane/knowledge-analysis-v20"
 
 
 def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version() -> None:
@@ -77,7 +78,7 @@ def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version
     )
 
     assert set(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS) == schema_versions
-    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 20))
+    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 21))
 
 
 def test_knowledge_analysis_v13_adds_parallel_capacity_without_changing_worker_semantics() -> None:
@@ -294,6 +295,34 @@ def test_knowledge_analysis_v19_requires_the_complete_solution_semantic_closure(
     ).read_bytes()
     assert (ANALYSIS_CONFIG_V18 / "instructions/knowledge-analysis.md").read_bytes() != (
         ANALYSIS_CONFIG_V19 / "instructions/knowledge-analysis.md"
+    ).read_bytes()
+
+
+def test_knowledge_analysis_v20_forbids_synthesized_reference_identities() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V20)
+
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/20.0"
+    assert manifest.created_at.isoformat() == "2026-09-12T11:38:00+00:00"
+    assert manifest.compatible_workflow_protocols[-1] == "workflow-role/1.21.0"
+    instruction = (ANALYSIS_CONFIG_V20 / "instructions/knowledge-analysis.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(instruction.split())
+    for required in (
+        "copied byte-for-byte",
+        "request-specific result JSON Schema",
+        "Do not construct an ID",
+        "guessed, synthesized, approximate, placeholder",
+        "`emitted IDs - allowed IDs`",
+        "Each set difference must be empty",
+        "matching prefix or syntactically valid pattern is not evidence of membership",
+    ):
+        assert required in normalized
+    assert (ANALYSIS_CONFIG_V19 / "instructions/platform.md").read_bytes() == (
+        ANALYSIS_CONFIG_V20 / "instructions/platform.md"
+    ).read_bytes()
+    assert (ANALYSIS_CONFIG_V19 / "instructions/knowledge-analysis.md").read_bytes() != (
+        ANALYSIS_CONFIG_V20 / "instructions/knowledge-analysis.md"
     ).read_bytes()
 
 

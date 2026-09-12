@@ -50,6 +50,15 @@ that index, every step dependency to point to an earlier step, and every concept
 to reference at least one solution step and one item element or assessment pattern. Missing,
 dangling, stale, duplicated, reordered, wrong-type, or hash-mismatched references fail explicitly.
 
+The worker boundary also derives a request-specific JSON Schema from the immutable reference index
+before execution. Node, item-element, concept-like, assessment-pattern, problem-anchor, full-anchor,
+and answer-anchor fields use exact enum sets for their semantic role. Empty optional reference sets
+admit only an empty array; an empty set for a required field fails before dispatch. This schema is a
+bounded projection of the canonical V10 contract, not a new identity or persisted cache. Canonical
+Pydantic and Orchestrator validation remain authoritative after execution. The duplicate layers are
+intentional: schema-constrained generation prevents syntactically valid fabricated IDs, while the
+post-result resolver protects storage against drift or a nonconforming worker.
+
 ## Access patterns and data structures
 
 The dominant read is an indexed lookup from Item Revision or base analysis run to the one accepted

@@ -31,6 +31,7 @@ from eom_workflow.models import (
     WorkflowRequest,
 )
 from eom_workflow.schemas import (
+    WorkflowSchemaError,
     constrained_result_schema,
     load_codex_result_schema,
     validate_role_input,
@@ -630,6 +631,98 @@ def test_v10_role_schema_and_request_projection_are_closed() -> None:
     assert isinstance(parsed, KnowledgeAnalysisProposalRoleResultV10)
     assert parsed.output.proposal.base_analysis_result_id == "knowledgeanalysisresult_" + "a" * 32
     assert len(load_codex_result_schema("knowledge-analysis-proposal-result@10.0")["$defs"]) == 4
+
+
+def test_v10_constrained_schema_rejects_reference_outside_exact_base_index() -> None:
+    worker_input = validate_role_input(_role_input_value(), "support", "workflow-role/1.21.0")
+    assert isinstance(worker_input, RoleWorkerInput)
+    constrained = constrained_result_schema("knowledge-analysis-proposal-result@10.0", worker_input)
+    result = _role_result_value()
+    output = cast(dict[str, Any], result["output"])
+    proposal = cast(dict[str, Any], output["proposal"])
+    report = cast(dict[str, Any], proposal["solution_report"])
+    steps = cast(list[dict[str, Any]], report["solution_steps"])
+    steps[0]["node_ids"] = ["knode_formula_item3_none"]
+
+    with pytest.raises(WorkflowSchemaError, match="is not one of"):
+        validate_schema_message(constrained, result, "constrained-v10")
+
+
+def test_v10_constrained_schema_binds_every_semantic_reference_family() -> None:
+    worker_input = validate_role_input(_role_input_value(), "support", "workflow-role/1.21.0")
+    assert isinstance(worker_input, RoleWorkerInput)
+    constrained = constrained_result_schema("knowledge-analysis-proposal-result@10.0", worker_input)
+    definitions = cast(dict[str, Any], constrained["$defs"])
+    report = cast(dict[str, Any], definitions["SolutionV1_solutionReport"])
+    properties = cast(dict[str, Any], report["properties"])
+
+    def item_properties(field_name: str) -> dict[str, Any]:
+        field = cast(dict[str, Any], properties[field_name])
+        items = cast(dict[str, Any], field["items"])
+        return cast(dict[str, Any], items["properties"])
+
+    steps = item_properties("solution_steps")
+    assert steps["node_ids"]["items"]["enum"] == [
+        "knode_assessment_pattern_reason",
+        "knode_concept_motion",
+        "knode_item_element_stem",
+    ]
+    assert steps["item_element_node_ids"]["items"]["enum"] == ["knode_item_element_stem"]
+    assert steps["anchor_ids"]["items"]["enum"] == ["anchor_problem"]
+
+    links = item_properties("concept_assessment_links")
+    assert links["concept_node_id"]["enum"] == ["knode_concept_motion"]
+    assert links["assessment_pattern_node_ids"]["items"]["enum"] == [
+        "knode_assessment_pattern_reason"
+    ]
+    assert links["item_element_node_ids"]["items"]["enum"] == ["knode_item_element_stem"]
+
+    choices = item_properties("choice_diagnostics")
+    assert choices["node_ids"]["items"]["enum"] == [
+        "knode_assessment_pattern_reason",
+        "knode_concept_motion",
+        "knode_item_element_stem",
+    ]
+    assert choices["anchor_ids"]["items"]["enum"] == [
+        "anchor_answer",
+        "anchor_problem",
+    ]
+
+    comparison = cast(dict[str, Any], properties["official_explanation_comparison"])
+    comparison_properties = cast(dict[str, Any], comparison["properties"])
+    assert comparison_properties["answer_explanation_anchor_ids"]["items"]["enum"] == [
+        "anchor_answer"
+    ]
+    issues = item_properties("unresolved_issues")
+    assert issues["anchor_ids"]["items"]["enum"] == ["anchor_answer", "anchor_problem"]
+
+
+def test_v10_constrained_schema_closes_empty_optional_reference_family() -> None:
+    input_value = _role_input_value()
+    request_wrapper = cast(dict[str, Any], input_value["request"])
+    request = cast(dict[str, Any], request_wrapper["analysis_request"])
+    base = cast(dict[str, Any], request["base_analysis"])
+    reference_index = cast(dict[str, Any], base["reference_index"])
+    reference_index["answer_explanation_anchor_ids"] = []
+    reference_index["index_sha256"] = content_sha256(
+        {key: value for key, value in reference_index.items() if key != "index_sha256"}
+    )
+    request["request_sha256"] = content_sha256(
+        {key: value for key, value in request.items() if key != "request_sha256"}
+    )
+    worker_input = validate_role_input(input_value, "support", "workflow-role/1.21.0")
+    assert isinstance(worker_input, RoleWorkerInput)
+
+    constrained = constrained_result_schema("knowledge-analysis-proposal-result@10.0", worker_input)
+    definitions = cast(dict[str, Any], constrained["$defs"])
+    report = cast(dict[str, Any], definitions["SolutionV1_solutionReport"])
+    properties = cast(dict[str, Any], report["properties"])
+    comparison = cast(dict[str, Any], properties["official_explanation_comparison"])
+    comparison_properties = cast(dict[str, Any], comparison["properties"])
+    answer_anchors = cast(dict[str, Any], comparison_properties["answer_explanation_anchor_ids"])
+
+    assert answer_anchors["maxItems"] == 0
+    assert "enum" not in answer_anchors["items"]
 
 
 def _change_reference_index_hash(value: dict[str, object]) -> None:

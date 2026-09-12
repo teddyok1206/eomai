@@ -1,0 +1,24 @@
+schema_version: knowledge-analysis-control-bootstrap/20.0
+preset_key: knowledge-analysis
+display_name: 지식 분석
+description: 풀이보고서의 모든 base node·anchor 참조를 요청별 폐쇄 집합 JSON Schema로 제한하고 출력 전 차집합 검사를 강제하는 bounded-parallel v1.21 support 정책입니다.
+created_at: 2026-09-12T11:38:00Z
+model: gpt-5.6-terra
+reasoning_effort: xhigh
+general_knowledge_policy: ALLOW_WITH_PROVENANCE
+compatible_workflow_protocols:
+  - workflow-role/1.4.0
+  - workflow-role/1.5.0
+  - workflow-role/1.6.0
+  - workflow-role/1.7.0
+  - workflow-role/1.8.0
+  - workflow-role/1.9.0
+  - workflow-role/1.10.0
+  - workflow-role/1.11.0
+  - workflow-role/1.18.0
+  - workflow-role/1.21.0
+platform_instruction_path: instructions/platform.md
+role_instruction_path: instructions/knowledge-analysis.md
+slot_key: slot05
+worker_pool_key: support
+timeout_seconds: 7200
