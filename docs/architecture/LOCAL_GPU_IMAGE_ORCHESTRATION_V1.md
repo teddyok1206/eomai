@@ -1,13 +1,14 @@
 # Local GPU image orchestration V1
 
-Status: implementation design; production route disabled until source and runtime gates pass
+Status: implemented; runtime use remains gated by the active Content Pack and provider binding
 
-Last reviewed: 2026-09-01 UTC
+Last reviewed: 2026-09-12 UTC
 
 ## Responsibility and boundary
 
 The existing generated-item image step remains the durable orchestration record. A validated V5
-image result may select `LOCAL_GENERATIVE_BACKGROUND`; Catalog then constructs one typed provider
+image result may select `LOCAL_GENERATIVE_BACKGROUND`, while the current V6 family may select
+`HYBRID_LOCAL_GENERATIVE`; Catalog then constructs one typed provider
 request, rasterizes the sanitized SVG overlay, starts one fixed local GPU unit, validates the
 background/composite receipt, and commits one immutable Artifact Revision. The isolated provider
 performs only the pinned Pillow alpha-composite operation; Catalog owns its contract and validates
@@ -56,8 +57,8 @@ pixels never become the source of required labels, numeric scales, equations, or
 - Artifact members: fixed keyed map with four members and exact expected hashes.
 - SVG validation: bounded ordered tree traversal, O(nodes + attribute bytes).
 
-Expected scale is one GPU, one provider unit at a time, and at most one generated background per
-image-result revision. A DB queue or general scheduler would add a parallel framework without a
+Expected scale is one GPU, one provider unit at a time, and at most one generated raster per typed
+drawing slot (with at most two IMAGE slots per Item). A DB queue or general scheduler would add a parallel framework without a
 second use case.
 
 ## Transaction and concurrency boundary
@@ -117,10 +118,11 @@ in the SVG and its deterministic raster, not in model-generated pixels.
 
 ## Failure containment and rollback
 
-Until a new immutable Content Pack release explicitly permits the local route, production remains
-deterministic SVG only. Rollback reactivates the prior pack release and removes the provider unit
+Runtime use requires an immutable Content Pack that permits the local route and an enabled,
+hash-pinned provider binding. Rollback reactivates a prior pack release and disables provider unit
 authorization; it does not rewrite workflows, receipts, artifacts, or model revisions. API, HWPX,
-observability, textbook-analysis Slot 5, port 8000, and `/home/eom/EOMIS` are outside this change.
+observability, knowledge-analysis support work, port 8000, and `/home/eom/EOMIS` are outside this
+change.
 
 ## Simpler alternative and why it is insufficient
 
