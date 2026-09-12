@@ -1052,6 +1052,7 @@ class _KnowledgeAnalysisRequestBase(FrozenModel):
         "eom://schemas/knowledge/knowledge-analysis-worker-proposal/5.0",
         "eom://schemas/knowledge/knowledge-analysis-worker-proposal/6.0",
         "eom://schemas/knowledge/knowledge-analysis-worker-proposal/7.0",
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/8.0",
     ]
     predecessor_analysis_run_id: str | None = Field(
         default=None, pattern=r"^analysisrun_[0-9a-f]{32}$"
@@ -1077,16 +1078,21 @@ class _KnowledgeAnalysisRequestBase(FrozenModel):
 
     @model_validator(mode="after")
     def exact_outputs_and_hash(self) -> _KnowledgeAnalysisRequestBase:
+        schema_version = getattr(self, "schema_version", None)
         expected_outputs = (
-            KNOWLEDGE_ANALYSIS_OUTPUTS_V3
-            if getattr(self, "schema_version", None)
-            in {
-                "knowledge-analysis-request/6.0",
-                "knowledge-analysis-request/7.0",
-                "knowledge-analysis-request/8.0",
-                "knowledge-analysis-request/9.0",
-            }
-            else KNOWLEDGE_ANALYSIS_OUTPUTS_V2
+            {"SOLUTION_REPORT"}
+            if schema_version == "knowledge-analysis-request/10.0"
+            else (
+                KNOWLEDGE_ANALYSIS_OUTPUTS_V3
+                if schema_version
+                in {
+                    "knowledge-analysis-request/6.0",
+                    "knowledge-analysis-request/7.0",
+                    "knowledge-analysis-request/8.0",
+                    "knowledge-analysis-request/9.0",
+                }
+                else KNOWLEDGE_ANALYSIS_OUTPUTS_V2
+            )
         )
         if set(self.requested_outputs) != expected_outputs:
             raise ValueError("knowledge analysis V2 requires the complete bounded output set")
@@ -1762,6 +1768,527 @@ class KnowledgeProposalMembersV2(KnowledgeProposalMembers):
     page_image_observations: KnowledgeProposalArtifactMember
 
 
+class KnowledgeAnalysisAcceptedResultArtifactMember(KnowledgeProposalArtifactMember):
+    """Exact accepted V9 result member reused by an additive solution pass."""
+
+    member_path: Literal["evidence/accepted-result.json"] = "evidence/accepted-result.json"
+    schema_ref: Literal["eom://schemas/knowledge/knowledge-analysis-result/9.0"] = (
+        "eom://schemas/knowledge/knowledge-analysis-result/9.0"
+    )
+    media_type: Literal["application/json"] = "application/json"
+
+
+class KnowledgeAnalysisBaseReferenceNode(FrozenModel):
+    """Small typed identity copied from one exact accepted base proposal."""
+
+    node_id: NodeId
+    node_type: Literal[
+        "CONCEPT",
+        "CLAIM",
+        "PROCESS",
+        "OBSERVABLE_PROPERTY",
+        "FORMULA",
+        "ITEM_ELEMENT",
+        "ASSESSMENT_PATTERN",
+    ]
+
+    @model_validator(mode="after")
+    def node_identity_carries_its_type(self) -> KnowledgeAnalysisBaseReferenceNode:
+        expected_prefix = f"knode_{self.node_type.lower()}_"
+        if not self.node_id.startswith(expected_prefix):
+            raise ValueError("solution reference node ID does not carry its declared type")
+        return self
+
+
+class KnowledgeAnalysisBaseReferenceIndex(FrozenModel):
+    """Bounded derived lookup index pinned to immutable base proposal members."""
+
+    anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=1024)
+    problem_anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=1024)
+    answer_explanation_anchor_ids: tuple[AnchorId, ...] = Field(max_length=1024)
+    nodes: tuple[KnowledgeAnalysisBaseReferenceNode, ...] = Field(min_length=1, max_length=512)
+    index_sha256: Sha256
+
+    @model_validator(mode="after")
+    def ordered_closed_and_hashed(self) -> KnowledgeAnalysisBaseReferenceIndex:
+        for values, label in (
+            (self.anchor_ids, "anchor"),
+            (self.problem_anchor_ids, "problem anchor"),
+            (self.answer_explanation_anchor_ids, "answer anchor"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"solution base {label} IDs must be sorted and unique")
+        if not set(self.problem_anchor_ids).issubset(self.anchor_ids) or not set(
+            self.answer_explanation_anchor_ids
+        ).issubset(self.anchor_ids):
+            raise ValueError("solution base role-aware anchors must resolve in the full anchor set")
+        if set(self.problem_anchor_ids) & set(self.answer_explanation_anchor_ids):
+            raise ValueError("solution base problem and answer anchors must be disjoint")
+        node_ids = tuple(node.node_id for node in self.nodes)
+        if node_ids != tuple(sorted(set(node_ids))):
+            raise ValueError("solution base reference nodes must be sorted and unique")
+        body = self.model_dump(mode="json", exclude={"index_sha256"})
+        if content_sha256(body) != self.index_sha256:
+            raise ValueError("solution base reference index hash differs")
+        return self
+
+
+class KnowledgeAnalysisBaseResultPointer(FrozenModel):
+    """One fully resolved accepted V9 analysis reused without copying its members."""
+
+    analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    analysis_result_id: str = Field(pattern=r"^knowledgeanalysisresult_[0-9a-f]{32}$")
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    accepted_result_sha256: Sha256
+    accepted_result_artifact: KnowledgeAnalysisAcceptedResultArtifactMember
+    proposal_receipt: KnowledgeProposalArtifactMember
+    proposal_content_set_sha256: Sha256
+    base_members: KnowledgeProposalMembersV2
+    base_counts: KnowledgeProposalCountsV2
+    reference_index: KnowledgeAnalysisBaseReferenceIndex
+
+    @model_validator(mode="after")
+    def exact_v9_member_family(self) -> KnowledgeAnalysisBaseResultPointer:
+        if self.accepted_result_artifact.sha256 != self.accepted_result_sha256:
+            raise ValueError("base accepted-result pointer hash differs")
+        if (
+            self.proposal_receipt.member_path != "normalized/proposal-receipt.json"
+            or self.proposal_receipt.schema_ref
+            != "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/8.0"
+            or self.proposal_receipt.media_type != "application/json"
+        ):
+            raise ValueError("base proposal receipt pointer is not V8")
+        expected = {
+            "normalized_markdown": (
+                "normalized/document.md",
+                "eom://schemas/knowledge/normalized-markdown/1.0",
+                "text/markdown",
+            ),
+            "anchors": (
+                "normalized/anchors.jsonl",
+                "eom://schemas/knowledge/source-anchor/2.0",
+                "application/x-ndjson",
+            ),
+            "nodes": (
+                "normalized/nodes.jsonl",
+                "eom://schemas/knowledge/proposed-node/4.0",
+                "application/x-ndjson",
+            ),
+            "edges": (
+                "normalized/edges.jsonl",
+                "eom://schemas/knowledge/proposed-edge/4.0",
+                "application/x-ndjson",
+            ),
+            "claims": (
+                "normalized/claims.jsonl",
+                "eom://schemas/knowledge/proposed-claim/2.0",
+                "application/x-ndjson",
+            ),
+            "component_observations": (
+                "normalized/components.jsonl",
+                "eom://schemas/knowledge/component-observation/2.0",
+                "application/x-ndjson",
+            ),
+            "page_image_observations": (
+                "normalized/page-images.jsonl",
+                "eom://schemas/knowledge/assessment-page-image-observation/2.0",
+                "application/x-ndjson",
+            ),
+            "unresolved_ambiguities": (
+                "normalized/ambiguities.jsonl",
+                "eom://schemas/knowledge/ambiguity/3.0",
+                "application/x-ndjson",
+            ),
+        }
+        values = tuple(
+            (name, getattr(self.base_members, name))
+            for name in self.base_members.__class__.model_fields
+        )
+        if len({(value.artifact_id, value.artifact_revision_id) for _, value in values}) != 1:
+            raise ValueError("base proposal members must share one Artifact Revision")
+        for name, value in values:
+            if (value.member_path, value.schema_ref, value.media_type) != expected[name]:
+                raise ValueError("base proposal member contract differs")
+        descriptors = [
+            {
+                "member_path": value.member_path,
+                "sha256": value.sha256,
+                "bytes": value.bytes,
+                "schema_ref": value.schema_ref,
+                "media_type": value.media_type,
+            }
+            for _, value in sorted(values, key=lambda pair: pair[1].member_path)
+        ]
+        if content_sha256(descriptors) != self.proposal_content_set_sha256:
+            raise ValueError("base proposal content-set hash differs")
+        return self
+
+
+class KnowledgeSolutionStep(FrozenModel):
+    step_id: str = Field(pattern=r"^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$")
+    ordinal: int = Field(ge=1, le=64)
+    operation: Literal[
+        "INTERPRET_GIVEN",
+        "APPLY_CONCEPT",
+        "TRANSFORM_RELATION",
+        "CALCULATE",
+        "EVALUATE_STATEMENT",
+        "EVALUATE_CHOICE",
+        "CONCLUDE",
+    ]
+    rationale: str = Field(min_length=1, max_length=4000)
+    outcome: str = Field(min_length=1, max_length=4000)
+    depends_on_step_ids: tuple[str, ...] = Field(max_length=16)
+    node_ids: tuple[NodeId, ...] = Field(min_length=1, max_length=16)
+    item_element_node_ids: tuple[NodeId, ...] = Field(min_length=1, max_length=16)
+    anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=16)
+
+    _rationale = field_validator("rationale", "outcome")(_safe_text)
+
+    @model_validator(mode="after")
+    def local_references_are_canonical(self) -> KnowledgeSolutionStep:
+        for values, label in (
+            (self.depends_on_step_ids, "dependency"),
+            (self.node_ids, "node"),
+            (self.item_element_node_ids, "item element"),
+            (self.anchor_ids, "anchor"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"solution step {label} IDs must be sorted and unique")
+        if any(not value.startswith("knode_item_element_") for value in self.item_element_node_ids):
+            raise ValueError("solution step item-element reference has the wrong node type")
+        return self
+
+
+class KnowledgeConceptAssessmentLink(FrozenModel):
+    concept_node_id: NodeId
+    role: Literal[
+        "GIVEN_INTERPRETATION",
+        "REQUIRED_KNOWLEDGE",
+        "INFERENCE_OPERATION",
+        "ANSWER_CRITERION",
+        "DISTRACTOR_TARGET",
+    ]
+    reasoning_step_ids: tuple[str, ...] = Field(min_length=1, max_length=32)
+    assessment_pattern_node_ids: tuple[NodeId, ...] = Field(max_length=16)
+    item_element_node_ids: tuple[NodeId, ...] = Field(max_length=32)
+    summary: str = Field(min_length=1, max_length=1000)
+
+    _summary = field_validator("summary")(_safe_text)
+
+    @model_validator(mode="after")
+    def typed_targets_are_canonical(self) -> KnowledgeConceptAssessmentLink:
+        if not self.concept_node_id.startswith(
+            ("knode_concept_", "knode_process_", "knode_observable_property_", "knode_formula_")
+        ):
+            raise ValueError("concept-assessment link source has the wrong node type")
+        for values, prefix, label in (
+            (self.reasoning_step_ids, "solutionstep_", "step"),
+            (self.assessment_pattern_node_ids, "knode_assessment_pattern_", "pattern"),
+            (self.item_element_node_ids, "knode_item_element_", "item element"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"concept-assessment {label} IDs must be sorted and unique")
+            if any(not value.startswith(prefix) for value in values):
+                raise ValueError(f"concept-assessment {label} ID has the wrong type")
+        if not self.assessment_pattern_node_ids and not self.item_element_node_ids:
+            raise ValueError("concept-assessment link needs a pattern or item element")
+        return self
+
+
+class KnowledgeChoiceDiagnostic(FrozenModel):
+    choice_key: str = Field(min_length=1, max_length=64)
+    verdict: Literal["CORRECT", "INCORRECT", "NOT_APPLICABLE"]
+    rationale: str = Field(min_length=1, max_length=4000)
+    targeted_misconception: str | None = Field(default=None, min_length=1, max_length=1000)
+    reasoning_step_ids: tuple[str, ...] = Field(min_length=1, max_length=32)
+    node_ids: tuple[NodeId, ...] = Field(min_length=1, max_length=16)
+    anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=16)
+
+    _text = field_validator("choice_key", "rationale")(_safe_text)
+
+    @field_validator("targeted_misconception")
+    @classmethod
+    def optional_misconception_is_safe(cls, value: str | None) -> str | None:
+        return None if value is None else _safe_text(value)
+
+    @model_validator(mode="after")
+    def local_references_are_canonical(self) -> KnowledgeChoiceDiagnostic:
+        for values, label in (
+            (self.reasoning_step_ids, "step"),
+            (self.node_ids, "node"),
+            (self.anchor_ids, "anchor"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"choice diagnostic {label} IDs must be sorted and unique")
+        return self
+
+
+class KnowledgeOfficialExplanationComparison(FrozenModel):
+    status: Literal["CONSISTENT", "PARTIAL", "CONFLICT", "UNAVAILABLE"]
+    summary: str = Field(min_length=1, max_length=4000)
+    answer_explanation_anchor_ids: tuple[AnchorId, ...] = Field(max_length=32)
+
+    _summary = field_validator("summary")(_safe_text)
+
+    @model_validator(mode="after")
+    def availability_matches_anchors(self) -> KnowledgeOfficialExplanationComparison:
+        if self.answer_explanation_anchor_ids != tuple(
+            sorted(set(self.answer_explanation_anchor_ids))
+        ):
+            raise ValueError("official-explanation anchor IDs must be sorted and unique")
+        unavailable = self.status == "UNAVAILABLE"
+        if unavailable != (not self.answer_explanation_anchor_ids):
+            raise ValueError("official-explanation availability differs from its anchors")
+        return self
+
+
+class KnowledgeSolutionIssue(FrozenModel):
+    code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    summary: str = Field(min_length=1, max_length=1000)
+    anchor_ids: tuple[AnchorId, ...] = Field(max_length=16)
+
+    _summary = field_validator("summary")(_safe_text)
+
+    @model_validator(mode="after")
+    def anchors_are_canonical(self) -> KnowledgeSolutionIssue:
+        if self.anchor_ids != tuple(sorted(set(self.anchor_ids))):
+            raise ValueError("solution issue anchor IDs must be sorted and unique")
+        return self
+
+
+class KnowledgeAnalysisSolutionReport(FrozenModel):
+    """Externally reviewable rationale, never a model's hidden chain of thought."""
+
+    schema_version: Literal["knowledge-analysis-solution-report/1.0"] = (
+        "knowledge-analysis-solution-report/1.0"
+    )
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    base_analysis_result_id: str = Field(pattern=r"^knowledgeanalysisresult_[0-9a-f]{32}$")
+    rationale_kind: Literal["VERIFIABLE_SOLUTION_RATIONALE"] = "VERIFIABLE_SOLUTION_RATIONALE"
+    solution_steps: tuple[KnowledgeSolutionStep, ...] = Field(min_length=1, max_length=64)
+    concept_assessment_links: tuple[KnowledgeConceptAssessmentLink, ...] = Field(
+        min_length=1, max_length=64
+    )
+    choice_diagnostics: tuple[KnowledgeChoiceDiagnostic, ...] = Field(max_length=32)
+    official_explanation_comparison: KnowledgeOfficialExplanationComparison
+    final_answer_summary: str = Field(min_length=1, max_length=4000)
+    solution_summary: str = Field(min_length=1, max_length=8000)
+    assessment_design_summary: str = Field(min_length=1, max_length=8000)
+    reusable_generation_guidance: str = Field(min_length=1, max_length=8000)
+    unresolved_issues: tuple[KnowledgeSolutionIssue, ...] = Field(max_length=32)
+    general_knowledge_used: bool
+
+    _text = field_validator(
+        "final_answer_summary",
+        "solution_summary",
+        "assessment_design_summary",
+        "reusable_generation_guidance",
+    )(_safe_text)
+
+    @model_validator(mode="after")
+    def ordered_closed_reasoning_graph(self) -> KnowledgeAnalysisSolutionReport:
+        step_ids = tuple(step.step_id for step in self.solution_steps)
+        ordinals = tuple(step.ordinal for step in self.solution_steps)
+        if ordinals != tuple(range(1, len(self.solution_steps) + 1)) or len(step_ids) != len(
+            set(step_ids)
+        ):
+            raise ValueError("solution steps must have contiguous ordinals and unique IDs")
+        earlier: set[str] = set()
+        for step in self.solution_steps:
+            if not set(step.depends_on_step_ids).issubset(earlier):
+                raise ValueError("solution step dependency must reference an earlier step")
+            earlier.add(step.step_id)
+        if self.solution_steps[-1].operation != "CONCLUDE":
+            raise ValueError("solution report must end with a conclusion step")
+        links = tuple((link.concept_node_id, link.role) for link in self.concept_assessment_links)
+        if links != tuple(sorted(set(links))):
+            raise ValueError("concept-assessment links must be sorted and unique")
+        if any(
+            not set(link.reasoning_step_ids).issubset(earlier)
+            for link in self.concept_assessment_links
+        ):
+            raise ValueError("concept-assessment link references an unknown solution step")
+        covered_steps = {
+            step_id for link in self.concept_assessment_links for step_id in link.reasoning_step_ids
+        }
+        if covered_steps != earlier:
+            raise ValueError("every solution step must participate in concept-assessment mapping")
+        choices = tuple(item.choice_key for item in self.choice_diagnostics)
+        if choices != tuple(sorted(set(choices))):
+            raise ValueError("choice diagnostics must be sorted by unique choice key")
+        if any(
+            not set(item.reasoning_step_ids).issubset(earlier) for item in self.choice_diagnostics
+        ):
+            raise ValueError("choice diagnostic references an unknown solution step")
+        issues = tuple(item.code for item in self.unresolved_issues)
+        if issues != tuple(sorted(set(issues))):
+            raise ValueError("solution issues must be sorted by unique code")
+        return self
+
+
+class KnowledgeAnalysisWorkerProposalV8(FrozenModel):
+    """Additive proposal containing only the new solution-report value."""
+
+    schema_version: Literal["knowledge-analysis-worker-proposal/8.0"] = (
+        "knowledge-analysis-worker-proposal/8.0"
+    )
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    base_analysis_result_id: str = Field(pattern=r"^knowledgeanalysisresult_[0-9a-f]{32}$")
+    solution_report: KnowledgeAnalysisSolutionReport
+    completed_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def nested_identities_match(self) -> KnowledgeAnalysisWorkerProposalV8:
+        if (
+            self.solution_report.analysis_request_id != self.analysis_request_id
+            or self.solution_report.base_analysis_result_id != self.base_analysis_result_id
+        ):
+            raise ValueError("solution proposal nested identities differ")
+        return self
+
+
+class KnowledgeAnalysisRequestV10(_KnowledgeAnalysisRequestBase):
+    """Additive solution pass over one exact accepted past-exam V9 analysis."""
+
+    schema_version: Literal["knowledge-analysis-request/10.0"] = "knowledge-analysis-request/10.0"
+    worker_proposal_schema_ref: Literal[
+        "eom://schemas/knowledge/knowledge-analysis-worker-proposal/8.0"
+    ] = "eom://schemas/knowledge/knowledge-analysis-worker-proposal/8.0"
+    accepted_result_schema_ref: Literal[
+        "eom://schemas/knowledge/knowledge-analysis-result/10.0"
+    ] = "eom://schemas/knowledge/knowledge-analysis-result/10.0"
+    source: ApprovedPastExamItemKnowledgeSourceV3
+    predecessor_analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    requested_outputs: tuple[Literal["SOLUTION_REPORT"], ...] = Field(  # type: ignore[assignment]
+        min_length=1, max_length=1
+    )
+    base_analysis: KnowledgeAnalysisBaseResultPointer
+
+    @model_validator(mode="after")
+    def exact_base_and_output(self) -> KnowledgeAnalysisRequestV10:
+        if self.requested_outputs != ("SOLUTION_REPORT",):
+            raise ValueError("additive solution analysis requests only one solution report")
+        if self.predecessor_analysis_run_id != self.base_analysis.analysis_run_id:
+            raise ValueError("solution predecessor differs from its base analysis")
+        body = self.model_dump(mode="json", exclude={"request_sha256"})
+        if content_sha256(body) != self.request_sha256:
+            raise ValueError("solution analysis request hash does not match canonical content")
+        return self
+
+
+def validate_knowledge_solution_report_references(
+    request: KnowledgeAnalysisRequestV10,
+    proposal: KnowledgeAnalysisWorkerProposalV8,
+) -> None:
+    """Resolve every report-local identity against the pinned base reference index in O(n)."""
+
+    report = proposal.solution_report
+    if (
+        proposal.analysis_request_id != request.analysis_request_id
+        or proposal.base_analysis_result_id != request.base_analysis.analysis_result_id
+        or report.general_knowledge_used
+        != (request.general_knowledge_mode == "AUXILIARY_UNATTRIBUTED")
+    ):
+        raise ValueError("solution proposal identity or general-knowledge provenance differs")
+    index = request.base_analysis.reference_index
+    node_types = {node.node_id: node.node_type for node in index.nodes}
+    all_anchors = set(index.anchor_ids)
+    problem_anchors = set(index.problem_anchor_ids)
+    answer_anchors = set(index.answer_explanation_anchor_ids)
+    step_ids = {step.step_id for step in report.solution_steps}
+    for step in report.solution_steps:
+        if (
+            not set(step.node_ids).issubset(node_types)
+            or not set(step.item_element_node_ids).issubset(node_types)
+            or any(node_types[node_id] != "ITEM_ELEMENT" for node_id in step.item_element_node_ids)
+            or not set(step.anchor_ids).issubset(problem_anchors)
+        ):
+            raise ValueError("solution step contains an unresolved or wrong-type base reference")
+    for link in report.concept_assessment_links:
+        if (
+            node_types.get(link.concept_node_id)
+            not in {"CONCEPT", "PROCESS", "OBSERVABLE_PROPERTY", "FORMULA"}
+            or not set(link.reasoning_step_ids).issubset(step_ids)
+            or any(
+                node_types.get(node_id) != "ASSESSMENT_PATTERN"
+                for node_id in link.assessment_pattern_node_ids
+            )
+            or any(
+                node_types.get(node_id) != "ITEM_ELEMENT" for node_id in link.item_element_node_ids
+            )
+        ):
+            raise ValueError("concept-assessment link does not resolve in the base analysis")
+    for choice in report.choice_diagnostics:
+        if (
+            not set(choice.reasoning_step_ids).issubset(step_ids)
+            or not set(choice.node_ids).issubset(node_types)
+            or not set(choice.anchor_ids).issubset(all_anchors)
+        ):
+            raise ValueError("choice diagnostic does not resolve in the base analysis")
+    comparison = report.official_explanation_comparison
+    if not set(comparison.answer_explanation_anchor_ids).issubset(answer_anchors):
+        raise ValueError("official explanation comparison cites non-answer evidence")
+    if any(not set(issue.anchor_ids).issubset(all_anchors) for issue in report.unresolved_issues):
+        raise ValueError("solution issue contains an unresolved anchor")
+
+
+class KnowledgeSolutionCounts(FrozenModel):
+    solution_steps: int = Field(ge=1, le=64)
+    concept_assessment_links: int = Field(ge=1, le=64)
+    choice_diagnostics: int = Field(ge=0, le=32)
+    unresolved_issues: int = Field(ge=0, le=32)
+
+
+class KnowledgeAnalysisProposalReceiptV9(FrozenModel):
+    """Pointer-only composite of an existing V8 receipt and one new report member."""
+
+    schema_version: Literal["knowledge-analysis-proposal-receipt/9.0"] = (
+        "knowledge-analysis-proposal-receipt/9.0"
+    )
+    analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
+    source: ApprovedPastExamItemKnowledgeSourceV3
+    base_analysis: KnowledgeAnalysisBaseResultPointer
+    status: Literal["PROPOSED_VALIDATED"] = "PROPOSED_VALIDATED"
+    solution_report: KnowledgeProposalArtifactMember
+    solution_counts: KnowledgeSolutionCounts
+    general_knowledge_used: bool
+    content_set_sha256: Sha256
+    completed_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def exact_additive_member_set(self) -> KnowledgeAnalysisProposalReceiptV9:
+        if (
+            self.solution_report.member_path != "normalized/solution-report.json"
+            or self.solution_report.schema_ref
+            != "eom://schemas/knowledge/knowledge-analysis-solution-report/1.0"
+            or self.solution_report.media_type != "application/json"
+            or self.solution_report.bytes < 1
+        ):
+            raise ValueError("solution report Artifact member contract differs")
+        base_values = [
+            getattr(self.base_analysis.base_members, name)
+            for name in self.base_analysis.base_members.__class__.model_fields
+        ]
+        descriptors = [
+            {
+                "artifact_id": value.artifact_id,
+                "artifact_revision_id": value.artifact_revision_id,
+                "member_path": value.member_path,
+                "sha256": value.sha256,
+                "bytes": value.bytes,
+                "schema_ref": value.schema_ref,
+                "media_type": value.media_type,
+            }
+            for value in (*base_values, self.solution_report)
+        ]
+        if content_sha256(sorted(descriptors, key=lambda item: str(item["member_path"]))) != (
+            self.content_set_sha256
+        ):
+            raise ValueError("additive proposal content-set hash differs")
+        return self
+
+
 class _KnowledgeAnalysisProposalReceiptBase(FrozenModel):
     analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
     status: Literal["PROPOSED_VALIDATED"] = "PROPOSED_VALIDATED"
@@ -2143,6 +2670,27 @@ class KnowledgeAnalysisResultV9(_KnowledgeAnalysisResultBase):
             raise ValueError("accepted visual Item result requires proposal receipt V8")
         if self.counts.page_image_observations != self.source.page_image_count:
             raise ValueError("accepted visual Item result page count differs from its source")
+        return self
+
+
+class KnowledgeAnalysisResultV10(_KnowledgeAnalysisResultBase):
+    """Accepted additive report reusing one exact visual Item analysis."""
+
+    schema_version: Literal["knowledge-analysis-result/10.0"] = "knowledge-analysis-result/10.0"
+    source: ApprovedPastExamItemKnowledgeSourceV3
+    base_analysis: KnowledgeAnalysisBaseResultPointer
+    counts: KnowledgeProposalCountsV2
+    solution_counts: KnowledgeSolutionCounts
+
+    @model_validator(mode="after")
+    def exact_solution_receipt_and_base(self) -> KnowledgeAnalysisResultV10:
+        if (
+            self.proposal_receipt.schema_ref
+            != "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/9.0"
+            or self.counts != self.base_analysis.base_counts
+            or self.analysis_request_id == self.base_analysis.analysis_request_id
+        ):
+            raise ValueError("accepted solution result differs from its receipt or base analysis")
         return self
 
 

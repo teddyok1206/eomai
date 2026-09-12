@@ -888,6 +888,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "9.0",
             "sha256:0aa8708c9952d47bac35e3a7921a03deacff64688dc880258cac0595d9a4e56d",
         ),
+        "knowledge-analysis-request-v10": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-request-v10.schema.json",
+            "resources/knowledge/knowledge-analysis-request-v10.schema.json",
+            "10.0",
+            "sha256:bd8c32b905729735b0513b699ef01661d3df719c403048c04ed5e658ea97b7fc",
+        ),
         "knowledge-analysis-batch-request": CatalogSchemaResource(
             "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
             "resources/knowledge/knowledge-analysis-batch-request-v1.schema.json",
@@ -953,6 +959,24 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/knowledge-analysis-worker-proposal-v7.schema.json",
             "7.0",
             "sha256:8be2932a12408c4f52e453ff4e40a1a4973a8776e3f39fb55189c4b67e5bad9b",
+        ),
+        "knowledge-analysis-worker-proposal-v8": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-worker-proposal-v8.schema.json",
+            "resources/knowledge/knowledge-analysis-worker-proposal-v8.schema.json",
+            "8.0",
+            "sha256:cdae8e9e3f45bb7be7e21905efe84c20f6495d38a2a39f96dccf57c0364e953f",
+        ),
+        "knowledge-analysis-solution-types-v1": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-solution-types-v1.schema.json",
+            "resources/knowledge/knowledge-analysis-solution-types-v1.schema.json",
+            "1.0",
+            "sha256:2c8f271a8ceeec22de0fb164edb6f475f70219b36cdc4d0101e84a0aa69ac3a1",
+        ),
+        "knowledge-analysis-solution-report-v1": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-solution-report-v1.schema.json",
+            "resources/knowledge/knowledge-analysis-solution-report-v1.schema.json",
+            "1.0",
+            "sha256:f66a69b23f7f6cabaf15fa3fb6acf85e00665e3c5782cdd414ca5905cdacbf8e",
         ),
         "knowledge-assessment-page-image-observation-v2": CatalogSchemaResource(
             "schemas/knowledge/knowledge-assessment-page-image-observation-v2.schema.json",
@@ -1026,6 +1050,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "8.0",
             "sha256:a8789f95a3472c5ab0ef3dc2e632bb4fee9832e1affab6472ef351736dde4810",
         ),
+        "knowledge-analysis-proposal-receipt-v9": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-proposal-receipt-v9.schema.json",
+            "resources/knowledge/knowledge-analysis-proposal-receipt-v9.schema.json",
+            "9.0",
+            "sha256:2ff63cbad5db4fe92980b02ca977ec961f3d3686012ccfcaa91a08008232b8cb",
+        ),
         "knowledge-analysis-risk-policy": CatalogSchemaResource(
             "schemas/knowledge/knowledge-analysis-risk-policy-v1.schema.json",
             "resources/knowledge/knowledge-analysis-risk-policy-v1.schema.json",
@@ -1085,6 +1115,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/knowledge-analysis-result-v9.schema.json",
             "9.0",
             "sha256:f52f7a1d4c7ec742fda337be9a6ea671b3911af1f519b7a4913e9266d63904d6",
+        ),
+        "knowledge-analysis-result-v10": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-result-v10.schema.json",
+            "resources/knowledge/knowledge-analysis-result-v10.schema.json",
+            "10.0",
+            "sha256:123028744f3f545a3a3b60869425bf242df33a77110726c459fc7f153b4b33bf",
         ),
         "knowledge-graph-snapshot-manifest": CatalogSchemaResource(
             "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",

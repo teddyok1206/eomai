@@ -26,6 +26,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV7,
     KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisRequestV9,
+    KnowledgeAnalysisRequestV10,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
@@ -33,6 +34,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV5,
     KnowledgeAnalysisWorkerProposalV6,
     KnowledgeAnalysisWorkerProposalV7,
+    KnowledgeAnalysisWorkerProposalV8,
     LegacyItemEditorialCompatibilityProposal,
     LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionRequest,
@@ -173,6 +175,7 @@ class KnowledgeAnalysisWorkerRequest(FrozenModel):
         | KnowledgeAnalysisRequestV7
         | KnowledgeAnalysisRequestV8
         | KnowledgeAnalysisRequestV9
+        | KnowledgeAnalysisRequestV10
     )
 
 
@@ -613,6 +616,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.18.0",
         "workflow-role/1.19.0",
         "workflow-role/1.20.0",
+        "workflow-role/1.21.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -719,6 +723,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.18.0",
         "workflow-role/1.19.0",
         "workflow-role/1.20.0",
+        "workflow-role/1.21.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1721,6 +1726,16 @@ class KnowledgeAnalysisProposalRoleResultV9(RoleResultBase):
     output: KnowledgeAnalysisProposalOutputV7
 
 
+class KnowledgeAnalysisProposalOutputV8(FrozenModel):
+    proposal: KnowledgeAnalysisWorkerProposalV8
+
+
+class KnowledgeAnalysisProposalRoleResultV10(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.21.0"] = "workflow-role/1.21.0"
+    role: Literal["support"] = "support"
+    output: KnowledgeAnalysisProposalOutputV8
+
+
 class LegacyItemExtractionOutput(FrozenModel):
     extraction_result: LegacyItemExtractionResult
 
@@ -1790,6 +1805,7 @@ RoleResult = (
     | KnowledgeAnalysisProposalRoleResultV7
     | KnowledgeAnalysisProposalRoleResultV8
     | KnowledgeAnalysisProposalRoleResultV9
+    | KnowledgeAnalysisProposalRoleResultV10
     | LegacyItemExtractionRoleResult
     | LegacyItemEditorialCompatibilityRoleResult
 )

@@ -139,11 +139,30 @@ def _solution_types() -> dict[str, object]:
     reference_index = {
         "type": "object",
         "additionalProperties": False,
-        "required": ["anchor_ids", "nodes", "index_sha256"],
+        "required": [
+            "anchor_ids",
+            "problem_anchor_ids",
+            "answer_explanation_anchor_ids",
+            "nodes",
+            "index_sha256",
+        ],
         "properties": {
             "anchor_ids": {
                 "type": "array",
                 "minItems": 1,
+                "maxItems": 1024,
+                "uniqueItems": True,
+                "items": anchor_id,
+            },
+            "problem_anchor_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1024,
+                "uniqueItems": True,
+                "items": anchor_id,
+            },
+            "answer_explanation_anchor_ids": {
+                "type": "array",
                 "maxItems": 1024,
                 "uniqueItems": True,
                 "items": anchor_id,
