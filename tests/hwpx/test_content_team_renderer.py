@@ -5,13 +5,16 @@ import json
 import stat
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from eom_hwpx_builder.analyzer import analyze_package
 from eom_hwpx_builder.content_team_renderer import (
+    _bind_typed_bottom_stem_for_handoff,
     _project_general_stem_for_handoff,
     render_content_team_workspace,
 )
+from eom_hwpx_builder.errors import HwpxError
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
     ContentTeamHandoffMember,
@@ -44,6 +47,35 @@ def test_general_stem_projection_is_linear_deterministic_and_boundary_local() ->
     assert _project_general_stem_for_handoff("first\r\n\r\n second\nthird") == (
         "first second third"
     )
+
+
+def test_typed_bottom_stem_binding_repairs_only_the_exact_canonical_suffix() -> None:
+    draft = parse_content_team_markdown_v2(LABELED_BLOCK_ITEM.encode("utf-8"))
+    expected = f"{draft.bottom_stem} [{draft.score_display}점]"
+    question = SimpleNamespace(stem=f"앞부분\n\n{expected}", bottom_stem="")
+
+    assert (
+        _bind_typed_bottom_stem_for_handoff(
+            question,
+            draft,
+            score_display=draft.score_display,
+        )
+        is True
+    )
+    assert question.stem == "앞부분"
+    assert question.bottom_stem == expected
+
+
+def test_typed_bottom_stem_binding_rejects_an_unproven_boundary() -> None:
+    draft = parse_content_team_markdown_v2(LABELED_BLOCK_ITEM.encode("utf-8"))
+    question = SimpleNamespace(stem="서로 다른 뒤 문단", bottom_stem="")
+
+    with pytest.raises(HwpxError, match="typed bottom stem differs"):
+        _bind_typed_bottom_stem_for_handoff(
+            question,
+            draft,
+            score_display=draft.score_display,
+        )
 
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
@@ -86,6 +118,17 @@ def test_general_stem_projection_is_linear_deterministic_and_boundary_local() ->
             0,
             2,
             id="labeled-block-blank-paragraph-projection",
+        ),
+        pytest.param(
+            LABELED_BLOCK_ITEM.replace(
+                "이에 대한 설명으로 옳은 것만을 <보기>에서 있는 대로 고른 것은?",
+                "위 자료와 조건을 바탕으로 옳은 것만을 고른 것은?",
+                1,
+            ),
+            0,
+            0,
+            2,
+            id="typed-bottom-stem-outside-handoff-phrase-vocabulary",
         ),
     ],
 )

@@ -342,6 +342,43 @@ def _project_general_stem_for_handoff(stem: str) -> str:
     return projected
 
 
+def _bind_typed_bottom_stem_for_handoff(
+    question: Any,
+    draft: ContentTeamEditorialDraftContract,
+    *,
+    score_display: str,
+) -> bool:
+    """Bind the typed bottom stem when the immutable parser's phrase heuristic misses it.
+
+    The reviewed handoff parser recognizes only a small Korean phrase vocabulary. Item Content owns
+    an already validated ``bottom_stem`` field, so the adapter may split only the exact canonical
+    suffix produced from that field. It must never guess a boundary or rewrite the approved text.
+    """
+
+    expected = f"{draft.bottom_stem} [{score_display}점]"
+    if question.bottom_stem == expected:
+        return False
+    suffix = f"\n\n{expected}"
+    if (
+        question.bottom_stem
+        or not question.stem.endswith(suffix)
+        or question.stem.count(expected) != 1
+    ):
+        raise HwpxError(
+            HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
+            "typed bottom stem differs from the handoff parser boundary",
+        )
+    remaining_stem = question.stem[: -len(suffix)]
+    if not remaining_stem.strip():
+        raise HwpxError(
+            HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
+            "typed bottom stem consumed the complete handoff stem",
+        )
+    question.stem = remaining_stem
+    question.bottom_stem = expected
+    return True
+
+
 def _hide_unused_visual_sample(output: Path) -> bool:
     """Hide the immutable template's empty two-column visual sample.
 
@@ -494,6 +531,11 @@ def _external_render(
             handoff_markdown.decode("utf-8"),
             question_name=f"item-{rendered_item_number}",
         )
+        bottom_stem_projection_applied = _bind_typed_bottom_stem_for_handoff(
+            question,
+            handoff_draft,
+            score_display=rendered_score_display,
+        )
         equation_report = equation_module.EquationPreflight().assert_supported(question)
         dynamic_validator_module: Any = validator_module
         validator_class = _content_team_validator_class(dynamic_validator_module, question)
@@ -527,6 +569,7 @@ def _external_render(
             "visual_layout": draft.visual_layout,
             "handoff_projection_applied": handoff_markdown != markdown,
             "handoff_projection_sha256": sha256_bytes(handoff_markdown),
+            "bottom_stem_projection_applied": bottom_stem_projection_applied,
             "unused_visual_sample_hidden": unused_visual_sample_hidden,
         }
         if item_number_override is not None or score_display_override is not None:
