@@ -182,12 +182,16 @@ def test_reviewed_handoff_renders_v2_item_with_dynamic_program_layout(
     result = render_content_team_workspace(request_path, result_path)
 
     output = tmp_path / "output/content-team-item.hwpx"
+    report = json.loads((tmp_path / "output/content-team-validation.json").read_text())
     assert result.status == "SUCCEEDED"
     assert result.output_sha256 == _sha256(output.read_bytes())
     assert result.equation_count == len(draft.equation_sources)
     assert result.table_count == expected_table_count
     assert result.visual_count == expected_visual_count
     assert result.labeled_block_count == expected_labeled_count
+    assert report["unused_visual_sample_hidden"] is (expected_visual_count == 0)
+    assert report["labeled_image_projection_applied"] is False
+    assert report["projected_image_slot_count"] == 0
     assert stat.S_IMODE(output.stat().st_mode) == 0o640
     assert stat.S_IMODE(result_path.stat().st_mode) == 0o640
 
@@ -361,3 +365,98 @@ def test_v2_renderer_replaces_image_slots_with_exact_pinned_pngs(
     for ordinal in range(image_count):
         assert f"eomContentTeamVisual{ordinal}".encode() in section
     assert "그림 삽입" not in section.decode("utf-8")
+
+
+@pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
+@pytest.mark.parametrize("image_count", [1, 2])
+def test_v3_renderer_combines_labeled_blocks_with_exact_pinned_images(
+    tmp_path: Path,
+    image_count: int,
+) -> None:
+    draft = parse_content_team_markdown_v2(LABELED_BLOCK_ITEM.encode("utf-8"))
+    draft_value = draft.model_dump(mode="json")
+    draft_value["visual_layout"] = "IMAGE_ONLY" if image_count == 1 else "IMAGE_IMAGE"
+    draft_value["visuals"] = [
+        {
+            "kind": "IMAGE",
+            "label": "" if image_count == 1 else ("(가)" if ordinal == 0 else "(나)"),
+        }
+        for ordinal in range(image_count)
+    ]
+    combined = type(draft).model_validate(draft_value)
+    markdown = serialize_content_team_markdown(combined)
+    item_value = {
+        "schema_version": "3.0",
+        **combined.model_dump(mode="json", exclude={"schema_version", "source_sha256"}),
+    }
+    item_bytes = json.dumps(
+        item_value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    images = tuple(png_bytes(output=ordinal == 0) for ordinal in range(image_count))
+    input_root = tmp_path / "input"
+    input_root.mkdir()
+    (input_root / "item-content.json").write_bytes(item_bytes)
+    (input_root / "content-team-item.md").write_bytes(markdown)
+    (input_root / "handoff.zip").write_bytes(HANDOFF.read_bytes())
+    for ordinal, image in enumerate(images):
+        (input_root / f"visual-{ordinal}.png").write_bytes(image)
+    handoff = ContentTeamHandoffSnapshot(
+        artifact_id="artifact_" + "a" * 32,
+        artifact_revision_id="rev_" + "b" * 32,
+        members=tuple(
+            ContentTeamHandoffMember(purpose=purpose, sha256=sha256, size=size)
+            for purpose, sha256, size in CONTENT_TEAM_HANDOFF_MEMBERS
+        ),
+    )
+    request = ContentTeamRenderRequestV3(
+        build_id="hwpxbuild_" + "c" * 32,
+        item_revision_id="itemrev_" + "d" * 32,
+        source=ContentTeamItemSourceV2(
+            artifact_id="artifact_" + "e" * 32,
+            artifact_revision_id="rev_" + "f" * 32,
+            json_sha256=_sha256(item_bytes),
+            markdown_sha256=_sha256(markdown),
+        ),
+        handoff=handoff,
+        images=tuple(
+            ContentTeamImageSource(
+                visual_ordinal=ordinal,
+                label="" if image_count == 1 else ("(가)" if ordinal == 0 else "(나)"),
+                artifact_id="artifact_" + str(ordinal + 1) * 32,
+                artifact_revision_id="rev_" + str(ordinal + 3) * 32,
+                sha256=_sha256(image),
+                alt_text=f"검증된 자료 결속 그림 {ordinal + 1}",
+                file_name=f"input/visual-{ordinal}.png",
+            )
+            for ordinal, image in enumerate(images)
+        ),
+    )
+    request_path = tmp_path / "request.json"
+    result_path = tmp_path / "result.json"
+    request_path.write_text(request.model_dump_json(), encoding="utf-8")
+
+    result = render_content_team_workspace(request_path, result_path)
+
+    output = tmp_path / "output/content-team-item.hwpx"
+    report = json.loads((tmp_path / "output/content-team-validation.json").read_text())
+    analysis = analyze_package(output)
+    assert result.status == "SUCCEEDED"
+    assert result.labeled_block_count == 2
+    assert result.visual_count == image_count
+    assert result.embedded_image_count == image_count
+    assert report["labeled_image_projection_applied"] is True
+    assert report["projected_image_slot_count"] == image_count
+    assert report["unused_visual_sample_hidden"] is False
+    assert analysis.bindata == tuple(
+        f"BinData/content-team-visual-{ordinal}.png" for ordinal in range(image_count)
+    )
+    with zipfile.ZipFile(output) as archive:
+        section = archive.read("Contents/section0.xml")
+        for ordinal, image in enumerate(images):
+            assert archive.read(f"BinData/content-team-visual-{ordinal}.png") == image
+            assert f"eomContentTeamVisual{ordinal}".encode() in section
+    assert "그림 삽입" not in section.decode("utf-8")
+    assert 'id="1729004418"' not in section.decode("utf-8")

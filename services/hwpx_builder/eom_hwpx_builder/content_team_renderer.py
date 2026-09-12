@@ -467,6 +467,102 @@ def _hide_unused_visual_sample(output: Path) -> bool:
     return True
 
 
+def _labeled_image_projection_layout(
+    draft: ContentTeamEditorialDraftContract,
+) -> str | None:
+    """Select the reviewed visual-slot projection for labeled blocks plus image slots.
+
+    The immutable handoff parser treats labeled blocks and visual slots as mutually exclusive
+    branches even though the typed Item Content contract permits their ordered combination.  Image
+    slots do not add textual/equation content, so they can be projected onto the handoff's reviewed
+    visual-area table after the labeled blocks have been rendered.  Table visuals remain on the
+    handoff's native branch because they require additional prototype dependency installation.
+    """
+
+    if not draft.labeled_blocks or not draft.visuals:
+        return None
+    if any(visual.kind != "IMAGE" for visual in draft.visuals):
+        return None
+    if draft.visual_layout not in {"IMAGE_ONLY", "IMAGE_IMAGE"}:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
+            "labeled image slots have an inconsistent visual layout",
+        )
+    return draft.visual_layout
+
+
+def _install_labeled_image_slots(output: Path, visual_module: Any, layout: str) -> int:
+    """Project typed image slots into the reviewed visual area after labeled-block rendering."""
+
+    package = read_package(output)
+    section_entry = package.by_name().get(SECTION_MEMBER)
+    if section_entry is None:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team HWPX section is missing",
+        )
+    section = parse_xml(section_entry.data, SECTION_MEMBER)
+    slot_count = 1 if layout == "IMAGE_ONLY" else 2
+    plan = visual_module.VisualSlotPlan(
+        pattern=(
+            visual_module.VisualSlotPattern.IMAGE_ONLY
+            if slot_count == 1
+            else visual_module.VisualSlotPattern.IMAGE_IMAGE
+        ),
+        paragraph_text="",
+        slots=tuple(
+            visual_module.VisualSlotContent(
+                (
+                    visual_module.VisualSlotSide.LEFT
+                    if ordinal == 0
+                    else visual_module.VisualSlotSide.RIGHT
+                ),
+                visual_module.VisualSlotKind.IMAGE,
+            )
+            for ordinal in range(slot_count)
+        ),
+    )
+    report = visual_module.VisualSlotRenderer().render(
+        section_root=section.root,
+        plan=plan,
+        table_renderer=None,
+    )
+    if report.image_slot_count != slot_count or report.table_slot_count != 0:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team labeled image projection differs from the typed slots",
+        )
+
+    section_bytes = serialize_xml(section)
+    temporary = output.with_name(".content-team-labeled-images.hwpx")
+    if temporary.exists() or temporary.is_symlink():
+        raise HwpxError(HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED, "HWPX output is not fresh")
+    try:
+        with zipfile.ZipFile(temporary, "x", allowZip64=False) as archive:
+            for entry in package.entries:
+                info = zipfile.ZipInfo(entry.info.filename, FIXED_ZIP_TIMESTAMP)
+                info.compress_type = entry.info.compress_type
+                info.comment = entry.info.comment
+                info.extra = entry.info.extra
+                info.internal_attr = entry.info.internal_attr
+                info.external_attr = entry.info.external_attr
+                info.create_system = entry.info.create_system
+                data = section_bytes if entry.info.filename == SECTION_MEMBER else entry.data
+                archive.writestr(info, data)
+        temporary.chmod(0o600)
+        analysis = analyze_package(temporary)
+        if analysis.active_content or analysis.external_links or not analysis.sections:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team labeled image projection failed package validation",
+            )
+        temporary.replace(output)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+    return slot_count
+
+
 def _external_render(
     runtime: Path,
     template: Path,
@@ -481,6 +577,10 @@ def _external_render(
     handoff_value["stem"] = _project_general_stem_for_handoff(draft.stem)
     for block in handoff_value["labeled_blocks"]:
         block["content"] = normalize_content_team_labeled_block_content(block["content"])
+    labeled_image_layout = _labeled_image_projection_layout(draft)
+    if labeled_image_layout is not None:
+        handoff_value["visuals"] = []
+        handoff_value["visual_layout"] = "NONE"
     handoff_draft = type(draft).model_validate(handoff_value)
     handoff_markdown = serialize_content_team_markdown(handoff_draft)
     rendered_item_number = (
@@ -527,6 +627,7 @@ def _external_render(
         equation_module = importlib.import_module("hwp_question_editor.services.equation_preflight")
         engine_module = importlib.import_module("hwp_question_editor.services.hwpx_template_engine")
         validator_module = importlib.import_module("hwp_question_editor.services.hwpx_validator")
+        visual_module = importlib.import_module("hwp_question_editor.services.visual_slot_renderer")
         question = parser_module.QuestionParser().parse(
             handoff_markdown.decode("utf-8"),
             question_name=f"item-{rendered_item_number}",
@@ -546,13 +647,15 @@ def _external_render(
             engine.create_document(template, output, question)
         finally:
             dynamic_validator_module.HwpxValidator = original_validator
+        projected_image_slot_count = 0
+        if labeled_image_layout is not None:
+            projected_image_slot_count = _install_labeled_image_slots(
+                output,
+                visual_module,
+                labeled_image_layout,
+            )
         unused_visual_sample_hidden = False
-        if (
-            not draft.labeled_blocks
-            and not draft.visuals
-            and draft.inquiry is None
-            and draft.visual_layout == "NONE"
-        ):
+        if not draft.visuals and draft.inquiry is None and draft.visual_layout == "NONE":
             unused_visual_sample_hidden = _hide_unused_visual_sample(output)
         validator_class(template).assert_valid(
             output,
@@ -571,6 +674,8 @@ def _external_render(
             "handoff_projection_sha256": sha256_bytes(handoff_markdown),
             "bottom_stem_projection_applied": bottom_stem_projection_applied,
             "unused_visual_sample_hidden": unused_visual_sample_hidden,
+            "labeled_image_projection_applied": labeled_image_layout is not None,
+            "projected_image_slot_count": projected_image_slot_count,
         }
         if item_number_override is not None or score_display_override is not None:
             report.update(
