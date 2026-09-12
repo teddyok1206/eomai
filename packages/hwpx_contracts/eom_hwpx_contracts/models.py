@@ -451,6 +451,54 @@ class ContentTeamImageSource(StrictModel):
         return self
 
 
+def content_team_image_slot_projection(
+    draft: ContentTeamEditorialDraftContract,
+) -> tuple[tuple[int, str], ...]:
+    """Project the exact ordered IMAGE slots from one approved editorial draft."""
+
+    return tuple(
+        (ordinal, visual.label)
+        for ordinal, visual in enumerate(draft.visuals)
+        if visual.kind == "IMAGE"
+    )
+
+
+def validate_content_team_image_bindings(
+    draft: ContentTeamEditorialDraftContract,
+    images: tuple[ContentTeamImageSource, ...],
+) -> None:
+    """Require each pinned PNG to match its actual typed visual-array position."""
+
+    expected = tuple(
+        (
+            ordinal,
+            label,
+            "generated-stimulus.png",
+            "eom://schemas/generated-item/stimulus-png/3.0",
+            "image/png",
+            800,
+            500,
+            f"input/visual-{ordinal}.png",
+        )
+        for ordinal, label in content_team_image_slot_projection(draft)
+    )
+    actual = tuple(
+        (
+            image.visual_ordinal,
+            image.label,
+            image.artifact_member,
+            image.schema_ref,
+            image.media_type,
+            image.width_px,
+            image.height_px,
+            image.file_name,
+        )
+        for image in images
+    )
+    if actual != expected:
+        raise ValueError("content-team image bindings differ from editorial visual slots")
+
+
 class ContentTeamRenderRequestV2(StrictModel):
     schema_version: Literal["2.0"] = "2.0"
     renderer_profile: Literal["content-team-hwp-question-editor-v2"] = (

@@ -21,15 +21,18 @@ from eom_catalog_contracts import (
 from eom_catalog_service.content_pack_files import compile_pack
 from eom_hwpx_contracts import (
     ContentTeamImageSlot,
+    ContentTeamImageSource,
     ContentTeamInquiry,
     ContentTeamLabeledBlock,
     ContentTeamTable,
+    content_team_image_slot_projection,
     derive_content_team_equation_sources,
     normalize_content_team_bottom_stem,
     normalize_content_team_inline_math,
     normalize_content_team_labeled_block_content,
     normalize_content_team_statement_marker,
     normalize_content_team_stem,
+    validate_content_team_image_bindings,
 )
 from eom_hwpx_contracts.content_team_markdown import (
     parse_content_team_markdown,
@@ -108,6 +111,94 @@ def _content(
             "equation_sources": list(equations),
         }
     )
+
+
+def _image_source(ordinal: int, label: str) -> ContentTeamImageSource:
+    return ContentTeamImageSource.model_validate(
+        {
+            "visual_ordinal": ordinal,
+            "label": label,
+            "artifact_id": "artifact_" + str(ordinal + 1) * 32,
+            "artifact_revision_id": "rev_" + str(ordinal + 3) * 32,
+            "sha256": "sha256:" + str(ordinal + 5) * 64,
+            "alt_text": f"검증된 그림 {ordinal + 1}",
+            "file_name": f"input/visual-{ordinal}.png",
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("visuals", "layout", "expected_slots"),
+    [
+        ((), "NONE", ()),
+        ((ContentTeamImageSlot(),), "IMAGE_ONLY", ((0, ""),)),
+        (
+            (
+                ContentTeamTable(
+                    headers=("구분", "값"),
+                    rows=(("A", "1"),),
+                    alignments=("default", "right"),
+                ),
+                ContentTeamImageSlot(),
+            ),
+            "TABLE_IMAGE",
+            ((1, ""),),
+        ),
+        (
+            (ContentTeamImageSlot(label="(가)"), ContentTeamImageSlot(label="(나)")),
+            "IMAGE_IMAGE",
+            ((0, "(가)"), (1, "(나)")),
+        ),
+    ],
+)
+def test_content_team_image_binding_uses_actual_ordered_visual_slots(
+    visuals: tuple[ContentTeamImageSlot | ContentTeamTable, ...],
+    layout: str,
+    expected_slots: tuple[tuple[int, str], ...],
+) -> None:
+    content = _content(visuals=visuals, visual_layout=layout)
+    images = tuple(_image_source(ordinal, label) for ordinal, label in expected_slots)
+
+    assert content_team_image_slot_projection(content) == expected_slots
+    validate_content_team_image_bindings(content, images)
+
+
+@pytest.mark.parametrize(
+    ("field", "forged"),
+    [
+        ("visual_ordinal", 1),
+        ("label", "(가)"),
+        ("artifact_member", "forged.png"),
+        ("schema_ref", "eom://schemas/generated-item/stimulus-png/9.9"),
+        ("media_type", "image/jpeg"),
+        ("width_px", 799),
+        ("height_px", 499),
+        ("file_name", "input/visual-1.png"),
+    ],
+)
+def test_content_team_image_binding_rejects_stale_member_signature(
+    field: str,
+    forged: object,
+) -> None:
+    content = _content(visuals=(ContentTeamImageSlot(),), visual_layout="IMAGE_ONLY")
+    image = _image_source(0, "").model_copy(update={field: forged})
+
+    with pytest.raises(ValueError, match="bindings differ"):
+        validate_content_team_image_bindings(content, (image,))
+
+
+def test_content_team_image_binding_rejects_missing_or_extra_members() -> None:
+    content = _content(
+        visuals=(ContentTeamImageSlot(label="(가)"), ContentTeamImageSlot(label="(나)")),
+        visual_layout="IMAGE_IMAGE",
+    )
+    first = _image_source(0, "(가)")
+    second = _image_source(1, "(나)")
+
+    with pytest.raises(ValueError, match="bindings differ"):
+        validate_content_team_image_bindings(content, (first,))
+    with pytest.raises(ValueError, match="bindings differ"):
+        validate_content_team_image_bindings(content, (second, first))
 
 
 @pytest.mark.parametrize(

@@ -23,6 +23,7 @@ from eom_hwpx_contracts import (
     ContentTeamRenderRequestV2,
     ContentTeamRenderRequestV3,
     serialize_content_team_markdown,
+    validate_content_team_image_bindings,
 )
 from eom_hwpx_contracts import validate_contract as validate_hwpx_contract
 from eom_identifiers import (
@@ -44,7 +45,7 @@ from eom_orchestrator.state_machine import JobState, transition_job
 from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy import Engine, select
 
-from eom_hwpx_manager.adapter import BuilderRun
+from eom_hwpx_manager.adapter import BuilderRun, hash_stable_regular_file
 from eom_hwpx_manager.application_adapter import FixedContentTeamBuilderAdapter
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.protocol import (
@@ -69,6 +70,7 @@ MAX_ITEM_JSON_BYTES = 2 * 1024 * 1024
 MAX_MARKDOWN_BYTES = 1024 * 1024
 MAX_HANDOFF_BYTES = 64 * 1024 * 1024
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
+MAX_HWPX_OUTPUT_BYTES = 64 * 1024 * 1024
 LOGGER = logging.getLogger("eom.hwpx_manager.content_team")
 ARTIFACT_ID = re.compile(r"\Aartifact_[0-9a-f]{32}\Z", re.ASCII)
 REVISION_ID = re.compile(r"\Arev_[0-9a-f]{32}\Z", re.ASCII)
@@ -235,11 +237,31 @@ class ContentTeamHwpxService:
 
         try:
             workspace = self.adapter.create_workspace(build_id)
-            self.adapter.stage_file(workspace, source.json_file, source_path)
-            self.adapter.stage_file(workspace, source.markdown_file, markdown_path)
-            self.adapter.stage_file(workspace, handoff_snapshot.archive_file, handoff_path)
+            self.adapter.stage_file(
+                workspace,
+                source.json_file,
+                source_path,
+                expected_sha256=source.json_sha256,
+            )
+            self.adapter.stage_file(
+                workspace,
+                source.markdown_file,
+                markdown_path,
+                expected_sha256=source.markdown_sha256,
+            )
+            self.adapter.stage_file(
+                workspace,
+                handoff_snapshot.archive_file,
+                handoff_path,
+                expected_sha256=handoff_snapshot.archive_sha256,
+            )
             for image, image_path in image_inputs:
-                self.adapter.stage_file(workspace, image.file_name, image_path)
+                self.adapter.stage_file(
+                    workspace,
+                    image.file_name,
+                    image_path,
+                    expected_sha256=image.sha256,
+                )
             self.adapter.write_json(workspace, "request.json", request_raw)
             log_root = self.settings.staging_root / job_id
             for state, event in (
@@ -279,7 +301,7 @@ class ContentTeamHwpxService:
                 else ContentTeamBuildResultV2.model_validate(result_raw)
             )
             output = workspace / "output/content-team-item.hwpx"
-            self._verify_output(output, workspace)
+            output_sha256 = self._verify_output(output, workspace)
             package_manifest = self.adapter.load_json(
                 workspace / "output/package-manifest.json",
                 workspace,
@@ -300,7 +322,7 @@ class ContentTeamHwpxService:
                 or result.image_set_sha256
                 != content_sha256([image.model_dump(mode="json") for image, _path in image_inputs])
                 or result.embedded_image_count != len(image_inputs)
-                or result.output_sha256 != sha256_file(output)
+                or result.output_sha256 != output_sha256
                 or package_manifest.get("package_sha256") != result.output_sha256
                 or renderer_report.get("status") != "PASS"
             ):
@@ -326,6 +348,11 @@ class ContentTeamHwpxService:
                 staging=log_root / "artifact",
                 manifest_version="content-team-hwpx-artifact/1.0",
             )
+            if staged.primary_hash != output_sha256:
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_RESULT_INVALID,
+                    "content-team HWPX changed after result validation",
+                )
             self._transition(job_id, JobState.COMMITTING, "HWPX_CONTENT_TEAM_COMMIT_STARTED")
             final = commit_file_set_artifact(staged, self.settings.nas_artifact_root)
             stored_result = {
@@ -455,30 +482,13 @@ class ContentTeamHwpxService:
         image_sources: tuple[ContentTeamImageSource, ...],
         content: AssessmentItemContentV2 | AssessmentItemContentV3,
     ) -> None:
-        slots = tuple(
-            (ordinal, visual.label)
-            for ordinal, visual in enumerate(content.visuals)
-            if visual.kind == "IMAGE"
-        )
-        if len(image_sources) != len(slots):
+        try:
+            validate_content_team_image_bindings(content, image_sources)
+        except ValueError as exc:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
                 "content-team image components differ from editorial slots",
-            )
-        for image, (ordinal, label) in zip(image_sources, slots, strict=True):
-            if (
-                image.visual_ordinal != ordinal
-                or image.label != label
-                or image.schema_ref != "eom://schemas/generated-item/stimulus-png/3.0"
-                or image.media_type != "image/png"
-                or image.artifact_member != "generated-stimulus.png"
-                or image.width_px != 800
-                or image.height_px != 500
-            ):
-                raise HwpxManagerError(
-                    HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
-                    "content-team image component is stale or malformed",
-                )
+            ) from exc
 
     def _resolve_member(
         self,
@@ -614,7 +624,7 @@ class ContentTeamHwpxService:
         return candidate
 
     @staticmethod
-    def _verify_output(output: Path, workspace: Path) -> None:
+    def _verify_output(output: Path, workspace: Path) -> str:
         try:
             metadata = output.lstat()
         except OSError as exc:
@@ -631,6 +641,13 @@ class ContentTeamHwpxService:
                 HwpxManagerErrorCode.HWPX_RESULT_INVALID,
                 "content-team HWPX output materialization is unsafe",
             )
+        try:
+            return hash_stable_regular_file(output, max_bytes=MAX_HWPX_OUTPUT_BYTES)
+        except (OSError, ValueError) as exc:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_RESULT_INVALID,
+                "content-team HWPX output changed during validation",
+            ) from exc
 
     def _completed_receipt(
         self,

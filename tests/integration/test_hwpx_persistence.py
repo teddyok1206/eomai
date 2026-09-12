@@ -146,7 +146,16 @@ class _FakeBuilderAdapter(HwpxBuilderAdapter):
         workspace.mkdir()
         return workspace
 
-    def stage_file(self, workspace: Path, relative_path: str, source: Path) -> Path:
+    def stage_file(
+        self,
+        workspace: Path,
+        relative_path: str,
+        source: Path,
+        *,
+        expected_sha256: str | None = None,
+    ) -> Path:
+        if expected_sha256 is not None:
+            assert sha256_file(source) == expected_sha256
         target = workspace / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)

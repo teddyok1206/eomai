@@ -81,6 +81,8 @@ from eom_hwpx_contracts.models import (
     TableData,
     content_team_exam_item_set_projection,
     content_team_exam_render_plan_projection,
+    content_team_image_slot_projection,
+    validate_content_team_image_bindings,
 )
 from eom_hwpx_contracts.validation import load_schema, validate_contract
 
@@ -151,6 +153,7 @@ __all__ = [
     "classify_content_team_equation",
     "content_team_exam_item_set_projection",
     "content_team_exam_render_plan_projection",
+    "content_team_image_slot_projection",
     "derive_content_team_equation_sources",
     "load_schema",
     "normalize_content_team_bottom_stem",
@@ -162,5 +165,6 @@ __all__ = [
     "parse_content_team_markdown_v2",
     "serialize_content_team_markdown",
     "statement_texts",
+    "validate_content_team_image_bindings",
     "validate_contract",
 ]

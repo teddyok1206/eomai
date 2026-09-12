@@ -6,13 +6,12 @@ import grp
 import json
 import os
 import re
-import shutil
 import stat
 import subprocess
 from pathlib import Path
 from typing import Any
 
-from eom_hwpx_manager.adapter import BuilderRun, HwpxBuilderAdapter
+from eom_hwpx_manager.adapter import BuilderRun, HwpxBuilderAdapter, copy_stable_regular_file
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 
 BUILD_ID = re.compile(r"\Ahwpxbuild_[0-9a-f]{32}\Z", re.ASCII)
@@ -127,22 +126,28 @@ class _FixedApplicationBuilderAdapter(HwpxBuilderAdapter):
             and builder_gid in process_groups
         )
 
-    def stage_file(self, workspace: Path, relative_path: str, source: Path) -> Path:
+    def stage_file(
+        self,
+        workspace: Path,
+        relative_path: str,
+        source: Path,
+        *,
+        expected_sha256: str | None = None,
+    ) -> Path:
         target = self._target(workspace, relative_path)
+        self._prepare_parent(workspace, target.parent)
         try:
-            source_metadata = source.lstat()
-        except OSError as exc:
+            copy_stable_regular_file(source, target, expected_sha256=expected_sha256)
+        except FileNotFoundError as exc:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_REFERENCE_MISSING,
                 "required HWPX input is missing",
             ) from exc
-        if not stat.S_ISREG(source_metadata.st_mode) or source.is_symlink():
+        except (OSError, ValueError) as exc:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_BUILDER_FAILED,
-                "HWPX input is not a regular file",
-            )
-        self._prepare_parent(workspace, target.parent)
-        shutil.copyfile(source, target)
+                "HWPX input could not be staged as a pinned regular file",
+            ) from exc
         self._finalize_file(target, workspace.lstat().st_gid)
         self._verify_staged_file(workspace, target)
         return target

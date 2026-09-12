@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from itertools import pairwise
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,7 +8,12 @@ from typing import Any
 
 import pytest
 from eom_hwpx_contracts import KordocSourcePointer
-from eom_hwpx_manager.adapter import HwpxBuilderAdapter
+from eom_hwpx_manager.adapter import (
+    HwpxBuilderAdapter,
+    copy_stable_regular_file,
+    hash_stable_regular_file,
+    read_stable_regular_file,
+)
 from eom_hwpx_manager.errors import HwpxManagerError
 from eom_hwpx_manager.kordoc_service import KordocHwpxService
 from eom_hwpx_manager.protocol import hwpx_schema_bundle_hash, kordoc_schema_bundle_hash
@@ -99,6 +105,74 @@ def test_adapter_result_loader_rejects_non_object_and_escape(tmp_path: Path) -> 
     outside.write_text("{}", encoding="utf-8")
     with pytest.raises(HwpxManagerError, match="unsafe"):
         HwpxBuilderAdapter.load_json(outside, workspace)
+
+
+def test_stable_file_copy_requires_exact_hash_and_fresh_target(tmp_path: Path) -> None:
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"reviewed input")
+    expected = sha256_file(source)
+    target = tmp_path / "target.bin"
+
+    assert copy_stable_regular_file(source, target, expected_sha256=expected) == expected
+    assert target.read_bytes() == b"reviewed input"
+    with pytest.raises(FileExistsError):
+        copy_stable_regular_file(source, target, expected_sha256=expected)
+    assert target.read_bytes() == b"reviewed input"
+
+    rejected = tmp_path / "rejected.bin"
+    with pytest.raises(ValueError, match="pinned source"):
+        copy_stable_regular_file(source, rejected, expected_sha256="sha256:" + "0" * 64)
+    assert not rejected.exists()
+
+
+def test_stable_file_copy_rejects_symlink_and_growth(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"a" * (2 * 1024 * 1024))
+    symlink = tmp_path / "source-link.bin"
+    symlink.symlink_to(source)
+    with pytest.raises(OSError):
+        copy_stable_regular_file(symlink, tmp_path / "link-target.bin")
+
+    original_read = os.read
+    source_fd: int | None = None
+    changed = False
+
+    def growing_read(descriptor: int, size: int) -> bytes:
+        nonlocal changed, source_fd
+        chunk = original_read(descriptor, size)
+        if source_fd is None:
+            source_fd = descriptor
+        if descriptor == source_fd and chunk and not changed:
+            with source.open("ab") as handle:
+                handle.write(b"b")
+            changed = True
+        return chunk
+
+    monkeypatch.setattr("eom_hwpx_manager.adapter.os.read", growing_read)
+    target = tmp_path / "grown-target.bin"
+    with pytest.raises(ValueError, match="grew"):
+        copy_stable_regular_file(source, target)
+    assert not target.exists()
+
+
+def test_stable_file_read_and_hash_reject_symlink_empty_and_oversize(tmp_path: Path) -> None:
+    source = tmp_path / "source.json"
+    source.write_bytes(b'{"status":"ok"}')
+    symlink = tmp_path / "source-link.json"
+    symlink.symlink_to(source)
+
+    assert read_stable_regular_file(source, max_bytes=1024) == source.read_bytes()
+    assert hash_stable_regular_file(source, max_bytes=1024) == sha256_file(source)
+    with pytest.raises(OSError):
+        read_stable_regular_file(symlink, max_bytes=1024)
+    with pytest.raises(ValueError, match="metadata"):
+        read_stable_regular_file(source, max_bytes=1)
+    empty = tmp_path / "empty.json"
+    empty.touch()
+    with pytest.raises(ValueError, match="metadata"):
+        hash_stable_regular_file(empty, max_bytes=1024)
 
 
 class _SourceSession:

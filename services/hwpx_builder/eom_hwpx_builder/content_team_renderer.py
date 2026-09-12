@@ -26,6 +26,7 @@ from eom_hwpx_contracts import (
     parse_content_team_markdown,
     parse_content_team_markdown_v2,
     serialize_content_team_markdown,
+    validate_content_team_image_bindings,
     validate_contract,
 )
 from pydantic import ValidationError
@@ -825,17 +826,13 @@ def render_content_team_workspace(
     image_set_sha256 = sha256_bytes(canonical_json_bytes([]))
     embedded_image_count = 0
     if isinstance(request, ContentTeamRenderRequestV2 | ContentTeamRenderRequestV3):
-        expected_slots = tuple(
-            (ordinal, visual.label)
-            for ordinal, visual in enumerate(draft.visuals)
-            if visual.kind == "IMAGE"
-        )
-        actual_slots = tuple((image.visual_ordinal, image.label) for image in request.images)
-        if actual_slots != expected_slots:
+        try:
+            validate_content_team_image_bindings(draft, request.images)
+        except ValueError as exc:
             raise HwpxError(
                 HwpxErrorCode.HWPX_IMAGE_BINDING_FAILED,
                 "content-team image pointers differ from editorial visual slots",
-            )
+            ) from exc
         image_payloads = tuple(
             (
                 image,

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import pwd
-import shutil
 import stat
 import subprocess
 from dataclasses import dataclass
@@ -17,6 +17,141 @@ from eom_hwpx_manager.settings import HwpxSettings
 
 MAX_CAPTURE_BYTES = 1024 * 1024
 MAX_RESULT_BYTES = 2 * 1024 * 1024
+
+
+def _stat_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_uid,
+        value.st_gid,
+        value.st_nlink,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
+def copy_stable_regular_file(
+    source: Path,
+    target: Path,
+    *,
+    expected_sha256: str | None = None,
+) -> str:
+    """Copy one untrusted source through stable fds into one fresh workspace file."""
+
+    read_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    write_flags = (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    source_fd = -1
+    target_fd = -1
+    target_created = False
+    succeeded = False
+    try:
+        source_fd = os.open(source, read_flags)
+        opened = os.fstat(source_fd)
+        if not stat.S_ISREG(opened.st_mode):
+            raise ValueError("source is not a regular file")
+        target_fd = os.open(target, write_flags, 0o600)
+        target_created = True
+        digest = hashlib.sha256()
+        remaining = opened.st_size
+        while remaining:
+            chunk = os.read(source_fd, min(remaining, 1024 * 1024))
+            if not chunk:
+                raise ValueError("source was truncated while staging")
+            digest.update(chunk)
+            view = memoryview(chunk)
+            while view:
+                written = os.write(target_fd, view)
+                if written <= 0:
+                    raise OSError("staged file write made no progress")
+                view = view[written:]
+            remaining -= len(chunk)
+        if os.read(source_fd, 1):
+            raise ValueError("source grew while staging")
+        copied_sha256 = "sha256:" + digest.hexdigest()
+        finalized_source = os.fstat(source_fd)
+        staged = os.fstat(target_fd)
+        if (
+            _stat_identity(opened) != _stat_identity(finalized_source)
+            or not stat.S_ISREG(staged.st_mode)
+            or staged.st_size != opened.st_size
+            or (expected_sha256 is not None and copied_sha256 != expected_sha256)
+        ):
+            raise ValueError("staged file differs from its pinned source")
+        os.fsync(target_fd)
+        succeeded = True
+        return copied_sha256
+    finally:
+        if target_fd >= 0:
+            os.close(target_fd)
+        if source_fd >= 0:
+            os.close(source_fd)
+        if target_created and not succeeded:
+            target.unlink(missing_ok=True)
+
+
+def read_stable_regular_file(
+    path: Path,
+    *,
+    max_bytes: int,
+) -> bytes:
+    """Read one bounded untrusted file without following its final path component."""
+
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or not 0 < opened.st_size <= max_bytes:
+            raise ValueError("file metadata is outside the accepted boundary")
+        chunks: list[bytes] = []
+        remaining = opened.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 64 * 1024))
+            if not chunk:
+                raise ValueError("file was truncated while reading")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise ValueError("file grew while reading")
+        if _stat_identity(opened) != _stat_identity(os.fstat(descriptor)):
+            raise ValueError("file identity changed while reading")
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
+def hash_stable_regular_file(path: Path, *, max_bytes: int) -> str:
+    """Hash one bounded regular file while proving its fd identity is stable."""
+
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or not 0 < opened.st_size <= max_bytes:
+            raise ValueError("file metadata is outside the accepted boundary")
+        digest = hashlib.sha256()
+        remaining = opened.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+            if not chunk:
+                raise ValueError("file was truncated while hashing")
+            digest.update(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise ValueError("file grew while hashing")
+        if _stat_identity(opened) != _stat_identity(os.fstat(descriptor)):
+            raise ValueError("file identity changed while hashing")
+        return "sha256:" + digest.hexdigest()
+    finally:
+        os.close(descriptor)
 
 
 @dataclass(frozen=True)
@@ -47,25 +182,32 @@ class HwpxBuilderAdapter:
         os.chown(workspace, account.pw_uid, account.pw_gid)
         return workspace
 
-    def stage_file(self, workspace: Path, relative_path: str, source: Path) -> Path:
+    def stage_file(
+        self,
+        workspace: Path,
+        relative_path: str,
+        source: Path,
+        *,
+        expected_sha256: str | None = None,
+    ) -> Path:
         relative = Path(relative_path)
         if relative.is_absolute() or ".." in relative.parts or "\\" in relative_path:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_BUILDER_FAILED, "unsafe workspace file name"
             )
+        target = workspace / relative
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         try:
-            source_stat = source.lstat()
-        except OSError as exc:
+            copy_stable_regular_file(source, target, expected_sha256=expected_sha256)
+        except FileNotFoundError as exc:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_REFERENCE_MISSING, "required input file is missing"
             ) from exc
-        if not stat.S_ISREG(source_stat.st_mode) or source.is_symlink():
+        except (OSError, ValueError) as exc:
             raise HwpxManagerError(
-                HwpxManagerErrorCode.HWPX_BUILDER_FAILED, "input is not a regular file"
-            )
-        target = workspace / relative
-        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
+                HwpxManagerErrorCode.HWPX_BUILDER_FAILED,
+                "input could not be staged as a pinned regular file",
+            ) from exc
         account = pwd.getpwnam(self.settings.builder_user)
         os.chown(target.parent, account.pw_uid, account.pw_gid)
         os.chown(target, account.pw_uid, account.pw_gid)
@@ -175,8 +317,8 @@ class HwpxBuilderAdapter:
                 HwpxManagerErrorCode.HWPX_RESULT_INVALID, "builder result file is unsafe"
             )
         try:
-            value = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            value = json.loads(read_stable_regular_file(path, max_bytes=MAX_RESULT_BYTES))
+        except (OSError, ValueError, UnicodeError, json.JSONDecodeError) as exc:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_RESULT_INVALID, "builder result is invalid JSON"
             ) from exc

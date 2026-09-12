@@ -38,7 +38,6 @@ from eom_identifiers import (
     new_job_id,
     new_logical_artifact_id,
     new_revision_id,
-    sha256_file,
 )
 from eom_orchestrator.artifacts import commit_file_set_artifact, stage_file_set_artifact
 from eom_orchestrator.database import transaction
@@ -489,15 +488,35 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
 
         try:
             workspace = self.adapter.create_workspace(build_id)
-            self.adapter.stage_file(workspace, handoff_snapshot.archive_file, handoff_path)
+            self.adapter.stage_file(
+                workspace,
+                handoff_snapshot.archive_file,
+                handoff_path,
+                expected_sha256=handoff_snapshot.archive_sha256,
+            )
             for staged_item, source_path, markdown_path, images in staged_items:
-                self.adapter.stage_file(workspace, staged_item.json_file, source_path)
-                self.adapter.stage_file(workspace, staged_item.markdown_file, markdown_path)
+                self.adapter.stage_file(
+                    workspace,
+                    staged_item.json_file,
+                    source_path,
+                    expected_sha256=staged_item.source_json_sha256,
+                )
+                self.adapter.stage_file(
+                    workspace,
+                    staged_item.markdown_file,
+                    markdown_path,
+                    expected_sha256=staged_item.source_markdown_sha256,
+                )
                 for image, image_path in images:
                     target = (
                         f"input/items/{staged_item.position:03d}/visual-{image.visual_ordinal}.png"
                     )
-                    self.adapter.stage_file(workspace, target, image_path)
+                    self.adapter.stage_file(
+                        workspace,
+                        target,
+                        image_path,
+                        expected_sha256=image.sha256,
+                    )
             self.adapter.write_json(workspace, "request.json", request_raw)
             log_root = self.settings.staging_root / job_id
             for state, event in (
@@ -532,7 +551,7 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 validate_hwpx_contract("content-team-exam-build-result", result_raw)
                 result = ContentTeamExamBuildResult.model_validate(result_raw)
             output = workspace / "output/content-team-exam.hwpx"
-            self._verify_output(output, workspace)
+            output_sha256 = self._verify_output(output, workspace)
             package_manifest = self.adapter.load_json(
                 workspace / "output/package-manifest.json", workspace
             )
@@ -552,7 +571,7 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 )
                 or result.item_count != len(items)
                 or result.section_count != len(items)
-                or result.output_sha256 != sha256_file(output)
+                or result.output_sha256 != output_sha256
                 or package_manifest.get("package_sha256") != result.output_sha256
                 or package_manifest.get("item_set_sha256") != item_set_sha256
                 or package_manifest.get("render_plan_sha256") != render_plan_sha256
@@ -590,6 +609,11 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 staging=log_root / "artifact",
                 manifest_version="content-team-exam-hwpx-artifact/1.0",
             )
+            if staged.primary_hash != output_sha256:
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_RESULT_INVALID,
+                    "content-team exam HWPX changed after result validation",
+                )
             self._transition(job_id, JobState.COMMITTING, "HWPX_EXAM_COMMIT_STARTED")
             final = commit_file_set_artifact(staged, self.settings.nas_artifact_root)
             stored_result: dict[str, Any] = {
