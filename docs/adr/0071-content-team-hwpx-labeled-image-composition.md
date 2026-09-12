@@ -42,6 +42,11 @@ closed.  Repackaging uses a fresh same-directory temporary file, validates packa
 atomically replaces only the workspace projection.  The orchestrator-owned HWPX manager continues
 to commit a successful artifact to NAS only after the isolated renderer result is validated.
 
+The HWPX builder has a separate runtime environment from the API release.  Its deployment verifier
+therefore compares the installed composition adapter byte-for-byte with the repository source, in
+addition to the entry point, exam renderer, models, and schemas.  A generic API deployment cannot
+silently leave an older composition adapter installed.
+
 Retries use the existing idempotent build boundary.  A terminal failed build is not mutated; a new
 attempt receives a new build identity while referencing the same immutable Item Revision.
 

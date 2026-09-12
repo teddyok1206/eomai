@@ -109,6 +109,10 @@ installed_contracts = Path(eom_hwpx_contracts.__file__).resolve().parent
 source_pairs = (
     (installed_builder / "cli.py", repository / "services/hwpx_builder/eom_hwpx_builder/cli.py"),
     (
+        installed_builder / "content_team_renderer.py",
+        repository / "services/hwpx_builder/eom_hwpx_builder/content_team_renderer.py",
+    ),
+    (
         installed_builder / "content_team_exam_renderer.py",
         repository / "services/hwpx_builder/eom_hwpx_builder/content_team_exam_renderer.py",
     ),

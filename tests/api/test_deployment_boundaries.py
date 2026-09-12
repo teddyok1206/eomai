@@ -734,6 +734,11 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
     ):
         assert runtime in deployment
     assert '"eom_hwpx_builder/cli.py"' in hwpx_deployment
+    assert 'installed_builder / "content_team_renderer.py"' in hwpx_deployment
+    assert (
+        'repository / "services/hwpx_builder/eom_hwpx_builder/content_team_renderer.py"'
+        in hwpx_deployment
+    )
     assert "CONTENT_TEAM_EXAM_V3_RUNTIME=READY" in hwpx_deployment
     assert "installed HWPX V3 source drift" in hwpx_deployment
     assert "sha256:43b7659bb96845f97fc2c29f5b26eaf561b4ba36ed0a1ee811088aa7cd9675a8" in (
