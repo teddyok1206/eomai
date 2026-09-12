@@ -272,7 +272,7 @@ def _base_analysis() -> dict[str, object]:
         "analysis_run_id": "analysisrun_" + "a" * 32,
         "analysis_result_id": "knowledgeanalysisresult_" + "a" * 32,
         "analysis_request_id": "knowledgeanalysis_" + "a" * 32,
-        "accepted_result_sha256": _sha("a"),
+        "accepted_result_sha256": _sha("9"),
         "accepted_result_artifact": {
             **_member(
                 "accepted-result.json",
@@ -521,6 +521,10 @@ def test_v10_additive_contracts_validate_in_json_schema_and_pydantic() -> None:
     ):
         validate_contract(schema_name, value)
     validate_knowledge_solution_report_references(request, proposal)
+    assert (
+        request.base_analysis.accepted_result_sha256
+        != request.base_analysis.accepted_result_artifact.sha256
+    )
 
 
 def test_v10_staging_commits_only_new_report_and_composite_receipt(tmp_path: Path) -> None:

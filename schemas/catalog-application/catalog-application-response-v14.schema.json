@@ -27,7 +27,7 @@
             },
             "workflow_id": {"pattern": "^workflow_[0-9a-f]{32}$", "type": "string"}
           },
-          "required": ["analysis_run_id", "workflow_id", "state", "resource_version", "proposal_artifact_revision_id", "accepted_result_artifact_revision_id"],
+          "required": ["analysis_run_id", "workflow_id", "state", "resource_version"],
           "type": "object"
         },
         "operation": {"const": "CREATE_KNOWLEDGE_SOLUTION_ANALYSIS"},

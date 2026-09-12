@@ -36,6 +36,7 @@ ADMITTED_DEFINITIONS = {
     ("knowledge-analysis", "4.0.0"): "knowledge-analysis.v4.yaml",
     ("knowledge-analysis", "8.0.0"): "knowledge-analysis.v8.yaml",
     ("knowledge-analysis", "9.0.0"): "knowledge-analysis.v9.yaml",
+    ("knowledge-analysis", "10.0.0"): "knowledge-analysis.v10.yaml",
     ("legacy-item-extraction", "1.0.0"): "legacy-item-extraction.v1.yaml",
     (
         "legacy-item-editorial-compatibility",
@@ -293,6 +294,7 @@ def test_catalog_socket_operation_schema_routes_are_total_and_immutable() -> Non
         "IMPORT_REVIEWED_ITEM_CONTENT": (10, 10),
         "GET_ITEM_CONTENT": (10, 10),
         "CREATE_KNOWLEDGE_ANALYSIS": (5, 3),
+        "CREATE_KNOWLEDGE_SOLUTION_ANALYSIS": (14, 14),
         "RECONCILE_KNOWLEDGE_ANALYSIS": (3, 3),
         "REVIEW_KNOWLEDGE_ANALYSIS": (3, 3),
         "CREATE_KNOWLEDGE_ANALYSIS_BATCH": (9, 7),

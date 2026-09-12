@@ -13,6 +13,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV6,
     KnowledgeAnalysisProposalReceiptV7,
     KnowledgeAnalysisProposalReceiptV8,
+    KnowledgeAnalysisProposalReceiptV9,
     KnowledgeAnalysisRiskPolicy,
 )
 
@@ -33,6 +34,7 @@ def evaluate_knowledge_analysis_risk(
         | KnowledgeAnalysisProposalReceiptV6
         | KnowledgeAnalysisProposalReceiptV7
         | KnowledgeAnalysisProposalReceiptV8
+        | KnowledgeAnalysisProposalReceiptV9
     ),
     policy: KnowledgeAnalysisRiskPolicy,
 ) -> KnowledgeAnalysisRiskEvaluation:
@@ -43,15 +45,26 @@ def evaluate_knowledge_analysis_risk(
         reasons.add("SOURCE_CLASS_REQUIRES_REVIEW")
     if policy.review_when_general_knowledge_used and receipt.general_knowledge_used:
         reasons.add("GENERAL_KNOWLEDGE_USED")
-    if policy.review_when_blocking_ambiguity_present and receipt.blocking_ambiguity_count > 0:
+    blocking_count = (
+        receipt.solution_counts.unresolved_issues
+        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9)
+        else receipt.blocking_ambiguity_count
+    )
+    if policy.review_when_blocking_ambiguity_present and blocking_count > 0:
         reasons.add("BLOCKING_AMBIGUITY_PRESENT")
-    if (
-        receipt.minimum_confidence_milli is not None
-        and receipt.minimum_confidence_milli < policy.minimum_confidence_milli
-    ):
+    minimum_confidence = (
+        None
+        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9)
+        else receipt.minimum_confidence_milli
+    )
+    if minimum_confidence is not None and minimum_confidence < policy.minimum_confidence_milli:
         reasons.add("CONFIDENCE_BELOW_POLICY")
     limits = policy.maximum_auto_accept_counts
-    counts = receipt.counts
+    counts = (
+        receipt.base_analysis.base_counts
+        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9)
+        else receipt.counts
+    )
     if any(
         observed > maximum
         for observed, maximum in (

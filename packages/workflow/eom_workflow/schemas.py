@@ -178,6 +178,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "knowledge-analysis-proposal-result@7.0",
             "knowledge-analysis-proposal-result@8.0",
             "knowledge-analysis-proposal-result@9.0",
+            "knowledge-analysis-proposal-result@10.0",
             "legacy-item-extraction-result@1.0",
             "legacy-item-editorial-compatibility-result@1.0",
         }

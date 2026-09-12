@@ -19,7 +19,7 @@ fail() {
 
 declare -A FILES=(
   ["${REPOSITORY_ROOT}/config/workflows/generic-item-development.v1.10.yaml"]="${WORKFLOW_ROOT}/generic-item-development.yaml"
-  ["${REPOSITORY_ROOT}/config/workflows/knowledge-analysis.v8.yaml"]="${WORKFLOW_ROOT}/knowledge-analysis.yaml"
+  ["${REPOSITORY_ROOT}/config/workflows/knowledge-analysis.v10.yaml"]="${WORKFLOW_ROOT}/knowledge-analysis.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/legacy-item-extraction.v1.yaml"]="${WORKFLOW_ROOT}/legacy-item-extraction.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/legacy-item-editorial-compatibility.v1.yaml"]="${WORKFLOW_ROOT}/legacy-item-editorial-compatibility.yaml"
   ["${REPOSITORY_ROOT}/config/human-actors.example.yaml"]="${CONFIG_ROOT}/human-actors.yaml"

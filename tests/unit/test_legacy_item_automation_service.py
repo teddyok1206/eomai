@@ -55,6 +55,8 @@ def _guard(service: LegacyItemAutomaticLearningService) -> None:
     service.preset_pin = _pin()
     service.learning.preset_pin_guard.return_value = nullcontext()
     service._terminal_analysis = cast(Any, lambda: None)
+    if "_solution_candidate" not in service.__dict__:
+        service._solution_candidate = cast(Any, lambda: None)
 
 
 def _query_backed_service(
@@ -117,6 +119,7 @@ def _query_backed_service(
     # These branches are outside the selector-order invariant under test.  Terminal and retry
     # selection remain the real service implementations backed by the relational fixture.
     service._active_analyses = cast(Any, tuple)
+    service._solution_candidate = cast(Any, lambda: None)
     service._candidate = Mock()
     return engine, service
 
@@ -235,6 +238,32 @@ def test_automatic_learning_refills_second_position_while_first_is_running() -> 
     command = service.analyses.reconcile.call_args.args[0]
     assert command.analysis_run_id == "analysisrun_" + "4" * 32
     service.learning.promote_and_schedule.assert_called_once()
+
+
+def test_automatic_learning_schedules_additive_report_before_graph_or_new_source() -> None:
+    service = object.__new__(LegacyItemAutomaticLearningService)
+    service.analyses = Mock()
+    service.learning = Mock()
+    service.graph = Mock()
+    service.graph_batch_size = 16
+    service._active_analyses = cast(Any, tuple)
+    service._solution_candidate = cast(
+        Any,
+        lambda: ("analysisrun_" + "4" * 32, "operator_owner"),
+    )
+    service._retryable_analysis = Mock()
+    service._candidate = Mock()
+    _guard(service)
+
+    assert service.advance_once() is True
+
+    command = service.analyses.create_solution.call_args.args[0]
+    assert command.base_analysis_run_id == "analysisrun_" + "4" * 32
+    assert command.requested_by == "operator_owner"
+    assert command.idempotency_key == "legacy-item-solution:" + "analysisrun_" + "4" * 32
+    service.graph.pending_candidates.assert_not_called()
+    service.learning.retry_failed_analysis.assert_not_called()
+    service._candidate.assert_not_called()
 
 
 def test_duplicate_batch_membership_reconciles_once_and_refills_second_position() -> None:

@@ -14,6 +14,8 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV6,
     KnowledgeAnalysisProposalReceiptV7,
     KnowledgeAnalysisProposalReceiptV8,
+    KnowledgeAnalysisProposalReceiptV9,
+    KnowledgeAnalysisSolutionReport,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
@@ -21,6 +23,8 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV5,
     KnowledgeAnalysisWorkerProposalV6,
     KnowledgeAnalysisWorkerProposalV7,
+    KnowledgeAnalysisWorkerProposalV8,
+    validate_contract,
 )
 from pydantic import ValidationError
 
@@ -194,3 +198,39 @@ def resolve_knowledge_analysis_proposal(
     if actual_counts != expected_counts:
         raise KnowledgeProposalResolutionError("CONTENT_INVALID", "analysis proposal counts differ")
     return proposal
+
+
+def resolve_knowledge_solution_proposal(
+    artifacts: CatalogArtifactService,
+    receipt: KnowledgeAnalysisProposalReceiptV9,
+) -> KnowledgeAnalysisWorkerProposalV8:
+    """Resolve the one additive report member without copying accepted base members."""
+
+    pointer = receipt.solution_report
+    try:
+        raw = artifacts.read_member(
+            artifact_id=pointer.artifact_id,
+            revision_id=pointer.artifact_revision_id,
+            member_path=pointer.member_path,
+            sha256=pointer.sha256,
+            media_type=pointer.media_type,
+            schema_ref=pointer.schema_ref,
+            max_bytes=pointer.bytes,
+        )
+        if len(raw) != pointer.bytes:
+            raise ValueError("solution report member byte count differs")
+        value = json.loads(raw)
+        if not isinstance(value, dict):
+            raise ValueError("solution report is not an object")
+        validate_contract("knowledge-analysis-solution-report-v1", value)
+        report = KnowledgeAnalysisSolutionReport.model_validate(value)
+        return KnowledgeAnalysisWorkerProposalV8(
+            analysis_request_id=receipt.analysis_request_id,
+            base_analysis_result_id=receipt.base_analysis.analysis_result_id,
+            solution_report=report,
+            completed_at=receipt.completed_at,
+        )
+    except (OSError, ValueError, json.JSONDecodeError, ValidationError) as exc:
+        raise KnowledgeProposalResolutionError(
+            "CONTENT_INVALID", "solution report member is invalid"
+        ) from exc

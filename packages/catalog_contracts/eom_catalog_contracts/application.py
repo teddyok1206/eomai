@@ -53,6 +53,7 @@ CatalogApplicationOperation = Literal[
     "IMPORT_REVIEWED_ITEM_CONTENT",
     "GET_ITEM_CONTENT",
     "CREATE_KNOWLEDGE_ANALYSIS",
+    "CREATE_KNOWLEDGE_SOLUTION_ANALYSIS",
     "RECONCILE_KNOWLEDGE_ANALYSIS",
     "REVIEW_KNOWLEDGE_ANALYSIS",
     "CREATE_KNOWLEDGE_ANALYSIS_BATCH",
@@ -282,6 +283,16 @@ class CreateKnowledgeAnalysisCommand(FrozenModel):
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[\x21-\x7e]+$")
 
 
+class CreateKnowledgeSolutionAnalysisCommand(FrozenModel):
+    """Create one additive report from an exact accepted visual Item analysis."""
+
+    operation: Literal["CREATE_KNOWLEDGE_SOLUTION_ANALYSIS"] = "CREATE_KNOWLEDGE_SOLUTION_ANALYSIS"
+    base_analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    preset_key: Literal["knowledge-analysis"] = "knowledge-analysis"
+    requested_by: ActorId
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[\x21-\x7e]+$")
+
+
 class ReconcileKnowledgeAnalysisCommand(FrozenModel):
     operation: Literal["RECONCILE_KNOWLEDGE_ANALYSIS"] = "RECONCILE_KNOWLEDGE_ANALYSIS"
     analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
@@ -380,6 +391,7 @@ CatalogApplicationRequestValue = Annotated[
     ReviewedItemContentImportCommand
     | ItemContentQuery
     | CreateKnowledgeAnalysisCommand
+    | CreateKnowledgeSolutionAnalysisCommand
     | ReconcileKnowledgeAnalysisCommand
     | ReviewKnowledgeAnalysisCommand
     | CreateKnowledgeAnalysisBatchCommand
@@ -484,6 +496,7 @@ class CatalogApplicationResponse(FrozenModel):
             self.operation
             in {
                 "CREATE_KNOWLEDGE_ANALYSIS",
+                "CREATE_KNOWLEDGE_SOLUTION_ANALYSIS",
                 "RECONCILE_KNOWLEDGE_ANALYSIS",
                 "REVIEW_KNOWLEDGE_ANALYSIS",
             }
@@ -524,6 +537,10 @@ CATALOG_APPLICATION_SCHEMA_ROUTES: Final = MappingProxyType(
         "CREATE_KNOWLEDGE_ANALYSIS": CatalogApplicationSchemaRoute(
             "catalog-application-request-v5",
             "catalog-application-response-v3",
+        ),
+        "CREATE_KNOWLEDGE_SOLUTION_ANALYSIS": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v14",
+            "catalog-application-response-v14",
         ),
         "RECONCILE_KNOWLEDGE_ANALYSIS": CatalogApplicationSchemaRoute(
             "catalog-application-request-v3",

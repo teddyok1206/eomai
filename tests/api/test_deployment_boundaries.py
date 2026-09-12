@@ -663,7 +663,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert "mock-exam terminal-state contract export is incomplete" in deployment
     assert "mock-exam retirement contract package exports are incomplete" in deployment
     assert "legacy Graph automation must preserve its local 1..16 batch contract" in deployment
-    assert 'CURRENT_MIGRATION_REVISION != "20260912_0034"' in deployment
+    assert 'CURRENT_MIGRATION_REVISION != "20260912_0035"' in deployment
 
 
 def test_release_verifies_assessment_occurrence_graph_schema_resources() -> None:
@@ -697,13 +697,15 @@ def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions()
     )
     assert (
         "for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, "
-        "analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9)" in deployment
+        "analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10)"
+        in deployment
     )
     assert (
         'analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", '
-        '"5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0"}' in deployment
+        '"5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0", "10.0.0"}' in deployment
     )
     assert 'load_role_input_schema("support", "workflow-role/1.18.0")' in deployment
+    assert 'load_role_input_schema("support", "workflow-role/1.21.0")' in deployment
 
 
 def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:

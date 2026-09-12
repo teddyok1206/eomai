@@ -364,6 +364,7 @@ class WorkflowRequest(FrozenModel):
         | KnowledgeAnalysisRequestV7
         | KnowledgeAnalysisRequestV8
         | KnowledgeAnalysisRequestV9
+        | KnowledgeAnalysisRequestV10
         | None
     ) = None
     legacy_extraction_request: LegacyItemExtractionRequest | None = None

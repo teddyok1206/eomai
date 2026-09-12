@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from eom_catalog_contracts import (
     PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
+    CreateKnowledgeSolutionAnalysisCommand,
     LegacyItemPromotionRequest,
     ReconcileKnowledgeAnalysisCommand,
 )
@@ -134,6 +135,17 @@ class LegacyItemAutomaticLearningService:
                 )
         if len(active_analyses) == MAX_AUTOMATIC_ACTIVE_ANALYSES:
             return progressed
+        solution_candidate = self._solution_candidate()
+        if solution_candidate is not None:
+            analysis_run_id, requested_by = solution_candidate
+            self.analyses.create_solution(
+                CreateKnowledgeSolutionAnalysisCommand(
+                    base_analysis_run_id=analysis_run_id,
+                    requested_by=requested_by,
+                    idempotency_key=f"legacy-item-solution:{analysis_run_id}",
+                )
+            )
+            return True
         graph_candidates = (
             self.graph.pending_candidates(limit=self.graph_batch_size)
             if self.graph is not None
@@ -224,6 +236,67 @@ class LegacyItemAutomaticLearningService:
         if row is None:
             return None
         return str(row.analysis_run_id), str(row.state)
+
+    def _solution_candidate(self) -> tuple[str, str] | None:
+        """Select one accepted V9 base with no additive V10 successor."""
+
+        successor = aliased(KnowledgeAnalysisRunRecord)
+        registration_key = (
+            literal("legacy-item-promotion:")
+            + LegacyItemExtractionDecisionRecord.acceptance_id
+            + literal(":")
+            + LegacyItemExtractionDecisionRecord.item_proposal_id
+        )
+        with self.sessions() as session:
+            row = session.execute(
+                select(
+                    KnowledgeAnalysisRunRecord.analysis_run_id,
+                    KnowledgeAnalysisRunRecord.created_by_operator_id,
+                )
+                .distinct()
+                .join(
+                    ItemRevisionRecord,
+                    ItemRevisionRecord.item_revision_id
+                    == KnowledgeAnalysisRunRecord.source_revision_id,
+                )
+                .join(
+                    LegacyItemExtractionDecisionRecord,
+                    ItemRevisionRecord.registration_key == registration_key,
+                )
+                .join(
+                    LegacyItemExtractionBatchWorkUnitRecord,
+                    LegacyItemExtractionBatchWorkUnitRecord.acceptance_id
+                    == LegacyItemExtractionDecisionRecord.acceptance_id,
+                )
+                .outerjoin(
+                    successor,
+                    (
+                        successor.predecessor_analysis_run_id
+                        == KnowledgeAnalysisRunRecord.analysis_run_id
+                    )
+                    & (
+                        successor.canonical_request["schema_version"].astext
+                        == "knowledge-analysis-request/10.0"
+                    ),
+                )
+                .where(
+                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id.in_(
+                        self.extraction_batch_ids
+                    ),
+                    KnowledgeAnalysisRunRecord.state == "ACCEPTED",
+                    KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
+                    == PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION,
+                    successor.analysis_run_id.is_(None),
+                )
+                .order_by(
+                    KnowledgeAnalysisRunRecord.created_at,
+                    KnowledgeAnalysisRunRecord.analysis_run_id,
+                )
+                .limit(1)
+            ).one_or_none()
+        if row is None:
+            return None
+        return str(row.analysis_run_id), str(row.created_by_operator_id)
 
     def _source_work_remaining(self) -> bool:
         with self.sessions() as session:

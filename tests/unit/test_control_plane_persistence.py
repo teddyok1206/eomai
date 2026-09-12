@@ -135,7 +135,7 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260912_0034"
+    assert CURRENT_MIGRATION_REVISION == "20260912_0035"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -158,7 +158,7 @@ def test_multimodal_batch_migration_is_additive_and_keeps_legacy_pointers() -> N
         encoding="utf-8"
     )
     assert 'down_revision: str | None = "20260826_0018"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260912_0034"
+    assert CURRENT_MIGRATION_REVISION == "20260912_0035"
     assert "textbook-analysis-bundle-manifest/1.0" in source
     assert "textbook-analysis-bundle-manifest/2.0" in source
     assert "drop_table" not in source
@@ -170,7 +170,7 @@ def test_codex_device_reauthentication_migration_is_additive_and_credential_free
         "migrations/versions/20260827_0020_codex_gui_device_reauthentication.py"
     ).read_text(encoding="utf-8")
     assert 'down_revision: str | None = "20260827_0019"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260912_0034"
+    assert CURRENT_MIGRATION_REVISION == "20260912_0035"
     assert "codex_auth_enrollments" in source
     assert "codex_auth_assignment_revisions" in source
     assert "codex_auth_assignment_revisions_immutable" in source
@@ -188,7 +188,7 @@ def test_knowledge_analysis_continue_collect_migration_preserves_legacy_batches(
         "migrations/versions/20260828_0021_knowledge_analysis_continue_collect.py"
     ).read_text(encoding="utf-8")
     assert 'down_revision: str | None = "20260827_0020"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260912_0034"
+    assert CURRENT_MIGRATION_REVISION == "20260912_0035"
     assert 'server_default="STOP_ON_FIRST_FAILURE"' in source
     assert "CONTINUE_AND_COLLECT" in source
     assert "DELETE FROM" not in source
@@ -200,7 +200,7 @@ def test_bounded_parallel_capacity_migration_preserves_serial_history() -> None:
         "migrations/versions/20260828_0022_bounded_parallel_knowledge_capacity.py"
     ).read_text(encoding="utf-8")
     assert 'down_revision: str | None = "20260828_0021"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260912_0034"
+    assert CURRENT_MIGRATION_REVISION == "20260912_0035"
     assert 'server_default="SERIAL"' in source
     assert 'server_default="1"' in source
     assert "max_active_knowledge_analysis BETWEEN 1 AND 2" in source
@@ -215,7 +215,7 @@ def test_graph_source_pointer_migration_pins_exact_analysis_runs() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | None = "20260828_0022"' in source
-    assert CURRENT_MIGRATION_REVISION == "20260912_0034"
+    assert CURRENT_MIGRATION_REVISION == "20260912_0035"
     assert "analysis_run_id" in source
     assert "fk_knowledge_node_source_analysis" in source
     assert "fk_knowledge_edge_source_analysis" in source
@@ -523,3 +523,27 @@ def test_workflow_command_claim_index_includes_delayed_availability() -> None:
     assert tuple(column.name for column in fencing.columns) == ("lease_token",)
     assert str(fencing.dialect_options["postgresql"]["where"]) == "lease_token IS NOT NULL"
     assert table.columns["lease_generation"].nullable is False
+
+
+def test_additive_solution_analysis_has_one_accepted_successor_per_base() -> None:
+    source = Path("migrations/versions/20260912_0035_additive_solution_analysis.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'down_revision: str | None = "20260912_0034"' in source
+    assert CURRENT_MIGRATION_REVISION == "20260912_0035"
+    assert "uq_knowledge_analysis_accepted_solution_predecessor" in source
+    assert "knowledge-analysis-request/10.0" in source
+    assert "DELETE FROM" not in source
+    assert "UPDATE knowledge_analysis_runs" not in source
+
+    table = Base.metadata.tables["knowledge_analysis_runs"]
+    index = next(
+        value
+        for value in table.indexes
+        if value.name == "uq_knowledge_analysis_accepted_solution_predecessor"
+    )
+    assert index.unique is True
+    assert tuple(column.name for column in index.columns) == ("predecessor_analysis_run_id",)
+    predicate = str(index.dialect_options["postgresql"]["where"])
+    assert "state = 'ACCEPTED'" in predicate
+    assert "knowledge-analysis-request/10.0" in predicate

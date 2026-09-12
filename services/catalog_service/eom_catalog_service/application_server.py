@@ -30,6 +30,7 @@ from eom_catalog_contracts import (
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
+    CreateKnowledgeSolutionAnalysisCommand,
     InspectMockExamReviewEligibilityQuery,
     ItemContentQuery,
     ItemMediaQuery,
@@ -210,6 +211,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     status="OK",
                     operation=request.operation,
                     analysis=self.server.knowledge_analysis.create(request),
+                )
+            elif isinstance(request, CreateKnowledgeSolutionAnalysisCommand):
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    analysis=self.server.knowledge_analysis.create_solution(request),
                 )
             elif isinstance(request, ReconcileKnowledgeAnalysisCommand):
                 response = CatalogApplicationResponse(

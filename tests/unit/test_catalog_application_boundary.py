@@ -29,6 +29,7 @@ from eom_catalog_contracts import (
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
+    CreateKnowledgeSolutionAnalysisCommand,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     InspectMockExamReviewEligibilityQuery,
@@ -540,6 +541,25 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
         analysis=FakeKnowledgeAnalysis().create(analysis_command),
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-application-response-v2", analysis_response)
+
+    solution_command = CreateKnowledgeSolutionAnalysisCommand(
+        base_analysis_run_id="analysisrun_" + "a" * 32,
+        requested_by="operator_test_admin",
+        idempotency_key="knowledge-solution-analysis-contract-key",
+    )
+    solution_request = CatalogApplicationRequest(root=solution_command).model_dump(mode="json")
+    validate_contract("catalog-application-request-v14", solution_request)
+    solution_response = CatalogApplicationResponse(
+        status="OK",
+        operation="CREATE_KNOWLEDGE_SOLUTION_ANALYSIS",
+        analysis=KnowledgeAnalysisApplicationResult(
+            analysis_run_id="analysisrun_" + "b" * 32,
+            workflow_id="workflow_" + "c" * 32,
+            state="REQUESTED",
+            resource_version=1,
+        ),
+    ).model_dump(mode="json", exclude_none=True)
+    validate_contract("catalog-application-response-v14", solution_response)
 
     document_analysis_command = CreateKnowledgeAnalysisCommand(
         source={

@@ -1849,8 +1849,6 @@ class KnowledgeAnalysisBaseResultPointer(FrozenModel):
 
     @model_validator(mode="after")
     def exact_v9_member_family(self) -> KnowledgeAnalysisBaseResultPointer:
-        if self.accepted_result_artifact.sha256 != self.accepted_result_sha256:
-            raise ValueError("base accepted-result pointer hash differs")
         if (
             self.proposal_receipt.member_path != "normalized/proposal-receipt.json"
             or self.proposal_receipt.schema_ref

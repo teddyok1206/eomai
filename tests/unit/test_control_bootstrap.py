@@ -65,6 +65,7 @@ ANALYSIS_CONFIG_V12 = ROOT / "config/control-plane/knowledge-analysis-v12"
 ANALYSIS_CONFIG_V13 = ROOT / "config/control-plane/knowledge-analysis-v13"
 ANALYSIS_CONFIG_V14 = ROOT / "config/control-plane/knowledge-analysis-v14"
 ANALYSIS_CONFIG_V15 = ROOT / "config/control-plane/knowledge-analysis-v15"
+ANALYSIS_CONFIG_V16 = ROOT / "config/control-plane/knowledge-analysis-v16"
 
 
 def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version() -> None:
@@ -73,7 +74,7 @@ def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version
     )
 
     assert set(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS) == schema_versions
-    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 16))
+    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 17))
 
 
 def test_knowledge_analysis_v13_adds_parallel_capacity_without_changing_worker_semantics() -> None:
@@ -178,6 +179,41 @@ def test_knowledge_analysis_v15_requires_exact_past_exam_png_inspection() -> Non
         "layout/localization features",
     ):
         assert required in role_instruction
+
+
+def test_knowledge_analysis_v16_adds_solution_reports_without_weakening_v9() -> None:
+    manifest = load_knowledge_analysis_bootstrap_manifest(ANALYSIS_CONFIG_V16)
+
+    assert manifest.schema_version == "knowledge-analysis-control-bootstrap/16.0"
+    assert manifest.created_at.isoformat() == "2026-09-12T00:00:00+00:00"
+    assert manifest.compatible_workflow_protocols[-2:] == (
+        "workflow-role/1.18.0",
+        "workflow-role/1.21.0",
+    )
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    instruction = (ANALYSIS_CONFIG_V16 / "instructions/knowledge-analysis.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = " ".join(instruction.split())
+    for required in (
+        "`knowledge-analysis-request/9.0`",
+        "`knowledge-analysis-request/10.0`",
+        "every supplied problem and answer/explanation PNG",
+        "Keep the complete established node",
+        "`source/base-analysis/`",
+        "eight pinned normalized members",
+        "externally verifiable solution report, not hidden chain-of-thought",
+        "how each curriculum concept",
+        "a diagnosis for each choice or statement",
+        "comparison with the official answer/explanation evidence",
+        "reference_index",
+        "never substitute the latest",
+    ):
+        assert required in normalized
+    assert (ANALYSIS_CONFIG_V15 / "bootstrap.yaml").read_bytes() != (
+        ANALYSIS_CONFIG_V16 / "bootstrap.yaml"
+    ).read_bytes()
 
 
 def test_parallel_bootstrap_preserves_an_operator_assigned_account_label(
