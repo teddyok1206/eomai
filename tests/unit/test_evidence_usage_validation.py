@@ -542,6 +542,52 @@ def test_required_image_presentation_binds_stem_and_image_slot_to_past_exam_stru
     )
 
 
+def test_required_image_presentation_rejects_internal_instruction_in_candidate_data() -> None:
+    with pytest.raises(EvidenceUsageValidationError) as captured:
+        _validate_required_image_presentation(
+            _required_image_plan(),
+            _required_image_manifest(),
+            (
+                _required_image_citation(
+                    paths=("/labeled_blocks/0/content", "/stem", "/visuals/0/kind")
+                ),
+            ),
+            {
+                "stem": "그림은 포물선 운동을 나타낸다.",
+                "labeled_blocks": [
+                    {
+                        "kind": "DATA",
+                        "content": "그림에는 O, P, Q와 포물선 궤적을 표시한다.",
+                    }
+                ],
+                "visuals": [{"kind": "IMAGE"}],
+            },
+        )
+    assert captured.value.code == "EVIDENCE_CANDIDATE_VISIBLE_IMAGE_INSTRUCTION"
+
+
+def test_required_image_presentation_accepts_observational_image_facts() -> None:
+    _validate_required_image_presentation(
+        _required_image_plan(),
+        _required_image_manifest(),
+        (
+            _required_image_citation(
+                paths=("/labeled_blocks/0/content", "/stem", "/visuals/0/kind")
+            ),
+        ),
+        {
+            "stem": "그림은 포물선 운동을 나타낸다.",
+            "labeled_blocks": [
+                {
+                    "kind": "DATA",
+                    "content": "그림의 P와 Q는 각각 t=1 s와 t=2 s인 공의 위치이다.",
+                }
+            ],
+            "visuals": [{"kind": "IMAGE"}],
+        },
+    )
+
+
 def test_required_image_presentation_rejects_missing_image_slot() -> None:
     with pytest.raises(EvidenceUsageValidationError) as captured:
         _validate_required_image_presentation(

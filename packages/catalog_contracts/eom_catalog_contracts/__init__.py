@@ -118,6 +118,7 @@ from eom_catalog_contracts.assessment_item import (
     StatementExplanation,
     StatementSetBlock,
     TableBlock,
+    candidate_visible_image_instruction_paths,
     validate_eom_question_template_content,
     validate_item_reference_contract,
 )
@@ -1160,6 +1161,7 @@ __all__ = [
     "build_integrated_science_mock_exam_production_plan_v3",
     "build_mock_exam_assembly_cohort",
     "build_mock_exam_assembly_plan",
+    "candidate_visible_image_instruction_paths",
     "catalog_application_schema_route",
     "catalog_schema_inventory",
     "classify_content_team_mock_exam_material_profile",

@@ -745,6 +745,9 @@ def test_content_team_v10_parses_grounded_authoring_image_pair_and_content_v3(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service, artifacts = _service(tmp_path)
+    WorkflowCatalogService._require_item_brief_release(
+        "generated-knowledge-item", "1.15.8", _grounded_content_team_request()
+    )
     svg = tmp_path / "content-team-v10.svg"
     png = tmp_path / "content-team-v10.png"
     svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"></svg>\n', encoding="utf-8")
@@ -823,6 +826,32 @@ def test_content_team_v10_standalone_required_image_requires_separate_data_mater
     with pytest.raises(
         ValueError,
         match="standalone image-required authoring has no DATA material block",
+    ):
+        service.content_team_image_slot_count(
+            workflow=_workflow(initial_request=request.model_dump(mode="json")),
+            authoring=AUTHORING_V10,
+        )
+
+
+def test_content_team_v10_standalone_required_image_rejects_candidate_instruction_leak(
+    tmp_path: Path,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    result = _content_team_authoring_result_v10()
+    output = cast(dict[str, Any], result["output"])
+    draft = cast(dict[str, Any], output["draft"])
+    draft["labeled_blocks"] = [
+        {
+            "kind": "DATA",
+            "content": "그림에는 O, P, Q와 포물선 궤적을 표시한다.",
+        }
+    ]
+    artifacts.values[AUTHORING_V10.revision_id] = result
+    request = _grounded_content_team_request()
+
+    with pytest.raises(
+        ValueError,
+        match="leaked an internal image-production instruction into candidate text",
     ):
         service.content_team_image_slot_count(
             workflow=_workflow(initial_request=request.model_dump(mode="json")),

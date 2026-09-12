@@ -18,6 +18,7 @@ from eom_catalog_contracts import (
     AssessmentItemContentV3,
     ImageBlock,
     MediaArtifactPointer,
+    candidate_visible_image_instruction_paths,
     validate_contract,
     validate_eom_question_template_content,
 )
@@ -923,6 +924,14 @@ class WorkflowCatalogService:
                 and brief.mock_exam_slot is None
                 and request.image_mode == "required"
             ):
+                instruction_paths = candidate_visible_image_instruction_paths(
+                    parsed.output.draft.model_dump(mode="json")
+                )
+                if instruction_paths:
+                    raise ValueError(
+                        "standalone image-required authoring leaked an internal image-production "
+                        "instruction into candidate text"
+                    )
                 if count == 0:
                     raise ValueError(
                         "standalone image-required content-team authoring has no IMAGE slot"
@@ -1375,6 +1384,7 @@ class WorkflowCatalogService:
             "1.15.5",
             "1.15.6",
             "1.15.7",
+            "1.15.8",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1393,6 +1403,7 @@ class WorkflowCatalogService:
                 "1.15.5",
                 "1.15.6",
                 "1.15.7",
+                "1.15.8",
             } and (
                 request.image_mode != "required"
                 or request.profiles is None

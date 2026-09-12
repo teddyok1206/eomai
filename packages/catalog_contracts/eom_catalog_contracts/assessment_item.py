@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath
 from typing import Annotated, Final, Literal
 
@@ -20,6 +21,20 @@ ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE: Final = "application/json"
 ASSESSMENT_ITEM_CONTENT_SCHEMA_REF: Final = "eom.assessment.item-content/1.0"
 ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF: Final = "eom.assessment.item-content/2.0"
 ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF: Final = "eom.assessment.item-content/3.0"
+
+_IMAGE_PRODUCTION_TECHNICAL_PATTERN: Final = re.compile(
+    r"(?i)(?:illustration_prompt|generation_prompt|negative_prompt|production_route|"
+    r"scene_description|scientific_constraints|required_labels|viewBox|<svg|"
+    r"(?:[0-9]{2,4}\s*[x\N{MULTIPLICATION SIGN}]\s*[0-9]{2,4}\s*(?:px|픽셀))|"
+    r"픽셀|렌더링|프롬프트|"
+    r"흑백\s*선화|순백\s*배경|선\s*스타일)"
+)
+_ACTIVE_IMAGE_PRODUCTION_PATTERN: Final = re.compile(
+    r"(?:그림|삽화|도식|이미지)(?:에는?|에|을|를|은|는)?"
+    r"(?:(?![.!?。]).){0,240}?"
+    r"(?:표시한다|표시하라|그린다|그려라|배치한다|배치하라|삽입한다|삽입하라|"
+    r"추가한다|추가하라|넣는다|넣어라|생성한다|생성하라|렌더링한다|렌더링하라)"
+)
 
 
 class MediaArtifactPointer(FrozenModel):
@@ -236,6 +251,54 @@ class AssessmentItemContentV3(ContentTeamEditorialDraftV2):
 type AssessmentItemContentContract = (
     AssessmentItemContent | AssessmentItemContentV2 | AssessmentItemContentV3
 )
+
+
+def candidate_visible_image_instruction_paths(draft: Mapping[str, object]) -> tuple[str, ...]:
+    """Return stable paths where internal image-production language leaked into Item text.
+
+    Typed callers have already validated the draft. Technical production vocabulary is invalid in
+    every candidate-facing field. Active image-production clauses are checked only in the stem and
+    labeled material blocks, where they cannot be confused with a legitimate inquiry procedure.
+    """
+
+    text_fields: list[tuple[str, str, bool]] = []
+
+    def append(path: str, value: object, *, active_clause: bool) -> None:
+        if isinstance(value, str):
+            text_fields.append((path, value, active_clause))
+
+    append("/stem", draft.get("stem"), active_clause=True)
+    append("/bottom_stem", draft.get("bottom_stem"), active_clause=True)
+    labeled_blocks = draft.get("labeled_blocks")
+    if isinstance(labeled_blocks, Sequence) and not isinstance(labeled_blocks, str | bytes):
+        for index, block in enumerate(labeled_blocks):
+            if isinstance(block, Mapping):
+                append(
+                    f"/labeled_blocks/{index}/content",
+                    block.get("content"),
+                    active_clause=True,
+                )
+    inquiry = draft.get("inquiry")
+    if isinstance(inquiry, Mapping):
+        for field in ("goal", "procedure", "result"):
+            append(f"/inquiry/{field}", inquiry.get(field), active_clause=False)
+    for collection_name in ("statements", "choices"):
+        collection = draft.get(collection_name)
+        if isinstance(collection, Sequence) and not isinstance(collection, str | bytes):
+            for index, item in enumerate(collection):
+                if isinstance(item, Mapping):
+                    append(
+                        f"/{collection_name}/{index}/text",
+                        item.get("text"),
+                        active_clause=False,
+                    )
+
+    return tuple(
+        path
+        for path, value, active_clause in text_fields
+        if _IMAGE_PRODUCTION_TECHNICAL_PATTERN.search(value)
+        or (active_clause and _ACTIVE_IMAGE_PRODUCTION_PATTERN.search(value))
+    )
 
 
 def validate_item_reference_contract(

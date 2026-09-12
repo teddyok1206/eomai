@@ -14,6 +14,7 @@ from eom_catalog_contracts import (
     EvidenceBundleManifestV2,
     EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
+    candidate_visible_image_instruction_paths,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_workflow import (
@@ -314,6 +315,13 @@ def _validate_required_image_presentation(
 
     if "image" not in plan.retrieval_requirement.required_item_elements:
         return
+    instruction_paths = candidate_visible_image_instruction_paths(draft)
+    if instruction_paths:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_CANDIDATE_VISIBLE_IMAGE_INSTRUCTION",
+            "candidate-visible Item text contains an internal image-production instruction at "
+            + ", ".join(instruction_paths),
+        )
     visuals = draft.get("visuals")
     if not isinstance(visuals, list | tuple):
         raise EvidenceUsageValidationError(
