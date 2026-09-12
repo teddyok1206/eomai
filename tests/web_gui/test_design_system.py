@@ -34,8 +34,8 @@ def test_surface_mode_is_route_derived_and_not_a_user_theme() -> None:
     }
     assert all(entry in JAVASCRIPT for entry in expected_modes)
     assert "document.documentElement.dataset.uiMode = mode;" in JAVASCRIPT
-    assert 'id="surface-mode-label"' in HTML
-    assert 'id="sidebar-mode-label"' in HTML
+    assert 'id="surface-mode-label"' not in HTML
+    assert 'id="sidebar-mode-label"' not in HTML
     assert "localStorage" not in JAVASCRIPT
 
 
@@ -65,7 +65,6 @@ def test_semantic_tokens_and_accessibility_rules_are_part_of_the_css_contract() 
     ):
         assert token in CSS
     assert "--eom-brand: #4f46e5" in CSS
-    assert 'html[data-ui-mode="human"]' in CSS
     assert 'html[data-ui-mode="engine"]' in CSS
     assert "@media (prefers-reduced-motion: reduce)" in CSS
     assert "border-radius: 16px" not in CSS
@@ -100,18 +99,35 @@ def test_login_surface_uses_the_quiet_solid_workbench_background() -> None:
 
 def test_readable_type_scale_keeps_explanatory_text_out_of_micro_sizes() -> None:
     for token in (
-        "--eom-type-caption: 12px",
-        "--eom-type-label: 13px",
-        "--eom-type-body: 14px",
+        "--eom-type-caption: 13px",
+        "--eom-type-label: 14px",
+        "--eom-type-body: 15px",
     ):
         assert token in CSS
     assert (
         "body { margin: 0; min-width: 320px; background: var(--eom-background); "
         "font-size: var(--eom-type-body)" in CSS
     )
-    assert ".curriculum-helper" in CSS and "font-size: var(--eom-type-label)" in CSS
     assert ".decision-checklist ul" in CSS and "font-size: var(--eom-type-label)" in CSS
-    assert 'html[data-ui-mode="human"] .panel-heading .eyebrow { display: none; }' in CSS
+    assert 'class="eyebrow"' not in HTML
+    assert 'class="eyebrow"' not in LOGIN_HTML
+    assert 'class="curriculum-helper"' not in HTML
+    assert "login-intro" not in LOGIN_HTML
+    assert "security-note" not in LOGIN_HTML
+    assert "<small" not in LOGIN_HTML
+
+
+def test_content_first_visual_system_is_consistent_and_restrained() -> None:
+    assert '-apple-system, BlinkMacSystemFont, "SF Pro Text"' in CSS
+    assert "--eom-radius-control: 10px" in CSS
+    assert "--eom-radius-card: 12px" in CSS
+    assert ".nav-item { width: 100%; min-height: 44px" in CSS
+    assert ".button, .icon-button { min-height: 40px" in CSS
+    assert ".login-panel .button { min-height: 44px" in CSS
+    assert "background-image:" not in CSS
+    assert "linear-gradient(" not in CSS
+    assert "sidebar-footer" not in HTML
+    assert "안정화 기준 적용" not in HTML
 
 
 def test_technical_details_are_progressively_disclosed_without_hiding_recovery() -> None:

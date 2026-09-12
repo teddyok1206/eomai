@@ -25,10 +25,8 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "기존 제작 결과 불러오기",
             "최근 HWPX 제작 결과",
             "운영 데이터 조회",
-            "운영·근거 화면",
             "근거에서 출판 문서까지",
             "eom-cdx가 문항에 맞춰 생성하는 자료 그림",
-            "참고 자료 묶음 없이 구조화된 요구사항과 작업자의 일반 과학 지식",
             "교육과정 범위",
             "대단원 선택",
             "중단원 선택",
@@ -40,7 +38,6 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "설정 초안 사용 전환 검토",
             "계정 로그인 변경",
             "자료 학습",
-            "이미지 관찰 필수 · OCR 텍스트 보조",
         ):
             assert marker in shell.text
         assert client.get("/studio/assets/styles.css").status_code == 200
@@ -151,6 +148,9 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
         "DRAFT 생성 전 확인",
         "DRAFT Release 검토",
         "API 확인 중",
+        "안정화 기준 적용",
+        "운영·근거 화면",
+        "참고 자료 묶음 없이 구조화된 요구사항과 작업자의 일반 과학 지식",
     ):
         assert obsolete_label not in html
     for obsolete_message in (

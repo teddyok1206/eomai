@@ -31,7 +31,10 @@ client-side data store, external font, analytics script, framework, or network d
 ## 2. Design stance: Scientific Workbench
 
 The product should feel like a calm scientific instrument and a well-edited research notebook. It is
-neither a marketing dashboard nor a collection of decorative cards.
+neither a marketing dashboard nor a collection of decorative cards. The presentation follows the
+same content-first qualities associated with excellent native applications: clarity, restraint,
+direct manipulation, and consistent spatial rhythm. It does not copy another product's assets,
+trademarks, or ornamental effects.
 
 The visual hierarchy follows this order:
 
@@ -41,8 +44,20 @@ The visual hierarchy follows this order:
 4. exact identifiers and diagnostic detail.
 
 Process is shown before outcome. Evidence is shown next to the work it supports. Empty states explain
-the next useful action. Small radii, hairline borders, restrained shadows, and compact typography keep
-dense work readable without making the interface feel like a generic administration console.
+the next useful action. Hairline borders, restrained shadows, and readable typography keep dense work
+clear without making the interface feel like a generic administration console.
+
+Every surface uses one stable hierarchy:
+
+1. one direct page title;
+2. the likely primary action;
+3. the working content;
+4. state, provenance, and recovery controls;
+5. exact technical detail under progressive disclosure.
+
+Decorative eyebrows, slogans, repeated descriptions, and instructions that merely restate a label
+are omitted. Safety consequences, validation errors, approval criteria, empty-state next actions, and
+accessibility labels are functional content and must remain.
 
 ## 3. Automatic surface modes
 
@@ -55,8 +70,8 @@ preference.
 | 운영·근거 화면 (`engine`) | 문항 제작 진행, Codex 실행 관리, 교육 지식 맵, DB Explorer | Provenance, execution state, timings, immutable IDs, and diagnostics may use compact mono accents. |
 
 Both modes expose the same authorized capabilities. Mode changes density and emphasis only; it never
-changes requests, permissions, fields, state transitions, or error handling. The current mode is
-visible in both the sidebar and top bar so a user knows which reading frame applies.
+changes requests, permissions, fields, state transitions, or error handling. The mode is an internal
+presentation decision and is not repeated as a badge in navigation or the top bar.
 
 ## 4. Semantic color roles
 
@@ -75,10 +90,10 @@ Color names describe responsibility rather than a widget:
 | Vermilion | failure, destructive consequence, or blocked state |
 
 Color is never the only state signal. Every state includes text and, where compact display helps, a
-shape or icon. Primary buttons and active navigation use signal indigo (`#4F46E5`). Emerald is
-reserved for successful completion; amber and vermilion retain their warning and failure meaning.
-World-facing product content remains on a pure white document surface so application chrome never
-tints item figures.
+shape or icon. Signal indigo (`#4F46E5`) is used sparingly for the likely primary action, focus, and
+the active navigation state. Secondary actions remain neutral. Emerald is reserved for successful
+completion; amber and vermilion retain their warning and failure meaning. World-facing product
+content remains on a pure white document surface so application chrome never tints item figures.
 
 ### Brand mark
 
@@ -152,21 +167,23 @@ access-policy and Evidence Bundle contract requires the reviewed platform rollou
 ## 6. Typography, density, and motion
 
 - Human text uses the existing local/system Korean sans stack.
-- IDs, hashes, timestamps, execution annotations, and engine-mode eyebrows use the existing mono
-  stack.
-- Application text follows one readable scale: 14 px body, 13 px labels and messages, and 12 px
+- IDs, hashes, timestamps, and compact execution annotations use the existing mono stack.
+- Application text follows one readable scale: 15 px body, 14 px labels and messages, and 13 px
   captions. Ordinary instructions, states, field labels, and table values must not be compressed
   below the caption size merely to fit more information on screen.
-- The only text below 12 px is compact machine notation such as an ordinal, truncated immutable ID,
+- The only text below 13 px is compact machine notation such as an ordinal, truncated immutable ID,
   graph key, or document-preview metadata. It must remain secondary, recoverable at normal size in a
   detail surface, and never carry the only explanation of an action or state.
-- Human-mode panels use their Korean heading as the primary label and suppress repeated decorative
-  uppercase eyebrow copy. Page-level context and engine-mode evidence labels remain visible.
-- Card radius remains at or below 8 px; control radius remains at or below 6 px.
+- Panels use one Korean heading as the primary label and omit repeated decorative uppercase eyebrow
+  copy. Page-level context and evidence labels remain visible only when they identify real data.
+- Cards use a 12 px radius and controls use a 10 px radius consistently. Status capsules are the only
+  deliberately pill-shaped element.
 - Shadows establish document elevation or overlay ownership, not decoration.
 - Animation is unnecessary for status truth. Any transition must be subtle and is effectively
   disabled by `prefers-reduced-motion: reduce`.
 - Dense tables stay dense. User composition fields retain comfortable input height and line spacing.
+- Navigation targets are at least 44 px high; routine controls are at least 40 px high; login and
+  primary credential controls are at least 44 px high.
 
 ## 7. Accessibility and trust
 

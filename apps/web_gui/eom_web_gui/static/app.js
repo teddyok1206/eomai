@@ -79,10 +79,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
 
 function syncUiMode(name) {
   const mode = UI_MODE_BY_VIEW[name] || "human";
-  const label = mode === "engine" ? "운영·근거 화면" : "사용자 작업면";
   document.documentElement.dataset.uiMode = mode;
-  $("#surface-mode-label").lastChild.textContent = ` ${label}`;
-  $("#sidebar-mode-label").textContent = label;
 }
 
 async function api(path, options = {}) {
@@ -675,7 +672,7 @@ function renderStages(workflow, steps) {
     const key = keys[index];
     element.classList.toggle("complete", completed.has(key));
     element.classList.toggle("current", key === current && !completed.has(key));
-    const detail = element.querySelector("small");
+    const detail = element.querySelector(".stage-state");
     const hwpxState = state.hwpxCapability
       ? statePresentation("hwpx_capability", state.hwpxCapability.state).label
       : "제작 가능 여부 확인 필요";
@@ -1072,11 +1069,11 @@ function renderItemBank() {
     card.className = "item-bank-card";
     const heading = document.createElement("header");
     const title = document.createElement("div");
-    const eyebrow = document.createElement("small");
-    eyebrow.textContent = `${entry.administration_year}년 ${entry.administration_month}월 · 고${entry.target_grade}`;
+    const metadata = document.createElement("small");
+    metadata.textContent = `${entry.administration_year}년 ${entry.administration_month}월 · 고${entry.target_grade}`;
     const label = document.createElement("strong");
     label.textContent = `${entry.occurrence_display_label} · ${entry.item_number}번`;
-    title.append(eyebrow, label);
+    title.append(metadata, label);
     const stateLabel = document.createElement("span");
     stateLabel.className = "status-badge tone-success";
     stateLabel.textContent = entry.item_revision_state === "APPROVED" ? "승인 문항" : "고정 과거 버전";
