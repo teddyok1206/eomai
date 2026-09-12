@@ -33,7 +33,6 @@ from eom_workflow.models import (
 
 from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_MAX_SUBJECT_CHARS,
-    LOCAL_GPU_MAX_WORKER_NEGATIVE_CHARS,
     LOCAL_GPU_PROMPT_POLICY_REVISION,
     compose_local_gpu_prompts,
 )
@@ -227,21 +226,13 @@ def _build_request(
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
     if isinstance(drawing, GeneratedVectorDrawingV6):
         subject = drawing.alt_text
-        if (
-            len(subject) > LOCAL_GPU_MAX_SUBJECT_CHARS
-            or _has_forbidden_gpu_content(subject)
-            or (
-                drawing.negative_prompt is not None
-                and len(drawing.negative_prompt) > LOCAL_GPU_MAX_WORKER_NEGATIVE_CHARS
-            )
-        ):
+        if len(subject) > LOCAL_GPU_MAX_SUBJECT_CHARS or _has_forbidden_gpu_content(subject):
             raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
     else:
         subject = drawing.generation_prompt
     prompt, negative = compose_local_gpu_prompts(
         subject=subject,
         background_only=drawing.production_route == "LOCAL_GENERATIVE_BACKGROUND",
-        worker_negative=drawing.negative_prompt,
     )
     if len(prompt) > 4000 or len(negative) > 2000:
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")

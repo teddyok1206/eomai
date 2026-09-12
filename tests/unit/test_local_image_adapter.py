@@ -18,7 +18,6 @@ from eom_catalog_service.local_image_adapter import (
 from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_BACKGROUND_REQUIREMENTS,
     LOCAL_GPU_MAX_SUBJECT_CHARS,
-    LOCAL_GPU_MAX_WORKER_NEGATIVE_CHARS,
     LOCAL_GPU_NEGATIVE_REQUIREMENTS,
     LOCAL_GPU_PROMPT_POLICY_REVISION,
     LOCAL_GPU_PROMPT_SOURCE_PINS,
@@ -229,7 +228,7 @@ def test_prompt_policy_revision_is_part_of_provider_request_identity(
     monkeypatch.setattr(
         local_image_adapter,
         "LOCAL_GPU_PROMPT_POLICY_REVISION",
-        "local-gpu-image-prompt-policy/1.3",
+        "local-gpu-image-prompt-policy/1.4",
     )
     changed = _build_request(
         workflow_id="workflow_" + "3" * 32,
@@ -281,9 +280,7 @@ def test_v6_hybrid_request_describes_a_semantic_raster_not_a_background(tmp_path
         assert requirement in request.generation.prompt
     assert "background layer only" not in request.generation.prompt
     assert request.generation.negative_prompt is not None
-    assert request.generation.negative_prompt == (
-        ", ".join(LOCAL_GPU_NEGATIVE_REQUIREMENTS) + ", extra animals, decorative objects"
-    )
+    assert request.generation.negative_prompt == ", ".join(LOCAL_GPU_NEGATIVE_REQUIREMENTS)
     for requirement in LOCAL_GPU_NEGATIVE_REQUIREMENTS:
         assert requirement in request.generation.negative_prompt
 
@@ -316,7 +313,7 @@ def test_v6_hybrid_request_projects_worker_alt_text_and_keeps_team_prompt_in_ide
 def test_local_gpu_prompt_policy_pins_two_unchanged_reviewed_sources() -> None:
     root = Path(__file__).resolve().parents[2]
 
-    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.2"
+    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.3"
     assert len(LOCAL_GPU_PROMPT_SOURCE_PINS) == 2
     for relative_path, expected_sha256 in LOCAL_GPU_PROMPT_SOURCE_PINS:
         source = root / relative_path
@@ -461,22 +458,13 @@ def test_v6_hybrid_request_allows_explicit_human_exclusion(
     assert request.generation.prompt == "monochrome: 방형구에서 식물 분포를 조사하는 장면"
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    (
-        ("alt_text", "가" * (LOCAL_GPU_MAX_SUBJECT_CHARS + 1)),
-        ("negative_prompt", "x" * (LOCAL_GPU_MAX_WORKER_NEGATIVE_CHARS + 1)),
-    ),
-)
-def test_local_gpu_request_rejects_unbounded_worker_prompt_fields(
-    tmp_path: Path,
-    field: str,
-    value: str,
-) -> None:
+def test_local_gpu_request_rejects_unbounded_worker_subject(tmp_path: Path) -> None:
     path = tmp_path / "generated-overlay.png"
     path.write_bytes(_overlay_png())
     path.chmod(0o640)
-    drawing = _hybrid_drawing().model_copy(update={field: value})
+    drawing = _hybrid_drawing().model_copy(
+        update={"alt_text": "가" * (LOCAL_GPU_MAX_SUBJECT_CHARS + 1)}
+    )
 
     with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_INPUT_INVALID"):
         _build_request(
@@ -487,6 +475,36 @@ def test_local_gpu_request_rejects_unbounded_worker_prompt_fields(
             binding=LocalImageProviderBinding.model_validate(_binding_value()),
             overlay_path=path,
         )
+
+
+def test_worker_negative_is_provenance_but_not_unbounded_provider_input(tmp_path: Path) -> None:
+    path = tmp_path / "generated-overlay.png"
+    path.write_bytes(_overlay_png())
+    path.chmod(0o640)
+    binding = LocalImageProviderBinding.model_validate(_binding_value())
+    first_drawing = _hybrid_drawing()
+    changed_drawing = first_drawing.model_copy(update={"negative_prompt": "다른 검토용 금지 조건"})
+
+    first = _build_request(
+        workflow_id="workflow_" + "7" * 32,
+        result_revision_id="rev_" + "8" * 32,
+        drawing_hash=content_sha256(first_drawing.model_dump(mode="json")),
+        drawing=first_drawing,
+        binding=binding,
+        overlay_path=path,
+    )
+    changed = _build_request(
+        workflow_id="workflow_" + "7" * 32,
+        result_revision_id="rev_" + "8" * 32,
+        drawing_hash=content_sha256(changed_drawing.model_dump(mode="json")),
+        drawing=changed_drawing,
+        binding=binding,
+        overlay_path=path,
+    )
+
+    assert first.generation.prompt == changed.generation.prompt
+    assert first.generation.negative_prompt == changed.generation.negative_prompt
+    assert first.generation.request_id != changed.generation.request_id
 
 
 @pytest.mark.parametrize(

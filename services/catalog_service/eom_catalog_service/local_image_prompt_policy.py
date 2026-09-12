@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import Final
 
-LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.2"
+LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.3"
 LOCAL_GPU_MAX_SUBJECT_CHARS: Final = 50
-LOCAL_GPU_MAX_WORKER_NEGATIVE_CHARS: Final = 120
 
 # These are provenance pins for the two reviewed inputs.  They are not runtime paths and the
 # Catalog service does not dereference repository files while handling a request.
@@ -59,7 +58,6 @@ def compose_local_gpu_prompts(
     *,
     subject: str,
     background_only: bool,
-    worker_negative: str | None,
 ) -> tuple[str, str]:
     """Arrange mandatory renderer style and exact worker content without truncation."""
 
@@ -67,9 +65,4 @@ def compose_local_gpu_prompts(
         LOCAL_GPU_BACKGROUND_REQUIREMENTS if background_only else LOCAL_GPU_RASTER_REQUIREMENTS
     )[0]
     positive = f"{prefix} {subject}"
-    negative_parts = (
-        (*LOCAL_GPU_NEGATIVE_REQUIREMENTS, worker_negative)
-        if worker_negative is not None
-        else LOCAL_GPU_NEGATIVE_REQUIREMENTS
-    )
-    return positive, ", ".join(negative_parts)
+    return positive, ", ".join(LOCAL_GPU_NEGATIVE_REQUIREMENTS)
