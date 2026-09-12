@@ -89,6 +89,20 @@ Orchestrator validates and commits it; Catalog acceptance and Graph publication 
 receipt. RAG retrieval resolves the accepted report pointer and combines it with base evidence at
 the presentation boundary. No worker talks to another worker or writes PostgreSQL/NAS.
 
+RAG preserves Evidence Bundle manifest versions 1 through 4 and introduces manifest/result version
+5 only when the retrieval boundary can pin additive solution evidence. Catalog performs one
+set-based lookup from candidate base analysis run IDs to accepted version-10 successors by the
+indexed predecessor relation, then resolves exact result, receipt, and report member pointers.
+The lookup and in-memory merge are O(candidates + accepted successors); there is no per-candidate
+query. PostgreSQL stores only bounded pointer metadata and never the report body.
+
+The detailed report is answer-bearing canonical evidence and is not copied into an item worker's
+workspace. The immutable Evidence Bundle V5 manifest pins it for audit and reproducibility, while
+the bounded generated context includes only the explicitly reusable `assessment_design_summary`
+and `reusable_generation_guidance` fields. The Catalog validates the complete report before that
+projection. Missing additive reports remain an explicit null pointer during bounded backfill; new
+corpus completion requires both passes before publication is considered complete.
+
 ## Decision
 
 - Add immutable request 10.0, worker proposal 8.0, proposal receipt 9.0, and accepted result 10.0.

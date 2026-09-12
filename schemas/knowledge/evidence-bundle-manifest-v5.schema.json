@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/evidence-bundle-manifest/5.0",
+  "title": "EOM Evidence Bundle Manifest V5",
+  "$defs": {
+    "solutionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "base_analysis_run_id", "base_analysis_result_id",
+        "solution_analysis_run_id", "solution_analysis_result_id", "solution_result_sha256",
+        "accepted_result_artifact", "proposal_receipt", "solution_report",
+        "proposal_content_set_sha256", "pointer_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "knowledge-solution-evidence-pointer/1.0"},
+        "base_analysis_run_id": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+        "base_analysis_result_id": {"type": "string", "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$"},
+        "solution_analysis_run_id": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+        "solution_analysis_result_id": {"type": "string", "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$"},
+        "solution_result_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+        "accepted_result_artifact": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"},
+        "proposal_receipt": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"},
+        "solution_report": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"},
+        "proposal_content_set_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+        "pointer_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"}
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id", "evidence_kind", "use", "source", "graph_node_ids",
+        "anchor_ids", "relevance_milli", "answer_bearing", "solution_evidence"
+      ],
+      "properties": {
+        "evidence_id": {"type": "string", "pattern": "^evidenceitem_[0-9a-f]{32}$"},
+        "evidence_kind": {"enum": ["DOCUMENT", "ITEM_REVISION", "CLAIM", "TABLE", "FIGURE", "EQUATION"]},
+        "use": {"enum": ["GROUNDING", "REFERENCE_PATTERN", "AVOID_COPY"]},
+        "source": {
+          "oneOf": [
+            {"$ref": "eom://schemas/knowledge/knowledge-analysis-types/3.0#/$defs/analysisSource"},
+            {"$ref": "eom://schemas/knowledge/knowledge-analysis-types/4.0#/$defs/documentRevisionSource"}
+          ]
+        },
+        "graph_node_ids": {
+          "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"}
+        },
+        "anchor_ids": {
+          "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"}
+        },
+        "relevance_milli": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "answer_bearing": {"type": "boolean"},
+        "solution_evidence": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/solutionEvidence"}
+          ]
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "evidence_bundle_id", "evidence_bundle_revision_id",
+    "revision_number", "retrieval_request_id", "retrieval_request_sha256", "graph_snapshot",
+    "access_policy_revision_id", "access_policy_sha256", "requester_permissions_sha256",
+    "materials", "entries", "budget", "manifest_sha256", "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "evidence-bundle-manifest/5.0"},
+    "evidence_bundle_id": {"$ref": "eom://schemas/knowledge/evidence-bundle-manifest/4.0#/properties/evidence_bundle_id"},
+    "evidence_bundle_revision_id": {"$ref": "eom://schemas/knowledge/evidence-bundle-manifest/4.0#/properties/evidence_bundle_revision_id"},
+    "revision_number": {"$ref": "eom://schemas/knowledge/evidence-bundle-manifest/4.0#/properties/revision_number"},
+    "retrieval_request_id": {"$ref": "eom://schemas/knowledge/evidence-bundle-manifest/4.0#/properties/retrieval_request_id"},
+    "retrieval_request_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "graph_snapshot": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"},
+    "access_policy_revision_id": {"$ref": "eom://schemas/knowledge/evidence-bundle-manifest/4.0#/properties/access_policy_revision_id"},
+    "access_policy_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "requester_permissions_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "materials": {"$ref": "eom://schemas/knowledge/evidence-bundle-manifest/4.0#/properties/materials"},
+    "entries": {
+      "type": "array", "minItems": 1, "maxItems": 128,
+      "items": {"$ref": "#/$defs/entry"}
+    },
+    "budget": {"$ref": "eom://schemas/knowledge/evidence-bundle-manifest/4.0#/$defs/budget"},
+    "manifest_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "created_at": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"}
+  }
+}

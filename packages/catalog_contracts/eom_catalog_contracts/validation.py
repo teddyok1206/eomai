@@ -768,6 +768,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "14.0",
             "sha256:a49f11043ce4991c0ef1498f51037a5d16d7e9cf68b8439f4e471a8fc0c3339d",
         ),
+        "catalog-application-response-v15": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v15.schema.json",
+            "resources/catalog-application/catalog-application-response-v15.schema.json",
+            "15.0",
+            "sha256:e548627ec2c6e49ec056cec85bf68e79437ce60d2cb0c93859e45e4b042aed83",
+        ),
         "catalog-item-media-request": CatalogSchemaResource(
             "schemas/catalog-application/catalog-item-media-request-v1.schema.json",
             "resources/catalog-application/catalog-item-media-request-v1.schema.json",
@@ -1332,6 +1338,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "4.0",
             "sha256:9dbf2b90ece9dae7a5963e504c1fb8dede32d09e9b6cb1f7b5beb6eb75162781",
         ),
+        "evidence-bundle-manifest-v5": CatalogSchemaResource(
+            "schemas/knowledge/evidence-bundle-manifest-v5.schema.json",
+            "resources/knowledge/evidence-bundle-manifest-v5.schema.json",
+            "5.0",
+            "sha256:a72c0235d96b10e3bb032c183bdbb86349e1d2245ed3a2a8b478b432d48389bd",
+        ),
         "evidence-bundle-publication-result": CatalogSchemaResource(
             "schemas/knowledge/evidence-bundle-publication-result-v1.schema.json",
             "resources/knowledge/evidence-bundle-publication-result-v1.schema.json",
@@ -1355,6 +1367,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/evidence-bundle-publication-result-v4.schema.json",
             "4.0",
             "sha256:2c4c60b94661042880b85d961dc210ecf73af1441dab2a421573cab4689277fb",
+        ),
+        "evidence-bundle-publication-result-v5": CatalogSchemaResource(
+            "schemas/knowledge/evidence-bundle-publication-result-v5.schema.json",
+            "resources/knowledge/evidence-bundle-publication-result-v5.schema.json",
+            "5.0",
+            "sha256:2d0d1e15e3844d72d9958cc3644a6ab97654c7ba9107fd9f080f6a4ad151e1b2",
         ),
     }
 )

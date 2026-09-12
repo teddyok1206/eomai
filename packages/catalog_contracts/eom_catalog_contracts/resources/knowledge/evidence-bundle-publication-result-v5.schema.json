@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/evidence-bundle-publication-result/5.0",
+  "title": "EOM Evidence Bundle Publication Result V5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "evidence_bundle_id", "evidence_bundle_revision_id", "revision_number",
+    "state", "retrieval_request_id", "retrieval_request_sha256", "graph_snapshot",
+    "access_policy_revision_id", "access_policy_sha256", "requester_permissions_sha256",
+    "manifest_artifact", "manifest_sha256", "context_artifact", "budget", "published_at",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "evidence-bundle-publication-result/5.0"},
+    "evidence_bundle_id": {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/4.0#/properties/evidence_bundle_id"},
+    "evidence_bundle_revision_id": {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/4.0#/properties/evidence_bundle_revision_id"},
+    "revision_number": {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/4.0#/properties/revision_number"},
+    "state": {"const": "PUBLISHED"},
+    "retrieval_request_id": {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/4.0#/properties/retrieval_request_id"},
+    "retrieval_request_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "graph_snapshot": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"},
+    "access_policy_revision_id": {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/4.0#/properties/access_policy_revision_id"},
+    "access_policy_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "requester_permissions_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "manifest_artifact": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"},
+    "manifest_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "context_artifact": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"},
+    "budget": {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/4.0#/properties/budget"},
+    "published_at": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"},
+    "result_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"}
+  }
+}
