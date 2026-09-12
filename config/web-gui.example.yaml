@@ -10,6 +10,7 @@ upstreams:
   application_api_url: http://127.0.0.1:8765
   observability_url: http://127.0.0.1:8780
   request_timeout_seconds: 5.0
+  workflow_start_timeout_seconds: 150.0
 sessions:
   cookie_secure: false
   ttl_seconds: 1800

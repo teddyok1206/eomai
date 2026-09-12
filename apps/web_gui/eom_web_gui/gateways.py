@@ -611,6 +611,7 @@ class HttpApplicationGateway:
         observability_url: str,
         timeout: float,
         observability_access_token: str | None,
+        workflow_start_timeout: float = 150.0,
         transport: httpx.AsyncBaseTransport | None = None,
         observability_transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -621,6 +622,7 @@ class HttpApplicationGateway:
             trust_env=False,
             transport=transport,
         )
+        self._workflow_start_timeout = workflow_start_timeout
         self.observe = ObserveClient(
             base_url=observability_url,
             timeout=timeout,
@@ -810,6 +812,7 @@ class HttpApplicationGateway:
             "/api/v1/workflows",
             json=payload,
             headers={"Idempotency-Key": idempotency_key},
+            timeout=self._workflow_start_timeout,
         )
         return sanitize_mapping(self._data(response))
 
@@ -2030,6 +2033,7 @@ class HttpApplicationGateway:
         json: dict[str, object] | None = None,
         headers: dict[str, str] | None = None,
         params: dict[str, str | int | float | bool | None] | None = None,
+        timeout: float | None = None,
     ) -> httpx.Response:
         # HTTPX serializes ``None`` query values as empty strings. FastAPI then
         # treats those empty enum/integer/cursor values as supplied-but-invalid
@@ -2051,6 +2055,7 @@ class HttpApplicationGateway:
                 "Accept": "application/json",
                 **(headers or {}),
             },
+            timeout=timeout,
         )
         if response.status_code != 401:
             if response.status_code >= 400:
@@ -2074,6 +2079,7 @@ class HttpApplicationGateway:
                 "Accept": "application/json",
                 **(headers or {}),
             },
+            timeout=timeout,
         )
         if response.status_code >= 400:
             raise _gateway_error(response)
@@ -2098,15 +2104,26 @@ class HttpApplicationGateway:
         json: dict[str, object] | None = None,
         headers: dict[str, str] | None = None,
         params: dict[str, str | int | float | bool] | None = None,
+        timeout: float | None = None,
     ) -> httpx.Response:
         try:
-            response = await self._client.request(
-                method,
-                path,
-                json=json,
-                headers=headers,
-                params=params,
-            )
+            if timeout is None:
+                response = await self._client.request(
+                    method,
+                    path,
+                    json=json,
+                    headers=headers,
+                    params=params,
+                )
+            else:
+                response = await self._client.request(
+                    method,
+                    path,
+                    json=json,
+                    headers=headers,
+                    params=params,
+                    timeout=timeout,
+                )
         except httpx.HTTPError as exc:
             raise GatewayError(status=503, code="APPLICATION_API_UNAVAILABLE") from exc
         return response

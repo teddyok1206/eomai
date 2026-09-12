@@ -152,10 +152,16 @@ async def test_http_gateway_login_and_operator_projection() -> None:
 
 @pytest.mark.anyio
 async def test_gateway_refreshes_once_and_preserves_idempotency_key() -> None:
-    seen: list[tuple[str, str | None]] = []
+    seen: list[tuple[str, str | None, float]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        seen.append((request.url.path, request.headers.get("idempotency-key")))
+        seen.append(
+            (
+                request.url.path,
+                request.headers.get("idempotency-key"),
+                request.extensions["timeout"]["read"],
+            )
+        )
         if request.url.path == "/api/v1/workflows" and request.headers["authorization"].endswith(
             "OLD"
         ):
@@ -181,6 +187,7 @@ async def test_gateway_refreshes_once_and_preserves_idempotency_key() -> None:
         application_api_url="http://127.0.0.1:8765",
         observability_url="http://127.0.0.1:8780",
         timeout=1,
+        workflow_start_timeout=150,
         observability_access_token=None,
         transport=httpx.MockTransport(handler),
     )
@@ -191,9 +198,10 @@ async def test_gateway_refreshes_once_and_preserves_idempotency_key() -> None:
     assert session.tokens.access_token == "eom_at_TEST_ONLY_NEW"
     workflow_calls = [item for item in seen if item[0] == "/api/v1/workflows"]
     assert workflow_calls == [
-        ("/api/v1/workflows", "stable-key-0000001"),
-        ("/api/v1/workflows", "stable-key-0000001"),
+        ("/api/v1/workflows", "stable-key-0000001", 150),
+        ("/api/v1/workflows", "stable-key-0000001", 150),
     ]
+    assert [item[2] for item in seen if item[0] == "/api/v1/auth/refresh"] == [1]
     await gateway.close()
 
 

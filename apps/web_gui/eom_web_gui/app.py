@@ -66,6 +66,7 @@ def create_app(
             application_api_url=actual_settings.upstreams.application_api_url,
             observability_url=actual_settings.upstreams.observability_url,
             timeout=actual_settings.upstreams.request_timeout_seconds,
+            workflow_start_timeout=actual_settings.upstreams.workflow_start_timeout_seconds,
             observability_access_token=(
                 secret_values.observability_access_token.get_secret_value()
                 if secret_values.observability_access_token is not None

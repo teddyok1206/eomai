@@ -34,6 +34,8 @@ def test_example_config_preserves_loopback_and_existing_ports() -> None:
         "allowed_hosts": ["127.0.0.1", "localhost"],
     }
     assert value["server"]["port"] not in {8000, 8765, 8780}
+    assert value["upstreams"]["request_timeout_seconds"] == 5.0
+    assert value["upstreams"]["workflow_start_timeout_seconds"] == 150.0
     assert "hwpx" not in value
 
 

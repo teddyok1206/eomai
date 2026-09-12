@@ -51,6 +51,7 @@ class UpstreamSettings(StrictSettings):
     application_api_url: str = "http://127.0.0.1:8765"
     observability_url: str = "http://127.0.0.1:8780"
     request_timeout_seconds: float = Field(default=5.0, ge=0.25, le=30.0)
+    workflow_start_timeout_seconds: float = Field(default=150.0, ge=30.0, le=165.0)
 
     @field_validator("application_api_url", "observability_url")
     @classmethod
