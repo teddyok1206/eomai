@@ -16,6 +16,7 @@ from eom_orchestrator.control_models import (
 )
 from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
 from eom_orchestrator.execution_materializer import (
+    _materialize_assessment_member,
     authorized_execution_artifact_revisions,
     materialize_execution_step,
 )
@@ -313,6 +314,51 @@ def _assessment_pointer(
         media_type=media_type,
         sha256=digest,
     ).model_dump(mode="json")
+
+
+def test_assessment_materializer_allows_only_explicit_empty_member(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    pointer = AssessmentArtifactMemberPointer.model_validate(
+        _assessment_pointer(
+            fixture,
+            seed="0",
+            member_path="normalized/ambiguities.jsonl",
+            payload=b"",
+            media_type="application/x-ndjson",
+            schema_ref="eom://schemas/knowledge/ambiguity/3.0",
+        )
+    )
+    workspace = _workspace(tmp_path, "empty-ambiguities")
+
+    with pytest.raises(ControlPlaneError) as captured:
+        _materialize_assessment_member(
+            fixture["session"],
+            pointer=pointer,
+            relative_path="source/base-analysis/ambiguities.jsonl",
+            workspace=workspace,
+            artifact_root=fixture["artifact_root"],
+            worker_group_id=GROUP_ID,
+            authorized_artifact_revision_ids=frozenset({pointer.artifact_revision_id}),
+            maximum_bytes=2 * 1024 * 1024,
+        )
+    assert captured.value.code == "CONTROL_POINTER_MANIFEST_MISMATCH"
+
+    payload = _materialize_assessment_member(
+        fixture["session"],
+        pointer=pointer,
+        relative_path="source/base-analysis/ambiguities.jsonl",
+        workspace=workspace,
+        artifact_root=fixture["artifact_root"],
+        worker_group_id=GROUP_ID,
+        authorized_artifact_revision_ids=frozenset({pointer.artifact_revision_id}),
+        maximum_bytes=2 * 1024 * 1024,
+        allow_empty=True,
+    )
+
+    assert payload == b""
+    assert (workspace / "source/base-analysis/ambiguities.jsonl").read_bytes() == b""
 
 
 def _legacy_extraction_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:

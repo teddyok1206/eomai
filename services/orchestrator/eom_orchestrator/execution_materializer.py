@@ -1261,6 +1261,12 @@ def _materialize_base_analysis(
             worker_group_id=worker_group_id,
             authorized_artifact_revision_ids=authorized_artifact_revision_ids,
             maximum_bytes=2 * 1024 * 1024,
+            allow_empty=(
+                relative_name == "ambiguities.jsonl"
+                and pointer.member_path == "normalized/ambiguities.jsonl"
+                and pointer.schema_ref == "eom://schemas/knowledge/ambiguity/3.0"
+                and pointer.media_type == "application/x-ndjson"
+            ),
         )
         if len(payload) != pointer.bytes:
             raise ControlPlaneError(
@@ -1359,6 +1365,7 @@ def _assessment_member_expected_bytes(
     *,
     pointer: OriginArtifactMemberPointer,
     authorized_artifact_revision_ids: frozenset[str],
+    allow_empty: bool = False,
 ) -> int:
     """Return the pinned manifest size after validating immutable pointer identity."""
 
@@ -1387,7 +1394,7 @@ def _assessment_member_expected_bytes(
         or entry.get("media_type") != pointer.media_type
         or entry.get("schema_ref") != pointer.schema_ref
         or not isinstance(expected_bytes, int)
-        or expected_bytes <= 0
+        or expected_bytes < (0 if allow_empty else 1)
     ):
         raise ControlPlaneError(
             "CONTROL_POINTER_MANIFEST_MISMATCH",
@@ -1432,11 +1439,13 @@ def _materialize_assessment_member(
     worker_group_id: int,
     authorized_artifact_revision_ids: frozenset[str],
     maximum_bytes: int,
+    allow_empty: bool = False,
 ) -> bytes:
     expected_bytes = _assessment_member_expected_bytes(
         session,
         pointer=pointer,
         authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        allow_empty=allow_empty,
     )
     if expected_bytes > maximum_bytes:
         raise ControlPlaneError(
