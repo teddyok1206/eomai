@@ -3983,6 +3983,65 @@ class EvidenceEntryV4(FrozenModel):
         return self
 
 
+class KnowledgeSolutionEvidencePointer(FrozenModel):
+    """Exact accepted additive report pointers attached to one base analysis."""
+
+    schema_version: Literal["knowledge-solution-evidence-pointer/1.0"] = (
+        "knowledge-solution-evidence-pointer/1.0"
+    )
+    base_analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    base_analysis_result_id: str = Field(pattern=r"^knowledgeanalysisresult_[0-9a-f]{32}$")
+    solution_analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
+    solution_analysis_result_id: str = Field(pattern=r"^knowledgeanalysisresult_[0-9a-f]{32}$")
+    solution_result_sha256: Sha256
+    accepted_result_artifact: KnowledgeArtifactMemberPointer
+    proposal_receipt: KnowledgeArtifactMemberPointer
+    solution_report: KnowledgeArtifactMemberPointer
+    proposal_content_set_sha256: Sha256
+    pointer_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_solution_members_and_hash(self) -> KnowledgeSolutionEvidencePointer:
+        expected = (
+            (
+                self.accepted_result_artifact,
+                "evidence/accepted-result.json",
+                "accepted-result.json",
+                "eom://schemas/knowledge/knowledge-analysis-result/10.0",
+            ),
+            (
+                self.proposal_receipt,
+                "normalized/proposal-receipt.json",
+                "proposal-receipt.json",
+                "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/9.0",
+            ),
+            (
+                self.solution_report,
+                "normalized/solution-report.json",
+                "solution-report.json",
+                "eom://schemas/knowledge/knowledge-analysis-solution-report/1.0",
+            ),
+        )
+        if self.base_analysis_run_id == self.solution_analysis_run_id or any(
+            pointer.member_path != member_path
+            or pointer.logical_name != logical_name
+            or pointer.schema_ref != schema_ref
+            or pointer.media_type != "application/json"
+            for pointer, member_path, logical_name, schema_ref in expected
+        ):
+            raise ValueError("solution evidence pointers differ from the additive contracts")
+        body = self.model_dump(mode="json", exclude={"pointer_sha256"})
+        if content_sha256(body) != self.pointer_sha256:
+            raise ValueError("solution evidence pointer hash does not match canonical content")
+        return self
+
+
+class EvidenceEntryV5(EvidenceEntryV4):
+    """Graph evidence optionally enriched by one accepted additive solution report."""
+
+    solution_evidence: KnowledgeSolutionEvidencePointer | None
+
+
 class EvidenceBundleMaterialsV2(FrozenModel):
     context_markdown: KnowledgeArtifactMemberPointer
 
@@ -4196,6 +4255,13 @@ class EvidenceBundleManifestV4(FrozenModel):
         return self
 
 
+class EvidenceBundleManifestV5(EvidenceBundleManifestV4):
+    """Manifest pinning additive solution evidence without copying report content."""
+
+    schema_version: Literal["evidence-bundle-manifest/5.0"] = "evidence-bundle-manifest/5.0"  # type: ignore[assignment]
+    entries: tuple[EvidenceEntryV5, ...] = Field(min_length=1, max_length=128)
+
+
 class EvidenceBundlePublicationResult(FrozenModel):
     schema_version: Literal["evidence-bundle-publication-result/1.0"] = (
         "evidence-bundle-publication-result/1.0"
@@ -4339,11 +4405,12 @@ class EvidenceBundlePublicationResultV4(FrozenModel):
 
     @model_validator(mode="after")
     def execution_materials_are_exact_and_hashed(self) -> EvidenceBundlePublicationResultV4:
+        manifest_version = self.schema_version.rsplit("/", maxsplit=1)[-1]
         if (
             self.manifest_artifact.member_path != "evidence/manifest.json"
             or self.manifest_artifact.media_type != "application/json"
             or self.manifest_artifact.schema_ref
-            != "eom://schemas/knowledge/evidence-bundle-manifest/4.0"
+            != f"eom://schemas/knowledge/evidence-bundle-manifest/{manifest_version}"
             or self.context_artifact.member_path != "evidence/context.md"
             or self.context_artifact.media_type != "text/markdown"
             or self.context_artifact.schema_ref
@@ -4354,3 +4421,11 @@ class EvidenceBundlePublicationResultV4(FrozenModel):
         if content_sha256(body) != self.result_sha256:
             raise ValueError("Evidence Bundle publication V4 result hash does not match content")
         return self
+
+
+class EvidenceBundlePublicationResultV5(EvidenceBundlePublicationResultV4):
+    """Execution-ready result for a solution-enriched Evidence Bundle."""
+
+    schema_version: Literal["evidence-bundle-publication-result/5.0"] = (
+        "evidence-bundle-publication-result/5.0"  # type: ignore[assignment]
+    )

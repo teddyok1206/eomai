@@ -16,7 +16,13 @@ from eom_catalog_contracts import (
     validate_contract,
     validate_knowledge_solution_report_references,
 )
-from eom_identifiers import content_sha256
+from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.solution_evidence_resolution import (
+    SolutionEvidenceResolutionError,
+    _resolve_row,
+)
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
 from eom_workflow.models import KnowledgeAnalysisProposalRoleResultV10, RoleWorkerInput
 from eom_workflow.schemas import (
     constrained_result_schema,
@@ -26,8 +32,6 @@ from eom_workflow.schemas import (
     validate_schema_message,
 )
 from pydantic import ValidationError
-
-from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
 
 NOW = datetime(2026, 9, 12, 3, tzinfo=UTC)
 
@@ -678,3 +682,198 @@ def test_v10_report_rejects_non_contiguous_or_unmapped_reasoning_steps() -> None
 
     with pytest.raises(ValidationError, match="contiguous ordinals"):
         KnowledgeAnalysisWorkerProposalV8.model_validate(proposal)
+
+
+class _SolutionReportReader:
+    def __init__(self, report_bytes: bytes) -> None:
+        self.report_bytes = report_bytes
+
+    def read_member(self, **_: object) -> bytes:
+        return self.report_bytes
+
+
+def _solution_resolution_records() -> tuple[object, object, object, object, object, bytes]:
+    request = _request_value()
+    receipt = _receipt_value()
+    report_value = _proposal_value()["solution_report"]
+    assert isinstance(report_value, dict)
+    report_bytes = canonical_json_bytes(report_value)
+    report_hash = sha256_bytes(report_bytes)
+
+    solution_member = receipt["solution_report"]
+    assert isinstance(solution_member, dict)
+    solution_member.update(
+        {
+            "artifact_id": "artifact_" + "c" * 32,
+            "artifact_revision_id": "rev_" + "c" * 32,
+            "sha256": report_hash,
+            "bytes": len(report_bytes),
+        }
+    )
+    base = receipt["base_analysis"]
+    assert isinstance(base, dict)
+    base_members = base["base_members"]
+    assert isinstance(base_members, dict)
+    descriptors = [*base_members.values(), solution_member]
+    receipt["content_set_sha256"] = content_sha256(
+        sorted(
+            (
+                {
+                    key: member[key]
+                    for key in (
+                        "artifact_id",
+                        "artifact_revision_id",
+                        "member_path",
+                        "sha256",
+                        "bytes",
+                        "schema_ref",
+                        "media_type",
+                    )
+                }
+                for member in descriptors
+                if isinstance(member, dict)
+            ),
+            key=lambda value: str(value["member_path"]),
+        )
+    )
+    receipt_model = KnowledgeAnalysisProposalReceiptV9.model_validate(receipt)
+    receipt_bytes = canonical_json_bytes(receipt_model)
+    receipt_hash = sha256_bytes(receipt_bytes)
+
+    result = _result_value()
+    result["proposal_content_set_sha256"] = receipt_model.content_set_sha256
+    result["proposal_receipt"] = {
+        "artifact_id": "artifact_" + "c" * 32,
+        "artifact_revision_id": "rev_" + "c" * 32,
+        "member_path": "normalized/proposal-receipt.json",
+        "sha256": receipt_hash,
+        "bytes": len(receipt_bytes),
+        "schema_ref": ("eom://schemas/knowledge/knowledge-analysis-proposal-receipt/9.0"),
+        "media_type": "application/json",
+        "logical_name": "proposal-receipt.json",
+    }
+    result["result_sha256"] = content_sha256(
+        {key: value for key, value in result.items() if key != "result_sha256"}
+    )
+    result_model = KnowledgeAnalysisResultV10.model_validate(result)
+    result_bytes = canonical_json_bytes(result_model)
+    result_hash = sha256_bytes(result_bytes)
+
+    run = type(
+        "Run",
+        (),
+        {
+            "state": "ACCEPTED",
+            "analysis_run_id": "analysisrun_" + "d" * 32,
+            "analysis_request_id": request["analysis_request_id"],
+            "request_sha256": request["request_sha256"],
+            "canonical_request": request,
+            "predecessor_analysis_run_id": "analysisrun_" + "a" * 32,
+            "accepted_result_artifact_id": "artifact_" + "d" * 32,
+            "accepted_result_artifact_revision_id": "rev_" + "d" * 32,
+            "accepted_result_sha256": result_hash,
+            "proposal_artifact_id": "artifact_" + "c" * 32,
+            "proposal_artifact_revision_id": "rev_" + "c" * 32,
+            "proposal_content_set_sha256": receipt_model.content_set_sha256,
+        },
+    )()
+    accepted_revision = type(
+        "Revision",
+        (),
+        {
+            "revision_id": "rev_" + "d" * 32,
+            "logical_artifact_id": "artifact_" + "d" * 32,
+            "content_hash": result_hash,
+            "content_bytes": len(result_bytes),
+            "approved": True,
+            "result": result_model.model_dump(mode="json"),
+            "manifest": {
+                "artifact_type": "knowledge-analysis-accepted-result",
+                "primary_file": "evidence/accepted-result.json",
+                "files": [
+                    {
+                        "file_name": "evidence/accepted-result.json",
+                        "sha256": result_hash,
+                        "bytes": len(result_bytes),
+                        "schema_ref": ("eom://schemas/knowledge/knowledge-analysis-result/10.0"),
+                        "media_type": "application/json",
+                    }
+                ],
+            },
+        },
+    )()
+    accepted_artifact = type(
+        "Artifact",
+        (),
+        {"logical_artifact_id": "artifact_" + "d" * 32, "approved": True},
+    )()
+    proposal_revision = type(
+        "Revision",
+        (),
+        {
+            "revision_id": "rev_" + "c" * 32,
+            "logical_artifact_id": "artifact_" + "c" * 32,
+            "content_hash": receipt_hash,
+            "content_bytes": len(receipt_bytes),
+            "approved": True,
+            "result": receipt_model.model_dump(mode="json"),
+            "manifest": {
+                "artifact_type": "knowledge-analysis-proposal",
+                "primary_file": "normalized/proposal-receipt.json",
+                "files": [
+                    {
+                        "file_name": "normalized/proposal-receipt.json",
+                        "sha256": receipt_hash,
+                        "bytes": len(receipt_bytes),
+                        "schema_ref": (
+                            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/9.0"
+                        ),
+                        "media_type": "application/json",
+                    },
+                    {
+                        "file_name": "normalized/solution-report.json",
+                        "sha256": report_hash,
+                        "bytes": len(report_bytes),
+                        "schema_ref": (
+                            "eom://schemas/knowledge/knowledge-analysis-solution-report/1.0"
+                        ),
+                        "media_type": "application/json",
+                    },
+                ],
+            },
+        },
+    )()
+    proposal_artifact = type(
+        "Artifact",
+        (),
+        {"logical_artifact_id": "artifact_" + "c" * 32, "approved": True},
+    )()
+    return (
+        run,
+        accepted_revision,
+        accepted_artifact,
+        proposal_revision,
+        proposal_artifact,
+        report_bytes,
+    )
+
+
+def test_solution_evidence_resolver_reconstructs_exact_pointer_and_report() -> None:
+    *records, report_bytes = _solution_resolution_records()
+    resolved = _resolve_row(
+        cast(CatalogArtifactService, _SolutionReportReader(report_bytes)),
+        cast(Any, tuple(records)),
+    )
+    assert resolved.pointer.base_analysis_run_id == "analysisrun_" + "a" * 32
+    assert resolved.pointer.solution_analysis_run_id == "analysisrun_" + "d" * 32
+    assert resolved.pointer.solution_report.sha256 == sha256_bytes(report_bytes)
+    assert resolved.report.assessment_design_summary == "개념을 판단 기준으로 묻는 방식"
+
+
+def test_solution_evidence_resolver_rejects_report_content_drift() -> None:
+    *records, report_bytes = _solution_resolution_records()
+    with pytest.raises(SolutionEvidenceResolutionError, match="solution evidence is invalid"):
+        _resolve_row(
+            cast(CatalogArtifactService, _SolutionReportReader(report_bytes + b"\n")),
+            cast(Any, tuple(records)),
+        )

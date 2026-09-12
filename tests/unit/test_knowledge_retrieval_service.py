@@ -12,8 +12,15 @@ from eom_catalog_contracts import (
     ContentIntakeKnowledgeSourceV2,
     CreateItemProductionEvidenceCommand,
     EducationRetrievalRequestV2,
+    EvidenceBundleManifestV5,
+    EvidenceBundleMaterialsV2,
+    EvidenceEntryV5,
     KnowledgeAnalysisRequestV2,
+    KnowledgeAnalysisSolutionReport,
     KnowledgeAnalysisSourceArtifactMemberV2,
+    KnowledgeArtifactMemberPointer,
+    KnowledgeSolutionEvidencePointer,
+    validate_contract,
 )
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
 from eom_catalog_service.knowledge_retrieval_service import (
@@ -28,6 +35,7 @@ from eom_catalog_service.knowledge_retrieval_service import (
     _SnapshotSourceResolutionCache,
 )
 from eom_catalog_service.settings import CatalogSettings
+from eom_catalog_service.solution_evidence_resolution import ResolvedSolutionEvidence
 from eom_identifiers import content_sha256
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from sqlalchemy.orm import Session
@@ -236,6 +244,193 @@ def test_one_shot_context_exposes_past_exam_identity_without_copying_payload() -
     assert "7번 문항" in markdown
     assert "생태계와 환경 변화" in markdown
     assert item.artifact_member.member_path not in markdown
+
+
+def _solution_evidence() -> ResolvedSolutionEvidence:
+    def pointer(
+        seed: str, *, member_path: str, logical_name: str, schema_ref: str
+    ) -> dict[str, str]:
+        return {
+            "artifact_id": "artifact_" + seed * 32,
+            "artifact_revision_id": "rev_" + seed * 32,
+            "sha256": "sha256:" + seed * 64,
+            "schema_ref": schema_ref,
+            "media_type": "application/json",
+            "logical_name": logical_name,
+            "member_path": member_path,
+        }
+
+    pointer_value: dict[str, object] = {
+        "schema_version": "knowledge-solution-evidence-pointer/1.0",
+        "base_analysis_run_id": "analysisrun_" + "3" * 32,
+        "base_analysis_result_id": "knowledgeanalysisresult_" + "4" * 32,
+        "solution_analysis_run_id": "analysisrun_" + "5" * 32,
+        "solution_analysis_result_id": "knowledgeanalysisresult_" + "6" * 32,
+        "solution_result_sha256": "sha256:" + "6" * 64,
+        "accepted_result_artifact": pointer(
+            "6",
+            member_path="evidence/accepted-result.json",
+            logical_name="accepted-result.json",
+            schema_ref="eom://schemas/knowledge/knowledge-analysis-result/10.0",
+        ),
+        "proposal_receipt": pointer(
+            "7",
+            member_path="normalized/proposal-receipt.json",
+            logical_name="proposal-receipt.json",
+            schema_ref=("eom://schemas/knowledge/knowledge-analysis-proposal-receipt/9.0"),
+        ),
+        "solution_report": pointer(
+            "7",
+            member_path="normalized/solution-report.json",
+            logical_name="solution-report.json",
+            schema_ref="eom://schemas/knowledge/knowledge-analysis-solution-report/1.0",
+        ),
+        "proposal_content_set_sha256": "sha256:" + "8" * 64,
+        "pointer_sha256": "sha256:" + "0" * 64,
+    }
+    pointer_value["pointer_sha256"] = content_sha256(
+        {key: value for key, value in pointer_value.items() if key != "pointer_sha256"}
+    )
+    report = KnowledgeAnalysisSolutionReport.model_validate(
+        {
+            "schema_version": "knowledge-analysis-solution-report/1.0",
+            "analysis_request_id": "knowledgeanalysis_" + "5" * 32,
+            "base_analysis_result_id": "knowledgeanalysisresult_" + "4" * 32,
+            "rationale_kind": "VERIFIABLE_SOLUTION_RATIONALE",
+            "solution_steps": [
+                {
+                    "step_id": "solutionstep_conclusion",
+                    "ordinal": 1,
+                    "operation": "CONCLUDE",
+                    "rationale": "ANSWER_BEARING_RATIONALE_MUST_NOT_LEAK",
+                    "outcome": "conclusion",
+                    "depends_on_step_ids": [],
+                    "node_ids": ["knode_concept_motion"],
+                    "item_element_node_ids": ["knode_item_element_stem"],
+                    "anchor_ids": ["anchor_problem"],
+                }
+            ],
+            "concept_assessment_links": [
+                {
+                    "concept_node_id": "knode_concept_motion",
+                    "role": "ANSWER_CRITERION",
+                    "reasoning_step_ids": ["solutionstep_conclusion"],
+                    "assessment_pattern_node_ids": ["knode_assessment_pattern_reason"],
+                    "item_element_node_ids": ["knode_item_element_stem"],
+                    "summary": "concept link",
+                }
+            ],
+            "choice_diagnostics": [],
+            "official_explanation_comparison": {
+                "status": "CONSISTENT",
+                "summary": "official comparison",
+                "answer_explanation_anchor_ids": ["anchor_answer"],
+            },
+            "final_answer_summary": "FINAL_ANSWER_MUST_NOT_LEAK",
+            "solution_summary": "SOLUTION_SUMMARY_MUST_NOT_LEAK",
+            "assessment_design_summary": "판단 기준을 새로운 맥락에 적용한다.",
+            "reusable_generation_guidance": "원문을 복제하지 않고 조건을 변형한다.",
+            "unresolved_issues": [],
+            "general_knowledge_used": False,
+        }
+    )
+    return ResolvedSolutionEvidence(
+        pointer=KnowledgeSolutionEvidencePointer.model_validate(pointer_value),
+        report=report,
+    )
+
+
+def test_solution_enriched_context_exposes_only_reusable_design_projection() -> None:
+    item = ApprovedItemKnowledgeSourceV2(
+        source_class="PAST_EXAM",
+        item_id="item_" + "b" * 32,
+        item_revision_id="itemrev_" + "c" * 32,
+        artifact_member=_member(
+            "c", media_type="application/json", schema_ref="eom.assessment.item-content/1.0"
+        ),
+    )
+    solution = _solution_evidence()
+    entries, markdown = KnowledgeRetrievalApplicationService._rank_and_render(
+        request=_request().model_copy(
+            update={"source_classes": ("APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK")}
+        ),
+        candidates=(
+            _Candidate(
+                analysis_run_id=solution.pointer.base_analysis_run_id,
+                source=item,
+                node_ids=("knode_exam",),
+                anchor_ids=("anchor_item",),
+                node_labels=("past exam structure",),
+                node_types=("ASSESSMENT_PATTERN",),
+                relevance_milli=900,
+                answer_bearing=False,
+                solution=solution,
+            ),
+        ),
+    )
+    assert len(entries) == 1
+    assert isinstance(entries[0], EvidenceEntryV5)
+    assert entries[0].solution_evidence == solution.pointer
+    assert solution.report.assessment_design_summary in markdown
+    assert solution.report.reusable_generation_guidance in markdown
+    assert solution.report.final_answer_summary not in markdown
+    assert solution.report.solution_summary not in markdown
+    assert solution.report.solution_steps[0].rationale not in markdown
+
+    materials = EvidenceBundleMaterialsV2(
+        context_markdown=KnowledgeArtifactMemberPointer(
+            artifact_id="artifact_" + "9" * 32,
+            artifact_revision_id="rev_" + "9" * 32,
+            sha256="sha256:" + "9" * 64,
+            schema_ref="eom://schemas/knowledge/evidence-bundle-context/1.0",
+            media_type="text/markdown",
+            logical_name="context.md",
+            member_path="evidence/context.md",
+        )
+    )
+    request = _request()
+    manifest_value: dict[str, object] = {
+        "schema_version": "evidence-bundle-manifest/5.0",
+        "evidence_bundle_id": "evidence_" + "a" * 32,
+        "evidence_bundle_revision_id": "evidencerev_" + "a" * 32,
+        "revision_number": 1,
+        "retrieval_request_id": request.retrieval_request_id,
+        "retrieval_request_sha256": request.request_sha256,
+        "graph_snapshot": request.graph_snapshot.model_dump(mode="json"),
+        "access_policy_revision_id": request.access_policy_revision_id,
+        "access_policy_sha256": request.access_policy_sha256,
+        "requester_permissions_sha256": request.requester_permissions_sha256,
+        "materials": materials.model_dump(mode="json"),
+        "entries": [entry.model_dump(mode="json") for entry in entries],
+        "budget": {
+            "document_count": 0,
+            "item_revision_count": 1,
+            "graph_node_count": 1,
+            "claim_count": 0,
+            "estimated_context_tokens": 100,
+        },
+        "manifest_sha256": "sha256:" + "0" * 64,
+        "created_at": NOW,
+    }
+    manifest_value["manifest_sha256"] = content_sha256(
+        {key: value for key, value in manifest_value.items() if key != "manifest_sha256"}
+    )
+    validate_contract("evidence-bundle-manifest-v5", manifest_value)
+    assert EvidenceBundleManifestV5.model_validate(manifest_value).entries == entries
+
+
+def test_solution_evidence_pointer_rejects_member_or_hash_drift() -> None:
+    value = _solution_evidence().pointer.model_dump(mode="json")
+    report_pointer = dict(value["solution_report"])
+    report_pointer["member_path"] = "normalized/document.md"
+    value["solution_report"] = report_pointer
+    with pytest.raises(ValueError, match="solution evidence pointers"):
+        KnowledgeSolutionEvidencePointer.model_validate(value)
+
+    value = _solution_evidence().pointer.model_dump(mode="json")
+    value["pointer_sha256"] = "sha256:" + "0" * 64
+    with pytest.raises(ValueError, match="pointer hash"):
+        KnowledgeSolutionEvidencePointer.model_validate(value)
 
 
 def test_ranked_context_orders_equal_relevance_entries_by_evidence_id() -> None:
